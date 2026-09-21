@@ -110,25 +110,33 @@ None of these attach a debugger; for breakpoints use the Xcode schemes below.
 ## TestFlight releases
 
 The `Apple TestFlight` GitHub Actions workflow archives and uploads both the iOS and native macOS
-apps to the shared App Store Connect record. A release tag must be an exact `vMAJOR.MINOR.PATCH`
-tag on the current `main` commit. For example:
+apps to the shared App Store Connect record. It is dispatch-only — there is no tag-push trigger.
+To release: **Actions → Apple TestFlight → Run workflow**, then set `version` to the
+`MAJOR.MINOR.PATCH` to ship and `publish` to `true`. The workflow itself must run on the current
+`main` commit; it refuses to publish otherwise.
 
-```sh
-git switch main
-git pull --ff-only
-git tag v1.2.3
-git push origin v1.2.3
-```
+Internally, `apple-testflight.yaml` is a thin dispatch wrapper: the archive/export/upload work
+itself lives in the reusable `apple-release.yaml` workflow, which it calls. That split keeps
+`apple-release.yaml` read-only (no `tag` job, `contents: read` only) so `ci.yaml` can also call it
+directly for a pull-request dry run — a called workflow's jobs are capped by the caller's
+permissions, and a pull-request-triggered call is never granted `contents: write`. Only
+`apple-testflight.yaml`'s own `tag` job, which runs after `apple-release.yaml` finishes, has that
+permission.
 
-The tag supplies `MARKETING_VERSION`. Both platforms share a
-`<commit-count>.<run-attempt>` build number generated without editing `project.yml`. Rerunning a
-partially failed release therefore produces a fresh build number for both platforms. Both archives
-must finish before either upload starts. Every uploaded archive has `testFlightInternalTestingOnly`
-set, so it cannot later be promoted to external TestFlight or the App Store.
+`version` supplies `MARKETING_VERSION`. Both platforms share a `<commit-count>.<run-attempt>`
+build number generated without editing `project.yml`. Rerunning a partially failed release
+therefore produces a fresh build number for both platforms. The iOS and macOS archives build in
+parallel, each in its own job; a single downstream job then exports and uploads both, and neither
+platform uploads unless both archived successfully. Every uploaded archive has
+`testFlightInternalTestingOnly` set, so it cannot later be promoted to external TestFlight or the
+App Store. Once the upload succeeds, the workflow creates and pushes the `vMAJOR.MINOR.PATCH`
+release tag itself at the released commit — do not push a release tag by hand.
 
-Use the workflow's manual dispatch with a `MAJOR.MINOR.PATCH` version to validate the complete
-certificate, profile, archive, and export path. Manual runs save the signed exports and dSYMs as a
-workflow artifact but never upload a build to App Store Connect.
+Leave `publish` at its default `false` (or omit it) to validate the complete certificate, profile,
+archive, and export path without uploading or tagging anything. Manual dry runs save the signed
+exports and dSYMs as a workflow artifact. The same dry run also runs automatically, as a
+non-required check, on any pull request that touches release-affecting files (either workflow
+file, its actions, `testflight.sh`, `project.yml`, or `Info.plist`/entitlements).
 
 ### One-time Apple and GitHub setup
 

@@ -1,0 +1,105 @@
+name: "Deploy a Cloudflare Worker"
+description: >-
+  Checks out current main twice (before building and again before deploying)
+  and installs, optionally builds, then deploys one package's Worker. Shared
+  by every job in deploy.yaml; each job's own concurrency/environment/
+  timeout-minutes stay on the job because a composite action cannot own them.
+
+inputs:
+  package:
+    description: "pnpm workspace package name, e.g. @cubby/web"
+    required: true
+  workspace-filter:
+    description: "Space-separated pnpm workspace filters for setup-node-with-deps"
+    required: true
+  wasm:
+    description: 'setup-node-with-deps "wasm" input: restore or false'
+    required: false
+    default: "false"
+  web-env:
+    description: 'setup-node-with-deps "web-env" input: true or false'
+    required: false
+    default: "false"
+  build-command:
+    description: "Shell command that builds the package. Skipped entirely when empty."
+    required: false
+    default: ""
+  sentry-auth-token:
+    description: >-
+      Sentry org auth token for the build step's env. The web build uploads
+      source maps with it; other packages leave this empty.
+    required: false
+    default: ""
+  deploy-command:
+    description: >-
+      Shell command that deploys the package. Ignored when wrangler-action is
+      "true".
+    required: false
+    default: ""
+  wrangler-action:
+    description: >-
+      Deploy via cloudflare/wrangler-action instead of deploy-command. Web's
+      deploy:cf script re-runs build:cf, which would duplicate the
+      build-command step above, so web keeps the direct wrangler-action call
+      that only deploys.
+    required: false
+    default: "false"
+  wrangler-command:
+    description: "wrangler-action's command input. Required when wrangler-action is true."
+    required: false
+    default: ""
+  working-directory:
+    description: "wrangler-action's workingDirectory input."
+    required: false
+    default: "."
+  cloudflare-api-token:
+    description: "Cloudflare API token"
+    required: true
+  cloudflare-account-id:
+    description: "Cloudflare account ID"
+    required: true
+
+runs:
+  using: "composite"
+  steps:
+    - name: Check current main before building
+      id: current_main
+      uses: ./.github/actions/check-current-main
+
+    - uses: ./.github/actions/setup-node-with-deps
+      if: steps.current_main.outputs.current == 'true'
+      with:
+        wasm: ${{ inputs.wasm }}
+        workspace-filter: ${{ inputs.workspace-filter }}
+        web-env: ${{ inputs.web-env }}
+
+    - name: Build ${{ inputs.package }}
+      if: steps.current_main.outputs.current == 'true' && inputs.build-command != ''
+      shell: bash
+      env:
+        CUBBY_SOURCE_COMMIT: ${{ github.sha }}
+        CUBBY_SOURCE_BRANCH: main
+        SENTRY_AUTH_TOKEN: ${{ inputs.sentry-auth-token }}
+      run: ${{ inputs.build-command }}
+
+    - name: Re-check current main before deployment
+      if: steps.current_main.outputs.current == 'true'
+      id: deploy_current
+      uses: ./.github/actions/check-current-main
+
+    - name: Deploy ${{ inputs.package }} (wrangler-action)
+      if: steps.deploy_current.outputs.current == 'true' && inputs.wrangler-action == 'true'
+      uses: cloudflare/wrangler-action@ebbaa1584979971c8614a24965b4405ff95890e0 # v4
+      with:
+        apiToken: ${{ inputs.cloudflare-api-token }}
+        accountId: ${{ inputs.cloudflare-account-id }}
+        command: ${{ inputs.wrangler-command }}
+        workingDirectory: ${{ inputs.working-directory }}
+
+    - name: Deploy ${{ inputs.package }}
+      if: steps.deploy_current.outputs.current == 'true' && inputs.wrangler-action != 'true'
+      shell: bash
+      env:
+        CLOUDFLARE_API_TOKEN: ${{ inputs.cloudflare-api-token }}
+        CLOUDFLARE_ACCOUNT_ID: ${{ inputs.cloudflare-account-id }}
+      run: ${{ inputs.deploy-command }}

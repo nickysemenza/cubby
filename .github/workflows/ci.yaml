@@ -36,6 +36,7 @@ jobs:
       coverage: ${{ steps.scope.outputs.coverage }}
       verify: ${{ steps.scope.outputs.verify }}
       apple: ${{ steps.apple.outputs.apple }}
+      release: ${{ steps.apple.outputs.release }}
     steps:
       - id: scope
         env:
@@ -52,6 +53,12 @@ jobs:
       # The Apple job is the slowest lane by far (macOS runners, xcodebuild),
       # so it alone is path-filtered: everything else always runs. On a push
       # or workflow_dispatch (no PR to diff against) it always runs too.
+      # `release` reuses the same PR file listing to decide whether to run
+      # release-dry-run below: narrower than `apple` (only files that change
+      # what a TestFlight release actually builds/signs) and, unlike `apple`,
+      # false on push/workflow_dispatch — main pushes never need a release
+      # dry run, and a real release is always an explicit dispatch of
+      # apple-testflight.yaml itself.
       - id: apple
         env:
           GH_TOKEN: ${{ github.token }}
@@ -61,18 +68,24 @@ jobs:
           # Prefix match for directories (a changed file anywhere under
           # them), exact match for individual files that affect the Apple
           # build outside apps/apple/ itself.
-          pattern='^(apps/apple/|cubby-ffi/|recipebridge/|\.github/|rust-toolchain\.toml$|scripts/ensure-apple-ffi\.ts$|scripts/rust-fingerprint\.ts$|scripts/apple-check\.sh$|apps/web/src/lib/generated/http-openapi\.gen\.json$)'
+          apple_pattern='^(apps/apple/|cubby-ffi/|recipebridge/|\.github/|rust-toolchain\.toml$|scripts/ensure-apple-ffi\.ts$|scripts/rust-fingerprint\.ts$|scripts/apple-check\.sh$|apps/web/src/lib/generated/http-openapi\.gen\.json$)'
+          release_pattern='^(\.github/workflows/apple-testflight\.yaml$|\.github/workflows/apple-release\.yaml$|\.github/actions/(prepare-apple-release-project|import-apple-signing|download-apple-profile)/|apps/apple/scripts/testflight\.sh$|apps/apple/project\.yml$|apps/apple/App/.*(Info\.plist|\.entitlements)$|apps/apple/scripts/build-rust\.sh$)'
 
           if [[ "$EVENT_NAME" == "pull_request" ]]; then
             files="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR}/files" --paginate --jq '.[].filename')"
-            matched="$(printf '%s\n' "$files" | grep -E "$pattern" || true)"
+            matched="$(printf '%s\n' "$files" | grep -E "$apple_pattern" || true)"
             if [[ -n "$matched" ]]; then apple=true; else apple=false; fi
+            release_matched="$(printf '%s\n' "$files" | grep -E "$release_pattern" || true)"
+            if [[ -n "$release_matched" ]]; then release=true; else release=false; fi
           else
             matched=""
+            release_matched=""
             apple=true
+            release=false
           fi
 
           echo "apple=$apple" >> "$GITHUB_OUTPUT"
+          echo "release=$release" >> "$GITHUB_OUTPUT"
           {
             echo "### Apple job scope"
             echo "apple=$apple ($EVENT_NAME)"
@@ -80,6 +93,14 @@ jobs:
               echo
               echo "Matching changed files:"
               printf '%s\n' "$matched" | sed 's/^/- /'
+            fi
+            echo
+            echo "### Release dry-run scope"
+            echo "release=$release ($EVENT_NAME)"
+            if [[ -n "$release_matched" ]]; then
+              echo
+              echo "Matching changed files:"
+              printf '%s\n' "$release_matched" | sed 's/^/- /'
             fi
           } >> "$GITHUB_STEP_SUMMARY"
 
@@ -573,6 +594,49 @@ jobs:
         with:
           path: apps/apple/SourcePackages
           key: ${{ steps.apple-tools.outputs.spm-clones-cache-key }}
+
+  # Populates apple-testflight.yaml's release FFI caches (setup-apple-ffi's
+  # targets=device/mac, profile=dist) on every main push, so a release hits
+  # a warm cache instead of the cold ~7-minute Rust build those keys
+  # previously only ever saw during a release itself. Deliberately does not
+  # `need` scope: it should warm regardless of the PR path filter, and there
+  # is no PR here to filter anyway (push-only). Not a required check.
+  warm-apple-ffi:
+    name: Warm Apple FFI cache (${{ matrix.targets }})
+    if: github.event_name == 'push'
+    runs-on: macos-26
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        targets: [device, mac]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: ./.github/actions/setup-apple-ffi
+        with:
+          targets: ${{ matrix.targets }}
+          profile: dist
+
+  # Exercises apple-release.yaml's identical signed archive/export path
+  # (publish: false, so nothing uploads or gets tagged) on a PR that touches
+  # release-affecting files, to catch a v1.0.1-v1.0.3-style config error
+  # (bad provisioning profile match, missing signing identity, missing
+  # Info.plist key) on the PR that introduces it instead of burning a real
+  # version tag at release time. Costs about 12 minutes of macOS runner time,
+  # only on matching PRs. Not a required check: a red run here surfaces the
+  # problem but does not block merging. Calls apple-release.yaml directly
+  # (not the apple-testflight.yaml dispatch wrapper): a pull_request-triggered
+  # job is never granted contents: write, and apple-release.yaml has no `tag`
+  # job to need it.
+  release-dry-run:
+    name: Release dry run
+    needs: scope
+    if: needs.scope.outputs.verify == 'true' && needs.scope.outputs.release == 'true'
+    uses: ./.github/workflows/apple-release.yaml
+    with:
+      version: "0.0.0"
+      publish: false
+    secrets: inherit
 
   report-coverage:
     name: Report scheduled coverage
