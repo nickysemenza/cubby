@@ -76,7 +76,6 @@ struct TodayView: View {
 
         if today == nil {
             let today = TodayModel(client: model.client)
-            today.onProblemCount = { [weak model] total in model?.problemsTotal = total }
             self.today = today
         }
         if nutrition == nil || dayChanged {

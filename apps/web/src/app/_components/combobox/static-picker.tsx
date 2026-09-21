@@ -15,6 +15,7 @@ interface StaticPickerOption {
 
 interface StaticPickerProps {
   inputId?: string;
+  inputRef?: React.RefCallback<HTMLInputElement>;
   "aria-describedby"?: string;
   items: readonly StaticPickerOption[];
   value: string | null;
@@ -33,6 +34,7 @@ interface StaticPickerProps {
 /** String-valued form adapter for the shared Base UI picker shell. */
 export function StaticPicker({
   inputId,
+  inputRef,
   "aria-describedby": ariaDescribedBy,
   items,
   value,
@@ -74,6 +76,7 @@ export function StaticPicker({
     <div className={className}>
       <EntityPicker
         inputId={inputId}
+        inputRef={inputRef}
         aria-describedby={ariaDescribedBy}
         label={label}
         items={pickerItems}

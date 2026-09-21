@@ -32,9 +32,6 @@ describe("useMobileListModel", () => {
       accessorFn: undefined,
     };
     const table = fromPartial<Table<TestRow>>({
-      // `mobileListLayout` reads this to decide whether the list reserves a
-      // thumbnail gutter, so a row-model-only stub no longer satisfies the hook.
-      getVisibleLeafColumns: () => [column],
       getRowModel: () => ({
         rows: [
           {

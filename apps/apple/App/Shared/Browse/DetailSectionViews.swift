@@ -14,11 +14,7 @@ struct EntityHeroView<Actions: View>: View {
 
     @State private var showingPhoto = false
 
-    #if os(macOS)
-        private let heroMaxHeight: CGFloat = 360
-    #else
-        private let heroMaxHeight: CGFloat = 280
-    #endif
+    private let heroMaxHeight: CGFloat = 220
 
     private var presentation: EntityPresentation { descriptor.presentation }
 
@@ -45,19 +41,6 @@ struct EntityHeroView<Actions: View>: View {
             .photoPreviewPresentation(isPresented: $showingPhoto) {
                 PhotoPreview(photos: [photo], selectedID: photo.id)
             }
-        } else {
-            Image(systemName: descriptor.sfSymbol)
-                .font(.system(size: 32, weight: .light))
-                .foregroundStyle(PorcelainTokens.graphiteSecondary)
-                .frame(width: 96, height: 96)
-                .background(
-                    RoundedRectangle(cornerRadius: PorcelainTokens.radiusPanel).fill(PorcelainTokens.inset)
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: PorcelainTokens.radiusPanel)
-                        .strokeBorder(PorcelainTokens.hairline, lineWidth: PorcelainTokens.hairlineWidth)
-                )
-                .accessibilityHidden(true)
         }
         VStack(alignment: .leading, spacing: PorcelainTokens.Space.sm) {
             if let breadcrumb = presentation.heroBreadcrumb, let field = descriptor.field(breadcrumb),
@@ -147,6 +130,16 @@ struct EntityHeroView<Actions: View>: View {
         default: .neutral
         }
     }
+}
+
+#Preview("Entity hero") {
+    List {
+        EntityHeroView(descriptor: EntityCatalog[.product], row: PreviewFixtures.sampleDetailRow) {
+            EmptyView()
+        }
+    }
+    .listStyle(.plain)
+    .environment(PreviewFixtures.signedInModel())
 }
 
 // MARK: - Fields

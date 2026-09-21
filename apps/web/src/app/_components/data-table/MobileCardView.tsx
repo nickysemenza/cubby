@@ -21,11 +21,7 @@ import {
 import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
 import { Spinner } from "~/components/ui/spinner";
-import {
-  entities,
-  EntityIcon,
-  isBrowserRoutedEntity,
-} from "~/entities/entities";
+import { entities, isBrowserRoutedEntity } from "~/entities/entities";
 import { useDebug } from "~/hooks/useDebug";
 import { type LongPressHandlers, useLongPress } from "~/hooks/useLongPress";
 import { cn } from "~/lib/utils";
@@ -163,22 +159,6 @@ function trailingValueEntries<TItem extends RowData>(
     }));
 }
 
-/** Whether the row reserves the 44px gutter, and what fills it when it does. */
-function resolveRowThumb<TItem extends RowData>(
-  entity: Entity | undefined,
-  model: MobileListRowModel<TItem>,
-) {
-  const showThumb =
-    Boolean(model.imageSlot) ||
-    (entity !== undefined && isBrowserRoutedEntity(entity));
-  const thumb =
-    model.imageSlot ??
-    (entity !== undefined && isBrowserRoutedEntity(entity) ? (
-      <EntityIcon entity={entity} className="size-3.5 text-hairline" />
-    ) : null);
-  return { showThumb, thumb };
-}
-
 function buildGridTemplateColumns({
   selectionMode,
   showThumb,
@@ -221,7 +201,7 @@ function buildRowClassName({
   );
 }
 
-/** Selection checkbox (selection mode) or the thumbnail/entity-glyph gutter. */
+/** Selection checkbox (selection mode) or a real thumbnail. */
 function RowLeading<TItem extends RowData>({
   selectionMode,
   showThumb,
@@ -488,7 +468,6 @@ function RowInteractiveDiv({
  */
 function PhoneListRow<TItem extends RowData>({
   model,
-  entity,
   isSelectable,
   selectionMode,
   onEnterSelection,
@@ -497,7 +476,6 @@ function PhoneListRow<TItem extends RowData>({
   children,
 }: {
   model: MobileListRowModel<TItem>;
-  entity?: Entity;
   isSelectable: boolean;
   selectionMode: boolean;
   onEnterSelection: () => void;
@@ -511,7 +489,8 @@ function PhoneListRow<TItem extends RowData>({
     canEnterSelection ? onEnterSelection : undefined,
   );
 
-  const { showThumb, thumb } = resolveRowThumb(entity, model);
+  const thumb = model.imageSlot;
+  const showThumb = Boolean(thumb);
   const subtitleParts = buildSubtitleParts(model);
   const trailingEntries = trailingValueEntries(model);
 
@@ -867,7 +846,6 @@ export function MobileCardView<TItem extends RowData>({
     const card = (
       <PhoneListRow
         model={model}
-        entity={entity}
         isSelectable={isSelectable}
         selectionMode={selectionMode}
         onEnterSelection={() => {

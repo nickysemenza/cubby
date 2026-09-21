@@ -239,15 +239,18 @@ function TableStatus<TItem extends RowData>({
   error,
   rows,
   emptyState,
+  refreshControls,
 }: Pick<
   RTableProps<TItem>,
-  "table" | "entity" | "isLoading" | "error" | "emptyState"
+  "table" | "entity" | "isLoading" | "error" | "emptyState" | "refreshControls"
 > & {
   hydrated: boolean;
   rows: readonly Row<TItem>[];
 }): ReactNode {
   if (isLoading || !hydrated) return <SimpleLoading />;
-  if (error) return <ErrorDisplay error={error} />;
+  if (error) {
+    return <ErrorDisplay error={error} onRetry={refreshControls?.onRefresh} />;
+  }
   if (rows.length) return null;
   if (emptyState) return emptyState;
 
@@ -995,6 +998,7 @@ function RTableInner<TItem extends RowData>(props: RTableProps<TItem>) {
       error={error}
       rows={rows}
       emptyState={emptyState}
+      refreshControls={refreshControls}
     />
   );
   const hasStatusContent =
@@ -1024,9 +1028,8 @@ function RTableInner<TItem extends RowData>(props: RTableProps<TItem>) {
   ) : null;
 
   const renderTableBody = () => {
-    // Status is rendered as a block below the table (see renderStatusContent),
-    // so the body stays empty rather than holding a full-scroll-width cell.
-    if (hasStatusContent) return null;
+    // Keep loaded rows usable after a failed refresh; status lives below the table.
+    if (!hydrated || (isLoading && rows.length === 0)) return null;
 
     // Always use virtualized rendering for consistent behavior
     const topSpacerHeight = virtualRows.length > 0 ? virtualRows[0]!.start : 0;

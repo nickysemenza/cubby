@@ -82,6 +82,7 @@ export function EntityEditDialogContent<E extends EditableEntity>({
     <ResponsiveDialog
       open={open}
       onOpenChange={(next) => {
+        if (!next && session.isPending) return;
         if (!next) session.reset();
         onOpenChange(next);
       }}
@@ -95,6 +96,10 @@ export function EntityEditDialogContent<E extends EditableEntity>({
         onSubmit={() => {
           void session.submit().then((result) => {
             if (!result.ok) return;
+            if (!result.changed) {
+              close();
+              return;
+            }
             if (!result.result) {
               throw new Error(
                 `${request.entity} ${request.operation} returned no entity result.`,
@@ -107,7 +112,9 @@ export function EntityEditDialogContent<E extends EditableEntity>({
         }}
         isPending={session.isPending}
         error={error}
-        onCancel={close}
+        onCancel={() => {
+          if (!session.isPending) close();
+        }}
         submitButtonText={presentation.submitLabel ?? "Create"}
         footerMode="dialog"
       >

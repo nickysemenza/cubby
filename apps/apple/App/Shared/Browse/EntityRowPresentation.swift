@@ -74,7 +74,7 @@ struct EntityRowPresentation: Sendable, Hashable {
             + facts.map { fact in
                 if let label = fact.label, !label.isEmpty { return "\(label), \(fact.value)" }
                 return fact.value
-            } + [shortcode]).joined(separator: ", ")
+            }).joined(separator: ", ")
     }
 
     static func resolve(
@@ -119,13 +119,6 @@ struct EntityRowPresentation: Sendable, Hashable {
             for key in ["date", "observedOn"] { append(key) }
         }
         for key in selectedKeys { append(key) }
-
-        if let updated = row.raw["updatedAt"]?.stringValue,
-            !facts.contains(where: { $0.id == "updatedAt" }),
-            let formatted = EntityFieldValue.formattedDate(updated)
-        {
-            facts.append(Fact(id: "updatedAt", label: "Edited", value: formatted, isDate: true))
-        }
 
         return EntityRowPresentation(
             title: row.title, facts: facts, shortcode: row.id,

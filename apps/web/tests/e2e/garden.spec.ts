@@ -93,7 +93,7 @@ test("a planting's generic pages: create, edit status, log a journal entry, and 
     .click();
   dialog = page.getByRole("dialog");
   await expect(dialog.getByText("Edit Planting")).toBeVisible();
-  await dialog.getByRole("combobox", { name: "status", exact: true }).click();
+  await dialog.getByRole("combobox", { name: "Status", exact: true }).click();
   await page.getByRole("option", { name: "Finished", exact: true }).click();
   await dialog
     .getByRole("button", { name: "Save changes", exact: true })
@@ -114,7 +114,7 @@ test("a planting's generic pages: create, edit status, log a journal entry, and 
     dialog.getByRole("combobox", { name: "Location", exact: true }),
     growingBedName,
   );
-  await dialog.getByRole("combobox", { name: "kind", exact: true }).click();
+  await dialog.getByRole("combobox", { name: "Kind", exact: true }).click();
   await page.getByRole("option", { name: "Harvest", exact: true }).click();
   await dialog.getByLabel("Observed", { exact: true }).fill("2026-08-20");
   await dialog.getByLabel("Harvest amount", { exact: true }).fill("A handful");

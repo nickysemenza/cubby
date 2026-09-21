@@ -13,9 +13,7 @@ struct AddPhotoSheet: View {
     @State private var path: [AddPhotoRoute] = []
     @State private var preparingUpload = false
     @State private var operationTask: Task<Void, Never>?
-    @State private var refreshingMatches = false
     @State private var draftDismissal = DraftDismissalState()
-    @State private var keepsPendingWriteAfterDismiss = false
     @State private var deliveredResult = false
 
     var body: some View {
@@ -108,6 +106,7 @@ struct AddPhotoSheet: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { requestCancel() }
+                        .disabled(isUploading || preparingUpload)
                         .accessibilityIdentifier("photo.add.cancel")
                 }
                 ToolbarItem(placement: .confirmationAction) {
@@ -117,7 +116,6 @@ struct AddPhotoSheet: View {
                             deliverResult(id)
                             dismiss()
                         }
-                        .disabled(refreshingMatches)
                         .accessibilityIdentifier("photo.add.done")
                     case .ready, .failed:
                         Button("Upload") { startPreparingUpload() }
@@ -157,14 +155,9 @@ struct AddPhotoSheet: View {
         .draftDismissal(
             $draftDismissal, isDirty: capture.hasDraft,
             isSaving: isUploading || preparingUpload,
-            onDiscard: { dismiss() },
-            onCloseWhileSaving: {
-                keepsPendingWriteAfterDismiss = true
-                dismiss()
-            }
+            onDiscard: { dismiss() }
         )
         .onDisappear {
-            guard !keepsPendingWriteAfterDismiss else { return }
             operationTask?.cancel()
             operationTask = nil
             capture.cancelPendingWork()
@@ -310,7 +303,7 @@ struct AddPhotoSheet: View {
 
     private func requestCancel() {
         draftDismissal.request(
-            isDirty: capture.hasDraft, isSaving: isUploading,
+            isDirty: capture.hasDraft, isSaving: isUploading || preparingUpload,
             dismiss: dismiss)
     }
 
@@ -318,12 +311,9 @@ struct AddPhotoSheet: View {
         await capture.upload()
         guard !Task.isCancelled, capture.uses(client: appModel.client) else { return }
         if case .done(let id) = capture.phase {
-            refreshingMatches = true
-            await appModel.photoMatches.refresh(client: appModel.client)
-            if !Task.isCancelled {
-                refreshingMatches = false
-                if keepsPendingWriteAfterDismiss { deliverResult(id) }
-            }
+            deliverResult(id)
+            dismiss()
+            Task { await appModel.photoMatches.refresh(client: appModel.client) }
         }
     }
 
