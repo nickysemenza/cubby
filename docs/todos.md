@@ -132,6 +132,24 @@ history is the archive. Permanent product constraints live in the
   retain findings for partial receipts and never receive automatically. This
   closes the [Delivered flow](plans/purchase-import-redesign.md#5-flows).
 
+- **Post-import shelf triage.** After a vendor purchase import every new
+  product lands in the `unlocated` saved view (`entities/view-manifest.ts`:
+  bought, never sold, held nowhere) and the operator decides each one by hand:
+  discard, stock it at a location, or park it in the household **Unknown**
+  location. The verbs exist — `discard` (ledger-only exit when unstocked),
+  `addToInventory`/`receive`, and `location.ensureGlobalUnknown` (the
+  recount and sweep flows already call it) — but there is no one-pass flow.
+  Build a guided pass over the `unlocated` rows offering exactly those three
+  choices per product: a one-click "Park in Unknown" (ensure the global
+  Unknown, create the entry there so it surfaces in `unknownParkedItems`) and
+  a stock amount defaulted from the quantity ledger (`expectedQuantity −
+  onHandUnits`; `product-hero-presence.ts` computes the presentation and is
+  currently unused) instead of `QuickInventoryAdd`'s constant `1`. Detail
+  pages have no prev/next navigation, so use the guided-flow shape
+  (`problem-actions.ts` `start-recount`), optionally scoped to one import run
+  (`product-import-runs.tsx` already knows it). Receiving stays explicit
+  (purchase-import plan decision 15).
+
 - **Expense project suggestion ignores trade affinity.** The
   `expense.projectId` roster in `server/ai/field-suggest/registry.ts` is
   `projectNameOptions` plus each project's date window; the same-trade
