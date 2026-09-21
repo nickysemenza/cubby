@@ -9,7 +9,7 @@ inputs:
     required: false
     default: "false"
   workspace-filter:
-    description: "Optional pnpm workspace filter for a narrower install"
+    description: "Optional space-separated pnpm workspace filters for a narrower install"
     required: false
     default: ""
   cache-pnpm-store:
@@ -112,7 +112,12 @@ runs:
         WORKSPACE_FILTER: ${{ inputs.workspace-filter }}
       run: |
         if [[ -n "$WORKSPACE_FILTER" ]]; then
-          pnpm install --frozen-lockfile --prefer-offline --filter "$WORKSPACE_FILTER"
+          read -r -a workspace_filters <<< "$WORKSPACE_FILTER"
+          filter_args=()
+          for workspace_filter in "${workspace_filters[@]}"; do
+            filter_args+=(--filter "$workspace_filter")
+          done
+          pnpm install --frozen-lockfile --prefer-offline "${filter_args[@]}"
         else
           pnpm install --frozen-lockfile --prefer-offline
         fi

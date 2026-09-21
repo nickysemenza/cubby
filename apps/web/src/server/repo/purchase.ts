@@ -2123,6 +2123,9 @@ export const previewMergePurchases = async (
         importRunTarget,
         importRunTarget.purchaseId,
         losers,
+        // ImportRunTarget is hard-delete-only operational history: every
+        // retained target must be previewed before merge repoints it.
+        { includeDeleted: true },
       ),
     }),
     impact({
