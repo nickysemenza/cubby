@@ -4,6 +4,8 @@ import { fromAny } from "@total-typescript/shoehorn";
 import { describe, expect, it, vi } from "vitest";
 import { type JSONType, z } from "zod";
 
+import { withErrorReporting } from "~/server/errors/report-error";
+
 import { callMcpTool } from "./mcp-test-utils";
 import { McpOperationContext } from "./operation-context";
 import { listMcpToolCatalog } from "./server";
@@ -195,6 +197,42 @@ describe("MCP catalog schemas", () => {
     const result = await callMcpTool(server, "union_out", {}, {});
     expect(result.isError).not.toBe(true);
     expect(result.structuredContent).toEqual({ total: 3 });
+  });
+
+  it("keeps legacy refusal codes in error metadata outside success-only structured content", async () => {
+    const server = new McpServer({ name: "test", version: "1.0.0" });
+    const capture = vi.fn(() => "unexpected-capture");
+    registerMcpTool(server, {
+      name: "legacy_refusal",
+      description: "Refuses invalid input",
+      inputSchema: z.object({}),
+      outputSchema: z.object({ ok: z.boolean() }),
+      annotations: { readOnlyHint: true },
+      handler: async () => {
+        throw Object.assign(
+          new Error("Invalid identifier", {
+            cause: { reason: "INVALID_INPUT" },
+          }),
+          { code: "BAD_REQUEST" },
+        );
+      },
+    });
+    const result = await withErrorReporting(
+      () => callMcpTool(server, "legacy_refusal", {}, {}),
+      undefined,
+      capture,
+    );
+    expect(result.isError).toBe(true);
+    expect(result.structuredContent).toBeUndefined();
+    expect(result._meta).toMatchObject({
+      "cubby/error": {
+        code: "BAD_REQUEST",
+        reason: "INVALID_INPUT",
+        message: "Invalid identifier",
+        diagnostics: { operation: "legacy_refusal", stage: "run" },
+      },
+    });
+    expect(capture).not.toHaveBeenCalled();
   });
 
   it("marks calendar state dirty only after a successful mutating tool", async () => {

@@ -28,5 +28,19 @@ describe("observed request cancellation", () => {
     expect(parseObservedFailure(Symbol("private failure"))).toMatchObject({
       message: "A non-serializable value was thrown",
     });
+    const circular = { message: "Provider failed", cause: {} };
+    circular.cause = circular;
+    expect(parseObservedFailure(circular)).toEqual(circular);
+    const hostile = {
+      get message() {
+        throw new Error("Cannot read message");
+      },
+    };
+    const observed = parseObservedFailure(hostile);
+    expect(observed).toBeInstanceOf(Error);
+    if (!(observed instanceof Error))
+      throw new Error("Expected an observable Error");
+    expect(observed.message).toBe("A non-serializable value was thrown");
+    expect(observed.cause).toBe(hostile);
   });
 });

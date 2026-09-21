@@ -26585,6 +26585,88 @@
           "requestId": {
             "type": "string"
           },
+          "diagnostics": {
+            "type": "object",
+            "properties": {
+              "origin": {
+                "type": "string",
+                "const": "server"
+              },
+              "operation": {
+                "type": "string"
+              },
+              "entity": {
+                "type": "string"
+              },
+              "module": {
+                "type": "string"
+              },
+              "stage": {
+                "type": "string",
+                "enum": [
+                  "context",
+                  "input",
+                  "run",
+                  "output",
+                  "dispatch"
+                ]
+              },
+              "causes": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "code": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "name",
+                    "message"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "truncated": {
+                "type": "boolean"
+              },
+              "batchIndex": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "sentryEventId": {
+                "type": "string"
+              },
+              "sentryUrl": {
+                "type": "string",
+                "pattern": "^https:\\/\\/nicky-semenza\\.sentry\\.io\\/issues\\/\\?query="
+              },
+              "cfRayId": {
+                "type": "string"
+              },
+              "cloudflareUrl": {
+                "type": "string",
+                "const": "https://dash.cloudflare.com/?to=/:account/workers-and-pages/observability"
+              }
+            },
+            "required": [
+              "origin",
+              "operation",
+              "stage",
+              "causes"
+            ],
+            "additionalProperties": false
+          },
           "blockers": {
             "type": "array",
             "items": {

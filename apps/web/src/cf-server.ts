@@ -21,6 +21,7 @@ import { observeResponseBody } from "./lib/response-body-observer";
 import { SENTRY_DSN } from "./lib/sentry-dsn";
 import { resolveWorkerSentryEnvironment } from "./lib/sentry-environment";
 import { scrubSentryEvent } from "./lib/sentry-scrub";
+import { rewriteLegacyStartRequest } from "./lib/start-dispatch-url";
 import {
   readStartOperationTraceContext,
   startOperationTraceAttributes,
@@ -36,6 +37,10 @@ import { createCalendarFeedHandler } from "./server/calendar/feed";
 import { runWithExecutionCtx, setCfEnv } from "./server/cf-env";
 import { recordDatabaseWrite } from "./server/database-freshness/client";
 import { withRequestDb, withRequestDbClient } from "./server/db";
+import {
+  reportServerError,
+  withErrorReporting,
+} from "./server/errors/report-error";
 import {
   handleImageProcessingSocketUpgrade,
   isImageProcessingSocketUpgrade,
@@ -73,13 +78,6 @@ const calendarFeedHandler = createCalendarFeedHandler((origin) =>
   externalCalendarFeedStateFor(origin),
 );
 
-interface InterceptedError {
-  name: string;
-  message: string;
-  stack?: string;
-  cause?: unknown;
-}
-
 // Per-request holder for the console.error-intercepted error, scoped via
 // AsyncLocalStorage — mirrors withRequestDb's per-request pool store in
 // server/db.ts. Workers reuse one isolate across concurrent in-flight
@@ -87,7 +85,7 @@ interface InterceptedError {
 // console.error reset/overwrite the value across an await before request A
 // reads it, dropping A's real error or shipping B's as A's.
 const interceptedErrorStore = new AsyncLocalStorage<{
-  error: InterceptedError | null;
+  error: Error | null;
 }>();
 
 const _origError = console.error;
@@ -96,21 +94,7 @@ console.error = (...args: unknown[]) => {
   if (holder) {
     for (const arg of args) {
       if (arg instanceof Error) {
-        holder.error = {
-          name: arg.constructor.name,
-          message: arg.message,
-          stack: arg.stack,
-          cause:
-            arg.cause instanceof Error
-              ? {
-                  name: arg.cause.constructor.name,
-                  message: arg.cause.message,
-                  stack: arg.cause.stack,
-                }
-              : arg.cause
-                ? String(arg.cause)
-                : undefined,
-        };
+        holder.error = arg;
       }
     }
   }
@@ -166,39 +150,22 @@ const handler = {
     // not both.
     Sentry.setTag("request_id", ray);
 
-    try {
-      return await interceptedErrorStore.run({ error: null }, () =>
-        withManualTrace(
-          startTraceContext
-            ? `cf.fetch.${startOperationTraceName(startTraceContext)}`
-            : "cf.fetch",
-          (span, endSpan) =>
-            url.pathname === "/.well-known/caldav" ||
-            url.pathname === "/.well-known/caldav/" ||
-            url.pathname === "/api/caldav" ||
-            url.pathname.startsWith("/api/caldav/")
-              ? withTrace("cf.caldav", async () => {
-                  const response = await runWithExecutionCtx(
-                    ctx,
-                    () => handleCalDavRequest(request),
-                    url.origin,
-                  );
-                  span.setAttribute(
-                    "http.response.status_code",
-                    response.status,
-                  );
-                  endSpan();
-                  return withResponseDiagnostics(response, {
-                    requestId: getRequestId(request.headers),
-                    workerVersion: env.CF_VERSION_METADATA.id,
-                  });
-                })
-              : (request.method === "GET" || request.method === "HEAD") &&
-                  url.pathname.startsWith("/api/calendar/")
-                ? withTrace("cf.calendarFeed", async () => {
+    return await withErrorReporting(async () => {
+      try {
+        return await interceptedErrorStore.run({ error: null }, () =>
+          withManualTrace(
+            startTraceContext
+              ? `cf.fetch.${startOperationTraceName(startTraceContext)}`
+              : "cf.fetch",
+            (span, endSpan) =>
+              url.pathname === "/.well-known/caldav" ||
+              url.pathname === "/.well-known/caldav/" ||
+              url.pathname === "/api/caldav" ||
+              url.pathname.startsWith("/api/caldav/")
+                ? withTrace("cf.caldav", async () => {
                     const response = await runWithExecutionCtx(
                       ctx,
-                      async () => await calendarFeedHandler({ request }),
+                      () => handleCalDavRequest(request),
                       url.origin,
                     );
                     span.setAttribute(
@@ -211,27 +178,84 @@ const handler = {
                       workerVersion: env.CF_VERSION_METADATA.id,
                     });
                   })
-                : withRequestDb(
-                    {
-                      strong: env.HYPERDRIVE.connectionString,
-                      boundedStale: env.HYPERDRIVE_CACHED.connectionString,
-                    },
-                    async () => {
-                      if (
-                        isDirectBrowserSocketUpgrade(request) ||
-                        isImageProcessingSocketUpgrade(request)
-                      ) {
-                        const response = await withTrace(
+                : (request.method === "GET" || request.method === "HEAD") &&
+                    url.pathname.startsWith("/api/calendar/")
+                  ? withTrace("cf.calendarFeed", async () => {
+                      const response = await runWithExecutionCtx(
+                        ctx,
+                        async () => await calendarFeedHandler({ request }),
+                        url.origin,
+                      );
+                      span.setAttribute(
+                        "http.response.status_code",
+                        response.status,
+                      );
+                      endSpan();
+                      return withResponseDiagnostics(response, {
+                        requestId: getRequestId(request.headers),
+                        workerVersion: env.CF_VERSION_METADATA.id,
+                      });
+                    })
+                  : withRequestDb(
+                      {
+                        strong: env.HYPERDRIVE.connectionString,
+                        boundedStale: env.HYPERDRIVE_CACHED.connectionString,
+                      },
+                      async () => {
+                        if (
+                          isDirectBrowserSocketUpgrade(request) ||
                           isImageProcessingSocketUpgrade(request)
-                            ? "cf.imageProcessingSocket"
-                            : "cf.purchaseImportSocket",
-                          () =>
+                        ) {
+                          const response = await withTrace(
+                            isImageProcessingSocketUpgrade(request)
+                              ? "cf.imageProcessingSocket"
+                              : "cf.purchaseImportSocket",
+                            () =>
+                              runWithExecutionCtx(
+                                ctx,
+                                () =>
+                                  isImageProcessingSocketUpgrade(request)
+                                    ? handleImageProcessingSocketUpgrade(
+                                        request,
+                                      )
+                                    : handleDirectBrowserSocketUpgrade(request),
+                                url.origin,
+                              ),
+                          );
+                          span.setAttribute(
+                            "http.response.status_code",
+                            response.status,
+                          );
+                          endSpan();
+                          // Preserve Cloudflare's immutable 101 headers and
+                          // non-standard WebSocket slot verbatim.
+                          return response;
+                        }
+                        const handlerImport = withTrace(
+                          "cf.importHandler",
+                          () => getHandler(),
+                        );
+                        const httpApiImport = url.pathname.startsWith(
+                          "/api/v1/",
+                        )
+                          ? withTrace("cf.importHttpApi", () => getHttpApi())
+                          : Promise.resolve(undefined);
+                        const [{ default: handler }] = await Promise.all([
+                          handlerImport,
+                          httpApiImport,
+                        ]);
+                        // Scoped here rather than around the whole handler body: this
+                        // is the only region where request-scoped work runs, and
+                        // waitUntil must belong to THIS request's context.
+                        const response = await withTrace(
+                          "cf.handler",
+                          async () =>
                             runWithExecutionCtx(
                               ctx,
-                              () =>
-                                isImageProcessingSocketUpgrade(request)
-                                  ? handleImageProcessingSocketUpgrade(request)
-                                  : handleDirectBrowserSocketUpgrade(request),
+                              async () =>
+                                handler.fetch(
+                                  rewriteLegacyStartRequest(request),
+                                ),
                               url.origin,
                             ),
                         );
@@ -239,127 +263,111 @@ const handler = {
                           "http.response.status_code",
                           response.status,
                         );
-                        endSpan();
-                        // Preserve Cloudflare's immutable 101 headers and
-                        // non-standard WebSocket slot verbatim.
-                        return response;
-                      }
-                      const handlerImport = withTrace("cf.importHandler", () =>
-                        getHandler(),
-                      );
-                      const httpApiImport = url.pathname.startsWith("/api/v1/")
-                        ? withTrace("cf.importHttpApi", () => getHttpApi())
-                        : Promise.resolve(undefined);
-                      const [{ default: handler }] = await Promise.all([
-                        handlerImport,
-                        httpApiImport,
-                      ]);
-                      // Scoped here rather than around the whole handler body: this
-                      // is the only region where request-scoped work runs, and
-                      // waitUntil must belong to THIS request's context.
-                      const response = await withTrace("cf.handler", async () =>
-                        runWithExecutionCtx(
-                          ctx,
-                          async () => handler.fetch(request),
-                          url.origin,
-                        ),
-                      );
-                      span.setAttribute(
-                        "http.response.status_code",
-                        response.status,
-                      );
 
-                      // If Nitro returned a 500 and we intercepted a real error, log the
-                      // details so they appear in `wrangler tail` (Nitro's response body
-                      // is useless) and report it to Sentry — the handler swallows it into
-                      // a 500 body, so withSentry's auto-capture (thrown-error only) never
-                      // sees it.
-                      const interceptedError =
-                        interceptedErrorStore.getStore()?.error;
-                      if (response.status >= 500 && interceptedError) {
-                        console.error(
-                          "[cf-server] Unhandled error:",
-                          JSON.stringify(interceptedError, null, 2),
-                        );
-                        const reconstructed = new Error(
-                          interceptedError.message,
-                        );
-                        reconstructed.name = interceptedError.name;
-                        reconstructed.stack = interceptedError.stack;
-                        reconstructed.cause = interceptedError.cause;
-                        Sentry.captureException(reconstructed);
-                      }
+                        // If Nitro returned a 500 and we intercepted a real error, log the
+                        // details so they appear in `wrangler tail` (Nitro's response body
+                        // is useless) and report it to Sentry — the handler swallows it into
+                        // a 500 body, so withSentry's auto-capture (thrown-error only) never
+                        // sees it.
+                        const interceptedError =
+                          interceptedErrorStore.getStore()?.error;
+                        let fallbackEventId: string | undefined;
+                        if (response.status >= 500 && interceptedError) {
+                          console.error(
+                            "[cf-server] Unhandled error:",
+                            interceptedError,
+                          );
+                          fallbackEventId = reportServerError(
+                            interceptedError,
+                            {
+                              requestId: getRequestId(request.headers),
+                            },
+                          );
+                        }
 
-                      const correlatedResponse = withResponseDiagnostics(
-                        withHtmlNoCache(response),
-                        {
-                          requestId: getRequestId(request.headers),
-                          workerVersion: env.CF_VERSION_METADATA.id,
-                        },
-                      );
-                      if (request.method === "HEAD") {
-                        span.setAttributes({
-                          "cubby.response.body.outcome": "empty",
-                          "cubby.response.stream.duration_ms": 0,
-                        });
-                        endSpan();
-                        return correlatedResponse;
-                      }
-                      return observeResponseBody(
-                        correlatedResponse,
-                        (observation) => {
+                        const correlatedResponse = withResponseDiagnostics(
+                          withHtmlNoCache(response),
+                          {
+                            requestId: getRequestId(request.headers),
+                            workerVersion: env.CF_VERSION_METADATA.id,
+                          },
+                        );
+                        if (fallbackEventId)
+                          correlatedResponse.headers.set(
+                            "x-sentry-event-id",
+                            fallbackEventId,
+                          );
+                        if (request.method === "HEAD") {
                           span.setAttributes({
-                            "cubby.response.body.outcome": observation.outcome,
-                            "cubby.response.stream.duration_ms": Math.round(
-                              observation.durationMs,
-                            ),
-                            "cubby.response.cancelled":
-                              observation.outcome === "cancelled",
+                            "cubby.response.body.outcome": "empty",
+                            "cubby.response.stream.duration_ms": 0,
                           });
-                          if (observation.outcome === "error") {
-                            span.setError("response_stream_error");
-                          }
                           endSpan();
-                        },
-                      );
-                    },
-                  ),
-          {
-            "http.request.method": request.method,
-            "http.route": routeTemplate,
-            "server.address": url.hostname,
-            "service.version": env.CF_VERSION_METADATA.id,
-            "cloudflare.worker.version.tag": env.CF_VERSION_METADATA.tag,
-            "cloudflare.worker.version.timestamp":
-              env.CF_VERSION_METADATA.timestamp,
-            "cubby.telemetry.schema_version": TELEMETRY_SCHEMA_VERSION,
-            "cubby.workload": classifyHttpWorkload(
-              url.pathname,
-              request.headers,
-            ),
-            // Load-bearing, not decoration: the ray is the id we hand back to
-            // the client in `x-request-id` (getRequestId falls back to it under
-            // CF), and this attribute is the only thing that makes that id
-            // findable in Tempo. Dropping it makes every reported id a dead
-            // end. Undefined values are skipped by both span backends.
-            "cloudflare.ray_id": ray,
-            ...startOperationTraceAttributes(startTraceContext),
-          },
-        ),
-      );
-    } catch (error) {
-      // Report to Sentry before swallowing: we return a generic 500 rather than
-      // rethrowing, so withSentry's auto-capture would otherwise miss this.
-      Sentry.captureException(error);
-      // Log full detail server-side (visible in `wrangler tail`) but never
-      // return the stack/message to the client — avoids stack-trace exposure.
-      const detail =
-        error instanceof Error
-          ? `${error.constructor.name}: ${error.message}\n${error.stack}`
-          : String(error);
-      console.error("[cf-server]", detail);
-      return new Response("Internal Server Error", { status: 500 });
-    }
+                          return correlatedResponse;
+                        }
+                        return observeResponseBody(
+                          correlatedResponse,
+                          (observation) => {
+                            span.setAttributes({
+                              "cubby.response.body.outcome":
+                                observation.outcome,
+                              "cubby.response.stream.duration_ms": Math.round(
+                                observation.durationMs,
+                              ),
+                              "cubby.response.cancelled":
+                                observation.outcome === "cancelled",
+                            });
+                            if (observation.outcome === "error") {
+                              span.setError("response_stream_error");
+                            }
+                            endSpan();
+                          },
+                        );
+                      },
+                    ),
+            {
+              "http.request.method": request.method,
+              "http.route": routeTemplate,
+              "server.address": url.hostname,
+              "service.version": env.CF_VERSION_METADATA.id,
+              "cloudflare.worker.version.tag": env.CF_VERSION_METADATA.tag,
+              "cloudflare.worker.version.timestamp":
+                env.CF_VERSION_METADATA.timestamp,
+              "cubby.telemetry.schema_version": TELEMETRY_SCHEMA_VERSION,
+              "cubby.workload": classifyHttpWorkload(
+                url.pathname,
+                request.headers,
+              ),
+              // Load-bearing, not decoration: the ray is the id we hand back to
+              // the client in `x-request-id` (getRequestId falls back to it under
+              // CF), and this attribute is the only thing that makes that id
+              // findable in Tempo. Dropping it makes every reported id a dead
+              // end. Undefined values are skipped by both span backends.
+              "cloudflare.ray_id": ray,
+              ...startOperationTraceAttributes(startTraceContext),
+            },
+          ),
+        );
+      } catch (error) {
+        // Report to Sentry before swallowing: we return a generic 500 rather than
+        // rethrowing, so withSentry's auto-capture would otherwise miss this.
+        const eventId = reportServerError(error, {
+          requestId: getRequestId(request.headers),
+        });
+        // Log full detail server-side (visible in `wrangler tail`) but never
+        // return the stack/message to the client — avoids stack-trace exposure.
+        const detail =
+          error instanceof Error
+            ? `${error.constructor.name}: ${error.message}\n${error.stack}`
+            : String(error);
+        console.error("[cf-server]", detail);
+        const headers = new Headers({ "cache-control": "no-store" });
+        const requestId = getRequestId(request.headers);
+        if (requestId) headers.set("x-request-id", requestId);
+        if (eventId) headers.set("x-sentry-event-id", eventId);
+        return new Response("Internal Server Error", { status: 500, headers });
+      }
+    }, request.headers);
   },
 
   // Background queue consumer. Each message is a complete task; there is no

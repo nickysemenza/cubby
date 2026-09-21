@@ -15,6 +15,10 @@ import { scheduleCalendarFeedDirty } from "~/server/calendar/client";
 import { recordDatabaseWrite } from "~/server/database-freshness/client";
 import { importRun } from "~/server/db/schema";
 import { toPublicErrorPayload } from "~/server/errors/app-error";
+import {
+  errorReportingHeaders,
+  withErrorReporting,
+} from "~/server/errors/report-error";
 import { parseMcpWorkflowCaller } from "~/server/mcp/caller-contract";
 import { getEntityKernelContext } from "~/server/mcp/kernel-context";
 import { McpOperationContext } from "~/server/mcp/operation-context";
@@ -30,14 +34,18 @@ import {
 } from "~/server/purchase-import/capabilities";
 import type { ReadPolicy } from "~/server/read-policy";
 import { getDb } from "~/server/repo/database-helpers";
+import { publicStartOperationErrorSchema } from "~/server/start-operation.contract";
+import {
+  normalizeStartOperationError,
+  type OperationFailureContext,
+  type OperationStage,
+} from "~/server/start-operation.server";
+import { getRequestId } from "~/server/tracing";
 
 import { declareToolOutputSchema } from "./tool-catalog";
 import { requireObjectInputSchema, sdkOutputSchema } from "./tool-json-schema";
 
 export type Caller = McpWorkflowCaller;
-type ToolErrorCode = NonNullable<
-  ReturnType<typeof toPublicErrorPayload>["code"]
->;
 
 const toolArgumentsSchema = z.looseObject({});
 const structuredContentSchema = z.looseObject({});
@@ -168,31 +176,54 @@ function structuredSuccess<TOutput extends StructuredOutputSchema>(
  * validates structured content against the success schema even for `isError`,
  * so putting `{code, reason}` there makes an ordinary refusal throw McpError.
  */
-function structuredError<T>(error: T): CallToolResult {
-  const result: CallToolResult = {
-    content: [{ type: "text", text: formatToolError(error) }],
+function structuredError<T>(
+  error: T,
+  context: OperationFailureContext,
+  stage: OperationStage,
+): CallToolResult {
+  const detail = describeToolError(error, context, stage);
+  return {
+    content: [
+      {
+        type: "text",
+        text: `${formatToolError(detail)}\n\n${JSON.stringify(detail)}`,
+      },
+    ],
     isError: true,
+    _meta: { "cubby/error": detail },
   };
-  const meta = toolErrorMeta(error);
-  if (meta) result._meta = meta;
-  return result;
 }
 
-const ERROR_META_KEY = "cubby/error";
+export const toolErrorDetailSchema = publicStartOperationErrorSchema.partial({
+  code: true,
+});
+export type ToolErrorDetail = z.infer<typeof toolErrorDetailSchema>;
 
-function toolErrorMeta<T>(error: T) {
-  const payload = toPublicErrorPayload(error);
-  if (!payload.code && !payload.reason && !payload.blockers) return undefined;
-  return { [ERROR_META_KEY]: payload };
-}
-
-export interface ToolErrorDetail {
-  code?: ToolErrorCode;
-  reason?: string;
-  message: string;
-}
-
-export function describeToolError<T>(error: T): ToolErrorDetail {
+export function describeToolError<T>(
+  error: T,
+  context?: OperationFailureContext,
+  stage: OperationStage = "run",
+): ToolErrorDetail {
+  if (context) {
+    const headers = context.headers ?? errorReportingHeaders();
+    const detail = normalizeStartOperationError(
+      error,
+      stage,
+      getRequestId(headers),
+      {
+        ...context,
+        headers,
+      },
+    ).publicError;
+    const payload = toPublicErrorPayload(error);
+    if (payload.code) {
+      detail.code = payload.code;
+      detail.reason = payload.reason;
+      if (payload.blockers && context.authenticated)
+        detail.blockers = payload.blockers;
+    }
+    return detail;
+  }
   const { code, reason } = toPublicErrorPayload(error);
   const message = error instanceof Error ? error.message : String(error);
   const detail: ToolErrorDetail = { message };
@@ -201,8 +232,7 @@ export function describeToolError<T>(error: T): ToolErrorDetail {
   return detail;
 }
 
-function formatToolError<T>(error: T): string {
-  const { code, reason, message } = describeToolError(error);
+function formatToolError({ code, reason, message }: ToolErrorDetail): string {
   if (!code) return message;
   return reason ? `${code}: ${message} (${reason})` : `${code}: ${message}`;
 }
@@ -263,99 +293,116 @@ export function registerMcpTool<
   }
   declareToolOutputSchema(server, config.name, config.outputSchema);
 
-  // eslint-disable-next-line complexity -- Registration centralizes auth, capability, approval, telemetry, and error contracts.
   const callback = async (
     params: ToolArguments,
     extra: ToolExtra,
-  ): Promise<CallToolResult> => {
-    let mutation = false;
-    let enteredHandler = false;
-    try {
-      const parsedParams = z.parse(inputSchema, params);
-      mutation =
-        config.isMutation?.(parsedParams) ??
-        config.annotations.readOnlyHint !== true;
-      const configuredReadPolicy = config.readPolicy?.(parsedParams);
-      const preparedExtra = await prepareToolExtra(
-        extra,
-        mutation ? "strong" : (configuredReadPolicy ?? "context"),
-      );
-      enteredHandler = true;
-      const trusted = trustedPurchaseAgent(preparedExtra);
-      const operationContext = operationContextFromExtra(preparedExtra);
-      if (trusted) {
-        const capability = capabilityForPurchaseAgentTool(
-          config.name,
-          mutation,
+  ): Promise<CallToolResult> =>
+    // eslint-disable-next-line complexity -- Registration centralizes auth, capability, approval, telemetry, and error contracts.
+    withErrorReporting(async () => {
+      let stage: OperationStage = "input";
+      let entity: string | undefined;
+      let mutation = false;
+      let enteredHandler = false;
+      try {
+        const parsedParams = z.parse(inputSchema, params);
+        entity = config.telemetryEntity?.(parsedParams);
+        stage = "context";
+        mutation =
+          config.isMutation?.(parsedParams) ??
+          config.annotations.readOnlyHint !== true;
+        const configuredReadPolicy = config.readPolicy?.(parsedParams);
+        const preparedExtra = await prepareToolExtra(
+          extra,
+          mutation ? "strong" : (configuredReadPolicy ?? "context"),
         );
-        if (capability) {
-          const parsedKernel = getEntityKernelContext(preparedExtra);
-          await assertImportRunCapabilityById(
-            parsedKernel.db,
-            trusted.runId,
-            capability,
+        enteredHandler = true;
+        const trusted = trustedPurchaseAgent(preparedExtra);
+        const operationContext = operationContextFromExtra(preparedExtra);
+        if (trusted) {
+          const capability = capabilityForPurchaseAgentTool(
+            config.name,
+            mutation,
           );
+          if (capability) {
+            const parsedKernel = getEntityKernelContext(preparedExtra);
+            await assertImportRunCapabilityById(
+              parsedKernel.db,
+              trusted.runId,
+              capability,
+            );
+          }
+        }
+        const autoAllowedPurchaseImportTool =
+          config.name === "prepare_purchase_import" ||
+          config.name === "commit_purchase_import" ||
+          config.purchaseAgentMutationHandled === true;
+        if (trusted && mutation && autoAllowedPurchaseImportTool) {
+          const execution = z
+            .object({ _runExecution: purchaseImportRunExecution })
+            .parse(params)._runExecution;
+          const parsedKernel = getEntityKernelContext(preparedExtra);
+          const [delegatedRun] = await getDb(parsedKernel.db)
+            .select({ publicId: importRun.publicId })
+            .from(importRun)
+            .where(eq(importRun.id, trusted.runId))
+            .limit(1);
+          if (delegatedRun?.publicId !== execution.runPublicId)
+            throw new Error(
+              "Purchase-agent run execution does not match its delegation",
+            );
+        }
+        stage = "run";
+        const result =
+          trusted && mutation && !autoAllowedPurchaseImportTool
+            ? await (async () => {
+                if (!operationContext)
+                  throw new Error(
+                    "Purchase-agent operation context is missing",
+                  );
+                const execution = z
+                  .object({ _runExecution: purchaseImportRunExecution })
+                  .parse(params)._runExecution;
+                const parsedKernel = getEntityKernelContext(preparedExtra);
+                return executePurchaseAgentMutation({
+                  db: parsedKernel.db,
+                  actor: parsedKernel.actorContext,
+                  operationContext,
+                  trusted,
+                  toolName: config.name,
+                  args: parsedParams,
+                  execution,
+                  run: (transactionExtra) =>
+                    config.handler(parsedParams, transactionExtra),
+                  baseExtra: preparedExtra,
+                });
+              })()
+            : await config.handler(parsedParams, preparedExtra);
+        stage = "output";
+        const response = structuredSuccess(result, config.outputSchema);
+        if (mutation) {
+          runtime.markCalendarDirty(`mcp.${config.name}`);
+        }
+        return response;
+      } catch (error) {
+        return structuredError(
+          error,
+          {
+            operation: config.name,
+            authenticated: extra.authInfo !== undefined,
+            entity,
+          },
+          stage,
+        );
+      } finally {
+        // A tool can commit before later validation or another item in a batch
+        // fails. Advancing the shared window here keeps every client strong for
+        // that possible partial write without turning a committed response into
+        // an error when the Durable Object is unavailable.
+        if (enteredHandler && mutation) {
+          await runtime.recordDatabaseWrite?.(`mcp.${config.name}`);
         }
       }
-      const autoAllowedPurchaseImportTool =
-        config.name === "prepare_purchase_import" ||
-        config.name === "commit_purchase_import" ||
-        config.purchaseAgentMutationHandled === true;
-      if (trusted && mutation && autoAllowedPurchaseImportTool) {
-        const execution = z
-          .object({ _runExecution: purchaseImportRunExecution })
-          .parse(params)._runExecution;
-        const parsedKernel = getEntityKernelContext(preparedExtra);
-        const [delegatedRun] = await getDb(parsedKernel.db)
-          .select({ publicId: importRun.publicId })
-          .from(importRun)
-          .where(eq(importRun.id, trusted.runId))
-          .limit(1);
-        if (delegatedRun?.publicId !== execution.runPublicId)
-          throw new Error(
-            "Purchase-agent run execution does not match its delegation",
-          );
-      }
-      const result =
-        trusted && mutation && !autoAllowedPurchaseImportTool
-          ? await (async () => {
-              if (!operationContext)
-                throw new Error("Purchase-agent operation context is missing");
-              const execution = z
-                .object({ _runExecution: purchaseImportRunExecution })
-                .parse(params)._runExecution;
-              const parsedKernel = getEntityKernelContext(preparedExtra);
-              return executePurchaseAgentMutation({
-                db: parsedKernel.db,
-                actor: parsedKernel.actorContext,
-                operationContext,
-                trusted,
-                toolName: config.name,
-                args: parsedParams,
-                execution,
-                run: (transactionExtra) =>
-                  config.handler(parsedParams, transactionExtra),
-                baseExtra: preparedExtra,
-              });
-            })()
-          : await config.handler(parsedParams, preparedExtra);
-      const response = structuredSuccess(result, config.outputSchema);
-      if (mutation) {
-        runtime.markCalendarDirty(`mcp.${config.name}`);
-      }
-      return response;
-    } catch (error) {
-      return structuredError(error);
-    } finally {
-      // A tool can commit before later validation or another item in a batch
-      // fails. Advancing the shared window here keeps every client strong for
-      // that possible partial write without turning a committed response into
-      // an error when the Durable Object is unavailable.
-      if (enteredHandler && mutation) {
-        await runtime.recordDatabaseWrite?.(`mcp.${config.name}`);
-      }
-    }
-  };
+    });
 
   server.registerTool(
     config.name,

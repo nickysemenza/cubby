@@ -1,6 +1,8 @@
 import { publicImpactItemSchema } from "@cubby/schemas/entity-integrity";
 import { z } from "zod";
 
+import { errorDiagnosticsSchema } from "~/lib/error-diagnostics";
+
 /**
  * The wire contract every Start operation shares, owned by neither side.
  *
@@ -23,6 +25,7 @@ export const publicStartOperationErrorSchema = z.object({
   reason: z.string().optional(),
   /** Correlates this failed request with server-side traces and Sentry. */
   requestId: z.string().optional(),
+  diagnostics: errorDiagnosticsSchema.optional().catch(undefined),
   blockers: z.array(publicImpactItemSchema).optional(),
   validationIssues: z.array(publicStartValidationIssueSchema).optional(),
 });

@@ -22,6 +22,7 @@ import {
   registerMcpTool,
   type McpToolRegistrationRuntime,
   type ToolErrorDetail,
+  toolErrorDetailSchema,
 } from "./tool-registration";
 
 const DEFAULT_BATCH_MAX_ITEMS = 50;
@@ -63,11 +64,7 @@ function batchOutputSchema<TItemOutput extends z.ZodType>(
         z.object({
           index: z.number().int().nonnegative(),
           status: z.literal("failed"),
-          error: z.object({
-            message: z.string(),
-            code: z.string().optional(),
-            reason: z.string().optional(),
-          }),
+          error: toolErrorDetailSchema,
         }),
       ]),
     ),
@@ -165,6 +162,7 @@ export function registerBatchTool<
         const results: Array<BatchResult<z.output<TItemOutput>>> = [];
 
         for (const [index, item] of params.items.entries()) {
+          let stage: "run" | "output" = "run";
           try {
             const producedValue = trusted
               ? await executePurchaseAgentMutation({
@@ -210,6 +208,7 @@ export function registerBatchTool<
                         extra.authInfo.extra.entityKernel,
                       ),
                 );
+            stage = "output";
             const produced = config.itemOutputSchema.parse(producedValue);
             const success: BatchSuccess<z.output<TItemOutput>> = {
               index,
@@ -222,7 +221,16 @@ export function registerBatchTool<
             results.push({
               index,
               status: "failed",
-              error: describeToolError(error),
+              error: describeToolError(
+                error,
+                {
+                  operation: config.name,
+                  authenticated: extra.authInfo !== undefined,
+                  entity: config.telemetryEntity?.(params),
+                  batchIndex: index,
+                },
+                stage,
+              ),
             });
           }
         }

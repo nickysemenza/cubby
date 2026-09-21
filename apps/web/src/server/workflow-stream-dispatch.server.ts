@@ -4,7 +4,9 @@ import {
   startOperationDefinitionFor,
 } from "~/lib/start-operation-observability";
 import { WORKFLOW_STREAM_HANDLER_LOADERS } from "~/server/generated/start-operation-handlers.gen";
+import { normalizeStartOperationError } from "~/server/start-operation.server";
 import type { WorkflowStreamHandler } from "~/server/subscription-domain.server";
+import { getRequestId } from "~/server/tracing";
 import { workflowStreamErrorResponse } from "~/server/workflow-stream.server";
 
 export interface WorkflowStreamLoaderPort {
@@ -51,11 +53,27 @@ export async function dispatchWorkflowStream(
   if (!isWorkflowStreamDefinition(definition)) {
     return rejected(`${operation} is not a registered workflow stream`);
   }
-  const handler = await port.load(definition.id);
-  if (!handler) {
-    return rejected(
-      `No workflow stream handler is registered for ${operation}`,
+  try {
+    const handler = await port.load(definition.id);
+    if (!handler) {
+      return rejected(
+        `No workflow stream handler is registered for ${operation}`,
+      );
+    }
+    return await handler({ request });
+  } catch (error) {
+    if (request.signal.aborted) throw error;
+    return workflowStreamErrorResponse(
+      normalizeStartOperationError(
+        error,
+        "dispatch",
+        getRequestId(request.headers),
+        {
+          operation: definition.id,
+          authenticated: false,
+          headers: request.headers,
+        },
+      ).publicError,
     );
   }
-  return await handler({ request });
 }

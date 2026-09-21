@@ -5,6 +5,7 @@ import type { StartOperationIdOfKind } from "~/lib/generated/start-operation-reg
 import { REQUEST_ID_HEADER } from "~/lib/request-id";
 import { startOperationDefinition } from "~/lib/start-operation-observability";
 import { recordDatabaseWrite } from "~/server/database-freshness/client";
+import { withErrorReporting } from "~/server/errors/report-error";
 import { observeOperation } from "~/server/observed-request";
 import { applyReadPolicy } from "~/server/read-policy";
 import type { PublicStartOperationError } from "~/server/start-operation.contract";
@@ -21,8 +22,6 @@ import type { Workload } from "~/server/workload";
 type StreamFrame =
   | { kind: "event"; payload: ReturnType<typeof superjson.serialize> }
   | { kind: "error"; error: PublicStartOperationError };
-
-type UnparsedWorkflowStreamError = z.input<z.ZodUnknown>;
 
 const encoder = new TextEncoder();
 const encodeFrame = (frame: StreamFrame) =>
@@ -43,15 +42,6 @@ export const workflowStreamErrorResponse = (
       "content-type": "application/x-ndjson; charset=utf-8",
     },
   });
-
-const errorResponse = (
-  error: UnparsedWorkflowStreamError,
-  stage: OperationStage,
-  requestId?: string,
-) =>
-  workflowStreamErrorResponse(
-    normalizeStartOperationError(error, stage, requestId).publicError,
-  );
 
 const hasSameOrigin = (request: Request) => {
   const origin = request.headers.get("origin");
@@ -94,13 +84,6 @@ export async function workflowStreamResponse<
     });
   }
 
-  let rawInput: unknown;
-  try {
-    rawInput = superjson.parse(await options.request.text());
-  } catch (error) {
-    return errorResponse(error, "input", getRequestId(options.request.headers));
-  }
-
   const abortController = new AbortController();
   const signal = AbortSignal.any([
     options.request.signal,
@@ -109,12 +92,13 @@ export async function workflowStreamResponse<
   let mutationStarted = false;
   const stream = new ReadableStream<Uint8Array>({
     start(controller) {
-      void (async () => {
+      void withErrorReporting(async () => {
         // Authentication and input parsing happen INSIDE the span, the same
         // order `runStartOperation` uses, so a rejected actor is observed
         // rather than silently short-circuited — and so an invalid payload
         // never gets to report before an unauthorized caller does.
         let stage: OperationStage = "context";
+        let actorVerified = false;
         try {
           await runtime.observe(
             startOperationDefinition(options.operation),
@@ -130,7 +114,9 @@ export async function workflowStreamResponse<
                 "strong",
               );
 
+              actorVerified = true;
               stage = "input";
+              const rawInput = superjson.parse(await options.request.text());
               const input = options.inputSchema.parse(rawInput);
 
               stage = "run";
@@ -157,6 +143,11 @@ export async function workflowStreamResponse<
               error,
               stage,
               getRequestId(options.request.headers),
+              {
+                operation: options.operation,
+                authenticated: actorVerified,
+                headers: options.request.headers,
+              },
             );
             controller.enqueue(
               encodeFrame({ kind: "error", error: normalized.publicError }),
@@ -167,7 +158,7 @@ export async function workflowStreamResponse<
             await runtime.recordDatabaseWrite(options.operation);
           if (!abortController.signal.aborted) controller.close();
         }
-      })();
+      });
     },
     async cancel(reason) {
       abortController.abort(reason);

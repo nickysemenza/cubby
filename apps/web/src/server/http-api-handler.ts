@@ -21,6 +21,7 @@ import {
 import { type HttpMetadata, httpMetadataSchema } from "~/lib/http-api/router";
 import { httpRoutes } from "~/lib/http-api/routes";
 import { startOperationDefinitionFor } from "~/lib/start-operation-observability";
+import { withErrorReporting } from "~/server/errors/report-error";
 import {
   authenticateHttpSession,
   type HttpSessionReader,
@@ -32,6 +33,11 @@ import {
   type UnparsedStartOperationData,
   unparsedStartOperationDataSchema,
 } from "~/server/start-operation.contract";
+import {
+  normalizeStartOperationError,
+  type OperationStage,
+} from "~/server/start-operation.server";
+import { getRequestId } from "~/server/tracing";
 
 interface HttpApiPorts {
   auth: {
@@ -238,6 +244,10 @@ const sessionDataCookiesFrom = (headers: Headers): string[] =>
 
 export function createHttpApiHandler(ports: HttpApiPorts) {
   const methods = methodTable(httpContract);
+  const diagnosticContexts = new WeakMap<
+    Request,
+    { authenticated: boolean; operation: string; stage: OperationStage }
+  >();
 
   const authenticate = async (request: ApiRequest) => {
     const url = new URL(request.url);
@@ -284,6 +294,8 @@ export function createHttpApiHandler(ports: HttpApiPorts) {
       request.headers.get("origin") !== url.origin
     )
       throw failure("FORBIDDEN", "Same-origin request required");
+    const diagnostics = diagnosticContexts.get(request);
+    if (diagnostics) diagnostics.authenticated = true;
     const headers = new Headers(request.headers);
     headers.set("origin", url.origin);
     request.apiContext = await ports.context({
@@ -295,7 +307,16 @@ export function createHttpApiHandler(ports: HttpApiPorts) {
   const implement = (route: AppRoute) => {
     const metadata = httpMetadataSchema.parse(route.metadata);
     return {
-      middleware: [async (request: ApiRequest) => authenticate(request)],
+      middleware: [
+        async (request: ApiRequest) => {
+          diagnosticContexts.set(request, {
+            authenticated: false,
+            operation: metadata.operation,
+            stage: "context",
+          });
+          await authenticate(request);
+        },
+      ],
       handler: async (
         args: { body?: unknown; query?: unknown; params?: unknown },
         context: { request: ApiRequest; responseHeaders: Headers },
@@ -314,9 +335,13 @@ export function createHttpApiHandler(ports: HttpApiPorts) {
         const url = new URL(request.url);
         const headers = new Headers(request.headers);
         headers.set("origin", url.origin);
+        const diagnostic = diagnosticContexts.get(request);
+        if (diagnostic) diagnostic.stage = "input";
+        const input = requestInput(metadata, route, args);
+        if (diagnostic) diagnostic.stage = "dispatch";
         const result = await ports.dispatch({
           operation,
-          input: requestInput(metadata, route, args),
+          input,
           request: {
             headers,
             signal: request.signal,
@@ -328,6 +353,7 @@ export function createHttpApiHandler(ports: HttpApiPorts) {
             status: errorStatus.parse(statuses.get(result.error.code)),
             body: result.error,
           };
+        if (diagnostic) diagnostic.stage = "output";
         if (
           (metadata.resource === "get" || metadata.nullableOutput === true) &&
           result.data === null
@@ -430,14 +456,20 @@ export function createHttpApiHandler(ports: HttpApiPorts) {
         errorBody("NOT_FOUND", "Invalid resource identifier"),
         { status: StatusCodes.NOT_FOUND },
       );
-    console.error("HTTP API failed", request.method, request.url, error);
-    return TsRestResponse.fromJson(
-      errorBody(
-        "INTERNAL_SERVER_ERROR",
-        "The operation could not be completed",
-      ),
-      { status: StatusCodes.INTERNAL_SERVER_ERROR },
+    const diagnostic = diagnosticContexts.get(request);
+    const normalized = normalizeStartOperationError(
+      error,
+      diagnostic?.stage ?? "context",
+      getRequestId(request.headers),
+      {
+        operation: diagnostic?.operation ?? "http-api",
+        authenticated: diagnostic?.authenticated ?? false,
+        headers: request.headers,
+      },
     );
+    return TsRestResponse.fromJson(normalized.publicError, {
+      status: errorStatus.parse(statuses.get(normalized.publicError.code)),
+    });
   };
 
   return async function handleHttpOperation(
@@ -461,20 +493,24 @@ export function createHttpApiHandler(ports: HttpApiPorts) {
           },
         },
       );
-    return fetchRequestHandler({
-      request,
-      contract: httpContract,
-      router,
-      options: {
-        responseValidation: false,
-        requestMiddleware: [normalizeQueryLists],
-        errorHandler,
-        responseHandlers: [
-          (response) => {
-            response.headers.set("Cache-Control", "no-store");
+    return withErrorReporting(
+      () =>
+        fetchRequestHandler({
+          request,
+          contract: httpContract,
+          router,
+          options: {
+            responseValidation: false,
+            requestMiddleware: [normalizeQueryLists],
+            errorHandler,
+            responseHandlers: [
+              (response) => {
+                response.headers.set("Cache-Control", "no-store");
+              },
+            ],
           },
-        ],
-      },
-    });
+        }),
+      request.headers,
+    );
   };
 }

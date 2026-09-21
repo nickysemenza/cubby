@@ -38,12 +38,17 @@ type PgError = z.output<typeof postgresErrorSchema>;
 /** Walk an error's `cause` chain for a Postgres error (5-digit SQLSTATE code). */
 function findPgError(error: UnparsedDatabaseError, depth = 0): PgError | null {
   if (depth >= 8) return null;
-  const parsedPostgresError = postgresErrorSchema.safeParse(error);
-  if (parsedPostgresError.success) return parsedPostgresError.data;
+  try {
+    const parsedPostgresError = postgresErrorSchema.safeParse(error);
+    if (parsedPostgresError.success) return parsedPostgresError.data;
 
-  const parsedNode = databaseErrorNodeSchema.safeParse(error);
-  if (!parsedNode.success || parsedNode.data.cause === undefined) return null;
-  return findPgError(parsedNode.data.cause, depth + 1);
+    const parsedNode = databaseErrorNodeSchema.safeParse(error);
+    if (!parsedNode.success || parsedNode.data.cause === undefined) return null;
+    return findPgError(parsedNode.data.cause, depth + 1);
+  } catch {
+    // Driver error properties can be accessors; diagnostics must not throw.
+    return null;
+  }
 }
 
 /** "ProductExternalId" -> "product external id" for prose. */

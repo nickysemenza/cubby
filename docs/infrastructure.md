@@ -364,6 +364,20 @@ The web/Workers Sentry DSN is intentionally public and checked into
 Sentry project. Authentication and ownership for both projects remain
 provider-side state.
 
+Authenticated Start, workflow-stream, HTTP API, and MCP failures carry bounded
+message/cause diagnostics with operation, optional entity, execution stage, and
+request references. Credentials and Drizzle SQL/parameter wrappers are scrubbed;
+pre-authentication failures expose safe messages and correlation IDs. Server
+stacks stay in Sentry. The request-scoped reporter captures unexpected original
+exceptions before returning the error, deduplicates nested reporting, and supplies
+the actual event ID and an event-search link. An ID records a capture attempt,
+not guaranteed ingestion. MCP batch items receive separate references.
+
+Web error details include Copy details, the Sentry link, and Open Workers
+Observability with a copyable Ray ID when Cloudflare supplied one. The Cloudflare
+link opens the dashboard, not an individual trace: the custom-span API does not
+expose the active trace ID. These references also survive native API decoding.
+
 Cloudflare must have two account-level Workers Observability destinations:
 
 - `grafana-logs` -> Grafana Cloud Loki OTLP endpoint.

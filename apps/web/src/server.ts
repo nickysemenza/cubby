@@ -1,6 +1,9 @@
 import { wrapFetchWithSentry } from "@sentry/tanstackstart-react";
 import handler, { createServerEntry } from "@tanstack/react-start/server-entry";
 
+import { rewriteLegacyStartRequest } from "~/lib/start-dispatch-url";
+import { withErrorReporting } from "~/server/errors/report-error";
+
 // __CF_WORKERS__ is a build-time define (true only in build:cf, false elsewhere). In production
 // the Workers entry (cf-server.ts) wraps everything with @sentry/cloudflare's
 // withSentry — the workerd-native SDK. wrapFetchWithSentry is built on
@@ -23,7 +26,13 @@ const isCfBuild = __CF_WORKERS__;
 const serverEntry = {
   async fetch(request: Request) {
     try {
-      return await handler.fetch(request);
+      return await withErrorReporting(
+        () =>
+          handler.fetch(
+            import.meta.env.PROD ? rewriteLegacyStartRequest(request) : request,
+          ),
+        request.headers,
+      );
     } catch (error) {
       console.error("[server]", error);
       throw error;

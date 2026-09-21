@@ -6,6 +6,7 @@ import { useMutation } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import { toast } from "sonner";
 
+import { showErrorToast } from "~/components/feedback/error-details";
 import type {
   EntityActionData,
   EntityActionVariables,
@@ -77,7 +78,8 @@ function showError<TError extends Error>(
   actionError: ActionError<TError> | undefined,
   error: TError,
 ) {
-  toast.error(
+  showErrorToast(
+    error,
     actionError === undefined
       ? getErrorMessage(error)
       : isActionErrorFactory(actionError)

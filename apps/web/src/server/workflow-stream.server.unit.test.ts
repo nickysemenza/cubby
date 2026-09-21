@@ -4,7 +4,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
 import { Database } from "~/server/db";
+import { withErrorReporting } from "~/server/errors/report-error";
 import { requireActor } from "~/server/request-context";
+import { publicStartOperationErrorSchema } from "~/server/start-operation.contract";
 import type { AuthenticatedStartOperationContext } from "~/server/start-operation.server";
 import { createTestRequestContext } from "~/server/testing/request-context";
 import type { AppSpan } from "~/server/tracing";
@@ -65,7 +67,10 @@ const responseFor = (
     runtime,
   );
 
-const streamFrameSchema = z.object({ kind: z.enum(["event", "error"]) });
+const streamFrameSchema = z.object({
+  kind: z.enum(["event", "error"]),
+  error: publicStartOperationErrorSchema.optional(),
+});
 
 describe("workflow stream freshness notifications", () => {
   beforeEach(() => {
@@ -95,12 +100,14 @@ describe("workflow stream freshness notifications", () => {
   });
 
   it("notifies after a stream that committed progress and then failed", async () => {
-    const response = await responseFor(
-      "ai.backfillLocationDescriptions",
-      async function* () {
-        yield { n: 1 };
-        throw new Error("later batch failed");
-      },
+    const response = await withErrorReporting(
+      () =>
+        responseFor("ai.backfillLocationDescriptions", async function* () {
+          yield { n: 1 };
+          throw new Error("later batch failed");
+        }),
+      undefined,
+      () => "sample-stream-event",
     );
 
     const frames = (await response.text())
@@ -109,7 +116,41 @@ describe("workflow stream freshness notifications", () => {
       .map((line) => streamFrameSchema.parse(JSON.parse(line)));
 
     expect(frames.map((frame) => frame.kind)).toEqual(["event", "error"]);
+    expect(frames[1]?.error).toMatchObject({
+      message: "later batch failed",
+      diagnostics: { sentryEventId: "sample-stream-event", stage: "run" },
+    });
     expect(recordDatabaseWrite).toHaveBeenCalledTimes(2);
+  });
+
+  it("authenticates before decoding a malformed stream body", async () => {
+    authenticate.mockRejectedValueOnce(
+      new Error("private authentication backend detail"),
+    );
+    const run = vi.fn(async function* () {
+      yield { n: 1 };
+    });
+    const response = await workflowStreamResponse(
+      {
+        request: new Request("https://cubby.test/api/workflow-stream/test", {
+          method: "POST",
+          body: "not-json",
+        }),
+        operation: "ai.backfillLocationDescriptions",
+        inputSchema: z.object({}),
+        eventSchema: z.object({ n: z.number() }),
+        run,
+      },
+      runtime,
+    );
+    const body = await response.text();
+    const frame = streamFrameSchema.parse(JSON.parse(body.trim()));
+    expect(frame.error?.diagnostics).toMatchObject({
+      stage: "context",
+      causes: [],
+    });
+    expect(body).not.toContain("private authentication backend detail");
+    expect(run).not.toHaveBeenCalled();
   });
 
   it("notifies when cancellation follows committed progress", async () => {

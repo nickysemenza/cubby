@@ -155,7 +155,7 @@ describe("runStartOperation", () => {
       { count: 3 },
     );
     expect(observedOperations).toEqual(["entity.detail"]);
-    expect(inspections).toEqual([{ workload: "ui" }]);
+    expect(inspections).toMatchObject([{ workload: "ui" }]);
   });
 
   it("hides the cached adapter from an explicitly strong query", async () => {
@@ -331,7 +331,7 @@ describe("runStartOperation", () => {
       }),
     });
     expect(run).not.toHaveBeenCalled();
-    expect(inspections).toEqual([
+    expect(inspections).toMatchObject([
       {
         error: expect.objectContaining({
           code: "BAD_REQUEST",
@@ -387,10 +387,18 @@ describe("runStartOperation", () => {
       outputSchema: z.object({ ok: z.boolean() }),
       request: request(),
       run: async () => {
-        throw createAppError("PRODUCT_NOT_FOUND", "Product not found");
+        const refusal = createAppError(
+          "PRODUCT_NOT_FOUND",
+          "Product not found",
+        );
+        throw new Error("Product lookup failed", {
+          cause: {
+            originalError: new Error("Repository lookup", { cause: refusal }),
+          },
+        });
       },
     });
-    expect(appResult).toEqual({
+    expect(appResult).toMatchObject({
       ok: false,
       error: {
         code: "NOT_FOUND",
@@ -416,7 +424,7 @@ describe("runStartOperation", () => {
         });
       },
     });
-    expect(databaseResult).toEqual({
+    expect(databaseResult).toMatchObject({
       ok: false,
       error: {
         code: "CONFLICT",
@@ -429,9 +437,9 @@ describe("runStartOperation", () => {
     expect(markCalendarDirty).not.toHaveBeenCalled();
   });
 
-  it("does not expose unknown or invalid-output details", async () => {
+  it("exposes authenticated causes without returning server stacks", async () => {
     const codedInfrastructureError = Object.assign(
-      new Error("secret implementation detail"),
+      new Error("Connection reset by upstream"),
       { code: "ECONNRESET" },
     );
     const unknown = await runStartOperation({
@@ -445,12 +453,18 @@ describe("runStartOperation", () => {
         throw codedInfrastructureError;
       },
     });
-    expect(unknown).toEqual({
+    expect(unknown).toMatchObject({
       ok: false,
       error: {
         code: "INTERNAL_SERVER_ERROR",
         reason: "UNKNOWN_ERROR",
-        message: "The operation could not be completed",
+        message: "Connection reset by upstream",
+        diagnostics: {
+          stage: "run",
+          causes: [
+            { code: "ECONNRESET", message: "Connection reset by upstream" },
+          ],
+        },
       },
     });
 
@@ -464,7 +478,7 @@ describe("runStartOperation", () => {
       run: async () =>
         fromAny<{ ok: boolean }, { ok: string }>({ ok: "not-a-boolean" }),
     });
-    expect(invalidOutput).toEqual({
+    expect(invalidOutput).toMatchObject({
       ok: false,
       error: {
         code: "INTERNAL_SERVER_ERROR",
@@ -474,6 +488,30 @@ describe("runStartOperation", () => {
     });
     expect(inspections).toHaveLength(2);
     expect(inspections.every(({ error }) => error instanceof Error)).toBe(true);
+    expect(JSON.stringify(unknown)).not.toContain('"stack"');
+  });
+
+  it("keeps authentication-provider failures private", async () => {
+    authenticate.mockRejectedValueOnce(
+      new Error("Authentication backend password=fixture-secret"),
+    );
+    const result = await runStartOperation({
+      operation: "entity.detail",
+      type: "query",
+      input: {},
+      inputSchema: z.object({}),
+      outputSchema: z.object({}),
+      request: request(),
+      run: async () => ({}),
+    });
+    expect(result).toMatchObject({
+      ok: false,
+      error: {
+        message: "The operation could not be completed",
+        diagnostics: { causes: [], stage: "context" },
+      },
+    });
+    expect(JSON.stringify(result)).not.toContain("fixture-secret");
   });
 
   it("throws cancellation before and after execution", async () => {

@@ -1,6 +1,8 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
+
+import { withErrorReporting } from "~/server/errors/report-error";
 
 import { callMcpTool } from "./mcp-test-utils";
 import { registerBatchTool, WRITE_CLOSED } from "./tools/_shared";
@@ -58,6 +60,56 @@ function createBatchServer(): McpServer {
 }
 
 describe("registerBatchTool", () => {
+  it("preserves distinct capture references through the MCP batch output schema", async () => {
+    const capture = vi.fn(() => crypto.randomUUID());
+    const response = await withErrorReporting(
+      () =>
+        callMcpTool(
+          createBatchServer(),
+          "process_items",
+          {
+            items: [
+              { id: "first", fail: true },
+              { id: "second", fail: true },
+            ],
+          },
+          {},
+        ),
+      new Headers({ "cf-ray": "batch-test-ray" }),
+      capture,
+    );
+    const result = z
+      .object({
+        results: z.array(
+          z.object({
+            error: z.object({
+              requestId: z.string(),
+              diagnostics: z.object({
+                sentryEventId: z.string(),
+                batchIndex: z.number(),
+                cfRayId: z.string(),
+              }),
+            }),
+          }),
+        ),
+      })
+      .parse(response.structuredContent);
+    expect(
+      result.results.map((item) => item.error.diagnostics.batchIndex),
+    ).toEqual([0, 1]);
+    expect(
+      new Set(
+        result.results.map((item) => item.error.diagnostics.sentryEventId),
+      ).size,
+    ).toBe(2);
+    expect(
+      result.results.every(
+        (item) => item.error.diagnostics.cfRayId === "batch-test-ray",
+      ),
+    ).toBe(true);
+    expect(capture).toHaveBeenCalledTimes(2);
+  });
+
   it("returns stable references and nested per-item failures", async () => {
     const response = await callMcpTool(
       createBatchServer(),
@@ -75,7 +127,11 @@ describe("registerBatchTool", () => {
         {
           index: 1,
           status: "failed",
-          error: { message: "Cannot process blocked" },
+          error: {
+            message: "Cannot process blocked",
+            code: "INTERNAL_SERVER_ERROR",
+            reason: "UNKNOWN_ERROR",
+          },
         },
         { index: 2, status: "succeeded", reference: "result-ccc" },
       ],
