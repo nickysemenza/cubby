@@ -5,6 +5,7 @@ import { testShortcode } from "@cubby/schemas/testing";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
+import { householdLocalDate } from "~/lib/household-date";
 import { mock } from "~/lib/test/mock-schema";
 
 import { entityEditRegistry } from "./definitions";
@@ -255,6 +256,54 @@ describe("entity edit definitions", () => {
       changed: true,
       command: { data: { merchant: "New merchant" } },
     });
+  });
+
+  // `changed` is computed from the post-`buildData` patch (not the raw
+  // pre-`buildData` dirty-field patch) precisely so a `buildData` that
+  // injects a fixed key can make an otherwise-untouched edit submit — the
+  // mechanism `expense`'s `settle` intent relies on for a no-touch "Mark
+  // purchased" (`future: false` is unconditional in its `buildData`).
+  it("submits an otherwise-empty edit when buildData injects a fixed key (kernel)", () => {
+    const today = householdLocalDate();
+    // A minimal record — only the settle roster's own keys — rather than a
+    // full `mock(expenseOut)`: `EntityEditRecord` values may be a top-level
+    // `Date` but not one nested inside an array/object (`sourceClaims`' rows
+    // carry `createdAt`/`updatedAt`), which `mock()`'s full output includes
+    // and this kernel-level test has no use for.
+    const record = {
+      id: testShortcode("expense", "EXP-TEST"),
+      lineKind: "principal",
+      future: true,
+      cost: 1000,
+      date: today,
+      costType: "materials",
+      trade: null,
+      notes: null,
+      vendor: null,
+      orderId: null,
+      projectId: null,
+    };
+    const request = {
+      entity: "expense" as const,
+      operation: "update" as const,
+      intent: "settle" as const,
+      surface: "dialog" as const,
+      record,
+    };
+    const resolved = resolveEntityEdit(entityEditRegistry, request);
+    if (!("definition" in resolved))
+      throw new Error("expense settle must resolve");
+    // Every seeded value matches the record: an untouched dialog.
+    const values = initialEntityEditValues(resolved, request);
+    const result = buildEntityEdit(resolved, request, values);
+    if (!result.ok || result.command.operation !== "update") {
+      throw new Error("settle must build an update");
+    }
+    expect(result.changed).toBe(true);
+    expect(result.command.data).toMatchObject({ future: false });
+    // Only the injected key reached the wire — every rendered field was
+    // genuinely untouched.
+    expect(Object.keys(result.command.data)).toEqual(["future"]);
   });
 
   it("defaults pendingImageIds to an empty array off the field roster, not a per-entity literal (G5)", () => {
