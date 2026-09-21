@@ -1,0 +1,60 @@
+name: "Import Apple signing identities"
+description: "Imports the Apple Distribution p12 and verifies its identities"
+
+inputs:
+  p12-base64:
+    description: "Apple Distribution and Mac Installer Distribution identities"
+    required: true
+  p12-password:
+    description: "Password for p12-base64"
+    required: true
+  verify-mac-installer:
+    description: "Also require a Mac Installer Distribution identity (needed to export a macOS archive)"
+    required: false
+    default: "false"
+
+runs:
+  using: "composite"
+  steps:
+    - name: Import App Store signing identities
+      uses: apple-actions/import-codesign-certs@5142e029c445c10ffc7149d172e540235a065466 # v7
+      with:
+        p12-file-base64: ${{ inputs.p12-base64 }}
+        p12-password: ${{ inputs.p12-password }}
+
+    - name: Verify Apple Distribution identity
+      shell: bash
+      run: |
+        set -euo pipefail
+        signing_identities="$(security find-identity -v -p codesigning)"
+        grep -q 'Apple Distribution' <<< "$signing_identities" || {
+          echo "::error::The imported p12 does not contain an Apple Distribution identity."
+          exit 1
+        }
+
+    # Only the macOS archive/export legs need this: skipping it for iOS
+    # halves the identity work per archive job versus checking both platforms
+    # unconditionally.
+    - name: Verify Mac Installer Distribution identity
+      if: inputs.verify-mac-installer == 'true'
+      shell: bash
+      run: |
+        set -euo pipefail
+        all_identities="$(security find-identity -v)"
+        echo "$all_identities"
+        # Apple's portal/API calls this Mac Installer Distribution, while the
+        # issued certificate's Keychain name remains the legacy label below.
+        grep -Eq 'Mac Installer Distribution|3rd Party Mac Developer Installer' <<< "$all_identities" || {
+          echo "::error::The imported p12 does not contain a Mac Installer Distribution certificate."
+          exit 1
+        }
+        installer_certificate_sha="$(
+          sed -nE \
+            '/"(Mac Installer Distribution|3rd Party Mac Developer Installer): /s/^[[:space:]]*[0-9]+\) ([0-9A-F]{40}) .*/\1/p' \
+            <<< "$all_identities"
+        )"
+        [[ "$installer_certificate_sha" =~ ^[0-9A-F]{40}$ ]] || {
+          echo "::error::Expected exactly one Mac Installer Distribution identity."
+          exit 1
+        }
+        echo "MAC_INSTALLER_SIGNING_CERTIFICATE=$installer_certificate_sha" >> "$GITHUB_ENV"

@@ -138,6 +138,71 @@ YAML has no anchors and no reusable construct that fits here, so the
 duplication is accepted rather than worked around. The separate Markdown link
 workflow, previews, and opt-in Claude workflows remain manual.
 
+## Apple TestFlight release
+
+The archive/export/upload path lives in `.github/workflows/apple-release.yaml`,
+a `workflow_call`-only reusable workflow, kept deliberately read-only
+(top-level `permissions: contents: read`, no `tag` job) because a called
+workflow's jobs are capped by the caller's permissions — a
+pull_request-triggered call is never granted `contents: write`. It takes
+`version` (`MAJOR.MINOR.PATCH`) and `publish` (default `false`) inputs and
+exposes `version`/`build`/`tag`/`mode` outputs. A `coordinates` job validates
+the inputs, computes `build` (`<commit count>.<run_attempt>`), resolves `mode`
+(`upload` when `publish` is true, otherwise `validate`), confirms the commit
+is still current main before publishing, and — before any macOS runner
+starts — rejects a `version` whose tag already exists via `git ls-remote
+--tags`. An `archive` matrix job then runs the iOS and macOS archives in
+parallel (`macos-26`, `fail-fast: false`), each restoring only its own
+`setup-apple-ffi` target (`device`/`mac`, `profile: dist`) instead of `all`,
+roughly halving the Rust work any one archive job pays for on a cold cache.
+Each leg tars its signed `.xcarchive` (including dSYMs) before uploading it as
+a short-retention artifact — `actions/upload-artifact` zips its input and
+does not preserve the executable bit or symlinks, which would leave
+`Cubby.app`'s main binary non-executable and its embedded framework symlinks
+flattened after download. A single `upload` job then downloads both
+archives, untars them back to the exact paths `testflight.sh` expects,
+re-imports the signing identities and profiles (`xcodebuild -exportArchive`
+re-signs, so it needs them even though `archive` already verified them), and
+runs `apps/apple/scripts/testflight.sh export ios` and `export macos`.
+Because `upload` `needs` both matrix legs, neither platform exports — let
+alone uploads — unless both archived successfully, preserving the original
+neither-platform-uploads-alone invariant. `apps/apple/scripts/testflight.sh`
+now has two subcommands, `archive <ios|macos>` and `export <ios|macos>`,
+instead of one script that always did both platforms serially; the macOS
+`archive` verification additionally asserts the archived Info.plist has a
+non-empty `LSApplicationCategoryType` (the v1.0.3 failure), and the Mac
+Installer Distribution identity check (the v1.0.2 failure) now runs in both
+the macOS `archive` leg and the `upload` job, each behind its own signing
+import.
+
+`.github/workflows/apple-testflight.yaml` is the `workflow_dispatch`-only
+wrapper around `apple-release.yaml` — there is no tag-push trigger. Its
+`release` job calls `apple-release.yaml` (`secrets: inherit`) with the
+dispatch inputs, and a `tag` job (`needs: release`, `if: inputs.publish ==
+true`, `permissions: contents: write` — only this job, not the workflow's
+top-level `contents: read`) creates the annotated tag at the released commit
+from `apple-release.yaml`'s outputs and pushes it, so the release tag is only
+ever created after a successful upload, and a tag can never be pushed
+manually to start a second run.
+
+`ci.yaml`'s `release-dry-run` job calls `apple-release.yaml` directly (not
+the `apple-testflight.yaml` wrapper, which would need a `tag` job's
+`contents: write` that a pull_request-triggered call can never have), gated
+on a `release` scope output computed the same way as `apple`'s, from the same
+PR file listing, but narrower — only files that change what a release
+actually builds or signs — and always `false` on `push`/`workflow_dispatch`.
+`release-dry-run` passes `version: "0.0.0"` and `publish: false`, exercising
+the identical signed archive/export path with nothing uploaded or tagged, so
+a config error like the v1.0.1–v1.0.3 failures surfaces on the PR that
+introduces it instead of at release time. It is not a required check.
+Separately, a `warm-apple-ffi` job in `ci.yaml` runs on every `main` push (not
+gated on `scope`, since there is no PR path filter to apply to a push) and
+restores/builds the `device`/`dist` and `mac`/`dist` `setup-apple-ffi`
+caches, so both a real release and `release-dry-run` normally hit a warm
+cache instead of the cold ~7-minute Rust build those two cache keys
+previously only ever saw during a release itself. Neither `warm-apple-ffi`
+nor `release-dry-run` is a required check.
+
 ## Deployment
 
 `.github/workflows/deploy.yaml` runs on `main` pushes and deploys all four
@@ -149,6 +214,20 @@ Production never depends on a test job.
 This trusts required PR checks before merging. Public-repository standard
 GitHub-hosted runners are free; no self-hosted runner or Cloudflare Builds is
 required.
+
+All three jobs call the shared `.github/actions/deploy-worker` composite
+(`check-current-main` → `setup-node-with-deps` → an optional build command →
+`check-current-main` again → the deploy command), differing only in package,
+workspace filter, whether WASM/the web env file are needed, and the build/
+deploy commands; `concurrency`, `environment`, and `timeout-minutes` stay on
+each job because a composite action cannot own them. Web keeps
+`cloudflare/wrangler-action` for its deploy step (behind the composite's
+`wrangler-action` input) rather than running `apps/web`'s `deploy:cf` script
+directly: `deploy:cf` is `build:cf && wrangler deploy --config
+dist/server/wrangler.json`, so calling it as the deploy command would rerun
+`build:cf` a second time after the composite's own build step already ran
+it. The auxiliary Workers and purchase-agent instead pass their package's own
+`deploy` script as a plain `deploy-command`, unchanged from before.
 
 ## Branch protection and measurement
 

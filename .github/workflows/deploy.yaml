@@ -21,34 +21,23 @@ jobs:
       url: https://cubby.nickysemenza.com
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      - name: Check current main before building
-        id: current_main
-        uses: ./.github/actions/check-current-main
-      - uses: ./.github/actions/setup-node-with-deps
-        if: steps.current_main.outputs.current == 'true'
+      - uses: ./.github/actions/deploy-worker
         with:
-          wasm: "restore"
+          package: "@cubby/web"
           workspace-filter: "@cubby/web..."
+          wasm: "restore"
           web-env: "true"
-      - name: Build web Cloudflare bundle
-        if: steps.current_main.outputs.current == 'true'
-        env:
-          CUBBY_SOURCE_COMMIT: ${{ github.sha }}
-          CUBBY_SOURCE_BRANCH: main
-          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
-        run: pnpm --filter @cubby/web run build:cf
-      - name: Re-check current main before deployment
-        if: steps.current_main.outputs.current == 'true'
-        id: deploy_current
-        uses: ./.github/actions/check-current-main
-      - name: Deploy built web Worker
-        if: steps.deploy_current.outputs.current == 'true'
-        uses: cloudflare/wrangler-action@ebbaa1584979971c8614a24965b4405ff95890e0 # v4
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: 9f10f078d35d86c78dedece2300a6b88
-          command: deploy --config dist/server/wrangler.json
-          workingDirectory: apps/web
+          build-command: "pnpm --filter @cubby/web run build:cf"
+          sentry-auth-token: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          # web's deploy:cf script (`build:cf && wrangler deploy`) would
+          # rerun build:cf a second time here, so this stays on
+          # wrangler-action calling wrangler directly instead of through
+          # deploy:cf — see the composite's wrangler-action input doc.
+          wrangler-action: "true"
+          wrangler-command: "deploy --config dist/server/wrangler.json"
+          working-directory: apps/web
+          cloudflare-api-token: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          cloudflare-account-id: "9f10f078d35d86c78dedece2300a6b88"
 
   deploy-worker:
     name: Deploy ${{ matrix.pkg }} Worker
@@ -65,24 +54,14 @@ jobs:
       name: cloudflare
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      - name: Check current main before building
-        id: current_main
-        uses: ./.github/actions/check-current-main
-      - uses: ./.github/actions/setup-node-with-deps
-        if: steps.current_main.outputs.current == 'true'
+      - uses: ./.github/actions/deploy-worker
         with:
-          wasm: "false"
+          package: "@cubby/${{ matrix.pkg }}"
           workspace-filter: "@cubby/${{ matrix.pkg }}..."
-      - name: Re-check current main before deployment
-        if: steps.current_main.outputs.current == 'true'
-        id: deploy_current
-        uses: ./.github/actions/check-current-main
-      - name: Deploy auxiliary Worker
-        if: steps.deploy_current.outputs.current == 'true'
-        run: pnpm --filter @cubby/${{ matrix.pkg }} run deploy
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: 9f10f078d35d86c78dedece2300a6b88
+          wasm: "false"
+          deploy-command: "pnpm --filter @cubby/${{ matrix.pkg }} run deploy"
+          cloudflare-api-token: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          cloudflare-account-id: "9f10f078d35d86c78dedece2300a6b88"
 
   deploy-purchase-agent:
     name: Build and deploy purchase agent
@@ -99,21 +78,11 @@ jobs:
       name: cloudflare
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      - name: Check current main before building
-        id: current_main
-        uses: ./.github/actions/check-current-main
-      - uses: ./.github/actions/setup-node-with-deps
-        if: steps.current_main.outputs.current == 'true'
+      - uses: ./.github/actions/deploy-worker
         with:
-          wasm: "false"
+          package: "@cubby/purchase-agent"
           workspace-filter: "@cubby/purchase-agent..."
-      - name: Re-check current main before deployment
-        if: steps.current_main.outputs.current == 'true'
-        id: deploy_current
-        uses: ./.github/actions/check-current-main
-      - name: Deploy private purchase-agent Worker
-        if: steps.deploy_current.outputs.current == 'true'
-        run: pnpm --filter @cubby/purchase-agent run deploy
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: 9f10f078d35d86c78dedece2300a6b88
+          wasm: "false"
+          deploy-command: "pnpm --filter @cubby/purchase-agent run deploy"
+          cloudflare-api-token: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          cloudflare-account-id: "9f10f078d35d86c78dedece2300a6b88"

@@ -1,0 +1,34 @@
+name: "Download Apple provisioning profile"
+description: "Downloads one App Store provisioning profile for the Cubby bundle identifier"
+
+inputs:
+  profile-type:
+    description: "IOS_APP_STORE or MAC_APP_STORE"
+    required: true
+  issuer-id:
+    description: "App Store Connect API issuer ID"
+    required: true
+  api-key-id:
+    description: "App Store Connect API key ID"
+    required: true
+  api-private-key:
+    description: "App Store Connect API private key contents"
+    required: true
+
+outputs:
+  profiles:
+    description: "JSON array of matching profiles, as returned by apple-actions/download-provisioning-profiles"
+    value: ${{ steps.download.outputs.profiles }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Download provisioning profile
+      id: download
+      uses: apple-actions/download-provisioning-profiles@2126b5f86a0e2863cbf4d2d312112b22b943a594 # v6
+      with:
+        bundle-id: com.nickysemenza.cubby
+        profile-type: ${{ inputs.profile-type }}
+        issuer-id: ${{ inputs.issuer-id }}
+        api-key-id: ${{ inputs.api-key-id }}
+        api-private-key: ${{ inputs.api-private-key }}

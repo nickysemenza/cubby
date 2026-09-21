@@ -1,49 +1,65 @@
 #!/usr/bin/env bash
-# Archive, verify, and export/upload both Cubby Apple apps. GitHub Actions owns
-# runner credentials; this script owns the platform ordering and Xcode contract.
+# Archive, verify, and export/upload a single Cubby Apple app platform.
+# GitHub Actions owns runner credentials and per-platform job topology
+# (parallel per-platform archives, one shared upload job); this script owns
+# the Xcode contract for each subcommand. See
+# .github/workflows/apple-testflight.yaml for how `archive` and `export`
+# compose into a release: the `archive` job runs `archive <ios|macos>` for
+# each platform in parallel, then the `upload` job runs `export ios` and
+# `export macos` after downloading both archives, so neither platform
+# uploads unless both archived successfully.
 set -euo pipefail
 
 usage() {
-  echo "usage: $0 <validate|upload>" >&2
-  echo "required env: MARKETING_VERSION IOS_BUILD_NUMBER MACOS_BUILD_NUMBER" >&2
-  echo "              IOS_PROFILES_JSON MACOS_PROFILES_JSON TESTFLIGHT_OUTPUT_DIR" >&2
+  echo "usage: $0 archive <ios|macos>" >&2
+  echo "       $0 export <ios|macos>" >&2
+  echo "common env: MARKETING_VERSION TESTFLIGHT_OUTPUT_DIR" >&2
+  echo "archive additionally needs: <PLATFORM>_BUILD_NUMBER <PLATFORM>_PROFILES_JSON" >&2
+  echo "export additionally needs: MODE(validate|upload) <PLATFORM>_PROFILES_JSON" >&2
+  echo "  (macOS also needs MAC_INSTALLER_SIGNING_CERTIFICATE)" >&2
+  echo "  (MODE=upload also needs ASC_API_KEY_PATH APP_STORE_CONNECT_KEY_ID APP_STORE_CONNECT_ISSUER_ID)" >&2
 }
 
-if [[ $# -ne 1 || ( "$1" != "validate" && "$1" != "upload" ) ]]; then
+if [[ $# -ne 2 ]]; then
   usage
   exit 2
 fi
-mode="$1"
+command="$1"
+platform="$2"
+case "$command" in
+  archive | export) ;;
+  *)
+    usage
+    exit 2
+    ;;
+esac
+case "$platform" in
+  ios | macos) ;;
+  *)
+    usage
+    exit 2
+    ;;
+esac
 
-required=(
-  MARKETING_VERSION
-  IOS_BUILD_NUMBER
-  MACOS_BUILD_NUMBER
-  IOS_PROFILES_JSON
-  MACOS_PROFILES_JSON
-  TESTFLIGHT_OUTPUT_DIR
-  MAC_INSTALLER_SIGNING_CERTIFICATE
-)
-if [[ "$mode" == "upload" ]]; then
-  required+=(ASC_API_KEY_PATH APP_STORE_CONNECT_KEY_ID APP_STORE_CONNECT_ISSUER_ID)
-fi
-for variable in "${required[@]}"; do
-  [[ -n "${!variable:-}" ]] || {
-    echo "error: required environment variable $variable is empty" >&2
-    exit 1
-  }
-done
+require() {
+  local variable
+  for variable in "$@"; do
+    [[ -n "${!variable:-}" ]] || {
+      echo "error: required environment variable $variable is empty" >&2
+      exit 1
+    }
+  done
+}
+
+require MARKETING_VERSION TESTFLIGHT_OUTPUT_DIR
 
 readonly team_id="Y9A97FXT63"
 readonly bundle_id="com.nickysemenza.cubby"
-readonly ios_profile_name="AppStore com.nickysemenza.cubby iOS"
-readonly macos_profile_name="AppStore com.nickysemenza.cubby macOS"
 readonly project="apps/apple/Cubby.xcodeproj"
 readonly derived_data="$TESTFLIGHT_OUTPUT_DIR/DerivedData"
 readonly ios_archive="$TESTFLIGHT_OUTPUT_DIR/Cubby-iOS.xcarchive"
 readonly macos_archive="$TESTFLIGHT_OUTPUT_DIR/Cubby-macOS.xcarchive"
-
-mkdir -p "$TESTFLIGHT_OUTPUT_DIR/exports/ios" "$TESTFLIGHT_OUTPUT_DIR/exports/macos"
+mkdir -p "$TESTFLIGHT_OUTPUT_DIR"
 
 resolve_profile() {
   local profiles="$1"
@@ -88,15 +104,12 @@ resolve_profile() {
   printf '%s' "$uuid"
 }
 
-ios_profile_uuid="$(resolve_profile "$IOS_PROFILES_JSON" "$ios_profile_name" IOS_APP_STORE mobileprovision)"
-macos_profile_uuid="$(resolve_profile "$MACOS_PROFILES_JSON" "$macos_profile_name" MAC_APP_STORE provisionprofile)"
-
 write_export_options() {
   local path="$1"
   local profile_uuid="$2"
   local destination="export"
   local installer_certificate="${3:-}"
-  [[ "$mode" == "upload" ]] && destination="upload"
+  [[ "$MODE" == "upload" ]] && destination="upload"
 
   printf '%s\n' '<?xml version="1.0" encoding="UTF-8"?>' \
     '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "https://www.apple.com/DTDs/PropertyList-1.0.dtd">' \
@@ -116,14 +129,6 @@ write_export_options() {
   fi
   plutil -lint "$path"
 }
-
-readonly ios_export_options="$TESTFLIGHT_OUTPUT_DIR/ExportOptions-iOS.plist"
-readonly macos_export_options="$TESTFLIGHT_OUTPUT_DIR/ExportOptions-macOS.plist"
-write_export_options "$ios_export_options" "$ios_profile_uuid"
-write_export_options \
-  "$macos_export_options" \
-  "$macos_profile_uuid" \
-  "$MAC_INSTALLER_SIGNING_CERTIFICATE"
 
 archive_platform() {
   local scheme="$1"
@@ -147,10 +152,6 @@ archive_platform() {
     "$@"
 }
 
-# Neither platform uploads unless both archives exist.
-archive_platform Cubby-iOS 'generic/platform=iOS' "$ios_archive" "$ios_profile_uuid" "$IOS_BUILD_NUMBER"
-archive_platform Cubby-macOS 'generic/platform=macOS' "$macos_archive" "$macos_profile_uuid" "$MACOS_BUILD_NUMBER" ARCHS=arm64
-
 verify_archive() {
   local archive="$1"
   local app="$2"
@@ -158,6 +159,7 @@ verify_archive() {
   local privacy_manifest="$4"
   local embedded_profile="$5"
   local build_number="$6"
+  local check_macos_category="${7:-false}"
 
   [[ -d "$app" ]]
   [[ "$(plutil -extract CFBundleShortVersionString raw -o - "$info")" == "$MARKETING_VERSION" ]]
@@ -166,22 +168,20 @@ verify_archive() {
   codesign --verify --deep --strict --verbose=2 "$app"
   find "$archive/dSYMs" -name '*.dSYM' -print -quit | grep -q .
   xcrun dwarfdump --uuid "$archive/dSYMs/Cubby.app.dSYM"
-}
 
-verify_archive \
-  "$ios_archive" \
-  "$ios_archive/Products/Applications/Cubby.app" \
-  "$ios_archive/Products/Applications/Cubby.app/Info.plist" \
-  "$ios_archive/Products/Applications/Cubby.app/PrivacyInfo.xcprivacy" \
-  "$ios_archive/Products/Applications/Cubby.app/embedded.mobileprovision" \
-  "$IOS_BUILD_NUMBER"
-verify_archive \
-  "$macos_archive" \
-  "$macos_archive/Products/Applications/Cubby.app" \
-  "$macos_archive/Products/Applications/Cubby.app/Contents/Info.plist" \
-  "$macos_archive/Products/Applications/Cubby.app/Contents/Resources/PrivacyInfo.xcprivacy" \
-  "$macos_archive/Products/Applications/Cubby.app/Contents/embedded.provisionprofile" \
-  "$MACOS_BUILD_NUMBER"
+  if [[ "$check_macos_category" == "true" ]]; then
+    # v1.0.3 shipped a macOS archive with no App Store category: Apple
+    # rejects a macOS submission whose Info.plist is missing
+    # LSApplicationCategoryType, but xcodebuild only surfaces that at
+    # export/upload time. Catch it here instead, right after archiving.
+    local category
+    category="$(plutil -extract LSApplicationCategoryType raw -o - "$info" 2>/dev/null || true)"
+    [[ -n "$category" ]] || {
+      echo "error: $info is missing LSApplicationCategoryType" >&2
+      exit 1
+    }
+  fi
+}
 
 export_platform() {
   local archive="$1"
@@ -193,7 +193,7 @@ export_platform() {
     -exportPath "$output"
     -exportOptionsPlist "$options"
   )
-  if [[ "$mode" == "upload" ]]; then
+  if [[ "$MODE" == "upload" ]]; then
     arguments+=(
       -authenticationKeyPath "$ASC_API_KEY_PATH"
       -authenticationKeyID "$APP_STORE_CONNECT_KEY_ID"
@@ -203,5 +203,71 @@ export_platform() {
   xcodebuild "${arguments[@]}"
 }
 
-export_platform "$ios_archive" "$TESTFLIGHT_OUTPUT_DIR/exports/ios" "$ios_export_options"
-export_platform "$macos_archive" "$TESTFLIGHT_OUTPUT_DIR/exports/macos" "$macos_export_options"
+if [[ "$command" == "archive" ]]; then
+  build_number_var="$(tr '[:lower:]' '[:upper:]' <<< "$platform")_BUILD_NUMBER"
+  profiles_var="$(tr '[:lower:]' '[:upper:]' <<< "$platform")_PROFILES_JSON"
+  require "$build_number_var" "$profiles_var"
+  build_number="${!build_number_var}"
+  profiles_json="${!profiles_var}"
+
+  case "$platform" in
+    ios)
+      profile_uuid="$(resolve_profile "$profiles_json" "AppStore com.nickysemenza.cubby iOS" IOS_APP_STORE mobileprovision)"
+      archive_platform Cubby-iOS 'generic/platform=iOS' "$ios_archive" "$profile_uuid" "$build_number"
+      verify_archive \
+        "$ios_archive" \
+        "$ios_archive/Products/Applications/Cubby.app" \
+        "$ios_archive/Products/Applications/Cubby.app/Info.plist" \
+        "$ios_archive/Products/Applications/Cubby.app/PrivacyInfo.xcprivacy" \
+        "$ios_archive/Products/Applications/Cubby.app/embedded.mobileprovision" \
+        "$build_number"
+      ;;
+    macos)
+      profile_uuid="$(resolve_profile "$profiles_json" "AppStore com.nickysemenza.cubby macOS" MAC_APP_STORE provisionprofile)"
+      archive_platform Cubby-macOS 'generic/platform=macOS' "$macos_archive" "$profile_uuid" "$build_number" ARCHS=arm64
+      verify_archive \
+        "$macos_archive" \
+        "$macos_archive/Products/Applications/Cubby.app" \
+        "$macos_archive/Products/Applications/Cubby.app/Contents/Info.plist" \
+        "$macos_archive/Products/Applications/Cubby.app/Contents/Resources/PrivacyInfo.xcprivacy" \
+        "$macos_archive/Products/Applications/Cubby.app/Contents/embedded.provisionprofile" \
+        "$build_number" \
+        true
+      ;;
+  esac
+
+elif [[ "$command" == "export" ]]; then
+  require MODE
+  [[ "$MODE" == "validate" || "$MODE" == "upload" ]] || {
+    echo "error: MODE must be validate or upload" >&2
+    exit 1
+  }
+  # Unlike `archive`, `export` never reads a build number: xcodebuild
+  # -exportArchive takes it from the already-archived .xcarchive.
+  profiles_var="$(tr '[:lower:]' '[:upper:]' <<< "$platform")_PROFILES_JSON"
+  require "$profiles_var"
+  profiles_json="${!profiles_var}"
+  if [[ "$platform" == "macos" ]]; then
+    require MAC_INSTALLER_SIGNING_CERTIFICATE
+  fi
+  if [[ "$MODE" == "upload" ]]; then
+    require ASC_API_KEY_PATH APP_STORE_CONNECT_KEY_ID APP_STORE_CONNECT_ISSUER_ID
+  fi
+
+  mkdir -p "$TESTFLIGHT_OUTPUT_DIR/exports/$platform"
+
+  case "$platform" in
+    ios)
+      profile_uuid="$(resolve_profile "$profiles_json" "AppStore com.nickysemenza.cubby iOS" IOS_APP_STORE mobileprovision)"
+      ios_export_options="$TESTFLIGHT_OUTPUT_DIR/ExportOptions-iOS.plist"
+      write_export_options "$ios_export_options" "$profile_uuid"
+      export_platform "$ios_archive" "$TESTFLIGHT_OUTPUT_DIR/exports/ios" "$ios_export_options"
+      ;;
+    macos)
+      profile_uuid="$(resolve_profile "$profiles_json" "AppStore com.nickysemenza.cubby macOS" MAC_APP_STORE provisionprofile)"
+      macos_export_options="$TESTFLIGHT_OUTPUT_DIR/ExportOptions-macOS.plist"
+      write_export_options "$macos_export_options" "$profile_uuid" "$MAC_INSTALLER_SIGNING_CERTIFICATE"
+      export_platform "$macos_archive" "$TESTFLIGHT_OUTPUT_DIR/exports/macos" "$macos_export_options"
+      ;;
+  esac
+fi
