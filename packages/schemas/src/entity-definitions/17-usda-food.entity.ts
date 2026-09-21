@@ -223,8 +223,8 @@ export default defineEntity({
           value,
           label: dataTypeLabel(value),
         })),
-        schemaRef: { module: "@cubby/usda-schemas", export: "dataTypeEnum" },
-        deriveSchema: true,
+        // USDA's standalone read keeps dataTypeFilter scalar and uses dataTypes
+        // for plural values; the generic derived select schema is one-or-many.
         urlOnly: true,
         wire: { kind: "param", name: "dataTypeFilter" },
       },
