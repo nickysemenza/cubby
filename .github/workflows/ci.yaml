@@ -475,19 +475,21 @@ jobs:
     timeout-minutes: 40
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      # A hosted runner's first simulator boot took about six silent minutes
-      # between the build and the first test; start it now so it overlaps the
-      # FFI restore and the compile. apple-check.sh waits on bootstatus.
-      - name: Boot the iOS Simulator in the background
-        run: |
-          udid="$(sh scripts/apple-sim-udid.sh)"
-          xcrun simctl boot "$udid"
-          echo "CUBBY_SIM_UDID=$udid" >> "$GITHUB_ENV"
       - uses: ./.github/actions/setup-apple-ffi
         with:
           targets: sim
       - uses: ./.github/actions/setup-apple-tools
         id: apple-tools
+      # A hosted runner's first simulator boot took about six silent minutes
+      # between the build and the first test; start it here so it overlaps
+      # the compile. Not earlier: booting alongside the cache restores above
+      # starved them (a 40s FFI restore took 4m41s). apple-check.sh waits on
+      # bootstatus before `xcodebuild test`.
+      - name: Boot the iOS Simulator in the background
+        run: |
+          udid="$(sh scripts/apple-sim-udid.sh)"
+          xcrun simctl boot "$udid"
+          echo "CUBBY_SIM_UDID=$udid" >> "$GITHUB_ENV"
       - name: Run iOS app checks
         run: sh scripts/apple-check.sh ci
       # Saved here rather than by actions/cache's post step so a red test run
