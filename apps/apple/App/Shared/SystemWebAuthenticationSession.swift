@@ -11,11 +11,14 @@ import Foundation
 /// Owns the system-browser session for one interactive sign-in. The authentication protocol and
 /// credential exchange stay in CubbyKit; this app-layer type supplies only Apple's presentation.
 @MainActor
-final class SystemWebAuthenticationSession: NSObject, ASWebAuthenticationPresentationContextProviding {
+final class SystemWebAuthenticationSession {
     private var session: ASWebAuthenticationSession?
+    private var presentationContext: PresentationContext?
 
     func authenticate(url: URL) async throws -> URL {
         guard session == nil else { throw AuthError.browserUnavailable }
+        guard let anchor = Self.currentAnchor else { throw AuthError.browserUnavailable }
+        let presentationContext = PresentationContext(anchor: anchor)
 
         return try await withCheckedThrowingContinuation { continuation in
             let session = ASWebAuthenticationSession(
@@ -34,29 +37,44 @@ final class SystemWebAuthenticationSession: NSObject, ASWebAuthenticationPresent
                 }
                 Task { @MainActor [weak self] in
                     self?.session = nil
+                    self?.presentationContext = nil
                     continuation.resume(with: result)
                 }
             }
-            session.presentationContextProvider = self
+            session.presentationContextProvider = presentationContext
             session.prefersEphemeralWebBrowserSession = false
+            self.presentationContext = presentationContext
             self.session = session
             guard session.start() else {
                 self.session = nil
+                self.presentationContext = nil
                 continuation.resume(throwing: AuthError.browserUnavailable)
                 return
             }
         }
     }
 
-    func presentationAnchor(for session: ASWebAuthenticationSession) -> ASPresentationAnchor {
+    private static var currentAnchor: ASPresentationAnchor? {
         #if os(iOS)
             let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
             let scene = scenes.first(where: { $0.activationState == .foregroundActive }) ?? scenes.first
             return scene?.windows.first(where: \.isKeyWindow) ?? scene?.windows.first
-                ?? ASPresentationAnchor()
         #else
             return NSApplication.shared.keyWindow ?? NSApplication.shared.windows.first
-                ?? ASPresentationAnchor()
         #endif
+    }
+
+    /// ASWebAuthenticationSession holds its provider weakly; retain the selected window until
+    /// completion so scene changes cannot replace the anchor while sign-in is presented.
+    private final class PresentationContext: NSObject, ASWebAuthenticationPresentationContextProviding {
+        let anchor: ASPresentationAnchor
+
+        init(anchor: ASPresentationAnchor) {
+            self.anchor = anchor
+        }
+
+        func presentationAnchor(for session: ASWebAuthenticationSession) -> ASPresentationAnchor {
+            anchor
+        }
     }
 }

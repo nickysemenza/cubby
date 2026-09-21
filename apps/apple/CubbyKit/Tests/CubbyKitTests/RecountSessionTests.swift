@@ -357,7 +357,7 @@ struct RecountSessionTests {
     @Test func staleRefetchesKeepsStagedDecisionsAndDoesNotAdvance() async throws {
         let (session, service) = try await makeSession(staleReconciles: 1)
         session.stage(.remove, for: InventoryEntryCode("INV-3456"))
-        service.state.withLock { $0.rows[bin1]?.removeFirst() }  // the bin changed underneath
+        _ = service.state.withLock { $0.rows[bin1]?.removeFirst() }  // the bin changed underneath
         await session.commitBin()
         #expect(session.stale == .refetched)
         #expect(session.currentBin?.id == bin1)

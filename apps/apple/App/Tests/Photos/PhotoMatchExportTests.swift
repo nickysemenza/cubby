@@ -37,7 +37,11 @@ struct PhotoMatchExportTests {
         defer { try? FileManager.default.removeItem(at: savedParent) }
         let savedReport = savedParent.appendingPathComponent(directory.lastPathComponent)
             .appendingPathComponent("photo-match.json")
-        weak var releasedExport = export
+        #if compiler(>=6.4)
+            weak let releasedExport = export
+        #else
+            weak var releasedExport = export
+        #endif
         do {
             let sharingLease = try #require(export)
             export = nil

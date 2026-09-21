@@ -67,6 +67,9 @@ time, and then:
 - `pnpm apple sim [--sim <name>]` — same on the booted (or first iPhone) simulator
 - `pnpm apple gen` / `pnpm apple test` — the generators in order / `swift test`
 
+Add `--timing` to `mac`, `ios`, or `sim` for the full build log and Xcode's task timing
+summary. Without it, each command still prints the wall-clock time of each build/install step.
+
 None of these attach a debugger; for breakpoints use the Xcode schemes below.
 
 ## Verification

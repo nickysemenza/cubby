@@ -37,7 +37,7 @@ struct PhotoEntityChooser: View {
         if let search = descriptor.primarySearch {
             content.searchable(
                 text: $searchText,
-                prompt: search.placeholder ?? "Search \(descriptor.plural.lowercased()) or shortcode")
+                prompt: search.placeholder)
         } else {
             content
         }
