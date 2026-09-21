@@ -717,11 +717,15 @@ export function ComboboxField<TFieldValues extends FieldValues = FieldValues>({
             isLoading={isLoading}
             value={field.value ?? null}
             setValue={(value) => {
+              field.onBlur();
               field.onChange(value);
               onSelect?.(value);
             }}
             onCreateNew={onCreateNew}
-            onOpenChange={onOpenChange}
+            onOpenChange={(open) => {
+              if (!open) field.onBlur();
+              onOpenChange?.(open);
+            }}
             clearable={clearable}
           />
           {suggestField && (
@@ -947,9 +951,13 @@ export function SelectField<TFieldValues extends FieldValues = FieldValues>({
             inputId={controlId}
             items={items}
             value={field.value ?? (nullable ? "__none__" : null)}
-            onValueChange={(value) =>
-              field.onChange(value === "__none__" ? null : value)
-            }
+            onOpenChange={(open) => {
+              if (!open) field.onBlur();
+            }}
+            onValueChange={(value) => {
+              field.onBlur();
+              field.onChange(value === "__none__" ? null : value);
+            }}
             placeholder={placeholder || `Select ${label.toLowerCase()}`}
             label={label.toLowerCase()}
             aria-describedby={description ? descriptionId : undefined}

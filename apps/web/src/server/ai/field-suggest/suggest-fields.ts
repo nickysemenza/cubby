@@ -7,10 +7,11 @@ import type {
  * `ai.suggestFields`: resolve every requested target of one entity's basis in
  * one round trip. Each target runs through {@link FIELD_SUGGEST_REGISTRY}'s
  * matching spec — enum targets classify with Jev, reference/text targets pick
- * from a roster with `runAiSelection` — in dependency order, so a target
+ * from a roster with `runAiSelection`. In suggested-basis mode, a target
  * whose own basis names another requested target (`expense.trade`'s basis
  * includes `projectId`, itself a target when the caller asks for both) sees
  * that target's freshly resolved value when the client sent none of its own.
+ * Provided-basis mode evaluates every target concurrently from supplied values.
  */
 import { entityRefKey } from "@cubby/schemas/entity";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
@@ -103,33 +104,6 @@ function resolveTargetSpecs(
     targetSpecs.set(target, spec);
   }
   return targetSpecs;
-}
-
-/**
- * DFS topological order over the requested targets: a target whose basis
- * names another requested target visits that target first. The manifest
- * compiler (step 1) rejects a cyclic `control.suggest.basis`, so the
- * `visiting` guard below is a defensive backstop, never expected to fire.
- */
-function orderTargetsByDependency(
-  targets: ReadonlySet<string>,
-  basisOf: ReadonlyMap<string, readonly string[]>,
-): string[] {
-  const order: string[] = [];
-  const visited = new Set<string>();
-  const visiting = new Set<string>();
-  const visit = (target: string): void => {
-    if (visited.has(target) || visiting.has(target)) return;
-    visiting.add(target);
-    for (const basisKey of basisOf.get(target) ?? []) {
-      if (basisKey !== target && targets.has(basisKey)) visit(basisKey);
-    }
-    visiting.delete(target);
-    visited.add(target);
-    order.push(target);
-  };
-  for (const target of targets) visit(target);
-  return order;
 }
 
 /** This target's raw `{key: value}` basis: the client's own value when
@@ -358,52 +332,65 @@ export async function suggestFields(
   const resolvedRawByTarget = new Map<string, string | null>();
   const suggestions: Record<string, FieldSuggestion | null> = {};
 
-  for (const target of orderTargetsByDependency(
-    requestedTargets,
-    targetBasisKeys,
-  )) {
-    const spec = targetSpecs.get(target)!;
-    const basisKeys = targetBasisKeys.get(target) ?? [];
+  const pending = new Map<string, Promise<void>>();
+  const resolveTarget = (target: string): Promise<void> => {
+    const existing = pending.get(target);
+    if (existing) return existing;
+    // Defer execution until registered: siblings share one dependency promise.
+    const task = Promise.resolve().then(async () => {
+      if (input.basisMode === "suggested") {
+        await Promise.all(
+          (targetBasisKeys.get(target) ?? [])
+            .filter((key) => key !== target && requestedTargets.has(key))
+            .map(resolveTarget),
+        );
+      }
+      const spec = targetSpecs.get(target)!;
+      const basisKeys = targetBasisKeys.get(target) ?? [];
 
-    const rawBasis = effectiveRawBasis(
-      basisKeys,
-      clientBasis,
-      requestedTargets,
-      resolvedRawByTarget,
-    );
-    const resolvedBasis = await resolveDisplayBasis(
-      db,
-      model.fields,
-      basisKeys,
-      rawBasis,
-      resolveLabels,
-    );
+      const rawBasis = effectiveRawBasis(
+        basisKeys,
+        clientBasis,
+        requestedTargets,
+        input.basisMode === "suggested" ? resolvedRawByTarget : new Map(),
+      );
+      const resolvedBasis = await resolveDisplayBasis(
+        db,
+        model.fields,
+        basisKeys,
+        rawBasis,
+        resolveLabels,
+      );
 
-    const hasSignal = basisKeys.some((key) => resolvedBasis[key] != null);
-    if (!hasSignal) {
-      suggestions[target] = null;
-      resolvedRawByTarget.set(target, null);
-      continue;
-    }
+      const hasSignal = basisKeys.some((key) => resolvedBasis[key] != null);
+      if (!hasSignal) {
+        suggestions[target] = null;
+        resolvedRawByTarget.set(target, null);
+        return;
+      }
 
-    const usage: AiSelectionUsage = {
-      db,
-      operation: `suggestFields.${input.entity}.${target}`,
-      cacheStatus: "none",
-      force: ports?.force,
-    };
-    const { suggestion, rawValue } = await resolveOneTarget(
-      db,
-      spec,
-      spec.subject(resolvedBasis),
-      resolvedBasis,
-      rawBasis,
-      usage,
-      ports?.jev,
-    );
-    suggestions[target] = suggestion;
-    resolvedRawByTarget.set(target, rawValue);
-  }
+      const usage: AiSelectionUsage = {
+        db,
+        operation: `suggestFields.${input.entity}.${target}`,
+        cacheStatus: "none",
+        force: ports?.force,
+      };
+      const { suggestion, rawValue } = await resolveOneTarget(
+        db,
+        spec,
+        spec.subject(resolvedBasis),
+        resolvedBasis,
+        rawBasis,
+        usage,
+        ports?.jev,
+      );
+      suggestions[target] = suggestion;
+      resolvedRawByTarget.set(target, rawValue);
+    });
+    pending.set(target, task);
+    return task;
+  };
+  await Promise.all([...requestedTargets].map(resolveTarget));
 
   return { suggestions };
 }

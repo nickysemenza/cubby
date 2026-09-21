@@ -1,4 +1,5 @@
 import type { FieldSuggestion } from "@cubby/schemas/ai";
+import { useContext } from "react";
 
 import {
   type EntitySuggestionsOperations,
@@ -6,6 +7,7 @@ import {
   useEntitySuggestionsQuery,
 } from "./field-suggestion";
 import { FieldSuggestionHint } from "./field-suggestion-hint";
+import { RecordSuggestionScope } from "./record-suggestions";
 
 /**
  * The query-layer half of the hint, for surfaces with no RHF form to hang a
@@ -14,19 +16,29 @@ import { FieldSuggestionHint } from "./field-suggestion-hint";
  * than reading a provider's context, and leaves the write itself to the
  * caller's own picker/setter through `onApply`.
  */
-export function FieldSuggestionApply({
+type ApplyProps = {
+  source: FieldSuggestionSource | null;
+  currentValue: string | null;
+  onApply: (suggestion: FieldSuggestion) => void | Promise<void>;
+  operations?: EntitySuggestionsOperations;
+};
+
+export function FieldSuggestionApply(props: ApplyProps) {
+  const row = useContext(RecordSuggestionScope);
+  if (
+    row &&
+    props.source?.targets.every((target) => row.source.targets.includes(target))
+  )
+    return null;
+  return <StandaloneSuggestion {...props} />;
+}
+
+function StandaloneSuggestion({
   source,
   currentValue,
   onApply,
   operations,
-}: {
-  source: FieldSuggestionSource | null;
-  /** The field's current raw value, compared against the suggestion to
-   * decide whether it's already applied. */
-  currentValue: string | null;
-  onApply: (suggestion: FieldSuggestion) => void;
-  operations?: EntitySuggestionsOperations;
-}) {
+}: ApplyProps) {
   const { suggestions, isFetching } = useEntitySuggestionsQuery({
     source,
     operations,
@@ -39,6 +51,8 @@ export function FieldSuggestionApply({
 
   return (
     <FieldSuggestionHint
+      currentValue={currentValue}
+      questionKey={JSON.stringify(source)}
       suggestion={suggestion}
       applied={applied}
       pending={isFetching}

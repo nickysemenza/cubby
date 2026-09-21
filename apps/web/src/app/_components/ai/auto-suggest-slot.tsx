@@ -24,7 +24,15 @@ export function AutoSuggestSlot<TFieldValues extends FieldValues>({
   valueKind?: "id" | "item";
   disabled?: boolean;
 }) {
-  const { suggestion, applied, isPending, apply } = useAutoFieldSuggestion({
+  const {
+    suggestion,
+    applied,
+    isPending,
+    apply,
+    currentValue,
+    currentLabel,
+    questionKey,
+  } = useAutoFieldSuggestion({
     form,
     name,
     field,
@@ -33,6 +41,9 @@ export function AutoSuggestSlot<TFieldValues extends FieldValues>({
   });
   return (
     <FieldSuggestionHint
+      currentLabel={currentLabel}
+      currentValue={currentValue}
+      questionKey={questionKey}
       suggestion={suggestion}
       applied={applied}
       pending={isPending}

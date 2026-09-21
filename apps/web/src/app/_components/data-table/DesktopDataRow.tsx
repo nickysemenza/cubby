@@ -11,6 +11,7 @@ import {
 } from "react";
 import { z } from "zod";
 
+import { RecordFieldSuggestion } from "~/app/_components/ai/record-suggestions";
 import { Button } from "~/components/ui/button";
 import { TableCell, TableRow } from "~/components/ui/table";
 import { FieldExplanation } from "~/entities/field-explanation";
@@ -143,7 +144,9 @@ function DesktopDataCell<TItem extends RowData>({
       )}
       style={{ width, minWidth: width, maxWidth: width, ...inset }}
     >
-      {explained}
+      <RecordFieldSuggestion record={cell.row.original} field={cell.column.id}>
+        {explained}
+      </RecordFieldSuggestion>
     </TableCell>
   );
 }

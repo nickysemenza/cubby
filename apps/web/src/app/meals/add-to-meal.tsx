@@ -14,6 +14,9 @@ import { CalendarPlus, TriangleAlert } from "lucide-react";
 import { useId, useMemo, useState } from "react";
 import { toast } from "sonner";
 
+import { useEntitySuggestionsQuery } from "~/app/_components/ai/field-suggestion";
+import { FieldSuggestionHint } from "~/app/_components/ai/field-suggestion-hint";
+import { SuggestionVisitProvider } from "~/app/_components/ai/suggestion-review";
 import { StaticPicker } from "~/app/_components/combobox/static-picker";
 import { DatePickerInput } from "~/app/_components/date-picker-input";
 import { Row, Stack } from "~/components/layout";
@@ -24,6 +27,7 @@ import { Label } from "~/components/ui/label";
 import { ResponsiveDialog } from "~/components/ui/responsive-dialog";
 import { entities, entityDetailParams } from "~/entities/entities";
 import { entityMutation } from "~/entities/entity-mutation.functions";
+import { ai } from "~/lib/ai.functions";
 import type { EntityBrowserMutationResult } from "~/server/entity-kernel/contracts";
 
 import { mealListLabel } from "./meal-format";
@@ -37,12 +41,14 @@ const NEW_MEAL = "new";
  * browser test run the production query/mutation stack with parsed in-memory
  * transports, rather than replacing React Query or a module at its boundary. */
 export interface AddToMealOperations {
+  suggestFields: typeof ai.suggestFields;
   existingMeals: typeof meal.getByDateRange;
   addRecipe: typeof meal.addRecipe;
   mealMutation: typeof entityMutation.mutate;
 }
 
 const productionOperations: AddToMealOperations = {
+  suggestFields: ai.suggestFields,
   existingMeals: meal.getByDateRange,
   addRecipe: meal.addRecipe,
   mealMutation: entityMutation.mutate,
@@ -92,9 +98,11 @@ function mealKindFromPicker(value: string | null): MealKind {
 
 export function AddToMeal({
   recipeId,
+  recipeName,
   operations = productionOperations,
 }: {
   recipeId: RecipeShortcode;
+  recipeName: string;
   operations?: AddToMealOperations;
 }) {
   const navigate = useNavigate();
@@ -112,6 +120,19 @@ export function AddToMeal({
     ...operations.existingMeals.queryOptions({ from: date, to: date }),
     enabled: open,
   });
+
+  const suggestionSource = {
+    entity: "meal" as const,
+    basisMode: "provided" as const,
+    targets: ["mealType", "mealKind"],
+    basis: { name: recipeName },
+  };
+  const { suggestions, isFetching: checkingSuggestions } =
+    useEntitySuggestionsQuery({
+      source: suggestionSource,
+      enabled: open && target === NEW_MEAL,
+      operations,
+    });
 
   const mealOptions = useMemo(
     () => [
@@ -257,31 +278,63 @@ export function AddToMeal({
           </Stack>
 
           {target === NEW_MEAL && (
-            <Row gap="sm" wrap>
-              <Stack gap="xs" className="min-w-40 flex-1">
-                <Label>Meal type</Label>
-                <StaticPicker
-                  items={mealTypeOptions}
-                  value={mealType}
-                  onValueChange={(value) =>
-                    setMealType(mealTypeFromPicker(value))
-                  }
-                  label="meal type"
-                  clearable
-                />
-              </Stack>
-              <Stack gap="xs" className="min-w-40 flex-1">
-                <Label>Kind</Label>
-                <StaticPicker
-                  items={mealKindOptions}
-                  value={mealKind}
-                  onValueChange={(value) =>
-                    setMealKind(mealKindFromPicker(value))
-                  }
-                  label="kind"
-                />
-              </Stack>
-            </Row>
+            <SuggestionVisitProvider>
+              <Row gap="sm" wrap>
+                <Stack gap="xs" className="min-w-40 flex-1">
+                  <Label>Meal type</Label>
+                  <StaticPicker
+                    items={mealTypeOptions}
+                    value={mealType}
+                    onValueChange={(value) =>
+                      setMealType(mealTypeFromPicker(value))
+                    }
+                    label="meal type"
+                    clearable
+                  />
+                  <FieldSuggestionHint
+                    suggestion={suggestions.mealType ?? null}
+                    applied={false}
+                    currentValue={mealType}
+                    currentLabel={
+                      mealTypeOptions.find(
+                        (option) => option.value === mealType,
+                      )?.label
+                    }
+                    questionKey={JSON.stringify([suggestionSource, "mealType"])}
+                    pending={checkingSuggestions}
+                    onApply={() =>
+                      setMealType(
+                        mealTypeFromPicker(suggestions.mealType?.value ?? null),
+                      )
+                    }
+                  />
+                </Stack>
+                <Stack gap="xs" className="min-w-40 flex-1">
+                  <Label>Kind</Label>
+                  <StaticPicker
+                    items={mealKindOptions}
+                    value={mealKind}
+                    onValueChange={(value) =>
+                      setMealKind(mealKindFromPicker(value))
+                    }
+                    label="kind"
+                  />
+                  <FieldSuggestionHint
+                    suggestion={suggestions.mealKind ?? null}
+                    applied={false}
+                    currentValue={mealKind}
+                    currentLabel={MEAL_KIND_LABELS[mealKind]}
+                    questionKey={JSON.stringify([suggestionSource, "mealKind"])}
+                    pending={checkingSuggestions}
+                    onApply={() =>
+                      setMealKind(
+                        mealKindFromPicker(suggestions.mealKind?.value ?? null),
+                      )
+                    }
+                  />
+                </Stack>
+              </Row>
+            </SuggestionVisitProvider>
           )}
 
           {targetNotCooked && selectedMeal && (

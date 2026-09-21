@@ -69,7 +69,7 @@ export const RecipeWorkflow: DetailSlotComponent<"recipe"> = ({
   return (
     <Stack gap="md">
       <Row gap="sm" wrap justify="end">
-        <AddToMeal recipeId={recipe.id} />
+        <AddToMeal recipeId={recipe.id} recipeName={recipe.name} />
         <CopyRecipeParseButton recipe={recipe} />
       </Row>
       <RecipeAvailabilityPanel recipeId={recipe.id} />

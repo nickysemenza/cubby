@@ -5,6 +5,7 @@ import { Check, LayoutList, List } from "lucide-react";
 import type { ReactNode } from "react";
 import { useMemo, useRef } from "react";
 
+import { RecordSuggestionsProvider } from "~/app/_components/ai/record-suggestions";
 import { ErrorDisplay } from "~/components/feedback/error-display";
 import { SimpleLoading } from "~/components/feedback/loading-skeletons";
 import { Stack } from "~/components/layout";
@@ -1145,71 +1146,79 @@ function RTableInner<TItem extends RowData>(props: RTableProps<TItem>) {
     // already capped by Page, but wide hosts (locations' tabbed
     // page, sized for its gallery view) would otherwise stretch the table to
     // the viewport and the width-slack spacer into an absurd gutter.
-    <EntityDisplayImagesProvider refs={entityMediaRefs}>
-      <Stack className="max-w-[90rem]">
-        <DesktopTableView
-          table={table}
-          controller={controller}
-          entity={entity}
-          embedded={embedded}
-          desktopInspector={desktopInspector}
-          externalToolbar={externalToolbar}
-          desktopToolbar={desktopToolbar}
-          showToolbar={showToolbar}
-          infiniteScroll={infiniteScroll}
-          showPagination={showPagination}
-          showCellSelectionStats={showCellSelectionStats}
-          timing={timing}
-          ariaLabel={ariaLabel}
-          cellSelectionEnabled={cellSelectionEnabled}
-          statusContent={statusContent}
-          hasStatusContent={hasStatusContent}
-          tableBody={renderTableBody()}
-        />
+    <RecordSuggestionsProvider
+      entity={entity}
+      records={
+        isLoading || isTransitioning ? [] : rows.map((row) => row.original)
+      }
+      fieldKeys={table.getVisibleLeafColumns().map((column) => column.id)}
+    >
+      <EntityDisplayImagesProvider refs={entityMediaRefs}>
+        <Stack className="max-w-[90rem]">
+          <DesktopTableView
+            table={table}
+            controller={controller}
+            entity={entity}
+            embedded={embedded}
+            desktopInspector={desktopInspector}
+            externalToolbar={externalToolbar}
+            desktopToolbar={desktopToolbar}
+            showToolbar={showToolbar}
+            infiniteScroll={infiniteScroll}
+            showPagination={showPagination}
+            showCellSelectionStats={showCellSelectionStats}
+            timing={timing}
+            ariaLabel={ariaLabel}
+            cellSelectionEnabled={cellSelectionEnabled}
+            statusContent={statusContent}
+            hasStatusContent={hasStatusContent}
+            tableBody={renderTableBody()}
+          />
 
-        {/* Mobile List View. Also rendered pre-hydration (see the desktop
+          {/* Mobile List View. Also rendered pre-hydration (see the desktop
           wrapper's breakpoint comment) so a phone's first paint is the
           shape-matched skeleton rather than a clipped desktop table. */}
-        {(isMobile || !hydrated) && (
-          <MobileListScreen
-            table={table}
-            entity={entity}
-            getDetailsHref={getMobileDetailsHref}
-            disableDetailsHref={disableMobileDetailsHref}
-            onRowClick={onRowClick}
-            additionalToolbarContent={additionalToolbarContent}
-            actions={actions}
-            bulkActionBar={bulkActionBar}
-            isLoading={isLoading}
-            error={error}
-            infiniteScroll={infiniteScroll}
-            refreshControls={refreshControls}
-            groupConfig={groupConfig}
-            grouped={grouped}
-            onGroupedChange={onGroupedChange}
-            isTransitioning={isTransitioning}
-            rowContentVersion={rowContentVersion}
-            portalWorkbenchUtilities={externalToolbar}
-            showToolbar={showToolbar}
-            showViewOptions={showMobileViewOptions({
-              embedded,
-              showColumnMenu,
-              externalToolbar,
-            })}
-            toolbarVariant={tableChromeVariant(embedded)}
-            emptyState={emptyState}
-          />
-        )}
+          {(isMobile || !hydrated) && (
+            <MobileListScreen
+              table={table}
+              entity={entity}
+              getDetailsHref={getMobileDetailsHref}
+              disableDetailsHref={disableMobileDetailsHref}
+              onRowClick={onRowClick}
+              additionalToolbarContent={additionalToolbarContent}
+              actions={actions}
+              bulkActionBar={bulkActionBar}
+              isLoading={isLoading}
+              error={error}
+              infiniteScroll={infiniteScroll}
+              refreshControls={refreshControls}
+              groupConfig={groupConfig}
+              grouped={grouped}
+              onGroupedChange={onGroupedChange}
+              isTransitioning={isTransitioning}
+              rowContentVersion={rowContentVersion}
+              portalWorkbenchUtilities={externalToolbar}
+              showToolbar={showToolbar}
+              showViewOptions={showMobileViewOptions({
+                embedded,
+                showColumnMenu,
+                externalToolbar,
+              })}
+              toolbarVariant={tableChromeVariant(embedded)}
+              emptyState={emptyState}
+            />
+          )}
 
-        {/* Mobile keeps the inline pager, hidden when infinite scroll is active */}
-        {isMobile && table.getPageCount() > 1 && !infiniteScroll && (
-          <DataTablePagination
-            table={table}
-            timing={timing}
-            variant={tableChromeVariant(embedded)}
-          />
-        )}
-      </Stack>
-    </EntityDisplayImagesProvider>
+          {/* Mobile keeps the inline pager, hidden when infinite scroll is active */}
+          {isMobile && table.getPageCount() > 1 && !infiniteScroll && (
+            <DataTablePagination
+              table={table}
+              timing={timing}
+              variant={tableChromeVariant(embedded)}
+            />
+          )}
+        </Stack>
+      </EntityDisplayImagesProvider>
+    </RecordSuggestionsProvider>
   );
 }

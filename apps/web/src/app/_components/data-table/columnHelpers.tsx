@@ -1604,6 +1604,7 @@ export function createSingleEntityInlineLinkColumn<
         const suggestConfig = editable.suggest;
         const suggest = suggestConfig
           ? {
+              basisMode: "provided" as const,
               entity: suggestConfig.entity,
               targets: [suggestConfig.field],
               basis: fieldSuggestionBasisFromRecord(
@@ -1953,6 +1954,7 @@ export function createFilterableSelectColumn<
             const suggestConfig = editable.suggest;
             const suggest = suggestConfig
               ? {
+                  basisMode: "provided" as const,
                   entity: suggestConfig.entity,
                   targets: [suggestConfig.field],
                   basis: fieldSuggestionBasisFromRecord(
@@ -2334,6 +2336,7 @@ export function createProjectLinkColumn<T extends ProjectRefRow>(
         const suggestConfig = editable.suggest;
         const suggest = suggestConfig
           ? {
+              basisMode: "provided" as const,
               entity: suggestConfig.entity,
               targets: [suggestConfig.field],
               basis: fieldSuggestionBasisFromRecord(

@@ -34,22 +34,11 @@ history is the archive. Permanent product constraints live in the
   `unavailable` and `history_expired`, the same class of fix the product
   identity checks got.
 
-- **Expose Jev's raw probability.** `server/ai/jev.ts` buckets the winning
-  choice into `high | medium | low` and carries a TODO; threshold tuning and
-  any "why did it pick this" surface need the number. Nullable
-  `probability` on `JevChoiceResult` and the suggestion schemas.
-
 - **Generate the MCP instructions' prefix list.** `MCP_SERVER_INSTRUCTIONS`
   in `server/mcp/server.ts` hand-lists every shortcode prefix while
   `packages/shared/src/generated/shortcode-registry.gen.ts` already holds
   them. Render the list from the registry plus entity descriptions so a new
   entity cannot drift out of the instructions.
-- **`add-to-meal` gets no Jev suggestions.** `meal.mealType`/`mealKind` are
-  suggestable from the meal name (`control.suggest` in `06-meal.entity.ts`),
-  but `app/meals/add-to-meal.tsx` only holds a `recipeId` and never fetches a
-  name, so there is no text basis. Fetch the recipe name there and mount
-  `FieldSuggestionApply` beside its two pickers, as `split-expense-dialog.tsx`
-  does for trade.
 
 - **Canvas conformance follow-ups.** The generic pages now render the
   canvas (<https://claude.ai/artifact/A45j5qz24RjRK6KzKmKLWL>): one 44px
@@ -397,6 +386,19 @@ history is the archive. Permanent product constraints live in the
 ---
 
 ## Requires thought or evidence
+
+- **Cache unchanged Jev evaluations by effective input.** Add application-level
+  reuse keyed by a canonical hash of model, explicit prompt version,
+  instructions, normalized context actually sent, and ordered choices/candidate
+  context. Cache successful results, including no-suggestion outcomes, and
+  deduplicate concurrent identical requests. Relevant input changes invalidate
+  reuse; unrelated entity edits do not. Define storage, expiry, and refresh
+  behavior before implementation. Preserve the existing Gateway cache; the
+  shared call boundary is `server/ai/jev.ts`.
+
+- **Review suggestions across a full filtered list.** The inline suggestion
+  pass checks opened pages only. Design an explicit interactive scan with
+  progress and individual acceptance before expanding beyond loaded records.
 
 - **Apply a reviewed purchase-validation diff.** Targeted validation now
   records a read-only semantic diff and stops for review. Design the explicit

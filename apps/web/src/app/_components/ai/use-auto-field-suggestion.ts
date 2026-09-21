@@ -1,4 +1,5 @@
 import type { FieldSuggestion } from "@cubby/schemas/ai";
+import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import { useCallback, useEffect } from "react";
 import {
   type FieldValues,
@@ -11,9 +12,13 @@ import { z } from "zod";
 
 import type { ComboboxItem } from "~/app/_components/combobox/combobox-types";
 
+import { basisValueOf } from "./field-suggestion";
 import { useFieldSuggestionContext } from "./field-suggestion-provider";
 
 export interface UseAutoFieldSuggestionResult {
+  currentLabel: string | null;
+  currentValue: string | null;
+  questionKey: string;
   suggestion: FieldSuggestion | null;
   /** The field's current value already equals the suggestion (auto-filled or
    * manually picked the same thing). */
@@ -29,6 +34,9 @@ export interface UseAutoFieldSuggestionResult {
 }
 
 const NO_SUGGESTION: UseAutoFieldSuggestionResult = {
+  currentLabel: null,
+  currentValue: null,
+  questionKey: "",
   suggestion: null,
   applied: false,
   isPending: false,
@@ -98,13 +106,6 @@ function currentEquals(
  * never be shown against a basis it wasn't asked about, and there's no
  * separate "is this still the question I asked" check to reproduce.
  *
- * **Accepted caveat**: RHF only dirties a field on an actual value change, so
- * a manual pick that happens to equal the field's own default
- * (`expense.trade: "other"`, `location.type: "room"`) never dirties it and
- * can still be silently overwritten by a later suggestion. Fixing this would
- * mean tracking "has this field ever been touched" as a second source of
- * truth independent of RHF's own dirty state, for one edge case — not worth
- * it; documented here instead.
  */
 export function useAutoFieldSuggestion<TFieldValues extends FieldValues>({
   form,
@@ -127,7 +128,8 @@ export function useAutoFieldSuggestion<TFieldValues extends FieldValues>({
   // instead (every primitive in step 3 renders its suggest slot inside that
   // Controller's `render` prop).
   const formState = useFormState({ control: form.control, name });
-  const isDirty = form.getFieldState(name, formState).isDirty;
+  const state = form.getFieldState(name, formState);
+  const isDirty = state.isDirty || state.isTouched;
   const suggestion = context?.suggestions[field] ?? null;
   const current: unknown = form.getValues(name);
   const applied = suggestion
@@ -140,7 +142,10 @@ export function useAutoFieldSuggestion<TFieldValues extends FieldValues>({
       disabled ||
       context.mode !== "create" ||
       isDirty ||
+      context.isFetching ||
       !suggestion?.value ||
+      suggestion.probability == null ||
+      suggestion.probability < 0.85 ||
       applied
     ) {
       return;
@@ -196,7 +201,12 @@ export function useAutoFieldSuggestion<TFieldValues extends FieldValues>({
   }, [context, disabled, isDirty, suggestion, form, name, field]);
 
   const apply = useCallback(() => {
-    if (!suggestion?.value) return;
+    if (
+      !suggestion?.value ||
+      context?.isFetching ||
+      basisValueOf(form.getValues(name)) !== basisValueOf(current)
+    )
+      return;
     // SAFETY: see the auto-fill effect above — same caller-declared
     // `valueKind` relationship.
     form.setValue(
@@ -207,11 +217,21 @@ export function useAutoFieldSuggestion<TFieldValues extends FieldValues>({
       >,
       { shouldDirty: true, shouldTouch: true },
     );
-  }, [suggestion, valueKind, form, name]);
+  }, [suggestion, valueKind, form, name, context, current]);
 
   if (!context) return NO_SUGGESTION;
 
   return {
+    currentLabel:
+      entityFieldModels[context.entity].fields
+        .find((candidate) => candidate.key === field)
+        ?.control?.options?.find(
+          (option) => option.value === basisValueOf(current),
+        )?.label ??
+      z.object({ name: z.string() }).safeParse(current).data?.name ??
+      basisValueOf(current),
+    currentValue: basisValueOf(current),
+    questionKey: context.questionKey,
     suggestion,
     applied,
     isPending: context.isFetching,

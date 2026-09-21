@@ -135,7 +135,7 @@ function RecipeCoverageCard({ recipe }: { recipe: RecipeAvailability }) {
         )}
       </Link>
       <Row justify="end">
-        <AddToMeal recipeId={recipe.recipeId} />
+        <AddToMeal recipeId={recipe.recipeId} recipeName={recipe.recipeName} />
       </Row>
     </Stack>
   );

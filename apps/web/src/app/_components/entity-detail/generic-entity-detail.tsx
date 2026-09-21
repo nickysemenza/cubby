@@ -12,6 +12,7 @@ import { Clock, FileText, ImageIcon, Info, Link2, Puzzle } from "lucide-react";
 import { Suspense, useMemo, useState } from "react";
 import { z } from "zod";
 
+import { RecordSuggestionsProvider } from "~/app/_components/ai/record-suggestions";
 import type {
   DetailHeroActions,
   DetailHeroStat,
@@ -628,11 +629,19 @@ export function GenericEntityDetail<E extends GenericDetailEntity>({
         chain={breadcrumbChain}
         current={title}
       />
-      <DetailSections
-        sections={sections}
-        rawData={record}
-        heroImages={heroImages}
-      />
+      <RecordSuggestionsProvider
+        entity={entity}
+        records={[record]}
+        fieldKeys={entityFieldModels[entity].fields
+          .filter((field) => field.display.detail)
+          .map((field) => field.key)}
+      >
+        <DetailSections
+          sections={sections}
+          rawData={record}
+          heroImages={heroImages}
+        />
+      </RecordSuggestionsProvider>
       {editable && editing ? (
         EditOverride ? (
           <EditOverride

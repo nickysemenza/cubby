@@ -1,9 +1,10 @@
 import type { FieldSuggestion } from "@cubby/schemas/ai";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
-import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { z } from "zod";
 
+import { readReferenceField } from "~/entities/entity-references";
 import { ai } from "~/lib/ai.functions";
 
 /**
@@ -109,11 +110,14 @@ export function fieldSuggestionBasisFromRecord<TRecord extends object>(
   const basis: Record<string, string | null> = {};
   for (const key of targets.basisKeys) {
     const readKey = fieldByKey(entity, key)?.readKey ?? key;
+    const field = fieldByKey(entity, key);
     // SAFETY: `readKey` comes from the generated field model, which owns
     // this record's shape; a key absent from a partial record just reads
     // `undefined`, which `basisValueOf` treats as null.
     const value = record[readKey as keyof TRecord];
-    basis[key] = basisValueOf(value);
+    basis[key] = field?.reference
+      ? (readReferenceField(record, field)?.items[0]?.id ?? null)
+      : basisValueOf(value);
   }
   return basis;
 }
@@ -149,6 +153,7 @@ export function isBasisSufficient(
 }
 
 export interface FieldSuggestionSource {
+  basisMode: "provided" | "suggested";
   readonly entity: ShortcodeEntity;
   /** Bare manifest field keys of `entity` being requested this call. */
   readonly targets: readonly string[];
@@ -162,9 +167,10 @@ export interface EntitySuggestionsOperations {
   suggestFields: typeof ai.suggestFields;
 }
 
-const productionEntitySuggestionsOperations: EntitySuggestionsOperations = {
-  suggestFields: ai.suggestFields,
-};
+export const productionEntitySuggestionsOperations: EntitySuggestionsOperations =
+  {
+    suggestFields: ai.suggestFields,
+  };
 
 /** Never a fresh `{}` — a stable default keeps `suggestions` referentially
  * equal across renders when there is nothing to show (web-ui hook-default rule). */
@@ -175,6 +181,7 @@ const EMPTY_SUGGESTIONS: Record<string, FieldSuggestion | null> = {};
  * query is disabled) never sees an invalid shape. Never fetched: `enabled`
  * gates on `source`, not on this target existing in any registry. */
 const INACTIVE_SUGGESTION_SOURCE: FieldSuggestionSource = {
+  basisMode: "provided",
   entity: "product",
   targets: ["__inactive__"],
   basis: {},
@@ -198,6 +205,7 @@ export function useEntitySuggestionsQuery({
 }) {
   const effective = source ?? INACTIVE_SUGGESTION_SOURCE;
   const opts = operations.suggestFields.queryOptions({
+    basisMode: effective.basisMode,
     entity: effective.entity,
     targets: [...effective.targets],
     basis: effective.basis,
@@ -206,7 +214,6 @@ export function useEntitySuggestionsQuery({
     ...opts,
     enabled: enabled && source != null,
     retry: false,
-    placeholderData: keepPreviousData,
     meta: { ...opts.meta, silentErrors: true },
   });
   return {

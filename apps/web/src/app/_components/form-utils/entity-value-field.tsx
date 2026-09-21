@@ -57,13 +57,20 @@ export function EntityValueField<
   const descriptionId = `${controlId}-description`;
   // Called unconditionally regardless of `suggestField` — a no-op without a
   // mounted `FieldSuggestionProvider`, same as `AutoSuggestSlot`.
-  const { suggestion, applied, isPending, apply, seedItem } =
-    useAutoFieldSuggestion({
-      form,
-      name,
-      field: suggestField ?? "",
-      disabled: !suggestField,
-    });
+  const {
+    suggestion,
+    applied,
+    isPending,
+    apply,
+    seedItem,
+    currentValue,
+    questionKey,
+  } = useAutoFieldSuggestion({
+    form,
+    name,
+    field: suggestField ?? "",
+    disabled: !suggestField,
+  });
   return (
     <SearchProvider scope={scope}>
       {({ items, onSearchChange, isLoading, onCreateNew, onOpenChange }) => (
@@ -104,7 +111,8 @@ export function EntityValueField<
                   placeholder={placeholder}
                   items={items}
                   value={selected}
-                  setValue={(item) =>
+                  setValue={(item) => {
+                    field.onBlur();
                     field.onChange(
                       // SAFETY: `name` is a caller-owned Path whose value is
                       // the selected entity shortcode; RHF cannot derive the
@@ -113,16 +121,22 @@ export function EntityValueField<
                         TFieldValues,
                         Path<TFieldValues>
                       >,
-                    )
-                  }
+                    );
+                  }}
                   onSearchChange={onSearchChange}
                   isLoading={isLoading}
                   onCreateNew={onCreateNew}
-                  onOpenChange={onOpenChange}
+                  onOpenChange={(open) => {
+                    if (!open) field.onBlur();
+                    onOpenChange?.(open);
+                  }}
                   clearable={clearable}
                 />
                 {suggestField && (
                   <FieldSuggestionHint
+                    currentValue={currentValue}
+                    currentLabel={selected?.name}
+                    questionKey={questionKey}
                     suggestion={suggestion}
                     applied={applied}
                     pending={isPending}
