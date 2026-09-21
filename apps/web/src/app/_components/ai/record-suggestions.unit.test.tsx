@@ -40,7 +40,7 @@ afterEach(() => {
 });
 const id = testShortcode("product", "first");
 const food = {
-  value: "food",
+  value: "CAT-2222",
   label: "Food",
   confidence: "high" as const,
   probability: 0.97,
@@ -57,22 +57,22 @@ function Surface({
   operations: EntitySuggestionsOperations;
   visible?: boolean;
 }) {
-  const record = { id, name, manufacturer: null, category: null };
+  const record = { id, name, manufacturer: null, categoryId: null };
   return (
     <RecordSuggestionsProvider
       entity="product"
       records={visible ? [record] : []}
-      fieldKeys={["category"]}
+      fieldKeys={["categoryId"]}
       operations={operations}
     >
       {visible ? (
-        <RecordFieldSuggestion record={record} field="category">
+        <RecordFieldSuggestion record={record} field="categoryId">
           <span>Empty category</span>
           <FieldSuggestionApply
             source={{
               entity: "product",
               basisMode: "provided",
-              targets: ["category"],
+              targets: ["categoryId"],
               basis: { name, manufacturer: null },
             }}
             currentValue={null}
@@ -96,7 +96,7 @@ describe("record suggestions", () => {
           return new Promise((resolve) => {
             finish = resolve;
           });
-        return { suggestions: { category: food } };
+        return { suggestions: { categoryId: food } };
       }),
     };
     const view = render(<Surface name="red apple" operations={operations} />, {
@@ -110,7 +110,9 @@ describe("record suggestions", () => {
     await waitFor(() => expect(calls).toHaveLength(2));
     await act(async () => {
       finish({
-        suggestions: { category: { ...food, value: "tools", label: "Tools" } },
+        suggestions: {
+          categoryId: { ...food, value: "CAT-2224", label: "Tools" },
+        },
       });
     });
     await screen.findByText("Suggested: Tools");
@@ -240,10 +242,9 @@ describe("record suggestions", () => {
 
   it("rechecks authoritative eligibility before accepting a rendered proposal", async () => {
     const record = {
-      id: testShortcode("product", "stale"),
-      name: "Red apple",
-      manufacturer: null,
-      category: null,
+      id: testShortcode("task", "stale"),
+      name: "Install a circuit breaker",
+      trade: null,
     };
     let calls = 0;
     const commands: EntityBrowserMutationInput[] = [];
@@ -251,26 +252,28 @@ describe("record suggestions", () => {
       suggestFields: ai.suggestFields.withTransport(async () => {
         calls += 1;
         return {
-          suggestions: { category: food },
-          eligibleTargets: ["category"],
+          suggestions: {
+            trade: { ...food, value: "electrical", label: "Electrical" },
+          },
+          eligibleTargets: ["trade"],
         };
       }),
     };
     render(
       <RecordSuggestionsProvider
-        entity="product"
+        entity="task"
         records={[record]}
-        fieldKeys={["category"]}
+        fieldKeys={["trade"]}
         operations={operations}
         readRecord={async () => ({
           ...record,
           fieldResolutions: {
-            category: {
+            trade: {
               mode: "inherit",
               storedValue: null,
-              value: "food",
-              fallbackValue: "food",
-              source: "Parent default",
+              value: "electrical",
+              fallbackValue: "electrical",
+              source: "Project default",
               sourceEntity: null,
               matchesFallback: true,
               canReset: false,
@@ -284,14 +287,14 @@ describe("record suggestions", () => {
           },
         })}
       >
-        <RecordFieldSuggestion record={record} field="category">
-          <span>Empty category</span>
+        <RecordFieldSuggestion record={record} field="trade">
+          <span>Empty trade</span>
         </RecordFieldSuggestion>
       </RecordSuggestionsProvider>,
       { wrapper: harness.wrapper },
     );
 
-    await screen.findByText("Suggested: Food");
+    await screen.findByText("Suggested: Electrical");
     fireEvent.click(screen.getByRole("button", { name: "Use suggestion" }));
     await screen.findByRole("alert");
     expect(calls).toBe(1);

@@ -9,7 +9,7 @@ describe("detail filter link route contracts", () => {
       entitySearch.product.schema.parse({
         manufacturer: "Acme",
         model: "2853-20",
-        category: "tools",
+        category: "CAT-2224",
         tags: "M18",
         ingredient: "ING-4K7M",
         location: "LOC-2ABC,__none__",
@@ -17,7 +17,7 @@ describe("detail filter link route contracts", () => {
     ).toMatchObject({
       manufacturer: "Acme",
       model: "2853-20",
-      category: "tools",
+      category: "CAT-2224",
       tags: "M18",
       ingredient: "ING-4K7M",
       location: "LOC-2ABC,__none__",
@@ -188,7 +188,11 @@ describe("detail filter link route contracts", () => {
   it("keeps malformed filters safe without widening exact entity scopes", () => {
     const malformedKnownValues = [
       [entitySearch.task.schema, { status: "almost_done" }, undefined],
-      [entitySearch.product.schema, { category: "not_a_category" }, undefined],
+      [
+        entitySearch.product.schema,
+        { category: "not_a_category" },
+        UNRESOLVABLE_ENTITY_FILTER,
+      ],
       [
         entitySearch.product.schema,
         { ingredient: "ingredient name" },

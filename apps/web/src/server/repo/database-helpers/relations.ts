@@ -1,22 +1,3 @@
-/**
- * Predefined relation loaders for common query patterns.
- * Reduces verbosity when fetching entities with their related data.
- *
- * Usage: spread into query options
- * Example: db.query.ingredient.findFirst({ where: ..., ...relations.ingredient.full })
- *
- * SOFT DELETE: Drizzle's relational queries DO support a `where` on a (to-many)
- * nested relation, so prefer `where: notDeleted(table)` directly in the `with` block
- * to exclude soft-deleted rows at query time — that's the durable, correct-by-
- * construction mechanism. (The recipe-usage relations below do this.) Note `where`
- * is only available on to-many relations; a to-one relation — e.g. a section's
- * `recipe` — can't carry one, so when liveness depends on a to-one parent the
- * transform must still filter (see `dbIngredientToAPI`). The transform-layer helpers
- * (`mapRelation`, `mapImages`,
- * `Array.filter(deletedAt === null)`) remain as backstops and still cover the
- * relations not yet annotated here.
- */
-
 import { type AnyColumn, and, asc, sql } from "drizzle-orm";
 
 import {
@@ -38,6 +19,24 @@ import {
   recipeSectionIngredient,
   taskImage,
 } from "~/server/db/schema";
+/**
+ * Predefined relation loaders for common query patterns.
+ * Reduces verbosity when fetching entities with their related data.
+ *
+ * Usage: spread into query options
+ * Example: db.query.ingredient.findFirst({ where: ..., ...relations.ingredient.full })
+ *
+ * SOFT DELETE: Drizzle's relational queries DO support a `where` on a (to-many)
+ * nested relation, so prefer `where: notDeleted(table)` directly in the `with` block
+ * to exclude soft-deleted rows at query time — that's the durable, correct-by-
+ * construction mechanism. (The recipe-usage relations below do this.) Note `where`
+ * is only available on to-many relations; a to-one relation — e.g. a section's
+ * `recipe` — can't carry one, so when liveness depends on a to-one parent the
+ * transform must still filter (see `dbIngredientToAPI`). The transform-layer helpers
+ * (`mapRelation`, `mapImages`,
+ * `Array.filter(deletedAt === null)`) remain as backstops and still cover the
+ * relations not yet annotated here.
+ */
 // Deep path, never the `database-helpers` barrel: these are top-level const
 // initializations, so an import cycle here is a TDZ crash at startup.
 import {
@@ -46,6 +45,8 @@ import {
   productExpenseTotalSql,
 } from "~/server/repo/expense-aggregate-sql";
 import { stockOnly } from "~/server/repo/inventory/placement";
+import { categorySummarySql } from "~/server/repo/product-category-sql";
+import { productClassificationEvidenceSql } from "~/server/repo/product/classification-evidence";
 
 import { notDeleted } from "./query";
 
@@ -206,7 +207,15 @@ const withProjectAndParentTaskNameOnly = {
  * opposed to `inventoryEntries.product`, which is stock held at it. Carries
  * the cover image because a linked location renders from its SKU's photo.
  */
+const productCategoryProjection = {
+  classificationEvidence: productClassificationEvidenceSql(
+    sql`${product.id}`,
+  ).as("classificationEvidence"),
+  category: categorySummarySql(sql`${product.categoryId}`).as("category"),
+};
+
 const locationIdentityProduct = {
+  extras: productCategoryProjection,
   with: {
     images: {
       where: notDeleted(productImage),
@@ -223,6 +232,7 @@ export const relations = {
     full: {
       with: {
         product: {
+          extras: productCategoryProjection,
           where: notDeleted(product),
           with: {
             unitMappings: { where: notDeleted(productUnitMappings) },
@@ -252,6 +262,7 @@ export const relations = {
     list: {
       with: {
         product: {
+          extras: productCategoryProjection,
           where: notDeleted(product),
           // Load-bearing for BOTH the Product column's pill (which shows
           // `product[0]` of a possible +9) and the leading thumbnail (which
@@ -332,6 +343,7 @@ export const relations = {
       // as `productIdsWithComponents` in product/crud.ts — the filter, the
       // cell and the hero must select the same rows.
       extras: {
+        ...productCategoryProjection,
         componentCount: productComponentCount.as("componentCount"),
       },
     },
@@ -360,6 +372,7 @@ export const relations = {
         },
       },
       extras: {
+        ...productCategoryProjection,
         // Counts every live line, acquisitions and exits alike. Shared with the
         // ORDER BY and the range filter in product/crud.ts.
         expenseCount: productExpenseCountSql().as("expenseCount"),
@@ -384,6 +397,7 @@ export const relations = {
         growsIngredient: { columns: { shortcode: true } },
       },
       extras: {
+        ...productCategoryProjection,
         expenseCount: productExpenseCountSql().as("expenseCount"),
         componentCount: productComponentCount.as("componentCount"),
         expenseTotal: productExpenseTotalSql().as("expenseTotal"),
@@ -482,6 +496,7 @@ export const relations = {
             // See the `inventory.list` note below: the embedded product's
             // barcode is derived from its primary `gtin` identifier row.
             product: {
+              extras: productCategoryProjection,
               with: { externalIds: { where: notDeleted(productExternalId) } },
             },
           },
@@ -551,6 +566,7 @@ export const relations = {
         // row's barcode is derived from its primary `gtin` identifier now, so
         // without it every inventory row would report itself barcode-less.
         product: {
+          extras: productCategoryProjection,
           with: { externalIds: { where: notDeleted(productExternalId) } },
         },
         location: true,
@@ -559,6 +575,7 @@ export const relations = {
     full: {
       with: {
         product: {
+          extras: productCategoryProjection,
           with: {
             unitMappings: { where: notDeleted(productUnitMappings) },
             externalIds: { where: notDeleted(productExternalId) },

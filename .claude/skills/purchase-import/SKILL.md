@@ -82,12 +82,18 @@ Load [financial-settlement.md](references/financial-settlement.md). Match litera
 posted charges or refunds to Purchases; one transaction may allocate across
 several Purchases and one order may have several shipment charges. Do not create
 synthetic transactions. If evidence is incomplete, leave settlement unresolved.
+Monarch rows prove settlement, not itemization or exact Product identity. Use
+email/order lines for items and prefer matching existing photo-created Products
+when variant evidence agrees. Keep historical Expense attribution separate from
+current inventory ownership. Reconciliation never receives that inventory again.
 
 ## Enrichment fallback
 
 Run the `product-enrichment` skill for unresolved Products after an import.
 Prefer stable vendor identity such as SKU, ASIN, UPC, or model. Leave ambiguous
-identity as a finding and preserve human-linked Products.
+identity as a finding and preserve human-linked Products. An inventory-photo
+handoff matches an existing Product; it does not turn an unresolved photo into
+a new purchase-import Product or inventory.
 
 ## Agent authority
 

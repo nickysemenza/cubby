@@ -22,7 +22,10 @@ import {
   parseEntityId,
   parseShortcodeFor,
 } from "@cubby/schemas/identifiers";
-import { type ProductCategory, productCategory } from "@cubby/schemas/product";
+import {
+  productCategorySummary,
+  type ProductCategorySummary,
+} from "@cubby/schemas/product-category-fields";
 import { getMiscDisplayName, isMiscProduct } from "@cubby/shared";
 
 import { getErrorMessage } from "~/lib/error-utils";
@@ -100,7 +103,7 @@ interface DetectedProductMatch {
   shortcode: ProductShortcode;
   name: string;
   manufacturer: string;
-  category: ProductCategory | null;
+  category: ProductCategorySummary | null;
 }
 
 // Router inputs use a public location shortcode. This service receives the
@@ -409,8 +412,8 @@ async function matchDetectedItems(
               name: semanticMatch.item.name,
               manufacturer: semanticMatch.item.subtitle ?? item.manufacturer,
               category:
-                productCategory.safeParse(semanticMatch.item.typeHint).data ??
-                null,
+                productCategorySummary.safeParse(semanticMatch.item.typeHint)
+                  .data ?? null,
             };
           }
         }
@@ -570,7 +573,6 @@ export async function approveDetectedInventoryItem(
         {
           name: productName,
           manufacturer: input.item.manufacturer,
-          category: input.item.category,
         },
         actor,
       );

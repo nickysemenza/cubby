@@ -79,6 +79,7 @@ import {
   effectiveExpenseProjectSql,
   effectiveExpenseTradeSql,
 } from "~/server/repo/expense-inheritance";
+import { categoryFeatureSql } from "~/server/repo/product-category-sql";
 import { loadProductOwnershipTimelines } from "~/server/repo/product/ownership";
 import {
   effectiveTaskProjectSql,
@@ -216,7 +217,10 @@ export async function projectToolMatrix(
         buildSearchConditions(
           product,
           [],
-          [eq(product.category, "tools"), toolNameSearchCondition(toolSearch)],
+          [
+            categoryFeatureSql(sql`${product.categoryId}`, "tools"),
+            toolNameSearchCondition(toolSearch),
+          ],
         ),
       )
       .groupBy(
@@ -417,7 +421,7 @@ export async function projectToolMatrix(
             .where(
               and(
                 inArray(inventoryEntry.productId, rowIds),
-                eq(product.category, "tools"),
+                categoryFeatureSql(sql`${product.categoryId}`, "tools"),
                 notDeleted(inventoryEntry),
               ),
             ),

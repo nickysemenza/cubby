@@ -1,4 +1,5 @@
 import { displayGtin, type ExternalIdInput } from "@cubby/schemas/external-id";
+import { productCategoryShortcode } from "@cubby/schemas/identifiers";
 import { type ImageOut, partitionEntityFiles } from "@cubby/schemas/image";
 import {
   type ProductLabelNutrition,
@@ -7,7 +8,6 @@ import {
 import {
   type ProductCreateInput,
   type ProductTopLevelOut,
-  productCategory,
 } from "@cubby/schemas/product";
 import {
   type UnitMappingInput,
@@ -27,6 +27,7 @@ import { z } from "zod";
 
 import { FieldSuggestionProvider } from "~/app/_components/ai/field-suggestion-provider";
 import { getOptionalIngredientId } from "~/app/_components/form-fields";
+import { useProductCategories } from "~/app/_components/hooks/useProductCategories";
 import { InfoRow } from "~/components/common/info-row";
 import { filterAliases } from "~/components/forms/aliases-field";
 import { Row, Stack } from "~/components/layout";
@@ -59,7 +60,7 @@ const PRODUCT_FORM_FIELDS = [
   "manufacturer",
   "model",
   "notes",
-  "category",
+  "categoryId",
   "upc",
   "isbn",
   "fdc_id",
@@ -70,6 +71,10 @@ const PRODUCT_FORM_FIELDS = [
   "labelNutrition",
   "externalIds",
 ] as const;
+
+// Classification is edited by EntityValueField, which persists the selected
+// CAT shortcode in `categoryId` rather than a ComboboxItem sibling.
+const PRODUCT_FORM_REFERENCE_PATHS = { categoryId: null } as const;
 
 // The `LabelNutritionFormValue` shape RHF actually holds mid-edit — looser
 // than `ProductLabelNutrition` (serving grams may be typed before any
@@ -153,7 +158,7 @@ interface ProductFormValues {
   manufacturer: string;
   model: string | null;
   notes: string | null;
-  category: z.infer<typeof productCategory> | null;
+  categoryId: string | null;
   upc: string | null;
   isbn: string | null;
   fdc_id: number | null;
@@ -172,7 +177,7 @@ const productFormFieldPaths = {
   manufacturer: "manufacturer",
   model: "model",
   notes: "notes",
-  category: "category",
+  categoryId: "categoryId",
   upc: "upc",
   isbn: "isbn",
   fdcId: "fdc_id",
@@ -234,6 +239,11 @@ const ProductLivePreview: FC<{ control: Control<ProductFormValues> }> = ({
   // SAFETY: the form is intentionally observed without a field name for this
   // display-only preview; its schema owns the partial product draft shape.
   const v = useWatch({ control }) as Partial<ProductFormValues>;
+  const { categories } = useProductCategories();
+  const categoryPath = categories
+    .find((category) => category.id === v.categoryId)
+    ?.path.map((node) => node.name)
+    .join(" / ");
 
   return (
     <div>
@@ -242,7 +252,7 @@ const ProductLivePreview: FC<{ control: Control<ProductFormValues> }> = ({
       </h3>
       <div className="mt-2">
         <InfoRow label="Manufacturer">{v.manufacturer || undefined}</InfoRow>
-        <InfoRow label="Category">{v.category ?? undefined}</InfoRow>
+        <InfoRow label="Classification">{categoryPath}</InfoRow>
         <InfoRow label="Price">
           {v.price != null ? (
             <span className="font-mono tabular-nums">
@@ -334,7 +344,7 @@ function createProductFormDefaults({
     manufacturer: initialManufacturer ?? UNSPECIFIED_MANUFACTURER,
     model: null,
     notes: null,
-    category: null,
+    categoryId: null,
     upc: initialUpc ?? null,
     isbn: null,
     fdc_id: initialFdcId ?? null,
@@ -372,7 +382,7 @@ function editProductFormDefaults(
     manufacturer: product.manufacturer,
     model: product.model,
     notes: product.notes,
-    category: product.category,
+    categoryId: product.category?.id ?? null,
     upc:
       product.primaryGtin && !productIsbn
         ? displayGtin(product.primaryGtin)
@@ -443,7 +453,9 @@ function normalizeProductValues(values: ProductFormValues): ProductFormValues {
 
 function createProductInput(
   values: ProductFormValues,
-  imageData: ReturnType<ReturnType<typeof useImageState>["getImageData"]>,
+  imageData: ReturnType<ReturnType<typeof useImageState>["getImageData"]> & {
+    pendingImagePurposes?: Record<string, "item" | "label">;
+  },
 ): ProductCreateInput {
   return {
     name: values.name,
@@ -452,7 +464,10 @@ function createProductInput(
     manufacturer: values.manufacturer,
     model: values.model,
     notes: values.notes,
-    category: values.category,
+    categoryId:
+      values.categoryId == null
+        ? null
+        : productCategoryShortcode.parse(values.categoryId),
     upc: values.upc,
     isbn: values.isbn,
     fdc_id: values.fdc_id,
@@ -477,7 +492,7 @@ function createProductInput(
 export const ProductForm: FC<ProductFormProps> = (props) => {
   const { mode, onCancel, embedded } = props;
   const imageState = useImageState();
-  const { getImageData, hasImageChanges } = imageState;
+  const { getImageData, getPendingImagePurposes, hasImageChanges } = imageState;
 
   const product = mode === "edit" ? props.entity : undefined;
 
@@ -486,9 +501,11 @@ export const ProductForm: FC<ProductFormProps> = (props) => {
   const { images: existingImages, documents: existingDocuments } = useMemo(
     () =>
       partitionEntityFiles(
-        mode === "edit" && product?.images ? product.images : [],
+        mode === "edit" && product
+          ? [...(product.images ?? []), ...(product.labelImages ?? [])]
+          : [],
       ),
-    [mode, product?.images],
+    [mode, product],
   );
   const initialName = mode === "create" ? props.initialName : undefined;
   const initialExpectedQuantity =
@@ -506,6 +523,7 @@ export const ProductForm: FC<ProductFormProps> = (props) => {
 
   const controller = useEntityFormController("product", props, {
     fields: PRODUCT_FORM_FIELDS,
+    referencePaths: PRODUCT_FORM_REFERENCE_PATHS,
     extend: PRODUCT_FORM_EXTEND,
     defaultValues: productFormDefaults({
       product,
@@ -531,14 +549,30 @@ export const ProductForm: FC<ProductFormProps> = (props) => {
         isbn: productIsbn?.gtin14 ?? null,
       }),
       create: (values) =>
-        createProductInput(normalizeProductValues(values), getImageData(true)),
+        createProductInput(normalizeProductValues(values), {
+          ...getImageData(true),
+          pendingImagePurposes: getPendingImagePurposes(),
+        }),
       edit: (updates) => ({
         id: product!.id,
-        data: { ...updates, ...getImageData() },
+        data: {
+          ...updates,
+          ...getImageData(),
+          // Product's generated update schema owns this field; it is separate
+          // from generic gallery data because attachment roles are Product-only.
+          pendingImagePurposes: getPendingImagePurposes(),
+        },
       }),
     },
   });
   const { form, handleSubmit, isPending, error, submitButtonText } = controller;
+  const classificationEvidenceBasis = useMemo(
+    () =>
+      product
+        ? { classificationEvidence: product.classificationEvidence }
+        : undefined,
+    [product],
+  );
 
   return (
     <FormWrapper
@@ -562,6 +596,7 @@ export const ProductForm: FC<ProductFormProps> = (props) => {
       <FieldSuggestionProvider
         entity="product"
         mode={product ? "edit" : "create"}
+        staticBasis={classificationEvidenceBasis}
         paths={{
           name: productFormFieldPaths.name,
           manufacturer: productFormFieldPaths.manufacturer,

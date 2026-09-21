@@ -20,6 +20,7 @@ const identifierTypeNames = {
   location: "LocationId",
   meal: "MealId",
   product: "ProductId",
+  productCategory: "ProductCategoryId",
   project: "ProjectId",
   purchase: "PurchaseId",
   recipe: "RecipeId",
@@ -70,12 +71,13 @@ const enumColumnExpression = (
     "meal.mealKind": `text(${column},{enum:mealKindValues})`,
     "meal.mealType": `text(${column},{enum:mealTypeValues})`,
     "inventory.ownershipMode": `text(${column},{enum:inventoryOwnershipModeValues})`,
-    "product.category": `text(${column},{enum:productCategoryValues})`,
     "project.defaultTrade": `text(${column},{enum:tradeValues})`,
     "purchase.defaultTrade": `text(${column},{enum:tradeValues})`,
     "project.locationsMode": `text(${column},{enum:["inherit","explicit"]})`,
     "task.projectMode": `text(${column},{enum:["inherit","explicit"]})`,
     "task.subjectProductMode": `text(${column},{enum:["inherit","explicit"]})`,
+    "productCategory.feature": `text(${column},{enum:productCategoryFeatureValues})`,
+    "image.source": `text(${column},{enum:["own", "catalog", "unknown"]})`,
     "project.kind": `text(${column},{enum:projectKindValues})`,
     "project.status": `text(${column},{enum:projectStatusValues})`,
     "recipe.SourceType": `recipeSourceEnum(${column})`,
@@ -206,7 +208,7 @@ export const renderEntityColumnsArtifact = (
     'import type { LedgerPartyKind } from "@cubby/schemas/ledger-party";\n' +
     'import { mealKindValues, mealTypeValues } from "@cubby/schemas/meal-classification";\n' +
     'import type { BaseKind } from "@cubby/schemas/problems";\n' +
-    'import { productCategoryValues } from "@cubby/schemas/product";\n' +
+    'import { productCategoryFeatureValues } from "@cubby/schemas/product-category-fields";\n' +
     'import { costTypeValues, projectKindValues, projectStatusValues, taskStatusValues, tradeValues } from "@cubby/schemas/project";\n' +
     'import { expenseLineBasisValues, expenseLineKindValues } from "@cubby/schemas/expense-line-kind";\n' +
     'import type { ProductLabelNutrition } from "@cubby/schemas/nutrition";\n' +

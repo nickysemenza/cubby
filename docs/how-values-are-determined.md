@@ -839,3 +839,19 @@ Garden entry images are the current live Image attachments in canonical attachme
 - Resolver: Declared field projection
 - Value paths: List `displayImages`; Detail `images`; Summary `displayImages`
 - Source dependencies: Selected garden entry images (`displayImages`)
+
+## Product Categories (`productCategory`)
+
+### Parent Name (`parentName`)
+
+The current name of this category's immediate parent.
+
+- Rule: `productCategory.parentName`, version 1
+- Resolver: Declared field projection
+
+### Path (`path`)
+
+The root-to-category classification path, including this category.
+
+- Rule: `productCategory.path`, version 1
+- Resolver: Declared field projection

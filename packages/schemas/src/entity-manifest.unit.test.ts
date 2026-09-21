@@ -141,6 +141,7 @@ describe("entity manifest", () => {
       "planting",
       "gardenEntry",
       "vendorAccount",
+      "productCategory",
     ]);
     expect(sorted(auditEntitySchema.options)).toEqual(
       sorted(auditableEntities),

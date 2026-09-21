@@ -266,6 +266,8 @@ export const updateLiveAndReturn = async <
  * the resolve step and only surfaced via a failing integration test.
  */
 export type ImageJoinTable = PgTable & {
+  id: AnyColumn;
+  updatedAt: AnyColumn;
   imageId: AnyColumn;
   sortOrder: AnyColumn;
   deletedAt: AnyColumn;

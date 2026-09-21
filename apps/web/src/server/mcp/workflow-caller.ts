@@ -1,3 +1,8 @@
+import type {
+  imageDescriptionCorrectionInput,
+  imageProcessingStatusInput,
+  scheduleImageProcessingInput,
+} from "@cubby/schemas/image-processing";
 import {
   type patchProductExternalIdsInput,
   type productExternalIdCollisionInput,
@@ -13,9 +18,15 @@ import {
   setDataException,
 } from "~/server/repo/data-quality";
 import { previewFinancialStatementImport } from "~/server/repo/financial-statement-preview";
+import {
+  getImageProcessingReadProjection,
+  saveImageDescriptionCorrection,
+} from "~/server/repo/image-processing";
 import { patchProductExternalIds } from "~/server/repo/product";
 import { reclassifyPurchaseDocument } from "~/server/repo/purchase";
 import { bindShortcodeResolver } from "~/server/repo/shortcode-resolver";
+import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
+import { scheduleImageProcessingJobs } from "~/server/services/image-processing.service";
 import { verifyProductImages } from "~/server/services/image-verification.service";
 import { lookupUPC } from "~/server/services/product-orchestration.service";
 import { getProductWithFood } from "~/server/services/product.service";
@@ -183,6 +194,28 @@ const callerDomains = {
       (context: CallerContext) =>
       (input: Parameters<typeof createFileUploadWorkflow>[1]) =>
         createFileUploadWorkflow(context.db, input),
+  },
+  imageProcessing: {
+    schedule:
+      (context: CallerContext) =>
+      (input: z.output<typeof scheduleImageProcessingInput>) =>
+        scheduleImageProcessingJobs(context.db, input),
+    get:
+      (context: CallerContext) =>
+      async (input: z.output<typeof imageProcessingStatusInput>) =>
+        getImageProcessingReadProjection(
+          context.readDb,
+          await resolveOrThrow(context.readDb, "image", input.id),
+        ),
+    correctDescription:
+      (context: CallerContext) =>
+      async (input: z.output<typeof imageDescriptionCorrectionInput>) => {
+        await saveImageDescriptionCorrection(context.db, {
+          imageId: await resolveOrThrow(context.db, "image", input.id),
+          description: input.description,
+        });
+        return { saved: true as const };
+      },
   },
   ingredient: {
     recipeUsages:

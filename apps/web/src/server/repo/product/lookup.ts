@@ -18,7 +18,9 @@ import type { Database } from "~/server/db";
 import { inventoryEntry, product, productExternalId } from "~/server/db/schema";
 import { enrichProductRowsWithDataQuality } from "~/server/repo/data-quality";
 import { getDb, imageOrder, notDeleted } from "~/server/repo/database-helpers";
+import { categorySummarySql } from "~/server/repo/product-category-sql";
 
+import { productClassificationEvidenceSql } from "./classification-evidence";
 import { getProductCoverImageUrlsByProductIds } from "./crud";
 import { loadPrimaryGtins, productHasGtin } from "./gtin";
 import { foodLookupParamFromProduct } from "./helpers";
@@ -97,6 +99,12 @@ export const findProductsByFoodIdentifiers = async (
 
   const res = await getDb(db).query.product.findMany({
     where: and(linkCondition, notDeleted(product)),
+    extras: {
+      category: categorySummarySql(sql`${product.categoryId}`).as("category"),
+      classificationEvidence: productClassificationEvidenceSql(
+        sql`${product.id}`,
+      ).as("classificationEvidence"),
+    },
     with: {
       externalIds: true,
       images: {
@@ -193,6 +201,12 @@ const findProductToAPI = async (
 ): Promise<ProductTopLevelOut | null> => {
   const res = await getDb(db).query.product.findFirst({
     where,
+    extras: {
+      category: categorySummarySql(sql`${product.categoryId}`).as("category"),
+      classificationEvidence: productClassificationEvidenceSql(
+        sql`${product.id}`,
+      ).as("classificationEvidence"),
+    },
     with: {
       externalIds: true,
       images: {

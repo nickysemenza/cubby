@@ -76,6 +76,7 @@ public enum CompanionCutoutResult: Sendable, Hashable {
     case completed(CompanionCutoutArtifact)
     case noSubject
     case unsupportedFormat
+    case alreadyTransparent
 }
 
 /// Downloads immutable original bytes, verifies the server-provided digest, and uploads only the
@@ -145,6 +146,7 @@ public struct CompanionImageProcessor: Sendable {
             return .unsupportedFormat
         }
         let image = try file.decodeFullResolution()
+        if Self.containsTransparency(image) { return .alreadyTransparent }
         let decodeMilliseconds = Self.milliseconds(since: decodeStarted)
         let orientation = Self.orientation(in: data)
         try Task.checkCancellation()
@@ -170,6 +172,29 @@ public struct CompanionImageProcessor: Sendable {
                     uploadMilliseconds: uploadMilliseconds,
                     width: lifted.image.width, height: lifted.image.height,
                     orientation: orientation)))
+    }
+
+    /// Alpha-bearing originals are already usable item renditions. Detect actual transparency,
+    /// since an opaque RGBA asset still benefits from subject lifting.
+    private static func containsTransparency(_ image: CGImage) -> Bool {
+        switch image.alphaInfo {
+        case .none, .noneSkipFirst, .noneSkipLast: return false
+        default: break
+        }
+        var pixels = [UInt8](repeating: 0, count: image.width * image.height * 4)
+        return pixels.withUnsafeMutableBytes { buffer in
+            guard
+                let context = CGContext(
+                    data: buffer.baseAddress, width: image.width, height: image.height,
+                    bitsPerComponent: 8, bytesPerRow: image.width * 4,
+                    space: CGColorSpaceCreateDeviceRGB(),
+                    bitmapInfo: CGBitmapInfo.byteOrder32Big.rawValue
+                        | CGImageAlphaInfo.premultipliedLast.rawValue)
+            else { return false }
+            context.draw(image, in: CGRect(x: 0, y: 0, width: image.width, height: image.height))
+            let bytes = buffer.bindMemory(to: UInt8.self)
+            return stride(from: 3, to: bytes.count, by: 4).contains { bytes[$0] < 255 }
+        }
     }
 
     public func sourceImage(_ source: CompanionImageSource) async throws -> CGImage {

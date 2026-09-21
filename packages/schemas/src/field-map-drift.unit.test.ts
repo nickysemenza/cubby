@@ -117,36 +117,10 @@ const INTENTIONAL_RESPELLINGS = {
   "product::productMcpDetailOut::unitMappings":
     "spreads productMcpFields — same reason as productMcpOut::unitMappings",
 
-  // --- product.ts: pre-existing hand copies in OTHER exports of the SAME
-  // file. This PR's ownership of product.ts is scoped to exactly
-  // `productQuickCreatePayload` and `productMcpFields` (see the task's
-  // ownership rules) — every other export below is a pre-existing hand copy
-  // this change does not touch, reported for follow-up the same as the
-  // other entities' below. Verified against product.ts directly (read-only).
-  "product::productUpdateData::name": PARTIAL_REWRAP,
-  "product::productUpdateData::aliases": PARTIAL_REWRAP,
-  "product::productUpdateData::tags": PARTIAL_REWRAP,
-  "product::productUpdateData::upc": PARTIAL_REWRAP,
-  "product::productUpdateData::isbn": PARTIAL_REWRAP,
-  "product::productUpdateData::fdc_id": PARTIAL_REWRAP,
-  "product::productUpdateData::manufacturer": PARTIAL_REWRAP,
-  "product::productUpdateData::model": PARTIAL_REWRAP,
-  "product::productUpdateData::notes": PARTIAL_REWRAP,
-  "product::productUpdateData::expectedQuantity": PARTIAL_REWRAP,
-  "product::productUpdateData::category": PARTIAL_REWRAP,
-  "product::productUpdateData::ingredientId": PARTIAL_REWRAP,
-  "product::productUpdateData::price": PARTIAL_REWRAP,
-  "product::productUpdateData::unitMappings": PARTIAL_REWRAP,
-  "product::productUpdateData::externalIds": PARTIAL_REWRAP,
-  "product::productUpdateData::usdaUnavailable": PARTIAL_REWRAP,
-  "product::productUpdateData::labelNutrition": PARTIAL_REWRAP,
-  "product::productUpdateData::stockTracked": PARTIAL_REWRAP,
-  "product::productUpdateData::growsIngredientId": PARTIAL_REWRAP,
-  "product::productUpdateData::pendingImageIds": PARTIAL_REWRAP,
   "product::productUpdateData::removeImageIds":
-    ".partial().extend({removeImageIds: z.array(imageShortcode).optional()}) — the .extend() call OVERRIDES the already-.partial()'d generated key with a fresh array literal, not the generated instance",
+    ".extend({removeImageIds: z.array(imageShortcode).optional()}) overrides the generated field with a fresh array literal",
   "product::productUpdateData::imageOrder":
-    ".partial().extend({imageOrder: z.array(imageShortcode).optional()}) — the .extend() call OVERRIDES the already-.partial()'d generated key with a fresh array literal, not the generated instance",
+    ".extend({imageOrder: z.array(imageShortcode).optional()}) overrides the generated field with a fresh array literal",
   "product::productBulkStockTrackedInput::stockTracked":
     "bulk-operation input applies one value across many product ids — hand-written z.boolean().nullable(), same meaning as generatedProductFieldSchemas.update.stockTracked but not a reference to it",
   "product::productApplyUpcInput::upc":

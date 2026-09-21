@@ -17,6 +17,7 @@ import { UnitCoveragePanel } from "~/app/_components/units/UnitCoveragePanel";
 import { Row, Stack } from "~/components/layout";
 import { Description } from "~/components/ui/description";
 import { EntityFilterLink } from "~/components/ui/entity-filter-link";
+import { Image } from "~/components/ui/image";
 import { labelNutrientsPer100 } from "~/lib/label-nutrition";
 import { countLabel } from "~/lib/pluralize";
 import { getAllUnitMappingsFromProduct } from "~/lib/unit-mapping-utils";
@@ -191,4 +192,31 @@ export const ProductRecipeAppearances: DetailSlotComponent<"product"> = ({
     />
   ) : (
     <Description>Not used in any recipes yet.</Description>
+  );
+
+/** Package labels are retained as evidence but deliberately excluded from item covers. */
+export const ProductLabels: DetailSlotComponent<"product"> = ({
+  record: product,
+}) =>
+  product.labelImages.length > 0 ? (
+    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+      {product.labelImages.map((label) => {
+        // An image can be corrected from an item photo after a historical
+        // cutout completed. Package evidence always renders its retained
+        // original, never that old transparent derivative.
+        const originalUrl = label.representations?.original ?? label.url;
+        return (
+          <a key={label.id} href={originalUrl} target="_blank" rel="noreferrer">
+            <Image
+              src={originalUrl}
+              alt={label.filename}
+              displayWidth={240}
+              className="aspect-[3/4] w-full rounded-md border border-border object-contain"
+            />
+          </a>
+        );
+      })}
+    </div>
+  ) : (
+    <Description>No labels on file.</Description>
   );

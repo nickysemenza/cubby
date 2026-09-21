@@ -723,6 +723,9 @@ const fieldsFor = (entity: EditableEntity, semanticIntent: string) =>
  * than the declaration.
  */
 export const entityEditRegistry: EntityEditRegistry = {
+  productCategory: buildDefinition("productCategory", (f) => ({
+    fields: f.fieldsFrom(["full"]),
+  })),
   product: buildDefinition("product", (f) => ({
     fields: f.fieldsFrom(["full"], {
       // The create schema allows omitting a manufacturer, but the form still

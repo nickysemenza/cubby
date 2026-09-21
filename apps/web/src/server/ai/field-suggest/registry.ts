@@ -24,10 +24,6 @@ import {
   mealTypeValues,
 } from "@cubby/schemas/meal-classification";
 import {
-  type ProductCategory,
-  productCategoryValues,
-} from "@cubby/schemas/product";
-import {
   TRADE_LABELS,
   type Trade,
   tradeValues,
@@ -39,8 +35,6 @@ import {
 } from "@cubby/schemas/project-fields";
 
 import {
-  CATEGORY_DESCRIPTIONS,
-  CATEGORY_RULES,
   COST_TYPE_DESCRIPTIONS,
   COST_TYPE_RULES,
   LOCATION_TYPE_DESCRIPTIONS,
@@ -59,6 +53,7 @@ import {
   getLocationPutAwayCandidates,
   type LocationPutAwayCandidate,
 } from "~/server/repo/location";
+import { listProductCategoryTreeOptions } from "~/server/repo/product-category";
 import { projectNameOptions } from "~/server/repo/project/lookup";
 import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
 import { vendorOptions } from "~/server/repo/vendor";
@@ -67,6 +62,8 @@ import {
   findLexicalSearchCandidates,
   type InternalSearchCandidate,
 } from "~/server/services/search.service";
+
+import { rankCategoryCandidates } from "./category-ranking";
 
 /** Reference keys are already replaced by the record's display name. */
 export type ResolvedBasis = Readonly<Record<string, string | null>>;
@@ -207,6 +204,32 @@ const renderProductCandidate = (candidate: InternalSearchCandidate): string =>
     candidate.subtitle ? ` — ${candidate.subtitle}` : ""
   }`;
 
+type ProductCategorySuggestionOption = Awaited<
+  ReturnType<typeof listProductCategoryTreeOptions>
+>[number] & {
+  aliases?: readonly string[];
+  description?: string | null;
+};
+
+const productCategoryPath = (
+  candidate: ProductCategorySuggestionOption,
+): string => candidate.path.map(({ name }) => name).join(" > ");
+
+/** Give Jev every lexical handle attached to a category, while keeping the
+ * hierarchy visible so a similarly named leaf is never selected in isolation. */
+const renderProductCategoryOption = (
+  candidate: ProductCategorySuggestionOption,
+): string => {
+  const aliases = candidate.aliases?.filter(Boolean).join(", ");
+  return [
+    `${candidate.id} | ${productCategoryPath(candidate)}`,
+    aliases ? `aliases: ${aliases}` : null,
+    candidate.description ? `description: ${candidate.description}` : null,
+  ]
+    .filter((part): part is string => part != null)
+    .join(" — ");
+};
+
 export const FIELD_SUGGEST_REGISTRY = {
   "planting.status": {
     kind: "enum",
@@ -232,13 +255,23 @@ export const FIELD_SUGGEST_REGISTRY = {
       "Choose harvest when a harvest amount is present; otherwise choose note for an observation or photo journal entry.",
     subject: (basis) => renderSubject("gardenEntry", basis),
   } satisfies EnumSuggestSpec<"note" | "harvest">,
-  "product.category": {
-    kind: "enum",
-    values: productCategoryValues,
-    describe: (v) => CATEGORY_DESCRIPTIONS[v],
-    rules: CATEGORY_RULES,
+  "product.categoryId": {
+    kind: "reference",
+    entity: "productCategory",
+    rules:
+      "You are a household-product classifier. Choose the ONE most specific existing classification supported by the product evidence. Compare the complete hierarchy, names, aliases, and descriptions. Choose none when the evidence does not support a classification; never invent a category.",
+    // Categories are a taxonomy rather than a household-sized roster. Show
+    // every live node; `runAiSelection` uses its overflow path above Jev's
+    // choice limit instead of silently dropping broad roots or their leaves.
+    maxCandidates: Number.MAX_SAFE_INTEGER,
+    roster: async (db, basis) =>
+      rankCategoryCandidates(await listProductCategoryTreeOptions(db), basis),
+    idOf: (c) => c.id,
+    labelOf: (c) => c.name,
+    detailOf: (c) => productCategoryPath(c),
+    renderLine: renderProductCategoryOption,
     subject: (basis) => renderSubject("product", basis),
-  } satisfies EnumSuggestSpec<ProductCategory>,
+  } satisfies ReferenceSuggestSpec<ProductCategorySuggestionOption>,
   "location.type": {
     kind: "enum",
     values: locationType.options,

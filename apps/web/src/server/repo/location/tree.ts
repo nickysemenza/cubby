@@ -36,6 +36,7 @@ import {
 } from "~/server/repo/database-helpers";
 import { stockOnly } from "~/server/repo/inventory/placement";
 import { parseLocationType } from "~/server/repo/location/parse-type";
+import { categorySummarySql } from "~/server/repo/product-category-sql";
 
 import { hydrateImageReadProjection } from "../image-read-projection";
 import { buildLocationWithChildren } from "./helpers";
@@ -135,6 +136,11 @@ export const buildLocationTree = async (db: Database, rootId?: LocationId) => {
     productIds.length > 0
       ? getDb(db).query.product.findMany({
           where: and(inArray(product.id, productIds), notDeleted(product)),
+          extras: {
+            category: categorySummarySql(sql`${product.categoryId}`).as(
+              "category",
+            ),
+          },
           with: {
             images: {
               where: notDeleted(productImage),

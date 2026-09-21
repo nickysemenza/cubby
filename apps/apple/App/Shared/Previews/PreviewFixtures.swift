@@ -46,7 +46,12 @@ enum PreviewFixtures {
             "id": .string("PRD-2345"),
             "name": .string("Cast Iron Skillet"),
             "manufacturer": .string("Lodge"),
-            "category": .string("Cookware"),
+            "categoryId": .string("CAT-2224"),
+            "category": .object([
+                "id": .string("CAT-2224"), "name": .string("Tools"),
+                "path": .array([.object(["id": .string("CAT-2224"), "name": .string("Tools")])]),
+                "feature": .string("tools"),
+            ]),
             "createdAt": .string("2026-01-15T18:30:00.000Z"),
             "stockTracked": .bool(true),
             "tags": .array([.string("kitchen"), .string("cast-iron")]),

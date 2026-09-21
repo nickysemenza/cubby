@@ -1,4 +1,6 @@
 import { tradeSchema } from "./task-fields";
+import { productCategoryFeature } from "./product-category-fields";
+import { productCategoryShortcode } from "./identifier-fields";
 import { productTopLevelOut } from "./product-output-fields";
 import { inventoryPlacementValues } from "@cubby/shared";
 import { foodSummary, foodSummaryMcpOut, upc } from "@cubby/usda-schemas";
@@ -64,12 +66,11 @@ import {
   unitMappingWithMetadata,
 } from "./unitmapping";
 import { productCategory, productPricingOut } from "./product-fields";
+import type { ProductCategorySummary } from "./product-category-fields";
 
-export { productCategory, productPricingOut } from "./product-fields";
+export { productPricingOut } from "./product-fields";
 
-export type ProductCategory = z.infer<typeof productCategory>;
-
-export { productCategoryValues } from "@cubby/shared";
+export type ProductCategory = ProductCategorySummary;
 
 /**
  * The explicit USDA food link: a positive `fdc_id`. One definition shared by
@@ -91,7 +92,6 @@ export const hasFoodIndicators = (product: {
 export const productCreateInput = z.object(generatedProductFieldSchemas.create);
 export const productUpdateData = z
   .object(generatedProductFieldSchemas.update)
-  .partial()
   .extend({
     removeImageIds: z.array(imageShortcode).optional(),
     imageOrder: z.array(imageShortcode).optional(),
@@ -295,6 +295,8 @@ export const productFilterFields = {
    * than narrowing it (see `taskFilterFields.projectPresenceFilter`).
    */
   tagsPresenceFilter: presenceFilter,
+  categoryFilter: oneOrMany(productCategoryShortcode).optional(),
+  categoryFeatureFilter: oneOrMany(productCategoryFeature).optional(),
   categoryPresenceFilter: presenceFilter,
   expensePresenceFilter: presenceFilter.describe(
     "Filter to products that do / don't have at least one expense in the ledger. Both acquisitions and exits (negative rows) count.",
@@ -489,7 +491,7 @@ export type ProductPricingOut = z.infer<typeof productPricingOut>;
 
 const productTopLevelFields = generatedProductFieldSchemas.read;
 
-export { productTopLevelOut } from "./product-output-fields";
+export { productTopLevelOut };
 
 /**
  * find-or-create result: the product plus whether it was newly created (vs a
@@ -954,7 +956,7 @@ export const productQuickCreatePayload = z.object({
   model: generatedProductFieldSchemas.create.model,
   notes: generatedProductFieldSchemas.create.notes,
   price: generatedProductFieldSchemas.create.price,
-  category: generatedProductFieldSchemas.create.category,
+  categoryId: generatedProductFieldSchemas.create.categoryId,
 });
 
 export type ProductQuickCreatePayload = z.infer<
@@ -988,6 +990,10 @@ const productMcpFields = {
   // int/positive) — registered in INTENTIONAL_RESPELLINGS.
   expectedQuantity: z.number().int().positive().nullable(),
   imageCount: z.number().int().nonnegative(),
+  /** Counts every active attachment in its role, including PDFs and files that
+   * cannot currently render. Together these sum to imageCount. */
+  itemImageCount: generatedProductFieldSchemas.read.itemImageCount,
+  labelImageCount: generatedProductFieldSchemas.read.labelImageCount,
   coverImageUrl: z.url().nullable(),
   fdc_id: generatedProductFieldSchemas.read.fdc_id,
   usdaUnavailable: generatedProductFieldSchemas.read.usdaUnavailable,
@@ -1036,6 +1042,13 @@ export const productMcpImageOut = z.object({
   sha256: z.string().nullable(),
   renderStatus: ImageRenderStatus.nullable(),
   storageStatus: ImageStorageStatus.nullable(),
+  source: imageOut.shape.source,
+  sourcePageUrl: imageOut.shape.sourcePageUrl,
+  sourceAssetUrl: imageOut.shape.sourceAssetUrl,
+  sourceName: imageOut.shape.sourceName,
+  useOriginal: imageOut.shape.useOriginal,
+  /** The ProductImage join role; null is distinct from an explicit item role. */
+  purpose: z.enum(["item", "label"]).nullable(),
   verifiedAt: z.date().nullable(),
   createdAt: z.date(),
   updatedAt: z.date(),

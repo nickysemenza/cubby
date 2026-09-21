@@ -1,5 +1,7 @@
 import "./build-constants";
 
+import { taxonomyShortcode } from "../../tooling/product-category-fixtures";
+
 import { upsertCookbook } from "~/server/repo/cookbook";
 import {
   makeCookbookExtraction,
@@ -12,9 +14,14 @@ import { ledgerPartyCreateInput } from "@cubby/schemas/ledger-party";
 import { saveMealFoodInput } from "@cubby/schemas/meal";
 import { plantingCreateInput } from "@cubby/schemas/planting";
 import { productCreateInput } from "@cubby/schemas/product";
+import { productCategoryCreateInput } from "@cubby/schemas/product-category";
 import { type TaskStatus, taskCreateInput } from "@cubby/schemas/project";
 import { testUserId } from "@cubby/schemas/testing";
-import { parseEntityId } from "@cubby/schemas/identifiers";
+import {
+  parseEntityId,
+  parseShortcodeFor,
+  type ImageShortcode,
+} from "@cubby/schemas/identifiers";
 import type { Page } from "@playwright/test";
 import { and, count, eq, isNull, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
@@ -28,7 +35,10 @@ import {
   type EntityBrowserMutationCommand,
   entityBrowserMutationCommandSchema,
 } from "~/server/entity-kernel/contracts";
-import { createUploadedImageRecord } from "~/server/repo/image";
+import {
+  attachExistingImageToEntity,
+  createUploadedImageRecord,
+} from "~/server/repo/image";
 import { saveMealFood } from "~/server/repo/meal/food";
 import { getDb } from "~/server/repo/database-helpers";
 import { requireActor } from "~/server/request-context";
@@ -110,7 +120,7 @@ async function createFixture<Input>(
 const productFixtureInput = (
   name: string,
   manufacturer: string,
-  category?: "tools",
+  categoryId?: string,
 ) =>
   productCreateInput.parse({
     name,
@@ -122,8 +132,31 @@ const productFixtureInput = (
     notes: null,
     expectedQuantity: null,
     ingredientId: null,
-    category,
+    categoryId: categoryId ?? null,
   });
+
+/** Seed a synthetic taxonomy node when a browser flow needs a stable route. */
+export const seedProductCategoryPrerequisite = (
+  page: Page,
+  opts: {
+    name: string;
+    parentId?: string | null;
+    aliases?: string[];
+    description?: string | null;
+  },
+) =>
+  createFixture(
+    page,
+    "productCategory",
+    productCategoryCreateInput.parse({
+      name: opts.name,
+      aliases: opts.aliases ?? [],
+      description: opts.description ?? null,
+      parentId: opts.parentId ?? null,
+      sortOrder: 0,
+      feature: null,
+    }),
+  );
 
 export const seedTaskPrerequisite = (
   page: Page,
@@ -179,12 +212,16 @@ export const seedPlantingPrerequisite = (
 
 export const seedProductPrerequisite = (
   page: Page,
-  opts: { name: string; manufacturer?: string },
+  opts: { name: string; manufacturer?: string; categoryId?: string },
 ) =>
   createFixture(
     page,
     "product",
-    productFixtureInput(opts.name, opts.manufacturer ?? "E2E fixture"),
+    productFixtureInput(
+      opts.name,
+      opts.manufacturer ?? "E2E fixture",
+      opts.categoryId,
+    ),
   );
 
 export const seedFinancialAccountPrerequisite = (page: Page, name: string) =>
@@ -208,8 +245,25 @@ export const seedImagePrerequisite = async (name: string) => {
     contentType: "image/png",
     size: 100,
   });
-  return { id: created.shortcode };
+  return { id: parseShortcodeFor("image", created.shortcode) };
 };
+
+/** Attach a synthetic uploaded image through the same existing-image workflow. */
+export const attachProductImagePrerequisite = async (
+  page: Page,
+  imageId: ImageShortcode,
+  productId: string,
+  purpose: "item" | "label",
+) =>
+  attachExistingImageToEntity(
+    getFixtureDb(),
+    { imageId, targetId: productId, purpose },
+    requireActor(
+      createTestRequestContext(getFixtureDb(), {
+        auth: { userId: await fixtureUserId(page) },
+      }),
+    ).actorContext,
+  );
 
 export const seedInventoryPrerequisites = (
   page: Page,
@@ -254,7 +308,11 @@ export async function seedToolFlowPrerequisite(
       const product = await createFixture(
         page,
         "product",
-        productFixtureInput(name, "Flow fixture maker", "tools"),
+        productFixtureInput(
+          name,
+          "Flow fixture maker",
+          taxonomyShortcode("tools"),
+        ),
       );
       await createFixture(
         page,
@@ -692,8 +750,11 @@ export async function seedWardrobePrerequisites(page: Page, name: string) {
     page,
     "product",
     productCreateInput.parse({
-      ...productFixtureInput(`${name} shirt`, "Fixture"),
-      category: "apparel",
+      ...productFixtureInput(
+        `${name} shirt`,
+        "Fixture",
+        taxonomyShortcode("apparel"),
+      ),
     }),
   );
   const entry = await createFixture(

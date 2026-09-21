@@ -1,5 +1,5 @@
 import { type LocationType, locationType } from "@cubby/schemas/location";
-import type { ProductCategory } from "@cubby/schemas/product";
+import type { ProductCategory } from "@cubby/shared";
 
 import { Row } from "~/components/layout";
 

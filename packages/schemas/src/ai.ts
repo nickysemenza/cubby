@@ -9,7 +9,7 @@ import {
   locationShortcode,
   productShortcode,
 } from "./identifiers";
-import { productCategory } from "./product";
+import { productCategory } from "./product-fields";
 import { foodSummaryWithLinkedProducts } from "./usda";
 
 // Confidence level values - single source of truth
@@ -72,7 +72,6 @@ const detectedInventoryItemFields = {
   // inventory.
   estimatedQuantity: z.number(),
   unit: z.string(),
-  category: productCategory.nullable(),
   confidence: confidence,
   evidence: z.string(),
   isMisc: z.boolean(),
@@ -138,7 +137,6 @@ export type ApproveDetectedInventoryItemOut = z.infer<
 export const productIdentificationSchema = z.object({
   name: z.string(),
   manufacturer: z.string(),
-  category: productCategory.nullable(),
   model: z.string().nullable(),
   confidence,
   reasoning: z.string(),

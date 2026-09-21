@@ -91,6 +91,7 @@ export const AppErrors = {
   // category (or attach a different product). "Doesn't exist" and "wrong kind"
   // are different problems with different fixes, so they are different reasons.
   PRODUCT_CATEGORY_INELIGIBLE: "PRECONDITION_FAILED",
+  PRODUCT_CATEGORY_NOT_FOUND: "NOT_FOUND",
   // `attach_entity` was handed a `quantity` for a parent whose relation carries
   // none. Collapsing three attach tools into one converted three compile-time
   // input schemas into one runtime check; this is that check having something

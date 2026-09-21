@@ -1,5 +1,5 @@
 import type { LocationType } from "@cubby/schemas/location";
-import type { ProductCategory } from "@cubby/schemas/product";
+import type { ProductCategory } from "@cubby/shared";
 
 // test layouts wiht
 // ╰─❮ pdftk PLS763-2.625x1.pdf stamp 3x.pdf output overlay.pdf && open overlay.pdf

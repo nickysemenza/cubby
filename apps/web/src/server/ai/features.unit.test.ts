@@ -127,7 +127,6 @@ describe("inventory detection eval fixtures", () => {
           manufacturer: "(unspecified)",
           estimatedQuantity: 1,
           unit: "each",
-          category: "supplies",
           confidence: "medium",
           evidence: "Blue folded plastic material is visible.",
           isMisc: false,
@@ -137,7 +136,6 @@ describe("inventory detection eval fixtures", () => {
           manufacturer: "(unspecified)",
           estimatedQuantity: 1,
           unit: "each",
-          category: "supplies",
           confidence: "medium",
           evidence:
             "Folded cream fabric is consistent with a painter drop cloth.",
@@ -148,7 +146,6 @@ describe("inventory detection eval fixtures", () => {
           manufacturer: "(unspecified)",
           estimatedQuantity: 1,
           unit: "each",
-          category: "supplies",
           confidence: "low",
           evidence:
             "Lower packaged plastic sheet is compatible with location context.",
@@ -176,7 +173,6 @@ describe("inventory detection eval fixtures", () => {
           manufacturer: "(unspecified)",
           estimatedQuantity: 4,
           unit: "each",
-          category: "storage",
           confidence: "low",
           evidence: "",
           isMisc: true,

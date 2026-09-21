@@ -1,3 +1,4 @@
+import type { ProductCategory } from "@cubby/shared";
 import type { CellData } from "@tanstack/react-table";
 import { render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
@@ -10,6 +11,7 @@ import {
   type CubbyColumnDef,
 } from "~/app/_components/data-table/table-features";
 
+import { categorySummaryFixture } from "../../tooling/product-category-fixtures";
 import { createEntityDisplayColumns } from "./entity-display";
 
 /**
@@ -23,7 +25,7 @@ import { createEntityDisplayColumns } from "./entity-display";
 /** Row shape covering every product field the list surfaces, mirroring
  * `ProductListItem` only where `createEntityDisplayColumns` reads it. */
 interface ProductRow {
-  category: string | null;
+  category: ProductCategory | null;
   manufacturer: string;
   primaryGtin: string | null;
   fdc_id: number | null;
@@ -46,7 +48,7 @@ interface ProductRow {
 }
 
 const PRODUCT_ROW: ProductRow = {
-  category: "tools",
+  category: categorySummaryFixture("tools"),
   manufacturer: "Acme",
   primaryGtin: "012345678905",
   fdc_id: 173944,
@@ -112,7 +114,7 @@ function buildProductColumns() {
       add(
         helper.display({
           id: "category",
-          cell: ({ row }) => <span>{row.original.category}</span>,
+          cell: ({ row }) => <span>{row.original.category?.name}</span>,
         }),
       );
       add(
@@ -312,7 +314,7 @@ describe("product list display columns", () => {
       buildProductColumnMeta().map((d) => [d.id, d.header]),
     );
     expect(byId).toEqual({
-      category: "Category",
+      category: "Classification",
       manufacturer: "Manufacturer",
       // Was "UPC" — the list column has always headed this "Barcode / ISBN".
       primaryGtin: "Barcode / ISBN",
@@ -391,7 +393,7 @@ describe("product list display columns", () => {
 
   it("renders the category override's own cell against the row", () => {
     render(<>{renderProductCell("category", PRODUCT_ROW)}</>);
-    expect(screen.getByText("tools")).toBeVisible();
+    expect(screen.getByText("Tools")).toBeVisible();
   });
 
   it("renders the expectedQuantity override (the ledgerExpectedQuantity alias) against the row", () => {

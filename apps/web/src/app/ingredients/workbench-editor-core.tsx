@@ -360,9 +360,6 @@ export const buildProductWrite = (
         expectedQuantity: null,
         ingredientId: row.id,
         fdc_id: food?.fdc_id ?? null,
-        // Ingredient products are food — the synthesized weight/volume/calorie
-        // edges come from the fdc link.
-        category: "food",
         price: eachPrice,
         unitMappings: newMappings,
         externalIds: [],

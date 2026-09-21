@@ -6,6 +6,7 @@ import type {
 } from "@cubby/schemas/identifiers";
 import type { InventoryPlacement } from "@cubby/schemas/inventory";
 import type { InventoryOwnershipMode } from "@cubby/schemas/inventory-ownership";
+import type { ProductCategorySummary } from "@cubby/schemas/product-category-fields";
 
 import type {
   inventoryEntry,
@@ -21,7 +22,9 @@ import type {
 import type { LocationIdentityProductRow } from "~/server/repo/location/internal-types";
 import type { MappableProductExternalId } from "~/server/repo/product/external-id-types";
 
-type ProductSelect = RowWithOptionalAliases<typeof product.$inferSelect>;
+type ProductSelect = RowWithOptionalAliases<typeof product.$inferSelect> & {
+  category: ProductCategorySummary | null;
+};
 type LocationSelect = RowWithOptionalAliasesAndTags<
   typeof location.$inferSelect
 >;

@@ -1,9 +1,8 @@
+import type { LocationId, ProductId } from "@cubby/schemas/identifiers";
 /**
  * Product analytics operations.
  * Category distribution, duplicate detection, and backfill operations.
  */
-
-import type { LocationId, ProductId } from "@cubby/schemas/identifiers";
 import type { ProductCategory } from "@cubby/schemas/product";
 import { isCollectionTag } from "@cubby/shared/collection-tag";
 import {
@@ -26,6 +25,7 @@ import {
 } from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
 import { displayableImageWhere } from "~/server/repo/image-displayability";
+import { categorySummarySql } from "~/server/repo/product-category-sql";
 
 import { loadPrimaryGtins, productHasAnyGtin } from "./gtin";
 
@@ -35,6 +35,9 @@ export const findDuplicateUniqueProducts = async (
 ) => {
   const duplicates = await getDb(db).query.product.findMany({
     where: and(eq(product.expectedQuantity, 1), notDeleted(product)),
+    extras: {
+      category: categorySummarySql(sql`${product.categoryId}`).as("category"),
+    },
     with: {
       inventoryEntry: {
         where: notDeleted(inventoryEntry),
@@ -90,7 +93,11 @@ export const findProductsWithNoImages = async (
     .from(product)
     .leftJoin(
       productImage,
-      and(eq(productImage.productId, product.id), notDeleted(productImage)),
+      and(
+        eq(productImage.productId, product.id),
+        notDeleted(productImage),
+        sql`${productImage.purpose} IS DISTINCT FROM 'label'`,
+      ),
     )
     .leftJoin(
       image,
@@ -139,6 +146,7 @@ export const countProductsWithNoImagesWithGtin = async (
               and(
                 eq(productImage.productId, product.id),
                 notDeleted(productImage),
+                sql`${productImage.purpose} IS DISTINCT FROM 'label'`,
                 displayableImageWhere,
               ),
             ),
@@ -247,7 +255,7 @@ export const getProductsSharingTags = async (
       shortcode: product.shortcode,
       name: product.name,
       manufacturer: product.manufacturer,
-      category: product.category,
+      category: categorySummarySql(sql`${product.categoryId}`),
       tags: product.tags,
     })
     .from(product)
@@ -276,7 +284,10 @@ export const getCategoryDistribution = async (
     where: notDeleted(product),
     columns: {
       id: true,
-      category: true,
+      categoryId: true,
+    },
+    extras: {
+      category: categorySummarySql(sql`${product.categoryId}`).as("category"),
     },
     with: {
       inventoryEntry: {
@@ -295,18 +306,20 @@ export const getCategoryDistribution = async (
   });
 
   const categoryMap = new Map<
-    ProductCategory | null,
+    string | null,
     {
+      category: ProductCategory | null;
       productCount: number;
       locationCounts: Map<string, { id: string; name: string; count: number }>;
     }
   >();
 
   for (const prod of productsWithInventory) {
-    const cat = prod.category;
+    const cat = prod.category?.id ?? null;
 
     if (!categoryMap.has(cat)) {
       categoryMap.set(cat, {
+        category: prod.category,
         productCount: 0,
         locationCounts: new Map(),
       });
@@ -336,13 +349,13 @@ export const getCategoryDistribution = async (
     locations: Array<{ id: string; name: string; count: number }>;
   }> = [];
 
-  for (const [category, data] of categoryMap) {
+  for (const data of categoryMap.values()) {
     const locations = Array.from(data.locationCounts.values())
       .sort((a, b) => b.count - a.count)
       .slice(0, 5);
 
     result.push({
-      category,
+      category: data.category,
       productCount: data.productCount,
       locations,
     });

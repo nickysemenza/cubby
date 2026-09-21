@@ -1,4 +1,4 @@
-import { productCategoryValues } from "@cubby/shared";
+import { productCategorySummary } from "./product-category-fields";
 import { fdcId } from "@cubby/usda-schemas";
 import { gtin } from "./external-id";
 import { z } from "zod";
@@ -294,7 +294,7 @@ export const locationPickerItemOut = z.object({
 });
 export type LocationPickerItemOut = z.infer<typeof locationPickerItemOut>;
 
-const locationProductCategory = z.enum(productCategoryValues);
+const locationProductCategory = productCategorySummary;
 
 const locationInventoryProductOut = z.object({
   id: productShortcode,

@@ -40,6 +40,7 @@ import {
   relations,
 } from "~/server/repo/database-helpers";
 import { stockOnly } from "~/server/repo/inventory/placement";
+import { categorySummarySql } from "~/server/repo/product-category-sql";
 import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
 import { findOrCreateWithShortcode } from "~/server/repo/shortcode-utils";
 
@@ -261,7 +262,8 @@ export const getLocationPutAwayCandidates = async (
     .select({
       tags: product.tags,
       manufacturer: product.manufacturer,
-      category: product.category,
+      categoryId: product.categoryId,
+      category: categorySummarySql(sql`${product.categoryId}`),
     })
     .from(product)
     .where(and(eq(product.id, productId), notDeleted(product)))
@@ -281,8 +283,8 @@ export const getLocationPutAwayCandidates = async (
     source.manufacturer && source.manufacturer !== UNSPECIFIED_MANUFACTURER
       ? eq(product.manufacturer, source.manufacturer)
       : sql`false`;
-  const sharesCategory = source.category
-    ? eq(product.category, source.category)
+  const sharesCategory = source.categoryId
+    ? eq(product.categoryId, source.categoryId)
     : sql`false`;
 
   const tallies = await dbClient

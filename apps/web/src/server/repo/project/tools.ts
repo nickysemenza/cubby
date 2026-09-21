@@ -62,6 +62,8 @@ import {
 } from "~/server/repo/expense-inheritance";
 import { foldAssociation } from "~/server/repo/merge";
 import { getProductCoverImageUrlsByProductIds } from "~/server/repo/product";
+import { getCategoryFeature } from "~/server/repo/product-category";
+import { categoryFeatureSql } from "~/server/repo/product-category-sql";
 import { loadProductOwnershipTimelines } from "~/server/repo/product/ownership";
 import type { EntityRelationMutationAdapter } from "~/server/repo/relation-mutation-adapter";
 import {
@@ -94,6 +96,13 @@ const effectiveExpenseProject = effectiveExpenseProjectSql();
 const effectiveExpenseTrade = effectiveExpenseTradeSql();
 const effectiveTaskProject = effectiveTaskProjectSql();
 const effectiveTaskTrade = effectiveTaskTradeSql();
+
+const reusableCategorySql = () =>
+  sql<ReusableResourceCategory | null>`CASE
+    WHEN ${categoryFeatureSql(sql`${product.categoryId}`, "tools")} THEN 'tools'
+    WHEN ${categoryFeatureSql(sql`${product.categoryId}`, "software")} THEN 'software'
+    ELSE NULL
+  END`;
 
 export type ResourceMetrics = {
   projectUseCount: number;
@@ -389,7 +398,7 @@ export async function listProjectResources(
       productCode: product.shortcode,
       productName: product.name,
       manufacturer: product.manufacturer,
-      category: product.category,
+      category: reusableCategorySql(),
       attachedAt: projectToolUsage.createdAt,
     })
     .from(projectToolUsage)
@@ -400,7 +409,10 @@ export async function listProjectResources(
     .where(
       and(
         eq(projectToolUsage.projectId, projectId),
-        inArray(product.category, ["tools", "software"]),
+        or(
+          categoryFeatureSql(sql`${product.categoryId}`, "tools"),
+          categoryFeatureSql(sql`${product.categoryId}`, "software"),
+        ),
         notDeleted(projectToolUsage),
       ),
     )
@@ -651,9 +663,7 @@ async function preflightAttachProjectResources(
     missing: requested.filter((id) => !byId.get(id)?.live),
     ineligible: requested.filter((id) => {
       const row = byId.get(id);
-      return (
-        !!row?.live && row.category !== "tools" && row.category !== "software"
-      );
+      return !!row?.live && !row.reusable;
     }),
     alreadySatisfied: requested.filter((id) => alreadyLive.has(id)),
     codeById,
@@ -1007,13 +1017,13 @@ async function liveProjectCodes(
 
 /** Require a live reusable resource and preserve distinct failure reasons. */
 async function assertReusableResource(
-  dbc: DrizzleClient | DrizzleTransaction,
+  dbc: DrizzleTransaction,
   productId: ProductId,
   role: string,
 ): Promise<{ shortcode: string }> {
   const row = await dbc.query.product.findFirst({
     where: and(eq(product.id, productId), notDeleted(product)),
-    columns: { shortcode: true, category: true },
+    columns: { shortcode: true, categoryId: true },
   });
   if (!row) {
     throw createAppError(
@@ -1021,21 +1031,26 @@ async function assertReusableResource(
       `${role} must exist and be live.`,
     );
   }
-  assertReusableCategory(productId, row);
+  await assertReusableCategory(dbc, productId, row);
   return { shortcode: row.shortcode };
 }
 
-function assertReusableCategory(
+async function assertReusableCategory(
+  db: Database | DrizzleTransaction,
   productId: ProductId,
-  row: { shortcode: string; category: string | null },
-): asserts row is { shortcode: string; category: ReusableResourceCategory } {
-  if (row.category === "tools" || row.category === "software") return;
+  row: {
+    shortcode: string;
+    categoryId: (typeof product.$inferSelect)["categoryId"];
+  },
+): Promise<void> {
+  const category = await getCategoryFeature(db, row.categoryId);
+  if (category === "tools" || category === "software") return;
   throwRelationRefusal({
     reason: "PRODUCT_CATEGORY_INELIGIBLE",
     ids: [productId],
     codeById: new Map([[productId, row.shortcode]]),
     message: (codes) =>
-      `A project resource must have category tools or software. ${codes} is category ${row.category} — change the product's category, or use a different Product.`,
+      `A project resource must have category tools or software. ${codes} is ineligible — change the product's category, or use a different Product.`,
     items: [
       relationImpact({
         code: "block-product-category-ineligible",
@@ -1049,7 +1064,7 @@ function assertReusableCategory(
 }
 
 async function assertUsagePair(
-  tx: DrizzleClient,
+  tx: DrizzleTransaction,
   projectId: ProjectId,
   productId: ProductId,
 ): Promise<{ productCode: string }> {
@@ -1060,7 +1075,7 @@ async function assertUsagePair(
     }),
     tx.query.product.findFirst({
       where: and(eq(product.id, productId), notDeleted(product)),
-      columns: { shortcode: true, category: true },
+      columns: { shortcode: true, categoryId: true },
     }),
   ]);
   if (!liveProject) {
@@ -1072,7 +1087,7 @@ async function assertUsagePair(
       "A used Product must exist and be live.",
     );
   }
-  assertReusableCategory(productId, liveProduct);
+  await assertReusableCategory(tx, productId, liveProduct);
   return { productCode: liveProduct.shortcode };
 }
 
@@ -1332,7 +1347,7 @@ export async function suggestProjectTools(
           eq(expense.future, false),
           eq(expense.costType, "tools"),
           gt(expense.cost, 0),
-          eq(product.category, "tools"),
+          categoryFeatureSql(sql`${product.categoryId}`, "tools"),
           notDeleted(expense),
         ),
       )
@@ -1351,7 +1366,12 @@ export async function suggestProjectTools(
         product,
         and(eq(product.id, inventoryEntry.productId), notDeleted(product)),
       )
-      .where(and(eq(product.category, "tools"), notDeleted(inventoryEntry))),
+      .where(
+        and(
+          categoryFeatureSql(sql`${product.categoryId}`, "tools"),
+          notDeleted(inventoryEntry),
+        ),
+      ),
     loadProjectDateWindows(db),
   ]);
 
@@ -1425,7 +1445,7 @@ export async function suggestProjectTools(
               eq(expense.lineKind, "principal"),
               eq(expense.costType, "tools"),
               gt(expense.cost, 0),
-              eq(product.category, "tools"),
+              categoryFeatureSql(sql`${product.categoryId}`, "tools"),
               notDeleted(expense),
             ),
           )
@@ -1678,7 +1698,7 @@ export async function listProductProjectUses(
     where: and(eq(product.id, productId), notDeleted(product)),
     columns: {
       shortcode: true,
-      category: true,
+      categoryId: true,
       name: true,
       manufacturer: true,
     },
@@ -1690,10 +1710,9 @@ export async function listProductProjectUses(
   // correction, so reads must never reinterpret a live edge as nonexistent.
   // Writes continue through assertReusableResource/assertUsagePair, which keep
   // the tools/software admission policy intact.
-  const category: ReusableResourceCategory | null =
-    productRow.category === "tools" || productRow.category === "software"
-      ? productRow.category
-      : null;
+  const category = await getCategoryFeature(db, productRow.categoryId);
+  const reusableCategory =
+    category === "tools" || category === "software" ? category : null;
 
   const rows = await dbc
     .select({
@@ -1743,9 +1762,9 @@ export async function listProductProjectUses(
     productId: parseShortcodeFor("product", productRow.shortcode),
     productName: productRow.name,
     manufacturer: productRow.manufacturer,
-    category: productRow.category,
+    category,
     canEdit: category !== null,
-    ...publicResourceMetrics(category, metrics),
+    ...publicResourceMetrics(reusableCategory, metrics),
     projects: rows.map((row) => ({
       projectId: parseShortcodeFor("project", row.projectCode),
       projectName: row.projectName,

@@ -1,11 +1,3 @@
-/**
- * Ingredient search, lookup, and list reads.
- *
- * Name/alias matching for the merge suggester and cookbook importer, the
- * paginated list with its computed sort keys, the lean by-id batch fetch for the
- * costing path, and the enrichment-workbench worklist. None of these mutate.
- */
-
 import {
   type IngredientId,
   type IngredientShortcode,
@@ -16,6 +8,13 @@ import type {
   IngredientListItem,
   IngredientMergeCandidateImpact,
 } from "@cubby/schemas/ingredient";
+/**
+ * Ingredient search, lookup, and list reads.
+ *
+ * Name/alias matching for the merge suggester and cookbook importer, the
+ * paginated list with its computed sort keys, the lean by-id batch fetch for the
+ * costing path, and the enrichment-workbench worklist. None of these mutate.
+ */
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
 import type { RecipeRef } from "@cubby/schemas/recipe";
 import {
@@ -61,6 +60,8 @@ import {
 } from "~/server/repo/product/pricing";
 import { relatedWhereConditions } from "~/server/repo/related-view";
 
+import { categorySummarySql } from "../product-category-sql";
+import { productClassificationEvidenceSql } from "../product/classification-evidence";
 import {
   appearsInRecipesRefsForIngredientSql,
   computeRecipeUsages,
@@ -312,7 +313,18 @@ export const getIngredientsByIDsLean = async (
       // read them, and pulling full Image records here was ~4MB + ~11s of drizzle
       // object-building per call (worker CPU that starved the recompute isolate).
       with: {
-        product: { where: notDeleted(product), with: { unitMappings: true } },
+        product: {
+          where: notDeleted(product),
+          extras: {
+            category: categorySummarySql(sql`${product.categoryId}`).as(
+              "category",
+            ),
+            classificationEvidence: productClassificationEvidenceSql(
+              sql`${product.id}`,
+            ).as("classificationEvidence"),
+          },
+          with: { unitMappings: true },
+        },
       },
     }),
     // This is still one batched GROUP BY, but it no longer serializes behind
@@ -377,6 +389,14 @@ export const enrichmentWorkbenchIngredients = async (
     ),
     with: {
       product: {
+        extras: {
+          category: categorySummarySql(sql`${product.categoryId}`).as(
+            "category",
+          ),
+          classificationEvidence: productClassificationEvidenceSql(
+            sql`${product.id}`,
+          ).as("classificationEvidence"),
+        },
         where: notDeleted(product),
         with: {
           unitMappings: true,

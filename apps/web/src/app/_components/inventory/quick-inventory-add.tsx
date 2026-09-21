@@ -4,7 +4,7 @@ import type {
   LocationShortcode,
   ProductShortcode,
 } from "@cubby/schemas/identifiers";
-import { productCategory } from "@cubby/schemas/product";
+import { productCategoryShortcode } from "@cubby/schemas/identifiers";
 import { unitMappingInput } from "@cubby/schemas/unitmapping";
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
 import { fdcId, upc } from "@cubby/usda-schemas";
@@ -87,7 +87,9 @@ const createFormSchema = z
     manufacturer: z.string().min(1, "Manufacturer is required"),
     model: z.string().nullable(),
     notes: z.string().nullable(),
-    category: productCategory.nullable(),
+    // The picker owns a string draft; parse the shortcode at the Product
+    // mutation boundary below, where malformed values become a field error.
+    categoryId: z.string().nullable(),
     upc: upc.nullable(),
     isbn: isbnFormField.nullable(),
     fdc_id: fdcId.nullable(),
@@ -102,14 +104,14 @@ const createFormSchema = z
     upc: data.upc === "" ? null : data.upc,
     fdc_id: data.fdc_id === 0 ? null : data.fdc_id,
   }));
-type CreateFormValues = z.infer<typeof createFormSchema>;
+type CreateFormValues = z.input<typeof createFormSchema>;
 
 const createProductFormFieldPaths = {
   name: "name",
   manufacturer: "manufacturer",
   model: "model",
   notes: "notes",
-  category: "category",
+  categoryId: "categoryId",
   upc: "upc",
   isbn: "isbn",
   fdcId: "fdc_id",
@@ -185,7 +187,7 @@ export function QuickInventoryAdd({
       manufacturer: UNSPECIFIED_MANUFACTURER,
       model: null,
       notes: null,
-      category: null,
+      categoryId: null,
       upc: null,
       isbn: null,
       fdc_id: null,
@@ -215,7 +217,10 @@ export function QuickInventoryAdd({
         manufacturer: values.manufacturer,
         model: values.model,
         notes: values.notes,
-        category: values.category,
+        categoryId:
+          values.categoryId == null
+            ? null
+            : productCategoryShortcode.parse(values.categoryId),
         upc: values.upc,
         isbn: values.isbn,
         fdc_id: values.fdc_id,
@@ -268,7 +273,7 @@ export function QuickInventoryAdd({
         manufacturer: UNSPECIFIED_MANUFACTURER,
         model: null,
         notes: null,
-        category: null,
+        categoryId: null,
         upc: null,
         isbn: null,
         fdc_id: null,

@@ -4,6 +4,7 @@ import type { InfLocation, LocationType } from "@cubby/schemas/location";
 import { testShortcode } from "@cubby/schemas/testing";
 import { describe, expect, it } from "vitest";
 
+import { categorySummaryFixture } from "../../../../tooling/product-category-fixtures";
 import { flattenPhotoStops, needsPhoto } from "./photo-pass-utils";
 
 function img(overrides: Partial<ImageOut> = {}): ImageOut {
@@ -23,6 +24,10 @@ function img(overrides: Partial<ImageOut> = {}): ImageOut {
     renderStatus: null,
     storageStatus: null,
     verifiedAt: null,
+    source: "unknown",
+    sourcePageUrl: null,
+    sourceAssetUrl: null,
+    sourceName: null,
     createdAt: new Date("2026-01-01T00:00:00Z"),
     updatedAt: new Date("2026-01-01T00:00:00Z"),
     ...overrides,
@@ -100,7 +105,7 @@ describe("needsPhoto", () => {
         name: "Two drawer box",
         manufacturer: "Example",
         model: null,
-        category: "storage",
+        category: categorySummaryFixture("storage"),
         coverImage: img(),
         price: null,
       },

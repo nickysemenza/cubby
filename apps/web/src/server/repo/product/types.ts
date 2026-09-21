@@ -1,6 +1,7 @@
 import type { DataQuality } from "@cubby/schemas/data-quality";
 import type { ImageUrlSummary } from "@cubby/schemas/image-summary";
 import type { LocationAncestorOut } from "@cubby/schemas/location";
+import type { ProductCategorySummary } from "@cubby/schemas/product-category-fields";
 
 import type {
   cookbook,
@@ -21,7 +22,10 @@ import type { MappableProductExternalId } from "./external-id-types";
 import type { ProductPricing } from "./pricing";
 import type { QuantityLedger } from "./quantity-ledger";
 
-type ProductSelect = RowWithOptionalAliases<typeof product.$inferSelect>;
+type ProductSelect = RowWithOptionalAliases<typeof product.$inferSelect> & {
+  classificationEvidence: string;
+  category: ProductCategorySummary | null;
+};
 type LocationSelect = RowWithOptionalAliasesAndTags<
   typeof location.$inferSelect
 >;

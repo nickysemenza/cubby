@@ -201,6 +201,10 @@ const initiatePendingUpload = async <TDatabase>(
     sourceFingerprint?: { hash: string; aspectRatio: number };
     width?: number;
     height?: number;
+    source?: "own" | "catalog" | "unknown";
+    sourcePageUrl?: string | null;
+    sourceAssetUrl?: string | null;
+    sourceName?: string | null;
   },
   key: string,
 ) => {
@@ -227,6 +231,10 @@ const initiatePendingUpload = async <TDatabase>(
     sourceFingerprint: input.sourceFingerprint,
     width: input.width,
     height: input.height,
+    source: input.source,
+    sourcePageUrl: input.sourcePageUrl,
+    sourceAssetUrl: input.sourceAssetUrl,
+    sourceName: input.sourceName,
   });
   const uploadUrl = await ports.objectStorage.generatePresignedUploadUrl({
     key,
@@ -311,7 +319,13 @@ const importImageFromUrlWithPorts = async <TDatabase>(
   ports: ImageStoragePorts<TDatabase>,
   db: TDatabase,
   params: { sourceUrl: string; filenamePrefix: string },
-): Promise<{ imageId: ImageShortcode; key: string; url: string } | null> => {
+): Promise<{
+  imageId: ImageShortcode;
+  key: string;
+  url: string;
+  /** This call inserted the Image row, so a caller may safely roll it back. */
+  created: boolean;
+} | null> => {
   if (ports.objectStorage.isOurBucketUrl(params.sourceUrl)) {
     const key = ports.objectStorage.extractKeyFromUrl(params.sourceUrl);
     if (key) {
@@ -321,6 +335,7 @@ const importImageFromUrlWithPorts = async <TDatabase>(
           imageId: parseShortcodeFor("image", existing.shortcode),
           key: existing.key,
           url: existing.url,
+          created: false,
         };
       }
 
@@ -337,6 +352,7 @@ const importImageFromUrlWithPorts = async <TDatabase>(
         imageId: parseShortcodeFor("image", createdImage.shortcode),
         key,
         url: ports.objectStorage.getPublicUrl(key),
+        created: true,
       };
     }
   }
@@ -358,6 +374,8 @@ const importImageFromUrlWithPorts = async <TDatabase>(
       filename: `${params.filenamePrefix}.${ports.objectStorage.contentTypeToExtension(stored.contentType)}`,
       size: stored.size,
       contentType: stored.contentType,
+      source: "catalog",
+      sourceAssetUrl: params.sourceUrl,
     });
   } catch (error) {
     await ports.objectStorage.deleteObject(stored.key).catch((cleanupError) => {
@@ -370,6 +388,7 @@ const importImageFromUrlWithPorts = async <TDatabase>(
     imageId: parseShortcodeFor("image", createdImage.shortcode),
     key: stored.key,
     url: stored.url,
+    created: true,
   };
 };
 
@@ -691,6 +710,7 @@ const attachmentResponse = <TDatabase>(
  * accepts PDFs, so it drives the bytes path directly rather than reusing that
  * helper.
  */
+// eslint-disable-next-line complexity -- three source modes converge before one transactional attachment path.
 const attachFileToEntityWithPorts = async <TDatabase>(
   ports: ImageStoragePorts<TDatabase>,
   db: TDatabase,
@@ -778,6 +798,11 @@ const attachFileToEntityWithPorts = async <TDatabase>(
         pendingImageId,
         idempotencyKey: input.idempotencyKey,
         expectedImageCount: input.expectedImageCount,
+        purpose: input.purpose,
+        source: input.source ?? "unknown",
+        sourcePageUrl: input.sourcePageUrl ?? null,
+        sourceAssetUrl: input.sourceAssetUrl ?? null,
+        sourceName: input.sourceName ?? null,
       },
       entity,
       input.documentKind,

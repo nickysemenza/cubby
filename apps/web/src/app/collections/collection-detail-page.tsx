@@ -116,7 +116,9 @@ function formatSmartMatch(match: SmartCollectionMatch): string {
     case "effectiveOwnerEquals":
       return `Owner is ${match.value}`;
     case "categoryEquals":
-      return `Category is ${match.value}`;
+      return `Classification is ${match.value}`;
+    case "categoryFeatureEquals":
+      return `Classification feature is ${match.value}`;
     case "manufacturerEquals":
       return `Manufacturer is ${match.value}`;
     case "productTagEquals":

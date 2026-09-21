@@ -60,7 +60,7 @@ type TargetFingerprintInput =
         | {
             name: string;
             manufacturer: string;
-            category: string | null;
+            categoryId: string | null;
             model: string | null;
             updatedAt: Date;
           }
@@ -458,7 +458,7 @@ export const Route = createFileRoute("/api/import/targeted")({
                 .select({
                   name: product.name,
                   manufacturer: product.manufacturer,
-                  category: product.category,
+                  categoryId: product.categoryId,
                   model: product.model,
                   updatedAt: product.updatedAt,
                 })

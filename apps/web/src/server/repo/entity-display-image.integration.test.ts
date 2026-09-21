@@ -8,6 +8,7 @@ import {
   gardenEntryImage,
   image,
   locationImage,
+  product,
   productImage,
   projectImage,
   purchaseImage,
@@ -27,6 +28,7 @@ import { createWish, updateWish, wishList } from "~/server/repo/wish";
 import { createTestRequestContext } from "~/server/testing/request-context";
 import { getR2PublicUrl } from "~/server/utils/r2-public-url";
 
+import { taxonomyShortcode } from "../../../tooling/product-category-fixtures";
 import { setCookbookProduct, upsertCookbook } from "./cookbook";
 import { getDb } from "./database-helpers";
 import {
@@ -151,6 +153,80 @@ describe("entity display image resolver", () => {
       );
 
       expect(rows[0]?.displayImages).toEqual([]);
+    });
+
+    it("hides label attachments from direct and borrowed covers while retaining legacy null items", async () => {
+      const labelledProduct = await createProductFixture(
+        ctx.db,
+        makeProductInput({ name: "Labelled product" }),
+        ctx.actor,
+      );
+      const label = await makeImage();
+      const legacyItem = await makeImage();
+      await getDb(ctx.db)
+        .insert(productImage)
+        .values([
+          {
+            productId: labelledProduct.entityId,
+            imageId: label.id,
+            sortOrder: 0,
+            purpose: "label",
+          },
+          {
+            productId: labelledProduct.entityId,
+            imageId: legacyItem.id,
+            sortOrder: 1,
+          },
+        ]);
+      const direct = await withDisplayImages(
+        ctx.db,
+        "product",
+        [{ id: labelledProduct.entityId }],
+        (row) => ({ id: row.id }),
+      );
+      expect(direct[0]?.displayImages).toEqual([
+        expectedDisplayImage(legacyItem),
+      ]);
+
+      const context = entityKernelContextSchema.parse(
+        createTestRequestContext(ctx.db, {
+          auth: { userId: ctx.actor.userId },
+        }),
+      );
+      const detail = await executeEntity(context, {
+        action: "get",
+        entity: "product",
+        id: labelledProduct.id,
+        missing: "error",
+      });
+      if (detail.action !== "get" || !detail.item)
+        throw new Error("Expected Product detail");
+      expect(detail.item.images).toMatchObject([
+        { id: legacyItem.shortcode, purpose: null },
+      ]);
+      expect(detail.item.labelImages).toMatchObject([
+        { id: label.shortcode, purpose: "label" },
+      ]);
+      expect(detail.item.attachments).toHaveLength(2);
+
+      const ingredient = await createIngredientFixture(
+        ctx.db,
+        { name: "Labelled borrowed ingredient" },
+        ctx.actor,
+      );
+      await getDb(ctx.db)
+        .update(product)
+        .set({ ingredientId: ingredient.entityId })
+        .where(eq(product.id, labelledProduct.entityId));
+      const borrowed = await withDisplayImages(
+        ctx.db,
+        "ingredient",
+        [{ id: ingredient.entityId }],
+        (row) => ({ id: row.id }),
+      );
+      expect(borrowed[0]?.displayImages).toEqual([
+        expectedDisplayImage(legacyItem),
+      ]);
     });
   });
 
@@ -545,7 +621,10 @@ describe("entity display image resolver", () => {
     it("orders candidates' product images in candidate link order", async () => {
       const pA = await createProductFixture(
         ctx.db,
-        makeProductInput({ name: "Candidate A", category: "tools" }),
+        makeProductInput({
+          name: "Candidate A",
+          categoryId: taxonomyShortcode("tools"),
+        }),
         ctx.actor,
       );
       const imgA = await makeImage();
@@ -555,7 +634,10 @@ describe("entity display image resolver", () => {
 
       const pB = await createProductFixture(
         ctx.db,
-        makeProductInput({ name: "Candidate B", category: "tools" }),
+        makeProductInput({
+          name: "Candidate B",
+          categoryId: taxonomyShortcode("tools"),
+        }),
         ctx.actor,
       );
       const imgB = await makeImage();
@@ -965,7 +1047,10 @@ describe("entity display image resolver", () => {
 
       const wishProduct = await createProductFixture(
         ctx.db,
-        makeProductInput({ name: "Mixed Wish Product", category: "tools" }),
+        makeProductInput({
+          name: "Mixed Wish Product",
+          categoryId: taxonomyShortcode("tools"),
+        }),
         ctx.actor,
       );
       const wishImg = await makeImage();

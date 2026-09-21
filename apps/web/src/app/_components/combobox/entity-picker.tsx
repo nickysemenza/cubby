@@ -25,6 +25,7 @@ const ENTITY_CODE = {
   ingredient: "ING",
   location: "LOC",
   product: "PRD",
+  productCategory: "CAT",
   recipe: "RCP",
   project: "PRJ",
   task: "TSK",

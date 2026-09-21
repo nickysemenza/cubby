@@ -20,7 +20,8 @@ import type {
   ToolUsedOutsideOwnership,
   WeightSoldProduct,
 } from "@cubby/schemas/problems";
-import { FOOD_CATEGORY, isMiscProduct } from "@cubby/shared";
+import type { ProductCategorySummary } from "@cubby/schemas/product-category-fields";
+import { isMiscProduct } from "@cubby/shared";
 import {
   and,
   eq,
@@ -69,6 +70,10 @@ import {
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
 import { displayableImageWhere } from "~/server/repo/image-displayability";
 import { canonicalLabelKey } from "~/server/repo/label-canonical";
+import {
+  categoryFeatureSql,
+  categorySummarySql,
+} from "~/server/repo/product-category-sql";
 import {
   isRetainingEdgeKey,
   PRODUCT_EDGE_ROLES,
@@ -789,7 +794,10 @@ export const loadProductsForCoverage = async (
       price: true,
       usdaUnavailable: true,
       ingredientId: true,
-      category: true,
+      categoryId: true,
+    },
+    extras: {
+      category: categorySummarySql(sql`${product.categoryId}`).as("category"),
     },
     with: {
       unitMappings: {
@@ -823,7 +831,7 @@ export const findProductsWithoutUnitMappings = async (
     shortcode: ProductShortcode;
     name: string;
     manufacturer: string;
-    category: string | null;
+    category: ProductCategorySummary | null;
   }[]
 > => {
   const dbClient = getDb(db);
@@ -832,14 +840,14 @@ export const findProductsWithoutUnitMappings = async (
       shortcode: product.shortcode,
       name: product.name,
       manufacturer: product.manufacturer,
-      category: product.category,
+      category: categorySummarySql(sql`${product.categoryId}`),
     })
     .from(product)
     .where(
       and(
         notDeleted(product),
         or(
-          eq(product.category, FOOD_CATEGORY),
+          categoryFeatureSql(sql`${product.categoryId}`, "food"),
           isNotNull(product.ingredientId),
           gt(product.fdc_id, 0),
         ),

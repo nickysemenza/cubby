@@ -1,5 +1,9 @@
 import { inventoryWithLocationAndProductOut } from "@cubby/schemas/inventory";
 import { testEntityId, testShortcode } from "@cubby/schemas/testing";
+import {
+  categorySummaryFixture,
+  taxonomyId,
+} from "tooling/product-category-fixtures";
 import { describe, expect, it } from "vitest";
 
 import { resolveProductPricing } from "../product/pricing";
@@ -43,7 +47,8 @@ const baseProduct = {
   updatedAt: UPDATED_AT,
   deletedAt: DELETED_AT,
   ingredientId: null,
-  category: "food" as const,
+  categoryId: taxonomyId("food"),
+  category: categorySummaryFixture("food"),
   price: 4.5,
   usdaUnavailable: null,
   stockTracked: null,
@@ -246,7 +251,7 @@ describe("inventory mappers", () => {
         model: "5lb",
         notes: "Keep dry",
         expectedQuantity: null,
-        category: "food",
+        category: categorySummaryFixture("food"),
         createdAt: CREATED_AT,
         updatedAt: UPDATED_AT,
         unitMappings: [

@@ -86,6 +86,8 @@ const VIRTUAL_CREATE_INPUTS: EntityFieldNotes = {
     externalIds: "writes ProductExternalId rows",
     unitMappings: "writes ProductUnitMappings rows",
     pendingImageIds: "writes ProductImage rows",
+    pendingImagePurposes:
+      "sets the item or label purpose for each pending ProductImage row",
   },
   purchase: { pendingImageIds: "writes PurchaseImage rows" },
   recipe: {

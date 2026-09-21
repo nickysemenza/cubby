@@ -1,6 +1,6 @@
 import { tradeSchema } from "./task-fields";
 import { z } from "zod";
-import { productCategory } from "./product-fields";
+import { productCategoryShortcode } from "./identifier-fields";
 import { externalIdKind, externalIdSource } from "./external-id";
 
 import { money } from "./money";
@@ -932,7 +932,7 @@ export const commitProductEnrichmentInput = z.object({
   changes: z
     .object({
       manufacturer: z.string().trim().min(1).max(300).optional(),
-      category: productCategory.optional(),
+      categoryId: productCategoryShortcode.optional(),
       model: z.string().trim().min(1).max(300).optional(),
       identifiers: z
         .array(
@@ -970,7 +970,7 @@ export const commitProductEnrichmentOut = z.object({
   productId: productShortcode,
   status: z.enum(["running", "needs_review"]),
   changedFields: z.array(
-    z.enum(["manufacturer", "category", "model", "identifiers", "image"]),
+    z.enum(["manufacturer", "categoryId", "model", "identifiers", "image"]),
   ),
 });
 
@@ -984,8 +984,8 @@ export const overwriteProductEnrichmentInput = z.object({
       value: z.string().trim().min(1).max(300).nullable(),
     }),
     z.object({
-      field: z.literal("category"),
-      value: productCategory.nullable(),
+      field: z.literal("categoryId"),
+      value: productCategoryShortcode.nullable(),
     }),
     z.object({
       field: z.literal("model"),
@@ -1000,7 +1000,7 @@ export type OverwriteProductEnrichmentInput = z.infer<
 export const overwriteProductEnrichmentOut = z.object({
   runPublicId: importRunPublicId,
   productId: productShortcode,
-  changedField: z.enum(["manufacturer", "category", "model"]),
+  changedField: z.enum(["manufacturer", "categoryId", "model"]),
 });
 
 export const purchaseImportOperationStatusInput = z.object({

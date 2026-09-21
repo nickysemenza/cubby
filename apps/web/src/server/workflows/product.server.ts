@@ -275,7 +275,14 @@ export const quickCreateProductWorkflow = bindWorkflow(
           expectedQuantity: input.expectedQuantity ?? null,
           model: input.model ?? null,
           price: input.price ?? null,
-          category: input.category ?? null,
+          categoryId:
+            input.categoryId == null
+              ? null
+              : await resolveLiveShortcode(
+                  context.db,
+                  input.categoryId,
+                  "productCategory",
+                ),
         },
         context.actorContext,
       );

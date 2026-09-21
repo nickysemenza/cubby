@@ -22,6 +22,7 @@ public typealias Location = Components.Schemas.LocationOut
 public typealias Meal = Components.Schemas.MealOut
 public typealias Planting = Components.Schemas.PlantingOut
 public typealias Product = Components.Schemas.ProductTopLevelOut
+public typealias ProductCategory = Components.Schemas.ProductCategoryOut
 public typealias Project = Components.Schemas.ProjectOut
 public typealias Purchase = Components.Schemas.PurchaseOut
 public typealias TaskRecord = Components.Schemas.TaskOut
@@ -228,6 +229,7 @@ public typealias GeneratedEntityMutationCreateResultLocation = Components.Schema
 public typealias GeneratedEntityMutationCreateResultMeal = Components.Schemas.GeneratedEntityMutationCreateResultMeal
 public typealias GeneratedEntityMutationCreateResultPlanting = Components.Schemas.GeneratedEntityMutationCreateResultPlanting
 public typealias GeneratedEntityMutationCreateResultProduct = Components.Schemas.GeneratedEntityMutationCreateResultProduct
+public typealias GeneratedEntityMutationCreateResultProductCategory = Components.Schemas.GeneratedEntityMutationCreateResultProductCategory
 public typealias GeneratedEntityMutationCreateResultProject = Components.Schemas.GeneratedEntityMutationCreateResultProject
 public typealias GeneratedEntityMutationCreateResultPurchase = Components.Schemas.GeneratedEntityMutationCreateResultPurchase
 public typealias GeneratedEntityMutationCreateResultRecipe = Components.Schemas.GeneratedEntityMutationCreateResultRecipe
@@ -248,6 +250,7 @@ public typealias GeneratedEntityMutationUpdateResultLocation = Components.Schema
 public typealias GeneratedEntityMutationUpdateResultMeal = Components.Schemas.GeneratedEntityMutationUpdateResultMeal
 public typealias GeneratedEntityMutationUpdateResultPlanting = Components.Schemas.GeneratedEntityMutationUpdateResultPlanting
 public typealias GeneratedEntityMutationUpdateResultProduct = Components.Schemas.GeneratedEntityMutationUpdateResultProduct
+public typealias GeneratedEntityMutationUpdateResultProductCategory = Components.Schemas.GeneratedEntityMutationUpdateResultProductCategory
 public typealias GeneratedEntityMutationUpdateResultProject = Components.Schemas.GeneratedEntityMutationUpdateResultProject
 public typealias GeneratedEntityMutationUpdateResultPurchase = Components.Schemas.GeneratedEntityMutationUpdateResultPurchase
 public typealias GeneratedEntityMutationUpdateResultRecipe = Components.Schemas.GeneratedEntityMutationUpdateResultRecipe
@@ -491,7 +494,16 @@ public typealias PositiveAmount = Components.Schemas.PositiveAmount
 public typealias PositiveAmountInput = Components.Schemas.PositiveAmountInput
 public typealias PositiveMoney = Components.Schemas.PositiveMoney
 public typealias ProblemsCount = Components.Schemas.ProblemsCount
-public typealias ProductCategory = Components.Schemas.ProductCategory
+public typealias ProductCategoryCreateInput = Components.Schemas.ProductCategoryCreateInput
+public typealias ProductCategoryDetail = Components.Schemas.ProductCategoryDetail
+public typealias ProductCategoryFeature = Components.Schemas.ProductCategoryFeature
+public typealias ProductCategoryListItem = Components.Schemas.ProductCategoryListItem
+public typealias ProductCategoryListPage = Components.Schemas.ProductCategoryListPage
+public typealias ProductCategoryOut = Components.Schemas.ProductCategoryOut
+public typealias ProductCategoryPathNode = Components.Schemas.ProductCategoryPathNode
+public typealias ProductCategoryShortcode = Components.Schemas.ProductCategoryShortcode
+public typealias ProductCategorySummary = Components.Schemas.ProductCategorySummary
+public typealias ProductCategoryUpdateData = Components.Schemas.ProductCategoryUpdateData
 public typealias ProductCookbookRefOut = Components.Schemas.ProductCookbookRefOut
 public typealias ProductCreateInput = Components.Schemas.ProductCreateInput
 public typealias ProductDataCheck = Components.Schemas.ProductDataCheck
@@ -764,6 +776,11 @@ extension Components.Schemas.NutritionMeal: Identifiable {}
 extension Components.Schemas.PlantingDetail: Identifiable {}
 extension Components.Schemas.PlantingListItem: Identifiable {}
 extension Components.Schemas.PlantingOut: Identifiable {}
+extension Components.Schemas.ProductCategoryDetail: Identifiable {}
+extension Components.Schemas.ProductCategoryListItem: Identifiable {}
+extension Components.Schemas.ProductCategoryOut: Identifiable {}
+extension Components.Schemas.ProductCategoryPathNode: Identifiable {}
+extension Components.Schemas.ProductCategorySummary: Identifiable {}
 extension Components.Schemas.ProductCookbookRefOut: Identifiable {}
 extension Components.Schemas.ProductDetail: Identifiable {}
 extension Components.Schemas.ProductListInventoryEntryOut: Identifiable {}

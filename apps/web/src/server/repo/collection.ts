@@ -23,9 +23,10 @@ import {
   parseShortcodeFor,
 } from "@cubby/schemas/identifiers";
 import type { InventoryOwnershipMode } from "@cubby/schemas/inventory-ownership";
+import type { ProductCategorySummary } from "@cubby/schemas/product-category-fields";
 import type { Trade } from "@cubby/schemas/project";
 import { setCollectionTag } from "@cubby/shared/collection-tag";
-import { and, asc, eq, inArray, isNotNull } from "drizzle-orm";
+import { sql, and, asc, eq, inArray, isNotNull } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
 import {
@@ -47,6 +48,7 @@ import {
   getProductCoverImageUrlsByProductIds,
   updateProduct,
 } from "~/server/repo/product";
+import { categorySummarySql } from "~/server/repo/product-category-sql";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 
 import {
@@ -71,7 +73,7 @@ interface GraphProduct {
   shortcode: string;
   name: string;
   manufacturer: string;
-  category: string | null;
+  category: ProductCategorySummary | null;
   tags: string[];
 }
 
@@ -256,7 +258,7 @@ const loadCollectionGraph = async (db: Database): Promise<CollectionGraph> => {
         shortcode: product.shortcode,
         name: product.name,
         manufacturer: product.manufacturer,
-        category: product.category,
+        category: categorySummarySql(sql`${product.categoryId}`),
         tags: product.tags,
       })
       .from(product)

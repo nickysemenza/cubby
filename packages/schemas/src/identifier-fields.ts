@@ -66,6 +66,7 @@ export const entityIdSchema = <E extends ShortcodeEntity>(
 export const recipeId = ENTITY_ID_SCHEMA.recipe;
 export const imageId = ENTITY_ID_SCHEMA.image;
 export const ingredientId = ENTITY_ID_SCHEMA.ingredient;
+export const productCategoryId = ENTITY_ID_SCHEMA.productCategory;
 export const productId = ENTITY_ID_SCHEMA.product;
 export const locationId = ENTITY_ID_SCHEMA.location;
 export const inventoryId = ENTITY_ID_SCHEMA.inventory;
@@ -88,6 +89,7 @@ export const gardenEntryId = ENTITY_ID_SCHEMA.gardenEntry;
 export type RecipeId = EntityId<"recipe">;
 export type ImageId = EntityId<"image">;
 export type IngredientId = EntityId<"ingredient">;
+export type ProductCategoryId = EntityId<"productCategory">;
 export type ProductId = EntityId<"product">;
 export type LocationId = EntityId<"location">;
 export type InventoryId = EntityId<"inventory">;
@@ -172,6 +174,7 @@ const PARSE_ENTITY_REF = {
   planting: entityRefParser("planting"),
   gardenEntry: entityRefParser("gardenEntry"),
   product: entityRefParser("product"),
+  productCategory: entityRefParser("productCategory"),
   project: entityRefParser("project"),
   purchase: entityRefParser("purchase"),
   recipe: entityRefParser("recipe"),
@@ -210,6 +213,7 @@ export {
   locationShortcode,
   mealShortcode,
   productShortcode,
+  productCategoryShortcode,
   projectShortcode,
   purchaseShortcode,
   parseShortcodeFor,
@@ -235,6 +239,7 @@ export type {
   LocationShortcode,
   MealShortcode,
   ProductShortcode,
+  ProductCategoryShortcode,
   ProjectShortcode,
   PurchaseShortcode,
   RecipeShortcode,

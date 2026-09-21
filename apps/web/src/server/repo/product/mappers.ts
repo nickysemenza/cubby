@@ -5,6 +5,7 @@ import {
   GTIN_SOURCE,
 } from "@cubby/schemas/external-id";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
+import { isDisplayableImageFile } from "@cubby/schemas/image";
 import type {
   InventoryListProductOut,
   ProductInventoryEmbedOut,
@@ -18,6 +19,7 @@ import {
   productTopLevelOut,
   productWithIngredientAndInventoryAndMappingsOut,
 } from "@cubby/schemas/product";
+import type { ProductCategorySummary } from "@cubby/schemas/product-category-fields";
 import { sumBy, uniq } from "es-toolkit";
 import type { z } from "zod";
 
@@ -49,13 +51,47 @@ type ProductImageRow =
   | MappableImageRecord
   | {
       image: MappableImageRecord;
+      purpose?: "item" | "label" | null;
       deletedAt?: Date | null;
     };
+
+const productImagePurposeOf = (row: ProductImageRow): "item" | "label" =>
+  "image" in row && row.purpose === "label" ? "label" : "item";
+
+const mapProductImages = (rows: ProductImageRow[]) =>
+  rows.flatMap((row) =>
+    mapImages([row]).map((image) => ({
+      ...image,
+      // The absence of a role on an older join is evidence in its own right;
+      // do not rewrite it to the item default used only for grouping/covers.
+      purpose: "image" in row ? (row.purpose ?? null) : null,
+    })),
+  );
+
+const splitProductImages = (rows: ProductImageRow[] | null | undefined) => {
+  const itemRows = (rows ?? []).filter(
+    (row) => productImagePurposeOf(row) === "item",
+  );
+  const labelRows = (rows ?? []).filter(
+    (row) => productImagePurposeOf(row) === "label",
+  );
+  const filesOf = (items: ProductImageRow[]) => mapProductImages(items);
+  const itemImages = filesOf(itemRows);
+  const labelImages = filesOf(labelRows);
+  return {
+    itemImages,
+    labelImages,
+    itemImageCount: itemImages.filter(isDisplayableImageFile).length,
+    labelImageCount: labelImages.filter(isDisplayableImageFile).length,
+  };
+};
 
 type ProductTopLevelDB = Omit<
   RowWithOptionalAliases<typeof product.$inferSelect>,
   "growsIngredientId"
 > & {
+  classificationEvidence: string;
+  category: ProductCategorySummary | null;
   growsIngredientId?: (typeof product.$inferSelect)["growsIngredientId"];
   images?: ProductImageRow[] | null;
   externalIds?: MappableProductExternalId[] | null;
@@ -133,36 +169,44 @@ export const mapProductUnitMappings = (
 
 export const mapDbProductToTopLevel = (
   productData: ProductTopLevelDB,
-): ProductTopLevelOut => ({
-  id: parseShortcodeFor("product", productData.shortcode),
-  name: productData.name,
-  aliases: productData.aliases ?? [],
-  tags: productData.tags ?? [],
-  primaryGtin: primaryGtinOf(productData.externalIds),
-  fdc_id: productData.fdc_id,
-  manufacturer: productData.manufacturer,
-  model: productData.model,
-  notes: productData.notes,
-  expectedQuantity: productData.expectedQuantity,
-  category: productData.category,
-  growsIngredientId: productData.growsIngredient
-    ? parseShortcodeFor("ingredient", productData.growsIngredient.shortcode)
-    : null,
-  price: productData.price,
-  pricing: productData.pricing ?? resolveProductPricing(productData.price),
-  usdaUnavailable: productData.usdaUnavailable,
-  stockTracked: productData.stockTracked,
-  labelNutrition: productData.labelNutrition,
-  dataQuality: productData.dataQuality,
-  images: mapImages(productData.images),
-  // Same derived cover rule as the picker (see
-  // `getProductCoverImageUrlsByProductIds`); `null` when the caller didn't
-  // batch-resolve it for this read.
-  coverImageUrl: productData.coverImageUrl ?? null,
-  externalIds: mapProductExternalIds(productData.externalIds),
-  createdAt: productData.createdAt,
-  updatedAt: productData.updatedAt,
-});
+): ProductTopLevelOut => {
+  const imageGroups = splitProductImages(productData.images);
+  return {
+    id: parseShortcodeFor("product", productData.shortcode),
+    name: productData.name,
+    aliases: productData.aliases ?? [],
+    tags: productData.tags ?? [],
+    primaryGtin: primaryGtinOf(productData.externalIds),
+    fdc_id: productData.fdc_id,
+    manufacturer: productData.manufacturer,
+    model: productData.model,
+    notes: productData.notes,
+    expectedQuantity: productData.expectedQuantity,
+    category: productData.category,
+    categoryId: productData.category?.id ?? null,
+    classificationEvidence: productData.classificationEvidence,
+    growsIngredientId: productData.growsIngredient
+      ? parseShortcodeFor("ingredient", productData.growsIngredient.shortcode)
+      : null,
+    price: productData.price,
+    pricing: productData.pricing ?? resolveProductPricing(productData.price),
+    usdaUnavailable: productData.usdaUnavailable,
+    stockTracked: productData.stockTracked,
+    labelNutrition: productData.labelNutrition,
+    dataQuality: productData.dataQuality,
+    images: imageGroups.itemImages,
+    labelImages: imageGroups.labelImages,
+    itemImageCount: imageGroups.itemImageCount,
+    labelImageCount: imageGroups.labelImageCount,
+    // Same derived cover rule as the picker (see
+    // `getProductCoverImageUrlsByProductIds`); `null` when the caller didn't
+    // batch-resolve it for this read.
+    coverImageUrl: productData.coverImageUrl ?? null,
+    externalIds: mapProductExternalIds(productData.externalIds),
+    createdAt: productData.createdAt,
+    updatedAt: productData.updatedAt,
+  };
+};
 
 export const dbProductToTopLevelAPI = (
   productData: ProductTopLevelDB,
@@ -178,8 +222,9 @@ export const dbProductToTopLevelAPI = (
 const mapDbProductToPickerItem = (
   productData: Pick<
     typeof product.$inferSelect,
-    "id" | "shortcode" | "name" | "manufacturer" | "category"
+    "id" | "shortcode" | "name" | "manufacturer" | "categoryId"
   > & {
+    category: ProductCategorySummary | null;
     coverImageUrl: ProductPickerItemOut["coverImageUrl"];
     price: ProductPickerItemOut["price"];
     quantityLedger: ProductPickerItemOut["quantityLedger"];
@@ -199,8 +244,9 @@ const mapDbProductToPickerItem = (
 export const dbProductToPickerItemAPI = (
   productData: Pick<
     typeof product.$inferSelect,
-    "id" | "shortcode" | "name" | "manufacturer" | "category"
+    "id" | "shortcode" | "name" | "manufacturer" | "categoryId"
   > & {
+    category: ProductCategorySummary | null;
     coverImageUrl: ProductPickerItemOut["coverImageUrl"];
     price: ProductPickerItemOut["price"];
     quantityLedger: ProductPickerItemOut["quantityLedger"];
@@ -217,6 +263,7 @@ export const dbProductToPickerItemAPI = (
 
 export const mapDbProductToInventoryEmbed = (
   productData: RowWithOptionalAliases<typeof product.$inferSelect> & {
+    category: ProductCategorySummary | null;
     pricing: ProductPricing;
     primaryGtin: string | null;
   },
@@ -238,6 +285,7 @@ export const mapDbProductToInventoryEmbed = (
 
 export const mapDbProductToInventoryList = (
   productData: RowWithOptionalAliases<typeof product.$inferSelect> & {
+    category: ProductCategorySummary | null;
     pricing?: ProductPricing;
     primaryGtin: string | null;
   },
@@ -409,6 +457,7 @@ export const dbProductToAPI = (
   dataQuality: ProductTopLevelOut["dataQuality"],
 ): z.infer<typeof productWithIngredientAndInventoryAndMappingsOut> => {
   const { ingredient, unitMappings, inventoryEntry, images } = productData;
+  const imageGroups = splitProductImages(images);
 
   // `isNotDeleted(entry.location)` matches `dbProductToListAPI` and
   // `onHandUnitsSql`, which inner-joins live locations. Without it a detail
@@ -463,6 +512,8 @@ export const dbProductToAPI = (
     model: productData.model,
     notes: productData.notes,
     expectedQuantity: productData.expectedQuantity,
+    classificationEvidence: productData.classificationEvidence,
+    categoryId: productData.category?.id ?? null,
     category: productData.category,
     growsIngredientId: productData.growsIngredient
       ? parseShortcodeFor("ingredient", productData.growsIngredient.shortcode)
@@ -481,7 +532,10 @@ export const dbProductToAPI = (
       unitMappings,
     ),
     externalIds: mapProductExternalIds(productData.externalIds),
-    images: mapImages(images),
+    images: imageGroups.itemImages,
+    labelImages: imageGroups.labelImages,
+    itemImageCount: imageGroups.itemImageCount,
+    labelImageCount: imageGroups.labelImageCount,
     // Same derived cover rule as the picker (see
     // `getProductCoverImageUrlsByProductIds`); `null` when the caller didn't
     // batch-resolve it for this read.

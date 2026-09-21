@@ -196,6 +196,11 @@ export const ripple = {
     ["relatedness", "product"],
   ]),
   product: productBase,
+  /** Taxonomy moves change Product evidence and inherited food-project costs. */
+  productCategory: rippleTags(productBase, [
+    ["productCategory"],
+    ["inventory"],
+  ]),
   /**
    * Product MERGE moves far more than a product write does. A rename touches
    * the product row and the surfaces that embed its name; a merge re-parents

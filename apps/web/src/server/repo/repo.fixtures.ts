@@ -7,6 +7,8 @@ import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
 import {
   type EntityId,
   type IngredientId,
+  type ProductCategoryId,
+  type ProductCategoryShortcode,
   type IngredientShortcode,
   type RecipeId,
   parseEntityId,
@@ -56,9 +58,18 @@ type RecipeIngredientInput = NonNullable<
 type ProductFixtureInput<
   Ingredient extends IngredientId | IngredientShortcode | null | undefined,
   GrowsIngredient extends IngredientId | IngredientShortcode | null | undefined,
-> = Omit<ProductCreateInput, "ingredientId" | "growsIngredientId"> & {
+  Category extends
+    | ProductCategoryId
+    | ProductCategoryShortcode
+    | null
+    | undefined,
+> = Omit<
+  ProductCreateInput,
+  "ingredientId" | "growsIngredientId" | "categoryId"
+> & {
   ingredientId: Ingredient | null;
   growsIngredientId: GrowsIngredient | null;
+  categoryId: Category | null;
 };
 
 /**
@@ -74,16 +85,22 @@ export const makeProductInput = <
     | IngredientShortcode
     | null
     | undefined = undefined,
+  Category extends
+    | ProductCategoryId
+    | ProductCategoryShortcode
+    | null
+    | undefined = undefined,
 >(
   overrides: Omit<
     Partial<ProductCreateInput>,
-    "ingredientId" | "growsIngredientId"
+    "ingredientId" | "growsIngredientId" | "categoryId"
   > & {
     ingredientId?: Ingredient;
     growsIngredientId?: GrowsIngredient;
+    categoryId?: Category;
   } = {},
-): ProductFixtureInput<Ingredient, GrowsIngredient> => {
-  const { ingredientId, growsIngredientId, ...rest } = overrides;
+): ProductFixtureInput<Ingredient, GrowsIngredient, Category> => {
+  const { ingredientId, growsIngredientId, categoryId, ...rest } = overrides;
   return {
     name: "Test Product",
     aliases: [],
@@ -95,6 +112,7 @@ export const makeProductInput = <
     expectedQuantity: null,
     ingredientId: ingredientId ?? null,
     growsIngredientId: growsIngredientId ?? null,
+    categoryId: categoryId ?? null,
     unitMappings: [],
     externalIds: [],
     ...rest,
@@ -153,6 +171,9 @@ const createProductWithResolvedIngredient = async (
     db,
     {
       ...data,
+      categoryId: data.categoryId
+        ? await resolveLiveShortcode(db, data.categoryId, "productCategory")
+        : null,
       growsIngredientId: growsIngredientId
         ? parseEntityId("ingredient", growsIngredientId)
         : null,

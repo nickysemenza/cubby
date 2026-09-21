@@ -8,6 +8,10 @@ import { describe, expect, it } from "vitest";
 
 import { getR2PublicUrl } from "~/server/utils/r2-public-url";
 
+import {
+  categorySummaryFixture,
+  taxonomyId,
+} from "../../../../tooling/product-category-fixtures";
 import { makeCookbookExtraction } from "../repo.fixtures";
 import {
   dbProductToAPI,
@@ -108,7 +112,9 @@ const baseProduct = {
   updatedAt: UPDATED_AT,
   deletedAt: DELETED_AT,
   ingredientId: INGREDIENT_ID,
-  category: "food" as const,
+  categoryId: taxonomyId("food"),
+  category: categorySummaryFixture("food"),
+  classificationEvidence: "",
   price: 4.5,
   usdaUnavailable: null,
   stockTracked: null,
@@ -219,7 +225,7 @@ describe("product mappers", () => {
       images: [
         baseImage,
         deletedImage,
-        { image: joinedImage, deletedAt: null },
+        { image: joinedImage, purpose: "label", deletedAt: null },
         { image: baseImage, deletedAt: DELETED_AT },
       ],
       externalIds: [activeExternalId, deletedExternalId],
@@ -230,9 +236,17 @@ describe("product mappers", () => {
       name: "Flour",
       manufacturer: "Generic",
       images: [
-        { id: IMAGE_ID, url: getR2PublicUrl(baseImage.key) },
-        { id: JOIN_IMAGE_ID, url: getR2PublicUrl(joinedImage.key) },
+        { id: IMAGE_ID, url: getR2PublicUrl(baseImage.key), purpose: null },
       ],
+      labelImages: [
+        {
+          id: JOIN_IMAGE_ID,
+          url: getR2PublicUrl(joinedImage.key),
+          purpose: "label",
+        },
+      ],
+      itemImageCount: 1,
+      labelImageCount: 1,
       externalIds: [{ id: EXTERNAL_ID, source: "amazon" }],
     });
     expect(result).not.toHaveProperty("deletedAt");

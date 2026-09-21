@@ -31,8 +31,13 @@ const productAt = (shortcode: string, componentCount = 0) =>
     notes: null,
     labelNutrition: null,
     expectedQuantity: null,
+    categoryId: null,
     category: null,
     images: [],
+    labelImages: [],
+    itemImageCount: 0,
+    labelImageCount: 0,
+    classificationEvidence: "",
     externalIds: [],
     price: null,
     pricing: {

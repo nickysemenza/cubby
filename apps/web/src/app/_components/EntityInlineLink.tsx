@@ -1,11 +1,11 @@
 import type { ImageUrlSummary } from "@cubby/schemas/image-summary";
 import type { LocationType } from "@cubby/schemas/location";
-import type { ProductCategory } from "@cubby/schemas/product";
 import type {
   ProjectKind,
   ProjectStatus,
   TaskStatus,
 } from "@cubby/schemas/project";
+import type { ProductCategory } from "@cubby/shared";
 import { getMiscDisplayName, isMiscProduct } from "@cubby/shared";
 import type { DataType } from "@cubby/usda-schemas";
 import type { ReactNode } from "react";

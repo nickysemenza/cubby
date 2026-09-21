@@ -8,6 +8,7 @@ import type {
   LocationId,
   LocationShortcode,
   ProductId,
+  ProductCategoryShortcode,
   ProductShortcode,
 } from "@cubby/schemas/identifiers";
 import type { InventoryPlacement } from "@cubby/schemas/inventory";
@@ -16,7 +17,6 @@ import {
   type PaginationParams,
   type SortParams,
 } from "@cubby/schemas/pagination";
-import type { ProductCategory } from "@cubby/schemas/product";
 import {
   and,
   asc,
@@ -46,7 +46,6 @@ import {
   buildOrderBy,
   buildPartialUpdateValues,
   buildSearchConditions,
-  eqAny,
   eqAnyRequested,
   getDb,
   type ListReadIntent,
@@ -60,6 +59,7 @@ import {
 } from "~/server/repo/database-helpers";
 import { createEntityReader } from "~/server/repo/entity-crud-factory";
 import { isGlobalUnknownLocation } from "~/server/repo/location";
+import { categoryDescendantsSql } from "~/server/repo/product-category-sql";
 import {
   effectiveProductPriceSql,
   loadProductPricing,
@@ -287,7 +287,7 @@ interface InventoryFilters {
   locationIdFilter?: LocationShortcode | typeof UNRESOLVABLE_ENTITY_FILTER;
   productIdFilter?: ProductShortcode | typeof UNRESOLVABLE_ENTITY_FILTER;
   manufacturerFilter?: string;
-  categoryFilter?: ProductCategory | ProductCategory[];
+  categoryFilter?: ProductCategoryShortcode | ProductCategoryShortcode[];
   verifiedPresenceFilter?: "has" | "none";
   valuationStatus?: "valued" | "missing" | "missing_with_priced_product";
   verifiedFrom?: string;
@@ -350,9 +350,10 @@ export const buildInventoryWhere = async (
   db: Database,
   filters: InventoryFilters,
 ) => {
-  const [locationIds, productIds] = await Promise.all([
+  const [locationIds, productIds, categoryIds] = await Promise.all([
     resolveFilterIds(db, "location", filters.locationIdFilter),
     resolveFilterIds(db, "product", filters.productIdFilter),
+    resolveFilterIds(db, "productCategory", filters.categoryFilter),
   ]);
 
   return buildSearchConditions(
@@ -368,7 +369,9 @@ export const buildInventoryWhere = async (
       lexicalEligibility("inventory", inventoryEntry.id, filters.searchQuery),
       eqAnyRequested(inventoryEntry.locationId, locationIds),
       eqAnyRequested(inventoryEntry.productId, productIds),
-      eqAny(product.category, filters.categoryFilter),
+      categoryIds === undefined
+        ? undefined
+        : sql`${product.categoryId} IN ${categoryDescendantsSql(categoryIds)}`,
       filters.locationRole === "global_unknown"
         ? isGlobalUnknownLocation()
         : undefined,

@@ -20,7 +20,10 @@ import {
 import type { LedgerPartyId } from "@cubby/schemas/identifiers";
 import type { InventoryPlacement } from "@cubby/schemas/inventory";
 import type { InventoryOwnershipMode } from "@cubby/schemas/inventory-ownership";
-import type { MergeProductsInput } from "@cubby/schemas/product";
+import {
+  hasFoodIndicators,
+  type MergeProductsInput,
+} from "@cubby/schemas/product";
 import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import { sumBy, uniq } from "es-toolkit";
 
@@ -66,6 +69,10 @@ import {
   resolveMergeTargets,
   type SlotCollisionPlan,
 } from "~/server/repo/merge";
+import {
+  getCategoryFeature,
+  resolveProductCategory,
+} from "~/server/repo/product-category";
 import { cascadeRemoval } from "~/server/repo/removal";
 
 import { validateLiveEffectiveTrades } from "../inheritance-validation";
@@ -192,7 +199,7 @@ const CARRIED_COLUMNS = [
   "model",
   "price",
   "notes",
-  "category",
+  "categoryId",
   "ingredientId",
   "expectedQuantity",
   // Nullable on purpose (`presenceFilter` exposes "undecided" as a real
@@ -207,7 +214,7 @@ const CARRIED_FIELD_LABELS = {
   model: "model",
   price: "price",
   notes: "notes",
-  category: "category",
+  categoryId: "classification",
   ingredientId: "linked ingredient",
   expectedQuantity: "expected quantity",
   stockTracked: "stock-tracking decision",
@@ -635,6 +642,7 @@ type ProductAssociationRow = {
 type ProductImageAssociationRow = ProductAssociationRow & {
   imageId: string;
   sha256: string | null;
+  purpose: "item" | "label" | null;
   sortOrder: number;
   createdAt: Date;
 };
@@ -730,7 +738,7 @@ async function buildProductMergePlan(
         model: true,
         price: true,
         notes: true,
-        category: true,
+        categoryId: true,
         ingredientId: true,
         expectedQuantity: true,
         stockTracked: true,
@@ -830,6 +838,7 @@ async function buildProductMergePlan(
         id: true,
         productId: true,
         imageId: true,
+        purpose: true,
         sortOrder: true,
         createdAt: true,
       },
@@ -1063,10 +1072,57 @@ async function buildProductMergePlan(
   };
 }
 
+type ProductMergeCategoryAdmission = {
+  categoryId: ProductMergeRow["categoryId"];
+  feature: Awaited<ReturnType<typeof getCategoryFeature>>;
+  hasWishCandidates: boolean;
+  hasProjectUses: boolean;
+  keeperIsGardenSource: boolean;
+};
+
+/**
+ * A merge can carry food/ISBN evidence and re-point resource edges at once.
+ * Resolve the survivor's final category before either write so the same
+ * admission rules as a direct category change protect the merged graph.
+ */
+const admitMergedProductCategory = async (
+  tx: DrizzleTransaction,
+  plan: ProductMergePlan,
+): Promise<ProductMergeCategoryAdmission> => {
+  const fdc_id = plan.keeper.fdc_id ?? plan.carried.fdc_id ?? null;
+  const ingredientId =
+    plan.keeper.ingredientId ?? plan.carried.ingredientId ?? null;
+  const requiredFeature = hasFoodIndicators({ fdc_id, ingredientId })
+    ? "food"
+    : distinctIsbns(plan.externalIds.rows).length > 0
+      ? "books"
+      : null;
+  const categoryId = await resolveProductCategory(
+    tx,
+    plan.keeper.categoryId ?? plan.carried.categoryId ?? null,
+    requiredFeature,
+  );
+  const feature = await getCategoryFeature(tx, categoryId);
+  const keeperGardenSource = await tx.query.planting.findFirst({
+    where: and(
+      eq(planting.sourceProductId, plan.keeper.id),
+      notDeleted(planting),
+    ),
+    columns: { id: true },
+  });
+  return {
+    categoryId,
+    feature,
+    hasWishCandidates: plan.wishes.rows.length > 0,
+    hasProjectUses: plan.projectUses.rows.length > 0,
+    keeperIsGardenSource: keeperGardenSource !== undefined,
+  };
+};
+
 const validateProductMergePlan = async (
   tx: DrizzleTransaction,
   plan: ProductMergePlan,
-): Promise<void> => {
+): Promise<ProductMergeCategoryAdmission> => {
   const isbns = distinctIsbns(plan.externalIds.rows);
   if (isbns.length > 1) {
     throw createAppError(
@@ -1108,6 +1164,30 @@ const validateProductMergePlan = async (
       `Cannot merge kits that list the same component in different quantities: ${detail.join(", ")}. Correct one list first.`,
     );
   }
+  const admission = await admitMergedProductCategory(tx, plan);
+  if (admission.hasWishCandidates && admission.feature !== "tools") {
+    throw createAppError(
+      "PRODUCT_HAS_WISH_CANDIDATES",
+      "Remove this Product from the Wishlist before changing it out of the Tools category.",
+    );
+  }
+  if (
+    admission.hasProjectUses &&
+    admission.feature !== "tools" &&
+    admission.feature !== "software"
+  ) {
+    throw createAppError(
+      "PRODUCT_CATEGORY_INELIGIBLE",
+      "A Product used as a project resource must remain Tools or Software.",
+    );
+  }
+  if (admission.keeperIsGardenSource && admission.feature === "food") {
+    throw createAppError(
+      "CONSTRAINT_VIOLATION",
+      "A planting source Product must be a garden product, not a food Product.",
+    );
+  }
+  return admission;
 };
 
 const foldProductExternalIds = async (
@@ -1218,6 +1298,7 @@ export const mergeProducts = async (
     mergeIds: input.mergeIds,
   });
 
+  // eslint-disable-next-line complexity -- merge folds every incoming Product edge atomically.
   return await withTransaction(db, async (tx) => {
     // Lock every row first so a concurrent merge or delete can't interleave and
     // leave a unique index deciding the outcome.
@@ -1243,7 +1324,13 @@ export const mergeProducts = async (
     );
     summary.deletedEntityIds = losers.map((row) => row.id);
 
-    await validateProductMergePlan(tx, plan);
+    const categoryAdmission = await validateProductMergePlan(tx, plan);
+    if (categoryAdmission.categoryId !== plan.keeper.categoryId) {
+      plan.carried.categoryId = categoryAdmission.categoryId;
+      if (!plan.carriedFields.includes("categoryId")) {
+        plan.carriedFields.push("categoryId");
+      }
+    }
 
     const inventoryPlan = plan.inventory;
     const componentPlan = plan.components;
@@ -1311,6 +1398,18 @@ export const mergeProducts = async (
     // way.) Read the survivor's own rows in their current order first, then
     // renumber survivor-first once the fold has moved everything across.
     const survivorImagesBefore = plan.survivorImageIds.map((id) => ({ id }));
+    // A direct keeper choice is authoritative.  Legacy null has no choice,
+    // so retain a surviving loser's explicit role when deduplicating the
+    // same image across Products.
+    for (const { into, rows } of plan.images.collision.absorb) {
+      if (into.purpose !== null) continue;
+      const purpose = rows.find((row) => row.purpose !== null)?.purpose;
+      if (purpose)
+        await tx
+          .update(productImage)
+          .set({ purpose })
+          .where(eq(productImage.id, into.id));
+    }
     summary.imagesMoved = await foldAssociation(tx, {
       column: "productId",
       table: productImage,
@@ -1705,6 +1804,11 @@ export const previewMergeProducts = async (
   const unitMappingPlan = plan.unitMappings;
   const componentPlan = plan.components;
   const isbns = distinctIsbns(plan.externalIds.rows);
+  // Read-only admission uses a transaction so it resolves the same inherited
+  // category feature and keeper planting edge as the atomic executor.
+  const categoryAdmission = await withTransaction(db, async (tx) =>
+    admitMergedProductCategory(tx, plan),
+  );
   // Blockers are labelled, not just described: `ImpactRow` renders
   // total/label/code and never `description`, so naming the cycle or the
   // disagreeing quantities anywhere else would make them invisible in the UI.
@@ -1780,6 +1884,52 @@ export const previewMergeProducts = async (
       edgeKey: "InventoryEntry.productId",
       label: "stock entries that can't be merged",
       byTargetId: byProduct(inventoryPlan.mismatches.map(({ row }) => row)),
+    }),
+    impact({
+      disposition: {
+        code: "block-wishlist-category-ineligible",
+        effect: "block",
+        description:
+          "Wishlist candidacies can only point at Tools products. The merged survivor would no longer be eligible.",
+      },
+      edgeKey: "WishCandidate.productId",
+      label: "wishlist candidacies that require Tools",
+      byTargetId:
+        categoryAdmission.hasWishCandidates &&
+        categoryAdmission.feature !== "tools"
+          ? byProduct(plan.wishes.rows)
+          : {},
+    }),
+    impact({
+      disposition: {
+        code: "block-project-resource-category-ineligible",
+        effect: "block",
+        description:
+          "Project resource usage requires Tools or Software. The merged survivor would no longer be eligible.",
+      },
+      edgeKey: "ProjectToolUsage.productId",
+      label: "project uses that require Tools or Software",
+      byTargetId:
+        categoryAdmission.hasProjectUses &&
+        categoryAdmission.feature !== "tools" &&
+        categoryAdmission.feature !== "software"
+          ? byProduct(plan.projectUses.rows)
+          : {},
+    }),
+    impact({
+      disposition: {
+        code: "block-garden-source-food-category",
+        effect: "block",
+        description:
+          "A planting source Product cannot be classified as Food. The keeper remains the source after merging.",
+      },
+      edgeKey: "Planting.sourceProductId",
+      label: "planting source that cannot become Food",
+      byTargetId:
+        categoryAdmission.keeperIsGardenSource &&
+        categoryAdmission.feature === "food"
+          ? { [keepId]: 1 }
+          : {},
     }),
   ]);
 

@@ -20,6 +20,7 @@ import type {
   SetPerceptualHashesOutput,
   ImageUpdateInput,
   ImageWithEntity,
+  ProductImagePurpose,
 } from "@cubby/schemas/image";
 import { attachableImageEntityId } from "@cubby/schemas/image";
 import type { PurchaseDocumentKind } from "@cubby/schemas/purchase";
@@ -145,11 +146,15 @@ const attachExistingWithBinding = async <
 ): Promise<boolean> => {
   const joinTable: ImageJoinTable = binding.table;
   const existing = await tx
-    .select({ deletedAt: sql<Date | null>`${joinTable.deletedAt}` })
+    .select({
+      id: sql<string>`${joinTable.id}`,
+      deletedAt: sql<Date | null>`${joinTable.deletedAt}`,
+    })
     .from(joinTable)
     .where(
       and(eq(binding.parentIdColumn, parentId), eq(joinTable.imageId, imageId)),
-    );
+    )
+    .orderBy(desc(joinTable.updatedAt), desc(joinTable.id));
   if (existing.some((row) => row.deletedAt === null)) return true;
   const now = new Date();
   const order = sortOrder ?? (await nextImageSortOrder(tx, binding, parentId));
@@ -166,15 +171,15 @@ const attachExistingWithBinding = async <
         ),
       );
   }
-  if (existing.some((row) => row.deletedAt !== null)) {
+  const detached = existing.find((row) => row.deletedAt !== null);
+  if (detached) {
     // SAFETY: the manifest binding guarantees these dynamic columns exist on every gallery join table.
     await tx
       .update(joinTable)
       .set({ deletedAt: null, updatedAt: now, sortOrder: order } as never)
       .where(
         and(
-          eq(binding.parentIdColumn, parentId),
-          eq(joinTable.imageId, imageId),
+          sql`${joinTable.id} = ${detached.id}`,
           isNotNull(joinTable.deletedAt),
         ),
       );
@@ -193,6 +198,7 @@ export const attachExistingImageToEntity = async (
     imageId: ImageShortcode;
     targetId: string;
     sortOrder?: number;
+    purpose?: ProductImagePurpose;
   },
   actor: ActorContext,
 ): Promise<{ reused: boolean }> => {
@@ -297,14 +303,34 @@ export const attachExistingImageToEntity = async (
       )
       .exhaustive();
 
-    if (!reused) {
+    const purposeChanged =
+      entity.entity === "product" && input.purpose !== undefined;
+    if (purposeChanged) {
+      await tx
+        .update(productImage)
+        .set({ purpose: input.purpose })
+        .where(
+          and(
+            eq(productImage.productId, entity.id),
+            eq(productImage.imageId, imageId),
+            notDeleted(productImage),
+          ),
+        );
+    }
+
+    if (!reused || purposeChanged) {
       await touchAttachableEntity(tx, entity, now);
       await logAuditEntry(tx, actor, {
         entityType: entity.entity,
         entityId: entity.id,
         action: "update",
         changes: {
-          images: { from: [], to: [input.imageId] },
+          images: purposeChanged
+            ? {
+                from: [],
+                to: [{ imageId: input.imageId, purpose: input.purpose }],
+              }
+            : { from: [], to: [input.imageId] },
         },
       });
     }
@@ -328,6 +354,10 @@ export const createPendingImageRecord = async (
     sourceFingerprint,
     width,
     height,
+    source,
+    sourcePageUrl,
+    sourceAssetUrl,
+    sourceName,
   }: {
     key: string;
     filename: string;
@@ -337,6 +367,10 @@ export const createPendingImageRecord = async (
     sourceFingerprint?: { hash: string; aspectRatio: number };
     width?: number;
     height?: number;
+    source?: "own" | "catalog" | "unknown";
+    sourcePageUrl?: string | null;
+    sourceAssetUrl?: string | null;
+    sourceName?: string | null;
   },
 ) => {
   // `insertWithShortcode`, not a bare insert: Image now carries a public `IMG-`
@@ -351,6 +385,10 @@ export const createPendingImageRecord = async (
     sourceFingerprint,
     width,
     height,
+    source,
+    sourcePageUrl,
+    sourceAssetUrl,
+    sourceName,
   });
 };
 
@@ -376,6 +414,10 @@ export const createUploadedImageRecord = async (
     targetType?: string | null;
     targetId?: string | null;
     idempotencyKey?: string | null;
+    source?: "own" | "catalog" | "unknown";
+    sourcePageUrl?: string | null;
+    sourceAssetUrl?: string | null;
+    sourceName?: string | null;
   },
 ) => {
   return await insertWithShortcode(db, "image", {
@@ -708,6 +750,10 @@ const imageWithRelationsToAPI = (
     contentType: imageData.contentType,
     status: imageData.status,
     ...imageIntegrityFields(imageData),
+    source: imageData.source,
+    sourcePageUrl: imageData.sourcePageUrl,
+    sourceAssetUrl: imageData.sourceAssetUrl,
+    sourceName: imageData.sourceName,
     createdAt: imageData.createdAt,
     updatedAt: imageData.updatedAt,
     entityType: legacyEntityType,
@@ -1975,11 +2021,13 @@ export const detachImagesFromEntity = async (
   await match(entity)
     .with({ entity: "product" }, ({ id }) =>
       tx
-        .delete(productImage)
+        .update(productImage)
+        .set({ deletedAt: new Date(), updatedAt: new Date() })
         .where(
           and(
             eq(productImage.productId, id),
             inArray(productImage.imageId, imageIds),
+            notDeleted(productImage),
           ),
         ),
     )
@@ -2656,7 +2704,7 @@ const touchAttachableEntity = async (
     .exhaustive();
 };
 
-const countDisplayableAttachedImages = async (
+const countAttachmentPreconditionImages = async (
   tx: DrizzleTransaction,
   entity: AttachableImageRef,
 ): Promise<number> => {
@@ -2671,7 +2719,7 @@ const countDisplayableAttachedImages = async (
           and(
             eq(productImage.productId, id),
             notDeleted(productImage),
-            whereImage,
+            notDeleted(image),
           ),
         ),
     )
@@ -2774,11 +2822,22 @@ const associateImageWithEntity = async (
   entity: AttachableImageRef,
   imageId: ImageId,
   documentKind?: PurchaseDocumentKind,
+  purpose?: ProductImagePurpose,
 ): Promise<void> => {
   await match(entity)
-    .with({ entity: "product" }, ({ id }) =>
-      associatePendingImages(dbc, imageJoinBindings.product, id, [imageId]),
-    )
+    .with({ entity: "product" }, async ({ id }) => {
+      const sortOrder = await nextImageSortOrder(
+        dbc,
+        imageJoinBindings.product,
+        id,
+      );
+      await dbc.insert(productImage).values({
+        productId: id,
+        imageId,
+        sortOrder,
+        purpose: purpose ?? null,
+      });
+    })
     .with({ entity: "recipe" }, ({ id }) =>
       associatePendingImages(dbc, imageJoinBindings.recipe, id, [imageId]),
     )
@@ -2846,6 +2905,10 @@ export const createAndAssociateUploadedImage = async (
     targetType?: string | null;
     targetId?: string | null;
     idempotencyKey?: string | null;
+    source?: "own" | "catalog" | "unknown";
+    sourcePageUrl?: string | null;
+    sourceAssetUrl?: string | null;
+    sourceName?: string | null;
   },
   entity: AttachableImageRef,
   documentKind?: PurchaseDocumentKind,
@@ -2864,6 +2927,7 @@ export const createOrReuseAttachedImage = async (
   params: Parameters<typeof createUploadedImageRecord>[1] & {
     expectedImageCount?: number;
     pendingImageId?: ImageId;
+    purpose?: ProductImagePurpose;
   },
   entity: AttachableImageRef,
   documentKind?: PurchaseDocumentKind,
@@ -2879,11 +2943,11 @@ export const createOrReuseAttachedImage = async (
       if (winner) return { row: winner, reused: true };
     }
     if (params.expectedImageCount !== undefined) {
-      const actual = await countDisplayableAttachedImages(tx, entity);
+      const actual = await countAttachmentPreconditionImages(tx, entity);
       if (actual !== params.expectedImageCount) {
         throw createAppError(
           "IMAGE_PRECONDITION_FAILED",
-          `Expected ${params.expectedImageCount} displayable images, found ${actual}`,
+          `Expected ${params.expectedImageCount} attached images, found ${actual}`,
         );
       }
     }
@@ -2891,6 +2955,7 @@ export const createOrReuseAttachedImage = async (
     const {
       expectedImageCount: _expectedImageCount,
       pendingImageId,
+      purpose,
       ...record
     } = params;
     if (pendingImageId) {
@@ -2914,6 +2979,7 @@ export const createOrReuseAttachedImage = async (
         entity,
         parseEntityId("image", promoted.id),
         documentKind,
+        purpose,
       );
       return { row: promoted, reused: false };
     }
@@ -2965,6 +3031,7 @@ export const createOrReuseAttachedImage = async (
       entity,
       parseEntityId("image", inserted.id),
       documentKind,
+      purpose,
     );
     return { row: inserted, reused: false };
   });

@@ -181,6 +181,7 @@ export const locationShortcode = SHORTCODE_SCHEMA.location;
 export const mealShortcode = SHORTCODE_SCHEMA.meal;
 export const plantingShortcode = SHORTCODE_SCHEMA.planting;
 export const gardenEntryShortcode = SHORTCODE_SCHEMA.gardenEntry;
+export const productCategoryShortcode = SHORTCODE_SCHEMA.productCategory;
 export const productShortcode = SHORTCODE_SCHEMA.product;
 export const projectShortcode = SHORTCODE_SCHEMA.project;
 export const purchaseShortcode = SHORTCODE_SCHEMA.purchase;
@@ -204,6 +205,7 @@ export type LocationShortcode = ShortcodeFor<"location">;
 export type MealShortcode = ShortcodeFor<"meal">;
 export type PlantingShortcode = ShortcodeFor<"planting">;
 export type GardenEntryShortcode = ShortcodeFor<"gardenEntry">;
+export type ProductCategoryShortcode = ShortcodeFor<"productCategory">;
 export type ProductShortcode = ShortcodeFor<"product">;
 export type ProjectShortcode = ShortcodeFor<"project">;
 export type PurchaseShortcode = ShortcodeFor<"purchase">;
@@ -285,6 +287,7 @@ const PARSE_CANONICAL_SHORTCODE = {
   planting: shortcodeParser("planting"),
   gardenEntry: shortcodeParser("gardenEntry"),
   product: shortcodeParser("product"),
+  productCategory: shortcodeParser("productCategory"),
   project: shortcodeParser("project"),
   purchase: shortcodeParser("purchase"),
   recipe: shortcodeParser("recipe"),

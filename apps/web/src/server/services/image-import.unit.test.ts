@@ -32,6 +32,7 @@ describe("importRecipeImageFromUrl", () => {
       imageId: testShortcode("image", "IMG-0001"),
       key: "imports/recipe.jpg",
       url: "https://images.example/imports/recipe.jpg",
+      created: true,
     });
   });
 

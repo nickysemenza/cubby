@@ -11,7 +11,7 @@
       "model": null,
       "notes": null,
       "expectedQuantity": null,
-      "category": "household",
+      "category": null,
       "images": [],
       "displayImages": [],
       "externalIds": [],
@@ -60,7 +60,12 @@
         "locationCount": 0
       },
       "onHandUnits": null,
-      "quantityVariance": null
+      "quantityVariance": null,
+      "categoryId": null,
+      "itemImageCount": 0,
+      "labelImageCount": 0,
+      "labelImages": [],
+      "classificationEvidence": ""
     }
   ],
   "meta": {

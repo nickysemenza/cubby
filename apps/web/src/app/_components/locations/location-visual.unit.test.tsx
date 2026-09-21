@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
+import { categorySummaryFixture } from "../../../../tooling/product-category-fixtures";
 import { LocationVisual } from "./location-visual";
 
 let harness: ReturnType<typeof createBrowserTestHarness>;
@@ -40,6 +41,10 @@ const image = (id: string): ImageOut =>
     sha256: null,
     renderStatus: null,
     storageStatus: null,
+    source: "unknown",
+    sourcePageUrl: null,
+    sourceAssetUrl: null,
+    sourceName: null,
     verifiedAt: null,
     createdAt: new Date("2026-01-01T00:00:00Z"),
     updatedAt: new Date("2026-01-01T00:00:00Z"),
@@ -74,7 +79,7 @@ const containerLocation = (overrides: Partial<InfLocation> = {}) =>
       name: "Two drawer tool box",
       manufacturer: "Example",
       model: "EX-2",
-      category: "storage",
+      category: categorySummaryFixture("storage"),
       coverImage: image("product"),
       price: 50,
     },

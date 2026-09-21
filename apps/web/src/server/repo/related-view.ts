@@ -147,7 +147,7 @@ const SQL_RELATED_VIEWS = {
   "project.purchasedProducts": named(),
   // KNOWN ASYMMETRY, deliberately left: the project's "Reusable resources" card
   // (`repo/project/tools.ts` `listProjectResources`) additionally restricts to
-  // `product.category IN ('tools','software')`; this column does not. Zero live
+  // Products whose inherited category feature is tools or software; this column does not. Zero live
   // edges differ today, and that card's own comment explains why it filters —
   // `ProjectToolUsage` is durable history that may predate a legitimate
   // category correction. It will diverge the first time a product with

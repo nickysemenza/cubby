@@ -192,6 +192,10 @@ export const createProductWithFood = async (
     db,
     {
       ...data,
+      categoryId:
+        data.categoryId == null
+          ? data.categoryId
+          : await resolveOrThrow(db, "productCategory", data.categoryId),
       ingredientId: ingredientEntityId,
       growsIngredientId: growsIngredientEntityId,
     },
@@ -239,6 +243,10 @@ export const updateProductWithFood = async (
     id,
     {
       ...data,
+      categoryId:
+        data.categoryId == null
+          ? data.categoryId
+          : await resolveOrThrow(db, "productCategory", data.categoryId),
       ingredientId: ingredientEntityId,
       growsIngredientId: growsIngredientEntityId,
     },

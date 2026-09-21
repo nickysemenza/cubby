@@ -139,9 +139,12 @@ function scalarBasisValue(value: FieldResolution["value"]): string | null {
   return scalar.success ? normalizeBasisValue(scalar.data) : null;
 }
 
-function normalizeBasisValue(raw: string | null | undefined): string | null {
+function normalizeBasisValue(
+  raw: string | null | undefined,
+  limit = MAX_BASIS_VALUE_LENGTH,
+): string | null {
   if (raw == null) return null;
-  const trimmed = raw.trim().slice(0, MAX_BASIS_VALUE_LENGTH);
+  const trimmed = raw.trim().slice(0, limit);
   return trimmed === "" ? null : trimmed;
 }
 
@@ -436,7 +439,15 @@ export async function suggestFields(
 
   const clientBasis = new Map<string, string | null>();
   for (const [key, value] of Object.entries(input.basis)) {
-    clientBasis.set(key, normalizeBasisValue(value));
+    clientBasis.set(
+      key,
+      normalizeBasisValue(
+        value,
+        input.entity === "product" && key === "classificationEvidence"
+          ? 8000
+          : MAX_BASIS_VALUE_LENGTH,
+      ),
+    );
   }
   const authoritativeKeys = new Set(
     Object.entries(fieldResolutions)

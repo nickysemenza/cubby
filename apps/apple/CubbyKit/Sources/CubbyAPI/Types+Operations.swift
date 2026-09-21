@@ -3480,6 +3480,7 @@ public enum Operations {
                     case planting = "planting"
                     case gardenEntry = "gardenEntry"
                     case vendorAccount = "vendorAccount"
+                    case productCategory = "productCategory"
                 }
                 /// - Remark: Generated from `#/paths/api/v1/fieldExplanation/explain/GET/query/entityType`.
                 public var entityType: Operations.FieldExplanation_explain.Input.Query.EntityTypePayload
@@ -10672,29 +10673,10 @@ public enum Operations {
                 ///
                 /// - Remark: Generated from `#/paths/api/v1/inventory/GET/query/manufacturerFilter`.
                 public var manufacturerFilter: Swift.String?
-                /// Product category
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/inventory/GET/query/CategoryFilterPayload`.
-                @frozen public enum CategoryFilterPayloadPayload: String, Codable, Hashable, Sendable, CaseIterable {
-                    case food = "food"
-                    case tools = "tools"
-                    case toolConsumables = "tool-consumables"
-                    case toolAccessories = "tool-accessories"
-                    case storage = "storage"
-                    case hardware = "hardware"
-                    case electronics = "electronics"
-                    case software = "software"
-                    case books = "books"
-                    case household = "household"
-                    case supplies = "supplies"
-                    case apparel = "apparel"
-                }
-                /// - Remark: Generated from `#/paths/api/v1/inventory/GET/query/categoryFilter`.
-                public typealias CategoryFilterPayload = [Operations.Resources_inventory_list.Input.Query.CategoryFilterPayloadPayload]
                 /// Filter by product category
                 ///
                 /// - Remark: Generated from `#/paths/api/v1/inventory/GET/query/categoryFilter`.
-                public var categoryFilter: Operations.Resources_inventory_list.Input.Query.CategoryFilterPayload?
+                public var categoryFilter: [Swift.String]?
                 /// - Remark: Generated from `#/paths/api/v1/inventory/GET/query/placementFilter`.
                 @frozen public enum PlacementFilterPayload: String, Codable, Hashable, Sendable, CaseIterable {
                     case stock = "stock"
@@ -10805,7 +10787,7 @@ public enum Operations {
                     locationIdFilter: Operations.Resources_inventory_list.Input.Query.LocationIdFilterPayload? = nil,
                     productIdFilter: Operations.Resources_inventory_list.Input.Query.ProductIdFilterPayload? = nil,
                     manufacturerFilter: Swift.String? = nil,
-                    categoryFilter: Operations.Resources_inventory_list.Input.Query.CategoryFilterPayload? = nil,
+                    categoryFilter: [Swift.String]? = nil,
                     placementFilter: Operations.Resources_inventory_list.Input.Query.PlacementFilterPayload? = nil,
                     locationRole: Operations.Resources_inventory_list.Input.Query.LocationRolePayload? = nil,
                     verifiedPresenceFilter: Operations.Resources_inventory_list.Input.Query.VerifiedPresenceFilterPayload? = nil,
@@ -19129,6 +19111,791 @@ public enum Operations {
             }
         }
     }
+    /// Use page=1&pageSize=20&sort=name,-createdAt. Filters are individual query parameters: text is literal, numbers and booleans are plain, and a list repeats its key (tag=a&tag=b). Response pagination metadata remains zero-based. Resource methods depend on entity capabilities.
+    ///
+    /// - Remark: HTTP `GET /api/v1/product-categories`.
+    /// - Remark: Generated from `#/paths//api/v1/product-categories/get(resources.productCategory.list)`.
+    public enum Resources_productCategory_list {
+        public static let id: Swift.String = "resources.productCategory.list"
+        public struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/api/v1/product-categories/GET/query`.
+            public struct Query: Sendable, Hashable {
+                /// Calendar day as "YYYY-MM-DD"
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/product-categories/GET/query/createdFrom`.
+                public var createdFrom: Swift.String?
+                /// Calendar day as "YYYY-MM-DD"
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/product-categories/GET/query/createdTo`.
+                public var createdTo: Swift.String?
+                /// Calendar day as "YYYY-MM-DD"
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/product-categories/GET/query/updatedFrom`.
+                public var updatedFrom: Swift.String?
+                /// Calendar day as "YYYY-MM-DD"
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/product-categories/GET/query/updatedTo`.
+                public var updatedTo: Swift.String?
+                /// - Remark: Generated from `#/paths/api/v1/product-categories/GET/query/search`.
+                public var search: Swift.String?
+                /// Page number, starting at 1 (default 1)
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/product-categories/GET/query/page`.
+                public var page: Swift.Int?
+                /// Items per page (default 10, maximum 500)
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/product-categories/GET/query/pageSize`.
+                public var pageSize: Swift.Int?
+                /// Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: name, sortOrder, updatedAt. Default: -sortOrder
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/product-categories/GET/query/sort`.
+                public var sort: Swift.String?
+                /// - Remark: Generated from `#/paths/api/v1/product-categories/GET/query/groupBy`.
+                @frozen public enum GroupByPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case name = "name"
+                    case sortOrder = "sortOrder"
+                    case updatedAt = "updatedAt"
+                }
+                /// Group rows by one field. One of: name, sortOrder, updatedAt
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/product-categories/GET/query/groupBy`.
+                public var groupBy: Operations.Resources_productCategory_list.Input.Query.GroupByPayload?
+                /// Creates a new `Query`.
+                ///
+                /// - Parameters:
+                ///   - createdFrom: Calendar day as "YYYY-MM-DD"
+                ///   - createdTo: Calendar day as "YYYY-MM-DD"
+                ///   - updatedFrom: Calendar day as "YYYY-MM-DD"
+                ///   - updatedTo: Calendar day as "YYYY-MM-DD"
+                ///   - search:
+                ///   - page: Page number, starting at 1 (default 1)
+                ///   - pageSize: Items per page (default 10, maximum 500)
+                ///   - sort: Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: name, sortOrder, updatedAt. Default: -sortOrder
+                ///   - groupBy: Group rows by one field. One of: name, sortOrder, updatedAt
+                public init(
+                    createdFrom: Swift.String? = nil,
+                    createdTo: Swift.String? = nil,
+                    updatedFrom: Swift.String? = nil,
+                    updatedTo: Swift.String? = nil,
+                    search: Swift.String? = nil,
+                    page: Swift.Int? = nil,
+                    pageSize: Swift.Int? = nil,
+                    sort: Swift.String? = nil,
+                    groupBy: Operations.Resources_productCategory_list.Input.Query.GroupByPayload? = nil
+                ) {
+                    self.createdFrom = createdFrom
+                    self.createdTo = createdTo
+                    self.updatedFrom = updatedFrom
+                    self.updatedTo = updatedTo
+                    self.search = search
+                    self.page = page
+                    self.pageSize = pageSize
+                    self.sort = sort
+                    self.groupBy = groupBy
+                }
+            }
+            public var query: Operations.Resources_productCategory_list.Input.Query
+            /// - Remark: Generated from `#/paths/api/v1/product-categories/GET/header`.
+            public struct Headers: Sendable, Hashable {
+                public var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_productCategory_list.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - accept:
+                public init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_productCategory_list.AcceptableContentType>] = .defaultValues()) {
+                    self.accept = accept
+                }
+            }
+            public var headers: Operations.Resources_productCategory_list.Input.Headers
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - query:
+            ///   - headers:
+            public init(
+                query: Operations.Resources_productCategory_list.Input.Query = .init(),
+                headers: Operations.Resources_productCategory_list.Input.Headers = .init()
+            ) {
+                self.query = query
+                self.headers = headers
+            }
+        }
+        @frozen public enum Output: Sendable, Hashable {
+            public struct Ok: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/product-categories/GET/responses/200/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/product-categories/GET/responses/200/content/application\/json`.
+                    case json(Components.Schemas.ProductCategoryListPage)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.ProductCategoryListPage {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.Resources_productCategory_list.Output.Ok.Body
+                /// Creates a new `Ok`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.Resources_productCategory_list.Output.Ok.Body) {
+                    self.body = body
+                }
+            }
+            /// 200
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/product-categories/get(resources.productCategory.list)/responses/200`.
+            ///
+            /// HTTP response code: `200 ok`.
+            case ok(Operations.Resources_productCategory_list.Output.Ok)
+            /// The associated value of the enum case if `self` is `.ok`.
+            ///
+            /// - Throws: An error if `self` is not `.ok`.
+            /// - SeeAlso: `.ok`.
+            public var ok: Operations.Resources_productCategory_list.Output.Ok {
+                get throws {
+                    switch self {
+                    case let .ok(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            public struct Default: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/product-categories/GET/responses/default/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/product-categories/GET/responses/default/content/application\/json`.
+                    case json(Components.Schemas.ApiError)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.ApiError {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.Resources_productCategory_list.Output.Default.Body
+                /// Creates a new `Default`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.Resources_productCategory_list.Output.Default.Body) {
+                    self.body = body
+                }
+            }
+            /// Error
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/product-categories/get(resources.productCategory.list)/responses/default`.
+            ///
+            /// HTTP response code: `default`.
+            case `default`(statusCode: Swift.Int, Operations.Resources_productCategory_list.Output.Default)
+            /// The associated value of the enum case if `self` is `.`default``.
+            ///
+            /// - Throws: An error if `self` is not `.`default``.
+            /// - SeeAlso: `.`default``.
+            public var `default`: Operations.Resources_productCategory_list.Output.Default {
+                get throws {
+                    switch self {
+                    case let .`default`(_, response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "default",
+                            response: self
+                        )
+                    }
+                }
+            }
+        }
+        @frozen public enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            public init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            public var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            public static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
+    /// - Remark: HTTP `POST /api/v1/product-categories`.
+    /// - Remark: Generated from `#/paths//api/v1/product-categories/post(resources.productCategory.create)`.
+    public enum Resources_productCategory_create {
+        public static let id: Swift.String = "resources.productCategory.create"
+        public struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/api/v1/product-categories/POST/header`.
+            public struct Headers: Sendable, Hashable {
+                public var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_productCategory_create.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - accept:
+                public init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_productCategory_create.AcceptableContentType>] = .defaultValues()) {
+                    self.accept = accept
+                }
+            }
+            public var headers: Operations.Resources_productCategory_create.Input.Headers
+            /// - Remark: Generated from `#/paths/api/v1/product-categories/POST/requestBody`.
+            @frozen public enum Body: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/product-categories/POST/requestBody/content/application\/json`.
+                case json(Components.Schemas.ProductCategoryCreateInput)
+            }
+            public var body: Operations.Resources_productCategory_create.Input.Body?
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - headers:
+            ///   - body:
+            public init(
+                headers: Operations.Resources_productCategory_create.Input.Headers = .init(),
+                body: Operations.Resources_productCategory_create.Input.Body? = nil
+            ) {
+                self.headers = headers
+                self.body = body
+            }
+        }
+        @frozen public enum Output: Sendable, Hashable {
+            public struct Created: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/product-categories/POST/responses/201/headers`.
+                public struct Headers: Sendable, Hashable {
+                    /// Created resource URL
+                    ///
+                    /// - Remark: Generated from `#/paths/api/v1/product-categories/POST/responses/201/headers/Location`.
+                    public var location: Swift.String?
+                    /// Creates a new `Headers`.
+                    ///
+                    /// - Parameters:
+                    ///   - location: Created resource URL
+                    public init(location: Swift.String? = nil) {
+                        self.location = location
+                    }
+                }
+                /// Received HTTP response headers
+                public var headers: Operations.Resources_productCategory_create.Output.Created.Headers
+                /// - Remark: Generated from `#/paths/api/v1/product-categories/POST/responses/201/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/product-categories/POST/responses/201/content/application\/json`.
+                    case json(Components.Schemas.GeneratedEntityMutationCreateResultProductCategory)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.GeneratedEntityMutationCreateResultProductCategory {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.Resources_productCategory_create.Output.Created.Body
+                /// Creates a new `Created`.
+                ///
+                /// - Parameters:
+                ///   - headers: Received HTTP response headers
+                ///   - body: Received HTTP response body
+                public init(
+                    headers: Operations.Resources_productCategory_create.Output.Created.Headers = .init(),
+                    body: Operations.Resources_productCategory_create.Output.Created.Body
+                ) {
+                    self.headers = headers
+                    self.body = body
+                }
+            }
+            /// 201
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/product-categories/post(resources.productCategory.create)/responses/201`.
+            ///
+            /// HTTP response code: `201 created`.
+            case created(Operations.Resources_productCategory_create.Output.Created)
+            /// The associated value of the enum case if `self` is `.created`.
+            ///
+            /// - Throws: An error if `self` is not `.created`.
+            /// - SeeAlso: `.created`.
+            public var created: Operations.Resources_productCategory_create.Output.Created {
+                get throws {
+                    switch self {
+                    case let .created(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "created",
+                            response: self
+                        )
+                    }
+                }
+            }
+            public struct Default: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/product-categories/POST/responses/default/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/product-categories/POST/responses/default/content/application\/json`.
+                    case json(Components.Schemas.ApiError)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.ApiError {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.Resources_productCategory_create.Output.Default.Body
+                /// Creates a new `Default`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.Resources_productCategory_create.Output.Default.Body) {
+                    self.body = body
+                }
+            }
+            /// Error
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/product-categories/post(resources.productCategory.create)/responses/default`.
+            ///
+            /// HTTP response code: `default`.
+            case `default`(statusCode: Swift.Int, Operations.Resources_productCategory_create.Output.Default)
+            /// The associated value of the enum case if `self` is `.`default``.
+            ///
+            /// - Throws: An error if `self` is not `.`default``.
+            /// - SeeAlso: `.`default``.
+            public var `default`: Operations.Resources_productCategory_create.Output.Default {
+                get throws {
+                    switch self {
+                    case let .`default`(_, response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "default",
+                            response: self
+                        )
+                    }
+                }
+            }
+        }
+        @frozen public enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            public init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            public var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            public static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
+    /// - Remark: HTTP `GET /api/v1/product-categories/{id}`.
+    /// - Remark: Generated from `#/paths//api/v1/product-categories/{id}/get(resources.productCategory.get)`.
+    public enum Resources_productCategory_get {
+        public static let id: Swift.String = "resources.productCategory.get"
+        public struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/api/v1/product-categories/{id}/GET/path`.
+            public struct Path: Sendable, Hashable {
+                /// productCategory shortcode, e.g. CAT-4K7M
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/product-categories/{id}/GET/path/id`.
+                public var id: Swift.String
+                /// Creates a new `Path`.
+                ///
+                /// - Parameters:
+                ///   - id: productCategory shortcode, e.g. CAT-4K7M
+                public init(id: Swift.String) {
+                    self.id = id
+                }
+            }
+            public var path: Operations.Resources_productCategory_get.Input.Path
+            /// - Remark: Generated from `#/paths/api/v1/product-categories/{id}/GET/header`.
+            public struct Headers: Sendable, Hashable {
+                public var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_productCategory_get.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - accept:
+                public init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_productCategory_get.AcceptableContentType>] = .defaultValues()) {
+                    self.accept = accept
+                }
+            }
+            public var headers: Operations.Resources_productCategory_get.Input.Headers
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - path:
+            ///   - headers:
+            public init(
+                path: Operations.Resources_productCategory_get.Input.Path,
+                headers: Operations.Resources_productCategory_get.Input.Headers = .init()
+            ) {
+                self.path = path
+                self.headers = headers
+            }
+        }
+        @frozen public enum Output: Sendable, Hashable {
+            public struct Ok: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/product-categories/{id}/GET/responses/200/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/product-categories/{id}/GET/responses/200/content/application\/json`.
+                    case json(Components.Schemas.ProductCategoryDetail)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.ProductCategoryDetail {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.Resources_productCategory_get.Output.Ok.Body
+                /// Creates a new `Ok`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.Resources_productCategory_get.Output.Ok.Body) {
+                    self.body = body
+                }
+            }
+            /// 200
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/product-categories/{id}/get(resources.productCategory.get)/responses/200`.
+            ///
+            /// HTTP response code: `200 ok`.
+            case ok(Operations.Resources_productCategory_get.Output.Ok)
+            /// The associated value of the enum case if `self` is `.ok`.
+            ///
+            /// - Throws: An error if `self` is not `.ok`.
+            /// - SeeAlso: `.ok`.
+            public var ok: Operations.Resources_productCategory_get.Output.Ok {
+                get throws {
+                    switch self {
+                    case let .ok(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            public struct Default: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/product-categories/{id}/GET/responses/default/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/product-categories/{id}/GET/responses/default/content/application\/json`.
+                    case json(Components.Schemas.ApiError)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.ApiError {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.Resources_productCategory_get.Output.Default.Body
+                /// Creates a new `Default`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.Resources_productCategory_get.Output.Default.Body) {
+                    self.body = body
+                }
+            }
+            /// Error
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/product-categories/{id}/get(resources.productCategory.get)/responses/default`.
+            ///
+            /// HTTP response code: `default`.
+            case `default`(statusCode: Swift.Int, Operations.Resources_productCategory_get.Output.Default)
+            /// The associated value of the enum case if `self` is `.`default``.
+            ///
+            /// - Throws: An error if `self` is not `.`default``.
+            /// - SeeAlso: `.`default``.
+            public var `default`: Operations.Resources_productCategory_get.Output.Default {
+                get throws {
+                    switch self {
+                    case let .`default`(_, response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "default",
+                            response: self
+                        )
+                    }
+                }
+            }
+        }
+        @frozen public enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            public init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            public var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            public static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
+    /// - Remark: HTTP `PATCH /api/v1/product-categories/{id}`.
+    /// - Remark: Generated from `#/paths//api/v1/product-categories/{id}/patch(resources.productCategory.update)`.
+    public enum Resources_productCategory_update {
+        public static let id: Swift.String = "resources.productCategory.update"
+        public struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/api/v1/product-categories/{id}/PATCH/path`.
+            public struct Path: Sendable, Hashable {
+                /// productCategory shortcode, e.g. CAT-4K7M
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/product-categories/{id}/PATCH/path/id`.
+                public var id: Swift.String
+                /// Creates a new `Path`.
+                ///
+                /// - Parameters:
+                ///   - id: productCategory shortcode, e.g. CAT-4K7M
+                public init(id: Swift.String) {
+                    self.id = id
+                }
+            }
+            public var path: Operations.Resources_productCategory_update.Input.Path
+            /// - Remark: Generated from `#/paths/api/v1/product-categories/{id}/PATCH/header`.
+            public struct Headers: Sendable, Hashable {
+                public var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_productCategory_update.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - accept:
+                public init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_productCategory_update.AcceptableContentType>] = .defaultValues()) {
+                    self.accept = accept
+                }
+            }
+            public var headers: Operations.Resources_productCategory_update.Input.Headers
+            /// - Remark: Generated from `#/paths/api/v1/product-categories/{id}/PATCH/requestBody`.
+            @frozen public enum Body: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/product-categories/{id}/PATCH/requestBody/content/application\/json`.
+                case json(Components.Schemas.ProductCategoryUpdateData)
+            }
+            public var body: Operations.Resources_productCategory_update.Input.Body?
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - path:
+            ///   - headers:
+            ///   - body:
+            public init(
+                path: Operations.Resources_productCategory_update.Input.Path,
+                headers: Operations.Resources_productCategory_update.Input.Headers = .init(),
+                body: Operations.Resources_productCategory_update.Input.Body? = nil
+            ) {
+                self.path = path
+                self.headers = headers
+                self.body = body
+            }
+        }
+        @frozen public enum Output: Sendable, Hashable {
+            public struct Ok: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/product-categories/{id}/PATCH/responses/200/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/product-categories/{id}/PATCH/responses/200/content/application\/json`.
+                    case json(Components.Schemas.GeneratedEntityMutationUpdateResultProductCategory)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.GeneratedEntityMutationUpdateResultProductCategory {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.Resources_productCategory_update.Output.Ok.Body
+                /// Creates a new `Ok`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.Resources_productCategory_update.Output.Ok.Body) {
+                    self.body = body
+                }
+            }
+            /// 200
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/product-categories/{id}/patch(resources.productCategory.update)/responses/200`.
+            ///
+            /// HTTP response code: `200 ok`.
+            case ok(Operations.Resources_productCategory_update.Output.Ok)
+            /// The associated value of the enum case if `self` is `.ok`.
+            ///
+            /// - Throws: An error if `self` is not `.ok`.
+            /// - SeeAlso: `.ok`.
+            public var ok: Operations.Resources_productCategory_update.Output.Ok {
+                get throws {
+                    switch self {
+                    case let .ok(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            public struct Default: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/product-categories/{id}/PATCH/responses/default/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/product-categories/{id}/PATCH/responses/default/content/application\/json`.
+                    case json(Components.Schemas.ApiError)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.ApiError {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.Resources_productCategory_update.Output.Default.Body
+                /// Creates a new `Default`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.Resources_productCategory_update.Output.Default.Body) {
+                    self.body = body
+                }
+            }
+            /// Error
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/product-categories/{id}/patch(resources.productCategory.update)/responses/default`.
+            ///
+            /// HTTP response code: `default`.
+            case `default`(statusCode: Swift.Int, Operations.Resources_productCategory_update.Output.Default)
+            /// The associated value of the enum case if `self` is `.`default``.
+            ///
+            /// - Throws: An error if `self` is not `.`default``.
+            /// - SeeAlso: `.`default``.
+            public var `default`: Operations.Resources_productCategory_update.Output.Default {
+                get throws {
+                    switch self {
+                    case let .`default`(_, response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "default",
+                            response: self
+                        )
+                    }
+                }
+            }
+        }
+        @frozen public enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            public init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            public var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            public static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
     /// - Remark: HTTP `POST /api/v1/product/findOrCreateByCode`.
     /// - Remark: Generated from `#/paths//api/v1/product/findOrCreateByCode/post(product.findOrCreateByCode)`.
     public enum Product_findOrCreateByCode {
@@ -19623,29 +20390,6 @@ public enum Operations {
                 }
                 /// - Remark: Generated from `#/paths/api/v1/products/GET/query/modelPresenceFilter`.
                 public var modelPresenceFilter: Operations.Resources_product_list.Input.Query.ModelPresenceFilterPayload?
-                /// Product category
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/products/GET/query/CategoryFilterPayload`.
-                @frozen public enum CategoryFilterPayloadPayload: String, Codable, Hashable, Sendable, CaseIterable {
-                    case food = "food"
-                    case tools = "tools"
-                    case toolConsumables = "tool-consumables"
-                    case toolAccessories = "tool-accessories"
-                    case storage = "storage"
-                    case hardware = "hardware"
-                    case electronics = "electronics"
-                    case software = "software"
-                    case books = "books"
-                    case household = "household"
-                    case supplies = "supplies"
-                    case apparel = "apparel"
-                }
-                /// - Remark: Generated from `#/paths/api/v1/products/GET/query/categoryFilter`.
-                public typealias CategoryFilterPayload = [Operations.Resources_product_list.Input.Query.CategoryFilterPayloadPayload]
-                /// Filter by category
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/products/GET/query/categoryFilter`.
-                public var categoryFilter: Operations.Resources_product_list.Input.Query.CategoryFilterPayload?
                 /// - Remark: Generated from `#/paths/api/v1/products/GET/query/expectedQuantityMin`.
                 public var expectedQuantityMin: Swift.Double?
                 /// - Remark: Generated from `#/paths/api/v1/products/GET/query/expectedQuantityMax`.
@@ -19980,6 +20724,27 @@ public enum Operations {
                 }
                 /// - Remark: Generated from `#/paths/api/v1/products/GET/query/tagsPresenceFilter`.
                 public var tagsPresenceFilter: Operations.Resources_product_list.Input.Query.TagsPresenceFilterPayload?
+                /// - Remark: Generated from `#/paths/api/v1/products/GET/query/categoryFilter`.
+                public var categoryFilter: [Swift.String]?
+                /// - Remark: Generated from `#/paths/api/v1/products/GET/query/CategoryFeatureFilterPayload`.
+                @frozen public enum CategoryFeatureFilterPayloadPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case food = "food"
+                    case books = "books"
+                    case tools = "tools"
+                    case toolConsumables = "tool-consumables"
+                    case toolAccessories = "tool-accessories"
+                    case storage = "storage"
+                    case hardware = "hardware"
+                    case electronics = "electronics"
+                    case software = "software"
+                    case household = "household"
+                    case supplies = "supplies"
+                    case apparel = "apparel"
+                }
+                /// - Remark: Generated from `#/paths/api/v1/products/GET/query/categoryFeatureFilter`.
+                public typealias CategoryFeatureFilterPayload = [Operations.Resources_product_list.Input.Query.CategoryFeatureFilterPayloadPayload]
+                /// - Remark: Generated from `#/paths/api/v1/products/GET/query/categoryFeatureFilter`.
+                public var categoryFeatureFilter: Operations.Resources_product_list.Input.Query.CategoryFeatureFilterPayload?
                 /// - Remark: Generated from `#/paths/api/v1/products/GET/query/categoryPresenceFilter`.
                 @frozen public enum CategoryPresenceFilterPayload: String, Codable, Hashable, Sendable, CaseIterable {
                     case has = "has"
@@ -20147,7 +20912,6 @@ public enum Operations {
                 ///   - upcFilter: Filter by UPC/barcode — matches ANY of the product's barcodes
                 ///   - modelFilter: Filter by model number — a tool's real identity when the name is generic.
                 ///   - modelPresenceFilter:
-                ///   - categoryFilter: Filter by category
                 ///   - expectedQuantityMin:
                 ///   - expectedQuantityMax:
                 ///   - notesFilter:
@@ -20176,6 +20940,8 @@ public enum Operations {
                 ///   - taskDueFrom: Calendar day as "YYYY-MM-DD"
                 ///   - taskDueTo: Calendar day as "YYYY-MM-DD"
                 ///   - tagsPresenceFilter:
+                ///   - categoryFilter:
+                ///   - categoryFeatureFilter:
                 ///   - categoryPresenceFilter:
                 ///   - expenseCountMin:
                 ///   - expenseCountMax:
@@ -20238,7 +21004,6 @@ public enum Operations {
                     upcFilter: Swift.String? = nil,
                     modelFilter: Swift.String? = nil,
                     modelPresenceFilter: Operations.Resources_product_list.Input.Query.ModelPresenceFilterPayload? = nil,
-                    categoryFilter: Operations.Resources_product_list.Input.Query.CategoryFilterPayload? = nil,
                     expectedQuantityMin: Swift.Double? = nil,
                     expectedQuantityMax: Swift.Double? = nil,
                     notesFilter: Swift.String? = nil,
@@ -20267,6 +21032,8 @@ public enum Operations {
                     taskDueFrom: Swift.String? = nil,
                     taskDueTo: Swift.String? = nil,
                     tagsPresenceFilter: Operations.Resources_product_list.Input.Query.TagsPresenceFilterPayload? = nil,
+                    categoryFilter: [Swift.String]? = nil,
+                    categoryFeatureFilter: Operations.Resources_product_list.Input.Query.CategoryFeatureFilterPayload? = nil,
                     categoryPresenceFilter: Operations.Resources_product_list.Input.Query.CategoryPresenceFilterPayload? = nil,
                     expenseCountMin: Swift.Int? = nil,
                     expenseCountMax: Swift.Int? = nil,
@@ -20329,7 +21096,6 @@ public enum Operations {
                     self.upcFilter = upcFilter
                     self.modelFilter = modelFilter
                     self.modelPresenceFilter = modelPresenceFilter
-                    self.categoryFilter = categoryFilter
                     self.expectedQuantityMin = expectedQuantityMin
                     self.expectedQuantityMax = expectedQuantityMax
                     self.notesFilter = notesFilter
@@ -20358,6 +21124,8 @@ public enum Operations {
                     self.taskDueFrom = taskDueFrom
                     self.taskDueTo = taskDueTo
                     self.tagsPresenceFilter = tagsPresenceFilter
+                    self.categoryFilter = categoryFilter
+                    self.categoryFeatureFilter = categoryFeatureFilter
                     self.categoryPresenceFilter = categoryPresenceFilter
                     self.expenseCountMin = expenseCountMin
                     self.expenseCountMax = expenseCountMax
@@ -21243,29 +22011,6 @@ public enum Operations {
                 }
                 /// - Remark: Generated from `#/paths/api/v1/products/timeline/GET/query/modelPresenceFilter`.
                 public var modelPresenceFilter: Operations.Resources_product_timeline.Input.Query.ModelPresenceFilterPayload?
-                /// Product category
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/products/timeline/GET/query/CategoryFilterPayload`.
-                @frozen public enum CategoryFilterPayloadPayload: String, Codable, Hashable, Sendable, CaseIterable {
-                    case food = "food"
-                    case tools = "tools"
-                    case toolConsumables = "tool-consumables"
-                    case toolAccessories = "tool-accessories"
-                    case storage = "storage"
-                    case hardware = "hardware"
-                    case electronics = "electronics"
-                    case software = "software"
-                    case books = "books"
-                    case household = "household"
-                    case supplies = "supplies"
-                    case apparel = "apparel"
-                }
-                /// - Remark: Generated from `#/paths/api/v1/products/timeline/GET/query/categoryFilter`.
-                public typealias CategoryFilterPayload = [Operations.Resources_product_timeline.Input.Query.CategoryFilterPayloadPayload]
-                /// Filter by category
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/products/timeline/GET/query/categoryFilter`.
-                public var categoryFilter: Operations.Resources_product_timeline.Input.Query.CategoryFilterPayload?
                 /// - Remark: Generated from `#/paths/api/v1/products/timeline/GET/query/expectedQuantityMin`.
                 public var expectedQuantityMin: Swift.Double?
                 /// - Remark: Generated from `#/paths/api/v1/products/timeline/GET/query/expectedQuantityMax`.
@@ -21600,6 +22345,27 @@ public enum Operations {
                 }
                 /// - Remark: Generated from `#/paths/api/v1/products/timeline/GET/query/tagsPresenceFilter`.
                 public var tagsPresenceFilter: Operations.Resources_product_timeline.Input.Query.TagsPresenceFilterPayload?
+                /// - Remark: Generated from `#/paths/api/v1/products/timeline/GET/query/categoryFilter`.
+                public var categoryFilter: [Swift.String]?
+                /// - Remark: Generated from `#/paths/api/v1/products/timeline/GET/query/CategoryFeatureFilterPayload`.
+                @frozen public enum CategoryFeatureFilterPayloadPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case food = "food"
+                    case books = "books"
+                    case tools = "tools"
+                    case toolConsumables = "tool-consumables"
+                    case toolAccessories = "tool-accessories"
+                    case storage = "storage"
+                    case hardware = "hardware"
+                    case electronics = "electronics"
+                    case software = "software"
+                    case household = "household"
+                    case supplies = "supplies"
+                    case apparel = "apparel"
+                }
+                /// - Remark: Generated from `#/paths/api/v1/products/timeline/GET/query/categoryFeatureFilter`.
+                public typealias CategoryFeatureFilterPayload = [Operations.Resources_product_timeline.Input.Query.CategoryFeatureFilterPayloadPayload]
+                /// - Remark: Generated from `#/paths/api/v1/products/timeline/GET/query/categoryFeatureFilter`.
+                public var categoryFeatureFilter: Operations.Resources_product_timeline.Input.Query.CategoryFeatureFilterPayload?
                 /// - Remark: Generated from `#/paths/api/v1/products/timeline/GET/query/categoryPresenceFilter`.
                 @frozen public enum CategoryPresenceFilterPayload: String, Codable, Hashable, Sendable, CaseIterable {
                     case has = "has"
@@ -21764,7 +22530,6 @@ public enum Operations {
                 ///   - upcFilter: Filter by UPC/barcode — matches ANY of the product's barcodes
                 ///   - modelFilter: Filter by model number — a tool's real identity when the name is generic.
                 ///   - modelPresenceFilter:
-                ///   - categoryFilter: Filter by category
                 ///   - expectedQuantityMin:
                 ///   - expectedQuantityMax:
                 ///   - notesFilter:
@@ -21793,6 +22558,8 @@ public enum Operations {
                 ///   - taskDueFrom: Calendar day as "YYYY-MM-DD"
                 ///   - taskDueTo: Calendar day as "YYYY-MM-DD"
                 ///   - tagsPresenceFilter:
+                ///   - categoryFilter:
+                ///   - categoryFeatureFilter:
                 ///   - categoryPresenceFilter:
                 ///   - expenseCountMin:
                 ///   - expenseCountMax:
@@ -21855,7 +22622,6 @@ public enum Operations {
                     upcFilter: Swift.String? = nil,
                     modelFilter: Swift.String? = nil,
                     modelPresenceFilter: Operations.Resources_product_timeline.Input.Query.ModelPresenceFilterPayload? = nil,
-                    categoryFilter: Operations.Resources_product_timeline.Input.Query.CategoryFilterPayload? = nil,
                     expectedQuantityMin: Swift.Double? = nil,
                     expectedQuantityMax: Swift.Double? = nil,
                     notesFilter: Swift.String? = nil,
@@ -21884,6 +22650,8 @@ public enum Operations {
                     taskDueFrom: Swift.String? = nil,
                     taskDueTo: Swift.String? = nil,
                     tagsPresenceFilter: Operations.Resources_product_timeline.Input.Query.TagsPresenceFilterPayload? = nil,
+                    categoryFilter: [Swift.String]? = nil,
+                    categoryFeatureFilter: Operations.Resources_product_timeline.Input.Query.CategoryFeatureFilterPayload? = nil,
                     categoryPresenceFilter: Operations.Resources_product_timeline.Input.Query.CategoryPresenceFilterPayload? = nil,
                     expenseCountMin: Swift.Int? = nil,
                     expenseCountMax: Swift.Int? = nil,
@@ -21946,7 +22714,6 @@ public enum Operations {
                     self.upcFilter = upcFilter
                     self.modelFilter = modelFilter
                     self.modelPresenceFilter = modelPresenceFilter
-                    self.categoryFilter = categoryFilter
                     self.expectedQuantityMin = expectedQuantityMin
                     self.expectedQuantityMax = expectedQuantityMax
                     self.notesFilter = notesFilter
@@ -21975,6 +22742,8 @@ public enum Operations {
                     self.taskDueFrom = taskDueFrom
                     self.taskDueTo = taskDueTo
                     self.tagsPresenceFilter = tagsPresenceFilter
+                    self.categoryFilter = categoryFilter
+                    self.categoryFeatureFilter = categoryFeatureFilter
                     self.categoryPresenceFilter = categoryPresenceFilter
                     self.expenseCountMin = expenseCountMin
                     self.expenseCountMax = expenseCountMax
@@ -25892,6 +26661,7 @@ public enum Operations {
                     case planting = "planting"
                     case gardenEntry = "gardenEntry"
                     case vendorAccount = "vendorAccount"
+                    case productCategory = "productCategory"
                 }
                 /// - Remark: Generated from `#/paths/api/v1/recommendations/forEntity/GET/query/entityType`.
                 public var entityType: Operations.Recommendations_forEntity.Input.Query.EntityTypePayload

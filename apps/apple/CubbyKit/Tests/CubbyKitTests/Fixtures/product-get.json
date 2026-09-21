@@ -9,7 +9,7 @@
   "model": null,
   "notes": null,
   "expectedQuantity": null,
-  "category": "household",
+  "category": null,
   "images": [],
   "externalIds": [],
   "price": null,
@@ -55,5 +55,10 @@
   "onHandUnits": null,
   "quantityVariance": null,
   "displayImages": [],
-  "attachments": []
+  "attachments": [],
+  "categoryId": null,
+  "itemImageCount": 0,
+  "labelImageCount": 0,
+  "labelImages": [],
+  "classificationEvidence": ""
 }

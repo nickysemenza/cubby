@@ -184,6 +184,38 @@ struct EntityRowTests {
         #expect(detail.createdAt.timeIntervalSince1970 > 0)
     }
 
+    /// Product image attachments carry their attachment purpose alongside the shared image
+    /// provenance. This must remain one flattened wire object: a closed `allOf` image schema
+    /// rejects the otherwise valid `purpose` key in generated Swift decoding.
+    @Test func productImageAttachmentDecodesSourceAndPurposeTogether() throws {
+        var payload = try #require(
+            Fixtures.decode(JSONValue.self, from: "product-get.json").objectValue)
+        payload["images"] = [
+            [
+                "id": "IMG-2345",
+                "url": "https://images.example/catalog.jpg",
+                "key": "products/catalog.jpg",
+                "filename": "catalog.jpg",
+                "size": 123,
+                "contentType": "image/jpeg",
+                "status": "UPLOADED",
+                "source": "catalog",
+                "sourcePageUrl": "https://catalog.example/products/sample",
+                "sourceAssetUrl": "https://catalog.example/images/sample.jpg",
+                "sourceName": "Example Catalog",
+                "useOriginal": true,
+                "createdAt": "2026-01-01T00:00:00.000Z",
+                "updatedAt": "2026-01-01T00:00:00.000Z",
+                "purpose": "item",
+            ]
+        ]
+
+        let row = try #require(product.row(from: .object(payload)))
+        let attachment = try #require(try row.decode(ProductDetail.self).images.first)
+        #expect(attachment.source == .catalog)
+        #expect(attachment.purpose == .item)
+    }
+
     @Test func imageIDsReadAttachmentsInOrder() {
         let object: JSONValue = [
             "id": "PRD-2345", "name": "Sample",
@@ -200,12 +232,22 @@ struct EntityRowTests {
     /// manufacturer 20, category 30), not a hand-named key.
     @Test func subtitleFollowsTheCatalogSubtitleSlotPriority() {
         let withManufacturer: JSONValue = [
-            "id": "PRD-2345", "name": "Sample", "manufacturer": "Acme", "category": "tools",
+            "id": "PRD-2345", "name": "Sample", "manufacturer": "Acme",
+            "category": [
+                "id": "CAT-2224", "name": "Tools", "path": [["id": "CAT-2224", "name": "Tools"]],
+                "feature": "tools",
+            ],
         ]
         #expect(product.row(from: withManufacturer)?.subtitle == "Acme")
 
-        let categoryOnly: JSONValue = ["id": "PRD-2345", "name": "Sample", "category": "tools"]
-        #expect(product.row(from: categoryOnly)?.subtitle == "tools")
+        let categoryOnly: JSONValue = [
+            "id": "PRD-2345", "name": "Sample", "categoryId": "CAT-2224",
+            "category": [
+                "id": "CAT-2224", "name": "Tools", "path": [["id": "CAT-2224", "name": "Tools"]],
+                "feature": "tools",
+            ],
+        ]
+        #expect(product.row(from: categoryOnly)?.subtitle == "Tools")
 
         let neither: JSONValue = ["id": "PRD-2345", "name": "Sample"]
         #expect(product.row(from: neither)?.subtitle == nil)

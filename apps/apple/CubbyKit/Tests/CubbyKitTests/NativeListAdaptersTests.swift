@@ -205,11 +205,11 @@ struct NativeListAdaptersTests {
         let date = Date(timeIntervalSince1970: 1_700_000_000)
         let pending = ImageWithEntity(
             id: ImageCode("IMG-1"), url: "https://images.example/pending.jpg", key: "pending-key",
-            filename: "pending.jpg", size: 1, contentType: "image/jpeg", status: .pending,
+            filename: "pending.jpg", size: 1, contentType: "image/jpeg", status: .pending, source: .unknown,
             useOriginal: false, createdAt: date, updatedAt: date, associations: [])
         let uploaded = ImageWithEntity(
             id: ImageCode("IMG-2"), url: "https://images.example/ready.jpg", key: "ready-key",
-            filename: "ready.jpg", size: 1, contentType: "image/jpeg", status: .uploaded,
+            filename: "ready.jpg", size: 1, contentType: "image/jpeg", status: .uploaded, source: .unknown,
             useOriginal: false, createdAt: date, updatedAt: date, associations: [])
         return pagePayload([pending, uploaded])
     }()

@@ -1,4 +1,5 @@
 import { tradeSchema } from "./task-fields";
+import { productCategoryShortcode } from "./identifier-fields";
 import { inventoryPlacementValues } from "@cubby/shared";
 import { fdcId } from "@cubby/usda-schemas";
 import { z } from "zod";
@@ -22,7 +23,7 @@ import {
   productShortcode,
 } from "./identifiers";
 import { locationOut, locationType } from "./location";
-import { productCategory } from "./product";
+import { productCategory } from "./product-fields";
 import { duplicateUniqueProductSchema } from "./problems";
 import {
   createItemsResponseSchema,
@@ -93,7 +94,7 @@ export const inventoryFilterFields = {
     .string()
     .optional()
     .describe("Filter by product manufacturer (substring)"),
-  categoryFilter: oneOrMany(productCategory)
+  categoryFilter: oneOrMany(productCategoryShortcode)
     .optional()
     .describe("Filter by product category"),
   placementFilter: inventoryPlacementFilter

@@ -24,6 +24,8 @@ export interface PendingImage {
   url: string;
   filename: string;
   key: string;
+  /** Product-only attachment role, selected before this pending image attaches. */
+  purpose?: "item" | "label";
 }
 
 interface UploadDraft {
@@ -77,6 +79,10 @@ interface PendingImageUploadProps {
   onImagesChange?: (images: PendingImage[]) => void;
   existingImages?: PendingImage[];
   onExistingImagesRemove?: (removedImageIds: string[]) => void;
+  /** Product-only explicit role corrections for already-attached photos. */
+  onExistingImagesPurposeChange?: (
+    purposes: Record<string, "item" | "label">,
+  ) => void;
   // Report the full display order of the remaining existing images after a
   // reorder (first = cover). Reorder controls render only when provided.
   onExistingImagesReorder?: (orderedImageIds: string[]) => void;
@@ -93,6 +99,7 @@ export function PendingImageUpload({
   onImagesChange,
   existingImages = EMPTY_IMAGES,
   onExistingImagesRemove,
+  onExistingImagesPurposeChange,
   onExistingImagesReorder,
   className = "",
   autoImportUrl,
@@ -112,8 +119,13 @@ export function PendingImageUpload({
   const [removedExistingImageIds, setRemovedExistingImageIds] = useState<
     string[]
   >([]);
+  const existingPurposeChangesRef = useRef<Record<string, "item" | "label">>(
+    {},
+  );
 
   const [imageUrl, setImageUrl] = useState("");
+  const [source, setSource] = useState<"own" | "catalog" | "unknown">("own");
+  const [purpose, setPurpose] = useState<"item" | "label">("item");
   const [importing, setImporting] = useState(false);
 
   const cameraInputRef = useRef<HTMLInputElement>(null);
@@ -153,6 +165,7 @@ export function PendingImageUpload({
     setPrevExistingImages(existingImages);
     setCurrentExistingImages(existingImages);
     setRemovedExistingImageIds([]);
+    existingPurposeChangesRef.current = {};
   }
 
   const uploadImageMutation = useMutation(
@@ -198,6 +211,7 @@ export function PendingImageUpload({
           url: result.url,
           filename: result.filename,
           key: result.key,
+          purpose: entityType === "PRODUCT" ? purpose : undefined,
         };
 
         replacePendingImages((current) => [...current, newImage]);
@@ -209,7 +223,7 @@ export function PendingImageUpload({
         setImporting(false);
       }
     },
-    [entityType, importFromUrlMutation, replacePendingImages],
+    [entityType, importFromUrlMutation, purpose, replacePendingImages],
   );
 
   const handleImportFromUrl = useCallback(
@@ -245,6 +259,7 @@ export function PendingImageUpload({
         contentType: contentType.data,
         size: file.size,
         entityType,
+        source,
       });
 
       const uploadResult = await fetch(initResult.uploadUrl, {
@@ -267,9 +282,10 @@ export function PendingImageUpload({
         url: initResult.url,
         filename: file.name,
         key: initResult.key,
+        purpose: entityType === "PRODUCT" ? purpose : undefined,
       };
     },
-    [entityType, uploadImageMutation],
+    [entityType, purpose, source, uploadImageMutation],
   );
 
   const runUpload = useCallback(
@@ -426,6 +442,23 @@ export function PendingImageUpload({
     [removedExistingImageIds, currentExistingImages, onExistingImagesRemove],
   );
 
+  const setExistingImagePurpose = useCallback(
+    (imageId: string, purpose: "item" | "label") => {
+      setCurrentExistingImages((images) =>
+        images.map((image) =>
+          image.id === imageId ? { ...image, purpose } : image,
+        ),
+      );
+      const next = {
+        ...existingPurposeChangesRef.current,
+        [imageId]: purpose,
+      };
+      existingPurposeChangesRef.current = next;
+      onExistingImagesPurposeChange?.(next);
+    },
+    [onExistingImagesPurposeChange],
+  );
+
   const moveExistingImage = useCallback(
     (imageId: string, target: "front" | "left" | "right") => {
       const idx = currentExistingImages.findIndex((img) => img.id === imageId);
@@ -503,6 +536,41 @@ export function PendingImageUpload({
             Import
           </Button>
         </div>
+        <div className="space-y-1">
+          <Label htmlFor="pending-image-source">Photo source</Label>
+          <select
+            className="h-9 w-full rounded-sm border border-input bg-background px-2 text-sm"
+            id="pending-image-source"
+            value={source}
+            onChange={(event) =>
+              setSource(
+                event.target.value === "own" || event.target.value === "catalog"
+                  ? event.target.value
+                  : "unknown",
+              )
+            }
+          >
+            <option value="own">Our photo</option>
+            <option value="catalog">Catalog image</option>
+            <option value="unknown">Unknown</option>
+          </select>
+        </div>
+        {entityType === "PRODUCT" && (
+          <div className="space-y-1">
+            <Label htmlFor="pending-product-image-purpose">Attach as</Label>
+            <select
+              className="h-9 w-full rounded-sm border border-input bg-background px-2 text-sm"
+              id="pending-product-image-purpose"
+              value={purpose}
+              onChange={(event) =>
+                setPurpose(event.target.value === "label" ? "label" : "item")
+              }
+            >
+              <option value="item">Item photo</option>
+              <option value="label">Label photo</option>
+            </select>
+          </div>
+        )}
         <p className="text-xs text-muted-foreground">
           You can also paste an image from your clipboard
         </p>
@@ -616,6 +684,22 @@ export function PendingImageUpload({
                   <span className="absolute bottom-1 left-1 z-20 rounded-sm bg-background/80 px-1 font-mono text-2xs text-foreground uppercase">
                     Cover
                   </span>
+                )}
+                {entityType === "PRODUCT" && (
+                  <select
+                    aria-label={`Attachment role for ${image.filename}`}
+                    className="absolute inset-x-1 bottom-1 z-20 h-7 rounded-sm border border-input bg-background/90 px-1 text-xs"
+                    value={image.purpose ?? "item"}
+                    onChange={(event) =>
+                      setExistingImagePurpose(
+                        image.id,
+                        event.target.value === "label" ? "label" : "item",
+                      )
+                    }
+                  >
+                    <option value="item">Item photo</option>
+                    <option value="label">Label photo</option>
+                  </select>
                 )}
                 {onExistingImagesReorder && index > 0 && (
                   <div className="absolute bottom-1 left-1 z-20 flex gap-1">

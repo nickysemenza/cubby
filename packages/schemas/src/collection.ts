@@ -9,7 +9,8 @@ import {
   purchaseShortcode,
 } from "./identifiers";
 import { amount } from "./codec";
-import { productCategory } from "./product-fields";
+import { productCategoryShortcode } from "./identifier-fields";
+import { productCategoryFeature } from "./product-category-fields";
 import { tradeSchema } from "./project";
 
 export const collectionSlug = z
@@ -63,10 +64,17 @@ export type CollectionProductPurchaseOut = z.infer<
 const ruleText = z.string().trim().min(1).max(200);
 export const smartCollectionRule = z.discriminatedUnion("kind", [
   z.strictObject({
+    kind: z.literal("categoryFeatureEquals"),
+    value: productCategoryFeature,
+  }),
+  z.strictObject({
     kind: z.literal("effectiveOwnerEquals"),
     value: ledgerPartyShortcode,
   }),
-  z.strictObject({ kind: z.literal("categoryEquals"), value: productCategory }),
+  z.strictObject({
+    kind: z.literal("categoryEquals"),
+    value: productCategoryShortcode,
+  }),
   z.strictObject({ kind: z.literal("productTagEquals"), value: ruleText }),
   z.strictObject({ kind: z.literal("manufacturerEquals"), value: ruleText }),
   z.strictObject({ kind: z.literal("locationNameContains"), value: ruleText }),
@@ -120,6 +128,7 @@ export const smartCollectionMatch = z.object({
   kind: z.enum([
     "effectiveOwnerEquals",
     "categoryEquals",
+    "categoryFeatureEquals",
     "productTagEquals",
     "manufacturerEquals",
     "locationNameContains",
@@ -251,6 +260,7 @@ export const smartCollectionSummary = z.object({
   sourceCounts: z.object({
     effectiveOwnerEquals: z.number().int().nonnegative(),
     categoryEquals: z.number().int().nonnegative(),
+    categoryFeatureEquals: z.number().int().nonnegative(),
     productTagEquals: z.number().int().nonnegative(),
     manufacturerEquals: z.number().int().nonnegative(),
     locationNameContains: z.number().int().nonnegative(),
@@ -305,7 +315,7 @@ export function collectionDefinitionForReference(
       match: "all",
       rules: [
         { kind: "effectiveOwnerEquals", value: reference.ownerId },
-        { kind: "categoryEquals", value: "apparel" },
+        { kind: "categoryFeatureEquals", value: "apparel" },
       ],
     };
   const starter = SMART_COLLECTION_STARTERS.find(

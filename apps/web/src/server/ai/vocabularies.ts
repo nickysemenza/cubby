@@ -13,45 +13,8 @@
 import type { CostType } from "@cubby/schemas/expense-fields";
 import type { LocationType } from "@cubby/schemas/location";
 import type { MealKind, MealType } from "@cubby/schemas/meal-classification";
-import type { ProductCategory } from "@cubby/schemas/product";
 import type { ProjectKind } from "@cubby/schemas/project-fields";
 import type { Trade } from "@cubby/schemas/task-fields";
-
-// Category descriptions for the LLM to understand what each category means
-// Using `satisfies` to ensure all categories have descriptions (build fails if one is missing)
-export const CATEGORY_DESCRIPTIONS = {
-  food: "Consumable food items: flour, olive oil, canned tomatoes, spices, meat, produce, beverages",
-  tools:
-    "Power and hand tools: drills, saws, grinders, screwdrivers, wrenches, measuring tools",
-  "tool-consumables":
-    "Consumable items used with tools: grinding discs, drill bits, sandpaper, saw blades, router bits",
-  "tool-accessories":
-    "Non-consumable tool add-ons: jigs, fixtures, guides, router tables, dust collection attachments",
-  storage:
-    "Organization and storage: toolboxes, systainers, packout, bags, bins, shelving units",
-  hardware:
-    "Fasteners and fittings: screws, nails, bolts, nuts, washers, hinges, brackets",
-  electronics:
-    "Electronic devices and components: raspberry pi, arduino, cables, monitors, adapters, sensors",
-  software: "Software licenses, applications, and subscriptions",
-  books:
-    "Physical books: novels, reference books, manuals, art books, and printed cookbooks",
-  household:
-    "Home items: furniture, cookware, appliances, decor, cleaning equipment, linens",
-  supplies:
-    "General consumable supplies: cleaning products, tape, batteries, glue, lubricants, rags",
-  apparel:
-    "Worn goods: shoes, boots, clothing, outerwear, hats, gloves, worn bags and packs",
-} satisfies Record<ProductCategory, string>;
-
-/** The category rules; the categories themselves are the Jev choices. */
-export const CATEGORY_RULES = `You are a product categorization assistant. Given a product name and manufacturer, determine the most appropriate category.
-
-Rules:
-1. If the product has food-related indicators (like being from a food brand, having nutrition info, being edible), always choose "food"
-2. For ambiguous items, consider the primary use case
-3. "supplies" is for general consumables that don't fit other categories
-4. Be precise: drill bits go in "tool-consumables", not "tools"`;
 
 // Location type descriptions for the LLM to understand what each type means
 // Using `satisfies` to ensure all types have descriptions (build fails if one is missing)

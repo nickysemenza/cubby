@@ -28,6 +28,7 @@ import {
   ReceiptText,
   Sprout,
   Store,
+  Tags,
   Users,
 } from "lucide-react";
 
@@ -204,6 +205,7 @@ const LUCIDE_ICONS = {
   ReceiptText,
   Sprout,
   Store,
+  Tags,
   Users,
 } satisfies Record<DeclaredLucideIcon, LucideIcon>;
 const isBrowserEntityKey = (value: string): value is BrowserRoutedEntity =>
@@ -383,6 +385,10 @@ const entityDefinitions = withEntityNames({
   },
   vendorAccount: {
     ...generatedBrowserRoutes.vendorAccount,
+    color: INK.slate,
+  },
+  productCategory: {
+    ...generatedBrowserRoutes.productCategory,
     color: INK.slate,
   },
   purchase: {

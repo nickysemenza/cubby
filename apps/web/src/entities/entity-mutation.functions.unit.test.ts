@@ -29,7 +29,7 @@ describe("entityMutation.mutate invalidates", () => {
         expectedQuantity: null,
         ingredientId: "ING-4K7M",
         fdc_id: null,
-        category: null,
+        categoryId: null,
       },
     });
 
@@ -51,7 +51,7 @@ describe("entityMutation.mutate invalidates", () => {
         expectedQuantity: null,
         ingredientId: "ING-4K7M",
         fdc_id: 12345,
-        category: "food",
+        categoryId: null,
       },
     });
 
@@ -71,7 +71,7 @@ describe("entityMutation.mutate invalidates", () => {
         expectedQuantity: null,
         ingredientId: null,
         fdc_id: null,
-        category: null,
+        categoryId: null,
       },
     });
 
@@ -99,5 +99,18 @@ describe("entityMutation.mutate invalidates", () => {
     });
 
     expect(tags).toEqual(entityRipple("vendor"));
+  });
+
+  it("refreshes Product reads after a category taxonomy write", () => {
+    const tags = entityMutation.mutate.invalidates({
+      action: "update",
+      entity: "productCategory",
+      id: "CAT-4K7M",
+      data: { name: "Updated classification" },
+    });
+
+    expect(hasTag(tags, ["productCategory"])).toBe(true);
+    expect(hasTag(tags, ["product"])).toBe(true);
+    expect(hasTag(tags, ["inventory"])).toBe(true);
   });
 });

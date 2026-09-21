@@ -3,11 +3,7 @@
  * isometric-geometry and isometric-scene; canvas lifecycle and pointer/touch
  * interaction live in use-isometric-pantry.
  */
-import {
-  formatCategoryLabel,
-  getCategoryColor,
-  productCategoryValues,
-} from "@cubby/shared";
+import { formatCategoryLabel, getCategoryColor } from "@cubby/shared";
 import { Link } from "@tanstack/react-router";
 import { ArrowLeft, Loader2, Maximize2 } from "lucide-react";
 
@@ -18,30 +14,36 @@ import { useHydratedLoading } from "~/hooks/useHydrated";
 
 import { useIsometricPantry } from "./use-isometric-pantry";
 
-function CategoryLegend() {
+function CategoryLegend({
+  inventory,
+}: {
+  inventory: ReturnType<typeof useIsometricPantry>["inventory"];
+}) {
+  const categories = Array.from(
+    new Map(
+      inventory
+        .map((item) => item.product.category)
+        .filter((category) => category != null)
+        .map((category) => [category.id, category]),
+    ).values(),
+  ).sort((a, b) =>
+    formatCategoryLabel(a).localeCompare(formatCategoryLabel(b)),
+  );
+  if (categories.length === 0) return null;
   return (
     <div className="absolute bottom-4 left-4 border border-[var(--border)] bg-card px-2 py-2">
       <div className="grid grid-cols-2 gap-x-4 gap-y-1">
-        {productCategoryValues.map((cat) => (
-          <div key={cat} className="flex items-center gap-2">
+        {categories.map((category) => (
+          <div key={category.id} className="flex items-center gap-2">
             <div
               className="size-2.5 shrink-0 rounded-sm"
-              style={{ backgroundColor: getCategoryColor(cat) }}
+              style={{ backgroundColor: getCategoryColor(category) }}
             />
             <span className="text-2xs leading-none text-muted-foreground">
-              {formatCategoryLabel(cat)}
+              {formatCategoryLabel(category)}
             </span>
           </div>
         ))}
-        <div className="flex items-center gap-2">
-          <div
-            className="size-2.5 shrink-0 rounded-sm"
-            style={{ backgroundColor: getCategoryColor(null) }}
-          />
-          <span className="text-2xs leading-none text-muted-foreground">
-            uncategorized
-          </span>
-        </div>
       </div>
     </div>
   );
@@ -147,7 +149,7 @@ export function IsometricPantry() {
           ))}
         </NativeSelect>
       </div>
-      <CategoryLegend />
+      <CategoryLegend inventory={inventory} />
     </div>
   );
 }

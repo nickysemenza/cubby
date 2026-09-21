@@ -260,6 +260,10 @@ const vendorColumns = {
     storageStatus: image.storageStatus,
     useOriginal: image.useOriginal,
     verifiedAt: image.verifiedAt,
+    source: image.source,
+    sourcePageUrl: image.sourcePageUrl,
+    sourceAssetUrl: image.sourceAssetUrl,
+    sourceName: image.sourceName,
     createdAt: image.createdAt,
     updatedAt: image.updatedAt,
   },
@@ -302,6 +306,10 @@ type VendorRow = {
       | null;
     useOriginal: boolean;
     verifiedAt: Date | null;
+    source: "own" | "catalog" | "unknown" | null;
+    sourcePageUrl: string | null;
+    sourceAssetUrl: string | null;
+    sourceName: string | null;
     createdAt: Date;
     updatedAt: Date;
   } | null;
@@ -323,6 +331,7 @@ const dbVendorToAPI = (row: VendorRow): VendorOut => ({
   latestPurchaseDate: row.latestPurchaseDate,
   logo: row.logo && {
     ...row.logo,
+    source: row.logo.source ?? "unknown",
     id: parseShortcodeFor("image", row.logo.id),
     url: getR2PublicUrl(row.logo.key),
   },

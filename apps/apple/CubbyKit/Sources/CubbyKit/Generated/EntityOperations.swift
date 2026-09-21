@@ -35,6 +35,7 @@ extension EntityKey {
         case .meal: [.create, .delete, .get, .list, .update]
         case .planting: [.create, .delete, .get, .list, .timeline, .update]
         case .product: [.create, .delete, .get, .list, .timeline, .update]
+        case .productCategory: [.create, .delete, .get, .list, .update]
         case .project: [.create, .delete, .get, .list, .update]
         case .purchase: [.create, .delete, .get, .list, .update]
         case .recipe: [.create, .delete, .get, .list, .update]
@@ -64,6 +65,7 @@ extension EntityKey {
         case .meal: [.create, .get, .list, .update]
         case .planting: [.create, .get, .list, .timeline, .update]
         case .product: [.create, .get, .list, .timeline, .update]
+        case .productCategory: [.create, .get, .list, .update]
         case .project: [.create, .get, .list, .update]
         case .purchase: [.create, .get, .list, .update]
         case .recipe: [.create, .get, .list, .update]
@@ -92,6 +94,7 @@ extension EntityKey {
         case .meal: .resource
         case .planting: .resource
         case .product: .resource
+        case .productCategory: .resource
         case .project: .resource
         case .purchase: .resource
         case .recipe: .resource
@@ -323,7 +326,7 @@ extension EntityDescriptor {
                 case "locationIdFilter": query.locationIdFilter = .init(value1: try value.string(name))
                 case "productIdFilter": query.productIdFilter = .init(value1: try value.string(name))
                 case "manufacturerFilter": query.manufacturerFilter = try value.string(name)
-                case "categoryFilter": query.categoryFilter = try value.enumCases(name)
+                case "categoryFilter": query.categoryFilter = value.strings
                 case "placementFilter": query.placementFilter = try value.enumCase(name)
                 case "locationRole": query.locationRole = try value.enumCase(name)
                 case "verifiedPresenceFilter": query.verifiedPresenceFilter = try value.enumCase(name)
@@ -532,7 +535,6 @@ extension EntityDescriptor {
                 case "upcFilter": query.upcFilter = try value.string(name)
                 case "modelFilter": query.modelFilter = try value.string(name)
                 case "modelPresenceFilter": query.modelPresenceFilter = try value.enumCase(name)
-                case "categoryFilter": query.categoryFilter = try value.enumCases(name)
                 case "expectedQuantityMin": query.expectedQuantityMin = try value.double(name)
                 case "expectedQuantityMax": query.expectedQuantityMax = try value.double(name)
                 case "notesFilter": query.notesFilter = try value.string(name)
@@ -561,6 +563,8 @@ extension EntityDescriptor {
                 case "taskDueFrom": query.taskDueFrom = try value.string(name)
                 case "taskDueTo": query.taskDueTo = try value.string(name)
                 case "tagsPresenceFilter": query.tagsPresenceFilter = try value.enumCase(name)
+                case "categoryFilter": query.categoryFilter = value.strings
+                case "categoryFeatureFilter": query.categoryFeatureFilter = try value.enumCases(name)
                 case "categoryPresenceFilter": query.categoryPresenceFilter = try value.enumCase(name)
                 case "expenseCountMin": query.expenseCountMin = try value.int(name)
                 case "expenseCountMax": query.expenseCountMax = try value.int(name)
@@ -583,6 +587,25 @@ extension EntityDescriptor {
                 }
             }
             let page = try await client.resources_product_list(query: query).ok.body.json
+            return ListPage(
+                items: try page.items.map(JSONValue.init(encoding:)),
+                meta: page.meta
+            )
+        case .productCategory:
+            var query = Operations.Resources_productCategory_list.Input.Query(page: page, pageSize: pageSize, sort: sort)
+            for name in filters.names {
+                guard let value = filters[name] else { continue }
+                switch name {
+                case "createdFrom": query.createdFrom = try value.string(name)
+                case "createdTo": query.createdTo = try value.string(name)
+                case "updatedFrom": query.updatedFrom = try value.string(name)
+                case "updatedTo": query.updatedTo = try value.string(name)
+                case "search": query.search = try value.string(name)
+                case "groupBy": query.groupBy = try value.enumCase(name)
+                default: throw EntityFilterError.unknownParameter(.productCategory, name)
+                }
+            }
+            let page = try await client.resources_productCategory_list(query: query).ok.body.json
             return ListPage(
                 items: try page.items.map(JSONValue.init(encoding:)),
                 meta: page.meta
@@ -937,7 +960,6 @@ extension EntityDescriptor {
         case .inventory:
             switch wireKey {
                 case "ingredientPresenceFilter": ["has", "none"]
-                case "categoryFilter": ["food", "tools", "tool-consumables", "tool-accessories", "storage", "hardware", "electronics", "software", "books", "household", "supplies", "apparel"]
                 case "placementFilter": ["stock", "installed", "all"]
                 case "locationRole": ["global_unknown"]
                 case "verifiedPresenceFilter": ["has", "none"]
@@ -1003,7 +1025,6 @@ extension EntityDescriptor {
                 case "mealPresenceFilter": ["has", "none"]
                 case "eaterPresenceFilter": ["has", "none"]
                 case "modelPresenceFilter": ["has", "none"]
-                case "categoryFilter": ["food", "tools", "tool-consumables", "tool-accessories", "storage", "hardware", "electronics", "software", "books", "household", "supplies", "apparel"]
                 case "notesPresenceFilter": ["has", "none"]
                 case "stockTrackedPresenceFilter": ["has", "none"]
                 case "upcPresenceFilter": ["has", "none"]
@@ -1020,6 +1041,7 @@ extension EntityDescriptor {
                 case "ingredientPresenceFilter": ["has", "none"]
                 case "taskStatusFilter": ["not_started", "later", "in_progress", "blocked", "done"]
                 case "tagsPresenceFilter": ["has", "none"]
+                case "categoryFeatureFilter": ["food", "books", "tools", "tool-consumables", "tool-accessories", "storage", "hardware", "electronics", "software", "household", "supplies", "apparel"]
                 case "categoryPresenceFilter": ["has", "none"]
                 case "quantityVarianceFilter": ["mismatched", "matched"]
                 case "unknownQuantityLinesFilter": ["has", "none"]
@@ -1031,6 +1053,11 @@ extension EntityDescriptor {
                 case "unitMappingPresenceFilter": ["has", "none"]
                 case "componentPresenceFilter": ["has", "none"]
                 case "groupBy": ["category"]
+                default: nil
+            }
+        case .productCategory:
+            switch wireKey {
+                case "groupBy": ["name", "sortOrder", "updatedAt"]
                 default: nil
             }
         case .project:
@@ -1221,7 +1248,6 @@ extension EntityDescriptor {
                 case "upcFilter": query.upcFilter = try value.string(name)
                 case "modelFilter": query.modelFilter = try value.string(name)
                 case "modelPresenceFilter": query.modelPresenceFilter = try value.enumCase(name)
-                case "categoryFilter": query.categoryFilter = try value.enumCases(name)
                 case "expectedQuantityMin": query.expectedQuantityMin = try value.double(name)
                 case "expectedQuantityMax": query.expectedQuantityMax = try value.double(name)
                 case "notesFilter": query.notesFilter = try value.string(name)
@@ -1250,6 +1276,8 @@ extension EntityDescriptor {
                 case "taskDueFrom": query.taskDueFrom = try value.string(name)
                 case "taskDueTo": query.taskDueTo = try value.string(name)
                 case "tagsPresenceFilter": query.tagsPresenceFilter = try value.enumCase(name)
+                case "categoryFilter": query.categoryFilter = value.strings
+                case "categoryFeatureFilter": query.categoryFeatureFilter = try value.enumCases(name)
                 case "categoryPresenceFilter": query.categoryPresenceFilter = try value.enumCase(name)
                 case "expenseCountMin": query.expenseCountMin = try value.int(name)
                 case "expenseCountMax": query.expenseCountMax = try value.int(name)
@@ -1351,6 +1379,8 @@ extension EntityDescriptor {
             return try JSONValue(encoding: try await client.resources_planting_get(path: .init(id: id)).ok.body.json)
         case .product:
             return try JSONValue(encoding: try await client.resources_product_get(path: .init(id: id)).ok.body.json)
+        case .productCategory:
+            return try JSONValue(encoding: try await client.resources_productCategory_get(path: .init(id: id)).ok.body.json)
         case .project:
             return try JSONValue(encoding: try await client.resources_project_get(path: .init(id: id)).ok.body.json)
         case .purchase:
@@ -1410,6 +1440,9 @@ extension EntityDescriptor {
         case .product:
             let created = try await client.resources_product_create(body: .json(try body.decoded())).created.body.json
             return try createdID(created.item)
+        case .productCategory:
+            let created = try await client.resources_productCategory_create(body: .json(try body.decoded())).created.body.json
+            return try createdID(created.item)
         case .project:
             let created = try await client.resources_project_create(body: .json(try body.decoded())).created.body.json
             return try createdID(created.item)
@@ -1464,6 +1497,8 @@ extension EntityDescriptor {
             _ = try await client.resources_planting_update(path: .init(id: id), body: .json(try body.decoded())).ok
         case .product:
             _ = try await client.resources_product_update(path: .init(id: id), body: .json(try body.decoded())).ok
+        case .productCategory:
+            _ = try await client.resources_productCategory_update(path: .init(id: id), body: .json(try body.decoded())).ok
         case .project:
             _ = try await client.resources_project_update(path: .init(id: id), body: .json(try body.decoded())).ok
         case .purchase:

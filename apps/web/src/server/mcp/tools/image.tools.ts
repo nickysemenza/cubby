@@ -7,6 +7,14 @@ import {
   imageAttachExistingInput,
   imageAttachExistingOutput,
 } from "@cubby/schemas/image";
+import {
+  imageDescriptionCorrectionInput,
+  imageDescriptionCorrectionOutput,
+  imageProcessingStatusInput,
+  imageProcessingStatusOutput,
+  scheduleImageProcessingInput,
+  scheduleImageProcessingOutput,
+} from "@cubby/schemas/image-processing";
 import { parseShortcode } from "@cubby/shared";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
@@ -50,6 +58,16 @@ const attachFileItem = z
       ctx.addIssue({
         code: "custom",
         message: "Provide exactly one of `url` or `uploadId`",
+      });
+    }
+    if (
+      value.purpose !== undefined &&
+      parseShortcode(value.entityId)?.type !== "product"
+    ) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["purpose"],
+        message: "purpose is only supported for Product attachments",
       });
     }
   });
@@ -101,6 +119,40 @@ async function attachOne(caller: Caller, params: AttachFileItem) {
  * resulting `uploadId` without carrying base64 through MCP.
  */
 export function registerImageTools(server: McpServer) {
+  registerMcpTool(server, {
+    name: "get_image_processing",
+    description:
+      "Read an image's durable description and transparent-cutout processing status.",
+    inputSchema: imageProcessingStatusInput,
+    outputSchema: imageProcessingStatusOutput,
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+    handler: async (params, extra) =>
+      await getCaller(extra).imageProcessing.get(params),
+  });
+  registerMcpTool(server, {
+    name: "schedule_image_processing",
+    description:
+      "Schedule description and/or transparent-cutout processing for an uploaded image.",
+    inputSchema: scheduleImageProcessingInput,
+    outputSchema: scheduleImageProcessingOutput,
+    annotations: WRITE_CLOSED,
+    handler: async (params, extra) =>
+      await getCaller(extra).imageProcessing.schedule(params),
+  });
+  registerMcpTool(server, {
+    name: "correct_image_description",
+    description: "Save a confirmed correction for an image description.",
+    inputSchema: imageDescriptionCorrectionInput,
+    outputSchema: imageDescriptionCorrectionOutput,
+    annotations: WRITE_CLOSED,
+    handler: async (params, extra) =>
+      await getCaller(extra).imageProcessing.correctDescription(params),
+  });
   registerBatchTool(server, {
     name: IMAGE_TOOL_NAMES.createFileUploads,
     description:

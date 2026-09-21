@@ -517,7 +517,7 @@ describe("declared entity displays", () => {
       );
       // width: "sm" -> "w-28", width: "md" -> "w-40"
       expect(byId.fdc_id?.className).toBe("w-28");
-      expect(byId.category?.className).toBe("w-28");
+      expect(byId.category?.className).toBe("w-40");
       expect(byId.stockTracked?.className).toBe("w-28");
       expect(byId.manufacturer?.className).toBe("w-40");
       expect(byId.model?.className).toBe("w-40");

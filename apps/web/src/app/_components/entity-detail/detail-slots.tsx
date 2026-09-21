@@ -77,6 +77,11 @@ export const detailSlots = {
         })),
       (product) => product.ingredient !== null,
     ),
+    labels: slot(() =>
+      import("~/app/products/slots").then((m) => ({
+        default: m.ProductLabels,
+      })),
+    ),
     "import-runs": slot(() =>
       import("~/app/products/product-import-runs").then((m) => ({
         default: m.ProductImportRuns,

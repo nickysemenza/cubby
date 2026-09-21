@@ -110,9 +110,22 @@ describe("operation cache tags", () => {
       "task",
       "purchase",
       "product",
+      "productCategory",
       "expense",
     ]) {
       expect(entityRipple(entity)).toContainEqual(["ai", "suggestFields"]);
+    }
+  });
+
+  it("refreshes inherited costs after a taxonomy move changes Food membership", () => {
+    const tags = entityRipple("productCategory");
+    for (const entity of [
+      "expense",
+      "project",
+      "purchase",
+      "householdContribution",
+    ]) {
+      expect(tags).toContainEqual([entity]);
     }
   });
 
@@ -231,7 +244,7 @@ describe("operation cache tags", () => {
             expectedQuantity: null,
             ingredientId: "ING-4K7M",
             fdc_id: 12345,
-            category: "food",
+            categoryId: "CAT-2222",
           },
         },
         // The same create with the ingredient link only.
@@ -245,7 +258,7 @@ describe("operation cache tags", () => {
             expectedQuantity: null,
             ingredientId: "ING-4K7M",
             fdc_id: null,
-            category: null,
+            categoryId: null,
           },
         },
         // A plain product create: neither link, so the narrow fan-out.
@@ -259,7 +272,7 @@ describe("operation cache tags", () => {
             expectedQuantity: null,
             ingredientId: null,
             fdc_id: null,
-            category: null,
+            categoryId: null,
           },
         },
         // A non-product entity, which never reaches `productWriteTags`.

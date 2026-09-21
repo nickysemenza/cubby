@@ -390,7 +390,10 @@ export const viewManifest = defineViewManifest({
         { id: "servingAsLocations", value: "none" },
         { id: "stockTracked", value: "none" },
         { id: "components", value: "none" },
-        { id: "category", value: ["tools", "tool-accessories", "storage"] },
+        {
+          id: "categoryFeature",
+          value: ["tools", "tool-accessories", "storage"],
+        },
       ],
       sort: [{ id: "price", desc: true }],
       layout: {
@@ -402,6 +405,7 @@ export const viewManifest = defineViewManifest({
           stockTracked: true,
           components: true,
           category: true,
+          categoryFeature: true,
         },
       },
     },
@@ -536,7 +540,7 @@ export const viewManifest = defineViewManifest({
         { id: "price", value: "none-real" },
         { id: "food", value: "none" },
         { id: "unitMappingQuality", value: "none" },
-        { id: "category", value: ["food", FILTER_NONE] },
+        { id: "categoryFeature", value: ["food", FILTER_NONE] },
       ],
       problem: {
         key: "productsWithoutMappings",
@@ -552,6 +556,7 @@ export const viewManifest = defineViewManifest({
           food: true,
           unitMappingQuality: true,
           category: true,
+          categoryFeature: true,
         },
       },
     },

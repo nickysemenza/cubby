@@ -1,7 +1,6 @@
 import type { ReactNode } from "react";
 
 import { locationTypeOptionsWithTheme } from "~/app/_components/locations/location-icons";
-import { productCategoryOptionsWithTheme } from "~/app/_components/products/product-category-icons";
 import {
   costTypeOptions,
   expenseLineKindOptions,
@@ -83,7 +82,6 @@ const ENTITY_SELECT_OPTIONS = {
     { value: "auto", label: "Auto-detect from name" },
     ...expenseLineKindOptions,
   ],
-  "product.category": productCategoryOptionsWithTheme,
   "location.type": locationTypeOptionsWithTheme,
 } satisfies Readonly<Record<string, readonly EntitySelectOption[]>>;
 

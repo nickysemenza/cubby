@@ -23,6 +23,10 @@ import {
   recipe,
 } from "~/server/db/schema";
 
+import {
+  taxonomyId,
+  taxonomyShortcode,
+} from "../../../tooling/product-category-fixtures";
 import { requireActor } from "../request-context";
 import { runDiagnostic } from "../services/problem-diagnostics.service";
 import { findFastProblems } from "../services/problems.service";
@@ -948,7 +952,7 @@ describe("title-size suggestions — food eligibility", () => {
     // food classification, so each independent eligibility signal is exercised.
     const eligible = [];
     for (const data of [
-      { name: "Example oats 500 g", category: "food" },
+      { name: "Example oats 500 g", categoryId: taxonomyId("food") },
       { name: "Example flour 1 kg", ingredientId: linkedIngredient.entityId },
       { name: "Example rice 2 lb", fdc_id: 12345 },
     ] as const) {
@@ -960,12 +964,12 @@ describe("title-size suggestions — food eligibility", () => {
       );
     }
     for (const data of [
-      { name: "Example line 10 lb", category: "tools" },
-      { name: "Example pot 1 gal", category: "household" },
+      { name: "Example line 10 lb", categoryId: taxonomyId("tools") },
+      { name: "Example pot 1 gal", categoryId: taxonomyId("household") },
       { name: "Example unclassified 500 g", fdc_id: 0 },
       { name: "Example invalid food link 500 g", fdc_id: -1 },
       { name: "Example unknown 500 g" },
-      { name: "Example multipack 6 x 500 g", category: "food" },
+      { name: "Example multipack 6 x 500 g", categoryId: taxonomyId("food") },
     ] as const) {
       await insertWithShortcode(ctx.db, "product", {
         manufacturer: "Example",
@@ -976,7 +980,7 @@ describe("title-size suggestions — food eligibility", () => {
       ctx.db,
       makeProductInput({
         name: "Example mapped oats 500 g",
-        category: "food",
+        categoryId: taxonomyShortcode("food"),
         unitMappings: [
           {
             a: { value: 1, unit: "each" },
@@ -990,7 +994,7 @@ describe("title-size suggestions — food eligibility", () => {
     const deleted = await insertWithShortcode(ctx.db, "product", {
       manufacturer: "Example",
       name: "Example deleted food 500 g",
-      category: "food",
+      categoryId: taxonomyId("food"),
     });
     await getDb(ctx.db)
       .update(product)

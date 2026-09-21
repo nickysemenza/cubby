@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 
+import { testShortcode } from "./test-support/identifiers";
 import {
   attachableImageEntity,
+  imageAttachExistingInput,
   imageListFiltersSchema,
   imageOut,
   initiateUploadWithoutEntitySchema,
@@ -24,6 +26,24 @@ describe("native image metadata", () => {
   it("derives existing-image targets from the gallery manifest", () => {
     expect(attachableImageEntity.options).toEqual(galleryEntities);
     expect(attachableImageEntity.options).toContain("gardenEntry");
+  });
+
+  it("allows an existing-image purpose only on Product attachments", () => {
+    const imageId = testShortcode("image", "IMG1");
+    expect(
+      imageAttachExistingInput.safeParse({
+        imageId,
+        targetId: testShortcode("product", "PRD1"),
+        purpose: "label",
+      }).success,
+    ).toBe(true);
+    expect(
+      imageAttachExistingInput.safeParse({
+        imageId,
+        targetId: testShortcode("recipe", "RCP1"),
+        purpose: "label",
+      }).success,
+    ).toBe(false);
   });
   it("accepts revision-one upload metadata and rejects noncanonical hashes", () => {
     expect(
@@ -65,6 +85,10 @@ describe("native image metadata", () => {
       sha256: null,
       renderStatus: null,
       storageStatus: null,
+      source: "unknown",
+      sourcePageUrl: null,
+      sourceAssetUrl: null,
+      sourceName: null,
       verifiedAt: null,
       createdAt: new Date(),
       updatedAt: new Date(),

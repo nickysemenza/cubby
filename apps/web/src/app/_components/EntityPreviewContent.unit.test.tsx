@@ -13,6 +13,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { mock } from "~/lib/test/mock-schema";
 
+import { categorySummaryFixture } from "../../../tooling/product-category-fixtures";
 import {
   toFinancialAccountCard,
   toFinancialTransactionCard,
@@ -190,7 +191,7 @@ describe("toLocationCard", () => {
           name: "27 Gal. Tough Storage Tote",
           manufacturer: "Example",
           model: null,
-          category: "supplies",
+          category: categorySummaryFixture("supplies"),
           coverImage: null,
           price: null,
         },
@@ -217,10 +218,13 @@ describe("toIngredientCard", () => {
             overrides: {
               externalIds: [],
               images: [
-                mock(imageOut, {
-                  seed: 3,
-                  overrides: { url: "https://example.com/oil.jpg" },
-                }),
+                {
+                  ...mock(imageOut, {
+                    seed: 3,
+                    overrides: { url: "https://example.com/oil.jpg" },
+                  }),
+                  purpose: null,
+                },
               ],
             },
           }),

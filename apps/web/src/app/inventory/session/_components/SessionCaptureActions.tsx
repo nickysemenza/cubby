@@ -382,7 +382,7 @@ export function SessionCaptureActions({
                 title: item.name,
                 meta: [
                   `${item.estimatedQuantity} ${item.unit}`,
-                  item.category,
+                  item.matchedProduct?.category?.name ?? null,
                   item.isMisc ? "misc" : null,
                 ]
                   .filter(Boolean)

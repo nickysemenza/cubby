@@ -3,6 +3,7 @@ import type {
   SmartCollectionMatch,
   SmartCollectionSummary,
 } from "@cubby/schemas/collection";
+import type { ProductCategorySummary } from "@cubby/schemas/product-category-fields";
 import { TRADE_LABELS, type Trade } from "@cubby/schemas/project";
 
 interface SmartLocation {
@@ -17,7 +18,7 @@ export interface SmartCollectionGraph {
     id: string;
     manufacturer: string;
     tags: string[];
-    category?: string | null;
+    category?: ProductCategorySummary | null;
   }[];
   locations: readonly SmartLocation[];
   inventory: readonly {
@@ -95,7 +96,13 @@ function evidenceForRule(
     case "effectiveOwnerEquals":
       return ownerEvidence(graph, product.id, rule.value);
     case "categoryEquals":
-      return product.category === rule.value ? [`Category: ${rule.value}`] : [];
+      return product.category?.path.some((node) => node.id === rule.value)
+        ? [`Category: ${rule.value}`]
+        : [];
+    case "categoryFeatureEquals":
+      return product.category?.feature === rule.value
+        ? [`Category feature: ${rule.value}`]
+        : [];
     case "productTagEquals":
       return product.tags.includes(rule.value) ? [`Tag: ${rule.value}`] : [];
     case "manufacturerEquals":
@@ -156,6 +163,7 @@ export function evaluateSmartCollections(
       sourceCounts: {
         effectiveOwnerEquals: 0,
         categoryEquals: 0,
+        categoryFeatureEquals: 0,
         productTagEquals: 0,
         manufacturerEquals: 0,
         locationNameContains: 0,

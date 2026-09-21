@@ -44,7 +44,9 @@ function parseProductProjectionInput<TInput>(row: TInput) {
 
 export function slimProduct<TInput>(row: TInput) {
   const product = parseProductProjectionInput(row);
-  const displayImages = (product.images ?? []).filter(isDisplayableImageFile);
+  const itemImages = product.images ?? [];
+  const labelImages = product.labelImages ?? [];
+  const cover = itemImages.find(isDisplayableImageFile) ?? null;
   const pricing = product.pricing ?? resolveProductPricing(product.price);
   return productMcpOut.parse({
     id: product.id,
@@ -59,8 +61,10 @@ export function slimProduct<TInput>(row: TInput) {
     effectivePrice: pricing.effectivePrice,
     pricing,
     expectedQuantity: product.expectedQuantity,
-    imageCount: displayImages.length,
-    coverImageUrl: displayImages[0]?.url ?? null,
+    imageCount: itemImages.length + labelImages.length,
+    itemImageCount: itemImages.filter(isDisplayableImageFile).length,
+    labelImageCount: labelImages.filter(isDisplayableImageFile).length,
+    coverImageUrl: cover?.url ?? null,
     fdc_id: product.fdc_id ?? null,
     usdaUnavailable: product.usdaUnavailable ?? null,
     stockTracked: product.stockTracked ?? null,
@@ -81,8 +85,12 @@ export function slimProductDetail<TInput>(row: TInput): ProductMcpDetailOut {
   const product = parseProductProjectionInput(row);
   const base = slimProduct(row);
   let displayPosition = 0;
-  const images = (product.images ?? []).map((file) => {
-    const displayable = isDisplayableImageFile(file);
+  const images = [
+    ...(product.images ?? []),
+    ...(product.labelImages ?? []),
+  ].map((file) => {
+    const displayable =
+      file.purpose !== "label" && isDisplayableImageFile(file);
     if (displayable) displayPosition += 1;
     return {
       ...file,
@@ -93,7 +101,6 @@ export function slimProductDetail<TInput>(row: TInput): ProductMcpDetailOut {
   const cover = images.find((file) => file.isCover) ?? null;
   return productMcpDetailOut.parse({
     ...base,
-    imageCount: displayPosition,
     coverImageId: cover?.id ?? null,
     coverImageUrl: cover?.url ?? null,
     images,

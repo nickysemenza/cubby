@@ -4,6 +4,7 @@
  */
 
 import type { InventoryItemForTree } from "@cubby/schemas/location";
+import type { ProductCategorySummary } from "@cubby/schemas/product-category-fields";
 
 import type { inventoryEntry, location, product } from "~/server/db/schema";
 import type {
@@ -25,6 +26,7 @@ type ProductSelect = RowWithOptionalAliases<typeof product.$inferSelect>;
  * Only the columns the wire shape needs, plus the cover image.
  */
 export type LocationIdentityProductRow = ProductSelect & {
+  category: ProductCategorySummary | null;
   images?: Array<{
     image: MappableImageRecord;
     deletedAt?: Date | null;
@@ -38,6 +40,7 @@ export type LocationListDB = LocationSelect & {
   inventoryEntries: Array<
     typeof inventoryEntry.$inferSelect & {
       product: ProductSelect & {
+        category: ProductCategorySummary | null;
         externalIds?: MappableProductExternalId[];
       };
     }

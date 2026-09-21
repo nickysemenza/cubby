@@ -1,5 +1,9 @@
 import type { BackgroundTaskInput } from "@cubby/schemas/background-tasks";
-import type { EntityId, EntityRef } from "@cubby/schemas/identifiers";
+import {
+  type EntityId,
+  type EntityRef,
+  parseEntityId,
+} from "@cubby/schemas/identifiers";
 import {
   isEmbeddableEntity,
   type SearchableEntity,
@@ -24,6 +28,7 @@ import {
   findMealEmbeddingRefsForRecipes,
   findPlantingEmbeddingRefsForIngredients,
   findPlantingEmbeddingRefsForLocations,
+  findProductEmbeddingRefsForCategories,
   findRecipeEmbeddingRefsForIngredients,
   findTaskEmbeddingRefsForProducts,
   findTrackerEmbeddingRefsForProjects,
@@ -37,6 +42,7 @@ import {
 
 const mutationSideEffectEntities = [
   "product",
+  "productCategory",
   "location",
   "ingredient",
   "recipe",
@@ -89,6 +95,7 @@ export interface MutationSideEffectPorts {
   ) => Promise<void>;
   readonly findChildTaskEmbeddingRefs: typeof findChildTaskEmbeddingRefs;
   readonly findInventoryEmbeddingRefsForProducts: typeof findInventoryEmbeddingRefsForProducts;
+  readonly findProductEmbeddingRefsForCategories?: typeof findProductEmbeddingRefsForCategories;
   readonly findInventoryEmbeddingRefsForLocations: typeof findInventoryEmbeddingRefsForLocations;
   readonly findRecipeEmbeddingRefsForIngredients: typeof findRecipeEmbeddingRefsForIngredients;
   readonly findTaskEmbeddingRefsForProducts: typeof findTaskEmbeddingRefsForProducts;
@@ -113,6 +120,7 @@ export interface MutationSideEffectPorts {
 const productionMutationSideEffectPorts: MutationSideEffectPorts = {
   publishTasks: publishInBackground,
   findInventoryEmbeddingRefsForProducts,
+  findProductEmbeddingRefsForCategories,
   findInventoryEmbeddingRefsForLocations,
   findRecipeEmbeddingRefsForIngredients,
   findTaskEmbeddingRefsForProducts,
@@ -281,6 +289,21 @@ const collectInventoryEmbeddingRefsForProduct: EmbeddingRefCollector = async (
   ]);
 };
 
+const collectProductCategoryEmbeddingRefs: EmbeddingRefCollector = async (
+  ctx,
+) => {
+  if (ctx.event.entity.entity !== "productCategory") return [];
+  const products = await (
+    ctx.ports.findProductEmbeddingRefsForCategories ??
+    findProductEmbeddingRefsForCategories
+  )(ctx.db, [ctx.event.entity.id]);
+  const inventory = await ctx.ports.findInventoryEmbeddingRefsForProducts(
+    ctx.db,
+    products.map((ref) => parseEntityId("product", ref.entityId)),
+  );
+  return [...products, ...inventory];
+};
+
 const collectTaskEmbeddingRefsForProduct: EmbeddingRefCollector = async (
   ctx,
 ) => {
@@ -438,6 +461,19 @@ async function refreshInventoryEmbeddingsForProduct(
 ): Promise<void> {
   const refs = await collectInventoryEmbeddingRefsForProduct(ctx);
   return await publishEmbeddingRefreshes(ctx.db, refs, ctx.event, ctx.ports);
+}
+
+/** A category rename or move rewrites descendant Product and Inventory text. */
+async function refreshProductCategoryEmbeddings(
+  ctx: HandlerContext,
+): Promise<void> {
+  const refs = await collectProductCategoryEmbeddingRefs(ctx);
+  await refreshDerivedSearchRefs(
+    ctx.db,
+    refs,
+    `${ctx.event.source}:${ctx.event.action}`,
+    ctx.ports,
+  );
 }
 
 async function refreshTaskEmbeddingsForProduct(
@@ -637,6 +673,11 @@ export const mutationSideEffectManifest = {
       refreshTaskEmbeddingsForProduct,
       refreshWishEmbeddingsForProduct,
     ],
+    onDelete: [],
+  },
+  productCategory: {
+    onCreate: [],
+    onUpdate: [refreshProductCategoryEmbeddings],
     onDelete: [],
   },
   location: {
@@ -850,6 +891,7 @@ type EntityRefBuilderMap = {
 
 const ENTITY_REF_BUILDER: EntityRefBuilderMap = {
   product: (id) => ({ entity: "product", id }),
+  productCategory: (id) => ({ entity: "productCategory", id }),
   location: (id) => ({ entity: "location", id }),
   ingredient: (id) => ({ entity: "ingredient", id }),
   recipe: (id) => ({ entity: "recipe", id }),

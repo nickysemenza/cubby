@@ -2895,6 +2895,31 @@
           "primaryKey": false,
           "notNull": false
         },
+        "source": {
+          "name": "source",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'unknown'"
+        },
+        "sourcePageUrl": {
+          "name": "sourcePageUrl",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "sourceAssetUrl": {
+          "name": "sourceAssetUrl",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "sourceName": {
+          "name": "sourceName",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
         "useOriginal": {
           "name": "useOriginal",
           "type": "boolean",
@@ -11532,9 +11557,9 @@
           "primaryKey": false,
           "notNull": false
         },
-        "category": {
-          "name": "category",
-          "type": "text",
+        "categoryId": {
+          "name": "categoryId",
+          "type": "uuid",
           "primaryKey": false,
           "notNull": false
         },
@@ -11593,11 +11618,11 @@
           "method": "btree",
           "with": {}
         },
-        "Product_category_idx": {
-          "name": "Product_category_idx",
+        "Product_categoryId_idx": {
+          "name": "Product_categoryId_idx",
           "columns": [
             {
-              "expression": "category",
+              "expression": "categoryId",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -11785,12 +11810,216 @@
           ],
           "onDelete": "no action",
           "onUpdate": "no action"
+        },
+        "Product_categoryId_ProductCategory_id_fk": {
+          "name": "Product_categoryId_ProductCategory_id_fk",
+          "tableFrom": "Product",
+          "tableTo": "ProductCategory",
+          "columnsFrom": [
+            "categoryId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.ProductCategory": {
+      "name": "ProductCategory",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "shortcode": {
+          "name": "shortcode",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "aliases": {
+          "name": "aliases",
+          "type": "text[]",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'::text[]"
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "parentId": {
+          "name": "parentId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "sortOrder": {
+          "name": "sortOrder",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "feature": {
+          "name": "feature",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updatedAt": {
+          "name": "updatedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "deletedAt": {
+          "name": "deletedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "ProductCategory_shortcode_unique": {
+          "name": "ProductCategory_shortcode_unique",
+          "columns": [
+            {
+              "expression": "shortcode",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "ProductCategory_parent_name_key": {
+          "name": "ProductCategory_parent_name_key",
+          "columns": [
+            {
+              "expression": "parentId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "name",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"ProductCategory\".\"deletedAt\" IS NULL",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "ProductCategory_feature_live_unique": {
+          "name": "ProductCategory_feature_live_unique",
+          "columns": [
+            {
+              "expression": "feature",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"ProductCategory\".\"deletedAt\" IS NULL AND \"ProductCategory\".\"feature\" IS NOT NULL",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "ProductCategory_parentId_idx": {
+          "name": "ProductCategory_parentId_idx",
+          "columns": [
+            {
+              "expression": "parentId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "ProductCategory_feature_idx": {
+          "name": "ProductCategory_feature_idx",
+          "columns": [
+            {
+              "expression": "feature",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "ProductCategory_parentId_ProductCategory_id_fk": {
+          "name": "ProductCategory_parentId_ProductCategory_id_fk",
+          "tableFrom": "ProductCategory",
+          "tableTo": "ProductCategory",
+          "columnsFrom": [
+            "parentId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "ProductCategory_sortOrder_check": {
+          "name": "ProductCategory_sortOrder_check",
+          "value": "\"ProductCategory\".\"sortOrder\" >= 0"
+        },
+        "ProductCategory_feature_check": {
+          "name": "ProductCategory_feature_check",
+          "value": "\"ProductCategory\".\"feature\" IS NULL OR \"ProductCategory\".\"feature\" IN ('food', 'books', 'tools', 'tool-consumables', 'tool-accessories', 'storage', 'hardware', 'electronics', 'software', 'household', 'supplies', 'apparel')"
+        }
+      },
       "isRLSEnabled": false
     },
     "public.ProductComponent": {
@@ -12269,6 +12498,12 @@
           "notNull": true,
           "default": 0
         },
+        "purpose": {
+          "name": "purpose",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
         "createdAt": {
           "name": "createdAt",
           "type": "timestamp",
@@ -12375,7 +12610,12 @@
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
-      "checkConstraints": {},
+      "checkConstraints": {
+        "ProductImage_purpose_check": {
+          "name": "ProductImage_purpose_check",
+          "value": "\"ProductImage\".\"purpose\" IS NULL OR \"ProductImage\".\"purpose\" IN ('item', 'label')"
+        }
+      },
       "isRLSEnabled": false
     },
     "public.ProductUnitMappings": {
