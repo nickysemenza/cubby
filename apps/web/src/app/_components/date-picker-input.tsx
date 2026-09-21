@@ -75,7 +75,9 @@ const DateClearButton = ({
   disabled: boolean;
   onClear: () => void;
 }) => {
-  if (!visible) return null;
+  if (!visible) {
+    return <span aria-hidden className="h-full w-7 shrink-0 max-sm:w-10" />;
+  }
   return (
     <button
       type="button"
@@ -265,11 +267,13 @@ export function DatePickerInput({
               }
             }}
           />
-          <DateClearButton
-            visible={clearable && !required && draft !== ""}
-            disabled={disabled}
-            onClear={() => applyValue(null)}
-          />
+          {clearable && !required && (
+            <DateClearButton
+              visible={draft !== ""}
+              disabled={disabled}
+              onClear={() => applyValue(null)}
+            />
+          )}
           <PopoverTrigger
             aria-label="Open calendar"
             disabled={disabled}

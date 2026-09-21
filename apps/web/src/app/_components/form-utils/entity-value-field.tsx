@@ -103,6 +103,7 @@ export function EntityValueField<
               >
                 <EntityPicker
                   inputId={controlId}
+                  inputRef={field.ref}
                   aria-describedby={description ? descriptionId : undefined}
                   entity={entity}
                   // The field label is the picker's accessible name ("Parent

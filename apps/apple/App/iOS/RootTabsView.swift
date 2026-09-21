@@ -18,7 +18,6 @@ struct RootTabsView: View {
                         SectionView(section: section)
                     }
                 }
-                .badge(section == .today ? model.problemsTotal ?? 0 : 0)
             }
         }
         .tabBarMinimizeBehavior(.onScrollDown)

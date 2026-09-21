@@ -157,12 +157,12 @@ private struct NativeSheetPresentation: ViewModifier {
                     .frame(minWidth: 320, idealWidth: 380, minHeight: 220)
             case .picker, .editor:
                 content.presentationSizing(.form)
-                    .frame(minWidth: 480, idealWidth: 620, minHeight: 440, idealHeight: 680)
+                    .frame(minWidth: 360, idealWidth: 560, minHeight: 360, idealHeight: 620)
             case .photo, .preview:
                 content.presentationSizing(.page)
                     .frame(
-                        minWidth: 960, idealWidth: photoSheetSize.width,
-                        minHeight: 620, idealHeight: photoSheetSize.height
+                        minWidth: 480, idealWidth: photoSheetSize.width,
+                        minHeight: 420, idealHeight: photoSheetSize.height
                     )
                     .task { windowSize = NSApp.keyWindow?.frame.size ?? windowSize }
             }
@@ -189,8 +189,8 @@ private struct NativeSheetPresentation: ViewModifier {
         /// shrinks to uselessness on a small one.
         private var photoSheetSize: CGSize {
             CGSize(
-                width: max(960, min(windowSize.width * 0.85, 1400)),
-                height: max(620, min(windowSize.height * 0.85, 1000)))
+                width: max(480, min(windowSize.width * 0.85, 1400)),
+                height: max(420, min(windowSize.height * 0.85, 1000)))
         }
     #endif
 }

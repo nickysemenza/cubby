@@ -59,12 +59,6 @@ history is the archive. Permanent product constraints live in the
   or page `rows`, and have the list mount refuse to run the read until a
   filter narrows the cohort.
 
-- **Scope the generic dialog's `useWatch`.** `useEntityEditSession` calls
-  `useWatch({ control })` at the session level, so every keystroke re-renders
-  the whole form (all sections and the image block). The remount bug fixed in
-  #1067 was the acute symptom; watch only the fields a presentation depends
-  on (`kind`-driven layouts) and let `Controller`s re-render themselves.
-
 - **Give the browser test harness a rejecting default transport.** UI tests
   that mount slots (relatedness rail, product image summaries) reach the real
   Start transport with no server, so `generic-entity-detail.unit.test.tsx`
@@ -752,10 +746,9 @@ history is the archive. Permanent product constraints live in the
 
 - **Core native inventory experience.** Promote when everyday use of the native
   redesign exposes a specific inventory bottleneck. Deepen location-first browsing,
-  stock comparison, capture/recount, and photo completion; introduce
-  unit-aware steppers, bulk actions, or drag/drop only for a
-  demonstrated workflow. Owners: `apps/apple/App/Shared/Browse`, `Capture`, and
-  `Audit`; see [native design](../apps/apple/DESIGN.md).
+  stock comparison, capture/recount, and photo completion; introduce bulk actions
+  or drag/drop only for a demonstrated workflow. Owners:
+  `apps/apple/App/Shared/Browse`, `Capture`, and `Audit`; see [native design](../apps/apple/DESIGN.md).
 
 - **Decode bytes in image verification** — Promote when a corrupt or fully transparent
   cover is next found by eye. `inspectImageFile`
@@ -884,16 +877,37 @@ history is the archive. Permanent product constraints live in the
 
 - **Native workflow parity with web.** Promote when a recurring household task
   still requires switching to the web. Native already renders every manifest
-  create/update through the generic editor, so the parity mechanism is a slot
-  per workflow: port one complete detail/list slot or action loop at a time,
-  preserving existing contracts and specialized behavior. Owners:
-  `apps/apple/App/Shared` and the generated `EntityCatalog`; build/capability context
-  lives in [the native README](../apps/apple/README.md).
+  create/update through the generic editor: add generated editor focus order with
+  Next/Done only when keyboard entry demonstrates a repeated friction, and make
+  sheet state/lifecycle comprehensive only when a concrete re-presentation,
+  cancellation, or saving handoff fails. Port one complete detail/list slot or
+  action loop at a time, preserving existing contracts and specialized behavior.
+  Owners: `apps/apple/App/Shared` and the generated `EntityCatalog`; build/capability
+  context lives in [the native README](../apps/apple/README.md).
 
 - **Generated native list/detail parity.** Keep Swift on the existing generated
   `EntityCatalog` and OpenAPI contracts. Revisit shared Rust only when a
   concrete cross-client rule cannot be expressed by those surfaces; do not
-  create a second entity catalog pre-emptively.
+  create a second entity catalog pre-emptively. Add collapsed-section parity
+  only after a manifest-supported consumer needs it, with the same declared
+  section state and accessibility behavior on both clients.
+
+- **Native numeric entry and units.** Net-new work: promote fractional/numeric
+  text entry and unit steppers only after a concrete native amount workflow
+  shows that the existing decimal fields are insufficient. Define locale-aware
+  parsing, validation, display, and the unit contract before extending generic
+  number or amount controls; do not fold it into inventory work by default.
+
+- **Native system-surface expansion.** Promote one surface only after a recurring
+  household workflow names it: Quick Look for typed attachments, typed drag/drop,
+  additional App Intents, widgets, extensions, voice entry, timers, or Live
+  Activities. Each slice must retain explicit user-confirmed writes and use the
+  existing entity/link contracts rather than creating a parallel state model.
+
+- **Offline native writes and multiwindow.** Promote only when disconnected use
+  or concurrent native windows blocks a demonstrated household workflow. This
+  needs an explicit write/retry/conflict model and window ownership rules; it is
+  larger work than the current session-only navigation and immediate-write flows.
 
 - **Natural CI evidence** — Revisit sharding only when ordinary exact-head runs
   show a repeatable tail imbalance or regression. Use native reporter output;

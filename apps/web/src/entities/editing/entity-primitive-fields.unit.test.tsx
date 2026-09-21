@@ -236,7 +236,7 @@ describe("EntityPrimitiveFields", () => {
     // (added for `control.suggest`, see `04-location.entity.ts`) is the sole
     // legitimate one in this section; `imageOrder`'s JSON must never surface
     // as a second one.
-    expect(screen.getByRole("combobox", { name: "type" })).toBeVisible();
+    expect(screen.getByRole("combobox", { name: "Type" })).toBeVisible();
     expect(screen.getAllByRole("combobox")).toHaveLength(1);
   });
 

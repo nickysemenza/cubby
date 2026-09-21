@@ -83,6 +83,7 @@ enum NativePresentationCoverage {
             "product.fits-with",
             "product.cookbooks",
             "product.recipe-appearances",
+            "product.import-runs",
             "recipe.workflow",
             "ingredient.nutrition-product",
             "cookbook.toc",

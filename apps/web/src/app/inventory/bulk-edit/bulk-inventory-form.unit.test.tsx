@@ -19,7 +19,7 @@ afterEach(() => {
 describe("bulk inventory edit", () => {
   it("opens the location picker without a deep-linked location", () => {
     render(<BulkInventoryForm />, { wrapper: harness.wrapper });
-    expect(screen.getByRole("combobox", { name: "location" })).toBeVisible();
+    expect(screen.getByRole("combobox", { name: "Location" })).toBeVisible();
     expect(harness.queryClient.isFetching()).toBe(0);
   });
 });

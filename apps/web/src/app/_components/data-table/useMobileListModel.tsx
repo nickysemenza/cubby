@@ -53,16 +53,6 @@ export interface MobileListRowModel<TItem extends RowData> {
   rightValueInteractive: boolean[];
   metaValues: MobileMetaValue[];
   detailsHref?: string;
-  /**
-   * Whether the row renders a thumbnail gutter even with no image.
-   *
-   * Decided per LIST, not per row: in a list whose table has an image column,
-   * every card reserves the 44px slot so every title starts on the same left
-   * edge. A row-by-row decision put consecutive titles at two different x's,
-   * which is what makes a long list unscannable. Lists with no image column
-   * reserve nothing — there is no scan line to keep.
-   */
-  reserveImageSlot: boolean;
 }
 
 export function mobileColumnLabel<TItem extends RowData>(
@@ -366,13 +356,11 @@ function projectMobileRow<TItem extends RowData>({
   entity,
   basePath,
   getDetailsHref,
-  reserveImageSlot,
 }: {
   row: Row<TItem>;
   entity: Entity | undefined;
   basePath: string | undefined;
   getDetailsHref: ((item: TItem) => string | undefined) | undefined;
-  reserveImageSlot: boolean;
 }): MobileListRowModel<TItem> {
   const slots = collectMobileSlots(row, entity);
   slots.subtitleCandidates.sort((a, b) => a.priority - b.priority);
@@ -403,7 +391,6 @@ function projectMobileRow<TItem extends RowData>({
       }),
     ),
     detailsHref,
-    reserveImageSlot,
   };
 }
 
@@ -431,8 +418,6 @@ export function useMobileListModel<TItem extends RowData>({
   const resolvedGetDetailsHref = disableDetailsHref
     ? undefined
     : getDetailsHref;
-  // Per-list, not per-row: see `MobileListRowModel.reserveImageSlot`.
-  const reserveImageSlot = mobileListLayout(table).hasImage;
 
   return useMemo(() => {
     // Mobile models store rendered ReactNodes. Reading the external version in
@@ -445,17 +430,9 @@ export function useMobileListModel<TItem extends RowData>({
         entity,
         basePath,
         getDetailsHref: resolvedGetDetailsHref,
-        reserveImageSlot,
       }),
     );
-  }, [
-    basePath,
-    entity,
-    resolvedGetDetailsHref,
-    reserveImageSlot,
-    rowContentVersion,
-    rows,
-  ]);
+  }, [basePath, entity, resolvedGetDetailsHref, rowContentVersion, rows]);
 }
 
 //
@@ -505,9 +482,8 @@ export function estimateMobileRowHeight(model?: MobileRowHeightInput): number {
     model.metaValues.length,
     model.metaValues.filter((item) => item.interactive).length,
   );
-  // Floor: the 44px thumbnail gutter (plus padding) sets a minimum a short row
-  // can't undercut — reserved or filled, it occupies the same height.
-  const hasThumbGutter = model.reserveImageSlot || Boolean(model.imageSlot);
+  // Real thumbnails set the minimum height; text-only rows need no gutter.
+  const hasThumbGutter = Boolean(model.imageSlot);
   return Math.max(ROW_CHROME + identity + spec, hasThumbGutter ? 61 : 41);
 }
 
@@ -518,7 +494,6 @@ type MobileRowHeightInput = Pick<
   | "rightValueInteractive"
   | "metaValues"
   | "imageSlot"
-  | "reserveImageSlot"
 >;
 
 /**
