@@ -52,9 +52,14 @@ let harness: TestHarness | undefined;
 
 function workerdAgentConfig() {
   const config = JSON.parse(readFileSync(agentConfigPath, "utf8")) as {
+    ai?: Record<string, unknown>;
     services?: Array<Record<string, unknown>>;
     queues?: { consumers?: Array<Record<string, unknown>> };
   };
+  // The harness supplies a deterministic model through a local service. Keep
+  // the production Workers AI binding out of this process so CI never tries to
+  // establish a remote Cloudflare proxy session.
+  delete config.ai;
   return {
     ...config,
     main: "../purchase-agent/dist/purchase_agent/index.js",
