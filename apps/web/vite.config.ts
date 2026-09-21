@@ -353,7 +353,7 @@ export default defineConfig(async ({ command, mode }) => {
         ? [
             sentryTanstackStart({
               org: "nicky-semenza",
-              project: "recipehub", // Sentry project slug; the display name is "cubby"
+              project: "cubby",
               authToken: process.env.SENTRY_AUTH_TOKEN,
               telemetry: false,
               autoInstrumentMiddleware: false,
