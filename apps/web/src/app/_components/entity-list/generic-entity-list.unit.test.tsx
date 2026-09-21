@@ -29,6 +29,7 @@ import type {
 import { listPage } from "~/app/_components/routing/entity-routes";
 import { entities } from "~/entities/entities";
 import {
+  ledgerPartyListItem,
   listEntities,
   mealListItem,
   parseEntityListInput,
@@ -182,15 +183,15 @@ describe("listPage", () => {
   });
 
   it("clears table selection and bulk actions after browsing Cards and returning to List", async () => {
-    const product = mock(productListItem, {
+    // A plain roster isolates shared selection from Product's kit/media reads.
+    const party = mock(ledgerPartyListItem, {
       overrides: {
-        id: testShortcode("product", "PRD-4K7M"),
-        name: "Cast iron skillet",
-        externalIds: [],
+        id: testShortcode("ledgerParty", "LPY-4K7M"),
+        name: "Example party",
         displayImages: [],
       },
     });
-    await renderListPage("product", "/products?view=table", [product]);
+    await renderListPage("ledgerParty", "/ledger-parties?view=table", [party]);
 
     const rowSelection = await screen.findByRole("checkbox", {
       name: "Select row",
