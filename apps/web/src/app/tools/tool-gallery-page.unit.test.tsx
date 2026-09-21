@@ -5,15 +5,19 @@ import type {
 } from "@cubby/schemas/project";
 import { testShortcode } from "@cubby/schemas/testing";
 import {
+  act,
   cleanup,
   fireEvent,
   render,
   screen,
   waitFor,
+  within,
 } from "@testing-library/react";
 import type * as React from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { entityRipple } from "~/integrations/tanstack-query/cache-tags";
+import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import { project } from "../projects/project.functions";
@@ -175,7 +179,12 @@ describe("Tools gallery", () => {
         groups: [],
         totals: { products: 0, placements: 0 },
       },
-      { query: "router", onQueryChange, onGroupByChange },
+      {
+        query: "router",
+        presentation: "flow",
+        onQueryChange,
+        onGroupByChange,
+      },
     );
 
     expect(await screen.findByText("No matching tools")).toBeVisible();
@@ -192,11 +201,140 @@ describe("Tools gallery", () => {
   });
 
   it("offers a retry when the gallery query fails", async () => {
-    renderGallery(new Error("Gallery unavailable"));
+    let attempts = 0;
+    renderGallery(response, {
+      presentation: "flow",
+      operations: {
+        gallery: project.toolGallery.withTransport(async () => {
+          attempts += 1;
+          if (attempts === 1) throw new Error("Gallery unavailable");
+          return response;
+        }),
+      },
+    });
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "Gallery unavailable",
     );
-    expect(screen.getByRole("button", { name: /retry/i })).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: /retry/i }));
+    expect(
+      await screen.findByRole("heading", { name: "Multiple locations" }),
+    ).toBeVisible();
+    expect(screen.getByTestId("grouped-flow")).toBeVisible();
+    expect(attempts).toBe(2);
+  });
+
+  it("renders one Flow divider for a group split across pages and associates every card with it", async () => {
+    const flowItem = (
+      suffix: string,
+      groupKey: string,
+      groupLabel: string,
+    ): ToolGalleryItemOut => ({
+      ...item,
+      productId: testShortcode("product", `PRD-${suffix}`),
+      productName: `Flow tool ${suffix}`,
+      groupKey,
+      groupLabel,
+    });
+    const groups = [
+      { key: "alpha", label: "Alpha", itemCount: 59, startIndex: 0 },
+      { key: "split", label: "Split group", itemCount: 2, startIndex: 59 },
+      { key: "late", label: "Late group", itemCount: 1, startIndex: 61 },
+    ];
+    const firstPage: ToolGalleryOut = {
+      meta: { pageIndex: 0, pageSize: 60, totalCount: 62 },
+      items: [
+        flowItem("ALPHA", "alpha", "Alpha"),
+        flowItem("SPLIT1", "split", "Split group"),
+      ],
+      groups,
+      totals: { products: 62, placements: 62 },
+    };
+    const secondPage: ToolGalleryOut = {
+      ...firstPage,
+      meta: { ...firstPage.meta, pageIndex: 1 },
+      items: [
+        flowItem("SPLIT2", "split", "Split group"),
+        flowItem("LATE", "late", "Late group"),
+      ],
+    };
+    const transport = vi.fn(
+      async ({ input }: { input: { pagination: { pageIndex: number } } }) =>
+        input.pagination.pageIndex === 0 ? firstPage : secondPage,
+    );
+
+    renderGallery(firstPage, {
+      presentation: "flow",
+      section: "late",
+      operations: {
+        gallery: project.toolGallery.withTransport(transport),
+      },
+    });
+
+    expect(
+      await screen.findByRole("heading", { name: "Late group" }),
+    ).toBeVisible();
+    expect(transport).toHaveBeenCalledTimes(2);
+    expect(
+      screen.getAllByRole("heading", { name: "Split group" }),
+    ).toHaveLength(1);
+    const splitDivider = document.querySelector(
+      '[data-grouped-flow-group="split"]',
+    );
+    if (!(splitDivider instanceof HTMLElement)) {
+      throw new Error("Split Flow divider was not rendered");
+    }
+    expect(within(splitDivider).getByText("2")).toBeVisible();
+    for (const name of ["Flow tool SPLIT1", "Flow tool SPLIT2"]) {
+      expect(
+        screen.getByRole("button", { name: new RegExp(name) }),
+      ).toHaveAttribute("aria-describedby", "grouped-flow-group-split-heading");
+    }
+  });
+
+  it("does not repeat a handled section jump when refreshed data adds a group", async () => {
+    const scrollIntoView = vi.spyOn(HTMLElement.prototype, "scrollIntoView");
+    let result = response;
+    renderGallery(response, {
+      presentation: "flow",
+      section: item.groupKey,
+      operations: {
+        gallery: project.toolGallery.withTransport(async () => result),
+      },
+    });
+    await waitFor(() => expect(scrollIntoView).toHaveBeenCalledTimes(1));
+
+    result = {
+      ...response,
+      meta: { ...response.meta, totalCount: 2 },
+      totals: { products: 2, placements: 4 },
+      items: [
+        item,
+        {
+          ...item,
+          productId: testShortcode("product", "PRD-EXTRA"),
+          groupKey: "extra",
+          groupLabel: "Extra tools",
+        },
+      ],
+      groups: [
+        ...response.groups,
+        { key: "extra", label: "Extra tools", itemCount: 1, startIndex: 1 },
+      ],
+    };
+    await act(() =>
+      invalidateOperationTags(harness.queryClient, entityRipple("product")),
+    );
+    await screen.findByRole("heading", { name: "Extra tools" });
+    // Section scrolling settles after two frames. Adding data must not behave
+    // like switching layout and send someone back to an earlier jump target.
+    await act(
+      () =>
+        new Promise<void>((resolve) =>
+          requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+        ),
+    );
+    expect(scrollIntoView).toHaveBeenCalledTimes(1);
+    scrollIntoView.mockRestore();
   });
 
   it("renders direct section jumps for compact group rosters", async () => {

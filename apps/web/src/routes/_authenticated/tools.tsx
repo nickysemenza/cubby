@@ -1,10 +1,13 @@
 import type { ToolGalleryGroupBy } from "@cubby/schemas/project";
 import { createFileRoute, stripSearchParams } from "@tanstack/react-router";
-import { Grid2X2, Grid3X3, TableProperties } from "lucide-react";
+import { Grid2X2, Grid3X3, PanelsTopLeft, TableProperties } from "lucide-react";
 import { useCallback, useState } from "react";
 
 import { ToolMatrixPage } from "~/app/projects/tool-matrix-page";
-import { ToolGalleryPage } from "~/app/tools/tool-gallery-page";
+import {
+  ToolGalleryPage,
+  type ToolGalleryPresentation,
+} from "~/app/tools/tool-gallery-page";
 import {
   matrixSearchFromTools,
   type ToolMatrixSearch,
@@ -17,11 +20,12 @@ import {
 } from "~/components/ui/view-switcher";
 import { pageTitle } from "~/lib/page-title";
 
-type ToolsView = "gallery" | "compact" | "usage";
+type ToolsView = ToolGalleryPresentation | "usage";
 
 const VIEW_OPTIONS: ViewSwitcherOption<ToolsView>[] = [
-  { value: "gallery", label: "Cards", icon: Grid2X2 },
+  { value: "cards", label: "Cards", icon: Grid2X2 },
   { value: "compact", label: "Compact", icon: Grid3X3 },
+  { value: "flow", label: "Flow", icon: PanelsTopLeft },
   { value: "usage", label: "Usage", icon: TableProperties },
 ];
 
@@ -46,7 +50,8 @@ function ToolsPage() {
   const search = Route.useSearch();
   const navigate = Route.useNavigate();
   const view = search.view ?? "gallery";
-  const [compact, setCompact] = useState(false);
+  const [presentation, setPresentation] =
+    useState<ToolGalleryPresentation>("cards");
 
   const changeGalleryQuery = useCallback(
     (query: string | undefined) => {
@@ -106,9 +111,9 @@ function ToolsPage() {
         <ViewSwitcher
           ariaLabel="Tools view"
           options={VIEW_OPTIONS}
-          value={view === "gallery" && compact ? "compact" : view}
+          value={view === "gallery" ? presentation : "usage"}
           onValueChange={(nextView) => {
-            setCompact(nextView === "compact");
+            if (nextView !== "usage") setPresentation(nextView);
             void navigate({
               search: (previous) => ({
                 ...previous,
@@ -124,7 +129,7 @@ function ToolsPage() {
       {view === "gallery" ? (
         <div className="px-2 py-3 md:px-6 md:py-4">
           <ToolGalleryPage
-            compact={compact}
+            presentation={presentation}
             query={search.q ?? ""}
             groupBy={search.galleryGroup ?? "location"}
             section={search.section}
