@@ -185,7 +185,7 @@ test.describe("Recipe Flow", () => {
       ),
     ).toBeVisible();
 
-    await page.getByRole("button", { name: "List view", exact: true }).click();
+    await page.getByRole("button", { name: "Table view", exact: true }).click();
     await expect(page.getByText("Water", { exact: true })).toBeVisible();
     await expect(page.getByText("Mix dough", { exact: true })).toBeVisible();
     await expect(page.getByText("until smooth", { exact: true })).toBeVisible();
