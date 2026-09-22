@@ -431,11 +431,25 @@ const handler = {
     // of Gmail credentials. Pausing preserves queued work; cleanup remains safe.
     if (controller.cron === "*/5 * * * *") {
       await withRequestDbClient(env.HYPERDRIVE.connectionString, async () => {
-        const [{ db }, { repairImageProcessingWork }] = await Promise.all([
+        const [
+          { db },
+          { repairImageProcessingWork },
+          { expireOfflineImportRuns, expireStaleImportRuns },
+        ] = await Promise.all([
           import("./server/db"),
           import("./server/repo/image-processing-maintenance"),
+          import("./server/purchase-import/run-service"),
         ]);
         await repairImageProcessingWork(db);
+        // Purchase runs have no execution engine of their own to time them
+        // out: a lost settle event or a stalled coordinator leaves the row
+        // `running` forever and blocks the account's next sync.
+        const [offline, stale] = await Promise.all([
+          expireOfflineImportRuns(db),
+          expireStaleImportRuns(db, env.PURCHASE_IMPORT),
+        ]);
+        if (offline.expired > 0 || stale.expired > 0)
+          console.log("[scheduled] Purchase runs expired", { offline, stale });
       });
       return;
     }
@@ -446,12 +460,6 @@ const handler = {
         GOOGLE_CLIENT_ID?: string;
         GOOGLE_CLIENT_SECRET?: string;
       };
-      if (!google.GOOGLE_CLIENT_ID || !google.GOOGLE_CLIENT_SECRET) {
-        console.log(
-          "[scheduled] Gmail discovery skipped: Google OAuth is not configured",
-        );
-        return;
-      }
       await withRequestDbClient(env.HYPERDRIVE.connectionString, async () => {
         const [
           { db },
@@ -470,9 +478,24 @@ const handler = {
           import("./server/purchase-import/hunts"),
           import("./server/purchase-import/gmail/process"),
         ]);
-        const store = createBetterAuthGmailAccountStore(db);
+        // Hunts come from statement charges, not mail: they run whether or
+        // not Gmail is configured.
         const huntsCreated = await discoverImportHunts(db);
         console.log("[scheduled] Purchase hunts created", { huntsCreated });
+        if (!google.GOOGLE_CLIENT_ID || !google.GOOGLE_CLIENT_SECRET) {
+          console.log(
+            "[scheduled] Gmail discovery skipped: Google OAuth is not configured",
+          );
+          const huntsDispatched = await dispatchImportHunts(
+            db,
+            env.PURCHASE_AGENT_QUEUE,
+          );
+          console.log("[scheduled] Purchase hunts dispatched", {
+            huntsDispatched,
+          });
+          return;
+        }
+        const store = createBetterAuthGmailAccountStore(db);
         const summary = await runGmailHourlySync({
           db,
           listTargets: () => listGmailSyncTargets(db),
@@ -1036,6 +1059,16 @@ export class PurchaseImportService extends WorkerEntrypoint<Env> {
         { ...input, kind: "mark_run_failed", payload: input },
         () => service.markImportRunFailed(db, input),
       ),
+    );
+  }
+
+  reconcileSettledRun(input: {
+    runId: string;
+    operationId: string;
+    detail?: string;
+  }) {
+    return this.withDatabase((db, service) =>
+      service.reconcileSettledImportRun(db, this.env.PURCHASE_IMPORT, input),
     );
   }
 }

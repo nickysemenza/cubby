@@ -10,10 +10,10 @@ import {
   purchaseImportRunDetailResponse,
 } from "~/lib/purchase-import-run-detail";
 import { getPurchaseAgentQueue } from "~/server/cf-env";
+import { recordImportRunDispatchAttempt } from "~/server/purchase-import/dispatch";
 import {
   controlImportRun,
   loadImportRunByPublicId,
-  recordImportRunDispatchAttempt,
 } from "~/server/purchase-import/run-service";
 import { createRequestContext, requireActor } from "~/server/request-context";
 

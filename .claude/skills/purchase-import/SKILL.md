@@ -51,8 +51,11 @@ For browser evidence, continue every selected order or hunt before calling
 the required auditor batches. Persist only same-domain observations with
 `save_navigation_hints`, record a proven vendor-history boundary with
 `mark_history_expired`, and use `stop_import_run_for_review` when evidence is
-ambiguous or unreadable. These run-lifecycle tools are not substitutes for the
-prepare/commit writer.
+ambiguous or unreadable. Every turn ends in one of: a pending browser command,
+`awaiting_approval`, `finish_import_run`, or a review stop (a progress report
+with phase `review` stops the run exactly as `stop_import_run_for_review`
+does); a run left without any of these is moved to review by the server.
+These run-lifecycle tools are not substitutes for the prepare/commit writer.
 
 An interrupted mutation is recovered through
 `purchase_import_operation_status` with its original operation id. Repeating

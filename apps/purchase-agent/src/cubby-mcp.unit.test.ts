@@ -39,6 +39,7 @@ describe("cubbyMcpConnection", () => {
       recordAgentUsage: unavailable,
       updateAgentProgress: unavailable,
       markRunFailed: unavailable,
+      reconcileSettledRun: unavailable,
     };
     const connection = cubbyMcpConnection(runId, () => service);
     if (!connection.fetch) {

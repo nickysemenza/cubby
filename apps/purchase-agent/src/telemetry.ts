@@ -1,6 +1,10 @@
 import { observe, type FlueEvent } from "@flue/runtime";
 
-import { purchaseImportService, type AgentUsageEvent } from "./service";
+import {
+  purchaseImportService,
+  type AgentUsageEvent,
+  type PurchaseImportService,
+} from "./service";
 
 const INSTANCE_PREFIX = "import-run:";
 const attempts = new Map<string, number>();
@@ -70,21 +74,43 @@ export function installPurchaseImportTelemetry(): void {
 
     if (event.type !== "submission_settled") return;
     if (key) attempts.delete(key);
-    if (event.outcome === "completed") return;
-    await Promise.all([
-      service.markRunFailed({
-        runId,
-        operationId: `submission-settled:${event.submissionId}`,
-        failureCode:
-          event.outcome === "aborted" ? "flue_aborted" : "flue_failed",
-        detail: event.error?.message,
-      }),
-      service.updateAgentProgress({
-        runId,
-        eventId: `submission-settled:${event.submissionId}`,
-        phase: "review",
-        detail: event.error?.message ?? `Coordinator ${event.outcome}`,
-      }),
-    ]);
+    await settleSubmission(service, runId, event);
   });
+}
+
+type SettledEvent = Extract<FlueEvent, { type: "submission_settled" }>;
+
+/**
+ * A completed submission is not a completed run: the coordinator may simply
+ * have stopped calling tools. The server decides whether the run is still
+ * legitimately open (a browser command in flight) or needs review. Failed and
+ * aborted submissions terminalize the run here.
+ */
+export async function settleSubmission(
+  service: Pick<
+    PurchaseImportService,
+    "reconcileSettledRun" | "markRunFailed" | "updateAgentProgress"
+  >,
+  runId: string,
+  event: SettledEvent,
+): Promise<void> {
+  const operationId = `submission-settled:${event.submissionId}`;
+  if (event.outcome === "completed") {
+    await service.reconcileSettledRun({ runId, operationId });
+    return;
+  }
+  await Promise.all([
+    service.markRunFailed({
+      runId,
+      operationId,
+      failureCode: event.outcome === "aborted" ? "flue_aborted" : "flue_failed",
+      detail: event.error?.message,
+    }),
+    service.updateAgentProgress({
+      runId,
+      eventId: operationId,
+      phase: "review",
+      detail: event.error?.message ?? `Coordinator ${event.outcome}`,
+    }),
+  ]);
 }
