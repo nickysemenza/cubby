@@ -71,20 +71,36 @@ final class PhotoLibraryStore: NSObject, PHPhotoLibraryChangeObserver {
         scannedCount = 0
     }
 
-    /// Kept in the normal Photos screen while it is loading so a field freeze has enough state to
-    /// identify the blocked operation without first navigating to Developer tools.
-    var loadingDebugStatus: String {
-        let elapsed = loadingStartedAt.map { Date.now.timeIntervalSince($0) } ?? 0
-        let analysis = analysisStore == nil ? "deferred (not opened)" : "attached"
-        return """
-            Step: \(loadingStep)
-            Elapsed: \(elapsed.formatted(.number.precision(.fractionLength(1)))) s
-            Completed: \(completedLoadingSteps.isEmpty ? "none" : completedLoadingSteps.joined(separator: " → "))
-            Batches published: \(loadedBatchCount)\(expectedBatchCount.map { " of \($0)" } ?? "")
-            Photos published: \(count)
-            Analysis index: \(analysis)
-            """
+    /// The full step/elapsed/batch/analysis picture the Photos header used to print as six lines
+    /// of monospaced text. `PhotoLibraryHeader`'s one-line load-step caption replaces that on
+    /// screen, but a frozen support case still needs every one of these fields — this is what the
+    /// "Copy diagnostics" payload (`PhotosRootView`'s `CopyDiagnosticsButton`) carries instead.
+    struct LoadDiagnostics: Encodable {
+        let step: String
+        let elapsedSeconds: Double
+        let completedSteps: [String]
+        let batchesPublished: Int
+        let expectedBatches: Int?
+        let photosPublished: Int
+        let analysisIndexAttached: Bool
     }
+
+    var loadDiagnostics: LoadDiagnostics {
+        LoadDiagnostics(
+            step: loadingStep,
+            elapsedSeconds: loadingStartedAt.map { Date.now.timeIntervalSince($0) } ?? 0,
+            completedSteps: completedLoadingSteps,
+            batchesPublished: loadedBatchCount,
+            expectedBatches: expectedBatchCount,
+            photosPublished: count,
+            analysisIndexAttached: analysisStore != nil)
+    }
+
+    /// Photos this device has enumerated but not yet checked against Cubby — the "Not in Cubby"
+    /// filter's footnote count (`PhotoLibraryHeader`). Never negative: `checked` only ever grows to
+    /// intersect `assetsByID`'s current keys (see `refresh`), but a defensive `max` keeps this safe
+    /// even if that invariant is ever violated mid-refresh.
+    var uncheckedCount: Int { max(0, count - checked.count) }
 
     init(analysisStore: PhotoAnalysisStore? = nil) {
         self.analysisStore = analysisStore

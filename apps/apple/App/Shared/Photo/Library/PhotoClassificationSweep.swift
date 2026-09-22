@@ -107,6 +107,11 @@ final class PhotoClassificationSweep {
     private(set) var isRunning = false
     private(set) var analysedCount = 0
     private(set) var totalCount = 0
+    /// Set on the transition into running, cleared alongside `isRunning`. SwiftUI reads
+    /// `currentActivities` on every body evaluation, so a literal `.now` there would make the
+    /// Activity screen's relative timestamp perpetually say "now" — this is computed once per run
+    /// instead.
+    private(set) var startedAt: Date?
     /// The last successfully classified candidate's capture date — the plan's "resume cursor".
     /// Skip logic itself reads the durable `classifyVersion` in the store (survives relaunch on
     /// its own); this is kept for diagnostics/tests, not as the source of truth.
@@ -186,11 +191,6 @@ final class PhotoClassificationSweep {
             Task { @MainActor in self?.reconcile() }
         }
         systemConditionObservers = [thermalToken, powerToken]
-    }
-
-    var statusText: String? {
-        guard isRunning, totalCount > 0 else { return nil }
-        return "Analysing… \(analysedCount) of \(totalCount)"
     }
 
     /// Called on Photos-tab appear/disappear (Q4c: runs only while the tab is visible).
@@ -287,11 +287,13 @@ final class PhotoClassificationSweep {
             if runGeneration == token {
                 isRunning = false
                 runTask = nil
+                startedAt = nil
                 if uncoalescedAnalysedCount > 0 { analysedCount += uncoalescedAnalysedCount }
             }
         }
         guard !ordered.isEmpty else { return }
         isRunning = true
+        startedAt = .now
         var iterator = ordered.makeIterator()
         // `classify` is a value of a `@MainActor`-isolated function type — Sendable because
         // running it always hops back to this actor regardless of which executor called it — so
