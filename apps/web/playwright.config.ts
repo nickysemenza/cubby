@@ -85,6 +85,7 @@ export default defineConfig({
     /* retries: 0 means "on-first-retry" never fires — there is no retry to
        collect a trace on. Record on the first (only) failure instead. */
     trace: "retain-on-failure",
+    screenshot: "only-on-failure",
   },
 
   /* Configure projects for major browsers */

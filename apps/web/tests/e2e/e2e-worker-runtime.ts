@@ -170,21 +170,34 @@ export async function createE2EWorkerRuntime({
   const resources: E2EWorkerResources = {};
   let restoreEnvironment = () => {};
   let harness: TestHarness | undefined;
+  // Phase timings attribute a slow or failed worker start without a trace.
+  let phaseStart = performance.now();
+  const logPhase = (phase: string) => {
+    const now = performance.now();
+    console.log(
+      `[E2E Worker ${parallelIndex}] ${phase} ${Math.round(now - phaseStart)}ms`,
+    );
+    phaseStart = now;
+  };
   try {
     const database = await createE2EDatabase();
+    logPhase("database checkout");
     resources.database = database;
     restoreEnvironment = installDatabaseEnvironment(database.databaseUrl);
 
     const objectStorage = await createE2EObjectStorage();
     resources.objectStorage = objectStorage;
+    logPhase("object storage");
 
     harness = createHarness(database.databaseUrl, objectStorage.url);
     resources.harness = harness;
     const { url } = await harness.listen();
     const baseURL = url.origin;
+    logPhase("harness create+listen");
     const storageState = authenticated
       ? await authenticate(baseURL)
       : { cookies: [], origins: [] };
+    logPhase("auth");
 
     console.log(`[E2E Worker ${parallelIndex}] ${database.name} at ${baseURL}`);
 
