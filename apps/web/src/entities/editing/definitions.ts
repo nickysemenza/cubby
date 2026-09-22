@@ -41,7 +41,7 @@ import type {
   EntityEditValue,
   EntityEditValueBag,
 } from "./types";
-import { entityEditValueSchema } from "./value-schema";
+import { projectEntityEditRecordValue } from "./value-schema";
 
 const editable: EntityEditAccess = { mode: "editable" };
 
@@ -54,23 +54,50 @@ const valueFor = (record: EntityEditRecord | undefined, id: string) => {
   const candidate = Object.entries(record ?? {}).find(
     ([key]) => key === id,
   )?.[1];
-  return entityEditValueSchema.parse(candidate);
+  // Tolerant: a read projection may nest `Date`s (audit stamps on
+  // `unitMappings`/`externalIds` rows); opening an editor never throws on
+  // one (`value-schema.ts`).
+  return projectEntityEditRecordValue(candidate);
 };
 
-const changed = (
-  record: EntityEditRecord | undefined,
-  id: string,
-  value: EntityEditValue,
-) => !record || !isEqual(valueFor(record, id), value);
+/**
+ * Whether a form value differs from its baseline. `baseline === undefined`
+ * means the record carries no such key. For a write-only field (`readKey:
+ * null`) that is the normal state, and a `null` form value against it is
+ * *unchanged* — otherwise every untouched write-only field would emit
+ * `{ field: null }` on save (product's `upc: null` retires the primary GTIN
+ * through `syncPrimaryGtin`). A nullable *read* field absent from a partial
+ * record still emits `null`: there the absence is an incomplete projection,
+ * not "nothing stored", and an explicit clear must reach the server.
+ */
+const changed = (input: {
+  record: EntityEditRecord | undefined;
+  writeOnly: boolean;
+  baseline: EntityEditValue;
+  value: EntityEditValue;
+}) => {
+  if (!input.record) return true;
+  if (input.writeOnly && input.baseline === undefined && input.value === null)
+    return false;
+  return !isEqual(input.baseline, input.value);
+};
 
 /**
  * The gallery pseudo-fields have no stored twin on the record: `images` is
- * the read shape, and `pendingImageIds`/`removeImageIds`/`imageOrder` are
- * write-only instructions. Their baseline is derived from `images` (order)
- * or is the empty list, and a patch carries them only when they instruct
- * something — an untouched gallery sends none of them.
+ * the read shape, and `pendingImageIds`/`removeImageIds`/`imageOrder`/
+ * `pendingImagePurposes` are write-only instructions. Their baseline is
+ * derived from `images` (order) or is the empty list/map, and a patch
+ * carries them only when they instruct something — an untouched gallery
+ * sends none of them.
  */
 const IMAGE_LIST_FIELDS = new Set(["pendingImageIds", "removeImageIds"]);
+const IMAGE_PURPOSES_FIELD = "pendingImagePurposes";
+const imagePurposeMap = (
+  value: EntityEditValue,
+): Record<string, string> | undefined => {
+  const parsed = z.record(z.string(), z.string()).safeParse(value);
+  return parsed.success ? parsed.data : undefined;
+};
 const recordImageIds = (record: EntityEditRecord | undefined): string[] =>
   z
     .array(z.object({ id: z.string() }).loose())
@@ -134,7 +161,11 @@ interface FieldOptions<E extends EditableEntity> {
    * Override the generic record/create-default `initial` lookup — for an
    * editor-only pseudo field with no model field to read a record value from
    * (e.g. location's `collections`, folded from the stored `tags` at submit
-   * and unfolded back into a list here for edit-mode seeding).
+   * and unfolded back into a list here for edit-mode seeding), or for a
+   * model field whose form shape is a projection of the record's (rows
+   * reduced to their input shape). On update the same projection is the
+   * baseline `toPatch` diffs against, so an untouched projected field emits
+   * nothing and a cleared one emits `null`.
    */
   initial?: EditField<E>["initial"];
 }
@@ -343,6 +374,7 @@ const builderFor = <E extends EditableEntity>(
       if (options?.initial) return options.initial(input);
       const { operation, record, context } = input;
       if (IMAGE_LIST_FIELDS.has(id)) return [];
+      if (id === IMAGE_PURPOSES_FIELD) return {};
       if (id === "imageOrder")
         return operation === "update" ? recordImageIds(record) : [];
       const existing = valueFor(record, id);
@@ -383,10 +415,17 @@ const builderFor = <E extends EditableEntity>(
       }
       return options?.validate?.(input) ?? noIssues();
     },
-    toPatch: ({ value, record }) => {
+    toPatch: (input) => {
+      const { value, record } = input;
       if (IMAGE_LIST_FIELDS.has(id)) {
         const ids = imageIdList(value);
         return ids && ids.length > 0 ? { [id]: ids } : undefined;
+      }
+      if (id === IMAGE_PURPOSES_FIELD) {
+        const purposes = imagePurposeMap(value);
+        return purposes && Object.keys(purposes).length > 0
+          ? { [id]: purposes }
+          : undefined;
       }
       if (id === "imageOrder") {
         const ids = imageIdList(value);
@@ -398,7 +437,23 @@ const builderFor = <E extends EditableEntity>(
       if (resolutionMode !== undefined) {
         return isEqual(value, resolutionMode) ? undefined : { [id]: value };
       }
-      return changed(record, id, value) ? { [id]: value } : undefined;
+      // A field with its own `initial` projection diffs against that
+      // projection, not the raw record — the record's shape (full rows with
+      // audit stamps, a GTIN the editor shows as a UPC) is not what the form
+      // holds, so the raw value would read as changed on every save and a
+      // cleared value could never be told apart from an absent one.
+      const baseline =
+        options?.initial && record
+          ? options.initial(input)
+          : valueFor(record, id);
+      return changed({
+        record,
+        writeOnly: fieldModelByKey.get(id)?.readKey === null,
+        baseline,
+        value,
+      })
+        ? { [id]: value }
+        : undefined;
     },
   });
 

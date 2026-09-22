@@ -68,13 +68,23 @@ struct EntityRowPresentationTests {
                 .facts.contains { $0.id == "source" && $0.value == "example.com" }
         )
 
-        for renderer in ControlRendererID.allCases {
-            let status = NativePresentationCoverage.control(renderer)
-            if renderer == .structuredField {
-                #expect(status == .unsupported("Structured fields are available on web."))
-            } else {
-                #expect(!status.isUnsupported)
-            }
+        // A named allowlist, not `allCases`: the enum is generated from the manifest, so a
+        // renderer a web-only field declares must classify as unsupported (with a reason) rather
+        // than fail this test or pass as generic by accident.
+        let nativeControls: Set<ControlRendererID> = [
+            .amount, .entityMultiSelect, .ledgerAttributions, .tagList, .vendorName,
+            .entitySelect, .money, .url,
+        ]
+        for renderer in nativeControls {
+            #expect(!NativePresentationCoverage.control(renderer).isUnsupported)
+        }
+        #expect(NativePresentationCoverage.control(.imageOrder) == .ownedElsewhere)
+        #expect(
+            NativePresentationCoverage.control(.structuredField)
+                == .unsupported("Structured fields are available on web."))
+        for renderer in ControlRendererID.allCases
+        where !nativeControls.contains(renderer) && renderer != .imageOrder {
+            #expect(NativePresentationCoverage.control(renderer).isUnsupported)
         }
         for renderer in ListRendererID.allCases {
             #expect(NativePresentationCoverage.list(renderer) == .implemented)

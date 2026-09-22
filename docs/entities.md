@@ -206,7 +206,16 @@ supply the start when the primary one was never set (e.g. planting's
 `["sowedOn", "transplantedOn"]`: a nursery-bought seedling has no `sowedOn`,
 so its interval starts at `transplantedOn`). The default timeline marks such
 a row as inferred (`confident: false`) whenever a fallback key, not the
-first one, supplied the start. `edit.readOnlyOnUpdate` and
+first one, supplied the start. `edit.sections` (`[{ id, title, fields,
+collapsed? }]`) is the editor's section grammar: the web `EntityIntentFields`
+and the native `GenericEntityEditModel` both bucket the intent's fields by
+it, falling back to `control.section` groups when it is omitted. Because the
+native editor renders *only* the fields a declared section lists, the
+compiler requires a declaring entity to place every controlled field of its
+create/update rosters and edit intents exactly once — the image-block keys
+(`pendingImageIds`, `pendingImagePurposes`, `removeImageIds`, `imageOrder`)
+are excluded, since the editors' image block owns them on both platforms.
+`edit.readOnlyOnUpdate` and
 `edit.readOnlyWhen` lock fields in the update editor. `capabilities.timeline`
 (`"default"`: audit log plus the declared date fields; `"custom"`: the
 `extensions.ports.timeline` implementation) publishes

@@ -1,5 +1,6 @@
 import { allEntities, entityManifest } from "@cubby/schemas/entity-manifest";
 import { EXPENSE_DATE_REQUIRED_MESSAGE } from "@cubby/schemas/expense-fields";
+import { productWithMappingsAndFoodOut } from "@cubby/schemas/product";
 import { projectOut, taskOut } from "@cubby/schemas/project";
 import { testShortcode } from "@cubby/schemas/testing";
 import { describe, expect, it } from "vitest";
@@ -266,10 +267,7 @@ describe("entity edit definitions", () => {
   it("submits an otherwise-empty edit when buildData injects a fixed key (kernel)", () => {
     const today = householdLocalDate();
     // A minimal record — only the settle roster's own keys — rather than a
-    // full `mock(expenseOut)`: `EntityEditRecord` values may be a top-level
-    // `Date` but not one nested inside an array/object (`sourceClaims`' rows
-    // carry `createdAt`/`updatedAt`), which `mock()`'s full output includes
-    // and this kernel-level test has no use for.
+    // full `mock(expenseOut)`; this kernel-level test has no use for the rest.
     const record = {
       id: testShortcode("expense", "EXP-TEST"),
       lineKind: "principal",
@@ -304,6 +302,94 @@ describe("entity edit definitions", () => {
     // Only the injected key reached the wire — every rendered field was
     // genuinely untouched.
     expect(Object.keys(result.command.data)).toEqual(["future"]);
+  });
+
+  // A product's read projection nests `Date`s inside its `unitMappings` rows
+  // (`unitMappingOut.createdAt`), which the value bag's `z.json()` branch
+  // rejects: opening the editor threw. The record value is projected instead,
+  // and an untouched edit stays a no-op — in particular the write-only `upc`
+  // (`readKey: null`, seeded `null`) must not reach the wire as `upc: null`,
+  // which `syncPrimaryGtin` would read as "retire the primary GTIN".
+  it("opens a record with nested Dates and keeps an untouched edit empty, write-only fields included", () => {
+    const record = mock(productWithMappingsAndFoodOut, {
+      seed: 5,
+      overrides: {
+        images: [],
+        notes: "Keep dry",
+        unitMappings: [
+          {
+            id: "6b1c2c1e-0000-4000-8000-000000000001",
+            a: { value: 8, unit: "oz" },
+            b: { value: 1, unit: "each" },
+            source: "manual",
+            sourceMetadata: { type: "manual" as const },
+            createdAt: new Date("2026-01-02T03:04:05.000Z"),
+            updatedAt: new Date("2026-01-02T03:04:05.000Z"),
+          },
+        ],
+      },
+    });
+    const request = {
+      entity: "product" as const,
+      operation: "update" as const,
+      intent: "full" as const,
+      surface: "dialog" as const,
+      record,
+    };
+    const resolved = resolveEntityEdit(entityEditRegistry, request);
+    if (!("definition" in resolved)) throw new Error("product must resolve");
+    const values = initialEntityEditValues(resolved, request);
+    expect(values.unitMappings).toEqual([
+      expect.objectContaining({ createdAt: "2026-01-02T03:04:05.000Z" }),
+    ]);
+    expect(values.upc).toBeNull();
+    const untouched = buildEntityEdit(resolved, request, values);
+    expect(untouched).toMatchObject({ ok: true, changed: false });
+    if (!untouched.ok || untouched.command.operation !== "update")
+      throw new Error("untouched edit must build an update");
+    expect(untouched.command.data).toEqual({});
+
+    // An explicitly cleared nullable *read* field is a real change.
+    const cleared = buildEntityEdit(resolved, request, {
+      ...values,
+      notes: null,
+    });
+    expect(cleared).toMatchObject({ ok: true, changed: true });
+    if (!cleared.ok || cleared.command.operation !== "update")
+      throw new Error("cleared edit must build an update");
+    expect(cleared.command.data).toEqual({ notes: null });
+  });
+
+  it("still emits null for a nullable read field cleared against a partial record", () => {
+    const request = {
+      entity: "expense" as const,
+      operation: "update" as const,
+      intent: "settle" as const,
+      surface: "dialog" as const,
+      // `notes` absent: an incomplete projection, not "nothing stored".
+      record: {
+        id: testShortcode("expense", "EXP-TEST"),
+        future: true,
+        cost: 12,
+        date: "2026-08-20",
+        costType: "materials",
+        trade: null,
+        vendor: null,
+        orderId: null,
+        projectId: null,
+      },
+    };
+    const resolved = resolveEntityEdit(entityEditRegistry, request);
+    if (!("definition" in resolved)) throw new Error("expense must resolve");
+    const values = initialEntityEditValues(resolved, request);
+    const result = buildEntityEdit(resolved, request, {
+      ...values,
+      notes: null,
+    });
+    expect(result).toMatchObject({
+      ok: true,
+      command: { operation: "update", data: { notes: null } },
+    });
   });
 
   it("defaults pendingImageIds to an empty array off the field roster, not a per-entity literal (G5)", () => {

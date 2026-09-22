@@ -5,6 +5,7 @@ import { format, parseISO } from "date-fns";
 import {
   type ComponentProps,
   type ComponentType,
+  type ReactNode,
   useEffect,
   useId,
   useMemo,
@@ -18,6 +19,7 @@ import {
   useEntityDisplayImages,
 } from "~/app/_components/entity-media/entity-display-images";
 import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
+import type { PendingImage } from "~/app/_components/PendingImageUpload";
 import {
   SelectField as FinanceSelectField,
   SourceAliasesField,
@@ -57,6 +59,33 @@ interface EntityEditorFieldsProps {
   record?: EntityEditRecord;
 }
 
+/**
+ * What the dialog shell's image block knows when it asks a presentation's
+ * `media` hook. A presentation types its hook as
+ * `EntityEditorPresentation<E>["media"]`.
+ */
+interface EntityEditorMediaInput {
+  form: EntityEditorForm;
+  record?: EntityEditRecord;
+  /** Uploaded-but-unattached images of this session, in gallery order. */
+  pendingImages: readonly PendingImage[];
+  /** `record.images` — the gallery the shell already shows. */
+  existingImages: readonly PendingImage[];
+}
+
+interface EntityEditorMediaOutput {
+  /** Rendered directly under the image block (e.g. an identify-from-photo button). */
+  actions?: ReactNode;
+  /**
+   * Further attached images that live outside `record.images` (a second
+   * image collection such as label photos), merged into the gallery's
+   * existing images and deduplicated by id.
+   */
+  extraExistingImages?: readonly PendingImage[];
+  /** Rendered after the image block (e.g. a document/manual dropzone). */
+  documents?: ReactNode;
+}
+
 export interface EntityEditorPresentation<E extends EditableEntity> {
   title(input: {
     context: EntityEditContext;
@@ -69,6 +98,15 @@ export interface EntityEditorPresentation<E extends EditableEntity> {
   submitLabel?: string;
   size?: ComponentProps<typeof ResponsiveDialog>["size"];
   Fields: ComponentType<EntityEditorFieldsProps>;
+  /**
+   * Per-entity extension of the shell's generic image block, consulted only
+   * when the intent roster mounts that block (`pendingImageIds`). Called
+   * during render from a component whose identity is fixed for the dialog's
+   * lifetime, so it may use React hooks. The shell owns the pending list and
+   * the `pendingImageIds`/`pendingImagePurposes`/`removeImageIds`/
+   * `imageOrder` form values; the hook only adds to what is drawn.
+   */
+  media?(input: EntityEditorMediaInput): EntityEditorMediaOutput;
   successMessage(result: EntityEditResultFor<E>): string;
 }
 

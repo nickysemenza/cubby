@@ -235,12 +235,76 @@ const checkListTimeline = (
     dateKey(lifecycle.end, "list.timeline.lifecycle.end");
 };
 
-const checkEdit = (edit: EntityPresentation["edit"], lookup: FieldLookup) => {
+/**
+ * Field keys the editors' image block owns on both platforms (web
+ * `entity-edit-dialog-content.tsx`, native `EntityEditorSheet.imageKeys` +
+ * `GenericEntityEditModel`): never drawn as field controls, so never placed
+ * in a declared edit section.
+ */
+const IMAGE_BLOCK_FIELD_KEYS = new Set([
+  "pendingImageIds",
+  "pendingImagePurposes",
+  "removeImageIds",
+  "imageOrder",
+]);
+
+/**
+ * Declared `edit.sections` are the whole editor: the native editor renders
+ * only the fields a declared section lists (`GenericEntityEditModel.sections`
+ * filters by them), so a controlled field in any create/update roster that no
+ * section names would silently vanish there. Every controlled field of the
+ * payload rosters and of every edit intent must be placed exactly once.
+ */
+const checkEditSectionCoverage = (
+  sections: NonNullable<EntityPresentation["edit"]["sections"]>,
+  fieldModel: EntityFieldModel,
+  context: string,
+) => {
+  const placed = new Map<string, string>();
+  for (const section of sections) {
+    for (const key of section.fields) {
+      const previous = placed.get(key);
+      if (previous !== undefined)
+        throw new EntityDeclarationError(
+          `${context}.edit.sections place ${key} twice (${previous}, ${section.id}).`,
+        );
+      placed.set(key, section.id);
+    }
+  }
+  const controlled = new Set(
+    fieldModel.fields
+      .filter((field) => field.control !== null)
+      .map((field) => field.key),
+  );
+  const rostered = new Set([
+    ...fieldModel.create,
+    ...fieldModel.update,
+    ...Object.values(fieldModel.intents?.fields ?? {}).flat(),
+  ]);
+  const missing = [...rostered].filter(
+    (key) =>
+      controlled.has(key) &&
+      !IMAGE_BLOCK_FIELD_KEYS.has(key) &&
+      !placed.has(key),
+  );
+  if (missing.length > 0)
+    throw new EntityDeclarationError(
+      `${context}.edit.sections leave controlled roster fields unplaced (the native editor drops them): ${missing.join(", ")}.`,
+    );
+};
+
+const checkEdit = (
+  edit: EntityPresentation["edit"],
+  fieldModel: EntityFieldModel,
+  lookup: FieldLookup,
+) => {
   const { context } = lookup;
   for (const section of edit.sections ?? []) {
     for (const key of section.fields)
       lookup.edit(key, `edit.sections[${section.id}]`);
   }
+  if (edit.sections !== null && edit.sections !== undefined)
+    checkEditSectionCoverage(edit.sections, fieldModel, context);
   for (const key of edit.readOnlyOnUpdate)
     lookup.edit(key, "edit.readOnlyOnUpdate");
   for (const [index, rule] of edit.readOnlyWhen.entries()) {
@@ -300,7 +364,7 @@ export const compilePresentation = (
     throw new EntityDeclarationError(
       `${context}.capabilities.timeline "custom" and extensions.ports.timeline must be declared together.`,
     );
-  checkEdit(edit, lookup);
+  checkEdit(edit, fieldModel, lookup);
   const mobileSubtitle = fieldModel.fields
     .filter(
       (field) =>
