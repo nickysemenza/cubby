@@ -1,6 +1,7 @@
 import {
   inventoryShortcode,
   locationShortcode,
+  productShortcode,
 } from "@cubby/schemas/identifiers";
 import { useCallback, useState } from "react";
 import { z } from "zod";
@@ -32,7 +33,7 @@ const discardableRow = z.object({
   id: inventoryShortcode,
   amount: z.object({ value: z.number(), unit: z.string() }),
   location: z.object({ id: locationShortcode, name: z.string() }),
-  product: z.object({ name: z.string() }),
+  product: z.object({ id: productShortcode, name: z.string() }),
 });
 
 const asDiscardItem = (row: EntityActionRow): InventoryDialogItem | null => {

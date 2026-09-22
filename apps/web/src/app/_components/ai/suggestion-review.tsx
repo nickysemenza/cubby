@@ -14,16 +14,24 @@ import { Button } from "~/components/ui/button";
 import { Description } from "~/components/ui/description";
 import { getAppErrorDetails } from "~/lib/error-utils";
 
+/** A `remove` (prune) proposal reviews at 0.85 regardless of `alternative` or
+ * whether the field already has a value — it is never a "replace a value
+ * with another guess" alternative, so the stricter 0.95 alternative gate
+ * doesn't apply to it. */
+const REMOVE_THRESHOLD = 0.85;
+
 export function actionableSuggestion(
   suggestion: FieldSuggestion | null,
   current: string | null,
   alternative = false,
 ): suggestion is FieldSuggestion & { value: string } {
-  return Boolean(
-    suggestion?.value &&
-    suggestion.value !== current &&
-    suggestion.probability != null &&
-    suggestion.probability >= (alternative || current?.trim() ? 0.95 : 0.85),
+  if (!suggestion?.value || suggestion.value === current) return false;
+  if (suggestion.probability == null) return false;
+  if (suggestion.operation === "remove") {
+    return suggestion.probability >= REMOVE_THRESHOLD;
+  }
+  return (
+    suggestion.probability >= (alternative || current?.trim() ? 0.95 : 0.85)
   );
 }
 
@@ -57,41 +65,21 @@ export function SuggestionVisitProvider({ children }: { children: ReactNode }) {
   );
 }
 
-/** The key includes the question, current value and answer: new evidence can be reviewed. */
-export function SuggestionReview({
-  suggestion,
-  currentValue,
-  currentLabel,
-  questionKey,
-  pending,
-  onApply,
-  applyLabel = "Use suggestion",
-  alternative = false,
-  children,
-}: {
-  children?: ReactNode;
-  suggestion: FieldSuggestion | null;
-  currentValue: string | null;
-  currentLabel?: ReactNode;
-  questionKey: string;
-  pending?: boolean;
-  onApply: () => void | Promise<void>;
-  applyLabel?: string;
-  alternative?: boolean;
-}) {
+/** Dismiss/apply/saving/failure state shared by both the `remove` and `set`
+ * review bodies — factored out so `SuggestionReview` itself stays a thin
+ * gate + layout switch instead of owning every branch. */
+function useSuggestionActions(
+  key: string,
+  onApply: () => void | Promise<void>,
+  pending: boolean | undefined,
+) {
   const visit = useSuggestionVisit();
   const [localDismissed, setLocalDismissed] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [failure, setFailure] = useState<unknown>(null);
   const active = useRef(false);
-  const key = JSON.stringify([questionKey, currentValue, suggestion?.value]);
+  const dismissed = visit ? visit.dismissed.has(key) : localDismissed === key;
   const dismiss = () => (visit ? visit.dismiss(key) : setLocalDismissed(key));
-  if (
-    !actionableSuggestion(suggestion, currentValue, alternative) ||
-    visit?.dismissed.has(key) ||
-    localDismissed === key
-  )
-    return children ?? null;
   const apply = async () => {
     if (active.current || pending) return;
     active.current = true;
@@ -108,6 +96,91 @@ export function SuggestionReview({
       setSaving(false);
     }
   };
+  return { dismissed, dismiss, apply, saving, failure };
+}
+
+interface ReviewBodyProps {
+  suggestion: FieldSuggestion & { value: string };
+  pending?: boolean;
+  saving: boolean;
+  failure: unknown;
+  apply: () => void;
+  dismiss: () => void;
+  applyLabel: string;
+  children?: ReactNode;
+}
+
+/** A prune (`operation: "remove"`) proposal never replaces the current value
+ * with another guess — it always shows the current chips as-is, plus why one
+ * or more of them is redundant, not an arrow-to-a-new-value flow. */
+function RemoveReviewBody({
+  suggestion,
+  pending,
+  saving,
+  failure,
+  apply,
+  dismiss,
+  applyLabel,
+  children,
+}: ReviewBodyProps) {
+  return (
+    <Stack
+      gap="xs"
+      className="min-w-0 whitespace-normal"
+      onClick={(event) => event.stopPropagation()}
+      onMouseDown={(event) => event.stopPropagation()}
+    >
+      {children}
+      <Description size="xs" className="text-muted-foreground">
+        {suggestion.label ?? `Remove ${suggestion.value}`}
+        {suggestion.detail ? ` — ${suggestion.detail}` : ""}
+      </Description>
+      <Row gap="xs" wrap>
+        <Button
+          type="button"
+          variant="link"
+          size="xs"
+          className="min-h-11 md:min-h-0"
+          disabled={pending || saving}
+          onClick={apply}
+        >
+          {saving ? "Saving…" : applyLabel}
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          size="xs"
+          className="min-h-11 md:min-h-0"
+          disabled={saving}
+          onClick={dismiss}
+        >
+          Keep
+        </Button>
+      </Row>
+      {failure !== null ? (
+        <Description size="xs" role="alert">
+          Could not save: {getAppErrorDetails(failure).message}
+        </Description>
+      ) : null}
+    </Stack>
+  );
+}
+
+function SetReviewBody({
+  suggestion,
+  currentValue,
+  currentLabel,
+  pending,
+  saving,
+  failure,
+  apply,
+  dismiss,
+  applyLabel,
+  children,
+}: ReviewBodyProps & {
+  currentValue: string | null;
+  currentLabel?: ReactNode;
+}) {
   return (
     <Stack
       gap="xs"
@@ -158,5 +231,59 @@ export function SuggestionReview({
         </Description>
       ) : null}
     </Stack>
+  );
+}
+
+/** The key includes the question, current value and answer: new evidence can be reviewed. */
+export function SuggestionReview({
+  suggestion,
+  currentValue,
+  currentLabel,
+  questionKey,
+  pending,
+  onApply,
+  applyLabel,
+  alternative = false,
+  children,
+}: {
+  children?: ReactNode;
+  suggestion: FieldSuggestion | null;
+  currentValue: string | null;
+  currentLabel?: ReactNode;
+  questionKey: string;
+  pending?: boolean;
+  onApply: () => void | Promise<void>;
+  applyLabel?: string;
+  alternative?: boolean;
+}) {
+  const key = JSON.stringify([questionKey, currentValue, suggestion?.value]);
+  const { dismissed, dismiss, apply, saving, failure } = useSuggestionActions(
+    key,
+    onApply,
+    pending,
+  );
+  if (!actionableSuggestion(suggestion, currentValue, alternative) || dismissed)
+    return children ?? null;
+  const isRemove = suggestion.operation === "remove";
+  const resolvedApplyLabel =
+    applyLabel ?? (isRemove ? "Remove tags" : "Use suggestion");
+  const bodyProps: ReviewBodyProps = {
+    suggestion,
+    pending,
+    saving,
+    failure,
+    apply,
+    dismiss,
+    applyLabel: resolvedApplyLabel,
+    children,
+  };
+  return isRemove ? (
+    <RemoveReviewBody {...bodyProps} />
+  ) : (
+    <SetReviewBody
+      {...bodyProps}
+      currentValue={currentValue}
+      currentLabel={currentLabel}
+    />
   );
 }

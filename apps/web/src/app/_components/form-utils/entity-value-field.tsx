@@ -63,6 +63,7 @@ export function EntityValueField<
     isPending,
     apply,
     seedItem,
+    seedItems,
     currentValue,
     questionKey,
   } = useAutoFieldSuggestion({
@@ -73,82 +74,100 @@ export function EntityValueField<
   });
   return (
     <SearchProvider scope={scope}>
-      {({ items, onSearchChange, isLoading, onCreateNew, onOpenChange }) => (
-        <Controller
-          control={form.control}
-          name={name}
-          render={({ field, fieldState }) => {
-            const rawId = z.string().safeParse(field.value).data;
-            const id = rawId ? parseShortcodeFor(entity, rawId) : null;
-            const selected =
-              items.find((item) => item.id === id) ??
-              (id && seedItem?.id === id
-                ? ({
-                    ...seedItem,
-                    id,
-                  } satisfies ComboboxItem<ShortcodeFor<E>>)
-                : id
-                  ? ({ id, shortcode: id, name: id } satisfies ComboboxItem<
-                      ShortcodeFor<E>
-                    >)
-                  : null);
-            return (
-              <FormFieldGroup
-                htmlFor={controlId}
-                label={label}
-                description={description}
-                descriptionId={descriptionId}
-                invalid={fieldState.invalid}
-                error={fieldState.error}
-              >
-                <EntityPicker
-                  inputId={controlId}
-                  inputRef={field.ref}
-                  aria-describedby={description ? descriptionId : undefined}
-                  entity={entity}
-                  // The field label is the picker's accessible name ("Parent
-                  // location", not "location") and names its clear button.
-                  label={label ?? entity}
-                  placeholder={placeholder}
-                  items={items}
-                  value={selected}
-                  setValue={(item) => {
-                    field.onBlur();
-                    field.onChange(
-                      // SAFETY: `name` is a caller-owned Path whose value is
-                      // the selected entity shortcode; RHF cannot derive the
-                      // relationship from this generic form type.
-                      (item?.id ?? "") as PathValue<
-                        TFieldValues,
-                        Path<TFieldValues>
-                      >,
-                    );
-                  }}
-                  onSearchChange={onSearchChange}
-                  isLoading={isLoading}
-                  onCreateNew={onCreateNew}
-                  onOpenChange={(open) => {
-                    if (!open) field.onBlur();
-                    onOpenChange?.(open);
-                  }}
-                  clearable={clearable}
-                />
-                {suggestField && (
-                  <FieldSuggestionHint
-                    currentValue={currentValue}
-                    currentLabel={selected?.name}
-                    questionKey={questionKey}
-                    suggestion={suggestion}
-                    applied={applied}
-                    pending={isPending}
-                    onApply={apply}
+      {({
+        items: rosterItems,
+        onSearchChange,
+        isLoading,
+        onCreateNew,
+        onOpenChange,
+      }) => {
+        // Pinned "Suggested" section ahead of the roster, only while there is
+        // a live suggestion to show — an id the roster also lists is shown
+        // once, under "Suggested", not twice.
+        const suggestedIds = new Set(seedItems.map((item) => item.id));
+        const items = suggestion
+          ? [
+              ...seedItems,
+              ...rosterItems.filter((item) => !suggestedIds.has(item.id)),
+            ]
+          : rosterItems;
+        return (
+          <Controller
+            control={form.control}
+            name={name}
+            render={({ field, fieldState }) => {
+              const rawId = z.string().safeParse(field.value).data;
+              const id = rawId ? parseShortcodeFor(entity, rawId) : null;
+              const selected =
+                items.find((item) => item.id === id) ??
+                (id && seedItem?.id === id
+                  ? ({
+                      ...seedItem,
+                      id,
+                    } satisfies ComboboxItem<ShortcodeFor<E>>)
+                  : id
+                    ? ({ id, shortcode: id, name: id } satisfies ComboboxItem<
+                        ShortcodeFor<E>
+                      >)
+                    : null);
+              return (
+                <FormFieldGroup
+                  htmlFor={controlId}
+                  label={label}
+                  description={description}
+                  descriptionId={descriptionId}
+                  invalid={fieldState.invalid}
+                  error={fieldState.error}
+                >
+                  <EntityPicker
+                    inputId={controlId}
+                    inputRef={field.ref}
+                    aria-describedby={description ? descriptionId : undefined}
+                    entity={entity}
+                    // The field label is the picker's accessible name ("Parent
+                    // location", not "location") and names its clear button.
+                    label={label ?? entity}
+                    placeholder={placeholder}
+                    items={items}
+                    value={selected}
+                    setValue={(item) => {
+                      field.onBlur();
+                      field.onChange(
+                        // SAFETY: `name` is a caller-owned Path whose value is
+                        // the selected entity shortcode; RHF cannot derive the
+                        // relationship from this generic form type.
+                        (item?.id ?? "") as PathValue<
+                          TFieldValues,
+                          Path<TFieldValues>
+                        >,
+                      );
+                    }}
+                    onSearchChange={onSearchChange}
+                    isLoading={isLoading}
+                    onCreateNew={onCreateNew}
+                    onOpenChange={(open) => {
+                      if (!open) field.onBlur();
+                      onOpenChange?.(open);
+                    }}
+                    clearable={clearable}
                   />
-                )}
-              </FormFieldGroup>
-            );
-          }}
-        />
-      )}
+                  {suggestField && (
+                    <FieldSuggestionHint
+                      currentValue={currentValue}
+                      currentLabel={selected?.name}
+                      questionKey={questionKey}
+                      suggestion={suggestion}
+                      applied={applied}
+                      pending={isPending}
+                      onApply={apply}
+                    />
+                  )}
+                </FormFieldGroup>
+              );
+            }}
+          />
+        );
+      }}
     </SearchProvider>
   );
 }

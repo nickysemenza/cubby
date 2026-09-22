@@ -133,6 +133,33 @@ history is the archive. Permanent product constraints live in the
   generic detail/list pages were built against (hero plate, section kinds,
   workbench band, journal variant) and is referenced only from #1067.
 
+- **Classification list filter has no tree grouping.** The `idMulti`
+  `productCategory` column filter renders through `MultiselectEditor`, not
+  `FilterableCombobox` — the group-header + depth rendering `tree-items.ts`'s
+  `treePickerItems` now feeds `EntityPicker`/`FilterableCombobox` (single-value
+  filters) needs a parallel `group`/`depth` on `FilterableComboboxItem` there
+  too, plus `useFilterOptions`'s hashing to key on the tree shape, not just
+  the flat option list.
+
+- **Location search hits carry no structured ancestor path.** The blank-query
+  location picker groups by root and indents by depth now
+  (`buildLocationComboboxItem`, `combobox-builders.tsx`), because it carries
+  `ancestors: [{id,name}]`. A typed-query search hit only has
+  `searchHitSchema`'s flat title/subtitle string — parsing that back into a
+  path is out of scope. Add a structured `path` to location search hits so
+  the typed-query picker can read as a tree too.
+
+- **`location.tags` has no redundant-token prune target.** `product.tags`
+  gets `control.suggest.mode: "prune"` (`redundant-tokens.ts`); the mechanism
+  is generic but `location.tags` holds only `collection:*` entries in
+  practice today, so its registry entry is deferred until locations actually
+  accumulate restating tags worth pruning.
+
+- **Project/Task parent pickers stay flat.** `task.projectId`'s and any
+  project-parent picker's rosters are shallow enough that hierarchical
+  grouping (`treePickerItems`) is not worth the wiring yet — revisit if
+  either roster grows deep nesting.
+
 ---
 
 ## Ready projects

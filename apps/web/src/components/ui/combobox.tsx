@@ -42,6 +42,14 @@ export interface FilterableComboboxItem {
    * the collapsed multi-combobox summary interpolate it into `${label} +${n}`.
    */
   meta?: boolean;
+  /** Optional result section for a hierarchical roster (`treePickerItems`,
+   * `~/app/_components/combobox/tree-items.ts`) — rendered as a header row
+   * whenever it changes between consecutive items. Callers own ordering:
+   * this list is never re-sorted by group here. */
+  group?: { id: string; label: string; order: number };
+  /** Distance from the root of a hierarchical roster (0 = root) — indents
+   * the row so a tree reads as a tree. */
+  depth?: number;
 }
 
 interface FilterableComboboxProps {
@@ -256,29 +264,44 @@ function ComboboxPopup({
               {items.map((item, index) => {
                 const isFirstNonMeta =
                   rosterStart > 0 && index === rosterStart;
+                const previousGroup = items[index - 1]?.group;
+                const showGroup =
+                  item.group && item.group.id !== previousGroup?.id;
+                const depth = item.depth ?? 0;
                 return (
-                  <ComboboxPrimitive.Item
-                    key={item.value}
-                    value={item.value}
-                    className={cn(
-                      // Compact layout
-                      "relative flex min-h-8 items-center gap-2 rounded-md px-2 py-1.5",
-                      // Typography
-                      "cursor-default text-xs outline-none select-none",
-                      // Interactive states
-                      "data-highlighted:bg-accent data-highlighted:text-accent-foreground",
-                      // Selected state - subtle background highlight
-                      "data-[selected]:bg-accent/50",
-                      // Disabled
-                      "data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
-                      // Meta options (nullable-filter sentinels) render in the
-                      // eyebrow register — a predicate about the data, not a
-                      // value drawn from it.
-                      item.meta &&
-                        "font-mono text-2xs uppercase tracking-wider text-slate",
-                      isFirstNonMeta && "border-t border-[var(--border)]",
-                    )}
-                  >
+                  <React.Fragment key={item.value}>
+                    {showGroup ? (
+                      <div
+                        role="presentation"
+                        className="border-b border-[var(--border)] bg-muted/40 px-2 py-1 text-[11px] font-medium text-muted-foreground first:border-t-0"
+                      >
+                        {item.group!.label}
+                      </div>
+                    ) : null}
+                    <ComboboxPrimitive.Item
+                      value={item.value}
+                      className={cn(
+                        // Compact layout
+                        "relative flex min-h-8 items-center gap-2 rounded-md px-2 py-1.5",
+                        // Typography
+                        "cursor-default text-xs outline-none select-none",
+                        // Interactive states
+                        "data-highlighted:bg-accent data-highlighted:text-accent-foreground",
+                        // Selected state - subtle background highlight
+                        "data-[selected]:bg-accent/50",
+                        // Disabled
+                        "data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
+                        // Meta options (nullable-filter sentinels) render in the
+                        // eyebrow register — a predicate about the data, not a
+                        // value drawn from it.
+                        item.meta &&
+                          "font-mono text-2xs uppercase tracking-wider text-slate",
+                        isFirstNonMeta && "border-t border-[var(--border)]",
+                      )}
+                      style={
+                        depth > 0 ? { paddingLeft: 8 + depth * 12 } : undefined
+                      }
+                    >
                     <ComboboxPrimitive.ItemIndicator className="shrink-0">
                       <CheckIcon className="size-3.5" />
                     </ComboboxPrimitive.ItemIndicator>
@@ -317,7 +340,8 @@ function ComboboxPopup({
                         {item.hint}
                       </span>
                     )}
-                  </ComboboxPrimitive.Item>
+                    </ComboboxPrimitive.Item>
+                  </React.Fragment>
                 );
               })}
             </ComboboxPrimitive.List>

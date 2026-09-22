@@ -34,14 +34,13 @@ import { z } from "zod";
 
 import type { InventoryDialogItem } from "~/app/_components/inventory/dialog-item";
 import { inventory } from "~/app/inventory/inventory.functions";
-import { tradeOptions } from "~/app/projects/trade-options";
 import { BulkActionDialog } from "~/components/dialogs/bulk-action-dialog";
 import { Stack } from "~/components/layout";
 import { QuantityInput } from "~/components/ui/quantity-input";
 import { getErrorMessage } from "~/lib/error-utils";
 import { wasm } from "~/lib/wasm";
 
-import { PlainDateField, SelectField, UnifiedTextField } from "../form-utils";
+import { DiscardLineFields } from "./discard-line-fields";
 
 const formSchema = z.object({
   trade: tradeSchema,
@@ -110,6 +109,16 @@ export const BulkDiscardInventoryDialog: FC<
   }, [selectionKey, open, form]);
 
   const quantities = form.watch("quantities");
+
+  // Ambiguous with more than one product staged — same single-item gate as
+  // bulk-edit's own basis rule (`bulk-edit-entity-action.tsx`).
+  const soleProduct = useMemo(() => {
+    const ids = new Set(items.map((item) => item.product.id));
+    const only = items[0]?.product;
+    return ids.size === 1 && only?.id !== undefined
+      ? { id: only.id, name: only.name }
+      : undefined;
+  }, [items]);
 
   const discard = useMutation(
     inventory.bulkDiscard.mutationOptions({
@@ -239,24 +248,10 @@ export const BulkDiscardInventoryDialog: FC<
       error={error}
     >
       <Stack gap="sm">
-        <PlainDateField
+        <DiscardLineFields
           form={form}
-          name="date"
-          label="Date"
-          clearLabel="Date unknown"
-        />
-        <SelectField
-          form={form}
-          name="trade"
-          label="Trade"
-          options={tradeOptions}
-          placeholder="Choose a trade…"
-        />
-        <UnifiedTextField
-          form={form}
-          name="reason"
-          label="Reason"
-          placeholder="Broke, worn out, given away…"
+          productId={soleProduct?.id}
+          productName={soleProduct?.name}
         />
       </Stack>
     </BulkActionDialog>

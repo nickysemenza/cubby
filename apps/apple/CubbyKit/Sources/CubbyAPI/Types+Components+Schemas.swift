@@ -1964,7 +1964,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/BrowserBridgeOperationCapture/type`.
             public var _type: Components.Schemas.BrowserBridgeOperationCapture._TypePayload
             /// - Remark: Generated from `#/components/schemas/BrowserBridgeOperationCapture/allowedHosts`.
-            public var allowedHosts: Components.Schemas.InputSchema160
+            public var allowedHosts: Components.Schemas.InputSchema162
             /// - Remark: Generated from `#/components/schemas/BrowserBridgeOperationCapture/enhancedEvidence`.
             public var enhancedEvidence: Swift.Bool
             /// - Remark: Generated from `#/components/schemas/BrowserBridgeOperationCapture/recoveryURL`.
@@ -2019,7 +2019,7 @@ extension Components {
             ///   - evidenceScope:
             public init(
                 _type: Components.Schemas.BrowserBridgeOperationCapture._TypePayload,
-                allowedHosts: Components.Schemas.InputSchema160,
+                allowedHosts: Components.Schemas.InputSchema162,
                 enhancedEvidence: Swift.Bool,
                 recoveryURL: Swift.String? = nil,
                 evidenceScope: Components.Schemas.BrowserBridgeOperationCapture.EvidenceScopePayload? = nil
@@ -2044,7 +2044,7 @@ extension Components {
                     forKey: ._type
                 )
                 self.allowedHosts = try container.decode(
-                    Components.Schemas.InputSchema160.self,
+                    Components.Schemas.InputSchema162.self,
                     forKey: .allowedHosts
                 )
                 self.enhancedEvidence = try container.decode(
@@ -2079,7 +2079,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/BrowserBridgeOperationFollowCapturedLink/linkID`.
             public var linkID: Swift.String
             /// - Remark: Generated from `#/components/schemas/BrowserBridgeOperationFollowCapturedLink/allowedHosts`.
-            public var allowedHosts: Components.Schemas.InputSchema160
+            public var allowedHosts: Components.Schemas.InputSchema162
             /// Creates a new `BrowserBridgeOperationFollowCapturedLink`.
             ///
             /// - Parameters:
@@ -2089,7 +2089,7 @@ extension Components {
             public init(
                 _type: Components.Schemas.BrowserBridgeOperationFollowCapturedLink._TypePayload,
                 linkID: Swift.String,
-                allowedHosts: Components.Schemas.InputSchema160
+                allowedHosts: Components.Schemas.InputSchema162
             ) {
                 self._type = _type
                 self.linkID = linkID
@@ -2111,7 +2111,7 @@ extension Components {
                     forKey: .linkID
                 )
                 self.allowedHosts = try container.decode(
-                    Components.Schemas.InputSchema160.self,
+                    Components.Schemas.InputSchema162.self,
                     forKey: .allowedHosts
                 )
                 try decoder.ensureNoAdditionalProperties(knownKeys: [
@@ -2132,7 +2132,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/BrowserBridgeOperationNavigate/url`.
             public var url: Swift.String
             /// - Remark: Generated from `#/components/schemas/BrowserBridgeOperationNavigate/allowedHosts`.
-            public var allowedHosts: Components.Schemas.InputSchema160
+            public var allowedHosts: Components.Schemas.InputSchema162
             /// Creates a new `BrowserBridgeOperationNavigate`.
             ///
             /// - Parameters:
@@ -2142,7 +2142,7 @@ extension Components {
             public init(
                 _type: Components.Schemas.BrowserBridgeOperationNavigate._TypePayload,
                 url: Swift.String,
-                allowedHosts: Components.Schemas.InputSchema160
+                allowedHosts: Components.Schemas.InputSchema162
             ) {
                 self._type = _type
                 self.url = url
@@ -2164,7 +2164,7 @@ extension Components {
                     forKey: .url
                 )
                 self.allowedHosts = try container.decode(
-                    Components.Schemas.InputSchema160.self,
+                    Components.Schemas.InputSchema162.self,
                     forKey: .allowedHosts
                 )
                 try decoder.ensureNoAdditionalProperties(knownKeys: [
@@ -21208,25 +21208,25 @@ extension Components {
                 ])
             }
         }
-        /// - Remark: Generated from `#/components/schemas/input_schema160`.
-        public typealias InputSchema160 = [Swift.String]
-        /// - Remark: Generated from `#/components/schemas/input_schema171`.
-        public struct InputSchema171: Codable, Hashable, Sendable {
-            /// - Remark: Generated from `#/components/schemas/input_schema171/kind`.
+        /// - Remark: Generated from `#/components/schemas/input_schema162`.
+        public typealias InputSchema162 = [Swift.String]
+        /// - Remark: Generated from `#/components/schemas/input_schema173`.
+        public struct InputSchema173: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/input_schema173/kind`.
             @frozen public enum KindPayload: String, Codable, Hashable, Sendable, CaseIterable {
                 case product = "product"
             }
-            /// - Remark: Generated from `#/components/schemas/input_schema171/kind`.
-            public var kind: Components.Schemas.InputSchema171.KindPayload
-            /// - Remark: Generated from `#/components/schemas/input_schema171/value`.
+            /// - Remark: Generated from `#/components/schemas/input_schema173/kind`.
+            public var kind: Components.Schemas.InputSchema173.KindPayload
+            /// - Remark: Generated from `#/components/schemas/input_schema173/value`.
             public var value: Components.Schemas.ProductShortcode
-            /// Creates a new `InputSchema171`.
+            /// Creates a new `InputSchema173`.
             ///
             /// - Parameters:
             ///   - kind:
             ///   - value:
             public init(
-                kind: Components.Schemas.InputSchema171.KindPayload,
+                kind: Components.Schemas.InputSchema173.KindPayload,
                 value: Components.Schemas.ProductShortcode
             ) {
                 self.kind = kind
@@ -21237,9 +21237,9 @@ extension Components {
                 case value
             }
         }
-        /// - Remark: Generated from `#/components/schemas/input_schema176`.
-        public struct InputSchema176: Codable, Hashable, Sendable {
-            /// - Remark: Generated from `#/components/schemas/input_schema176/orderBy`.
+        /// - Remark: Generated from `#/components/schemas/input_schema178`.
+        public struct InputSchema178: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/input_schema178/orderBy`.
             @frozen public enum OrderByPayload: String, Codable, Hashable, Sendable, CaseIterable {
                 case fdcId = "fdc_id"
                 case description = "description"
@@ -21247,23 +21247,23 @@ extension Components {
                 case relevance = "relevance"
                 case linkedProducts = "linkedProducts"
             }
-            /// - Remark: Generated from `#/components/schemas/input_schema176/orderBy`.
-            public var orderBy: Components.Schemas.InputSchema176.OrderByPayload?
-            /// - Remark: Generated from `#/components/schemas/input_schema176/direction`.
+            /// - Remark: Generated from `#/components/schemas/input_schema178/orderBy`.
+            public var orderBy: Components.Schemas.InputSchema178.OrderByPayload?
+            /// - Remark: Generated from `#/components/schemas/input_schema178/direction`.
             @frozen public enum DirectionPayload: String, Codable, Hashable, Sendable, CaseIterable {
                 case asc = "asc"
                 case desc = "desc"
             }
-            /// - Remark: Generated from `#/components/schemas/input_schema176/direction`.
-            public var direction: Components.Schemas.InputSchema176.DirectionPayload?
-            /// Creates a new `InputSchema176`.
+            /// - Remark: Generated from `#/components/schemas/input_schema178/direction`.
+            public var direction: Components.Schemas.InputSchema178.DirectionPayload?
+            /// Creates a new `InputSchema178`.
             ///
             /// - Parameters:
             ///   - orderBy:
             ///   - direction:
             public init(
-                orderBy: Components.Schemas.InputSchema176.OrderByPayload? = nil,
-                direction: Components.Schemas.InputSchema176.DirectionPayload? = nil
+                orderBy: Components.Schemas.InputSchema178.OrderByPayload? = nil,
+                direction: Components.Schemas.InputSchema178.DirectionPayload? = nil
             ) {
                 self.orderBy = orderBy
                 self.direction = direction
@@ -34044,8 +34044,10 @@ extension Components {
             public var name: Swift.String
             /// - Remark: Generated from `#/components/schemas/ProductCreateInput/aliases`.
             public var aliases: [Swift.String]?
+            /// Compatibility or ecosystem tokens only — battery platform, mount, thread, size standard. Never the manufacturer, a classification word, or a path node; those belong in manufacturer/categoryId. `collection:*` entries are managed by Collections. Leave empty when nothing fits.
+            ///
             /// - Remark: Generated from `#/components/schemas/ProductCreateInput/tags`.
-            public var tags: [Swift.String]?
+            public var tags: Components.Schemas.InputSchema56?
             /// - Remark: Generated from `#/components/schemas/ProductCreateInput/upc`.
             public var upc: Components.Schemas.GtinInput?
             /// - Remark: Generated from `#/components/schemas/ProductCreateInput/isbn`.
@@ -34110,7 +34112,7 @@ extension Components {
             /// - Parameters:
             ///   - name: Product name
             ///   - aliases:
-            ///   - tags:
+            ///   - tags: Compatibility or ecosystem tokens only — battery platform, mount, thread, size standard. Never the manufacturer, a classification word, or a path node; those belong in manufacturer/categoryId. `collection:*` entries are managed by Collections. Leave empty when nothing fits.
             ///   - upc:
             ///   - isbn:
             ///   - fdcId:
@@ -34132,7 +34134,7 @@ extension Components {
             public init(
                 name: Swift.String,
                 aliases: [Swift.String]? = nil,
-                tags: [Swift.String]? = nil,
+                tags: Components.Schemas.InputSchema56? = nil,
                 upc: Components.Schemas.GtinInput? = nil,
                 isbn: Swift.String? = nil,
                 fdcId: Components.Schemas.FdcId? = nil,
@@ -36342,8 +36344,10 @@ extension Components {
             public var name: Swift.String?
             /// - Remark: Generated from `#/components/schemas/ProductUpdateData/aliases`.
             public var aliases: [Swift.String]?
+            /// Compatibility or ecosystem tokens only — battery platform, mount, thread, size standard. Never the manufacturer, a classification word, or a path node; those belong in manufacturer/categoryId. `collection:*` entries are managed by Collections. Leave empty when nothing fits.
+            ///
             /// - Remark: Generated from `#/components/schemas/ProductUpdateData/tags`.
-            public var tags: [Swift.String]?
+            public var tags: Components.Schemas.InputSchema56?
             /// - Remark: Generated from `#/components/schemas/ProductUpdateData/upc`.
             public var upc: Components.Schemas.GtinInput?
             /// - Remark: Generated from `#/components/schemas/ProductUpdateData/isbn`.
@@ -36412,7 +36416,7 @@ extension Components {
             /// - Parameters:
             ///   - name: Product name
             ///   - aliases:
-            ///   - tags:
+            ///   - tags: Compatibility or ecosystem tokens only — battery platform, mount, thread, size standard. Never the manufacturer, a classification word, or a path node; those belong in manufacturer/categoryId. `collection:*` entries are managed by Collections. Leave empty when nothing fits.
             ///   - upc:
             ///   - isbn:
             ///   - fdcId:
@@ -36436,7 +36440,7 @@ extension Components {
             public init(
                 name: Swift.String? = nil,
                 aliases: [Swift.String]? = nil,
-                tags: [Swift.String]? = nil,
+                tags: Components.Schemas.InputSchema56? = nil,
                 upc: Components.Schemas.GtinInput? = nil,
                 isbn: Swift.String? = nil,
                 fdcId: Components.Schemas.FdcId? = nil,
@@ -42730,7 +42734,7 @@ extension Components {
                 /// - Remark: Generated from `#/components/schemas/ScanAtLocationInput/code/value1`.
                 public var value1: Components.Schemas.ProductFindOrCreateByCodeInput?
                 /// - Remark: Generated from `#/components/schemas/ScanAtLocationInput/code/value2`.
-                public var value2: Components.Schemas.InputSchema171?
+                public var value2: Components.Schemas.InputSchema173?
                 /// Creates a new `CodePayload`.
                 ///
                 /// - Parameters:
@@ -42738,7 +42742,7 @@ extension Components {
                 ///   - value2:
                 public init(
                     value1: Components.Schemas.ProductFindOrCreateByCodeInput? = nil,
-                    value2: Components.Schemas.InputSchema171? = nil
+                    value2: Components.Schemas.InputSchema173? = nil
                 ) {
                     self.value1 = value1
                     self.value2 = value2
@@ -45991,17 +45995,17 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/UsdaListInput/sort`.
             public struct SortPayload: Codable, Hashable, Sendable {
                 /// - Remark: Generated from `#/components/schemas/UsdaListInput/sort/value1`.
-                public var value1: Components.Schemas.InputSchema176?
+                public var value1: Components.Schemas.InputSchema178?
                 /// - Remark: Generated from `#/components/schemas/UsdaListInput/sort/value2`.
-                public var value2: [Components.Schemas.InputSchema176]?
+                public var value2: [Components.Schemas.InputSchema178]?
                 /// Creates a new `SortPayload`.
                 ///
                 /// - Parameters:
                 ///   - value1:
                 ///   - value2:
                 public init(
-                    value1: Components.Schemas.InputSchema176? = nil,
-                    value2: [Components.Schemas.InputSchema176]? = nil
+                    value1: Components.Schemas.InputSchema178? = nil,
+                    value2: [Components.Schemas.InputSchema178]? = nil
                 ) {
                     self.value1 = value1
                     self.value2 = value2

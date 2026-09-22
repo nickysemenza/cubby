@@ -225,9 +225,19 @@ const metadataSchemas = () => {
        * sibling fields (`basis`, model field keys of the same entity). The
        * browser editor auto-fills it while untouched and offers a one-tap
        * apply once a value already exists.
+       *
+       * `mode: "fill"` (default) proposes a value for an enum, singular
+       * reference, or nullable text target. `mode: "prune"` targets a
+       * text-array and proposes *removals* — entries that restate sibling
+       * fields; the target itself is then an implicit basis (its current
+       * entries are the thing being judged), which the compiler allows only
+       * for prune.
        */
       suggest: z
-        .object({ basis: z.array(nonEmptyString()).min(1) })
+        .object({
+          basis: z.array(nonEmptyString()).min(1),
+          mode: z.enum(["fill", "prune"]).optional().default("fill"),
+        })
         .strict()
         .nullable()
         .optional()

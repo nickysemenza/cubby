@@ -57,6 +57,7 @@ const SuggestionSchedulerContext = createContext<ReturnType<
 const recordSchema = z.looseObject({ id: z.string() });
 const mutationPatchSchema = z.record(z.string(), z.json());
 const nullableBasisValueSchema = z.string().nullable();
+const textArraySchema = z.array(z.string());
 type SuggestionRecord = z.infer<typeof recordSchema>;
 type SuggestionRow = {
   record: SuggestionRecord;
@@ -70,7 +71,7 @@ const RecordSuggestionsContext = createContext<{
   save: (
     id: string,
     field: string,
-    value: string,
+    suggestion: FieldSuggestion,
     source: FieldSuggestionSource,
     expectedCurrent: string | null,
   ) => Promise<void>;
@@ -88,6 +89,77 @@ function explicitSuggestionPatch(
     return { subjectProductId: value, subjectProductMode: "explicit" };
   }
   return { [field]: value };
+}
+
+/** For a `remove` proposal, drops the target field's own key from the basis
+ * used to fingerprint drift (Amendment 1's self-basis) — an unrelated tag
+ * added after the proposal was computed shouldn't spuriously revoke it, only
+ * a drift in a *sibling* restating field (manufacturer, classification)
+ * should. A `set` proposal has no self-basis to drop. */
+function basisForFingerprint(
+  basis: FieldSuggestionSource["basis"],
+  field: string,
+  isRemove: boolean,
+): FieldSuggestionSource["basis"] {
+  if (!isRemove) return basis;
+  const { [field]: _omitted, ...rest } = basis;
+  return rest;
+}
+
+/** Generic over whichever text-array field the prune target names: re-reads
+ * the field's current entries and only patches when every proposed removal
+ * is still present — `collection:*` entries always survive since a removal
+ * never names one. */
+function removeFieldPatch(
+  entity: StandardEntity,
+  field: string,
+  suggestion: FieldSuggestion,
+  freshRecord: SuggestionRecord,
+): z.output<typeof mutationPatchSchema> {
+  const readKey =
+    entityFieldModels[entity].fields.find(
+      (candidate) => candidate.key === field,
+    )?.readKey ?? field;
+  const current = textArraySchema.safeParse(freshRecord[readKey]);
+  const removedValues = new Set(
+    suggestion.removals.map((removal) => removal.value),
+  );
+  if (
+    !current.success ||
+    ![...removedValues].every((value) => current.data.includes(value))
+  ) {
+    throw new Error("Suggestion inputs changed");
+  }
+  return {
+    [field]: current.data.filter((value) => !removedValues.has(value)),
+  };
+}
+
+function setFieldPatch(
+  entity: StandardEntity,
+  field: string,
+  suggestion: FieldSuggestion,
+  freshRecord: SuggestionRecord,
+  expectedCurrent: string | null,
+): z.output<typeof mutationPatchSchema> {
+  const value = suggestion.value;
+  if (
+    !value ||
+    recordValue(entity, freshRecord, field).value !== expectedCurrent
+  ) {
+    throw new Error("Suggestion inputs changed");
+  }
+  const resolution = recordFieldResolutions(freshRecord)[field];
+  const resolutionPolicy = entityFieldModels[entity].fields.find(
+    (candidate) => candidate.key === field,
+  )?.resolution;
+  const usesInheritedValue =
+    resolution?.canReset === true &&
+    resolutionPolicy?.redundancy === "eligible" &&
+    resolution.fallbackValue === value;
+  return usesInheritedValue && resolutionPolicy
+    ? mutationPatchSchema.parse(resolutionPolicy.reset)
+    : explicitSuggestionPatch(entity, field, value);
 }
 
 export const RecordSuggestionScope = createContext<SuggestionRow | null>(null);
@@ -162,7 +234,17 @@ function suggestionRequestsForRecord(
         record.lineKind !== "principal"
       ),
   );
-  const suggested = available
+  // A `mode: "prune"` target always provides its own current entries as
+  // basis — it is never an empty field waiting to be filled, so it gets its
+  // own request group rather than joining the fill suggested/alternatives
+  // split below (Amendment 2: prune suggestions are their own basis mode,
+  // not lumped in with "provided" alternatives).
+  const pruneTargets = available
+    .filter((target) => target.mode === "prune")
+    .map((target) => target.key)
+    .sort();
+  const fillTargets = available.filter((target) => target.mode !== "prune");
+  const suggested = fillTargets
     .filter((target) => {
       const resolution = resolutions[target.key];
       return (
@@ -174,7 +256,7 @@ function suggestionRequestsForRecord(
     .map((target) => target.key)
     .sort();
   const suggestedSet = new Set(suggested);
-  const alternatives = available
+  const alternatives = fillTargets
     .filter((target) => !suggestedSet.has(target.key))
     .map((target) => target.key)
     .sort();
@@ -200,6 +282,19 @@ function suggestionRequestsForRecord(
               entity,
               basisMode: "provided" as const,
               targets: alternatives,
+              basis,
+            },
+          },
+        ]
+      : []),
+    ...(pruneTargets.length > 0
+      ? [
+          {
+            record,
+            source: {
+              entity,
+              basisMode: "provided" as const,
+              targets: pruneTargets,
               basis,
             },
           },
@@ -407,7 +502,7 @@ function BoundRecordSuggestions({
     save: async (
       id: string,
       field: string,
-      value: string,
+      suggestion: FieldSuggestion,
       source: FieldSuggestionSource,
       expectedCurrent: string | null,
     ) => {
@@ -431,24 +526,22 @@ function BoundRecordSuggestions({
         freshTargets,
         freshRecord,
       );
+      const isRemove = suggestion.operation === "remove";
       if (
-        basisFingerprint(freshBasis) !== basisFingerprint(source.basis) ||
-        recordValue(entity, freshRecord, field).value !== expectedCurrent
+        basisFingerprint(basisForFingerprint(freshBasis, field, isRemove)) !==
+        basisFingerprint(basisForFingerprint(source.basis, field, isRemove))
       ) {
         throw new Error("Suggestion inputs changed");
       }
-      const resolution = recordFieldResolutions(freshRecord)[field];
-      const resolutionPolicy = entityFieldModels[entity].fields.find(
-        (candidate) => candidate.key === field,
-      )?.resolution;
-      const usesInheritedValue =
-        resolution?.canReset === true &&
-        resolutionPolicy?.redundancy === "eligible" &&
-        resolution.fallbackValue === value;
-      const patch =
-        usesInheritedValue && resolutionPolicy
-          ? mutationPatchSchema.parse(resolutionPolicy.reset)
-          : explicitSuggestionPatch(entity, field, value);
+      const patch = isRemove
+        ? removeFieldPatch(entity, field, suggestion, freshRecord)
+        : setFieldPatch(
+            entity,
+            field,
+            suggestion,
+            freshRecord,
+            expectedCurrent,
+          );
       try {
         await update.submit({
           operation: "update",
@@ -574,13 +667,7 @@ export function RecordFieldSuggestion({
       !suggestion?.value
     )
       throw new Error("Suggestion inputs changed");
-    await context.save(
-      row.record.id,
-      field,
-      suggestion.value,
-      source,
-      current.value,
-    );
+    await context.save(row.record.id, field, suggestion, source, current.value);
   };
   return (
     <RecordSuggestionScope value={row}>

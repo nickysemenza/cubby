@@ -15,6 +15,10 @@ export interface PickerPresentation {
     label: string;
     order: number;
   };
+  /** Distance from the root of a hierarchical picker (0 = root) — indents
+   * the row so a tree reads as a tree. `treePickerItems` (`tree-items.ts`)
+   * sets this for every parent-linked entity's grouped list. */
+  depth?: number;
   /** Short action/status cue, e.g. "Need 2" or "In progress". */
   status?: {
     label: string;

@@ -3,6 +3,7 @@ import type {
   FieldSuggestionsOut,
 } from "@cubby/schemas/ai";
 import { inventoryEntryOut } from "@cubby/schemas/inventory";
+import { productTopLevelOut } from "@cubby/schemas/product";
 import { expenseOut } from "@cubby/schemas/project";
 import { testShortcode } from "@cubby/schemas/testing";
 import {
@@ -48,6 +49,9 @@ const food = {
   probability: 0.97,
   detail: null,
   reasoning: "",
+  alternatives: [],
+  operation: "set" as const,
+  removals: [],
 };
 
 function Surface({
@@ -205,6 +209,140 @@ describe("record suggestions", () => {
       data: { locationId },
     });
     expect(commands).toHaveLength(1);
+  });
+
+  it("saves a remove (prune) suggestion by patching the array field, preserving collection:* tags", async () => {
+    const record = {
+      id: testShortcode("product", "tag-remove"),
+      name: "Rain shell",
+      manufacturer: "Jacquemus",
+      categoryId: null,
+      tags: ["jacquemus", "collection:favorites", "mount"],
+    };
+    const removeSuggestion = {
+      value: "jacquemus",
+      label: "Remove jacquemus",
+      confidence: "high" as const,
+      probability: 0.9,
+      detail: "restates manufacturer",
+      reasoning: "",
+      alternatives: [],
+      operation: "remove" as const,
+      removals: [
+        {
+          value: "jacquemus",
+          probability: 0.9,
+          reason: "restates manufacturer",
+        },
+      ],
+    };
+    const commands: EntityBrowserMutationInput[] = [];
+    const operations: EntitySuggestionsOperations = {
+      suggestFields: ai.suggestFields.withTransport(async () => ({
+        suggestions: { tags: removeSuggestion },
+      })),
+    };
+    const item = mock(productTopLevelOut, {
+      seed: 1,
+      overrides: {
+        id: record.id,
+        tags: ["collection:favorites", "mount"],
+      },
+    });
+    render(
+      <RecordSuggestionsProvider
+        entity="product"
+        records={[record]}
+        fieldKeys={["tags"]}
+        operations={operations}
+        readRecord={async () => record}
+        mutationPort={createEntityMutationPort({
+          execute: async (command) => {
+            commands.push(command);
+            return {
+              action: "update",
+              entity: "product",
+              item,
+              sideEffects: { backgroundBatches: [] },
+            };
+          },
+        })}
+      >
+        <RecordFieldSuggestion record={record} field="tags">
+          <span>current tags</span>
+        </RecordFieldSuggestion>
+      </RecordSuggestionsProvider>,
+      { wrapper: harness.wrapper },
+    );
+
+    fireEvent.click(await screen.findByRole("button", { name: "Remove tags" }));
+    await waitFor(() => expect(commands).toHaveLength(1));
+    expect(commands[0]).toEqual({
+      action: "update",
+      entity: "product",
+      id: record.id,
+      data: { tags: ["collection:favorites", "mount"] },
+    });
+  });
+
+  it("refuses a remove suggestion once its removal is no longer present", async () => {
+    const record = {
+      id: testShortcode("product", "tag-stale"),
+      name: "Rain shell",
+      manufacturer: "Jacquemus",
+      categoryId: null,
+      tags: ["jacquemus", "mount"],
+    };
+    const removeSuggestion = {
+      value: "jacquemus",
+      label: "Remove jacquemus",
+      confidence: "high" as const,
+      probability: 0.9,
+      detail: "restates manufacturer",
+      reasoning: "",
+      alternatives: [],
+      operation: "remove" as const,
+      removals: [
+        {
+          value: "jacquemus",
+          probability: 0.9,
+          reason: "restates manufacturer",
+        },
+      ],
+    };
+    const commands: EntityBrowserMutationInput[] = [];
+    const operations: EntitySuggestionsOperations = {
+      suggestFields: ai.suggestFields.withTransport(async () => ({
+        suggestions: { tags: removeSuggestion },
+      })),
+    };
+    render(
+      <RecordSuggestionsProvider
+        entity="product"
+        records={[record]}
+        fieldKeys={["tags"]}
+        operations={operations}
+        // The tag was removed by someone else between the suggestion and the
+        // click — a sibling basis field (manufacturer) is unchanged, so only
+        // the every-removal-still-present check catches this.
+        readRecord={async () => ({ ...record, tags: ["mount"] })}
+        mutationPort={createEntityMutationPort({
+          execute: async (command) => {
+            commands.push(command);
+            throw new Error("must not write");
+          },
+        })}
+      >
+        <RecordFieldSuggestion record={record} field="tags">
+          <span>current tags</span>
+        </RecordFieldSuggestion>
+      </RecordSuggestionsProvider>,
+      { wrapper: harness.wrapper },
+    );
+
+    fireEvent.click(await screen.findByRole("button", { name: "Remove tags" }));
+    await screen.findByRole("alert");
+    expect(commands).toHaveLength(0);
   });
 
   it("reads inventory's nested product reference as the location suggestion basis", () => {

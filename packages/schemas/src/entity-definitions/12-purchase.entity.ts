@@ -117,7 +117,13 @@ export default defineEntity({
         kind: "enum",
         nullable: true,
         label: "Default trade",
-        control: { kind: "select", section: "details" },
+        control: {
+          kind: "select",
+          section: "details",
+          // Purchase has no "name" field — `displayLabel` is its closest
+          // equivalent (the operator-facing text for the purchase).
+          suggest: { basis: ["displayLabel", "vendorId", "notes"] },
+        },
         display: { detail: true },
         validation: {
           read: tradeSchema.nullable(),
