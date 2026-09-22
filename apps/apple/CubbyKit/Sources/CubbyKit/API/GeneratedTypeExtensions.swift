@@ -295,3 +295,29 @@ extension PhotoLocalAnalysis {
                 filename: payload.provenance.filename))
     }
 }
+
+extension ImageAnalysisOutput {
+    /// The wire payload for `recordImageAnalysis`, built from a device-run `PhotoLocalAnalysis` —
+    /// the inverse of `PhotoLocalAnalysis.init(payload:)` above. Shared by
+    /// `PhotoImportRunUploader`'s post-finalize analysis phase and (via that same shape) the
+    /// Diagnostics backfill path, so the two never drift into slightly different field mappings.
+    public init(_ analysis: PhotoLocalAnalysis) {
+        self.init(
+            analysisVersion: analysis.analysisVersion, analyzedAt: analysis.analyzedAt,
+            sha256: analysis.sha256, capturedAt: analysis.capturedAt,
+            contentType: analysis.contentType, width: analysis.width, height: analysis.height,
+            classifications: analysis.classifications.map {
+                .init(identifier: $0.identifier, confidence: $0.confidence)
+            },
+            recognizedText: analysis.recognizedText.map {
+                .init(text: $0.text, confidence: $0.confidence)
+            },
+            featurePrint: .init(
+                revision: analysis.featurePrint.revision,
+                data: analysis.featurePrint.data.base64EncodedString()),
+            provenance: .init(
+                source: .init(rawValue: analysis.provenance.source.rawValue) ?? .files,
+                localIdentifier: analysis.provenance.localIdentifier,
+                filename: analysis.provenance.filename))
+    }
+}

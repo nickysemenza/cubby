@@ -1350,7 +1350,9 @@ private enum PhotoImportManifestError: LocalizedError {
     }
 }
 
-private extension PhotoSelectionItem {
+// Internal, not `private`: `PhotoImportRunFlow` (Photo/Library/PhotoImportRunSheet.swift) needs the
+// same source→provenance mapping to build `PhotoAnalysisProvenance` for its own bulk-upload path.
+extension PhotoSelectionItem {
     var provenanceSource: PhotoAnalysisProvenance.Source {
         switch source {
         case .library: .photoLibrary

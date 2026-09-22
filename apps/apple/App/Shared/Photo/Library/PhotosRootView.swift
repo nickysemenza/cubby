@@ -5,6 +5,12 @@ import SwiftUI
 struct PhotosRootView: View {
     @Environment(AppModel.self) private var appModel
     @State private var destination: PhotoSelectionBatch?
+    @State private var runBatch: PhotoImportRunBatch?
+    /// A completed selection with no destination chosen yet — the dialog below decides between
+    /// per-photo routing (`destination`) and the plain bulk "Add to import run" path (`runBatch`).
+    /// Both the toolbar's "Add to…" and macOS's "From files" fallback funnel through this same
+    /// `onSelection` closure, so either source offers both destinations.
+    @State private var pendingSelection: [PhotoSelectionItem]?
     @State private var analysisReady = false
 
     var body: some View {
@@ -13,16 +19,38 @@ struct PhotosRootView: View {
             analysisStore: analysisReady ? appModel.photoAnalysisStore : nil,
             sweep: analysisReady ? appModel.photoClassificationSweep : nil
         ) { items in
-            guard let analysisStore = appModel.photoAnalysisStore else { return }
-            // Built here, once per batch, and owned by the batch rather than seeded into the
-            // sheet's own @State: a re-presented `.sheet(item:)` is not guaranteed to reset
-            // @State seeded from an init parameter when the item changes (apps/apple/AGENTS.md,
-            // "Traps that cost real time"), which previously showed the prior batch's manifest.
-            destination = PhotoSelectionBatch(
-                items: items,
-                manifest: PhotoImportManifest(
-                    items: items, analysisStore: analysisStore,
-                    activityCenter: appModel.backgroundActivity))
+            pendingSelection = items
+        }
+        .confirmationDialog(
+            "Add \(pendingSelection?.count ?? 0) photo\((pendingSelection?.count ?? 0) == 1 ? "" : "s")",
+            isPresented: Binding(
+                get: { pendingSelection != nil },
+                set: { if !$0 { pendingSelection = nil } }),
+            titleVisibility: .visible
+        ) {
+            if let analysisStore = appModel.photoAnalysisStore {
+                Button("Assign to records…") {
+                    guard let items = pendingSelection else { return }
+                    // Built here, once per batch, and owned by the batch rather than seeded into
+                    // the sheet's own @State: a re-presented `.sheet(item:)` is not guaranteed to
+                    // reset @State seeded from an init parameter when the item changes
+                    // (apps/apple/AGENTS.md, "Traps that cost real time"), which previously showed
+                    // the prior batch's manifest.
+                    destination = PhotoSelectionBatch(
+                        items: items,
+                        manifest: PhotoImportManifest(
+                            items: items, analysisStore: analysisStore,
+                            activityCenter: appModel.backgroundActivity))
+                    pendingSelection = nil
+                }
+            }
+            Button("Add to import run…") {
+                guard let items = pendingSelection else { return }
+                runBatch = PhotoImportRunBatch(
+                    items: items, flow: PhotoImportRunFlow(client: appModel.client))
+                pendingSelection = nil
+            }
+            Button("Cancel", role: .cancel) { pendingSelection = nil }
         }
         .sheet(item: $destination) { batch in
             PhotoDestinationSheet(manifest: batch.manifest) { committedIDs in
@@ -32,11 +60,27 @@ struct PhotosRootView: View {
                 destination = nil
             }
         }
+        .sheet(item: $runBatch) { batch in
+            PhotoImportRunSheet(items: batch.items, flow: batch.flow) { _ in
+                let uploadedIDs = Set(batch.items.map(\.id))
+                appModel.photoLibrary.selectedIDs.removeAll { uploadedIDs.contains($0) }
+                runBatch = nil
+            }
+        }
         .task {
             await appModel.preparePhotoSubsystem()
             analysisReady = true
         }
     }
+}
+
+/// The counterpart to `PhotoSelectionBatch` for the bulk import-run path: owns the flow's
+/// `@Observable` state so a re-presented `.sheet(item:)` never reuses stale progress from a prior
+/// batch (see `PhotoSelectionBatch`'s doc comment above).
+struct PhotoImportRunBatch: Identifiable {
+    let id = UUID()
+    let items: [PhotoSelectionItem]
+    let flow: PhotoImportRunFlow
 }
 
 struct LibraryPickerSheet: View {
