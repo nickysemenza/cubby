@@ -37,12 +37,12 @@ describe("AI workflow graphs", () => {
       inspectWorkflow(suggestUsdaFoodWorkflow.definition).steps.map(
         (step) => step.type,
       ),
-    ).toEqual(["call"]);
+    ).toEqual(["call", "call"]);
     expect(
       inspectWorkflow(suggestUsdaFoodBatchWorkflow.definition).steps.map(
         (step) => step.type,
       ),
-    ).toEqual(["call", "call"]);
+    ).toEqual(["call", "call", "call"]);
     expect(
       inspectWorkflow(suggestIngredientMergeBatchWorkflow.definition).steps.map(
         (step) => step.type,

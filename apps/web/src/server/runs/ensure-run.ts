@@ -22,7 +22,7 @@ import { getDb, notDeleted } from "~/server/repo/database-helpers";
  * refreshes. Work a member starts (a backfill button) stays attributed to
  * that member. Seeded by `scripts/cutovers/run-attribution.sql`.
  */
-export const SYSTEM_USER_ID: UserId = userId.parse("cubby-system");
+const SYSTEM_USER_ID: UserId = userId.parse("cubby-system");
 export const systemActor = (): ActorContext =>
   buildActorContext(SYSTEM_USER_ID, "system");
 
@@ -41,8 +41,9 @@ export type EnsureRunInput = {
   /** Groups repeat calls into one run, e.g. one Jev pass per page mount. */
   clientKey?: string;
   /**
-   * A non-ephemeral run is `running` until `finishRun`. Pass `completed` for
-   * one that groups a user's discrete steps with no end signal (EPUB imports).
+   * A non-ephemeral run is `running` until its owner completes it. Pass
+   * `completed` for one that groups a member's discrete steps with no end
+   * signal (EPUB imports).
    */
   status?: "running" | "completed";
   notes?: string;
@@ -107,18 +108,6 @@ export async function ensureRun(
     : await insert.returning({ id: importRun.id });
   if (!row) throw new Error(`Run for ${input.purpose} was not created`);
   return row.id;
-}
-
-/** Close a non-ephemeral run (a backfill, a file import) that `ensureRun` opened. */
-export async function finishRun(
-  db: Database,
-  runId: ImportRunId,
-  status: "completed" | "failed",
-): Promise<void> {
-  await getDb(db)
-    .update(importRun)
-    .set({ status, endedAt: new Date() })
-    .where(eq(importRun.id, runId));
 }
 
 /** `actor` with its run set, opening one when nothing encloses the work. */

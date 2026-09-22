@@ -1191,14 +1191,22 @@ export const ENTITY_EDGES = {
       role: "history",
       label: "audit entries",
       description: "An audit entry written as part of this run.",
-      liveness: { kind: "must-target-live" },
+      liveness: {
+        kind: "allow-target-deleted",
+        reason:
+          "Append-only provenance: an audit entry keeps naming the run it belonged to.",
+      },
     },
     "AiUsage.runId": {
       column: aiUsage.runId,
       role: "history",
       label: "AI usage",
       description: "One model call made as part of this run.",
-      liveness: { kind: "must-target-live" },
+      liveness: {
+        kind: "allow-target-deleted",
+        reason:
+          "Append-only provenance: a usage row keeps naming the run it was billed to.",
+      },
     },
     "Purchase.importRunId": {
       column: purchase.importRunId,
@@ -1319,7 +1327,11 @@ export const ENTITY_EDGES = {
       label: "audit entries",
       description:
         "An audit entry written from this install; the column is cleared when the device goes.",
-      liveness: { kind: "must-target-live" },
+      liveness: {
+        kind: "allow-target-deleted",
+        reason:
+          "Append-only provenance: an audit entry keeps naming the install it came from.",
+      },
     },
     "ImageSighting.deviceId": {
       column: imageSighting.deviceId,

@@ -34,7 +34,7 @@ const auditLogWorkflow = workflow<Database, AuditInput>("auditLog.list")
             entityType: subject.data.entityType,
             entityId: subject.resolved?.id,
             channel: subject.data.channel,
-            oauthClientId: subject.data.oauthClientId,
+            oauthClientId: subject.data.oauthClient,
             deviceId: subject.device
               ? deviceId.parse(subject.device.id)
               : undefined,

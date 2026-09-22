@@ -28,7 +28,8 @@ export const auditLogListInput = z.object({
   entityType: auditEntitySchema.optional(),
   entityId: auditableEntityIdSchema.optional(),
   channel: oneOrMany(auditChannelSchema).optional(),
-  oauthClientId: z.string().min(1).optional(),
+  /** An OAuth client id (not a Cubby entity), e.g. the one Claude registered. */
+  oauthClient: z.string().min(1).optional(),
   deviceId: deviceShortcode.optional(),
   /** Everything one Run wrote, e.g. an import or an agent session. */
   runId: importRunShortcode.optional(),
