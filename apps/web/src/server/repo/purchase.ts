@@ -781,7 +781,16 @@ export const getPurchaseExpenses = async (
     extras: expenseInheritanceReadExtras(),
     ...relations.expense.withProject,
   });
-  return (await hydrateExpenseProjectAllocations(db, rows)).map(dbExpenseToAPI);
+  const [hydrated, dataQualities] = await Promise.all([
+    hydrateExpenseProjectAllocations(db, rows),
+    loadDataQualities(
+      db,
+      "expense",
+      rows.map((row) => row.id),
+    ),
+  ]);
+  // SAFETY: `row` came from `rows`, which `dataQualities` was loaded for.
+  return hydrated.map((row) => dbExpenseToAPI(row, dataQualities.get(row.id)!));
 };
 
 /**
@@ -1383,9 +1392,19 @@ export const splitExpense = async (
     extras: expenseInheritanceReadExtras(),
     ...relations.expense.withProject,
   });
+  const [hydratedCreated, createdDataQualities] = await Promise.all([
+    hydrateExpenseProjectAllocations(db, rows),
+    loadDataQualities(
+      db,
+      "expense",
+      rows.map((row) => row.id),
+    ),
+  ]);
   return {
-    items: (await hydrateExpenseProjectAllocations(db, rows)).map(
-      dbExpenseToAPI,
+    // SAFETY: `row` came from `rows`, which `createdDataQualities` was loaded
+    // for.
+    items: hydratedCreated.map((row) =>
+      dbExpenseToAPI(row, createdDataQualities.get(row.id)!),
     ),
     priceAffectedProductIds,
   };

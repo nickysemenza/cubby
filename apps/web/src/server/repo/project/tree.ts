@@ -39,6 +39,7 @@ import { and, inArray } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
 import { project } from "~/server/db/schema";
+import { loadDataQualities } from "~/server/repo/data-quality";
 import { getDb } from "~/server/repo/database-helpers";
 import { withDisplayImages } from "~/server/repo/entity-display-image";
 
@@ -139,14 +140,16 @@ export const projectTreePage = async (
   });
 
   const ids = rows.map((row) => row.id);
-  const [projectContext, deps] = await Promise.all([
+  const [projectContext, deps, dataQualities] = await Promise.all([
     loadProjectSubtreeRollups(db, ids, tree),
     projectDependencyIds(db, ids),
+    loadDataQualities(db, "project", ids),
   ]);
 
   return {
     data: await withDisplayImages(db, "project", rows, (row) =>
-      hydrateProjectRow(row, projectContext, deps),
+      // SAFETY: `row` came from `rows`, which `dataQualities` was loaded for.
+      hydrateProjectRow(row, projectContext, deps, dataQualities.get(row.id)!),
     ),
     count: roots.length,
     sums,

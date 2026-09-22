@@ -151,6 +151,7 @@ describe("task list display columns", () => {
       "dueEndDate",
       "trade",
       "sortOrder",
+      "dataQuality",
     ]);
   });
 
@@ -167,6 +168,7 @@ describe("task list display columns", () => {
       dueEndDate: "Due end",
       trade: "Trade",
       sortOrder: "Sort Order",
+      dataQuality: "Data quality",
     });
   });
 

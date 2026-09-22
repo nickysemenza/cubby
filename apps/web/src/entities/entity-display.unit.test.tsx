@@ -348,6 +348,7 @@ describe("declared entity displays", () => {
       expect(details.map(({ id, header }) => ({ id, header }))).toEqual([
         { id: "kind", header: "Kind" },
         { id: "notes", header: "Notes" },
+        { id: "dataQuality", header: "Data quality" },
       ]);
       expect(details[0]).toMatchObject({
         cellIsOverride: false,

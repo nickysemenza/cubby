@@ -2667,6 +2667,38 @@
             "explode": true
           },
           {
+            "name": "dataStatus",
+            "in": "query",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "complete",
+                  "needs_data",
+                  "defect"
+                ]
+              }
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "dataGap",
+            "in": "query",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "expense_cost"
+                ]
+              }
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
             "name": "projectId",
             "in": "query",
             "schema": {
@@ -3042,7 +3074,7 @@
           {
             "name": "sort",
             "in": "query",
-            "description": "Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: name, cost, lineKind, productQuantity, date, costType, trade, project, product, vendor, orderId, createdAt, updatedAt. Default: -date",
+            "description": "Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: name, cost, lineKind, productQuantity, date, costType, trade, project, product, vendor, orderId, createdAt, updatedAt, dataQuality. Default: -date",
             "schema": {
               "type": "string",
               "pattern": "^-?[^,\\s-][^,\\s]*(,-?[^,\\s-][^,\\s]*){0,2}$"
@@ -3548,6 +3580,39 @@
             "explode": true
           },
           {
+            "name": "dataStatus",
+            "in": "query",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "complete",
+                  "needs_data",
+                  "defect"
+                ]
+              }
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "dataGap",
+            "in": "query",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "financial_account_ledger_party",
+                  "financial_account_confirmed"
+                ]
+              }
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
             "name": "ledgerPartyId",
             "in": "query",
             "schema": {
@@ -3667,7 +3732,7 @@
           {
             "name": "sort",
             "in": "query",
-            "description": "Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: name, provisional, transactionCount, createdAt, updatedAt. Default: -name",
+            "description": "Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: name, provisional, transactionCount, createdAt, updatedAt, dataQuality. Default: -name",
             "schema": {
               "type": "string",
               "pattern": "^-?[^,\\s-][^,\\s]*(,-?[^,\\s-][^,\\s]*){0,2}$"
@@ -3678,7 +3743,7 @@
           {
             "name": "groupBy",
             "in": "query",
-            "description": "Group rows by one field. One of: name, provisional, transactionCount, createdAt, updatedAt",
+            "description": "Group rows by one field. One of: name, provisional, transactionCount, createdAt, updatedAt, dataQuality",
             "schema": {
               "type": "string",
               "enum": [
@@ -3686,7 +3751,8 @@
                 "provisional",
                 "transactionCount",
                 "createdAt",
-                "updatedAt"
+                "updatedAt",
+                "dataQuality"
               ]
             },
             "style": "form",
@@ -4179,6 +4245,39 @@
             "explode": true
           },
           {
+            "name": "dataStatus",
+            "in": "query",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "complete",
+                  "needs_data",
+                  "defect"
+                ]
+              }
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "dataGap",
+            "in": "query",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "financial_transaction_allocation",
+                  "financial_transaction_merchant"
+                ]
+              }
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
             "name": "accountId",
             "in": "query",
             "schema": {
@@ -4317,7 +4416,7 @@
           {
             "name": "sort",
             "in": "query",
-            "description": "Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: transactionDate, postedDate, amount, merchant, kind, status, createdAt, updatedAt. Default: -transactionDate",
+            "description": "Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: transactionDate, postedDate, amount, merchant, kind, status, createdAt, updatedAt, dataQuality. Default: -transactionDate",
             "schema": {
               "type": "string",
               "pattern": "^-?[^,\\s-][^,\\s]*(,-?[^,\\s-][^,\\s]*){0,2}$"
@@ -4328,7 +4427,7 @@
           {
             "name": "groupBy",
             "in": "query",
-            "description": "Group rows by one field. One of: transactionDate, postedDate, amount, merchant, kind, status, createdAt, updatedAt",
+            "description": "Group rows by one field. One of: transactionDate, postedDate, amount, merchant, kind, status, createdAt, updatedAt, dataQuality",
             "schema": {
               "type": "string",
               "enum": [
@@ -4339,7 +4438,8 @@
                 "kind",
                 "status",
                 "createdAt",
-                "updatedAt"
+                "updatedAt",
+                "dataQuality"
               ]
             },
             "style": "form",
@@ -4744,6 +4844,39 @@
             "explode": true
           },
           {
+            "name": "dataStatus",
+            "in": "query",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "complete",
+                  "needs_data",
+                  "defect"
+                ]
+              }
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "dataGap",
+            "in": "query",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "garden_entry_note",
+                  "garden_entry_harvest_amount"
+                ]
+              }
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
             "name": "locationId",
             "in": "query",
             "schema": {
@@ -4820,7 +4953,7 @@
           {
             "name": "sort",
             "in": "query",
-            "description": "Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: observedOn, createdAt, updatedAt, kind. Default: -observedOn",
+            "description": "Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: observedOn, createdAt, updatedAt, kind, dataQuality. Default: -observedOn",
             "schema": {
               "type": "string",
               "pattern": "^-?[^,\\s-][^,\\s]*(,-?[^,\\s-][^,\\s]*){0,2}$"
@@ -4831,14 +4964,15 @@
           {
             "name": "groupBy",
             "in": "query",
-            "description": "Group rows by one field. One of: observedOn, createdAt, updatedAt, kind",
+            "description": "Group rows by one field. One of: observedOn, createdAt, updatedAt, kind, dataQuality",
             "schema": {
               "type": "string",
               "enum": [
                 "observedOn",
                 "createdAt",
                 "updatedAt",
-                "kind"
+                "kind",
+                "dataQuality"
               ]
             },
             "style": "form",
@@ -5133,6 +5267,39 @@
             "schema": {
               "type": "string",
               "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "dataStatus",
+            "in": "query",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "complete",
+                  "needs_data",
+                  "defect"
+                ]
+              }
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "dataGap",
+            "in": "query",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "garden_entry_note",
+                  "garden_entry_harvest_amount"
+                ]
+              }
             },
             "style": "form",
             "explode": true
@@ -8370,6 +8537,38 @@
             "explode": true
           },
           {
+            "name": "dataStatus",
+            "in": "query",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "complete",
+                  "needs_data",
+                  "defect"
+                ]
+              }
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "dataGap",
+            "in": "query",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "ledger_party_financial_account"
+                ]
+              }
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
             "name": "mealId",
             "in": "query",
             "schema": {
@@ -8468,7 +8667,7 @@
           {
             "name": "sort",
             "in": "query",
-            "description": "Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: name, kind, createdAt, updatedAt. Default: -name",
+            "description": "Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: name, kind, createdAt, updatedAt, dataQuality. Default: -name",
             "schema": {
               "type": "string",
               "pattern": "^-?[^,\\s-][^,\\s]*(,-?[^,\\s-][^,\\s]*){0,2}$"
@@ -8479,14 +8678,15 @@
           {
             "name": "groupBy",
             "in": "query",
-            "description": "Group rows by one field. One of: name, kind, createdAt, updatedAt",
+            "description": "Group rows by one field. One of: name, kind, createdAt, updatedAt, dataQuality",
             "schema": {
               "type": "string",
               "enum": [
                 "name",
                 "kind",
                 "createdAt",
-                "updatedAt"
+                "updatedAt",
+                "dataQuality"
               ]
             },
             "style": "form",
@@ -8771,6 +8971,38 @@
             "explode": true
           },
           {
+            "name": "dataStatus",
+            "in": "query",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "complete",
+                  "needs_data",
+                  "defect"
+                ]
+              }
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "dataGap",
+            "in": "query",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "ledger_transfer_transaction"
+                ]
+              }
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
             "name": "fromPartyId",
             "in": "query",
             "schema": {
@@ -8825,7 +9057,7 @@
           {
             "name": "sort",
             "in": "query",
-            "description": "Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: date, amount, createdAt, updatedAt. Default: -date",
+            "description": "Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: date, amount, createdAt, updatedAt, dataQuality. Default: -date",
             "schema": {
               "type": "string",
               "pattern": "^-?[^,\\s-][^,\\s]*(,-?[^,\\s-][^,\\s]*){0,2}$"
@@ -8836,14 +9068,15 @@
           {
             "name": "groupBy",
             "in": "query",
-            "description": "Group rows by one field. One of: date, amount, createdAt, updatedAt",
+            "description": "Group rows by one field. One of: date, amount, createdAt, updatedAt, dataQuality",
             "schema": {
               "type": "string",
               "enum": [
                 "date",
                 "amount",
                 "createdAt",
-                "updatedAt"
+                "updatedAt",
+                "dataQuality"
               ]
             },
             "style": "form",
@@ -11974,6 +12207,39 @@
             "explode": true
           },
           {
+            "name": "dataStatus",
+            "in": "query",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "complete",
+                  "needs_data",
+                  "defect"
+                ]
+              }
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "dataGap",
+            "in": "query",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "planting_variety",
+                  "planting_location"
+                ]
+              }
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
             "name": "locationId",
             "in": "query",
             "schema": {
@@ -12078,7 +12344,7 @@
           {
             "name": "sort",
             "in": "query",
-            "description": "Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: createdAt, updatedAt, status, sowedOn, finishedOn. Default: -createdAt",
+            "description": "Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: createdAt, updatedAt, status, sowedOn, finishedOn, dataQuality. Default: -createdAt",
             "schema": {
               "type": "string",
               "pattern": "^-?[^,\\s-][^,\\s]*(,-?[^,\\s-][^,\\s]*){0,2}$"
@@ -12089,7 +12355,7 @@
           {
             "name": "groupBy",
             "in": "query",
-            "description": "Group rows by one field. One of: createdAt, updatedAt, status, sowedOn, finishedOn",
+            "description": "Group rows by one field. One of: createdAt, updatedAt, status, sowedOn, finishedOn, dataQuality",
             "schema": {
               "type": "string",
               "enum": [
@@ -12097,7 +12363,8 @@
                 "updatedAt",
                 "status",
                 "sowedOn",
-                "finishedOn"
+                "finishedOn",
+                "dataQuality"
               ]
             },
             "style": "form",
@@ -12369,6 +12636,39 @@
                   "planned",
                   "growing",
                   "finished"
+                ]
+              }
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "dataStatus",
+            "in": "query",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "complete",
+                  "needs_data",
+                  "defect"
+                ]
+              }
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "dataGap",
+            "in": "query",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "planting_variety",
+                  "planting_location"
                 ]
               }
             },
@@ -18207,6 +18507,39 @@
             "explode": true
           },
           {
+            "name": "dataStatus",
+            "in": "query",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "complete",
+                  "needs_data",
+                  "defect"
+                ]
+              }
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "dataGap",
+            "in": "query",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "project_kind",
+                  "project_start_date"
+                ]
+              }
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
             "name": "dateFrom",
             "in": "query",
             "description": "Calendar day as \"YYYY-MM-DD\"",
@@ -18360,7 +18693,7 @@
           {
             "name": "sort",
             "in": "query",
-            "description": "Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: name, status, kind, startDate, costEstimate, createdAt, updatedAt. Default: -createdAt",
+            "description": "Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: name, status, kind, startDate, costEstimate, createdAt, updatedAt, dataQuality. Default: -createdAt",
             "schema": {
               "type": "string",
               "pattern": "^-?[^,\\s-][^,\\s]*(,-?[^,\\s-][^,\\s]*){0,2}$"
@@ -18371,7 +18704,7 @@
           {
             "name": "groupBy",
             "in": "query",
-            "description": "Group rows by one field. One of: name, status, kind, startDate, costEstimate, createdAt, updatedAt",
+            "description": "Group rows by one field. One of: name, status, kind, startDate, costEstimate, createdAt, updatedAt, dataQuality",
             "schema": {
               "type": "string",
               "enum": [
@@ -18381,7 +18714,8 @@
                 "startDate",
                 "costEstimate",
                 "createdAt",
-                "updatedAt"
+                "updatedAt",
+                "dataQuality"
               ]
             },
             "style": "form",
@@ -23154,6 +23488,39 @@
             "explode": true
           },
           {
+            "name": "dataStatus",
+            "in": "query",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "complete",
+                  "needs_data",
+                  "defect"
+                ]
+              }
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "dataGap",
+            "in": "query",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "task_due_date",
+                  "task_trade"
+                ]
+              }
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
             "name": "projectId",
             "in": "query",
             "schema": {
@@ -23439,7 +23806,7 @@
           {
             "name": "sort",
             "in": "query",
-            "description": "Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: name, status, dueDate, trade, project, subjectProduct, createdAt, updatedAt. Default: -createdAt",
+            "description": "Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: name, status, dueDate, trade, project, subjectProduct, createdAt, updatedAt, dataQuality. Default: -createdAt",
             "schema": {
               "type": "string",
               "pattern": "^-?[^,\\s-][^,\\s]*(,-?[^,\\s-][^,\\s]*){0,2}$"
@@ -23853,6 +24220,39 @@
                   "crafts",
                   "auto",
                   "other"
+                ]
+              }
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "dataStatus",
+            "in": "query",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "complete",
+                  "needs_data",
+                  "defect"
+                ]
+              }
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "dataGap",
+            "in": "query",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "task_due_date",
+                  "task_trade"
                 ]
               }
             },
@@ -25163,6 +25563,40 @@
             "explode": true
           },
           {
+            "name": "dataStatus",
+            "in": "query",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "complete",
+                  "needs_data",
+                  "defect"
+                ]
+              }
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "dataGap",
+            "in": "query",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "vendor_order_evidence",
+                  "vendor_logo",
+                  "vendor_website"
+                ]
+              }
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
             "name": "latestPurchaseDatePresenceFilter",
             "in": "query",
             "schema": {
@@ -25226,7 +25660,7 @@
           {
             "name": "sort",
             "in": "query",
-            "description": "Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: name, purchaseCount, spend, latestPurchaseDate, createdAt, updatedAt. Default: -spend",
+            "description": "Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: name, purchaseCount, spend, latestPurchaseDate, createdAt, updatedAt, dataQuality. Default: -spend",
             "schema": {
               "type": "string",
               "pattern": "^-?[^,\\s-][^,\\s]*(,-?[^,\\s-][^,\\s]*){0,2}$"
@@ -25237,7 +25671,7 @@
           {
             "name": "groupBy",
             "in": "query",
-            "description": "Group rows by one field. One of: name, purchaseCount, spend, latestPurchaseDate, createdAt, updatedAt",
+            "description": "Group rows by one field. One of: name, purchaseCount, spend, latestPurchaseDate, createdAt, updatedAt, dataQuality",
             "schema": {
               "type": "string",
               "enum": [
@@ -25246,7 +25680,8 @@
                 "spend",
                 "latestPurchaseDate",
                 "createdAt",
-                "updatedAt"
+                "updatedAt",
+                "dataQuality"
               ]
             },
             "style": "form",
@@ -25565,6 +26000,38 @@
             "explode": true
           },
           {
+            "name": "dataStatus",
+            "in": "query",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "complete",
+                  "needs_data",
+                  "defect"
+                ]
+              }
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "dataGap",
+            "in": "query",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "wish_candidate"
+                ]
+              }
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
             "name": "candidateProductId",
             "in": "query",
             "schema": {
@@ -25616,7 +26083,7 @@
           {
             "name": "sort",
             "in": "query",
-            "description": "Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: name, acquiredAt, priceRange, createdAt, updatedAt. Default: -createdAt",
+            "description": "Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: name, acquiredAt, priceRange, createdAt, updatedAt, dataQuality. Default: -createdAt",
             "schema": {
               "type": "string",
               "pattern": "^-?[^,\\s-][^,\\s]*(,-?[^,\\s-][^,\\s]*){0,2}$"
@@ -25627,7 +26094,7 @@
           {
             "name": "groupBy",
             "in": "query",
-            "description": "Group rows by one field. One of: name, acquiredAt, priceRange, createdAt, updatedAt",
+            "description": "Group rows by one field. One of: name, acquiredAt, priceRange, createdAt, updatedAt, dataQuality",
             "schema": {
               "type": "string",
               "enum": [
@@ -25635,7 +26102,8 @@
                 "acquiredAt",
                 "priceRange",
                 "createdAt",
-                "updatedAt"
+                "updatedAt",
+                "dataQuality"
               ]
             },
             "style": "form",
@@ -25961,6 +26429,9 @@
             "type": "string",
             "format": "date-time",
             "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "dataQuality": {
+            "$ref": "#/components/schemas/DataQuality"
           }
         },
         "required": [
@@ -25978,7 +26449,8 @@
           "doneSubtaskCount",
           "images",
           "createdAt",
-          "updatedAt"
+          "updatedAt",
+          "dataQuality"
         ],
         "additionalProperties": false
       },
@@ -27784,7 +28256,7 @@
             "const": "capture"
           },
           "allowedHosts": {
-            "$ref": "#/components/schemas/input_schema164"
+            "$ref": "#/components/schemas/input_schema170"
           },
           "enhancedEvidence": {
             "type": "boolean"
@@ -27832,7 +28304,7 @@
             "maxLength": 200
           },
           "allowedHosts": {
-            "$ref": "#/components/schemas/input_schema164"
+            "$ref": "#/components/schemas/input_schema170"
           }
         },
         "required": [
@@ -27854,7 +28326,7 @@
             "format": "uri"
           },
           "allowedHosts": {
-            "$ref": "#/components/schemas/input_schema164"
+            "$ref": "#/components/schemas/input_schema170"
           }
         },
         "required": [
@@ -31926,6 +32398,15 @@
           "location_type",
           "inventory_verified",
           "meal_contents",
+          "ledger_party_financial_account",
+          "ledger_transfer_transaction",
+          "project_kind",
+          "project_start_date",
+          "task_due_date",
+          "task_trade",
+          "vendor_order_evidence",
+          "vendor_logo",
+          "vendor_website",
           "purchase_date",
           "order_id",
           "stated_total",
@@ -31935,6 +32416,16 @@
           "paperwork_mismatch",
           "settlement_reference",
           "settlement_mismatch",
+          "financial_account_ledger_party",
+          "financial_account_confirmed",
+          "financial_transaction_allocation",
+          "financial_transaction_merchant",
+          "wish_candidate",
+          "expense_cost",
+          "planting_variety",
+          "planting_location",
+          "garden_entry_note",
+          "garden_entry_harvest_amount",
           "category_description",
           "category_feature"
         ]
@@ -32105,7 +32596,18 @@
               "location",
               "inventory",
               "meal",
+              "ledgerParty",
+              "ledgerTransfer",
+              "project",
+              "task",
+              "vendor",
               "purchase",
+              "financialAccount",
+              "financialTransaction",
+              "wish",
+              "expense",
+              "planting",
+              "gardenEntry",
               "productCategory"
             ]
           },
@@ -35364,6 +35866,9 @@
             "format": "date-time",
             "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
           },
+          "dataQuality": {
+            "$ref": "#/components/schemas/DataQuality"
+          },
           "displayImages": {
             "$ref": "#/components/schemas/DisplayImagesField"
           },
@@ -35391,6 +35896,7 @@
           "sourceClaims",
           "createdAt",
           "updatedAt",
+          "dataQuality",
           "displayImages",
           "attachments"
         ],
@@ -35608,15 +36114,57 @@
             "type": "string",
             "description": "Substring match on url"
           },
-          "projectId": {
+          "dataStatus": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/input_schema132"
+                "type": "string",
+                "enum": [
+                  "complete",
+                  "needs_data",
+                  "defect"
+                ]
               },
               {
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/input_schema132"
+                  "type": "string",
+                  "enum": [
+                    "complete",
+                    "needs_data",
+                    "defect"
+                  ]
+                }
+              }
+            ]
+          },
+          "dataGap": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "expense_cost"
+                ]
+              },
+              {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "expense_cost"
+                  ]
+                }
+              }
+            ]
+          },
+          "projectId": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/input_schema134"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/input_schema134"
                 }
               }
             ]
@@ -35647,12 +36195,12 @@
           "vendorId": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/input_schema135"
+                "$ref": "#/components/schemas/input_schema137"
               },
               {
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/input_schema135"
+                  "$ref": "#/components/schemas/input_schema137"
                 }
               }
             ]
@@ -35711,12 +36259,12 @@
           "purchaseId": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/input_schema139"
+                "$ref": "#/components/schemas/input_schema141"
               },
               {
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/input_schema139"
+                  "$ref": "#/components/schemas/input_schema141"
                 }
               }
             ]
@@ -35896,6 +36444,9 @@
             "format": "date-time",
             "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
           },
+          "dataQuality": {
+            "$ref": "#/components/schemas/DataQuality"
+          },
           "displayImages": {
             "$ref": "#/components/schemas/DisplayImagesField"
           }
@@ -35920,6 +36471,7 @@
           "sourceClaims",
           "createdAt",
           "updatedAt",
+          "dataQuality",
           "displayImages"
         ],
         "additionalProperties": false
@@ -36111,6 +36663,9 @@
             "type": "string",
             "format": "date-time",
             "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "dataQuality": {
+            "$ref": "#/components/schemas/DataQuality"
           }
         },
         "required": [
@@ -36132,7 +36687,8 @@
           "funders",
           "sourceClaims",
           "createdAt",
-          "updatedAt"
+          "updatedAt",
+          "dataQuality"
         ],
         "additionalProperties": false
       },
@@ -37124,6 +37680,9 @@
             "format": "date-time",
             "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
           },
+          "dataQuality": {
+            "$ref": "#/components/schemas/DataQuality"
+          },
           "displayImages": {
             "$ref": "#/components/schemas/DisplayImagesField"
           },
@@ -37144,6 +37703,7 @@
           "transactionCount",
           "createdAt",
           "updatedAt",
+          "dataQuality",
           "displayImages",
           "attachments"
         ],
@@ -37488,6 +38048,9 @@
             "format": "date-time",
             "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
           },
+          "dataQuality": {
+            "$ref": "#/components/schemas/DataQuality"
+          },
           "displayImages": {
             "$ref": "#/components/schemas/DisplayImagesField"
           }
@@ -37505,6 +38068,7 @@
           "transactionCount",
           "createdAt",
           "updatedAt",
+          "dataQuality",
           "displayImages"
         ],
         "additionalProperties": false
@@ -37607,6 +38171,9 @@
             "type": "string",
             "format": "date-time",
             "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "dataQuality": {
+            "$ref": "#/components/schemas/DataQuality"
           }
         },
         "required": [
@@ -37621,7 +38188,8 @@
           "ledgerPartyName",
           "transactionCount",
           "createdAt",
-          "updatedAt"
+          "updatedAt",
+          "dataQuality"
         ],
         "additionalProperties": false
       },
@@ -38077,6 +38645,9 @@
             "format": "date-time",
             "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
           },
+          "dataQuality": {
+            "$ref": "#/components/schemas/DataQuality"
+          },
           "displayImages": {
             "$ref": "#/components/schemas/DisplayImagesField"
           },
@@ -38100,6 +38671,7 @@
           "displayName",
           "createdAt",
           "updatedAt",
+          "dataQuality",
           "displayImages",
           "attachments"
         ],
@@ -38205,6 +38777,9 @@
             "format": "date-time",
             "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
           },
+          "dataQuality": {
+            "$ref": "#/components/schemas/DataQuality"
+          },
           "displayImages": {
             "$ref": "#/components/schemas/DisplayImagesField"
           }
@@ -38225,6 +38800,7 @@
           "displayName",
           "createdAt",
           "updatedAt",
+          "dataQuality",
           "displayImages"
         ],
         "additionalProperties": false
@@ -38350,6 +38926,9 @@
             "type": "string",
             "format": "date-time",
             "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "dataQuality": {
+            "$ref": "#/components/schemas/DataQuality"
           }
         },
         "required": [
@@ -38367,7 +38946,8 @@
           "accountName",
           "displayName",
           "createdAt",
-          "updatedAt"
+          "updatedAt",
+          "dataQuality"
         ],
         "additionalProperties": false
       },
@@ -38745,6 +39325,9 @@
             "format": "date-time",
             "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
           },
+          "dataQuality": {
+            "$ref": "#/components/schemas/DataQuality"
+          },
           "displayImages": {
             "$ref": "#/components/schemas/DisplayImagesField"
           },
@@ -38766,6 +39349,7 @@
           "plantings",
           "createdAt",
           "updatedAt",
+          "dataQuality",
           "displayImages",
           "attachments"
         ],
@@ -38832,6 +39416,9 @@
             "format": "date-time",
             "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
           },
+          "dataQuality": {
+            "$ref": "#/components/schemas/DataQuality"
+          },
           "displayImages": {
             "$ref": "#/components/schemas/DisplayImagesField"
           }
@@ -38850,6 +39437,7 @@
           "plantings",
           "createdAt",
           "updatedAt",
+          "dataQuality",
           "displayImages"
         ],
         "additionalProperties": false
@@ -38926,6 +39514,9 @@
             "type": "string",
             "format": "date-time",
             "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "dataQuality": {
+            "$ref": "#/components/schemas/DataQuality"
           }
         },
         "required": [
@@ -38941,7 +39532,8 @@
           "locationName",
           "plantings",
           "createdAt",
-          "updatedAt"
+          "updatedAt",
+          "dataQuality"
         ],
         "additionalProperties": false
       },
@@ -44648,7 +45240,7 @@
           }
         }
       },
-      "input_schema132": {
+      "input_schema134": {
         "anyOf": [
           {
             "$ref": "#/components/schemas/ProjectShortcode"
@@ -44662,7 +45254,7 @@
         "pattern": "^PRJ-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
         "description": "project shortcode, e.g. PRJ-4K7M"
       },
-      "input_schema135": {
+      "input_schema137": {
         "anyOf": [
           {
             "$ref": "#/components/schemas/VendorShortcode"
@@ -44676,7 +45268,7 @@
         "pattern": "^VEN-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
         "description": "vendor shortcode, e.g. VEN-4K7M"
       },
-      "input_schema139": {
+      "input_schema141": {
         "anyOf": [
           {
             "$ref": "#/components/schemas/PurchaseShortcode"
@@ -44690,7 +45282,7 @@
         "pattern": "^PUR-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
         "description": "purchase shortcode, e.g. PUR-4K7M"
       },
-      "input_schema152": {
+      "input_schema156": {
         "type": "object",
         "properties": {
           "orderBy": {
@@ -44707,7 +45299,7 @@
           }
         }
       },
-      "input_schema154": {
+      "input_schema158": {
         "anyOf": [
           {
             "$ref": "#/components/schemas/TaskShortcode"
@@ -44721,7 +45313,7 @@
         "pattern": "^TSK-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
         "description": "task shortcode, e.g. TSK-4K7M"
       },
-      "input_schema164": {
+      "input_schema170": {
         "minItems": 1,
         "maxItems": 20,
         "type": "array",
@@ -44731,7 +45323,7 @@
           "maxLength": 253
         }
       },
-      "input_schema175": {
+      "input_schema181": {
         "type": "object",
         "properties": {
           "kind": {
@@ -44747,7 +45339,7 @@
           "value"
         ]
       },
-      "input_schema179": {
+      "input_schema185": {
         "type": "object",
         "properties": {
           "orderBy": {
@@ -44771,7 +45363,7 @@
           }
         }
       },
-      "input_schema180": {
+      "input_schema186": {
         "type": "object",
         "properties": {
           "orderBy": {
@@ -46504,6 +47096,9 @@
             "format": "date-time",
             "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
           },
+          "dataQuality": {
+            "$ref": "#/components/schemas/DataQuality"
+          },
           "displayImages": {
             "$ref": "#/components/schemas/DisplayImagesField"
           },
@@ -46518,6 +47113,7 @@
           "notes",
           "createdAt",
           "updatedAt",
+          "dataQuality",
           "displayImages",
           "attachments"
         ],
@@ -46559,6 +47155,9 @@
             "format": "date-time",
             "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
           },
+          "dataQuality": {
+            "$ref": "#/components/schemas/DataQuality"
+          },
           "displayImages": {
             "$ref": "#/components/schemas/DisplayImagesField"
           }
@@ -46570,6 +47169,7 @@
           "notes",
           "createdAt",
           "updatedAt",
+          "dataQuality",
           "displayImages"
         ],
         "additionalProperties": false
@@ -46643,6 +47243,9 @@
             "type": "string",
             "format": "date-time",
             "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "dataQuality": {
+            "$ref": "#/components/schemas/DataQuality"
           }
         },
         "required": [
@@ -46651,7 +47254,8 @@
           "kind",
           "notes",
           "createdAt",
-          "updatedAt"
+          "updatedAt",
+          "dataQuality"
         ],
         "additionalProperties": false
       },
@@ -47060,6 +47664,9 @@
             "format": "date-time",
             "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
           },
+          "dataQuality": {
+            "$ref": "#/components/schemas/DataQuality"
+          },
           "displayImages": {
             "$ref": "#/components/schemas/DisplayImagesField"
           },
@@ -47081,6 +47688,7 @@
           "evidenceTransactionIds",
           "createdAt",
           "updatedAt",
+          "dataQuality",
           "displayImages",
           "attachments"
         ],
@@ -47142,6 +47750,9 @@
             "format": "date-time",
             "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
           },
+          "dataQuality": {
+            "$ref": "#/components/schemas/DataQuality"
+          },
           "displayImages": {
             "$ref": "#/components/schemas/DisplayImagesField"
           }
@@ -47160,6 +47771,7 @@
           "evidenceTransactionIds",
           "createdAt",
           "updatedAt",
+          "dataQuality",
           "displayImages"
         ],
         "additionalProperties": false
@@ -47231,6 +47843,9 @@
             "type": "string",
             "format": "date-time",
             "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "dataQuality": {
+            "$ref": "#/components/schemas/DataQuality"
           }
         },
         "required": [
@@ -47246,7 +47861,8 @@
           "sourceClaims",
           "evidenceTransactionIds",
           "createdAt",
-          "updatedAt"
+          "updatedAt",
+          "dataQuality"
         ],
         "additionalProperties": false
       },
@@ -47456,14 +48072,14 @@
             },
             "anyOf": [
               {
-                "$ref": "#/components/schemas/input_schema179"
+                "$ref": "#/components/schemas/input_schema185"
               },
               {
                 "minItems": 1,
                 "maxItems": 3,
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/input_schema179"
+                  "$ref": "#/components/schemas/input_schema185"
                 }
               }
             ]
@@ -53388,6 +54004,9 @@
             "format": "date-time",
             "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
           },
+          "dataQuality": {
+            "$ref": "#/components/schemas/DataQuality"
+          },
           "displayImages": {
             "$ref": "#/components/schemas/DisplayImagesField"
           },
@@ -53412,6 +54031,7 @@
           "guideTransplantWindow",
           "createdAt",
           "updatedAt",
+          "dataQuality",
           "displayImages",
           "attachments"
         ],
@@ -53521,6 +54141,9 @@
             "format": "date-time",
             "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
           },
+          "dataQuality": {
+            "$ref": "#/components/schemas/DataQuality"
+          },
           "displayImages": {
             "$ref": "#/components/schemas/DisplayImagesField"
           }
@@ -53542,6 +54165,7 @@
           "guideTransplantWindow",
           "createdAt",
           "updatedAt",
+          "dataQuality",
           "displayImages"
         ],
         "additionalProperties": false
@@ -53668,6 +54292,9 @@
             "type": "string",
             "format": "date-time",
             "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "dataQuality": {
+            "$ref": "#/components/schemas/DataQuality"
           }
         },
         "required": [
@@ -53686,7 +54313,8 @@
           "guideSowWindow",
           "guideTransplantWindow",
           "createdAt",
-          "updatedAt"
+          "updatedAt",
+          "dataQuality"
         ],
         "additionalProperties": false
       },
@@ -60097,6 +60725,9 @@
           "dates": {
             "$ref": "#/components/schemas/ProjectOutputFieldsProjectDateWindow"
           },
+          "dataQuality": {
+            "$ref": "#/components/schemas/DataQuality"
+          },
           "displayImages": {
             "$ref": "#/components/schemas/DisplayImagesField"
           },
@@ -60119,6 +60750,7 @@
           "updatedAt",
           "rollup",
           "dates",
+          "dataQuality",
           "displayImages",
           "attachments"
         ],
@@ -60369,6 +61001,50 @@
             "description": "Any exact match against locations[]",
             "$ref": "#/components/schemas/input_schema103"
           },
+          "dataStatus": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "complete",
+                  "needs_data",
+                  "defect"
+                ]
+              },
+              {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "complete",
+                    "needs_data",
+                    "defect"
+                  ]
+                }
+              }
+            ]
+          },
+          "dataGap": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "project_kind",
+                  "project_start_date"
+                ]
+              },
+              {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "project_kind",
+                    "project_start_date"
+                  ]
+                }
+              }
+            ]
+          },
           "dateFrom": {
             "$ref": "#/components/schemas/input_schema37"
           },
@@ -60396,12 +61072,12 @@
           "parentProjectId": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/input_schema132"
+                "$ref": "#/components/schemas/input_schema134"
               },
               {
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/input_schema132"
+                  "$ref": "#/components/schemas/input_schema134"
                 }
               }
             ]
@@ -60581,6 +61257,9 @@
           "dates": {
             "$ref": "#/components/schemas/ProjectOutputFieldsProjectDateWindow"
           },
+          "dataQuality": {
+            "$ref": "#/components/schemas/DataQuality"
+          },
           "displayImages": {
             "$ref": "#/components/schemas/DisplayImagesField"
           }
@@ -60600,6 +61279,7 @@
           "updatedAt",
           "rollup",
           "dates",
+          "dataQuality",
           "displayImages"
         ],
         "additionalProperties": false
@@ -60703,6 +61383,9 @@
           "dates": {
             "$ref": "#/components/schemas/ProjectOutputFieldsProjectDateWindow"
           },
+          "dataQuality": {
+            "$ref": "#/components/schemas/DataQuality"
+          },
           "displayImages": {
             "$ref": "#/components/schemas/DisplayImagesField"
           }
@@ -60722,6 +61405,7 @@
           "updatedAt",
           "rollup",
           "dates",
+          "dataQuality",
           "displayImages"
         ],
         "additionalProperties": false
@@ -60878,6 +61562,9 @@
           },
           "dates": {
             "$ref": "#/components/schemas/ProjectOutputFieldsProjectDateWindow"
+          },
+          "dataQuality": {
+            "$ref": "#/components/schemas/DataQuality"
           }
         },
         "required": [
@@ -60894,7 +61581,8 @@
           "createdAt",
           "updatedAt",
           "rollup",
-          "dates"
+          "dates",
+          "dataQuality"
         ],
         "additionalProperties": false
       },
@@ -61869,14 +62557,14 @@
             },
             "anyOf": [
               {
-                "$ref": "#/components/schemas/input_schema152"
+                "$ref": "#/components/schemas/input_schema156"
               },
               {
                 "minItems": 1,
                 "maxItems": 3,
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/input_schema152"
+                  "$ref": "#/components/schemas/input_schema156"
                 }
               }
             ]
@@ -67168,7 +67856,7 @@
                 "$ref": "#/components/schemas/ProductFindOrCreateByCodeInput"
               },
               {
-                "$ref": "#/components/schemas/input_schema175"
+                "$ref": "#/components/schemas/input_schema181"
               }
             ],
             "description": "The scanned code."
@@ -69589,6 +70277,9 @@
             "format": "date-time",
             "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
           },
+          "dataQuality": {
+            "$ref": "#/components/schemas/DataQuality"
+          },
           "displayImages": {
             "$ref": "#/components/schemas/DisplayImagesField"
           },
@@ -69612,6 +70303,7 @@
           "images",
           "createdAt",
           "updatedAt",
+          "dataQuality",
           "displayImages",
           "attachments"
         ],
@@ -69658,12 +70350,12 @@
           "parentTaskId": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/input_schema154"
+                "$ref": "#/components/schemas/input_schema158"
               },
               {
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/input_schema154"
+                  "$ref": "#/components/schemas/input_schema158"
                 }
               }
             ]
@@ -69703,15 +70395,59 @@
               }
             ]
           },
-          "projectId": {
+          "dataStatus": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/input_schema132"
+                "type": "string",
+                "enum": [
+                  "complete",
+                  "needs_data",
+                  "defect"
+                ]
               },
               {
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/input_schema132"
+                  "type": "string",
+                  "enum": [
+                    "complete",
+                    "needs_data",
+                    "defect"
+                  ]
+                }
+              }
+            ]
+          },
+          "dataGap": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "task_due_date",
+                  "task_trade"
+                ]
+              },
+              {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "task_due_date",
+                    "task_trade"
+                  ]
+                }
+              }
+            ]
+          },
+          "projectId": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/input_schema134"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/input_schema134"
                 }
               }
             ]
@@ -69861,6 +70597,9 @@
             "format": "date-time",
             "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
           },
+          "dataQuality": {
+            "$ref": "#/components/schemas/DataQuality"
+          },
           "displayImages": {
             "$ref": "#/components/schemas/DisplayImagesField"
           }
@@ -69881,6 +70620,7 @@
           "images",
           "createdAt",
           "updatedAt",
+          "dataQuality",
           "displayImages"
         ],
         "additionalProperties": false
@@ -69991,6 +70731,9 @@
             "type": "string",
             "format": "date-time",
             "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "dataQuality": {
+            "$ref": "#/components/schemas/DataQuality"
           }
         },
         "required": [
@@ -70008,7 +70751,8 @@
           "doneSubtaskCount",
           "images",
           "createdAt",
-          "updatedAt"
+          "updatedAt",
+          "dataQuality"
         ],
         "additionalProperties": false
       },
@@ -71520,14 +72264,14 @@
             },
             "anyOf": [
               {
-                "$ref": "#/components/schemas/input_schema180"
+                "$ref": "#/components/schemas/input_schema186"
               },
               {
                 "minItems": 1,
                 "maxItems": 3,
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/input_schema180"
+                  "$ref": "#/components/schemas/input_schema186"
                 }
               }
             ]
@@ -72180,6 +72924,9 @@
             "format": "date-time",
             "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
           },
+          "dataQuality": {
+            "$ref": "#/components/schemas/DataQuality"
+          },
           "displayImages": {
             "$ref": "#/components/schemas/DisplayImagesField"
           },
@@ -72201,6 +72948,7 @@
           "spend",
           "createdAt",
           "updatedAt",
+          "dataQuality",
           "displayImages",
           "attachments"
         ],
@@ -72321,6 +73069,9 @@
             "format": "date-time",
             "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
           },
+          "dataQuality": {
+            "$ref": "#/components/schemas/DataQuality"
+          },
           "displayImages": {
             "$ref": "#/components/schemas/DisplayImagesField"
           }
@@ -72339,6 +73090,7 @@
           "spend",
           "createdAt",
           "updatedAt",
+          "dataQuality",
           "displayImages"
         ],
         "additionalProperties": false
@@ -72506,6 +73258,9 @@
             "type": "string",
             "format": "date-time",
             "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "dataQuality": {
+            "$ref": "#/components/schemas/DataQuality"
           }
         },
         "required": [
@@ -72521,7 +73276,8 @@
           "purchaseCount",
           "spend",
           "createdAt",
-          "updatedAt"
+          "updatedAt",
+          "dataQuality"
         ],
         "additionalProperties": false
       },
@@ -72764,6 +73520,9 @@
             "format": "date-time",
             "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
           },
+          "dataQuality": {
+            "$ref": "#/components/schemas/DataQuality"
+          },
           "displayImages": {
             "$ref": "#/components/schemas/DisplayImagesField"
           },
@@ -72780,6 +73539,7 @@
           "candidateCount",
           "createdAt",
           "updatedAt",
+          "dataQuality",
           "displayImages",
           "attachments"
         ],
@@ -72831,6 +73591,9 @@
             "format": "date-time",
             "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
           },
+          "dataQuality": {
+            "$ref": "#/components/schemas/DataQuality"
+          },
           "displayImages": {
             "$ref": "#/components/schemas/DisplayImagesField"
           }
@@ -72844,6 +73607,7 @@
           "candidateCount",
           "createdAt",
           "updatedAt",
+          "dataQuality",
           "displayImages"
         ],
         "additionalProperties": false
@@ -72912,6 +73676,9 @@
             "type": "string",
             "format": "date-time",
             "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "dataQuality": {
+            "$ref": "#/components/schemas/DataQuality"
           }
         },
         "required": [
@@ -72922,7 +73689,8 @@
           "candidates",
           "candidateCount",
           "createdAt",
-          "updatedAt"
+          "updatedAt",
+          "dataQuality"
         ],
         "additionalProperties": false
       },

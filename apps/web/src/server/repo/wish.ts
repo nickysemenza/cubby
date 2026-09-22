@@ -1,4 +1,5 @@
 import type { ActorContext } from "@cubby/schemas/context";
+import type { DataQuality } from "@cubby/schemas/data-quality";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 import {
@@ -24,6 +25,7 @@ import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import { product, wish, wishCandidate } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
 import { computeChanges, logAuditEntry } from "~/server/repo/audit-log";
+import { loadDataQualities } from "~/server/repo/data-quality";
 import {
   auditDateWhereConditions,
   countWhere,
@@ -121,7 +123,11 @@ const candidateRowsForWishes = async (
   return byWish;
 };
 
-const toWishOut = (row: WishRow, candidates: CandidateRow[]): WishOut => {
+const toWishOut = (
+  row: WishRow,
+  candidates: CandidateRow[],
+  dataQuality: DataQuality,
+): WishOut => {
   const publicCandidates = candidates.map((candidate) => ({
     id: parseShortcodeFor("product", candidate.shortcode),
     name: candidate.name,
@@ -138,6 +144,7 @@ const toWishOut = (row: WishRow, candidates: CandidateRow[]): WishOut => {
     candidates: publicCandidates,
     candidateCount: publicCandidates.length,
     priceRange: wishPriceRange(publicCandidates),
+    dataQuality,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
@@ -147,11 +154,25 @@ const hydrateWishes = async (
   db: Database | DrizzleTransaction,
   rows: WishRow[],
 ): Promise<WishOut[]> => {
-  const candidates = await candidateRowsForWishes(
-    db,
-    rows.map((row) => row.id),
+  const [candidates, dataQualities] = await Promise.all([
+    candidateRowsForWishes(
+      db,
+      rows.map((row) => row.id),
+    ),
+    loadDataQualities(
+      db,
+      "wish",
+      rows.map((row) => row.id),
+    ),
+  ]);
+  return rows.map((row) =>
+    toWishOut(
+      row,
+      candidates.get(row.id) ?? [],
+      // SAFETY: `row` came from `rows`, which `dataQualities` was loaded for.
+      dataQualities.get(row.id)!,
+    ),
   );
-  return rows.map((row) => toWishOut(row, candidates.get(row.id) ?? []));
 };
 
 // The candidate subqueries use a SQL alias (`p`), so keep their field refs raw

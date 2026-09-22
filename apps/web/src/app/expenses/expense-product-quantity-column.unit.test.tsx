@@ -1,5 +1,5 @@
 import type { ExpenseOut } from "@cubby/schemas/project";
-import { testShortcode } from "@cubby/schemas/testing";
+import { testCompleteDataQuality, testShortcode } from "@cubby/schemas/testing";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
@@ -35,6 +35,7 @@ const EXPENSE: ExpenseOut = {
   beneficiaries: [],
   funders: [],
   sourceClaims: [],
+  dataQuality: testCompleteDataQuality(),
   createdAt: new Date("2026-07-20T00:00:00Z"),
   updatedAt: new Date("2026-07-20T00:00:00Z"),
 };

@@ -139,6 +139,17 @@ export const listRendererCoverage = {
   meal: scoredCoverage<"meal">(),
   productCategory: scoredCoverage<"productCategory">(),
   // finance and project entities
+  project: scoredCoverage<"project">(),
+  task: scoredCoverage<"task">(),
+  vendor: scoredCoverage<"vendor">(),
+  financialAccount: scoredCoverage<"financialAccount">(),
+  financialTransaction: scoredCoverage<"financialTransaction">(),
+  expense: scoredCoverage<"expense">(),
+  wish: scoredCoverage<"wish">(),
+  planting: scoredCoverage<"planting">(),
+  gardenEntry: scoredCoverage<"gardenEntry">(),
+  ledgerParty: scoredCoverage<"ledgerParty">(),
+  ledgerTransfer: scoredCoverage<"ledgerTransfer">(),
 } satisfies {
   [E in ListRendererEntity]: EntityListRendererCoverage<E>;
 };

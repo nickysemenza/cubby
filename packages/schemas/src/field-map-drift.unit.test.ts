@@ -532,8 +532,15 @@ const INTENTIONAL_RESPELLINGS = {
     "task's own generated search filter field (generatedTaskFilterFields.search, correctly referenced via taskFilterFields' spread) — coincidentally shares a name with project's own generated search filter field since both live in project.ts",
   "project::taskFiltersSchema::status":
     "task's own generated filter status field (generatedTaskFilterFields.status, correctly referenced via taskFilterFields' spread) — coincidentally shares a name with project's own generated status field since both live in project.ts",
+  "project::taskFiltersSchema::dataStatus":
+    TASK_EXPENSE_SHARED_MODULE_COLLISION,
+  "project::taskFiltersSchema::dataGap": TASK_EXPENSE_SHARED_MODULE_COLLISION,
   "project::expenseFiltersSchema::search":
     "expense's own hand-written search filter (oneOrMany(z.string()); expense has no generated search key — see the file comment on why notes gets its own field) — coincidentally shares a name with project's own generated search filter field",
+  "project::expenseFiltersSchema::dataStatus":
+    TASK_EXPENSE_SHARED_MODULE_COLLISION,
+  "project::expenseFiltersSchema::dataGap":
+    TASK_EXPENSE_SHARED_MODULE_COLLISION,
   "project::embeddedProjectScopeSchema::search":
     "hand-written z.string().optional() duplicate of project's own generated search filter field, for the embeddable project-scope shape — same-entity hand copy, real duplication",
   "project::projectDashboardFiltersSchema::search":

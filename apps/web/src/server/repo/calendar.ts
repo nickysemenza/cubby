@@ -33,6 +33,7 @@ import type { Database } from "~/server/db";
 import { expense, project, purchase, task } from "~/server/db/schema";
 
 import { loadCalendarPlantings, mapPlantingItems } from "./calendar-plantings";
+import { loadDataQualities } from "./data-quality";
 import { getDb, notDeleted, relations } from "./database-helpers";
 import { eqAny, presenceCondition } from "./database-helpers/query";
 import { expenseInheritanceReadExtras } from "./expense-inheritance";
@@ -300,12 +301,19 @@ const mapMealItems = (
     mealTotals: meal.totals,
   }));
 
-const mapTaskItems = (
+const mapTaskItems = async (
+  db: Database,
   rows: Awaited<ReturnType<typeof loadCalendarTasks>>,
   productCoverImageUrls: Map<string, string>,
-): CalendarItem[] =>
-  rows.flatMap((row) => {
-    const value = dbTaskToAPI(row, [], []);
+): Promise<CalendarItem[]> => {
+  const dataQualities = await loadDataQualities(
+    db,
+    "task",
+    rows.map((row) => row.id),
+  );
+  return rows.flatMap((row) => {
+    // SAFETY: `row` came from `rows`, which `dataQualities` was loaded for.
+    const value = dbTaskToAPI(row, [], [], 0, 0, dataQualities.get(row.id)!);
     const startDate = value.dueDate ?? value.dueEndDate;
     const endDate = value.dueEndDate ?? value.dueDate;
     return startDate && endDate
@@ -330,13 +338,21 @@ const mapTaskItems = (
         ]
       : [];
   });
+};
 
-const mapExpenseItems = (
+const mapExpenseItems = async (
+  db: Database,
   rows: Awaited<ReturnType<typeof loadCalendarExpenses>>,
   productCoverImageUrls: Map<string, string>,
-): CalendarItem[] =>
-  rows.flatMap((row) => {
-    const value = dbExpenseToAPI(row);
+): Promise<CalendarItem[]> => {
+  const dataQualities = await loadDataQualities(
+    db,
+    "expense",
+    rows.map((row) => row.id),
+  );
+  return rows.flatMap((row) => {
+    // SAFETY: `row` came from `rows`, which `dataQualities` was loaded for.
+    const value = dbExpenseToAPI(row, dataQualities.get(row.id)!);
     return value.date
       ? [
           {
@@ -361,6 +377,7 @@ const mapExpenseItems = (
         ]
       : [];
   });
+};
 
 const mapProjectItems = (
   rows: Awaited<ReturnType<typeof loadCalendarProjects>>,
@@ -515,8 +532,8 @@ export async function getCalendarRange(
 
   const items = sortCalendarItems([
     ...mapMealItems(meals, recipeCoverImageUrls),
-    ...mapTaskItems(taskRows, productCoverImageUrls),
-    ...mapExpenseItems(expenseRows, productCoverImageUrls),
+    ...(await mapTaskItems(db, taskRows, productCoverImageUrls)),
+    ...(await mapExpenseItems(db, expenseRows, productCoverImageUrls)),
     ...mapProjectItems(projectRows, projectDates, input),
     ...mapPlantingItems(plantingRows, input),
   ]);

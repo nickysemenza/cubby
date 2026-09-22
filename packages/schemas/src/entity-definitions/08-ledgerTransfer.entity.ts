@@ -415,6 +415,17 @@ export default defineEntity({
     merge: false,
     operationOwners: { delete: "kernel", merge: null },
     mcp: ["get", "list", "create", "update", "delete"],
+    dataQuality: {
+      checks: [
+        {
+          id: "ledger_transfer_transaction",
+          facet: "settlement",
+          weight: 1,
+          label: "Transaction",
+          message: "No financial transaction evidences this transfer.",
+        },
+      ],
+    },
   },
   extensions: {
     countFilter: null,

@@ -1,3 +1,4 @@
+import type { DataQuality } from "@cubby/schemas/data-quality";
 import type {
   ExpenseId,
   ProductId,
@@ -331,7 +332,10 @@ const expenseProjectName = (row: ExpenseRow) =>
     ? resolveLiveJoinName(row.project)
     : row.effectiveProjectName;
 
-export const dbExpenseToAPI = (row: ExpenseRow): ExpenseOut => {
+export const dbExpenseToAPI = (
+  row: ExpenseRow,
+  dataQuality: DataQuality,
+): ExpenseOut => {
   // A soft-deleted Purchase reads as no Purchase at all — the same rule
   // `resolveLiveJoinName` applies to project/product below, so a deleted parent
   // renders blank rather than as live data.
@@ -416,6 +420,7 @@ export const dbExpenseToAPI = (row: ExpenseRow): ExpenseOut => {
             ),
           },
     projectAllocations: expenseProjectAllocations(row),
+    dataQuality,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };

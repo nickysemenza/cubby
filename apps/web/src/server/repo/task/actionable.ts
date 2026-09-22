@@ -78,6 +78,7 @@ import {
   task,
   taskDependency,
 } from "~/server/db/schema";
+import { loadDataQualities } from "~/server/repo/data-quality";
 import { getDb, notDeleted, relations } from "~/server/repo/database-helpers";
 import {
   type EntityRef,
@@ -394,10 +395,17 @@ export async function listActionableTasks(
 
   // Subtask counts must include done subtasks, which `openTaskRows` (non-done
   // only) can't supply — a separate grouped query over ALL live subtasks.
-  const subtaskCounts = await taskSubtaskCounts(
-    db,
-    hydratedOpenTaskRows.map((row) => row.id),
-  );
+  const [subtaskCounts, dataQualities] = await Promise.all([
+    taskSubtaskCounts(
+      db,
+      hydratedOpenTaskRows.map((row) => row.id),
+    ),
+    loadDataQualities(
+      db,
+      "task",
+      hydratedOpenTaskRows.map((row) => row.id),
+    ),
+  ]);
 
   // `dbTaskToAPI` takes public ids for blockedByIds/blockingIds; the edge
   // values above are the OTHER side's uuid regardless of its open/done
@@ -487,6 +495,9 @@ export async function listActionableTasks(
       toTaskShortcodes(blockingIds.get(row.id) ?? []),
       counts?.count ?? 0,
       counts?.doneCount ?? 0,
+      // SAFETY: `row` came from `hydratedOpenTaskRows`, which `dataQualities`
+      // was loaded for.
+      dataQualities.get(row.id)!,
     );
 
     const reasons = blockedReasonsFor(row);

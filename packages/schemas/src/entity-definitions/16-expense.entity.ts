@@ -1383,6 +1383,17 @@ export default defineEntity({
     merge: false,
     operationOwners: { delete: "kernel", merge: null },
     mcp: ["get", "list", "search", "create", "update", "delete", "bulkUpdate"],
+    dataQuality: {
+      checks: [
+        {
+          id: "expense_cost",
+          facet: "ledger",
+          weight: 2,
+          label: "Cost",
+          message: "No cost is recorded for this expense.",
+        },
+      ],
+    },
   },
   extensions: {
     countFilter: null,

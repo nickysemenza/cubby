@@ -495,6 +495,24 @@ export default defineEntity({
     merge: false,
     operationOwners: { delete: "kernel", merge: null },
     mcp: ["get", "list", "create", "update", "delete"],
+    dataQuality: {
+      checks: [
+        {
+          id: "garden_entry_note",
+          facet: "content",
+          weight: 1,
+          label: "Note",
+          message: "No note is recorded for this entry.",
+        },
+        {
+          id: "garden_entry_harvest_amount",
+          facet: "content",
+          weight: 1,
+          label: "Harvest amount",
+          message: "No harvest amount is recorded for this entry.",
+        },
+      ],
+    },
   },
   extensions: {
     countFilter: null,

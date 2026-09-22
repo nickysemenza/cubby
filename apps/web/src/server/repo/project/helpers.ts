@@ -1,3 +1,4 @@
+import type { DataQuality } from "@cubby/schemas/data-quality";
 import type { FieldResolutions } from "@cubby/schemas/field-resolution";
 import { type ProjectId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type {
@@ -158,6 +159,7 @@ const dbProjectToAPI = ({
   parentProjectShortcode,
   childProjectIds,
   allRows,
+  dataQuality,
 }: {
   row: ProjectRow;
   ownRollup: ProjectOwnRollup;
@@ -169,6 +171,7 @@ const dbProjectToAPI = ({
   parentProjectShortcode: string | null;
   childProjectIds: string[];
   allRows: Parameters<typeof resolveInheritedProjectSettings>[1];
+  dataQuality: DataQuality;
 }): ProjectOut => {
   const resolved = resolveInheritedProjectSettings(row, allRows);
   const fallback = resolveInheritedProjectSettings(
@@ -251,6 +254,7 @@ const dbProjectToAPI = ({
     updatedAt: row.updatedAt,
     rollup: { ...ownRollup, subtree: subtreeRollup },
     dates,
+    dataQuality,
   };
 };
 
@@ -273,6 +277,7 @@ export const hydrateProjectRow = (
     blockedBy: Map<ProjectId, ProjectId[]>;
     blocking: Map<ProjectId, ProjectId[]>;
   },
+  dataQuality: DataQuality,
 ): ProjectOut => {
   const toShortcode = (id: ProjectId) => context.shortcodeById.get(id) ?? "";
   return dbProjectToAPI({
@@ -293,5 +298,6 @@ export const hydrateProjectRow = (
       toShortcode,
     ),
     allRows: context.allRows,
+    dataQuality,
   });
 };

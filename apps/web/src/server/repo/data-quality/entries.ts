@@ -1,14 +1,25 @@
 import type { ScoredEntity } from "@cubby/schemas/data-quality";
 
 import { cookbookChecks } from "./checks/cookbook";
+import { expenseChecks } from "./checks/expense";
+import { financialAccountChecks } from "./checks/financial-account";
+import { financialTransactionChecks } from "./checks/financial-transaction";
+import { gardenEntryChecks } from "./checks/garden-entry";
 import { ingredientChecks } from "./checks/ingredient";
 import { inventoryChecks } from "./checks/inventory";
+import { ledgerPartyChecks } from "./checks/ledger-party";
+import { ledgerTransferChecks } from "./checks/ledger-transfer";
 import { locationChecks } from "./checks/location";
 import { mealChecks } from "./checks/meal";
+import { plantingChecks } from "./checks/planting";
 import { productChecks } from "./checks/product";
 import { productCategoryChecks } from "./checks/product-category";
+import { projectChecks } from "./checks/project";
 import { purchaseChecks } from "./checks/purchase";
 import { recipeChecks } from "./checks/recipe";
+import { taskChecks } from "./checks/task";
+import { vendorChecks } from "./checks/vendor";
+import { wishChecks } from "./checks/wish";
 import type { EntityChecks, ScoredTable } from "./registry";
 
 /** The registry's owner contract: one entry per scored entity. */
@@ -35,4 +46,15 @@ export const dataQualityEntries = {
   meal: mealChecks,
   productCategory: productCategoryChecks,
   // finance and project entities
+  project: projectChecks,
+  task: taskChecks,
+  vendor: vendorChecks,
+  financialAccount: financialAccountChecks,
+  financialTransaction: financialTransactionChecks,
+  expense: expenseChecks,
+  wish: wishChecks,
+  planting: plantingChecks,
+  gardenEntry: gardenEntryChecks,
+  ledgerParty: ledgerPartyChecks,
+  ledgerTransfer: ledgerTransferChecks,
 } satisfies DataQualityEntries;

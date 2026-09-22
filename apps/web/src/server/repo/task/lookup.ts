@@ -23,6 +23,7 @@ import { uniq } from "es-toolkit";
 import { householdLocalDate } from "~/lib/household-date";
 import type { Database } from "~/server/db";
 import { product, task } from "~/server/db/schema";
+import { loadDataQualities } from "~/server/repo/data-quality";
 import {
   auditDateWhereConditions,
   countWhere,
@@ -337,9 +338,10 @@ export const taskList = async (
   }
 
   const ids = rows.map((r) => r.id);
-  const [deps, subtaskCounts] = await Promise.all([
+  const [deps, subtaskCounts, dataQualities] = await Promise.all([
     taskDependencyIds(db, ids),
     taskSubtaskCounts(db, ids),
+    loadDataQualities(db, "task", ids),
   ]);
 
   const hydratedRows = await hydrateTaskInheritanceRows(db, rows);
@@ -351,6 +353,8 @@ export const taskList = async (
       deps.blocking.get(row.id) ?? [],
       counts?.count ?? 0,
       counts?.doneCount ?? 0,
+      // SAFETY: `row` came from `rows`, which `dataQualities` was loaded for.
+      dataQualities.get(row.id)!,
     );
   });
 

@@ -1087,6 +1087,24 @@ export default defineEntity({
     merge: false,
     operationOwners: { delete: "kernel", merge: null },
     mcp: ["get", "list", "search", "create", "update", "delete"],
+    dataQuality: {
+      checks: [
+        {
+          id: "financial_transaction_allocation",
+          facet: "ledger",
+          weight: 2,
+          label: "Allocation",
+          message: "No purchase allocation is recorded for this settlement.",
+        },
+        {
+          id: "financial_transaction_merchant",
+          facet: "identity",
+          weight: 1,
+          label: "Merchant",
+          message: "No merchant is recorded for this transaction.",
+        },
+      ],
+    },
   },
   extensions: {
     countFilter: null,
