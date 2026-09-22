@@ -610,11 +610,11 @@ const INTENTIONAL_RESPELLINGS = {
   // --- device -------------------------------------------------------------
   "device::deviceFilters::ledgerPartyId":
     "shortcode-list filter spelled as entityFilterList(ledgerPartyShortcode) over the generated scalar ledgerPartyId field",
-  "purchaseImportRun::purchaseImportRunFilters::vendorAccountId":
+  "importRun::importRunFilters::vendorAccountId":
     "shortcode-list filter spelled as entityFilterList(vendorAccountShortcode) over the generated scalar vendorAccountId field",
-  "purchaseImportRun::purchaseImportRunFilters::vendorId":
+  "importRun::importRunFilters::vendorId":
     "shortcode-list filter spelled as entityFilterList(vendorShortcode) over the generated scalar vendorId field",
-  "purchaseImportRun::purchaseImportRunFilters::ledgerPartyId":
+  "importRun::importRunFilters::ledgerPartyId":
     "shortcode-list filter spelled as entityFilterList(ledgerPartyShortcode) over the generated scalar ledgerPartyId field",
 
   // --- recipe: recipeTopLevelFields (recipe-shared.ts) is a hand-declared

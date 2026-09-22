@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 /**
- * Cycle-safe enums for the `purchaseImportRun` declaration. `purchase-import.ts`
+ * Cycle-safe enums for the `importRun` declaration. `purchase-import.ts`
  * re-exports them so existing consumers keep their import paths.
  */
 export const importRunTrigger = z.enum([
@@ -24,5 +24,6 @@ export const importRunPurpose = z.enum([
   "account_sync",
   "purchase_validation",
   "product_enrichment",
+  "photo_inventory",
 ]);
 export type ImportRunPurpose = z.infer<typeof importRunPurpose>;

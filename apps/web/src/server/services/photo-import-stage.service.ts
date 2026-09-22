@@ -6,16 +6,20 @@ import type {
 } from "~/contracts/photo-import.contract";
 import type { Database } from "~/server/db";
 import { findReusableImagesBySha256 } from "~/server/repo/photo-import";
+import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 import { initiateImageUploadWithoutEntity } from "~/server/services/image-storage.service";
 
 export interface PhotoImportStagePorts {
   findReusable: typeof findReusableImagesBySha256;
   initiateUpload: typeof initiateImageUploadWithoutEntity;
+  /** Defaults to the real resolver; existing test doubles need not supply it. */
+  resolveRunId?: typeof resolveOrThrow;
 }
 
 const productionPorts: PhotoImportStagePorts = {
   findReusable: findReusableImagesBySha256,
   initiateUpload: initiateImageUploadWithoutEntity,
+  resolveRunId: resolveOrThrow,
 };
 
 /** Staging is deliberately not transactional: every successful presign remains reusable. */
@@ -24,11 +28,19 @@ export async function stagePhotoImport(
   input: PhotoImportStageInput,
   ports: PhotoImportStagePorts = productionPorts,
 ): Promise<PhotoImportStageOutput> {
+  const runId = input.importRunId
+    ? await (ports.resolveRunId ?? resolveOrThrow)(
+        db,
+        "importRun",
+        input.importRunId,
+      )
+    : undefined;
   const exact = await ports.findReusable(
     db,
     input.items
       .filter((item) => item.allowExactReuse)
       .map((item) => item.sha256),
+    runId,
   );
   const items: PhotoImportStageOutput["items"] = [];
   for (const item of input.items) {

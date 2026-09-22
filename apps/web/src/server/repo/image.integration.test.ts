@@ -1,12 +1,27 @@
 import type { ProjectId } from "@cubby/schemas/identifiers";
-import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
+import {
+  parseEntityId,
+  parseShortcodeFor,
+  userId,
+} from "@cubby/schemas/identifiers";
 import { getImageByIdSchema } from "@cubby/schemas/image";
 import { projectCreateInput } from "@cubby/schemas/project";
+import { generateShortcode } from "@cubby/shared";
 import { asc, eq, inArray } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { cookbook, image, projectImage, vendor } from "~/server/db/schema";
+import type { Database } from "~/server/db";
+import {
+  cookbook,
+  image,
+  importRun,
+  importRunTarget,
+  ledgerParty,
+  projectImage,
+  user,
+  vendor,
+} from "~/server/db/schema";
 import { makeCookbookExtraction } from "~/server/repo/repo.fixtures";
 import { markImageUploadedWorkflow } from "~/server/workflows/image.server";
 
@@ -31,7 +46,72 @@ import {
   setImagePerceptualHashes,
 } from "./image";
 import { createProject } from "./project";
+import { insertWithShortcode } from "./shortcode-utils";
 import { findOrCreateVendor } from "./vendor";
+
+let importRunFixtureSeq = 0;
+const uniqImportRunLabel = (label: string) =>
+  `${label}-${(importRunFixtureSeq++).toString(36)}`;
+
+/** Minimal live `LedgerParty`, for fixtures that only need a valid owner id. */
+const mkLedgerParty = (db: Database) =>
+  insertWithShortcode(db, "ledgerParty", {
+    name: uniqImportRunLabel("Ledger party"),
+    kind: "member",
+  });
+
+const mkActorUser = (db: Database) =>
+  insertAndReturn(db, user, {
+    id: uniqImportRunLabel("user"),
+    name: "Import run fixture actor",
+    email: `${uniqImportRunLabel("actor")}@example.test`,
+  });
+
+/**
+ * A live `photo_inventory` `ImportRun`, with the actor snapshot columns the
+ * table requires (mirrors `mkImportRun` in
+ * `problems/detectors-integrity.integration.test.ts`, trimmed to what the
+ * image-filter tests need).
+ */
+const mkPhotoInventoryRun = async (db: Database) => {
+  const party = await mkLedgerParty(db);
+  const [partySnapshot, actor] = await Promise.all([
+    getDb(db)
+      .select({
+        shortcode: ledgerParty.shortcode,
+        name: ledgerParty.name,
+        kind: ledgerParty.kind,
+      })
+      .from(ledgerParty)
+      .where(eq(ledgerParty.id, party.id))
+      .then((rows) => rows[0]!),
+    mkActorUser(db),
+  ]);
+  return insertAndReturn(db, importRun, {
+    shortcode: generateShortcode("importRun"),
+    purpose: "photo_inventory",
+    trigger: "manual",
+    ledgerPartyId: party.id,
+    actorUserId: userId.parse(actor.id),
+    actorName: actor.name,
+    actorEmail: actor.email,
+    actorLedgerPartyShortcode: partySnapshot.shortcode,
+    actorLedgerPartyName: partySnapshot.name,
+    actorLedgerPartyKind: partySnapshot.kind,
+  });
+};
+
+const mkImportRunTargetRow = (
+  db: Database,
+  values: { runId: string; imageId: string; position?: number; state?: string },
+) =>
+  insertAndReturn(db, importRunTarget, {
+    runId: values.runId,
+    imageId: parseEntityId("image", values.imageId),
+    position: values.position,
+    state: values.state ?? "pending",
+    targetFingerprint: uniqImportRunLabel("target-fingerprint"),
+  });
 
 describe("image repository", () => {
   const ctx = withTestDb();
@@ -469,6 +549,127 @@ describe("image repository", () => {
   // deliberately NOT filtered by notDeleted(cookbook) — filtering it would cull
   // exactly the images that then blow up the hard-delete on
   // Cookbook_coverImageId_fkey.
+});
+
+describe("image repository — import-run targets", () => {
+  const ctx = withTestDb();
+
+  const makeImage = (filename: string) =>
+    createUploadedImageRecord(ctx.db, {
+      key: `images/${crypto.randomUUID()}.jpg`,
+      filename,
+      contentType: "image/jpeg",
+      size: 512,
+    });
+
+  it("filters images by importRunId and targetState", async () => {
+    const run = await mkPhotoInventoryRun(ctx.db);
+    const otherRun = await mkPhotoInventoryRun(ctx.db);
+    const pendingImage = await makeImage("run-pending.jpg");
+    const preparedImage = await makeImage("run-prepared.jpg");
+    const otherRunImage = await makeImage("other-run.jpg");
+    const untargetedImage = await makeImage("untargeted.jpg");
+
+    await mkImportRunTargetRow(ctx.db, {
+      runId: run.id,
+      imageId: pendingImage.id,
+      position: 1,
+      state: "pending",
+    });
+    await mkImportRunTargetRow(ctx.db, {
+      runId: run.id,
+      imageId: preparedImage.id,
+      position: 2,
+      state: "prepared",
+    });
+    await mkImportRunTargetRow(ctx.db, {
+      runId: otherRun.id,
+      imageId: otherRunImage.id,
+      position: 1,
+      state: "pending",
+    });
+
+    const runCode = parseShortcodeFor("importRun", run.shortcode);
+    const byRun = await imageList(ctx.db, { importRunId: runCode }, [], {
+      pageIndex: 0,
+      pageSize: 100,
+    });
+    const byRunIds = byRun.data.map((row) => row.id);
+    expect(byRunIds).toContain(pendingImage.shortcode);
+    expect(byRunIds).toContain(preparedImage.shortcode);
+    expect(byRunIds).not.toContain(otherRunImage.shortcode);
+    expect(byRunIds).not.toContain(untargetedImage.shortcode);
+
+    const byRunAndState = await imageList(
+      ctx.db,
+      { importRunId: runCode, targetState: "pending" },
+      [],
+      { pageIndex: 0, pageSize: 100 },
+    );
+    const byRunAndStateIds = byRunAndState.data.map((row) => row.id);
+    expect(byRunAndStateIds).toContain(pendingImage.shortcode);
+    expect(byRunAndStateIds).not.toContain(preparedImage.shortcode);
+
+    const byStateAlone = await imageList(
+      ctx.db,
+      { targetState: ["pending"] },
+      [],
+      { pageIndex: 0, pageSize: 100 },
+    );
+    const byStateAloneIds = byStateAlone.data.map((row) => row.id);
+    expect(byStateAloneIds).toContain(pendingImage.shortcode);
+    expect(byStateAloneIds).toContain(otherRunImage.shortcode);
+    expect(byStateAloneIds).not.toContain(preparedImage.shortcode);
+
+    // Each listed image carries its own target's run/state/position back —
+    // the agent workflow reads this instead of a second lookup per image.
+    const preparedRow = byRun.data.find(
+      (row) => row.id === preparedImage.shortcode,
+    );
+    expect(preparedRow?.importTarget).toMatchObject({
+      runId: run.shortcode,
+      state: "prepared",
+      position: 2,
+    });
+  });
+
+  it("orders a run's images by ImportRunTarget.position, then createdAt", async () => {
+    const run = await mkPhotoInventoryRun(ctx.db);
+    const first = await makeImage("position-first.jpg");
+    const second = await makeImage("position-second.jpg");
+    const third = await makeImage("position-third.jpg");
+
+    // Inserted out of position order, so a pass without the position ORDER BY
+    // would come back in this insertion/createdAt order instead.
+    await mkImportRunTargetRow(ctx.db, {
+      runId: run.id,
+      imageId: third.id,
+      position: 3,
+    });
+    await mkImportRunTargetRow(ctx.db, {
+      runId: run.id,
+      imageId: first.id,
+      position: 1,
+    });
+    await mkImportRunTargetRow(ctx.db, {
+      runId: run.id,
+      imageId: second.id,
+      position: 2,
+    });
+
+    const listed = await imageList(
+      ctx.db,
+      { importRunId: parseShortcodeFor("importRun", run.shortcode) },
+      [],
+      { pageIndex: 0, pageSize: 100 },
+    );
+
+    expect(listed.data.map((row) => row.id)).toEqual([
+      first.shortcode,
+      second.shortcode,
+      third.shortcode,
+    ]);
+  });
 });
 
 // `PurchaseImage` is a charge's documents — the emailed PDF invoice or a photo

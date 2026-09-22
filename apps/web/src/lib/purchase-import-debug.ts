@@ -63,7 +63,7 @@ export const purchaseImportDebugEventsRequest = z.object({
   events: z.array(purchaseImportDebugEvent).min(1).max(100),
 });
 
-const purchaseImportRunLogEntry = z.object({
+const importRunLogEntry = z.object({
   id: z.string(),
   occurredAt: z.iso.datetime(),
   source: z.enum(["run", "server", "mac"]),
@@ -84,18 +84,16 @@ const purchaseImportRunLogEntry = z.object({
   error: z.string().nullable(),
 });
 
-export const purchaseImportRunLogResponse = z.object({
-  entries: z.array(purchaseImportRunLogEntry),
+export const importRunLogResponse = z.object({
+  entries: z.array(importRunLogEntry),
   truncated: z.boolean(),
 });
 
-export const purchaseImportRunLogRequest = z.union([
+export const importRunLogRequest = z.union([
   z.object({ publicId: importRunShortcode }),
   // Legacy Settings entries predate public PIR addresses. New detail routes
   // use the public-id branch; this preserves older local history links.
   z.object({ runId: z.uuid() }),
 ]);
 
-export type PurchaseImportRunLogEntry = z.infer<
-  typeof purchaseImportRunLogEntry
->;
+export type ImportRunLogEntry = z.infer<typeof importRunLogEntry>;

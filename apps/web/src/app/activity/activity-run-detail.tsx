@@ -101,7 +101,7 @@ export function ActivityRunDetail({
           {id.startsWith("RUN-") ? (
             <a
               className="text-primary hover:underline"
-              href={`/purchase-imports/${id}`}
+              href={`/import-runs/${id}`}
             >
               Open purchase run details
             </a>

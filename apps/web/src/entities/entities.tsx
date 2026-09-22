@@ -391,8 +391,8 @@ const entityDefinitions = withEntityNames({
     ...generatedBrowserRoutes.vendorAccount,
     color: INK.slate,
   },
-  purchaseImportRun: {
-    ...generatedBrowserRoutes.purchaseImportRun,
+  importRun: {
+    ...generatedBrowserRoutes.importRun,
     color: INK.slate,
   },
   productCategory: {

@@ -1,12 +1,12 @@
-import { purchaseImportRunId } from "@cubby/schemas/identifiers";
+import { importRunId } from "@cubby/schemas/identifiers";
 import { createFileRoute } from "@tanstack/react-router";
 import { asc, eq } from "drizzle-orm";
 
 import {
   purchaseImportDebugEvent,
-  purchaseImportRunLogRequest,
-  purchaseImportRunLogResponse,
-  type PurchaseImportRunLogEntry,
+  importRunLogRequest,
+  importRunLogResponse,
+  type ImportRunLogEntry,
 } from "~/lib/purchase-import-debug";
 import { importRun, importRunOperation } from "~/server/db/schema";
 import { getDb } from "~/server/repo/database-helpers";
@@ -37,7 +37,7 @@ type OperationRow = Pick<
 
 const operationLogEntry = (
   operation: OperationRow,
-): PurchaseImportRunLogEntry | null => {
+): ImportRunLogEntry | null => {
   if (operation.kind === DEBUG_EVENT_KIND) {
     const event = purchaseImportDebugEvent.safeParse(operation.result);
     if (!event.success) return null;
@@ -82,9 +82,7 @@ export const Route = createFileRoute("/api/import/run-logs")({
   server: {
     handlers: {
       POST: async ({ request }) => {
-        const identifier = purchaseImportRunLogRequest.safeParse(
-          await request.json(),
-        );
+        const identifier = importRunLogRequest.safeParse(await request.json());
         if (!identifier.success) {
           return Response.json(
             { error: "Import run was not found" },
@@ -114,10 +112,7 @@ export const Route = createFileRoute("/api/import/run-logs")({
           .where(
             "publicId" in identifier.data
               ? eq(importRun.shortcode, identifier.data.publicId)
-              : eq(
-                  importRun.id,
-                  purchaseImportRunId.parse(identifier.data.runId),
-                ),
+              : eq(importRun.id, importRunId.parse(identifier.data.runId)),
           )
           .limit(1);
         if (!run) {
@@ -145,7 +140,7 @@ export const Route = createFileRoute("/api/import/run-logs")({
           )
           .limit(MAX_LOG_ENTRIES + 1);
 
-        const entries: PurchaseImportRunLogEntry[] = [
+        const entries: ImportRunLogEntry[] = [
           {
             id: `run:${run.id}:started`,
             occurredAt: run.startedAt.toISOString(),
@@ -160,9 +155,7 @@ export const Route = createFileRoute("/api/import/run-logs")({
           ...operations
             .slice(0, MAX_LOG_ENTRIES)
             .map(operationLogEntry)
-            .filter(
-              (entry): entry is PurchaseImportRunLogEntry => entry !== null,
-            ),
+            .filter((entry): entry is ImportRunLogEntry => entry !== null),
         );
         if (run.endedAt) {
           entries.push({
@@ -182,7 +175,7 @@ export const Route = createFileRoute("/api/import/run-logs")({
             left.id.localeCompare(right.id),
         );
         return Response.json(
-          purchaseImportRunLogResponse.parse({
+          importRunLogResponse.parse({
             entries,
             truncated: operations.length > MAX_LOG_ENTRIES,
           }),

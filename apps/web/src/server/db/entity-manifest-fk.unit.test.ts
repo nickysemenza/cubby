@@ -80,7 +80,7 @@ const NON_ENTITY_FK_TARGETS = {
   StatementImport: "provider export bookkeeping, not a domain entity",
   StatementRow: "verbatim statement evidence, not a domain entity",
   ImportRunTarget:
-    "explicit operational target for a validation or enrichment import run",
+    "explicit operational target for a validation, enrichment or photo-inventory import run",
   ImportRunOrderCandidate:
     "an account-sync run's order-history worklist, not a domain entity",
   ImportPreparedOrder:
@@ -111,17 +111,21 @@ const NON_GRAPH_ENTITY_FK_EXEMPTIONS = {
     classification: "metadata",
     reason: "records the Product a targeted enrichment examined",
   },
+  "ImportRunTarget.imageId": {
+    classification: "metadata",
+    reason: "records the Image a photo-inventory run grouped into a Product",
+  },
   "ImportRunTarget.vendorAccountId": {
     classification: "metadata",
     reason:
       "freezes the member-owned vendor account selected for targeted evidence",
   },
-  // purchaseImportRun's own child rows. Each source table is operational
+  // importRun's own child rows. Each source table is operational
   // bookkeeping (see NON_ENTITY_FK_TARGETS above), not an entity, so these
   // stay ordinary non-graph exemptions rather than needing a declared
   // relationship. `Purchase.importRunId` and `ImportRun.predecessorRunId`
   // are NOT exempted here on purpose: both source purchase and
-  // purchaseImportRun, which are entities, so the guard below correctly
+  // importRun, which are entities, so the guard below correctly
   // demands a real graph path for them (as it already does for
   // `ImportRun.ledgerPartyId`/`vendorAccountId`/`vendorId`) — declaring one
   // needs a `relations` entry on the entity definitions plus `pnpm generate`,

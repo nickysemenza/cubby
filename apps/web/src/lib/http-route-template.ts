@@ -94,8 +94,8 @@ const DYNAMIC_TRACE_ROUTES: ReadonlyArray<{
   template: string;
 }> = [
   {
-    pattern: /^\/purchase-imports\/[^/]+$/u,
-    template: "/purchase-imports/:shortcode",
+    pattern: /^\/import-runs\/[^/]+$/u,
+    template: "/import-runs/:shortcode",
   },
   {
     pattern: /^\/api\/import\/runs\/[^/]+$/u,

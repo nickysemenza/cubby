@@ -152,7 +152,7 @@ public actor CubbyClient {
             case .planting: .planting
             case .gardenEntry: .gardenEntry
             case .vendorAccount: .vendorAccount
-            case .purchaseImportRun: .purchaseImportRun
+            case .importRun: .importRun
             case .device: .device
             }
         return try await perform {

@@ -17,6 +17,7 @@ import { registerIngredientTools } from "./tools/ingredient.tools";
 import { registerInventoryTools } from "./tools/inventory.tools";
 import { registerLedgerTools } from "./tools/ledger.tools";
 import { MEAL_RECIPE_TOOL_NAMES, registerMealTools } from "./tools/meal.tools";
+import { registerPhotoImportTools } from "./tools/photo-import.tools";
 import { registerProblemsTools } from "./tools/problems.tools";
 import { registerProductTools } from "./tools/product.tools";
 import { registerProjectTools } from "./tools/project.tools";
@@ -87,6 +88,7 @@ function registerTools(server: McpServer) {
   registerProblemsTools(server);
   registerProjectTools(server);
   registerPurchaseTools(server);
+  registerPhotoImportTools(server);
   registerFinancialTools(server);
   registerMealTools(server);
   registerUsdaTools(server);

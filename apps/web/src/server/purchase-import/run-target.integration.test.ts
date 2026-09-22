@@ -7,10 +7,7 @@ import { getDb } from "~/server/repo/database-helpers";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
 import { startOrResumeImportRun } from "./run-service";
-import {
-  listPurchaseImportRuns,
-  resolvePurchaseImportTarget,
-} from "./run-target";
+import { listImportRuns, resolvePurchaseImportTarget } from "./run-target";
 
 describe("purchase import run target resolution", () => {
   const ctx = withTestDb();
@@ -88,7 +85,7 @@ describe("purchase import run target resolution", () => {
     expect(targetId).toBe(purchase.id);
     expect(mutation?.runId).toBe(run.id);
 
-    const runs = await listPurchaseImportRuns(ctx.db, party.id, targetId!);
+    const runs = await listImportRuns(ctx.db, party.id, targetId!);
     expect(runs.map((row) => row.id)).toEqual([run.id]);
   });
 });

@@ -305,7 +305,7 @@ describe("activity image processing projection", () => {
       .update(imageProcessingJob)
       .set({ createdAt: at })
       .where(eq(imageProcessingJob.id, imageJob));
-    const runPublicId = generateShortcode("purchaseImportRun");
+    const runPublicId = generateShortcode("importRun");
     const [run] = await getDb(ctx.db)
       .insert(importRun)
       .values({

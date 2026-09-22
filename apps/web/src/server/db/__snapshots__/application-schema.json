@@ -5403,6 +5403,12 @@
           "primaryKey": false,
           "notNull": false
         },
+        "notes": {
+          "name": "notes",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
         "dispatchAttempts": {
           "name": "dispatchAttempts",
           "type": "integer",
@@ -5675,7 +5681,11 @@
         },
         "ImportRun_purpose_check": {
           "name": "ImportRun_purpose_check",
-          "value": "\"ImportRun\".\"purpose\" IN ('account_sync', 'purchase_validation', 'product_enrichment')"
+          "value": "\"ImportRun\".\"purpose\" IN ('account_sync', 'purchase_validation', 'product_enrichment', 'photo_inventory')"
+        },
+        "ImportRun_photo_inventory_no_vendor_check": {
+          "name": "ImportRun_photo_inventory_no_vendor_check",
+          "value": "\"ImportRun\".\"purpose\" <> 'photo_inventory' OR \"ImportRun\".\"vendorAccountId\" IS NULL"
         }
       },
       "isRLSEnabled": false
@@ -6685,6 +6695,18 @@
           "primaryKey": false,
           "notNull": false
         },
+        "imageId": {
+          "name": "imageId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "position": {
+          "name": "position",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
         "vendorAccountId": {
           "name": "vendorAccountId",
           "type": "uuid",
@@ -6813,6 +6835,21 @@
           "method": "btree",
           "with": {}
         },
+        "ImportRunTarget_image_idx": {
+          "name": "ImportRunTarget_image_idx",
+          "columns": [
+            {
+              "expression": "imageId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
         "ImportRunTarget_run_purchase_key": {
           "name": "ImportRunTarget_run_purchase_key",
           "columns": [
@@ -6853,6 +6890,28 @@
           ],
           "isUnique": true,
           "where": "\"ImportRunTarget\".\"productId\" IS NOT NULL",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "ImportRunTarget_run_image_key": {
+          "name": "ImportRunTarget_run_image_key",
+          "columns": [
+            {
+              "expression": "runId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "imageId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"ImportRunTarget\".\"imageId\" IS NOT NULL",
           "concurrently": false,
           "method": "btree",
           "with": {}
@@ -6898,6 +6957,19 @@
           "onDelete": "no action",
           "onUpdate": "no action"
         },
+        "ImportRunTarget_imageId_Image_id_fk": {
+          "name": "ImportRunTarget_imageId_Image_id_fk",
+          "tableFrom": "ImportRunTarget",
+          "tableTo": "Image",
+          "columnsFrom": [
+            "imageId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
         "ImportRunTarget_vendorAccountId_VendorAccount_id_fk": {
           "name": "ImportRunTarget_vendorAccountId_VendorAccount_id_fk",
           "tableFrom": "ImportRunTarget",
@@ -6918,7 +6990,7 @@
       "checkConstraints": {
         "ImportRunTarget_exactly_one_target_check": {
           "name": "ImportRunTarget_exactly_one_target_check",
-          "value": "((\"ImportRunTarget\".\"purchaseId\" IS NOT NULL)::int + (\"ImportRunTarget\".\"productId\" IS NOT NULL)::int) = 1"
+          "value": "((\"ImportRunTarget\".\"purchaseId\" IS NOT NULL)::int + (\"ImportRunTarget\".\"productId\" IS NOT NULL)::int + (\"ImportRunTarget\".\"imageId\" IS NOT NULL)::int) = 1"
         },
         "ImportRunTarget_state_check": {
           "name": "ImportRunTarget_state_check",
@@ -6926,7 +6998,7 @@
         },
         "ImportRunTarget_outcome_check": {
           "name": "ImportRunTarget_outcome_check",
-          "value": "\"ImportRunTarget\".\"outcome\" IS NULL OR \"ImportRunTarget\".\"outcome\" IN ('replayed', 'raw_evidence_drift', 'semantic_drift', 'enriched', 'unavailable', 'skipped')"
+          "value": "\"ImportRunTarget\".\"outcome\" IS NULL OR \"ImportRunTarget\".\"outcome\" IN ('replayed', 'raw_evidence_drift', 'semantic_drift', 'enriched', 'unavailable', 'skipped', 'attached')"
         }
       },
       "isRLSEnabled": false

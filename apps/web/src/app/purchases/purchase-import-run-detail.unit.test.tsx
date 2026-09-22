@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
-import { PurchaseImportRunDetailPage } from "./purchase-import-run-detail";
+import { ImportRunDetailPage } from "./purchase-import-run-detail";
 
 let harness: ReturnType<typeof createBrowserTestHarness>;
 
@@ -157,9 +157,9 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe("PurchaseImportRunDetailPage", () => {
+describe("ImportRunDetailPage", () => {
   it("keeps terminal evidence view-only while showing full-run usage and transcript", async () => {
-    render(<PurchaseImportRunDetailPage publicId={run.publicId} />, {
+    render(<ImportRunDetailPage publicId={run.publicId} />, {
       wrapper: harness.wrapper,
     });
 

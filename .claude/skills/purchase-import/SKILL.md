@@ -32,9 +32,13 @@ through Cubby's prepare/commit writer rather than generic entity mutation.
 3. Call `prepare_purchase_import` in batches of at most 50 orders. Preserve its
    preparation revision and stable line ids.
 4. Resolve every principal line. Prefer exact retailer SKU, ASIN, UPC/GTIN, or
-   manufacturer model; then inspect Product aliases, names, and details. Choose
-   an existing Product shortcode, explicitly choose `new`, or leave the line
-   `unresolved`. Never create a Product merely because search was inconclusive.
+   manufacturer model; then inspect Product aliases, names, and details. Before
+   choosing `new`, check inventory-first Products (`dataGap: product_unpurchased`,
+   same category/owner) and claim one when variant evidence agrees — see
+   [product identity](../product-enrichment/references/product-identity.md).
+   Choose an existing Product shortcode, explicitly choose `new`, or leave the
+   line `unresolved`. Never create a Product merely because search was
+   inconclusive.
 5. Call `commit_purchase_import` with the preparation revision and every line
    resolution. Do not use generic entity creation for imported Products or
    Expenses.
@@ -63,7 +67,7 @@ does); a run left without any of these is moved to review by the server.
 These run-lifecycle tools are not substitutes for the prepare/commit writer.
 
 An interrupted mutation is recovered through
-`purchase_import_operation_status` with its original operation id. Repeating
+`import_operation_status` with its original operation id. Repeating
 the source payload is replay, not a way to revise a reviewed decision; a
 correction creates a linked successor run and new decision revision.
 

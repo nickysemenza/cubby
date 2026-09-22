@@ -1,3 +1,3 @@
-export function purchaseImportRunHref(publicId: string): string {
-  return `/purchase-imports/${encodeURIComponent(publicId)}`;
+export function importRunHref(publicId: string): string {
+  return `/import-runs/${encodeURIComponent(publicId)}`;
 }

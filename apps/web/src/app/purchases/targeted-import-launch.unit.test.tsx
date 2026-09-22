@@ -84,7 +84,7 @@ describe("TargetedImportLaunchDialog", () => {
     ).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /Open RUN-4K7M/ })).toHaveAttribute(
       "href",
-      "/purchase-imports/RUN-4K7M",
+      "/import-runs/RUN-4K7M",
     );
   });
 });

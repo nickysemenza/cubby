@@ -1,4 +1,4 @@
-import { purchaseImportRunId } from "@cubby/schemas/identifiers";
+import { importRunId } from "@cubby/schemas/identifiers";
 import { describe, expect, it, vi } from "vitest";
 
 import { Database } from "~/server/db";
@@ -129,7 +129,7 @@ describe("purchase agent OAuth callback", () => {
     ports.getQueue.mockReturnValue({ send });
     ports.resumeRuns.mockResolvedValue([
       {
-        id: purchaseImportRunId.parse("15119902-3ed6-4f04-a9cc-8c9860c399b2"),
+        id: importRunId.parse("15119902-3ed6-4f04-a9cc-8c9860c399b2"),
         publicId: "RUN-4K7M",
         purpose: "account_sync",
         coordinatorModel: "gpt-5.6-terra",
@@ -155,14 +155,14 @@ describe("purchase agent OAuth callback", () => {
   it("marks every missing or rejected queue handoff as recoverable", async () => {
     const runs = [
       {
-        id: purchaseImportRunId.parse("15119902-3ed6-4f04-a9cc-8c9860c399b2"),
+        id: importRunId.parse("15119902-3ed6-4f04-a9cc-8c9860c399b2"),
         publicId: "RUN-4K7M",
         purpose: "account_sync" as const,
         coordinatorModel: "gpt-5.6-terra",
         eventId: "event-1",
       },
       {
-        id: purchaseImportRunId.parse("25119902-3ed6-4f04-a9cc-8c9860c399b2"),
+        id: importRunId.parse("25119902-3ed6-4f04-a9cc-8c9860c399b2"),
         publicId: "RUN-4K7N",
         purpose: "account_sync" as const,
         coordinatorModel: "gpt-5.6-terra",

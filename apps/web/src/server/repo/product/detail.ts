@@ -13,11 +13,16 @@ import { observeOperationPhase } from "~/server/observed-request";
 import { loadDataQualities } from "~/server/repo/data-quality";
 import { getDb, notDeleted, relations } from "~/server/repo/database-helpers";
 import { resolveEntityDisplayImages } from "~/server/repo/entity-display-image";
+import { loadImageAnalysisSummaries } from "~/server/repo/image-analysis-summary";
 import { getRecipeUsagesForIngredient } from "~/server/repo/ingredient";
 import { loadLocationAncestorsWithIds } from "~/server/repo/location/tree";
 import { getProductCoverImageUrlsByProductIds } from "~/server/repo/product/crud";
 import { foodLookupParamFromProduct } from "~/server/repo/product/helpers";
-import { dbProductToAPI, primaryGtinOf } from "~/server/repo/product/mappers";
+import {
+  dbProductToAPI,
+  primaryGtinOf,
+  productImageShortcodesOf,
+} from "~/server/repo/product/mappers";
 import { enrichProductRowsWithPricing } from "~/server/repo/product/pricing";
 import {
   EMPTY_QUANTITY_LEDGER,
@@ -175,6 +180,10 @@ export async function readProductDetail(
     (await getProductCoverImageUrlsByProductIds(context.db, [row.id])).get(
       row.id,
     ) ?? null;
+  const analysisSummaries = await loadImageAnalysisSummaries(
+    context.db,
+    productImageShortcodesOf(breadcrumbed.images),
+  );
   const recipe = await observeOperationPhase(
     PRODUCT_DETAIL_OPERATION,
     "recipe_usages",
@@ -193,6 +202,7 @@ export async function readProductDetail(
       coverImageUrl,
     },
     dataQuality,
+    analysisSummaries,
   );
   return {
     ...mapped,

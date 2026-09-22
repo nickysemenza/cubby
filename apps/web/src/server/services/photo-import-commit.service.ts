@@ -3,6 +3,7 @@ import type {
   PhotoImportCommitResult,
 } from "~/contracts/photo-import.contract";
 import { deferPublications } from "~/server/background-tasks/publish";
+import type { Database } from "~/server/db";
 import type { EntityKernelContext } from "~/server/entity-kernel";
 import { createAppError } from "~/server/errors/app-error";
 import {
@@ -19,11 +20,23 @@ import {
   runMutationSideEffectsForEntities,
   type MutationSideEffectEvent,
 } from "~/server/services/mutation-side-effects";
+import { finalizeImportedImages } from "~/server/services/photo-import-finalize.service";
 import { getS3Object } from "~/server/utils/s3";
 
-interface VerifiedImportImage {
+/** A staged image's bytes/dimensions checked against its row, independent of any caller-specific payload. */
+export interface StagedImageIntegrityItem {
+  imageId: string;
+  sha256: string;
+  width: number;
+  height: number;
+}
+
+export interface VerifiedStagedImage {
   row: ImportImageRow;
   integrity: Awaited<ReturnType<typeof inspectImageFile>>;
+}
+
+interface VerifiedImportImage extends VerifiedStagedImage {
   analysis: PhotoImportCommitInput["images"][number]["analysis"] | null;
 }
 
@@ -81,11 +94,11 @@ const analysesMatch = (
   right: PhotoImportItem["analysis"],
 ): boolean => JSON.stringify(left) === JSON.stringify(right);
 
-const verifyUploadedImage = async (
+const verifyUploadedStagedImage = (
   row: ImportImageRow,
   imageId: string,
-  items: PhotoImportItem[],
-): Promise<VerifiedImportImage> => {
+  reuseAllowed: boolean,
+): VerifiedStagedImage => {
   if (
     !row.sha256 ||
     row.renderStatus !== "verified" ||
@@ -96,23 +109,10 @@ const verifyUploadedImage = async (
       `Existing image ${imageId} is not available for reuse`,
     );
   }
-  if (items.some((item) => item.duplicateDecision !== "reuse")) {
+  if (!reuseAllowed) {
     throw createAppError(
       "IMAGE_PRECONDITION_FAILED",
       `Existing image ${imageId} was not approved for reuse`,
-    );
-  }
-  const exactItems = items.filter(
-    (item) => row.sha256 === item.analysis.sha256,
-  );
-  const exactAnalysis = exactItems[0]?.analysis ?? null;
-  if (
-    exactAnalysis &&
-    exactItems.some((item) => !analysesMatch(item.analysis, exactAnalysis))
-  ) {
-    throw createAppError(
-      "CONSTRAINT_VIOLATION",
-      `Reused image ${imageId} has conflicting exact-match analysis`,
     );
   }
   return {
@@ -127,22 +127,24 @@ const verifyUploadedImage = async (
       storageStatus: "available",
       verifiedAt: new Date(),
     },
-    // A reused active image is already durable. It receives associations only;
-    // local analysis belongs to newly staged rows in this commit.
-    analysis: null,
   };
 };
 
-const verifyPendingImage = async (
+const verifyPendingStagedImage = async (
   row: ImportImageRow,
   imageId: string,
-  items: PhotoImportItem[],
+  candidates: StagedImageIntegrityItem[],
   ports: PhotoImportCommitPorts,
-): Promise<VerifiedImportImage> => {
-  const item = items[0];
+): Promise<VerifiedStagedImage> => {
+  const item = candidates[0];
   if (!item) throw new Error(`Validated image ${imageId} has no selection`);
   if (
-    items.some((candidate) => !analysesMatch(candidate.analysis, item.analysis))
+    candidates.some(
+      (candidate) =>
+        candidate.sha256 !== item.sha256 ||
+        candidate.width !== item.width ||
+        candidate.height !== item.height,
+    )
   ) {
     throw createAppError(
       "CONSTRAINT_VIOLATION",
@@ -168,11 +170,9 @@ const verifyPendingImage = async (
   // deliberately reports raw encoded dimensions. Exact bytes can therefore legitimately
   // present the same width/height pair in the opposite order for EXIF/HEIF rotation.
   const dimensionsMatch =
-    (integrity.width === item.analysis.width &&
-      integrity.height === item.analysis.height) ||
-    (integrity.width === item.analysis.height &&
-      integrity.height === item.analysis.width);
-  if (integrity.sha256 !== item.analysis.sha256 || !dimensionsMatch) {
+    (integrity.width === item.width && integrity.height === item.height) ||
+    (integrity.width === item.height && integrity.height === item.width);
+  if (integrity.sha256 !== item.sha256 || !dimensionsMatch) {
     throw createAppError(
       "IMAGE_PRECONDITION_FAILED",
       `Staged bytes for ${imageId} do not match their local analysis`,
@@ -180,16 +180,79 @@ const verifyPendingImage = async (
   }
   return {
     row,
-    integrity: {
-      ...integrity,
-      width: item.analysis.width,
-      height: item.analysis.height,
-    },
-    analysis: item.analysis,
+    integrity: { ...integrity, width: item.width, height: item.height },
   };
 };
 
-async function verifyStagedImages(
+/**
+ * Verify a flat set of staged/reused image selections against their rows:
+ * bytes and dimensions for a fresh PENDING upload, availability (plus
+ * `reuseAllowed`) for an already-UPLOADED exact-hash reuse. Shared by the
+ * manifest commit path (which layers its own per-destination duplicate-
+ * decision and analysis-consistency checks on top, see `verifyCommitImages`)
+ * and the photo-inventory finalize path, which has no destination or
+ * decision concept and always allows reuse of an exact-hash match `stage`
+ * already returned.
+ */
+export async function verifyStagedImages(
+  db: Database,
+  items: readonly StagedImageIntegrityItem[],
+  options: { reuseAllowed: boolean },
+  ports: PhotoImportCommitPorts,
+): Promise<VerifiedStagedImage[]> {
+  const itemsByCode = new Map<string, StagedImageIntegrityItem[]>();
+  for (const item of items) {
+    const bucket = itemsByCode.get(item.imageId);
+    if (bucket) bucket.push(item);
+    else itemsByCode.set(item.imageId, [item]);
+  }
+  const codes = [...itemsByCode.keys()];
+  const rows = await ports.getImages(db, codes);
+  const byCode = new Map(rows.map((row) => [row.shortcode, row]));
+  if (byCode.size !== codes.length) {
+    throw createAppError(
+      "REFERENCED_RECORD_MISSING",
+      "One or more staged images are unavailable",
+    );
+  }
+
+  const verified: VerifiedStagedImage[] = [];
+  for (const [imageId, candidates] of itemsByCode) {
+    const row = byCode.get(imageId);
+    if (!row) {
+      throw createAppError(
+        "REFERENCED_RECORD_MISSING",
+        `Staged image ${imageId} is unavailable`,
+      );
+    }
+    if (row.status === "UPLOADED") {
+      verified.push(
+        verifyUploadedStagedImage(row, imageId, options.reuseAllowed),
+      );
+      continue;
+    }
+    if (row.status !== "PENDING") {
+      throw createAppError(
+        "IMAGE_PRECONDITION_FAILED",
+        `Staged image ${imageId} is not pending`,
+      );
+    }
+    verified.push(
+      await verifyPendingStagedImage(row, imageId, candidates, ports),
+    );
+  }
+  return verified;
+}
+
+/**
+ * Commit-specific wrapper: adapts commit's per-destination items into the
+ * shared shape, then layers commit's own invariants back on top of the
+ * generic verification — a selected photo may appear only once, every
+ * destination sharing a reused (already-UPLOADED) image must have agreed to
+ * reuse it, and duplicate destinations for one staged image must submit the
+ * same local analysis.
+ */
+async function verifyCommitImages(
   context: EntityKernelContext,
   input: PhotoImportCommitInput,
   ports: PhotoImportCommitPorts,
@@ -201,44 +264,65 @@ async function verifyStagedImages(
       "A selected photo may appear only once in a photo import",
     );
   }
-  const itemsByCode = new Map<string, PhotoImportCommitInput["images"]>();
+  const itemsByImageId = new Map<string, PhotoImportItem[]>();
   for (const item of input.images) {
-    const items = itemsByCode.get(item.imageId);
-    if (items) items.push(item);
-    else itemsByCode.set(item.imageId, [item]);
+    const bucket = itemsByImageId.get(item.imageId);
+    if (bucket) bucket.push(item);
+    else itemsByImageId.set(item.imageId, [item]);
   }
-  const codes = [...itemsByCode.keys()];
-  const rows = await ports.getImages(context.db, codes);
-  const byCode = new Map(rows.map((row) => [row.shortcode, row]));
-  if (byCode.size !== codes.length) {
-    throw createAppError(
-      "REFERENCED_RECORD_MISSING",
-      "One or more staged images are unavailable",
-    );
-  }
-
-  const verified: VerifiedImportImage[] = [];
-  for (const [imageId, items] of itemsByCode) {
-    const row = byCode.get(imageId);
-    if (!row) {
-      throw createAppError(
-        "REFERENCED_RECORD_MISSING",
-        `Staged image ${imageId} is unavailable`,
-      );
-    }
+  const staged = await verifyStagedImages(
+    context.db,
+    input.images.map((item) => ({
+      imageId: item.imageId,
+      sha256: item.analysis.sha256,
+      width: item.analysis.width,
+      height: item.analysis.height,
+    })),
+    { reuseAllowed: true },
+    ports,
+  );
+  return staged.map(({ row, integrity }): VerifiedImportImage => {
+    const candidates = itemsByImageId.get(row.shortcode) ?? [];
     if (row.status === "UPLOADED") {
-      verified.push(await verifyUploadedImage(row, imageId, items));
-      continue;
+      if (candidates.some((item) => item.duplicateDecision !== "reuse")) {
+        throw createAppError(
+          "IMAGE_PRECONDITION_FAILED",
+          `Existing image ${row.shortcode} was not approved for reuse`,
+        );
+      }
+      const exactItems = candidates.filter(
+        (item) => row.sha256 === item.analysis.sha256,
+      );
+      const exactAnalysis = exactItems[0]?.analysis ?? null;
+      if (
+        exactAnalysis &&
+        exactItems.some((item) => !analysesMatch(item.analysis, exactAnalysis))
+      ) {
+        throw createAppError(
+          "CONSTRAINT_VIOLATION",
+          `Reused image ${row.shortcode} has conflicting exact-match analysis`,
+        );
+      }
+      // A reused active image is already durable. It receives associations only;
+      // local analysis belongs to newly staged rows in this commit.
+      return { row, integrity, analysis: null };
     }
-    if (row.status !== "PENDING") {
+    const item = candidates[0];
+    if (!item) {
+      throw new Error(`Validated image ${row.shortcode} has no selection`);
+    }
+    if (
+      candidates.some(
+        (candidate) => !analysesMatch(candidate.analysis, item.analysis),
+      )
+    ) {
       throw createAppError(
-        "IMAGE_PRECONDITION_FAILED",
-        `Staged image ${imageId} is not pending`,
+        "CONSTRAINT_VIOLATION",
+        `Staged image ${row.shortcode} has conflicting local analysis`,
       );
     }
-    verified.push(await verifyPendingImage(row, imageId, items, ports));
-  }
-  return verified;
+    return { row, integrity, analysis: item.analysis };
+  });
 }
 
 export async function commitPhotoImport(
@@ -251,7 +335,7 @@ export async function commitPhotoImport(
   // can correct its plan and explicitly resubmit without uploading again. A retry that races this
   // preflight is still safe: the transaction compares the locked row status with this snapshot
   // before any route write, so only one request can consume a PENDING image.
-  const verified = await verifyStagedImages(context, input, ports);
+  const verified = await verifyCommitImages(context, input, ports);
   const imageCodes = [...new Set(input.images.map((item) => item.imageId))];
   let sideEffectEvents: MutationSideEffectEvent[] = [];
   const deferred = deferPublications();
@@ -303,29 +387,31 @@ export async function commitPhotoImport(
         imagesByCode,
       );
       sideEffectEvents = applied.sideEffectEvents;
-      for (const staged of lockedVerified) {
-        if (staged.analysis) {
-          await ports.persistAnalysis(
-            transactionDb,
-            staged.row.id,
-            staged.analysis,
-            staged.analysis.analysisVersion,
-            staged.analysis.sha256,
-          );
-        }
-      }
       for (const event of sideEffectEvents) {
         await ports.refreshProjection(transactionDb, event);
       }
-      const pending = lockedVerified.filter(
-        ({ row }) => row.status === "PENDING",
-      );
-      const activatedCount = await ports.activateImages(transactionDb, pending);
-      if (activatedCount !== pending.length) {
-        throw new Error(
-          `Photo import activated ${activatedCount} images; expected ${pending.length}`,
-        );
-      }
+      await finalizeImportedImages(transactionDb, {
+        pending: lockedVerified.map(({ row, integrity }) => ({
+          row,
+          integrity,
+        })),
+        analyses: lockedVerified
+          .filter(
+            (
+              staged,
+            ): staged is typeof staged & {
+              analysis: NonNullable<typeof staged.analysis>;
+            } => staged.analysis != null,
+          )
+          .map((staged) => ({
+            imageId: staged.row.id,
+            analysis: staged.analysis,
+          })),
+        ports: {
+          activateImages: ports.activateImages,
+          persistAnalysis: ports.persistAnalysis,
+        },
+      });
       return {
         committedPhotoIds: imageCodes,
         createdDestinations: applied.createdDestinations,

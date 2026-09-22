@@ -4404,7 +4404,7 @@ public enum Operations {
                     case gardenEntry = "gardenEntry"
                     case vendorAccount = "vendorAccount"
                     case productCategory = "productCategory"
-                    case purchaseImportRun = "purchaseImportRun"
+                    case importRun = "importRun"
                     case device = "device"
                 }
                 /// - Remark: Generated from `#/paths/api/v1/fieldExplanation/explain/GET/query/entityType`.
@@ -18695,6 +18695,338 @@ public enum Operations {
             }
         }
     }
+    /// - Remark: HTTP `POST /api/v1/photoImport/createRun`.
+    /// - Remark: Generated from `#/paths//api/v1/photoImport/createRun/post(photoImport.createRun)`.
+    public enum PhotoImport_createRun {
+        public static let id: Swift.String = "photoImport.createRun"
+        public struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/api/v1/photoImport/createRun/POST/header`.
+            public struct Headers: Sendable, Hashable {
+                public var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.PhotoImport_createRun.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - accept:
+                public init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.PhotoImport_createRun.AcceptableContentType>] = .defaultValues()) {
+                    self.accept = accept
+                }
+            }
+            public var headers: Operations.PhotoImport_createRun.Input.Headers
+            /// - Remark: Generated from `#/paths/api/v1/photoImport/createRun/POST/requestBody`.
+            @frozen public enum Body: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/photoImport/createRun/POST/requestBody/content/application\/json`.
+                case json(Components.Schemas.PhotoImportCreateRunInput)
+            }
+            public var body: Operations.PhotoImport_createRun.Input.Body?
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - headers:
+            ///   - body:
+            public init(
+                headers: Operations.PhotoImport_createRun.Input.Headers = .init(),
+                body: Operations.PhotoImport_createRun.Input.Body? = nil
+            ) {
+                self.headers = headers
+                self.body = body
+            }
+        }
+        @frozen public enum Output: Sendable, Hashable {
+            public struct Ok: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/photoImport/createRun/POST/responses/200/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/photoImport/createRun/POST/responses/200/content/application\/json`.
+                    case json(Components.Schemas.PhotoImportCreateRunOutput)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.PhotoImportCreateRunOutput {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.PhotoImport_createRun.Output.Ok.Body
+                /// Creates a new `Ok`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.PhotoImport_createRun.Output.Ok.Body) {
+                    self.body = body
+                }
+            }
+            /// 200
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/photoImport/createRun/post(photoImport.createRun)/responses/200`.
+            ///
+            /// HTTP response code: `200 ok`.
+            case ok(Operations.PhotoImport_createRun.Output.Ok)
+            /// The associated value of the enum case if `self` is `.ok`.
+            ///
+            /// - Throws: An error if `self` is not `.ok`.
+            /// - SeeAlso: `.ok`.
+            public var ok: Operations.PhotoImport_createRun.Output.Ok {
+                get throws {
+                    switch self {
+                    case let .ok(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            public struct Default: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/photoImport/createRun/POST/responses/default/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/photoImport/createRun/POST/responses/default/content/application\/json`.
+                    case json(Components.Schemas.ApiError)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.ApiError {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.PhotoImport_createRun.Output.Default.Body
+                /// Creates a new `Default`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.PhotoImport_createRun.Output.Default.Body) {
+                    self.body = body
+                }
+            }
+            /// Error
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/photoImport/createRun/post(photoImport.createRun)/responses/default`.
+            ///
+            /// HTTP response code: `default`.
+            case `default`(statusCode: Swift.Int, Operations.PhotoImport_createRun.Output.Default)
+            /// The associated value of the enum case if `self` is `.`default``.
+            ///
+            /// - Throws: An error if `self` is not `.`default``.
+            /// - SeeAlso: `.`default``.
+            public var `default`: Operations.PhotoImport_createRun.Output.Default {
+                get throws {
+                    switch self {
+                    case let .`default`(_, response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "default",
+                            response: self
+                        )
+                    }
+                }
+            }
+        }
+        @frozen public enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            public init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            public var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            public static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
+    /// - Remark: HTTP `POST /api/v1/photoImport/finalize`.
+    /// - Remark: Generated from `#/paths//api/v1/photoImport/finalize/post(photoImport.finalize)`.
+    public enum PhotoImport_finalize {
+        public static let id: Swift.String = "photoImport.finalize"
+        public struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/api/v1/photoImport/finalize/POST/header`.
+            public struct Headers: Sendable, Hashable {
+                public var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.PhotoImport_finalize.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - accept:
+                public init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.PhotoImport_finalize.AcceptableContentType>] = .defaultValues()) {
+                    self.accept = accept
+                }
+            }
+            public var headers: Operations.PhotoImport_finalize.Input.Headers
+            /// - Remark: Generated from `#/paths/api/v1/photoImport/finalize/POST/requestBody`.
+            @frozen public enum Body: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/photoImport/finalize/POST/requestBody/content/application\/json`.
+                case json(Components.Schemas.PhotoImportFinalizeInput)
+            }
+            public var body: Operations.PhotoImport_finalize.Input.Body?
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - headers:
+            ///   - body:
+            public init(
+                headers: Operations.PhotoImport_finalize.Input.Headers = .init(),
+                body: Operations.PhotoImport_finalize.Input.Body? = nil
+            ) {
+                self.headers = headers
+                self.body = body
+            }
+        }
+        @frozen public enum Output: Sendable, Hashable {
+            public struct Ok: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/photoImport/finalize/POST/responses/200/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/photoImport/finalize/POST/responses/200/content/application\/json`.
+                    case json(Components.Schemas.PhotoImportFinalizeOutput)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.PhotoImportFinalizeOutput {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.PhotoImport_finalize.Output.Ok.Body
+                /// Creates a new `Ok`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.PhotoImport_finalize.Output.Ok.Body) {
+                    self.body = body
+                }
+            }
+            /// 200
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/photoImport/finalize/post(photoImport.finalize)/responses/200`.
+            ///
+            /// HTTP response code: `200 ok`.
+            case ok(Operations.PhotoImport_finalize.Output.Ok)
+            /// The associated value of the enum case if `self` is `.ok`.
+            ///
+            /// - Throws: An error if `self` is not `.ok`.
+            /// - SeeAlso: `.ok`.
+            public var ok: Operations.PhotoImport_finalize.Output.Ok {
+                get throws {
+                    switch self {
+                    case let .ok(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            public struct Default: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/photoImport/finalize/POST/responses/default/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/photoImport/finalize/POST/responses/default/content/application\/json`.
+                    case json(Components.Schemas.ApiError)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.ApiError {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.PhotoImport_finalize.Output.Default.Body
+                /// Creates a new `Default`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.PhotoImport_finalize.Output.Default.Body) {
+                    self.body = body
+                }
+            }
+            /// Error
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/photoImport/finalize/post(photoImport.finalize)/responses/default`.
+            ///
+            /// HTTP response code: `default`.
+            case `default`(statusCode: Swift.Int, Operations.PhotoImport_finalize.Output.Default)
+            /// The associated value of the enum case if `self` is `.`default``.
+            ///
+            /// - Throws: An error if `self` is not `.`default``.
+            /// - SeeAlso: `.`default``.
+            public var `default`: Operations.PhotoImport_finalize.Output.Default {
+                get throws {
+                    switch self {
+                    case let .`default`(_, response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "default",
+                            response: self
+                        )
+                    }
+                }
+            }
+        }
+        @frozen public enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            public init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            public var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            public static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
     /// - Remark: HTTP `POST /api/v1/photoImport/reconcile`.
     /// - Remark: Generated from `#/paths//api/v1/photoImport/reconcile/post(photoImport.reconcile)`.
     public enum PhotoImport_reconcile {
@@ -21680,6 +22012,7 @@ public enum Operations {
                     case productPrice = "product_price"
                     case productImage = "product_image"
                     case amazonAsin = "amazon_asin"
+                    case productUnpurchased = "product_unpurchased"
                     case duplicateExternalId = "duplicate_external_id"
                 }
                 /// - Remark: Generated from `#/paths/api/v1/products/GET/query/dataGap`.
@@ -23305,6 +23638,7 @@ public enum Operations {
                     case productPrice = "product_price"
                     case productImage = "product_image"
                     case amazonAsin = "amazon_asin"
+                    case productUnpurchased = "product_unpurchased"
                     case duplicateExternalId = "duplicate_external_id"
                 }
                 /// - Remark: Generated from `#/paths/api/v1/products/timeline/GET/query/dataGap`.
@@ -25863,6 +26197,7 @@ public enum Operations {
                     case productPrice = "product_price"
                     case productImage = "product_image"
                     case amazonAsin = "amazon_asin"
+                    case productUnpurchased = "product_unpurchased"
                     case duplicateExternalId = "duplicate_external_id"
                 }
                 /// - Remark: Generated from `#/paths/api/v1/purchases/GET/query/dataGap`.
@@ -27920,7 +28255,7 @@ public enum Operations {
                     case gardenEntry = "gardenEntry"
                     case vendorAccount = "vendorAccount"
                     case productCategory = "productCategory"
-                    case purchaseImportRun = "purchaseImportRun"
+                    case importRun = "importRun"
                     case device = "device"
                 }
                 /// - Remark: Generated from `#/paths/api/v1/recommendations/forEntity/GET/query/entityType`.

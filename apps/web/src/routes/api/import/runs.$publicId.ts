@@ -4,10 +4,10 @@ import { z } from "zod";
 
 import {
   importRunShortcode,
-  purchaseImportRunControlInput,
-  purchaseImportRunControlResponse,
-  purchaseImportRunDetailError,
-  purchaseImportRunDetailResponse,
+  importRunControlInput,
+  importRunControlResponse,
+  importRunDetailError,
+  importRunDetailResponse,
 } from "~/lib/purchase-import-run-detail";
 import { getPurchaseAgentQueue } from "~/server/cf-env";
 import { recordImportRunDispatchAttempt } from "~/server/purchase-import/dispatch";
@@ -182,7 +182,7 @@ export const Route = createFileRoute("/api/import/runs/$publicId")({
             usageCursor ? { usageCursor } : undefined,
           );
           return Response.json(
-            purchaseImportRunDetailResponse.parse({ run: browserRun(run) }),
+            importRunDetailResponse.parse({ run: browserRun(run) }),
           );
         } catch (error) {
           if (
@@ -195,9 +195,7 @@ export const Route = createFileRoute("/api/import/runs/$publicId")({
       },
       PATCH: async ({ params, request }) => {
         const publicId = importRunShortcode.safeParse(params.publicId);
-        const input = purchaseImportRunControlInput.safeParse(
-          await request.json(),
-        );
+        const input = importRunControlInput.safeParse(await request.json());
         if (!publicId.success || !input.success) return notFound();
         const context = requireActor(
           await createRequestContext({ headers: request.headers }),
@@ -257,7 +255,7 @@ export const Route = createFileRoute("/api/import/runs/$publicId")({
             publicId.data,
           );
           return Response.json(
-            purchaseImportRunControlResponse.parse({
+            importRunControlResponse.parse({
               run: browserRun(run),
               successor:
                 "successorRunPublicId" in control &&
@@ -278,7 +276,7 @@ export const Route = createFileRoute("/api/import/runs/$publicId")({
           )
             return notFound();
           return Response.json(
-            purchaseImportRunDetailError.parse({
+            importRunDetailError.parse({
               error: "This import run could not be updated.",
             }),
             { status: 409 },

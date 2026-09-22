@@ -142,9 +142,7 @@ describe("buildFinancialTransactionWhere", () => {
 
 describe("buildImageWhere", () => {
   const where = (filters: ImageListFilters) =>
-    Promise.resolve(
-      renderWhereSql(buildImageWhere(mockWhereDatabase(), filters)),
-    );
+    buildImageWhere(mockWhereDatabase(), filters).then(renderWhereSql);
 
   it.each([
     {
@@ -163,6 +161,12 @@ describe("buildImageWhere", () => {
       expect(await where(filters)).toContain(contains);
     },
   );
+
+  it("narrows by targetState via an ImportRunTarget EXISTS clause", async () => {
+    const sqlText = await where({ targetState: "pending" });
+    expect(sqlText).toContain("ImportRunTarget");
+    expect(sqlText).toContain('"state"');
+  });
 });
 
 describe("buildLedgerPartyWhere", () => {

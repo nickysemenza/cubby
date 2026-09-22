@@ -1,4 +1,4 @@
-import { purchaseImportRunShortcode } from "@cubby/schemas/identifiers";
+import { importRunShortcode } from "@cubby/schemas/identifiers";
 import { z } from "zod";
 
 export const purchaseAgentConnectionStatus = z.enum([
@@ -11,9 +11,9 @@ export type PurchaseAgentConnectionStatus = z.infer<
   typeof purchaseAgentConnectionStatus
 >;
 
-export const importRunShortcode = purchaseImportRunShortcode;
+export { importRunShortcode };
 
-const purchaseImportRunSummary = z.object({
+const importRunSummary = z.object({
   publicId: importRunShortcode,
   purpose: z
     .enum(["account_sync", "purchase_validation", "product_enrichment"])
@@ -31,12 +31,12 @@ const purchaseImportRunSummary = z.object({
   failureCode: z.string().nullable(),
   estimatedCost: z.number(),
 });
-export type PurchaseImportRunSummary = z.infer<typeof purchaseImportRunSummary>;
+export type ImportRunSummary = z.infer<typeof importRunSummary>;
 
-export const purchaseImportRunsResponse = z.object({
-  runs: z.array(purchaseImportRunSummary),
+export const importRunsResponse = z.object({
+  runs: z.array(importRunSummary),
 });
-export const purchaseImportRunsError = z.object({ error: z.string() });
+export const importRunsError = z.object({ error: z.string() });
 
 export const purchaseImportAgentOAuthStatus = z.object({
   authorized: z.boolean(),
@@ -166,7 +166,7 @@ const importRunDispatch = z.object({
 });
 
 /** The browser-facing detail contract. Private UUIDs never cross this boundary. */
-const purchaseImportRunDetail = z.object({
+const importRunDetail = z.object({
   publicId: importRunShortcode,
   purpose: z
     .enum(["account_sync", "purchase_validation", "product_enrichment"])
@@ -219,13 +219,13 @@ const purchaseImportRunDetail = z.object({
   approvals: z.array(importRunApproval),
 });
 
-export type PurchaseImportRunDetail = z.infer<typeof purchaseImportRunDetail>;
+export type ImportRunDetail = z.infer<typeof importRunDetail>;
 
-export const purchaseImportRunDetailResponse = z.object({
-  run: purchaseImportRunDetail,
+export const importRunDetailResponse = z.object({
+  run: importRunDetail,
 });
 
-export const purchaseImportRunControlInput = z.object({
+export const importRunControlInput = z.object({
   action: z.enum([
     "pause",
     "resume",
@@ -243,8 +243,8 @@ export const purchaseImportRunControlInput = z.object({
   approvalId: z.string().min(1).optional(),
 });
 
-export const purchaseImportRunControlResponse = z.object({
-  run: purchaseImportRunDetail,
+export const importRunControlResponse = z.object({
+  run: importRunDetail,
   successor: z
     .object({
       publicId: importRunShortcode,
@@ -255,4 +255,4 @@ export const purchaseImportRunControlResponse = z.object({
     .optional(),
 });
 
-export const purchaseImportRunDetailError = z.object({ error: z.string() });
+export const importRunDetailError = z.object({ error: z.string() });

@@ -16,6 +16,7 @@ import type {
   ImageAssociation,
   ImageListFilters,
   ImageHashIndex,
+  ImportTargetSummary,
   SetPerceptualHashesInput,
   SetPerceptualHashesOutput,
   ImageUpdateInput,
@@ -24,6 +25,7 @@ import type {
 } from "@cubby/schemas/image";
 import { attachableImageEntityId } from "@cubby/schemas/image";
 import type { PurchaseDocumentKind } from "@cubby/schemas/purchase";
+import { importRunTargetState } from "@cubby/schemas/purchase-import";
 import type { SearchableEntityRef } from "@cubby/schemas/search";
 import {
   aliasedTable,
@@ -65,6 +67,8 @@ import {
   image,
   importHunt,
   importPreparedOrder,
+  importRun,
+  importRunTarget,
   location,
   locationImage,
   meal,
@@ -91,6 +95,8 @@ import {
   buildOrderBy,
   buildSearchConditions,
   countWhere,
+  eqAny,
+  eqAnyRequested,
   executeListQueryWithCount,
   getDb,
   imageJoinBindings,
@@ -101,13 +107,16 @@ import {
   nextImageSortOrder,
   notDeleted,
   updateAndReturn,
+  uuidArrayParam,
   withTransaction,
 } from "~/server/repo/database-helpers";
 import { declaredFilterPredicates } from "~/server/repo/declared-filter-predicates";
 import { softDeleteEntitySearchArtifactsTx } from "~/server/repo/entity-embedding-cleanup";
+import { loadImageAnalysisSummaries } from "~/server/repo/image-analysis-summary";
 import { displayableImageWhere } from "~/server/repo/image-displayability";
 import {
   resolveAllPresent,
+  resolveFilterIds,
   resolveOrThrow,
   resolveShortcode,
 } from "~/server/repo/shortcode-resolver";
@@ -897,6 +906,8 @@ const imageReferenceCondition = (
     "ImageProcessingJob.imageId": sql`FALSE`,
     "ImageDerivative.imageId": sql`FALSE`,
     "ImageDescriptionCorrection.imageId": sql`FALSE`,
+    // A run worklist row records history, never ownership of the image.
+    "ImportRunTarget.imageId": sql`FALSE`,
     "ImportPreparedOrder.primaryDocumentImageId": exists(
       dbc
         .select({ one: sql`1` })
@@ -1043,17 +1054,46 @@ const cullablePendingImageWhere = (db: Database, cutoffDate: Date) =>
  */
 // Not on `listScaffold`: the predicate is built twice against two spellings
 // of the table (`outerImage`), and the scaffold binds one table per entity.
-export const buildImageWhere = (
+//
+// Async (unlike most `buildXWhere` in this repo) because `importRunId` is a
+// shortcode filter that must resolve through `shortcode-resolver` rather than
+// match a raw code in SQL (see `docs/agents/domain-rules.md`). `getEntityCounts`
+// already tolerates either arity — see `CountWhere` in `~/server/repo/dashboard`.
+export const buildImageWhere = async (
   db: Database,
   filters: ImageListFilters,
   outerImage: typeof image = image,
-): SQL | undefined => {
+): Promise<SQL | undefined> => {
   let referencePresence: SQL | undefined;
   if (filters.referencePresenceFilter) {
     const referenced = activeImageReferenceCondition(db, outerImage);
     referencePresence =
       filters.referencePresenceFilter === "has" ? referenced : not(referenced);
   }
+
+  // `undefined` here means "not requested"; `[]` means "requested but every
+  // code failed to resolve" — `eqAnyRequested` treats those differently
+  // (unrestricted vs. matches nothing), see its own doc comment.
+  const importRunIds = await resolveFilterIds(
+    db,
+    "importRun",
+    filters.importRunId,
+  );
+  const importTargetCondition =
+    importRunIds !== undefined || filters.targetState !== undefined
+      ? exists(
+          getDb(db)
+            .select({ one: sql`1` })
+            .from(importRunTarget)
+            .where(
+              and(
+                eq(importRunTarget.imageId, outerImage.id),
+                eqAnyRequested(importRunTarget.runId, importRunIds),
+                eqAny(importRunTarget.state, filters.targetState),
+              ),
+            ),
+        )
+      : undefined;
 
   return buildSearchConditions(
     outerImage,
@@ -1065,12 +1105,51 @@ export const buildImageWhere = (
       ...declaredFilterPredicates("image", outerImage, filters),
       ...auditDateWhereConditions(outerImage, filters),
       referencePresence,
+      importTargetCondition,
       imageProcessingIssueFilter(outerImage, filters.processingIssue),
       filters.uploadedAgeHoursMin !== undefined
         ? sql`${outerImage.createdAt} < now() - (${filters.uploadedAgeHoursMin} * interval '1 hour')`
         : undefined,
     ],
   );
+};
+
+/**
+ * Each image's current import-run target row, batched by the public `IMG-`
+ * shortcode (matching every other batched loader `imageList`/`getImageById`
+ * call). `ImportRunTarget_run_image_key` keeps a live target unique per (run,
+ * image), but a row's own history is never deleted, so this takes the newest
+ * by `createdAt` when more than one run has ever targeted the same image.
+ */
+const loadImportTargets = async (
+  db: Database,
+  imageShortcodes: readonly string[],
+): Promise<Map<string, ImportTargetSummary>> => {
+  const shortcodes = [...new Set(imageShortcodes)];
+  if (shortcodes.length === 0) return new Map();
+  const rows = await getDb(db)
+    .select({
+      imageShortcode: image.shortcode,
+      state: importRunTarget.state,
+      position: importRunTarget.position,
+      runShortcode: importRun.shortcode,
+      createdAt: importRunTarget.createdAt,
+    })
+    .from(importRunTarget)
+    .innerJoin(importRun, eq(importRun.id, importRunTarget.runId))
+    .innerJoin(image, eq(image.id, importRunTarget.imageId))
+    .where(inArray(image.shortcode, shortcodes))
+    .orderBy(desc(importRunTarget.createdAt));
+  const byImage = new Map<string, ImportTargetSummary>();
+  for (const row of rows) {
+    if (byImage.has(row.imageShortcode)) continue;
+    byImage.set(row.imageShortcode, {
+      runId: parseShortcodeFor("importRun", row.runShortcode),
+      state: importRunTargetState.parse(row.state),
+      position: row.position,
+    });
+  }
+  return byImage;
 };
 
 export const imageList = async (
@@ -1081,16 +1160,27 @@ export const imageList = async (
   readIntent: ListReadIntent = "page",
 ) => {
   const dbClient = getDb(db);
-  const whereClause = buildImageWhere(
-    db,
-    filters,
-    aliasedTable(image, "image"),
-  );
-  const countWhereClause = buildImageWhere(db, filters, image);
+  const [whereClause, countWhereClause, importRunIdsForOrder] =
+    await Promise.all([
+      buildImageWhere(db, filters, aliasedTable(image, "image")),
+      buildImageWhere(db, filters, image),
+      resolveFilterIds(db, "importRun", filters.importRunId),
+    ]);
 
-  const orderByClause = buildOrderBy(image, sorts, [
-    ...generatedEntitySort.image.fields,
-  ]);
+  // A photo-inventory run's picker order overrides the caller's own sort:
+  // an agent working `filters.importRunId` wants the run's physical capture
+  // order, not whatever default/requested sort the generic image list uses.
+  const orderByClause =
+    importRunIdsForOrder !== undefined
+      ? [
+          sql`(
+            SELECT "position" FROM "ImportRunTarget"
+            WHERE "ImportRunTarget"."imageId" = ${image.id}
+              AND "ImportRunTarget"."runId" = ANY(${uuidArrayParam(importRunIdsForOrder)})
+          ) asc nulls last`,
+          asc(image.createdAt),
+        ]
+      : buildOrderBy(image, sorts, [...generatedEntitySort.image.fields]);
 
   const take = pagination.pageSize;
   const skip = pagination.pageIndex * pagination.pageSize;
@@ -1108,18 +1198,20 @@ export const imageList = async (
     count: () => countWhere(db, image, countWhereClause),
   });
 
-  const representations = await loadImageRepresentations(
-    db,
-    images.map((item) => item.shortcode),
-  );
-  const processingIssues = await loadImageProcessingIssues(
-    db,
-    images.map((item) => item.shortcode),
-  );
+  const imageShortcodes = images.map((item) => item.shortcode);
+  const [representations, processingIssues, importTargets, analysisSummaries] =
+    await Promise.all([
+      loadImageRepresentations(db, imageShortcodes),
+      loadImageProcessingIssues(db, imageShortcodes),
+      loadImportTargets(db, imageShortcodes),
+      loadImageAnalysisSummaries(db, imageShortcodes),
+    ]);
   const processedImages = images.map((item) => ({
     ...imageWithRelationsToAPI(item),
     representations: representations.get(item.shortcode),
     processingIssue: processingIssues.get(item.shortcode) ?? null,
+    importTarget: importTargets.get(item.shortcode) ?? null,
+    analysisSummary: analysisSummaries.get(item.shortcode) ?? null,
   }));
 
   return {
@@ -1141,11 +1233,19 @@ export const getImageById = async (
     throw createAppError("IMAGE_NOT_FOUND", "Image not found");
   }
 
+  const [representations, importTargets, analysisSummaries] = await Promise.all(
+    [
+      loadImageRepresentations(db, [imageRecord.shortcode]),
+      loadImportTargets(db, [imageRecord.shortcode]),
+      loadImageAnalysisSummaries(db, [imageRecord.shortcode]),
+    ],
+  );
+
   return {
     ...imageWithRelationsToAPI(imageRecord),
-    representations: (
-      await loadImageRepresentations(db, [imageRecord.shortcode])
-    ).get(imageRecord.shortcode),
+    representations: representations.get(imageRecord.shortcode),
+    importTarget: importTargets.get(imageRecord.shortcode) ?? null,
+    analysisSummary: analysisSummaries.get(imageRecord.shortcode) ?? null,
   };
 };
 
@@ -1329,6 +1429,12 @@ export const cullPendingImages = async (
  *   null it so the parent row survives, just without a cover.
  */
 export const IMAGE_HARD_DELETE = {
+  "ImportRunTarget.imageId": {
+    code: "deleteRow",
+    effect: "hard-delete",
+    description:
+      "A photo-inventory worklist row cannot outlive its image: the three-way target check forbids clearing the link.",
+  },
   "ImageProcessingJob.imageId": {
     code: "deleteRow",
     effect: "hard-delete",
@@ -1448,6 +1554,32 @@ const parseImageIds = (imageIds: readonly string[]): ImageId[] =>
   imageIds.map((imageId) => parseEntityId("image", imageId));
 
 const IMAGE_EDGE_OPERATIONS = {
+  "ImportRunTarget.imageId": {
+    countsAsOwnership: false,
+    clear: async (tx: DrizzleTransaction, imageIds: string[]) => {
+      await tx
+        .delete(importRunTarget)
+        .where(inArray(importRunTarget.imageId, parseImageIds(imageIds)));
+    },
+    findReferenced: async (
+      dbc: DrizzleClient | DrizzleTransaction,
+      imageIds?: string[],
+    ) => {
+      const rows = await dbc
+        .select({ imageId: importRunTarget.imageId })
+        .from(importRunTarget)
+        .where(
+          and(
+            isNotNull(importRunTarget.imageId),
+            imageIds
+              ? inArray(importRunTarget.imageId, parseImageIds(imageIds))
+              : undefined,
+          ),
+        );
+      return rows.flatMap(({ imageId }) => (imageId ? [imageId] : []));
+    },
+    joinColumn: undefined,
+  },
   // Job rows refer to derivatives as well as originals, so they must go first.
   "ImageProcessingJob.imageId": {
     countsAsOwnership: false,

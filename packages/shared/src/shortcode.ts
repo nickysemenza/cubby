@@ -189,7 +189,7 @@ export const recipeShortcode = SHORTCODE_SCHEMA.recipe;
 export const taskShortcode = SHORTCODE_SCHEMA.task;
 export const vendorShortcode = SHORTCODE_SCHEMA.vendor;
 export const vendorAccountShortcode = SHORTCODE_SCHEMA.vendorAccount;
-export const purchaseImportRunShortcode = SHORTCODE_SCHEMA.purchaseImportRun;
+export const importRunShortcode = SHORTCODE_SCHEMA.importRun;
 export const wishShortcode = SHORTCODE_SCHEMA.wish;
 export const deviceShortcode = SHORTCODE_SCHEMA.device;
 
@@ -215,7 +215,7 @@ export type RecipeShortcode = ShortcodeFor<"recipe">;
 export type TaskShortcode = ShortcodeFor<"task">;
 export type VendorShortcode = ShortcodeFor<"vendor">;
 export type VendorAccountShortcode = ShortcodeFor<"vendorAccount">;
-export type PurchaseImportRunShortcode = ShortcodeFor<"purchaseImportRun">;
+export type ImportRunShortcode = ShortcodeFor<"importRun">;
 export type WishShortcode = ShortcodeFor<"wish">;
 export type DeviceShortcode = ShortcodeFor<"device">;
 
@@ -298,7 +298,7 @@ const PARSE_CANONICAL_SHORTCODE = {
   task: shortcodeParser("task"),
   vendor: shortcodeParser("vendor"),
   vendorAccount: shortcodeParser("vendorAccount"),
-  purchaseImportRun: shortcodeParser("purchaseImportRun"),
+  importRun: shortcodeParser("importRun"),
   wish: shortcodeParser("wish"),
   device: shortcodeParser("device"),
 } as const satisfies {

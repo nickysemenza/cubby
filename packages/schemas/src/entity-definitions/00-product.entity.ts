@@ -2415,6 +2415,12 @@ export default defineEntity({
           message: "Amazon-linked product has no Amazon ASIN.",
         },
         {
+          id: "product_unpurchased",
+          facet: "provenance",
+          label: "Not purchased",
+          message: "Stocked product has no Purchase or acquiring Expense.",
+        },
+        {
           id: "duplicate_external_id",
           facet: "integrity",
           kind: "defect",

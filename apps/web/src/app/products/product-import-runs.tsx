@@ -5,11 +5,11 @@ import { Stack } from "~/components/layout";
 import { StatusText } from "~/components/ui/status-text";
 import { readJsonOrThrow } from "~/lib/http-error";
 import {
-  purchaseImportRunsResponse,
-  type PurchaseImportRunSummary,
+  importRunsResponse,
+  type ImportRunSummary,
 } from "~/lib/purchase-import-run-detail";
 
-import { purchaseImportRunHref } from "../purchases/purchase-import-links";
+import { importRunHref } from "../purchases/purchase-import-links";
 import { TargetedImportLaunchButton } from "../purchases/targeted-import-launch";
 
 /** Targeted enrichment history stays visible even when a run made no writes. */
@@ -24,7 +24,7 @@ export const ProductImportRuns: DetailSlotComponent<"product"> = ({
       );
       const data = await readJsonOrThrow(
         response,
-        purchaseImportRunsResponse,
+        importRunsResponse,
         "Product enrichment runs could not load.",
       );
       return data.runs;
@@ -67,7 +67,7 @@ export const ProductImportRuns: DetailSlotComponent<"product"> = ({
   );
 };
 
-function ProductImportRunSummary({ run }: { run: PurchaseImportRunSummary }) {
+function ProductImportRunSummary({ run }: { run: ImportRunSummary }) {
   return (
     <div className="grid gap-1 border-b border-border pb-3 text-sm last:border-0 last:pb-0">
       <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
@@ -87,7 +87,7 @@ function ProductImportRunSummary({ run }: { run: PurchaseImportRunSummary }) {
       ) : null}
       <a
         className="w-fit text-xs font-medium text-primary hover:underline"
-        href={purchaseImportRunHref(run.publicId)}
+        href={importRunHref(run.publicId)}
       >
         Open import run
       </a>

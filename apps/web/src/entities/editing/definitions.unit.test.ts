@@ -26,7 +26,7 @@ const editableEntities = allEntities.filter(
     entity !== "image" &&
     entity !== "usda-food" &&
     entity !== "cookbook" &&
-    entity !== "purchaseImportRun",
+    entity !== "importRun",
 );
 
 // Proves the property `genericCreateDefault` (definitions.ts) relies on:

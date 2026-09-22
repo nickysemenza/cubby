@@ -88,7 +88,7 @@ no route, preview URL, database credential, document binding, or browser
 authority. Its checked-in Wrangler configuration declares:
 
 - queue consumer `cubby-purchase-agent`;
-- SQLite Durable Object class `FluePurchaseImportRunAgent`, one instance named
+- SQLite Durable Object class `FlueImportRunAgent`, one instance named
   `import-run:<ImportRun.id>` per run;
 - direct named service binding `CUBBY_PURCHASE_SERVICE` to the web Worker's
   `PurchaseImportService` entrypoint, including run-bound MCP token issuance

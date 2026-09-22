@@ -142,6 +142,8 @@ extension OperationRoute {
         OperationRoute(operationID: "oauth.pruneOrphanedClients", method: .post, path: "/api/v1/oauth/pruneOrphanedClients", pathParameters: [], queryParameters: [], hasBody: true),
         OperationRoute(operationID: "oauth.revokeConnectedApp", method: .post, path: "/api/v1/oauth/revokeConnectedApp", pathParameters: [], queryParameters: [], hasBody: true),
         OperationRoute(operationID: "photoImport.commit", method: .post, path: "/api/v1/photoImport/commit", pathParameters: [], queryParameters: [], hasBody: true),
+        OperationRoute(operationID: "photoImport.createRun", method: .post, path: "/api/v1/photoImport/createRun", pathParameters: [], queryParameters: [], hasBody: true),
+        OperationRoute(operationID: "photoImport.finalize", method: .post, path: "/api/v1/photoImport/finalize", pathParameters: [], queryParameters: [], hasBody: true),
         OperationRoute(operationID: "photoImport.reconcile", method: .post, path: "/api/v1/photoImport/reconcile", pathParameters: [], queryParameters: [], hasBody: true),
         OperationRoute(operationID: "photoImport.stage", method: .post, path: "/api/v1/photoImport/stage", pathParameters: [], queryParameters: [], hasBody: true),
         OperationRoute(operationID: "problems.deleteUnused", method: .post, path: "/api/v1/problems/deleteUnused", pathParameters: [], queryParameters: [], hasBody: true),

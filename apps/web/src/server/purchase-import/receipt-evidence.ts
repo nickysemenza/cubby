@@ -1,8 +1,5 @@
 import type { ActorContext } from "@cubby/schemas/context";
-import {
-  purchaseImportRunId,
-  vendorAccountId,
-} from "@cubby/schemas/identifiers";
+import { importRunId, vendorAccountId } from "@cubby/schemas/identifiers";
 import {
   listReceiptHuntsOut,
   submitReceiptEvidenceInput,
@@ -202,7 +199,7 @@ export async function submitReceiptEvidence(
         const [existingRun] = await tx
           .select({ id: importRun.id, publicId: importRun.shortcode })
           .from(importRun)
-          .where(eq(importRun.id, purchaseImportRunId.parse(row.receiptRunId)))
+          .where(eq(importRun.id, importRunId.parse(row.receiptRunId)))
           .limit(1);
         if (!existingRun)
           throw new Error("Receipt import run could not be resumed.");
@@ -216,13 +213,13 @@ export async function submitReceiptEvidence(
         };
       }
     }
-    const runId = purchaseImportRunId.parse(crypto.randomUUID());
+    const runId = importRunId.parse(crypto.randomUUID());
     const dispatchEventId = `receipt:${input.huntId}:${row.imageChecksum}`;
     const [run] = await tx
       .insert(importRun)
       .values({
         id: runId,
-        shortcode: generateShortcode("purchaseImportRun"),
+        shortcode: generateShortcode("importRun"),
         ledgerPartyId: row.ledgerPartyId,
         actorUserId: row.actorUserId,
         actorName: row.actorName,
@@ -235,7 +232,7 @@ export async function submitReceiptEvidence(
           : null,
         vendorId: row.vendorId,
         predecessorRunId: row.receiptRunId
-          ? purchaseImportRunId.parse(row.receiptRunId)
+          ? importRunId.parse(row.receiptRunId)
           : null,
         trigger: "discovery",
         agentSessionId: `import-run:${runId}`,
