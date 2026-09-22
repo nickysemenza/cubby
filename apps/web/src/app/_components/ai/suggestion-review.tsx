@@ -16,6 +16,7 @@ import { showErrorToast } from "~/components/feedback/error-details";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Description } from "~/components/ui/description";
+import { useIsMobile } from "~/hooks/useMobile";
 import { getAppErrorDetails } from "~/lib/error-utils";
 
 import { stringLabelOf } from "./field-suggestion";
@@ -407,6 +408,7 @@ export function SuggestionReview({
     onApply,
     pending,
   );
+  const isMobile = useIsMobile();
   const markCurrentLabel = stringLabelOf(currentLabel);
   // Cleared the bar or not is a fact about the proposal itself, independent
   // of whether the person went on to dismiss it — a dismissed-but-actionable
@@ -427,6 +429,7 @@ export function SuggestionReview({
           actionable={meetsBar}
           dismissed={dismissed}
           prune={prune}
+          reserve={pending}
         />
       </>
     );
@@ -434,7 +437,10 @@ export function SuggestionReview({
   const isRemove = suggestion.operation === "remove";
   const resolvedApplyLabel =
     applyLabel ?? (isRemove ? "Remove tags" : "Use suggestion");
-  if (surface === "cell") {
+  // Phones fold every inline review into the glyph too: an inline review
+  // arriving after load grew the page under the reader's finger (+96px), and
+  // neither engine's scroll anchoring held the tapped control in place.
+  if (surface === "cell" || (surface === "inline" && isMobile)) {
     return (
       <>
         {children}
@@ -445,7 +451,7 @@ export function SuggestionReview({
           currentLabel={markCurrentLabel}
           alternative={alternative}
           autoFilled={autoFilled}
-          surface="cell"
+          surface={surface}
           actionable
           prune={prune}
           review={

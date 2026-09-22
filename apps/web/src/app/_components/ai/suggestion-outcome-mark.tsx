@@ -268,6 +268,10 @@ function OutcomePopoverBody({
   );
 }
 
+/** Phone touch-target footprint of an `inline`/`line` glyph. Shared with the
+ * pending placeholder so a settling outcome swaps into space already taken. */
+const GLYPH_SLOT = "min-h-11 min-w-11 md:min-h-0 md:min-w-0";
+
 /** The glyph itself — sized down and untabbable in a non-actionable table
  * cell, full touch-target size on `inline`/`line` surfaces. */
 function MarkGlyph({
@@ -292,7 +296,7 @@ function MarkGlyph({
       onClick={stopPropagation}
       className={cn(
         "inline-flex shrink-0 items-center justify-center rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-ring",
-        surface !== "cell" && "min-h-11 min-w-11 md:min-h-0 md:min-w-0",
+        surface !== "cell" && GLYPH_SLOT,
       )}
     >
       <Sparkle
@@ -302,6 +306,22 @@ function MarkGlyph({
         )}
       />
     </PopoverTrigger>
+  );
+}
+
+/** Inert stand-in holding an inline glyph's footprint until its outcome lands. */
+function PendingGlyphSlot({
+  reserve,
+  surface,
+}: {
+  reserve?: boolean;
+  surface: SuggestionOutcomeSurface;
+}) {
+  if (!reserve || surface !== "inline") return null;
+  return (
+    <span aria-hidden className={cn("inline-flex shrink-0", GLYPH_SLOT)}>
+      <span className="size-3" />
+    </span>
   );
 }
 
@@ -325,6 +345,7 @@ export function SuggestionOutcomeMark({
   actionable = false,
   dismissed = false,
   prune = false,
+  reserve,
   review,
 }: {
   outcome?: FieldSuggestionOutcome | null;
@@ -340,11 +361,17 @@ export function SuggestionOutcomeMark({
   /** Dismissed this visit: the copy stays, the cobalt "act here" cue goes. */
   dismissed?: boolean;
   prune?: boolean;
+  /** The outcome is still in flight: hold the glyph's slot on an `inline`
+   * surface. On a phone the 44px glyph wraps onto its own line, so mounting
+   * it only on arrival pushed every later fact down mid-tap (a reset button
+   * tapped as Jev settled received the tap on empty space). */
+  reserve?: boolean;
   review?: ReactNode;
 }) {
   const resolvedOutcome =
     outcome ?? (suggestion ? outcomeFromSuggestion(suggestion) : null);
-  if (!resolvedOutcome) return null;
+  if (!resolvedOutcome)
+    return <PendingGlyphSlot reserve={reserve} surface={surface} />;
 
   const args: DescribeOutcomeArgs & { outcome: FieldSuggestionOutcome } = {
     outcome: resolvedOutcome,
