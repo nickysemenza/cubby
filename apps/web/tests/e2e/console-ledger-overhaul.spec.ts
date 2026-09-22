@@ -1,12 +1,11 @@
 import { expect, test } from "./e2e-test";
-import { waitForAppHydration } from "./e2e-helpers";
+import { gotoAuthenticatedPage } from "./e2e-helpers";
 
 test("workspace shell responds from phone navigation through desktop sidebar", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
-  await page.goto("/", { waitUntil: "domcontentloaded" });
-  await waitForAppHydration(page);
+  await gotoAuthenticatedPage(page, "/");
 
   const sidebar = page.getByRole("complementary", {
     name: "Workspace navigation",

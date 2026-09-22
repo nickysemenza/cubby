@@ -7,6 +7,7 @@ import {
   expectViewportBounded,
   waitForAppHydration,
   waitForFormHydration,
+  gotoAuthenticatedPage,
 } from "./e2e-helpers";
 import { expect, test } from "./e2e-test";
 
@@ -20,8 +21,7 @@ test("work graph renders through Viz, restores filters, and opens a graph node",
     name: disconnectedName,
   });
 
-  await page.goto("/entities?tab=work");
-  await waitForAppHydration(page);
+  await gotoAuthenticatedPage(page, "/entities?tab=work");
 
   const graph = page.locator('svg[aria-label="Entity dependency graph"]');
   await expect(graph).toBeVisible({ timeout: 15_000 });
@@ -106,8 +106,7 @@ test("legacy recipe graph URL still opens its graph controls", async ({
   await expect(page).toHaveURL(/\/recipes\/RCP-[A-Z0-9]{4}/, {
     timeout: 15000,
   });
-  await page.goto("/entities?tab=recipes&hide=false");
-  await waitForAppHydration(page);
+  await gotoAuthenticatedPage(page, "/entities?tab=recipes&hide=false");
 
   await expect(page.getByRole("tab", { name: "Recipe graph" })).toHaveAttribute(
     "aria-selected",
@@ -133,10 +132,10 @@ test("graph workspace keeps its map while selecting, expanding, and opening reco
     products: [{ name: productName, quantity: 1, unit: "each" }],
   });
   const product = products[0]!;
-  await page.goto(
+  await gotoAuthenticatedPage(
+    page,
     `/entities?tab=explore&entity=product&root=${product.id}&view=graph`,
   );
-  await waitForAppHydration(page);
   await expect(page).toHaveURL((url) => url.pathname === "/graph");
   const graph = page.getByLabel("Relationship graph", { exact: true });
   const nodes = graph.locator(".react-flow__node");
@@ -247,8 +246,7 @@ test("graph workspace keeps its map while selecting, expanding, and opening reco
       .evaluate((input) => input.getBoundingClientRect().width),
   ).toBeGreaterThan(300);
   await page.setViewportSize({ width: 1280, height: 900 });
-  await page.goto(`/products/${product.id}`);
-  await waitForAppHydration(page);
+  await gotoAuthenticatedPage(page, `/products/${product.id}`);
   await page.getByRole("tab", { name: "Relations", exact: true }).click();
   await page.getByRole("button", { name: "Graph view", exact: true }).click();
   await expect(
@@ -267,8 +265,7 @@ test("graph thumbnails retain label space and canonical navigation", async ({
       body: '<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64"><rect width="64" height="64" fill="#16845b"/></svg>',
     }),
   );
-  await page.goto(`/graph?entity=image&root=${image.id}`);
-  await waitForAppHydration(page);
+  await gotoAuthenticatedPage(page, `/graph?entity=image&root=${image.id}`);
   const card = page
     .getByLabel("Relationship graph", { exact: true })
     .locator(".graph-map-record")

@@ -1,4 +1,5 @@
 import {
+  seedConcurrently,
   seedCookbookSourcePrerequisite,
   seedProductPrerequisite,
 } from "./e2e-fixtures";
@@ -8,15 +9,16 @@ import { expect, test } from "./e2e-test";
 test("card density adapts to the work surface and stays temporary through filtering", async ({
   page,
 }, testInfo) => {
-  test.setTimeout(60_000);
   await page.setViewportSize({ width: 1600, height: 1000 });
   const name = `Card layout ${Date.now()}`;
-  for (let index = 0; index < 12; index++) {
-    await seedProductPrerequisite(page, {
-      name: `${name} ${index === 0 ? "Long handled precision workshop tool with an unusually descriptive name" : index}`,
-      manufacturer: "Example maker",
-    });
-  }
+  await seedConcurrently(
+    Array.from({ length: 12 }, (_, index) => index),
+    (index) =>
+      seedProductPrerequisite(page, {
+        name: `${name} ${index === 0 ? "Long handled precision workshop tool with an unusually descriptive name" : index}`,
+        manufacturer: "Example maker",
+      }),
+  );
   await gotoAuthenticatedPage(
     page,
     `/products?name=${encodeURIComponent(name)}`,

@@ -1,18 +1,15 @@
 import type { Route } from "@playwright/test";
 
 import { seedMealNutritionPrerequisite } from "./e2e-fixtures";
-import { selectComboboxItem, waitForAppHydration } from "./e2e-helpers";
+import { selectComboboxItem, gotoAuthenticatedPage } from "./e2e-helpers";
 import { expect, test } from "./e2e-test";
-
-test.setTimeout(60_000);
 
 test("meal nutrition keeps entered product and ingredient amounts while deriving current estimates", async ({
   page,
 }, testInfo) => {
   const name = `Nutrition ${Date.now().toString(36).slice(-5)}-${testInfo.workerIndex}`;
   const fixture = await seedMealNutritionPrerequisite(page, name);
-  await page.goto(`/meals/${fixture.meal.id}`);
-  await waitForAppHydration(page);
+  await gotoAuthenticatedPage(page, `/meals/${fixture.meal.id}`);
 
   await expect(
     page.getByRole("heading", { name: `${name} meal`, exact: true }),
@@ -118,8 +115,10 @@ test("meal nutrition keeps entered product and ingredient amounts while deriving
     timeout: 5000,
   });
 
-  await page.goto(`/meals?view=nutrition&date=${fixture.futureDate}`);
-  await waitForAppHydration(page);
+  await gotoAuthenticatedPage(
+    page,
+    `/meals?view=nutrition&date=${fixture.futureDate}`,
+  );
   await expect(page).toHaveURL(
     (url) =>
       url.pathname === "/meals" &&
@@ -128,8 +127,7 @@ test("meal nutrition keeps entered product and ingredient amounts while deriving
   );
   await expect(page.getByText("Planned", { exact: true })).toBeVisible();
 
-  await page.goto("/");
-  await waitForAppHydration(page);
+  await gotoAuthenticatedPage(page, "/");
   const homeSummary = page.getByRole("region", {
     name: "Today's nutrition",
   });
@@ -142,8 +140,7 @@ test("meal nutrition keeps entered product and ingredient amounts while deriving
       url.searchParams.get("date") === fixture.today,
   );
 
-  await page.goto(`/meals/${fixture.meal.id}`);
-  await waitForAppHydration(page);
+  await gotoAuthenticatedPage(page, `/meals/${fixture.meal.id}`);
   const refreshedProductRow = page
     .getByRole("region", { name: `${name} member nutrition` })
     .getByRole("listitem")
@@ -173,8 +170,10 @@ test("meal nutrition keeps entered product and ingredient amounts while deriving
     page.getByRole("region", { name: `${name} member nutrition` }),
   ).toHaveCount(0);
 
-  await page.goto(`/meals?view=nutrition&date=${fixture.inlineDate}`);
-  await waitForAppHydration(page);
+  await gotoAuthenticatedPage(
+    page,
+    `/meals?view=nutrition&date=${fixture.inlineDate}`,
+  );
   await page.getByRole("button", { name: "Add food", exact: true }).click();
   const targetDialog = page.getByRole("dialog", {
     name: "Add food to a meal",

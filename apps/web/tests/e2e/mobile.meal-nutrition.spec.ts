@@ -1,8 +1,6 @@
 import { seedMealNutritionPrerequisite } from "./e2e-fixtures";
-import { expectViewportBounded, waitForAppHydration } from "./e2e-helpers";
+import { expectViewportBounded, gotoAuthenticatedPage } from "./e2e-helpers";
 import { expect, test } from "./e2e-test";
-
-test.setTimeout(45_000);
 
 test("phone meal nutrition stacks people and keeps the food form in bounds", async ({
   page,
@@ -11,8 +9,7 @@ test("phone meal nutrition stacks people and keeps the food form in bounds", asy
   const fixture = await seedMealNutritionPrerequisite(page, name, {
     seedProductPortion: true,
   });
-  await page.goto(`/meals/${fixture.meal.id}`);
-  await waitForAppHydration(page);
+  await gotoAuthenticatedPage(page, `/meals/${fixture.meal.id}`);
 
   await expect(
     page.getByRole("region", { name: `${name} member nutrition` }),
@@ -34,8 +31,10 @@ test("phone meal nutrition stacks people and keeps the food form in bounds", asy
 
   await dialog.getByRole("button", { name: "Cancel" }).click();
   await expect(dialog).not.toBeVisible();
-  await page.goto(`/meals?view=nutrition&date=${fixture.today}`);
-  await waitForAppHydration(page);
+  await gotoAuthenticatedPage(
+    page,
+    `/meals?view=nutrition&date=${fixture.today}`,
+  );
   await expect(
     page.getByRole("region", { name: `${name} member nutrition` }),
   ).toBeVisible();
