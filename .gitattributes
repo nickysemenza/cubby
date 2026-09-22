@@ -50,3 +50,14 @@ apps/apple/CubbyKit/Sources/CubbyKit/Generated/** linguist-generated
 apps/apple/CubbyKit/Sources/CubbyAPISupport/Generated/** linguist-generated
 apps/apple/CubbyKit/Sources/CubbyAPI/** linguist-generated
 apps/apple/CubbyKit/Sources/CubbyFFI/cubby_ffi.swift linguist-generated
+
+# Generated outputs are never hand-merged: scripts/merge-generated.sh keeps
+# the current side and the post-merge/post-rewrite hooks regenerate them from
+# the merged inputs (scripts/regenerate-after-merge.sh). Without the driver
+# registered (`pnpm install` does it), these conflict like any text file.
+**/*.gen.ts merge=cubby-generated
+**/*.gen.json merge=cubby-generated
+**/src/generated/** merge=cubby-generated
+apps/apple/CubbyKit/Sources/CubbyKit/Generated/** merge=cubby-generated
+apps/apple/CubbyKit/Sources/CubbyAPISupport/Generated/** merge=cubby-generated
+apps/apple/CubbyKit/Sources/CubbyAPI/** merge=cubby-generated

@@ -16,3 +16,9 @@ Oxlint's project rules protect unsafe identifier boundaries and soft-delete
 filters. Keep constraint-focused one-line local exceptions. Oxfmt owns
 maintained web source and CSS, not generated files, Markdown, YAML, TOML, or
 vendored/build output. Do not weaken a gate to accommodate a change.
+
+Never hand-merge a generated file. With the `cubby-generated` merge driver
+registered (`pnpm install` does it), a conflicting generated file keeps the
+current side and the post-merge/post-rewrite hook reruns `pnpm generate` (and
+the CubbyAPI generator when the OpenAPI document changed); commit what it
+regenerates. Without the driver, take either side and run `pnpm generate`.
