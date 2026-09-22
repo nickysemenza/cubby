@@ -48,7 +48,8 @@ struct Call: AsyncParsableCommand {
             // loosely-typed escape hatch this command exists for — it shares the same credential
             // provider and `CubbyAPIError` handling, so the two behave identically on failure.
             let context = try CLIContext.make(from: global)
-            let debugClient = CubbyDebugClient(baseURL: context.baseURL, credentials: context.credentials)
+            let debugClient = CubbyDebugClient(
+                baseURL: context.baseURL, credentials: context.credentials, identity: context.identity)
             let parsedQuery = try Self.parseQuery(query)
             let body = try Self.parseBody(jsonBodyString)
 

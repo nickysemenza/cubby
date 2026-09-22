@@ -13,7 +13,7 @@ extension ImageProcessingClientMessage {
         deviceID: UUID, foreground: Bool,
         subjectLiftAvailable: Bool = true,
         imageDescriptionAvailable: Bool,
-        automaticWork: Bool = true
+        automaticWork: Bool
     ) -> Self {
         #if os(macOS)
             let platform: ImageProcessingHello.PlatformPayload = .macos

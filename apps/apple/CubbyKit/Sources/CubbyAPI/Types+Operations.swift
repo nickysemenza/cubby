@@ -1633,6 +1633,8 @@ public enum Operations {
                 public var updatedTo: Swift.String?
                 /// - Remark: Generated from `#/paths/api/v1/devices/GET/query/search`.
                 public var search: Swift.String?
+                /// - Remark: Generated from `#/paths/api/v1/devices/GET/query/installationId`.
+                public var installationId: Swift.String?
                 /// - Remark: Generated from `#/paths/api/v1/devices/GET/query/PlatformPayload`.
                 @frozen public enum PlatformPayloadPayload: String, Codable, Hashable, Sendable, CaseIterable {
                     case ios = "ios"
@@ -1754,6 +1756,7 @@ public enum Operations {
                 ///   - updatedFrom: Calendar day as "YYYY-MM-DD"
                 ///   - updatedTo: Calendar day as "YYYY-MM-DD"
                 ///   - search:
+                ///   - installationId:
                 ///   - platform:
                 ///   - automaticWork:
                 ///   - remotePaused:
@@ -1770,6 +1773,7 @@ public enum Operations {
                     updatedFrom: Swift.String? = nil,
                     updatedTo: Swift.String? = nil,
                     search: Swift.String? = nil,
+                    installationId: Swift.String? = nil,
                     platform: Operations.Resources_device_list.Input.Query.PlatformPayload? = nil,
                     automaticWork: Swift.Bool? = nil,
                     remotePaused: Swift.Bool? = nil,
@@ -1786,6 +1790,7 @@ public enum Operations {
                     self.updatedFrom = updatedFrom
                     self.updatedTo = updatedTo
                     self.search = search
+                    self.installationId = installationId
                     self.platform = platform
                     self.automaticWork = automaticWork
                     self.remotePaused = remotePaused

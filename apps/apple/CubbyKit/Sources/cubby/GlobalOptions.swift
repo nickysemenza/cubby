@@ -52,6 +52,8 @@ struct CLIContext {
     /// its `host` needs `await` from call sites that otherwise have no other reason to suspend.
     let host: String
     let credentials: CredentialProvider
+    /// The CLI's own product name; it carries no installation id (that concept is native-app only).
+    let identity: ClientIdentity
     let client: CubbyClient
     let json: Bool
 
@@ -68,12 +70,14 @@ struct CLIContext {
             // File store, not Keychain: an ad-hoc-signed `swift run` binary re-prompts on every rebuild.
             credentials = CredentialProvider(host: host, store: FileSessionTokenStore.standard())
         }
+        let identity = ClientIdentity.currentApp(product: "cubby-cli", installationID: nil)
 
         return CLIContext(
             baseURL: baseURL,
             host: host,
             credentials: credentials,
-            client: CubbyClient(baseURL: baseURL, credentials: credentials),
+            identity: identity,
+            client: CubbyClient(baseURL: baseURL, credentials: credentials, identity: identity),
             json: options.json
         )
     }

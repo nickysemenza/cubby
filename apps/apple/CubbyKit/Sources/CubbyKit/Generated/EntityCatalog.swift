@@ -2626,6 +2626,7 @@ public enum EntityCatalog {
     ],
     filters: [
       FilterDescriptor(columnId: "name", urlKey: "q", kind: .text, placeholder: "Search devices...", label: nil, options: nil, wire: .param(name: "search"), targetEntity: nil),
+      FilterDescriptor(columnId: "installationId", urlKey: "installationId", kind: .text, placeholder: "Filter by installation ID...", label: nil, options: nil, wire: .param(name: "installationId"), targetEntity: nil),
       FilterDescriptor(columnId: "platform", urlKey: "platform", kind: .multiselect, placeholder: "Filter by platform...", label: nil, options: [LabeledOption(value: "ios", label: "iOS"), LabeledOption(value: "macos", label: "macOS")], wire: .param(name: "platform"), targetEntity: nil),
       FilterDescriptor(columnId: "automaticWork", urlKey: "automaticWork", kind: .boolean, placeholder: "Filter by automatic work...", label: nil, options: [LabeledOption(value: "true", label: "Automatic work on"), LabeledOption(value: "false", label: "Automatic work off")], wire: .param(name: "automaticWork"), targetEntity: nil),
       FilterDescriptor(columnId: "remotePaused", urlKey: "remotePaused", kind: .boolean, placeholder: "Filter by paused state...", label: nil, options: [LabeledOption(value: "true", label: "Paused"), LabeledOption(value: "false", label: "Not paused")], wire: .param(name: "remotePaused"), targetEntity: nil),

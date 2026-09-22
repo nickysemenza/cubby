@@ -48,7 +48,23 @@ struct RootView: View {
                     RequestTraceStrip(entry: last)
                 }
             }
+            // Asked once per install, right after sign-in: until it is answered the participation
+            // master switch stays off (`DeviceParticipation`'s default).
+            .sheet(isPresented: showsParticipationOnboarding) {
+                DeviceParticipationOnboardingSheet()
+            }
         }
+    }
+
+    private var showsParticipationOnboarding: Binding<Bool> {
+        Binding(
+            get: { model.participation.answeredAt == nil },
+            set: { presented in
+                // Any dismissal path (including the sheet's own buttons, which already call
+                // `setParticipation`) must leave `answeredAt` set so this never reappears.
+                guard !presented, model.participation.answeredAt == nil else { return }
+                model.setParticipation(automaticWork: model.participation.automaticWork)
+            })
     }
 
     #if os(iOS)

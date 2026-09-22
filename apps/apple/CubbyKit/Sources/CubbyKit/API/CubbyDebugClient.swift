@@ -10,11 +10,16 @@ import HTTPTypes
 public actor CubbyDebugClient {
     public let baseURL: URL
     private let credentials: CredentialProvider
+    private let identity: ClientIdentity
     private let session: URLSession
 
-    public init(baseURL: URL, credentials: CredentialProvider, session: URLSession = .cubbyShared) {
+    public init(
+        baseURL: URL, credentials: CredentialProvider, identity: ClientIdentity = .unknown,
+        session: URLSession = .cubbyShared
+    ) {
         self.baseURL = baseURL
         self.credentials = credentials
+        self.identity = identity
         self.session = session
     }
 
@@ -47,7 +52,7 @@ public actor CubbyDebugClient {
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         var fields = HTTPFields()
         let authentication = await credentials.requestState()
-        CubbyAuthMiddleware.apply(authentication, to: &fields)
+        CubbyAuthMiddleware.apply(authentication, identity: identity, to: &fields)
         for field in fields {
             request.setValue(field.value, forHTTPHeaderField: field.name.rawName)
         }

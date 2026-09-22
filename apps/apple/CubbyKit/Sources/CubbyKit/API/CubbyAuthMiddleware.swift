@@ -6,6 +6,8 @@ extension HTTPField.Name {
     /// Better Auth's API-key header, used by the CLI harness. Force-unwrap is safe: the literal is
     /// a valid token.
     public static let xAPIKey = HTTPField.Name("x-api-key")!
+    /// This install's id, echoed on every request alongside the identity `User-Agent`.
+    public static let xCubbyDevice = HTTPField.Name("x-cubby-device")!
 }
 
 /// The one place credentials are attached and errors are decoded for the typed client.
@@ -18,10 +20,15 @@ public struct CubbyAuthMiddleware: ClientMiddleware {
     public static let maxErrorBodyBytes = 1 << 20
 
     private let credentials: CredentialProvider
+    private let identity: ClientIdentity
     private let observer: (any RequestObserver)?
 
-    public init(credentials: CredentialProvider, observer: (any RequestObserver)? = nil) {
+    public init(
+        credentials: CredentialProvider, identity: ClientIdentity = .unknown,
+        observer: (any RequestObserver)? = nil
+    ) {
         self.credentials = credentials
+        self.identity = identity
         self.observer = observer
     }
 
@@ -34,7 +41,7 @@ public struct CubbyAuthMiddleware: ClientMiddleware {
     ) async throws -> (HTTPResponse, HTTPBody?) {
         var request = request
         let authentication = await credentials.requestState()
-        Self.apply(authentication, to: &request.headerFields)
+        Self.apply(authentication, identity: identity, to: &request.headerFields)
 
         let start = Date()
         let (response, responseBody) = try await next(request, body, baseURL)
@@ -60,16 +67,19 @@ public struct CubbyAuthMiddleware: ClientMiddleware {
 
     /// Shared with `CubbyDebugClient` and `AuthFlow`, which do not go through
     /// OpenAPIRuntime.
-    static func apply(_ credential: CubbyCredential?, to fields: inout HTTPFields) {
+    static func apply(_ credential: CubbyCredential?, identity: ClientIdentity, to fields: inout HTTPFields) {
         switch credential {
         case .bearer(let token): fields[.authorization] = "Bearer \(token)"
         case .apiKey(let key): fields[.xAPIKey] = key
         case nil: break
         }
+        apply(identity, to: &fields)
     }
 
-    static func apply(_ state: CredentialProvider.RequestState, to fields: inout HTTPFields) {
-        apply(state.credential, to: &fields)
+    static func apply(
+        _ state: CredentialProvider.RequestState, identity: ClientIdentity, to fields: inout HTTPFields
+    ) {
+        apply(state.credential, identity: identity, to: &fields)
         if case .bearer = state.credential {
             if !state.sessionDataCookies.isEmpty {
                 fields[.cookie] = state.sessionDataCookies
@@ -77,6 +87,13 @@ public struct CubbyAuthMiddleware: ClientMiddleware {
                     .map { "\($0.key)=\($0.value)" }
                     .joined(separator: "; ")
             }
+        }
+    }
+
+    private static func apply(_ identity: ClientIdentity, to fields: inout HTTPFields) {
+        fields[.userAgent] = identity.userAgent
+        if let installationID = identity.installationID {
+            fields[.xCubbyDevice] = installationID.uuidString.lowercased()
         }
     }
 }

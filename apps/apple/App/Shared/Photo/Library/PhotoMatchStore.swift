@@ -25,6 +25,10 @@ struct PhotoMatchInspectorSnapshot: Sendable {
 
 @Observable
 final class PhotoMatchStore {
+    /// The master "Automatic work on this device" switch, set by `AppModel`. `false` stops the
+    /// auto-kick repair download after a `refresh()` (including one `check(...)` triggers for an
+    /// explicit selection) — the explicit selection dedupe itself still runs.
+    var allowsRepair = true
     private(set) var hasIndex = false
     private(set) var isLoading = false
     private(set) var isRepairing = false
@@ -313,7 +317,7 @@ final class PhotoMatchStore {
                     }
                 }
                 revision += 1
-                if !observers.isEmpty {
+                if allowsRepair, !observers.isEmpty {
                     let repairs = document.repair.compactMap { row in
                         URL(string: row.url).map { (row.id, $0) }
                     }

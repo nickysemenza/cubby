@@ -240,7 +240,7 @@ struct ActivityView: View {
 
     @ViewBuilder private var localExecution: some View {
         let activities = appModel.backgroundActivity.visibleActivities
-        Section("This device — now") {
+        Section {
             if activities.isEmpty {
                 ContentUnavailableView("Nothing running on this device", systemImage: "checkmark.circle")
             } else {
@@ -250,7 +250,17 @@ struct ActivityView: View {
                     }
                 }
             }
+        } header: {
+            Text("This device — now")
+        } footer: {
+            Toggle("Automatic work on this device", isOn: automaticWorkBinding)
         }
+    }
+
+    private var automaticWorkBinding: Binding<Bool> {
+        Binding(
+            get: { appModel.participation.automaticWork },
+            set: { appModel.setParticipation(automaticWork: $0) })
     }
 }
 
