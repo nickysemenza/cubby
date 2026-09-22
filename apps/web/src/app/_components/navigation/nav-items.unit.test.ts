@@ -165,6 +165,7 @@ describe("getEntityNavGroup", () => {
       ingredient: "Records",
       product: "Records",
       productCategory: "Records",
+      device: "Records",
       "usda-food": "Records",
       image: "Records",
       inventory: "Records",

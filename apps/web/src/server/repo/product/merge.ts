@@ -32,6 +32,7 @@ import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import {
   cookbook,
+  device,
   expense,
   inventoryEntry,
   importRunTarget,
@@ -181,6 +182,12 @@ export const PRODUCT_MERGE_EDGE_POLICY = {
     description:
       "Planting provenance retains the merged product tombstone rather than rewriting its recorded source.",
   },
+  "Device.productId": {
+    code: "repoint-to-survivor",
+    effect: "repoint",
+    description:
+      "A device whose hardware was merged away re-points onto the survivor, the same plain repoint as a Location or Cookbook.",
+  },
 } as const satisfies IncomingEdgePolicy<"product", OperationDisposition>;
 
 /**
@@ -287,6 +294,8 @@ interface ProductMergeSummary {
   locationsMoved: number;
   /** Cookbooks whose physical copy was merged away, re-pointed onto the survivor. */
   cookbooksMoved: number;
+  /** Devices whose linked hardware was merged away, re-pointed onto the survivor. */
+  devicesMoved: number;
   projectUsesMoved: number;
   purchaseLinksMoved: number;
   wishCandidatesMoved: number;
@@ -1604,6 +1613,12 @@ export const mergeProducts = async (
       )
       .returning({ id: cookbook.id });
     summary.cookbooksMoved = movedCookbooks.length;
+    const movedDevices = await tx
+      .update(device)
+      .set({ productId: keepId })
+      .where(and(inArray(device.productId, plan.loserIds), notDeleted(device)))
+      .returning({ id: device.id });
+    summary.devicesMoved = movedDevices.length;
     await tx
       .update(mealFoodEntry)
       .set({ productId: keepId })
@@ -1750,6 +1765,7 @@ const emptySummary = (
   tasksMoved: 0,
   locationsMoved: 0,
   cookbooksMoved: 0,
+  devicesMoved: 0,
   projectUsesMoved: 0,
   purchaseLinksMoved: 0,
   wishCandidatesMoved: 0,

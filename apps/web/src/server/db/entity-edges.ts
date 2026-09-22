@@ -75,6 +75,7 @@ import type { AnyColumn } from "drizzle-orm";
 
 import {
   cookbook,
+  device,
   expense,
   expenseAttribution,
   financialAccount,
@@ -567,6 +568,13 @@ export const ENTITY_EDGES = {
         "A planned or confirmed recipe portion naming this member or guest as its eater.",
       liveness: { kind: "must-target-live" },
     },
+    "Device.ledgerPartyId": {
+      column: device.ledgerPartyId,
+      role: "reference",
+      label: "devices",
+      description: "A native companion install owned by this member.",
+      liveness: { kind: "must-target-live" },
+    },
   }),
   product: edges({
     "ImportRunTarget.productId": {
@@ -703,6 +711,13 @@ export const ENTITY_EDGES = {
       label: "source products",
       description:
         "A planting can retain the seed packet, seedling, or plant it came from.",
+      liveness: { kind: "must-target-live" },
+    },
+    "Device.productId": {
+      column: device.productId,
+      role: "reference",
+      label: "devices",
+      description: "A device whose physical hardware is this Product.",
       liveness: { kind: "must-target-live" },
     },
   }),
@@ -1247,4 +1262,5 @@ export const ENTITY_EDGES = {
     },
   }),
   "usda-food": edges({}),
+  device: edges({}),
 } as const satisfies Record<Entity, Record<string, EntityEdge>>;

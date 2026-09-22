@@ -1,6 +1,6 @@
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import { eq, sql } from "drizzle-orm";
-import { withTestDb } from "tooling/test-setup";
+import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import {
@@ -19,6 +19,7 @@ import {
   retainImageAnalysisInput,
 } from "./activity-input";
 import { getDb } from "./database-helpers";
+import { createDevice, getDeviceByID, updateDevice } from "./device";
 import { createUploadedImageRecord, deleteImages } from "./image";
 import {
   claimImageProcessingJob,
@@ -202,6 +203,78 @@ describe("image execution history conservation", () => {
     expect(
       events.filter((event) => event.event === "completion.rejected"),
     ).toHaveLength(1);
+  });
+  it("refuses a device assignment its own Device row has opted out of, and re-permits it once re-enabled", async () => {
+    const { jobId } = await setup();
+    const installationId = crypto.randomUUID();
+    const { entityId: deviceEntityId } = await createDevice(
+      ctx.db,
+      {
+        installationId,
+        name: "Test Mac",
+        platform: "macos",
+        appVersion: null,
+        osVersion: null,
+        automaticWork: false,
+        remotePaused: false,
+      },
+      TEST_ACTOR,
+    );
+    const lease = await claim(jobId);
+    const assignment = {
+      jobId,
+      attemptId: lease.attemptId,
+      userId: "test-user",
+      connectionId: crypto.randomUUID(),
+      executor: {
+        kind: "device" as const,
+        deviceId: installationId,
+        name: "Test Mac",
+        platform: "macos" as const,
+        appVersion: "1",
+        osVersion: "26",
+      },
+    };
+    // `automaticWork: false` refuses the assignment even though the job and
+    // attempt are otherwise perfectly leasable — the authoritative re-check
+    // `dispatch()`'s cached socket attachment cannot substitute for.
+    expect(await assignImageProcessingExecutor(ctx.db, assignment)).toBe(false);
+    const created = await getDeviceByID(ctx.db, deviceEntityId);
+    await updateDevice(ctx.db, created.id, { automaticWork: true }, TEST_ACTOR);
+    expect(await assignImageProcessingExecutor(ctx.db, assignment)).toBe(true);
+  });
+  it("refuses a device assignment while its Device row is remotely paused", async () => {
+    const { jobId } = await setup();
+    const installationId = crypto.randomUUID();
+    await createDevice(
+      ctx.db,
+      {
+        installationId,
+        name: "Test iPhone",
+        platform: "ios",
+        appVersion: null,
+        osVersion: null,
+        automaticWork: true,
+        remotePaused: true,
+      },
+      TEST_ACTOR,
+    );
+    const lease = await claim(jobId);
+    const assignment = {
+      jobId,
+      attemptId: lease.attemptId,
+      userId: "test-user",
+      connectionId: crypto.randomUUID(),
+      executor: {
+        kind: "device" as const,
+        deviceId: installationId,
+        name: "Test iPhone",
+        platform: "ios" as const,
+        appVersion: "1",
+        osVersion: "26",
+      },
+    };
+    expect(await assignImageProcessingExecutor(ctx.db, assignment)).toBe(false);
   });
   it("retains immutable input cleanup across deletion and a late upload", async () => {
     const { source, jobId } = await setup();

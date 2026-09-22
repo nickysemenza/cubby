@@ -450,6 +450,9 @@ describe("MCP catalog schemas", () => {
       "expectedExternalId",
       "externalAccountId",
       "providerId",
+      // A Device's `installationId` is the native app's own install UUID, not
+      // a Cubby shortcode.
+      "installationId",
     ]);
     const violations: string[] = [];
     const stillExceptional = new Set<string>();

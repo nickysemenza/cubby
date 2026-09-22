@@ -39,6 +39,20 @@ public protocol APIProtocol: Sendable {
     /// - Remark: HTTP `GET /api/v1/dashboard/counts`.
     /// - Remark: Generated from `#/paths//api/v1/dashboard/counts/get(dashboard.counts)`.
     func dashboard_counts(_ input: Operations.Dashboard_counts.Input) async throws -> Operations.Dashboard_counts.Output
+    /// Use page=1&pageSize=20&sort=name,-createdAt. Filters are individual query parameters: text is literal, numbers and booleans are plain, and a list repeats its key (tag=a&tag=b). Response pagination metadata remains zero-based. Resource methods depend on entity capabilities.
+    ///
+    /// - Remark: HTTP `GET /api/v1/devices`.
+    /// - Remark: Generated from `#/paths//api/v1/devices/get(resources.device.list)`.
+    func resources_device_list(_ input: Operations.Resources_device_list.Input) async throws -> Operations.Resources_device_list.Output
+    /// - Remark: HTTP `POST /api/v1/devices`.
+    /// - Remark: Generated from `#/paths//api/v1/devices/post(resources.device.create)`.
+    func resources_device_create(_ input: Operations.Resources_device_create.Input) async throws -> Operations.Resources_device_create.Output
+    /// - Remark: HTTP `GET /api/v1/devices/{id}`.
+    /// - Remark: Generated from `#/paths//api/v1/devices/{id}/get(resources.device.get)`.
+    func resources_device_get(_ input: Operations.Resources_device_get.Input) async throws -> Operations.Resources_device_get.Output
+    /// - Remark: HTTP `PATCH /api/v1/devices/{id}`.
+    /// - Remark: Generated from `#/paths//api/v1/devices/{id}/patch(resources.device.update)`.
+    func resources_device_update(_ input: Operations.Resources_device_update.Input) async throws -> Operations.Resources_device_update.Output
     /// - Remark: HTTP `POST /api/v1/entity/explore`.
     /// - Remark: Generated from `#/paths//api/v1/entity/explore/post(entity.explore)`.
     func entity_explore(_ input: Operations.Entity_explore.Input) async throws -> Operations.Entity_explore.Output
@@ -562,6 +576,54 @@ extension APIProtocol {
     /// - Remark: Generated from `#/paths//api/v1/dashboard/counts/get(dashboard.counts)`.
     public func dashboard_counts(headers: Operations.Dashboard_counts.Input.Headers = .init()) async throws -> Operations.Dashboard_counts.Output {
         try await dashboard_counts(Operations.Dashboard_counts.Input(headers: headers))
+    }
+    /// Use page=1&pageSize=20&sort=name,-createdAt. Filters are individual query parameters: text is literal, numbers and booleans are plain, and a list repeats its key (tag=a&tag=b). Response pagination metadata remains zero-based. Resource methods depend on entity capabilities.
+    ///
+    /// - Remark: HTTP `GET /api/v1/devices`.
+    /// - Remark: Generated from `#/paths//api/v1/devices/get(resources.device.list)`.
+    public func resources_device_list(
+        query: Operations.Resources_device_list.Input.Query = .init(),
+        headers: Operations.Resources_device_list.Input.Headers = .init()
+    ) async throws -> Operations.Resources_device_list.Output {
+        try await resources_device_list(Operations.Resources_device_list.Input(
+            query: query,
+            headers: headers
+        ))
+    }
+    /// - Remark: HTTP `POST /api/v1/devices`.
+    /// - Remark: Generated from `#/paths//api/v1/devices/post(resources.device.create)`.
+    public func resources_device_create(
+        headers: Operations.Resources_device_create.Input.Headers = .init(),
+        body: Operations.Resources_device_create.Input.Body? = nil
+    ) async throws -> Operations.Resources_device_create.Output {
+        try await resources_device_create(Operations.Resources_device_create.Input(
+            headers: headers,
+            body: body
+        ))
+    }
+    /// - Remark: HTTP `GET /api/v1/devices/{id}`.
+    /// - Remark: Generated from `#/paths//api/v1/devices/{id}/get(resources.device.get)`.
+    public func resources_device_get(
+        path: Operations.Resources_device_get.Input.Path,
+        headers: Operations.Resources_device_get.Input.Headers = .init()
+    ) async throws -> Operations.Resources_device_get.Output {
+        try await resources_device_get(Operations.Resources_device_get.Input(
+            path: path,
+            headers: headers
+        ))
+    }
+    /// - Remark: HTTP `PATCH /api/v1/devices/{id}`.
+    /// - Remark: Generated from `#/paths//api/v1/devices/{id}/patch(resources.device.update)`.
+    public func resources_device_update(
+        path: Operations.Resources_device_update.Input.Path,
+        headers: Operations.Resources_device_update.Input.Headers = .init(),
+        body: Operations.Resources_device_update.Input.Body? = nil
+    ) async throws -> Operations.Resources_device_update.Output {
+        try await resources_device_update(Operations.Resources_device_update.Input(
+            path: path,
+            headers: headers,
+            body: body
+        ))
     }
     /// - Remark: HTTP `POST /api/v1/entity/explore`.
     /// - Remark: Generated from `#/paths//api/v1/entity/explore/post(entity.explore)`.

@@ -15,6 +15,7 @@ import {
   unwrapDb,
   withTransaction,
 } from "~/server/repo/database-helpers";
+import { getDeviceParticipation } from "~/server/repo/device-participation";
 
 export async function recordImageProcessingEvent(
   db: Database | DrizzleTransaction,
@@ -59,6 +60,21 @@ export async function assignImageProcessingExecutor(
       )
       .for("update");
     if (!job) return false;
+    // Authoritative re-check: `dispatch()`'s socket-attachment cache can be up
+    // to `PARTICIPATION_TTL_MS` stale, so a device that flipped `remotePaused`
+    // or `automaticWork` off between hello and this assignment must still be
+    // refused here, inside the transaction that grants the assignment.
+    if (input.executor.kind === "device" && input.executor.deviceId) {
+      const participation = await getDeviceParticipation(
+        tx,
+        input.executor.deviceId,
+      );
+      if (
+        participation &&
+        (!participation.automaticWork || participation.remotePaused)
+      )
+        return false;
+    }
     const assigned = await tx
       .update(imageProcessingAttempt)
       .set({

@@ -191,6 +191,7 @@ export const vendorShortcode = SHORTCODE_SCHEMA.vendor;
 export const vendorAccountShortcode = SHORTCODE_SCHEMA.vendorAccount;
 export const purchaseImportRunShortcode = SHORTCODE_SCHEMA.purchaseImportRun;
 export const wishShortcode = SHORTCODE_SCHEMA.wish;
+export const deviceShortcode = SHORTCODE_SCHEMA.device;
 
 export type CookbookShortcode = ShortcodeFor<"cookbook">;
 export type ExpenseShortcode = ShortcodeFor<"expense">;
@@ -216,6 +217,7 @@ export type VendorShortcode = ShortcodeFor<"vendor">;
 export type VendorAccountShortcode = ShortcodeFor<"vendorAccount">;
 export type PurchaseImportRunShortcode = ShortcodeFor<"purchaseImportRun">;
 export type WishShortcode = ShortcodeFor<"wish">;
+export type DeviceShortcode = ShortcodeFor<"device">;
 
 /** Any entity's shortcode, for surfaces that hold a code before resolving it. */
 export type AnyShortcode = z.infer<(typeof SHORTCODE_SCHEMA)[ShortcodeType]>;
@@ -298,6 +300,7 @@ const PARSE_CANONICAL_SHORTCODE = {
   vendorAccount: shortcodeParser("vendorAccount"),
   purchaseImportRun: shortcodeParser("purchaseImportRun"),
   wish: shortcodeParser("wish"),
+  device: shortcodeParser("device"),
 } as const satisfies {
   [T in ShortcodeType]: (code: string) => ParsedShortcodeFor<T>;
 };

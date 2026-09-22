@@ -10,6 +10,7 @@ const entityColumnFunctionName = (entity: string) =>
 
 const identifierTypeNames = {
   cookbook: "CookbookId",
+  device: "DeviceId",
   expense: "ExpenseId",
   financialAccount: "FinancialAccountId",
   financialTransaction: "FinancialTransactionId",

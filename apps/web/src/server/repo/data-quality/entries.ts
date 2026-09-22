@@ -1,6 +1,7 @@
 import type { ScoredEntity } from "@cubby/schemas/data-quality";
 
 import { cookbookChecks } from "./checks/cookbook";
+import { deviceChecks } from "./checks/device";
 import { expenseChecks } from "./checks/expense";
 import { financialAccountChecks } from "./checks/financial-account";
 import { financialTransactionChecks } from "./checks/financial-transaction";
@@ -57,4 +58,5 @@ export const dataQualityEntries = {
   gardenEntry: gardenEntryChecks,
   ledgerParty: ledgerPartyChecks,
   ledgerTransfer: ledgerTransferChecks,
+  device: deviceChecks,
 } satisfies DataQualityEntries;

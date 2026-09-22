@@ -151,6 +151,7 @@ public actor CubbyClient {
             case .gardenEntry: .gardenEntry
             case .vendorAccount: .vendorAccount
             case .purchaseImportRun: .purchaseImportRun
+            case .device: .device
             }
         return try await perform {
             try await api.fieldExplanation_explain(

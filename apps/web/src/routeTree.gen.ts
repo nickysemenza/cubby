@@ -48,6 +48,8 @@ import { Route as AuthenticatedCollectionsCollectionRouteImport } from './routes
 import { Route as AuthenticatedCollectionsAssignmentsRouteImport } from './routes/_authenticated/collections.assignments'
 import { Route as AuthenticatedCookbooksIndexRouteImport } from './routes/_authenticated/cookbooks.index'
 import { Route as AuthenticatedCookbooksShortcodeRouteImport } from './routes/_authenticated/cookbooks.$shortcode'
+import { Route as AuthenticatedDevicesIndexRouteImport } from './routes/_authenticated/devices.index'
+import { Route as AuthenticatedDevicesShortcodeRouteImport } from './routes/_authenticated/devices.$shortcode'
 import { Route as AuthenticatedExpensesIndexRouteImport } from './routes/_authenticated/expenses.index'
 import { Route as AuthenticatedExpensesShortcodeRouteImport } from './routes/_authenticated/expenses.$shortcode'
 import { Route as AuthenticatedFinancialAccountsIndexRouteImport } from './routes/_authenticated/financial-accounts.index'
@@ -348,6 +350,18 @@ const AuthenticatedCookbooksShortcodeRoute =
   AuthenticatedCookbooksShortcodeRouteImport.update({
     id: '/cookbooks/$shortcode',
     path: '/cookbooks/$shortcode',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedDevicesIndexRoute =
+  AuthenticatedDevicesIndexRouteImport.update({
+    id: '/devices/',
+    path: '/devices/',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedDevicesShortcodeRoute =
+  AuthenticatedDevicesShortcodeRouteImport.update({
+    id: '/devices/$shortcode',
+    path: '/devices/$shortcode',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
 const AuthenticatedExpensesIndexRoute =
@@ -925,6 +939,7 @@ export interface FileRoutesByFullPath {
   '/collections/$collection': typeof AuthenticatedCollectionsCollectionRoute
   '/collections/assignments': typeof AuthenticatedCollectionsAssignmentsRoute
   '/cookbooks/$shortcode': typeof AuthenticatedCookbooksShortcodeRoute
+  '/devices/$shortcode': typeof AuthenticatedDevicesShortcodeRoute
   '/expenses/$shortcode': typeof AuthenticatedExpensesShortcodeRoute
   '/financial-accounts/$shortcode': typeof AuthenticatedFinancialAccountsShortcodeRoute
   '/financial-transactions/$shortcode': typeof AuthenticatedFinancialTransactionsShortcodeRoute
@@ -976,6 +991,7 @@ export interface FileRoutesByFullPath {
   '/api/workflow-stream/$operation': typeof ApiWorkflowStreamOperationRoute
   '/collections/': typeof AuthenticatedCollectionsIndexRoute
   '/cookbooks/': typeof AuthenticatedCookbooksIndexRoute
+  '/devices/': typeof AuthenticatedDevicesIndexRoute
   '/expenses/': typeof AuthenticatedExpensesIndexRoute
   '/financial-accounts/': typeof AuthenticatedFinancialAccountsIndexRoute
   '/financial-transactions/': typeof AuthenticatedFinancialTransactionsIndexRoute
@@ -1057,6 +1073,7 @@ export interface FileRoutesByTo {
   '/collections/$collection': typeof AuthenticatedCollectionsCollectionRoute
   '/collections/assignments': typeof AuthenticatedCollectionsAssignmentsRoute
   '/cookbooks/$shortcode': typeof AuthenticatedCookbooksShortcodeRoute
+  '/devices/$shortcode': typeof AuthenticatedDevicesShortcodeRoute
   '/expenses/$shortcode': typeof AuthenticatedExpensesShortcodeRoute
   '/financial-accounts/$shortcode': typeof AuthenticatedFinancialAccountsShortcodeRoute
   '/financial-transactions/$shortcode': typeof AuthenticatedFinancialTransactionsShortcodeRoute
@@ -1108,6 +1125,7 @@ export interface FileRoutesByTo {
   '/api/workflow-stream/$operation': typeof ApiWorkflowStreamOperationRoute
   '/collections': typeof AuthenticatedCollectionsIndexRoute
   '/cookbooks': typeof AuthenticatedCookbooksIndexRoute
+  '/devices': typeof AuthenticatedDevicesIndexRoute
   '/expenses': typeof AuthenticatedExpensesIndexRoute
   '/financial-accounts': typeof AuthenticatedFinancialAccountsIndexRoute
   '/financial-transactions': typeof AuthenticatedFinancialTransactionsIndexRoute
@@ -1192,6 +1210,7 @@ export interface FileRoutesById {
   '/_authenticated/collections/$collection': typeof AuthenticatedCollectionsCollectionRoute
   '/_authenticated/collections/assignments': typeof AuthenticatedCollectionsAssignmentsRoute
   '/_authenticated/cookbooks/$shortcode': typeof AuthenticatedCookbooksShortcodeRoute
+  '/_authenticated/devices/$shortcode': typeof AuthenticatedDevicesShortcodeRoute
   '/_authenticated/expenses/$shortcode': typeof AuthenticatedExpensesShortcodeRoute
   '/_authenticated/financial-accounts/$shortcode': typeof AuthenticatedFinancialAccountsShortcodeRoute
   '/_authenticated/financial-transactions/$shortcode': typeof AuthenticatedFinancialTransactionsShortcodeRoute
@@ -1243,6 +1262,7 @@ export interface FileRoutesById {
   '/api/workflow-stream/$operation': typeof ApiWorkflowStreamOperationRoute
   '/_authenticated/collections/': typeof AuthenticatedCollectionsIndexRoute
   '/_authenticated/cookbooks/': typeof AuthenticatedCookbooksIndexRoute
+  '/_authenticated/devices/': typeof AuthenticatedDevicesIndexRoute
   '/_authenticated/expenses/': typeof AuthenticatedExpensesIndexRoute
   '/_authenticated/financial-accounts/': typeof AuthenticatedFinancialAccountsIndexRoute
   '/_authenticated/financial-transactions/': typeof AuthenticatedFinancialTransactionsIndexRoute
@@ -1327,6 +1347,7 @@ export interface FileRouteTypes {
     | '/collections/$collection'
     | '/collections/assignments'
     | '/cookbooks/$shortcode'
+    | '/devices/$shortcode'
     | '/expenses/$shortcode'
     | '/financial-accounts/$shortcode'
     | '/financial-transactions/$shortcode'
@@ -1378,6 +1399,7 @@ export interface FileRouteTypes {
     | '/api/workflow-stream/$operation'
     | '/collections/'
     | '/cookbooks/'
+    | '/devices/'
     | '/expenses/'
     | '/financial-accounts/'
     | '/financial-transactions/'
@@ -1459,6 +1481,7 @@ export interface FileRouteTypes {
     | '/collections/$collection'
     | '/collections/assignments'
     | '/cookbooks/$shortcode'
+    | '/devices/$shortcode'
     | '/expenses/$shortcode'
     | '/financial-accounts/$shortcode'
     | '/financial-transactions/$shortcode'
@@ -1510,6 +1533,7 @@ export interface FileRouteTypes {
     | '/api/workflow-stream/$operation'
     | '/collections'
     | '/cookbooks'
+    | '/devices'
     | '/expenses'
     | '/financial-accounts'
     | '/financial-transactions'
@@ -1593,6 +1617,7 @@ export interface FileRouteTypes {
     | '/_authenticated/collections/$collection'
     | '/_authenticated/collections/assignments'
     | '/_authenticated/cookbooks/$shortcode'
+    | '/_authenticated/devices/$shortcode'
     | '/_authenticated/expenses/$shortcode'
     | '/_authenticated/financial-accounts/$shortcode'
     | '/_authenticated/financial-transactions/$shortcode'
@@ -1644,6 +1669,7 @@ export interface FileRouteTypes {
     | '/api/workflow-stream/$operation'
     | '/_authenticated/collections/'
     | '/_authenticated/cookbooks/'
+    | '/_authenticated/devices/'
     | '/_authenticated/expenses/'
     | '/_authenticated/financial-accounts/'
     | '/_authenticated/financial-transactions/'
@@ -1996,6 +2022,20 @@ declare module '@tanstack/react-router' {
       path: '/cookbooks/$shortcode'
       fullPath: '/cookbooks/$shortcode'
       preLoaderRoute: typeof AuthenticatedCookbooksShortcodeRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/devices/': {
+      id: '/_authenticated/devices/'
+      path: '/devices'
+      fullPath: '/devices/'
+      preLoaderRoute: typeof AuthenticatedDevicesIndexRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/devices/$shortcode': {
+      id: '/_authenticated/devices/$shortcode'
+      path: '/devices/$shortcode'
+      fullPath: '/devices/$shortcode'
+      preLoaderRoute: typeof AuthenticatedDevicesShortcodeRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
     '/_authenticated/expenses/': {
@@ -2677,6 +2717,7 @@ interface AuthenticatedRouteChildren {
   AuthenticatedCollectionsCollectionRoute: typeof AuthenticatedCollectionsCollectionRoute
   AuthenticatedCollectionsAssignmentsRoute: typeof AuthenticatedCollectionsAssignmentsRoute
   AuthenticatedCookbooksShortcodeRoute: typeof AuthenticatedCookbooksShortcodeRoute
+  AuthenticatedDevicesShortcodeRoute: typeof AuthenticatedDevicesShortcodeRoute
   AuthenticatedExpensesShortcodeRoute: typeof AuthenticatedExpensesShortcodeRoute
   AuthenticatedFinancialAccountsShortcodeRoute: typeof AuthenticatedFinancialAccountsShortcodeRoute
   AuthenticatedFinancialTransactionsShortcodeRoute: typeof AuthenticatedFinancialTransactionsShortcodeRoute
@@ -2717,6 +2758,7 @@ interface AuthenticatedRouteChildren {
   AuthenticatedWishesShortcodeRoute: typeof AuthenticatedWishesShortcodeRoute
   AuthenticatedCollectionsIndexRoute: typeof AuthenticatedCollectionsIndexRoute
   AuthenticatedCookbooksIndexRoute: typeof AuthenticatedCookbooksIndexRoute
+  AuthenticatedDevicesIndexRoute: typeof AuthenticatedDevicesIndexRoute
   AuthenticatedExpensesIndexRoute: typeof AuthenticatedExpensesIndexRoute
   AuthenticatedFinancialAccountsIndexRoute: typeof AuthenticatedFinancialAccountsIndexRoute
   AuthenticatedFinancialTransactionsIndexRoute: typeof AuthenticatedFinancialTransactionsIndexRoute
@@ -2778,6 +2820,7 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedCollectionsAssignmentsRoute:
     AuthenticatedCollectionsAssignmentsRoute,
   AuthenticatedCookbooksShortcodeRoute: AuthenticatedCookbooksShortcodeRoute,
+  AuthenticatedDevicesShortcodeRoute: AuthenticatedDevicesShortcodeRoute,
   AuthenticatedExpensesShortcodeRoute: AuthenticatedExpensesShortcodeRoute,
   AuthenticatedFinancialAccountsShortcodeRoute:
     AuthenticatedFinancialAccountsShortcodeRoute,
@@ -2830,6 +2873,7 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedWishesShortcodeRoute: AuthenticatedWishesShortcodeRoute,
   AuthenticatedCollectionsIndexRoute: AuthenticatedCollectionsIndexRoute,
   AuthenticatedCookbooksIndexRoute: AuthenticatedCookbooksIndexRoute,
+  AuthenticatedDevicesIndexRoute: AuthenticatedDevicesIndexRoute,
   AuthenticatedExpensesIndexRoute: AuthenticatedExpensesIndexRoute,
   AuthenticatedFinancialAccountsIndexRoute:
     AuthenticatedFinancialAccountsIndexRoute,

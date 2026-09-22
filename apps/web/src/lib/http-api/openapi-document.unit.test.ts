@@ -314,7 +314,7 @@ describe("generated HTTP OpenAPI document", () => {
         "ApiError",
       );
     }
-    expect(operations).toHaveLength(361);
+    expect(operations).toHaveLength(366);
   });
 
   it("carries query parameters as plain form values", () => {
@@ -372,7 +372,7 @@ describe("generated HTTP OpenAPI document", () => {
     for (const entry of operations)
       methods[z.enum(["get", "post", "patch", "delete"]).parse(entry.method)] +=
         1;
-    expect(methods).toEqual({ get: 167, post: 152, patch: 21, delete: 21 });
+    expect(methods).toEqual({ get: 169, post: 153, patch: 22, delete: 22 });
     for (const path of POST_QUERIES) {
       const posted = paths[path]?.post;
       expect(posted).toBeDefined();
@@ -455,7 +455,7 @@ describe("generated HTTP OpenAPI document", () => {
     const pages = Object.entries(schemas).filter(([name]) =>
       name.endsWith("ListPage"),
     );
-    expect(pages).toHaveLength(20);
+    expect(pages).toHaveLength(21);
     for (const [, page] of pages)
       expect(schemaNode.parse(page.properties?.meta).$ref).toBe(
         `${COMPONENT}ListPageMeta`,

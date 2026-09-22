@@ -1606,6 +1606,900 @@ public enum Operations {
             }
         }
     }
+    /// Use page=1&pageSize=20&sort=name,-createdAt. Filters are individual query parameters: text is literal, numbers and booleans are plain, and a list repeats its key (tag=a&tag=b). Response pagination metadata remains zero-based. Resource methods depend on entity capabilities.
+    ///
+    /// - Remark: HTTP `GET /api/v1/devices`.
+    /// - Remark: Generated from `#/paths//api/v1/devices/get(resources.device.list)`.
+    public enum Resources_device_list {
+        public static let id: Swift.String = "resources.device.list"
+        public struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/api/v1/devices/GET/query`.
+            public struct Query: Sendable, Hashable {
+                /// Calendar day as "YYYY-MM-DD"
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/devices/GET/query/createdFrom`.
+                public var createdFrom: Swift.String?
+                /// Calendar day as "YYYY-MM-DD"
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/devices/GET/query/createdTo`.
+                public var createdTo: Swift.String?
+                /// Calendar day as "YYYY-MM-DD"
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/devices/GET/query/updatedFrom`.
+                public var updatedFrom: Swift.String?
+                /// Calendar day as "YYYY-MM-DD"
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/devices/GET/query/updatedTo`.
+                public var updatedTo: Swift.String?
+                /// - Remark: Generated from `#/paths/api/v1/devices/GET/query/search`.
+                public var search: Swift.String?
+                /// - Remark: Generated from `#/paths/api/v1/devices/GET/query/PlatformPayload`.
+                @frozen public enum PlatformPayloadPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case ios = "ios"
+                    case macos = "macos"
+                }
+                /// - Remark: Generated from `#/paths/api/v1/devices/GET/query/platform`.
+                public typealias PlatformPayload = [Operations.Resources_device_list.Input.Query.PlatformPayloadPayload]
+                /// - Remark: Generated from `#/paths/api/v1/devices/GET/query/platform`.
+                public var platform: Operations.Resources_device_list.Input.Query.PlatformPayload?
+                /// - Remark: Generated from `#/paths/api/v1/devices/GET/query/automaticWork`.
+                public var automaticWork: Swift.Bool?
+                /// - Remark: Generated from `#/paths/api/v1/devices/GET/query/remotePaused`.
+                public var remotePaused: Swift.Bool?
+                /// - Remark: Generated from `#/paths/api/v1/devices/GET/query/DataStatusPayload`.
+                @frozen public enum DataStatusPayloadPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case complete = "complete"
+                    case needsData = "needs_data"
+                    case defect = "defect"
+                }
+                /// - Remark: Generated from `#/paths/api/v1/devices/GET/query/dataStatus`.
+                public typealias DataStatusPayload = [Operations.Resources_device_list.Input.Query.DataStatusPayloadPayload]
+                /// - Remark: Generated from `#/paths/api/v1/devices/GET/query/dataStatus`.
+                public var dataStatus: Operations.Resources_device_list.Input.Query.DataStatusPayload?
+                /// - Remark: Generated from `#/paths/api/v1/devices/GET/query/DataGapPayload`.
+                @frozen public enum DataGapPayloadPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case deviceOwnerMissing = "device_owner_missing"
+                    case deviceStale = "device_stale"
+                }
+                /// - Remark: Generated from `#/paths/api/v1/devices/GET/query/dataGap`.
+                public typealias DataGapPayload = [Operations.Resources_device_list.Input.Query.DataGapPayloadPayload]
+                /// - Remark: Generated from `#/paths/api/v1/devices/GET/query/dataGap`.
+                public var dataGap: Operations.Resources_device_list.Input.Query.DataGapPayload?
+                /// ledgerParty shortcode, e.g. LPY-4K7M
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/devices/GET/query/LedgerPartyIdPayload`.
+                public struct LedgerPartyIdPayloadPayload: Codable, Hashable, Sendable {
+                    /// ledgerParty shortcode, e.g. LPY-4K7M
+                    ///
+                    /// - Remark: Generated from `#/paths/api/v1/devices/GET/query/LedgerPartyIdPayload/value1`.
+                    public var value1: Swift.String?
+                    /// - Remark: Generated from `#/paths/api/v1/devices/GET/query/LedgerPartyIdPayload/value2`.
+                    @frozen public enum Value2Payload: String, Codable, Hashable, Sendable, CaseIterable {
+                        case __unresolvableEntityFilter = "__unresolvable_entity_filter__"
+                    }
+                    /// - Remark: Generated from `#/paths/api/v1/devices/GET/query/LedgerPartyIdPayload/value2`.
+                    public var value2: Operations.Resources_device_list.Input.Query.LedgerPartyIdPayloadPayload.Value2Payload?
+                    /// Creates a new `LedgerPartyIdPayloadPayload`.
+                    ///
+                    /// - Parameters:
+                    ///   - value1: ledgerParty shortcode, e.g. LPY-4K7M
+                    ///   - value2:
+                    public init(
+                        value1: Swift.String? = nil,
+                        value2: Operations.Resources_device_list.Input.Query.LedgerPartyIdPayloadPayload.Value2Payload? = nil
+                    ) {
+                        self.value1 = value1
+                        self.value2 = value2
+                    }
+                    public init(from decoder: any Swift.Decoder) throws {
+                        var errors: [any Swift.Error] = []
+                        do {
+                            self.value1 = try decoder.decodeFromSingleValueContainer()
+                        } catch {
+                            errors.append(error)
+                        }
+                        do {
+                            self.value2 = try decoder.decodeFromSingleValueContainer()
+                        } catch {
+                            errors.append(error)
+                        }
+                        try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                            [
+                                self.value1,
+                                self.value2
+                            ],
+                            type: Self.self,
+                            codingPath: decoder.codingPath,
+                            errors: errors
+                        )
+                    }
+                    public func encode(to encoder: any Swift.Encoder) throws {
+                        try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                            self.value1,
+                            self.value2
+                        ])
+                    }
+                }
+                /// - Remark: Generated from `#/paths/api/v1/devices/GET/query/ledgerPartyId`.
+                public typealias LedgerPartyIdPayload = [Operations.Resources_device_list.Input.Query.LedgerPartyIdPayloadPayload]
+                /// - Remark: Generated from `#/paths/api/v1/devices/GET/query/ledgerPartyId`.
+                public var ledgerPartyId: Operations.Resources_device_list.Input.Query.LedgerPartyIdPayload?
+                /// Page number, starting at 1 (default 1)
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/devices/GET/query/page`.
+                public var page: Swift.Int?
+                /// Items per page (default 10, maximum 500)
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/devices/GET/query/pageSize`.
+                public var pageSize: Swift.Int?
+                /// Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: name, lastSeenAt, updatedAt, dataQuality. Default: -lastSeenAt
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/devices/GET/query/sort`.
+                public var sort: Swift.String?
+                /// - Remark: Generated from `#/paths/api/v1/devices/GET/query/groupBy`.
+                @frozen public enum GroupByPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case name = "name"
+                    case lastSeenAt = "lastSeenAt"
+                    case updatedAt = "updatedAt"
+                }
+                /// Group rows by one field. One of: name, lastSeenAt, updatedAt
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/devices/GET/query/groupBy`.
+                public var groupBy: Operations.Resources_device_list.Input.Query.GroupByPayload?
+                /// Creates a new `Query`.
+                ///
+                /// - Parameters:
+                ///   - createdFrom: Calendar day as "YYYY-MM-DD"
+                ///   - createdTo: Calendar day as "YYYY-MM-DD"
+                ///   - updatedFrom: Calendar day as "YYYY-MM-DD"
+                ///   - updatedTo: Calendar day as "YYYY-MM-DD"
+                ///   - search:
+                ///   - platform:
+                ///   - automaticWork:
+                ///   - remotePaused:
+                ///   - dataStatus:
+                ///   - dataGap:
+                ///   - ledgerPartyId:
+                ///   - page: Page number, starting at 1 (default 1)
+                ///   - pageSize: Items per page (default 10, maximum 500)
+                ///   - sort: Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: name, lastSeenAt, updatedAt, dataQuality. Default: -lastSeenAt
+                ///   - groupBy: Group rows by one field. One of: name, lastSeenAt, updatedAt
+                public init(
+                    createdFrom: Swift.String? = nil,
+                    createdTo: Swift.String? = nil,
+                    updatedFrom: Swift.String? = nil,
+                    updatedTo: Swift.String? = nil,
+                    search: Swift.String? = nil,
+                    platform: Operations.Resources_device_list.Input.Query.PlatformPayload? = nil,
+                    automaticWork: Swift.Bool? = nil,
+                    remotePaused: Swift.Bool? = nil,
+                    dataStatus: Operations.Resources_device_list.Input.Query.DataStatusPayload? = nil,
+                    dataGap: Operations.Resources_device_list.Input.Query.DataGapPayload? = nil,
+                    ledgerPartyId: Operations.Resources_device_list.Input.Query.LedgerPartyIdPayload? = nil,
+                    page: Swift.Int? = nil,
+                    pageSize: Swift.Int? = nil,
+                    sort: Swift.String? = nil,
+                    groupBy: Operations.Resources_device_list.Input.Query.GroupByPayload? = nil
+                ) {
+                    self.createdFrom = createdFrom
+                    self.createdTo = createdTo
+                    self.updatedFrom = updatedFrom
+                    self.updatedTo = updatedTo
+                    self.search = search
+                    self.platform = platform
+                    self.automaticWork = automaticWork
+                    self.remotePaused = remotePaused
+                    self.dataStatus = dataStatus
+                    self.dataGap = dataGap
+                    self.ledgerPartyId = ledgerPartyId
+                    self.page = page
+                    self.pageSize = pageSize
+                    self.sort = sort
+                    self.groupBy = groupBy
+                }
+            }
+            public var query: Operations.Resources_device_list.Input.Query
+            /// - Remark: Generated from `#/paths/api/v1/devices/GET/header`.
+            public struct Headers: Sendable, Hashable {
+                public var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_device_list.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - accept:
+                public init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_device_list.AcceptableContentType>] = .defaultValues()) {
+                    self.accept = accept
+                }
+            }
+            public var headers: Operations.Resources_device_list.Input.Headers
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - query:
+            ///   - headers:
+            public init(
+                query: Operations.Resources_device_list.Input.Query = .init(),
+                headers: Operations.Resources_device_list.Input.Headers = .init()
+            ) {
+                self.query = query
+                self.headers = headers
+            }
+        }
+        @frozen public enum Output: Sendable, Hashable {
+            public struct Ok: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/devices/GET/responses/200/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/devices/GET/responses/200/content/application\/json`.
+                    case json(Components.Schemas.DeviceListPage)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.DeviceListPage {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.Resources_device_list.Output.Ok.Body
+                /// Creates a new `Ok`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.Resources_device_list.Output.Ok.Body) {
+                    self.body = body
+                }
+            }
+            /// 200
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/devices/get(resources.device.list)/responses/200`.
+            ///
+            /// HTTP response code: `200 ok`.
+            case ok(Operations.Resources_device_list.Output.Ok)
+            /// The associated value of the enum case if `self` is `.ok`.
+            ///
+            /// - Throws: An error if `self` is not `.ok`.
+            /// - SeeAlso: `.ok`.
+            public var ok: Operations.Resources_device_list.Output.Ok {
+                get throws {
+                    switch self {
+                    case let .ok(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            public struct Default: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/devices/GET/responses/default/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/devices/GET/responses/default/content/application\/json`.
+                    case json(Components.Schemas.ApiError)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.ApiError {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.Resources_device_list.Output.Default.Body
+                /// Creates a new `Default`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.Resources_device_list.Output.Default.Body) {
+                    self.body = body
+                }
+            }
+            /// Error
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/devices/get(resources.device.list)/responses/default`.
+            ///
+            /// HTTP response code: `default`.
+            case `default`(statusCode: Swift.Int, Operations.Resources_device_list.Output.Default)
+            /// The associated value of the enum case if `self` is `.`default``.
+            ///
+            /// - Throws: An error if `self` is not `.`default``.
+            /// - SeeAlso: `.`default``.
+            public var `default`: Operations.Resources_device_list.Output.Default {
+                get throws {
+                    switch self {
+                    case let .`default`(_, response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "default",
+                            response: self
+                        )
+                    }
+                }
+            }
+        }
+        @frozen public enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            public init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            public var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            public static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
+    /// - Remark: HTTP `POST /api/v1/devices`.
+    /// - Remark: Generated from `#/paths//api/v1/devices/post(resources.device.create)`.
+    public enum Resources_device_create {
+        public static let id: Swift.String = "resources.device.create"
+        public struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/api/v1/devices/POST/header`.
+            public struct Headers: Sendable, Hashable {
+                public var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_device_create.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - accept:
+                public init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_device_create.AcceptableContentType>] = .defaultValues()) {
+                    self.accept = accept
+                }
+            }
+            public var headers: Operations.Resources_device_create.Input.Headers
+            /// - Remark: Generated from `#/paths/api/v1/devices/POST/requestBody`.
+            @frozen public enum Body: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/devices/POST/requestBody/content/application\/json`.
+                case json(Components.Schemas.DeviceCreateInput)
+            }
+            public var body: Operations.Resources_device_create.Input.Body?
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - headers:
+            ///   - body:
+            public init(
+                headers: Operations.Resources_device_create.Input.Headers = .init(),
+                body: Operations.Resources_device_create.Input.Body? = nil
+            ) {
+                self.headers = headers
+                self.body = body
+            }
+        }
+        @frozen public enum Output: Sendable, Hashable {
+            public struct Created: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/devices/POST/responses/201/headers`.
+                public struct Headers: Sendable, Hashable {
+                    /// Created resource URL
+                    ///
+                    /// - Remark: Generated from `#/paths/api/v1/devices/POST/responses/201/headers/Location`.
+                    public var location: Swift.String?
+                    /// Creates a new `Headers`.
+                    ///
+                    /// - Parameters:
+                    ///   - location: Created resource URL
+                    public init(location: Swift.String? = nil) {
+                        self.location = location
+                    }
+                }
+                /// Received HTTP response headers
+                public var headers: Operations.Resources_device_create.Output.Created.Headers
+                /// - Remark: Generated from `#/paths/api/v1/devices/POST/responses/201/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/devices/POST/responses/201/content/application\/json`.
+                    case json(Components.Schemas.GeneratedEntityMutationCreateResultDevice)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.GeneratedEntityMutationCreateResultDevice {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.Resources_device_create.Output.Created.Body
+                /// Creates a new `Created`.
+                ///
+                /// - Parameters:
+                ///   - headers: Received HTTP response headers
+                ///   - body: Received HTTP response body
+                public init(
+                    headers: Operations.Resources_device_create.Output.Created.Headers = .init(),
+                    body: Operations.Resources_device_create.Output.Created.Body
+                ) {
+                    self.headers = headers
+                    self.body = body
+                }
+            }
+            /// 201
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/devices/post(resources.device.create)/responses/201`.
+            ///
+            /// HTTP response code: `201 created`.
+            case created(Operations.Resources_device_create.Output.Created)
+            /// The associated value of the enum case if `self` is `.created`.
+            ///
+            /// - Throws: An error if `self` is not `.created`.
+            /// - SeeAlso: `.created`.
+            public var created: Operations.Resources_device_create.Output.Created {
+                get throws {
+                    switch self {
+                    case let .created(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "created",
+                            response: self
+                        )
+                    }
+                }
+            }
+            public struct Default: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/devices/POST/responses/default/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/devices/POST/responses/default/content/application\/json`.
+                    case json(Components.Schemas.ApiError)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.ApiError {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.Resources_device_create.Output.Default.Body
+                /// Creates a new `Default`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.Resources_device_create.Output.Default.Body) {
+                    self.body = body
+                }
+            }
+            /// Error
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/devices/post(resources.device.create)/responses/default`.
+            ///
+            /// HTTP response code: `default`.
+            case `default`(statusCode: Swift.Int, Operations.Resources_device_create.Output.Default)
+            /// The associated value of the enum case if `self` is `.`default``.
+            ///
+            /// - Throws: An error if `self` is not `.`default``.
+            /// - SeeAlso: `.`default``.
+            public var `default`: Operations.Resources_device_create.Output.Default {
+                get throws {
+                    switch self {
+                    case let .`default`(_, response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "default",
+                            response: self
+                        )
+                    }
+                }
+            }
+        }
+        @frozen public enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            public init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            public var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            public static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
+    /// - Remark: HTTP `GET /api/v1/devices/{id}`.
+    /// - Remark: Generated from `#/paths//api/v1/devices/{id}/get(resources.device.get)`.
+    public enum Resources_device_get {
+        public static let id: Swift.String = "resources.device.get"
+        public struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/api/v1/devices/{id}/GET/path`.
+            public struct Path: Sendable, Hashable {
+                /// device shortcode, e.g. DEV-4K7M
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/devices/{id}/GET/path/id`.
+                public var id: Swift.String
+                /// Creates a new `Path`.
+                ///
+                /// - Parameters:
+                ///   - id: device shortcode, e.g. DEV-4K7M
+                public init(id: Swift.String) {
+                    self.id = id
+                }
+            }
+            public var path: Operations.Resources_device_get.Input.Path
+            /// - Remark: Generated from `#/paths/api/v1/devices/{id}/GET/header`.
+            public struct Headers: Sendable, Hashable {
+                public var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_device_get.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - accept:
+                public init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_device_get.AcceptableContentType>] = .defaultValues()) {
+                    self.accept = accept
+                }
+            }
+            public var headers: Operations.Resources_device_get.Input.Headers
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - path:
+            ///   - headers:
+            public init(
+                path: Operations.Resources_device_get.Input.Path,
+                headers: Operations.Resources_device_get.Input.Headers = .init()
+            ) {
+                self.path = path
+                self.headers = headers
+            }
+        }
+        @frozen public enum Output: Sendable, Hashable {
+            public struct Ok: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/devices/{id}/GET/responses/200/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/devices/{id}/GET/responses/200/content/application\/json`.
+                    case json(Components.Schemas.DeviceDetail)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.DeviceDetail {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.Resources_device_get.Output.Ok.Body
+                /// Creates a new `Ok`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.Resources_device_get.Output.Ok.Body) {
+                    self.body = body
+                }
+            }
+            /// 200
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/devices/{id}/get(resources.device.get)/responses/200`.
+            ///
+            /// HTTP response code: `200 ok`.
+            case ok(Operations.Resources_device_get.Output.Ok)
+            /// The associated value of the enum case if `self` is `.ok`.
+            ///
+            /// - Throws: An error if `self` is not `.ok`.
+            /// - SeeAlso: `.ok`.
+            public var ok: Operations.Resources_device_get.Output.Ok {
+                get throws {
+                    switch self {
+                    case let .ok(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            public struct Default: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/devices/{id}/GET/responses/default/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/devices/{id}/GET/responses/default/content/application\/json`.
+                    case json(Components.Schemas.ApiError)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.ApiError {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.Resources_device_get.Output.Default.Body
+                /// Creates a new `Default`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.Resources_device_get.Output.Default.Body) {
+                    self.body = body
+                }
+            }
+            /// Error
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/devices/{id}/get(resources.device.get)/responses/default`.
+            ///
+            /// HTTP response code: `default`.
+            case `default`(statusCode: Swift.Int, Operations.Resources_device_get.Output.Default)
+            /// The associated value of the enum case if `self` is `.`default``.
+            ///
+            /// - Throws: An error if `self` is not `.`default``.
+            /// - SeeAlso: `.`default``.
+            public var `default`: Operations.Resources_device_get.Output.Default {
+                get throws {
+                    switch self {
+                    case let .`default`(_, response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "default",
+                            response: self
+                        )
+                    }
+                }
+            }
+        }
+        @frozen public enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            public init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            public var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            public static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
+    /// - Remark: HTTP `PATCH /api/v1/devices/{id}`.
+    /// - Remark: Generated from `#/paths//api/v1/devices/{id}/patch(resources.device.update)`.
+    public enum Resources_device_update {
+        public static let id: Swift.String = "resources.device.update"
+        public struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/api/v1/devices/{id}/PATCH/path`.
+            public struct Path: Sendable, Hashable {
+                /// device shortcode, e.g. DEV-4K7M
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/devices/{id}/PATCH/path/id`.
+                public var id: Swift.String
+                /// Creates a new `Path`.
+                ///
+                /// - Parameters:
+                ///   - id: device shortcode, e.g. DEV-4K7M
+                public init(id: Swift.String) {
+                    self.id = id
+                }
+            }
+            public var path: Operations.Resources_device_update.Input.Path
+            /// - Remark: Generated from `#/paths/api/v1/devices/{id}/PATCH/header`.
+            public struct Headers: Sendable, Hashable {
+                public var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_device_update.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - accept:
+                public init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_device_update.AcceptableContentType>] = .defaultValues()) {
+                    self.accept = accept
+                }
+            }
+            public var headers: Operations.Resources_device_update.Input.Headers
+            /// - Remark: Generated from `#/paths/api/v1/devices/{id}/PATCH/requestBody`.
+            @frozen public enum Body: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/devices/{id}/PATCH/requestBody/content/application\/json`.
+                case json(Components.Schemas.DeviceUpdateData)
+            }
+            public var body: Operations.Resources_device_update.Input.Body?
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - path:
+            ///   - headers:
+            ///   - body:
+            public init(
+                path: Operations.Resources_device_update.Input.Path,
+                headers: Operations.Resources_device_update.Input.Headers = .init(),
+                body: Operations.Resources_device_update.Input.Body? = nil
+            ) {
+                self.path = path
+                self.headers = headers
+                self.body = body
+            }
+        }
+        @frozen public enum Output: Sendable, Hashable {
+            public struct Ok: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/devices/{id}/PATCH/responses/200/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/devices/{id}/PATCH/responses/200/content/application\/json`.
+                    case json(Components.Schemas.GeneratedEntityMutationUpdateResultDevice)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.GeneratedEntityMutationUpdateResultDevice {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.Resources_device_update.Output.Ok.Body
+                /// Creates a new `Ok`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.Resources_device_update.Output.Ok.Body) {
+                    self.body = body
+                }
+            }
+            /// 200
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/devices/{id}/patch(resources.device.update)/responses/200`.
+            ///
+            /// HTTP response code: `200 ok`.
+            case ok(Operations.Resources_device_update.Output.Ok)
+            /// The associated value of the enum case if `self` is `.ok`.
+            ///
+            /// - Throws: An error if `self` is not `.ok`.
+            /// - SeeAlso: `.ok`.
+            public var ok: Operations.Resources_device_update.Output.Ok {
+                get throws {
+                    switch self {
+                    case let .ok(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            public struct Default: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/devices/{id}/PATCH/responses/default/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/devices/{id}/PATCH/responses/default/content/application\/json`.
+                    case json(Components.Schemas.ApiError)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.ApiError {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.Resources_device_update.Output.Default.Body
+                /// Creates a new `Default`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.Resources_device_update.Output.Default.Body) {
+                    self.body = body
+                }
+            }
+            /// Error
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/devices/{id}/patch(resources.device.update)/responses/default`.
+            ///
+            /// HTTP response code: `default`.
+            case `default`(statusCode: Swift.Int, Operations.Resources_device_update.Output.Default)
+            /// The associated value of the enum case if `self` is `.`default``.
+            ///
+            /// - Throws: An error if `self` is not `.`default``.
+            /// - SeeAlso: `.`default``.
+            public var `default`: Operations.Resources_device_update.Output.Default {
+                get throws {
+                    switch self {
+                    case let .`default`(_, response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "default",
+                            response: self
+                        )
+                    }
+                }
+            }
+        }
+        @frozen public enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            public init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            public var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            public static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
     /// - Remark: HTTP `POST /api/v1/entity/explore`.
     /// - Remark: Generated from `#/paths//api/v1/entity/explore/post(entity.explore)`.
     public enum Entity_explore {
@@ -3506,6 +4400,7 @@ public enum Operations {
                     case vendorAccount = "vendorAccount"
                     case productCategory = "productCategory"
                     case purchaseImportRun = "purchaseImportRun"
+                    case device = "device"
                 }
                 /// - Remark: Generated from `#/paths/api/v1/fieldExplanation/explain/GET/query/entityType`.
                 public var entityType: Operations.FieldExplanation_explain.Input.Query.EntityTypePayload
@@ -27021,6 +27916,7 @@ public enum Operations {
                     case vendorAccount = "vendorAccount"
                     case productCategory = "productCategory"
                     case purchaseImportRun = "purchaseImportRun"
+                    case device = "device"
                 }
                 /// - Remark: Generated from `#/paths/api/v1/recommendations/forEntity/GET/query/entityType`.
                 public var entityType: Operations.Recommendations_forEntity.Input.Query.EntityTypePayload

@@ -10,6 +10,7 @@ import CubbyAPI
 
 // MARK: - Entities
 
+public typealias Device = Components.Schemas.DeviceOut
 public typealias Expense = Components.Schemas.ExpenseOut
 public typealias FinancialAccount = Components.Schemas.FinancialAccountOut
 public typealias FinancialTransaction = Components.Schemas.FinancialTransactionOut
@@ -101,6 +102,14 @@ public typealias DataQualityFacetName = Components.Schemas.DataQualityFacetName
 public typealias DataQualityGap = Components.Schemas.DataQualityGap
 public typealias DataQualityStatus = Components.Schemas.DataQualityStatus
 public typealias DataTypeEnum = Components.Schemas.DataTypeEnum
+public typealias DeviceCreateInput = Components.Schemas.DeviceCreateInput
+public typealias DeviceDetail = Components.Schemas.DeviceDetail
+public typealias DeviceListItem = Components.Schemas.DeviceListItem
+public typealias DeviceListPage = Components.Schemas.DeviceListPage
+public typealias DeviceOut = Components.Schemas.DeviceOut
+public typealias DevicePlatform = Components.Schemas.DevicePlatform
+public typealias DeviceShortcode = Components.Schemas.DeviceShortcode
+public typealias DeviceUpdateData = Components.Schemas.DeviceUpdateData
 public typealias DisplayImagesField = Components.Schemas.DisplayImagesField
 public typealias DisplayImageSummary = Components.Schemas.DisplayImageSummary
 public typealias DuplicateUniqueProduct = Components.Schemas.DuplicateUniqueProduct
@@ -221,6 +230,7 @@ public typealias GardenEntryListPage = Components.Schemas.GardenEntryListPage
 public typealias GardenEntryOut = Components.Schemas.GardenEntryOut
 public typealias GardenEntryShortcode = Components.Schemas.GardenEntryShortcode
 public typealias GardenEntryUpdateData = Components.Schemas.GardenEntryUpdateData
+public typealias GeneratedEntityMutationCreateResultDevice = Components.Schemas.GeneratedEntityMutationCreateResultDevice
 public typealias GeneratedEntityMutationCreateResultExpense = Components.Schemas.GeneratedEntityMutationCreateResultExpense
 public typealias GeneratedEntityMutationCreateResultFinancialAccount = Components.Schemas.GeneratedEntityMutationCreateResultFinancialAccount
 public typealias GeneratedEntityMutationCreateResultFinancialTransaction = Components.Schemas.GeneratedEntityMutationCreateResultFinancialTransaction
@@ -241,6 +251,7 @@ public typealias GeneratedEntityMutationCreateResultTask = Components.Schemas.Ge
 public typealias GeneratedEntityMutationCreateResultVendor = Components.Schemas.GeneratedEntityMutationCreateResultVendor
 public typealias GeneratedEntityMutationCreateResultVendorAccount = Components.Schemas.GeneratedEntityMutationCreateResultVendorAccount
 public typealias GeneratedEntityMutationCreateResultWish = Components.Schemas.GeneratedEntityMutationCreateResultWish
+public typealias GeneratedEntityMutationUpdateResultDevice = Components.Schemas.GeneratedEntityMutationUpdateResultDevice
 public typealias GeneratedEntityMutationUpdateResultExpense = Components.Schemas.GeneratedEntityMutationUpdateResultExpense
 public typealias GeneratedEntityMutationUpdateResultFinancialAccount = Components.Schemas.GeneratedEntityMutationUpdateResultFinancialAccount
 public typealias GeneratedEntityMutationUpdateResultFinancialTransaction = Components.Schemas.GeneratedEntityMutationUpdateResultFinancialTransaction
@@ -303,10 +314,12 @@ public typealias ImageProcessingIssue = Components.Schemas.ImageProcessingIssue
 public typealias ImageProcessingIssueFilter = Components.Schemas.ImageProcessingIssueFilter
 public typealias ImageProcessingJobKind = Components.Schemas.ImageProcessingJobKind
 public typealias ImageProcessingJobState = Components.Schemas.ImageProcessingJobState
+public typealias ImageProcessingParticipation = Components.Schemas.ImageProcessingParticipation
 public typealias ImageProcessingResult = Components.Schemas.ImageProcessingResult
 public typealias ImageProcessingServerMessage = Components.Schemas.ImageProcessingServerMessage
 public typealias ImageProcessingServerMessageAcknowledge = Components.Schemas.ImageProcessingServerMessageAcknowledge
 public typealias ImageProcessingServerMessageCommand = Components.Schemas.ImageProcessingServerMessageCommand
+public typealias ImageProcessingServerMessageHelloAck = Components.Schemas.ImageProcessingServerMessageHelloAck
 public typealias ImageProcessingSkippedOutcome = Components.Schemas.ImageProcessingSkippedOutcome
 public typealias ImageProcessingSource = Components.Schemas.ImageProcessingSource
 public typealias ImageProcessingStatus = Components.Schemas.ImageProcessingStatus
@@ -716,6 +729,9 @@ extension Components.Schemas.CollectionProductPlacementOut: Identifiable {}
 extension Components.Schemas.CollectionProductPurchaseOut: Identifiable {}
 extension Components.Schemas.CookbookProductSummary: Identifiable {}
 extension Components.Schemas.CookbookSummary: Identifiable {}
+extension Components.Schemas.DeviceDetail: Identifiable {}
+extension Components.Schemas.DeviceListItem: Identifiable {}
+extension Components.Schemas.DeviceOut: Identifiable {}
 extension Components.Schemas.DisplayImageSummary: Identifiable {}
 extension Components.Schemas.DuplicateUniqueProduct: Identifiable {}
 extension Components.Schemas.EntityAttachmentRead: Identifiable {}
