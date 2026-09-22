@@ -185,6 +185,14 @@ struct PhotoLibraryStagesTests {
         #expect(stage(stages, "categories").state == .off("Not running"))
     }
 
+    @Test func sweepThatNeverRanIsNotStartedRatherThanDone() {
+        let stages = PhotoLibraryStages.derive(
+            inputs(
+                categories: PhotoLibraryStages.CategoriesInput(
+                    isRunning: false, analysedCount: 0, totalCount: 0)))
+        #expect(stage(stages, "categories").state == .off("Not started"))
+    }
+
     @Test func noClassificationSweepShowsCategoriesOffRatherThanCrashing() {
         let stages = PhotoLibraryStages.derive(inputs(categories: nil))
         #expect(stage(stages, "categories").state == .off("Categories are unavailable"))

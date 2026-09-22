@@ -583,6 +583,12 @@ extension View {
     ) -> some View {
         onAppear { if active { sweep?.setActive(true) } }
             .onDisappear { if active { sweep?.setActive(false) } }
+            // The sweep only exists once `preparePhotoSubsystem()` opens the analysis store, which
+            // is after the tab's `onAppear` — without this the tab-visible signal never reaches
+            // it and categories never classify that session.
+            .onChange(of: sweep.map(ObjectIdentifier.init)) { _, id in
+                if active, id != nil { sweep?.setActive(true) }
+            }
             .onChange(of: scenePhase) { _, phase in if active { sweep?.setSceneActive(phase == .active) } }
             .task(id: categoryFilterKey) {
                 guard sweep != nil else { return }

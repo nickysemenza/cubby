@@ -225,6 +225,9 @@ enum PhotoLibraryStages {
         } else if categories.isRunning {
             state = .running(
                 value: Double(categories.analysedCount), total: Double(categories.totalCount))
+        } else if categories.totalCount == 0 {
+            // `totalCount` is set when a pass starts, so 0/0 means no pass has run yet.
+            state = .off("Not started")
         } else if categories.analysedCount >= categories.totalCount {
             state = .done
         } else {
