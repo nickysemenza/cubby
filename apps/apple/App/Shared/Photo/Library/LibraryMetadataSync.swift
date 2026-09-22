@@ -285,7 +285,7 @@ extension LibraryMetadataSync {
                 let mappings = PHPhotoLibrary.shared().cloudIdentifierMappings(
                     forLocalIdentifiers: [localIdentifier])
                 guard case .success(let cloudID) = mappings[localIdentifier] else { return nil }
-                return cloudID.archivalStringValue
+                return cloudID.stringValue
             },
             deviceShortcodeProvider: { [weak client] in
                 guard let client else { return nil }

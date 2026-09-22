@@ -1051,7 +1051,7 @@ final class PhotoImportManifest {
                     forLocalIdentifiers: batch)
                 for (localID, mapping) in mappings {
                     if case .success(let cloudID) = mapping {
-                        result[localID] = cloudID.archivalStringValue
+                        result[localID] = cloudID.stringValue
                     }
                 }
                 start = end
