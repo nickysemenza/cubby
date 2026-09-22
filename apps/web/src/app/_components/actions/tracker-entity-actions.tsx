@@ -5,8 +5,8 @@ import {
 import { type ExpenseOut, expenseOut } from "@cubby/schemas/project";
 import { useState } from "react";
 
-import { SettleExpenseDialog } from "~/app/expenses/settle-expense-dialog";
 import { CreateProjectFromTasksDialog } from "~/app/tasks/create-project-from-tasks-dialog";
+import { EntityEditDialog } from "~/entities/editing/entity-edit-dialog";
 
 import { VerbMenuItem } from "./action-verb-ui";
 import type {
@@ -62,12 +62,17 @@ export function useMarkExpensePurchasedAction(): EntityActionHandles {
       );
     },
     dialog: target && (
-      <SettleExpenseDialog
+      <EntityEditDialog
         open
         onOpenChange={(open) => {
           if (!open) setTarget(null);
         }}
-        expense={target}
+        request={{
+          entity: "expense",
+          operation: "update",
+          intent: "settle",
+          record: target,
+        }}
       />
     ),
   };

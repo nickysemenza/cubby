@@ -840,9 +840,32 @@ export default defineEntity({
         date: ["date"],
         project: ["projectId"],
         product: ["productId"],
+        // "Mark purchased" — settles a planned expense in one write: final
+        // cost, actual date (defaults to today), and a chance to correct the
+        // project/cost type/trade/notes/vendor now that it actually
+        // happened. `future: false` is fixed in the editing registry's
+        // `buildData`, not listed here, because it's never user-edited.
+        settle: [
+          "cost",
+          "date",
+          "projectId",
+          "costType",
+          "trade",
+          "notes",
+          "vendor",
+          "orderId",
+        ],
       },
       create: ["capture", "full"],
-      update: ["full", "planned", "cost", "date", "project", "product"],
+      update: [
+        "full",
+        "planned",
+        "cost",
+        "date",
+        "project",
+        "product",
+        "settle",
+      ],
     },
     output: [
       "fieldResolutions",

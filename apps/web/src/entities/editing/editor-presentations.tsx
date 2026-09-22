@@ -103,6 +103,17 @@ function ExpenseCaptureFields() {
   return <EntityIntentFields entity="expense" intent="capture" />;
 }
 
+function ExpenseSettleFields({ record }: EntityEditorFieldsProps) {
+  return (
+    <EntityIntentFields
+      entity="expense"
+      intent="settle"
+      mode="edit"
+      record={record}
+    />
+  );
+}
+
 function ProjectCaptureFields() {
   return <EntityIntentFields entity="project" intent="capture" />;
 }
@@ -454,6 +465,7 @@ type EntityEditorPresentationKey =
   | "meal:create:capture"
   | "task:create:capture"
   | "expense:create:capture"
+  | "expense:update:settle"
   | "project:create:capture"
   | "vendor:create:capture"
   | "purchase:create:capture"
@@ -474,6 +486,7 @@ interface PresentationEntityByKey {
   "meal:create:capture": "meal";
   "task:create:capture": "task";
   "expense:create:capture": "expense";
+  "expense:update:settle": "expense";
   "project:create:capture": "project";
   "vendor:create:capture": "vendor";
   "purchase:create:capture": "purchase";
@@ -520,6 +533,15 @@ const presentations = {
         : "Log what you bought (or plan to) — the fastest way to keep a project's cost honest.",
     Fields: ExpenseCaptureFields,
     successMessage: (result) => `Logged "${resultName(result, "expense")}"`,
+  },
+  "expense:update:settle": {
+    title: () => "Mark purchased",
+    description: () =>
+      "Log the final cost and date — this moves the expense off the Planned list.",
+    submitLabel: "Mark purchased",
+    Fields: ExpenseSettleFields,
+    successMessage: (result) =>
+      `Marked "${resultName(result, "expense")}" purchased`,
   },
   "project:create:capture": {
     title: ({ context }) =>

@@ -413,53 +413,6 @@ export function FormWrapper<TFieldValues extends FieldValues = FieldValues>({
   );
 }
 
-// Nullable textarea — empty string coerces to null (same contract as
-// UnifiedTextField's nullable mode).
-export function NullableTextareaField<
-  TFieldValues extends FieldValues = FieldValues,
->({
-  form,
-  name,
-  label,
-  placeholder,
-  rows = 4,
-}: {
-  form: UseFormReturn<TFieldValues>;
-  name: FieldPathByValue<TFieldValues, string | null | undefined>;
-  label: string;
-  placeholder: string;
-  rows?: number;
-}) {
-  return (
-    <Controller
-      control={form.control}
-      name={name}
-      render={({ field, fieldState }) => (
-        <FormFieldGroup
-          htmlFor={name}
-          label={label}
-          invalid={fieldState.invalid}
-          error={fieldState.error}
-        >
-          <Textarea
-            id={name}
-            placeholder={placeholder}
-            {...field}
-            value={field.value ?? ""}
-            onChange={(e) => {
-              const v = e.target.value;
-              field.onChange(v === "" ? null : v);
-            }}
-            className="min-h-0 px-2 py-1"
-            rows={rows}
-            aria-invalid={fieldState.invalid}
-          />
-        </FormFieldGroup>
-      )}
-    />
-  );
-}
-
 // Helper for handling required textarea fields
 export function RequiredTextareaField<
   TFieldValues extends FieldValues = FieldValues,

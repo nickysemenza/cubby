@@ -38,6 +38,26 @@ jobs:
       apple: ${{ steps.apple.outputs.apple }}
       release: ${{ steps.apple.outputs.release }}
     steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          sparse-checkout: |
+            .nvmrc
+            scripts/check-outward-text.ts
+            packages/shared/src/generated/shortcode-registry.gen.ts
+          sparse-checkout-cone-mode: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version-file: .nvmrc
+      # The commit-msg hook gates commit messages; the PR title and body are
+      # the other outward text AGENTS.md keeps free of live entity codes.
+      - name: PR text names no live entity codes
+        if: github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          gh pr view "$PR" --repo "$GITHUB_REPOSITORY" --json title,body \
+            --jq '.title + "\n" + .body' | node scripts/check-outward-text.ts --stdin
       - id: scope
         env:
           MODE: ${{ inputs.mode || 'verify' }}
