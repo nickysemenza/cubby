@@ -157,6 +157,7 @@ extension OperationRoute {
         OperationRoute(operationID: "problems.getUpc", method: .get, path: "/api/v1/problems/getUpc", pathParameters: [], queryParameters: [], hasBody: false),
         OperationRoute(operationID: "problems.getViews", method: .get, path: "/api/v1/problems/getViews", pathParameters: [], queryParameters: [], hasBody: false),
         OperationRoute(operationID: "problems.recipeUsageByProduct", method: .get, path: "/api/v1/problems/recipeUsageByProduct", pathParameters: [], queryParameters: ["productShortcodes"], hasBody: false),
+        OperationRoute(operationID: "problems.resolveArrivedFindings", method: .post, path: "/api/v1/problems/resolveArrivedFindings", pathParameters: [], queryParameters: [], hasBody: true),
         OperationRoute(operationID: "problems.resolveImportFinding", method: .post, path: "/api/v1/problems/resolveImportFinding", pathParameters: [], queryParameters: [], hasBody: true),
         OperationRoute(operationID: "product.applyUpcData", method: .post, path: "/api/v1/product/applyUpcData", pathParameters: [], queryParameters: [], hasBody: true),
         OperationRoute(operationID: "product.attachComponents", method: .post, path: "/api/v1/product/attachComponents", pathParameters: [], queryParameters: [], hasBody: true),

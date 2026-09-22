@@ -20,6 +20,7 @@ import {
   findViewProblemsWorkflow,
   pruneAllUnusedAliasesWorkflow,
   recipeUsageByProductWorkflow,
+  resolveArrivedFindingsWorkflow,
   resolveImportFindingWorkflow,
   reparseStaleWorkflow,
 } from "~/server/workflows/problems.server";
@@ -63,6 +64,8 @@ export const problemsHandlers = implementOperationDomain(problemsContract, {
     deleteUnusedIngredientsWorkflow(context, input),
   resolveImportFinding: (context, input) =>
     resolveImportFindingWorkflow(context, input),
+  resolveArrivedFindings: (context, input) =>
+    resolveArrivedFindingsWorkflow(context, input),
 });
 
 export const integrityProblemsHandlers = implementOperationDomain(

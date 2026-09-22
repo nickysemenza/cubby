@@ -13,9 +13,10 @@
 import type {
   InventoryShortcode,
   ProductShortcode,
+  PurchaseShortcode,
 } from "@cubby/schemas/identifiers";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { type FC, useMemo } from "react";
 import { FormProvider, useForm } from "react-hook-form";
 import { z } from "zod";
@@ -41,6 +42,7 @@ import {
 import { Input } from "~/components/ui/input";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { entityDetailFor } from "~/entities/entity-detail.functions";
+import { problems as problemOperations } from "~/lib/problems.functions";
 
 const formSchema = z.object({
   location: optionalLocationField,
@@ -54,6 +56,8 @@ interface ReceiveExpenseDialogProps {
   onOpenChange: (open: boolean) => void;
   productId: ProductShortcode;
   expenseName: string;
+  /** The purchase whose open `arrived` finding this receive may close. */
+  purchaseId: PurchaseShortcode | null;
 }
 
 export const ReceiveExpenseDialog: FC<ReceiveExpenseDialogProps> = ({
@@ -61,6 +65,7 @@ export const ReceiveExpenseDialog: FC<ReceiveExpenseDialogProps> = ({
   onOpenChange,
   productId,
   expenseName,
+  purchaseId,
 }) => {
   const { data: product, isLoading } = useQuery({
     ...entityDetailFor("product").queryOptions(productId),
@@ -93,6 +98,15 @@ export const ReceiveExpenseDialog: FC<ReceiveExpenseDialogProps> = ({
     if (!nextOpen) form.reset();
     onOpenChange(nextOpen);
   };
+  const resolveArrived = useMutation(
+    problemOperations.resolveArrivedFindings.mutationOptions(),
+  );
+  // Receiving stays interactive; the finding just learns about it. The server
+  // keeps the finding open until every product line of the purchase landed.
+  const received = () => {
+    if (purchaseId) resolveArrived.mutate({ purchaseId });
+    close(false);
+  };
 
   const entries = product?.inventoryEntry ?? [];
   // `expectedQuantity: 1` marks a one-of-a-kind item. Such a product doesn't
@@ -108,7 +122,7 @@ export const ReceiveExpenseDialog: FC<ReceiveExpenseDialogProps> = ({
     data: Parameters<typeof updateInventory.mutateAsync>[0]["data"],
   ) => {
     await updateInventory.mutateAsync({ id, data });
-    close(false);
+    received();
   };
 
   const body = () => {
@@ -199,7 +213,7 @@ export const ReceiveExpenseDialog: FC<ReceiveExpenseDialogProps> = ({
           <QuickInventoryAdd
             locationId={locationId}
             initialProduct={initialProduct}
-            onSuccess={() => close(false)}
+            onSuccess={received}
           />
         )}
       </Stack>

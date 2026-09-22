@@ -15,6 +15,8 @@ import {
   problemsViewsSchema,
   recipeUsageByProductInput,
   recipeUsageByProductOut,
+  resolveArrivedFindingsInput,
+  resolveArrivedFindingsOut,
   resolveImportFindingInput,
   resolveImportFindingOut,
   PROBLEM_CLASS,
@@ -23,9 +25,15 @@ import {
 import { z } from "zod";
 
 import { readProblemCountsFromDurableObject } from "~/server/database-freshness/client";
-import { resolveImportFinding } from "~/server/purchase-import/findings";
+import {
+  resolveArrivedFindingsForPurchase,
+  resolveImportFinding,
+} from "~/server/purchase-import/findings";
 import { recipeUsageCountsByProduct } from "~/server/repo/problems";
-import { resolveAllOrThrow } from "~/server/repo/shortcode-resolver";
+import {
+  resolveAllOrThrow,
+  resolveOrThrow,
+} from "~/server/repo/shortcode-resolver";
 import {
   findAllViewProblemIds,
   findViewProblems,
@@ -97,6 +105,10 @@ const problemsWorkflowSchemas = {
   resolveImportFinding: {
     input: resolveImportFindingInput,
     output: resolveImportFindingOut,
+  },
+  resolveArrivedFindings: {
+    input: resolveArrivedFindingsInput,
+    output: resolveArrivedFindingsOut,
   },
 };
 
@@ -218,6 +230,19 @@ export const resolveImportFindingWorkflow = defineWorkflowOperation(
     c: ProblemsWorkflowContext,
     input: z.output<typeof resolveImportFindingInput>,
   ) => resolveImportFinding(c.db, input, c.actorContext),
+);
+
+export const resolveArrivedFindingsWorkflow = defineWorkflowOperation(
+  "problems.resolveArrivedFindings",
+  async (
+    c: ProblemsWorkflowContext,
+    input: z.output<typeof resolveArrivedFindingsInput>,
+  ) =>
+    resolveArrivedFindingsForPurchase(
+      c.db,
+      { purchaseId: await resolveOrThrow(c.db, "purchase", input.purchaseId) },
+      c.actorContext,
+    ),
 );
 
 const reparseStaleDefinition = defineCoordinatorStream({

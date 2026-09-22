@@ -1571,6 +1571,10 @@
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {
+        "Expense_date_cost_check": {
+          "name": "Expense_date_cost_check",
+          "value": "\"Expense\".\"date\" IS NOT NULL OR (\"Expense\".\"cost\" IS NOT NULL AND \"Expense\".\"cost\" = 0)"
+        },
         "Expense_live_charge_assignment_check": {
           "name": "Expense_live_charge_assignment_check",
           "value": "\"Expense\".\"deletedAt\" IS NOT NULL OR \"Expense\".\"lineKind\" = 'principal' OR (\"Expense\".\"projectId\" IS NULL AND \"Expense\".\"purchaseId\" IS NOT NULL)"
@@ -1586,10 +1590,6 @@
         "Expense_lineKind_productId_check": {
           "name": "Expense_lineKind_productId_check",
           "value": "\"Expense\".\"lineKind\" = 'principal' OR \"Expense\".\"productId\" IS NULL"
-        },
-        "Expense_date_cost_check": {
-          "name": "Expense_date_cost_check",
-          "value": "\"Expense\".\"date\" IS NOT NULL OR (\"Expense\".\"cost\" IS NOT NULL AND \"Expense\".\"cost\" = 0)"
         }
       },
       "isRLSEnabled": false
@@ -5268,6 +5268,18 @@
           "primaryKey": false,
           "notNull": false
         },
+        "historyCursorUrl": {
+          "name": "historyCursorUrl",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "historyExhaustedAt": {
+          "name": "historyExhaustedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
         "createdAt": {
           "name": "createdAt",
           "type": "timestamp",
@@ -6183,6 +6195,140 @@
         "ImportRunOperation_state_check": {
           "name": "ImportRunOperation_state_check",
           "value": "\"ImportRunOperation\".\"state\" IN ('started', 'paused_approval', 'completed', 'failed')"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.ImportRunOrderCandidate": {
+      "name": "ImportRunOrderCandidate",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "runId": {
+          "name": "runId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "orderId": {
+          "name": "orderId",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "orderUrl": {
+          "name": "orderUrl",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "orderedAt": {
+          "name": "orderedAt",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "state": {
+          "name": "state",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'pending'"
+        },
+        "listedAt": {
+          "name": "listedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updatedAt": {
+          "name": "updatedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "ImportRunOrderCandidate_run_order_key": {
+          "name": "ImportRunOrderCandidate_run_order_key",
+          "columns": [
+            {
+              "expression": "runId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "orderId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "ImportRunOrderCandidate_run_state_idx": {
+          "name": "ImportRunOrderCandidate_run_state_idx",
+          "columns": [
+            {
+              "expression": "runId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "state",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "ImportRunOrderCandidate_runId_ImportRun_id_fk": {
+          "name": "ImportRunOrderCandidate_runId_ImportRun_id_fk",
+          "tableFrom": "ImportRunOrderCandidate",
+          "tableTo": "ImportRun",
+          "columnsFrom": [
+            "runId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "ImportRunOrderCandidate_state_check": {
+          "name": "ImportRunOrderCandidate_state_check",
+          "value": "\"ImportRunOrderCandidate\".\"state\" IN ('pending', 'covered', 'imported', 'skipped')"
         }
       },
       "isRLSEnabled": false

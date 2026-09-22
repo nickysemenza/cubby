@@ -43,7 +43,12 @@ through Cubby's prepare/commit writer rather than generic entity mutation.
 7. Report every conflict or open finding; resolve it through the Problems UI.
 
 For a Flue run, call `claim_next_import_work` before selecting an evidence
-path and after each committed item. A `receipt_evidence` item must go through
+path and after each committed item. Account-sync work is a `cursor_walk`
+(capture the order-history page; importing it records an `order_list` of
+orders with `nextPageUrl`, or `null` once the page predates the account
+cursor), then one `order` at a time (capture and import its detail page),
+then hunts and enrichment; `finish_import_run` refuses while a listed order
+is still pending. A `receipt_evidence` item must go through
 `extract_receipt_evidence`, whose immutable source/checksum/extraction payload
 is passed unchanged to `prepare_purchase_import`; it is not a separate writer.
 For browser evidence, continue every selected order or hunt before calling
