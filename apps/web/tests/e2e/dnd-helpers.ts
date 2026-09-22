@@ -1,4 +1,9 @@
-import { expect, type Locator, type Page } from "@playwright/test";
+import {
+  expect,
+  type Locator,
+  type Page,
+  type Response,
+} from "@playwright/test";
 
 async function visibleCenter(locator: Locator) {
   await locator.scrollIntoViewIfNeeded();
@@ -78,16 +83,41 @@ export async function dragByKeyboard(
   await source.press("Space");
 }
 
-/** Synchronize on the gesture's successful mutation; assertions stay UI-only. */
-export function waitForDndMutation(page: Page, entity: string) {
-  return page.waitForResponse(
-    (response) =>
+const operationHeader = (response: Response, suffix = "") =>
+  response.request().headers()[`x-cubby-operation${suffix}`];
+
+/**
+ * Synchronize on the gesture's successful mutation; assertions stay UI-only.
+ *
+ * Pass `refetchOperation` before a persistence reload: it also waits for the
+ * invalidation refetch the mutation triggers. Reloading while that refetch is
+ * in flight aborts it, and local workerd then failed the next read with
+ * "Network connection lost." (iPhone WebKit CI flake, 2026-09-22).
+ */
+export async function waitForDndMutation(
+  page: Page,
+  entity: string,
+  refetchOperation?: string,
+) {
+  let committed = false;
+  const settled = await page.waitForResponse((response) => {
+    if (
+      !committed &&
       response.request().method() === "POST" &&
       response.url().includes("/_serverFn/") &&
-      response.request().headers()["x-cubby-operation-kind"] === "mutation" &&
-      response.request().headers()["x-cubby-operation-entity"] === entity &&
-      response.ok(),
-  );
+      operationHeader(response, "-kind") === "mutation" &&
+      operationHeader(response, "-entity") === entity &&
+      response.ok()
+    ) {
+      committed = true;
+      return refetchOperation === undefined;
+    }
+    // Responses are observed in arrival order, so a match here comes from the
+    // mutation's invalidation, not from the page load before the gesture.
+    return committed && operationHeader(response) === refetchOperation;
+  });
+  // A response resolves at its headers; the framed body can still be streaming.
+  await settled.finished();
 }
 
 /**
