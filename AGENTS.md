@@ -14,12 +14,12 @@
   results at handoff instead of rerunning checks for publication.
 - Production migrations have one exclusive owner; establish safe data and
   deployed-code compatibility before pushing, then verify the schema afterward.
-- Keep edits disjoint across agents/worktrees. The main task runs on whichever
-  frontier model the session selected — no model is pinned per-repo, so pick the
-  cheaper tier for routine work rather than fighting a default. Route bounded
+- Keep edits disjoint across agents/worktrees. Claude main sessions default to
+  `opus` at medium effort (`.claude/settings.json`); Codex pins no model. A
+  session's explicit `/model` or effort choice wins. Route bounded
   implementation, investigation, test, and log-analysis subagents to the cheaper
-  tier; use another frontier agent only for independent review of broad or risky
-  work.
+  lanes in model routing; use an independent review agent only for broad or
+  risky work.
 - Use synthetic data in repository content and outward-facing engineering text.
   Never include personal or household information, real Cubby entity identifiers
   or records, or private source material in docs, comments, fixtures, examples,
