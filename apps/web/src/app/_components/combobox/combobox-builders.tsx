@@ -303,30 +303,52 @@ function productPickerInventoryGroup(
  * builder: the search endpoint (both present), a by-shortcode read (ancestors
  * derived from its nested parent chain, see `locationToSegments`), and a
  * freshly-created location (neither — it has no parent chain loaded yet).
+ *
+ * When `ancestors` is present, the row also carries `presentation.group`
+ * (the root location) and `presentation.depth` (the path length) — the
+ * blank-query list picker reads as a tree the same way `productCategory`'s
+ * does, instead of a flat alphabetical roster. A root location (empty
+ * `ancestors`) groups under itself. Every group gets the same `order`
+ * (0): the list is already server-sorted so siblings arrive contiguous,
+ * and `EntityPicker`'s stable sort leaves same-order rows in that order.
  */
 export const buildLocationComboboxItem = (location: {
   id: LocationShortcode;
   name: string;
   type: LocationType | null;
   aliases?: string[] | null;
-  ancestors?: Array<{ name: string }> | null;
+  ancestors?: Array<{ id?: string; name: string }> | null;
   coverImage?: { url: string } | null;
-}): ComboboxItem<LocationShortcode> => ({
-  id: location.id,
-  shortcode: location.id,
-  name: location.name,
-  aliases: location.aliases ?? [],
-  secondary: location.type ?? undefined,
-  detail: location.ancestors?.length
-    ? location.ancestors.map((ancestor) => ancestor.name).join(" › ")
-    : undefined,
-  icon: (
-    <LocationPickerThumb
-      imageUrl={location.coverImage?.url}
-      type={location.type}
-    />
-  ),
-});
+}): ComboboxItem<LocationShortcode> => {
+  const ancestors = location.ancestors;
+  const rootAncestor = ancestors?.[0];
+  const root = {
+    id: rootAncestor?.id ?? location.id,
+    name: rootAncestor?.name ?? location.name,
+  };
+  return {
+    id: location.id,
+    shortcode: location.id,
+    name: location.name,
+    aliases: location.aliases ?? [],
+    secondary: location.type ?? undefined,
+    detail: ancestors?.length
+      ? ancestors.map((ancestor) => ancestor.name).join(" › ")
+      : undefined,
+    icon: (
+      <LocationPickerThumb
+        imageUrl={location.coverImage?.url}
+        type={location.type}
+      />
+    ),
+    presentation: ancestors
+      ? {
+          group: { id: root.id, label: root.name, order: 0 },
+          depth: ancestors.length,
+        }
+      : undefined,
+  };
+};
 
 /**
  * Same row, built from a detail-shaped location — a by-shortcode read or a

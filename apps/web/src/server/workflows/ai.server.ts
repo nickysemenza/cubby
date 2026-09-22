@@ -4,6 +4,7 @@ import type {
   aiUsageSummaryInput,
   approveDetectedInventoryItemInput,
   enrichmentProposalPrecomputeInput,
+  externalIdKindSuggestionInput,
   fieldSuggestionsInput,
   ingredientMergeSuggestionBatchInput,
   productIdentificationInput,
@@ -17,6 +18,7 @@ import {
 } from "@cubby/schemas/identifiers";
 import type { z } from "zod";
 
+import { suggestExternalIdKind } from "~/server/ai/external-id-kind";
 import { suggestFields } from "~/server/ai/field-suggest/suggest-fields";
 import { getAiClient } from "~/server/clients/ai";
 import type { Database } from "~/server/db";
@@ -310,4 +312,13 @@ export const suggestFieldsWorkflow = defineWorkflowOperation(
   "ai.suggestFields",
   (db: Database, input: z.output<typeof fieldSuggestionsInput>) =>
     suggestFields(db, input),
+);
+export const suggestExternalIdKindWorkflow = defineWorkflowOperation(
+  "ai.suggestExternalIdKind",
+  (db: Database, input: z.output<typeof externalIdKindSuggestionInput>) =>
+    suggestExternalIdKind(input, {
+      db,
+      operation: "suggestExternalIdKind",
+      cacheStatus: "none",
+    }),
 );

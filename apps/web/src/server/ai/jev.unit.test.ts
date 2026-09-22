@@ -189,6 +189,7 @@ describe("runJevChoice", () => {
       selectedIndex: null,
       confidence: "medium",
       probability: 0.8,
+      ranked: [{ index: 0, probability: 0.2 }],
     });
   });
 
@@ -215,6 +216,10 @@ describe("runJevChoice", () => {
       selectedIndex: 1,
       confidence: "high",
       probability: 0.9,
+      ranked: [
+        { index: 1, probability: 0.9 },
+        { index: 0, probability: 0.1 },
+      ],
     });
 
     await expect(
@@ -225,6 +230,27 @@ describe("runJevChoice", () => {
         port: jevFor("none", { c0: 0.1, none: 0.9 }),
       }),
     ).rejects.toThrow(/probability key set/);
+  });
+
+  it("ranks every candidate desc by probability, excluding none", async () => {
+    const port = jevFor("c2", {
+      c0: 0.1,
+      c1: 0.25,
+      c2: 0.5,
+      none: 0.15,
+    });
+
+    const result = await runJevChoice({
+      ...base,
+      choices: ["a", "b", "c"],
+      port,
+    });
+
+    expect(result.ranked).toEqual([
+      { index: 2, probability: 0.5 },
+      { index: 1, probability: 0.25 },
+      { index: 0, probability: 0.1 },
+    ]);
   });
 
   it("throws Jev failures and invalid distributions instead of answering elsewhere", async () => {
@@ -275,6 +301,10 @@ describe("runJevChoice", () => {
       selectedIndex: 0,
       confidence: "high",
       probability: 0.9,
+      ranked: [
+        { index: 0, probability: 0.9 },
+        { index: 1, probability: 0.05 },
+      ],
     });
     const [call] = sent;
     expect(call?.url).toBe(

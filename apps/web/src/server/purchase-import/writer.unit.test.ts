@@ -165,6 +165,7 @@ describe("explicitLineDecisions", () => {
       selectedIndex: 0,
       confidence: "high",
       probability: 0.9,
+      ranked: [{ index: 0, probability: 0.9 }],
     }));
 
     const [decision] = await explicitLineDecisions(

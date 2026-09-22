@@ -210,7 +210,16 @@ export default defineEntity({
       {
         key: "tags",
         kind: "text-array",
-        control: { kind: "specialized", renderer: "tag-list" },
+        description:
+          "Compatibility or ecosystem tokens only — battery platform, mount, thread, size standard. Never the manufacturer, a classification word, or a path node; those belong in manufacturer/categoryId. `collection:*` entries are managed by Collections. Leave empty when nothing fits.",
+        control: {
+          kind: "specialized",
+          renderer: "tag-list",
+          suggest: {
+            basis: ["manufacturer", "categoryId", "aliases"],
+            mode: "prune",
+          },
+        },
         display: {
           list: true,
           listOrder: 16,
@@ -221,8 +230,18 @@ export default defineEntity({
         },
         validation: {
           read: z.array(z.string()),
-          create: z.array(z.string()).default([]),
-          update: z.array(z.string()).optional(),
+          create: z
+            .array(z.string())
+            .default([])
+            .describe(
+              "Compatibility or ecosystem tokens only — battery platform, mount, thread, size standard. Never the manufacturer, a classification word, or a path node; those belong in manufacturer/categoryId. `collection:*` entries are managed by Collections. Leave empty when nothing fits.",
+            ),
+          update: z
+            .array(z.string())
+            .optional()
+            .describe(
+              "Compatibility or ecosystem tokens only — battery platform, mount, thread, size standard. Never the manufacturer, a classification word, or a path node; those belong in manufacturer/categoryId. `collection:*` entries are managed by Collections. Leave empty when nothing fits.",
+            ),
         },
       },
       {

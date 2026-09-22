@@ -12,6 +12,7 @@ export type ReadPolicy = "context" | "strong";
 export const STRONG_QUERY_OPERATIONS = [
   // AI and externally hydrated food reads own authoritative database helpers.
   "ai.suggestFields",
+  "ai.suggestExternalIdKind",
   "usda-food.alternateId",
   "usda-food.detail",
   "usda-food.list",

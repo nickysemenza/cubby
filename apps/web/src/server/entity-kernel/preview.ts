@@ -104,7 +104,16 @@ async function applyPreviewSuggestions(args: {
   const dependencyKeys = new Set<string>(
     args.model.fields
       .filter((field) => field.control?.suggest)
-      .flatMap((field) => field.control?.suggest?.basis ?? []),
+      .flatMap((field) => {
+        const suggest = field.control?.suggest;
+        if (!suggest) return [];
+        // A prune target judges its own current entries, so it is an
+        // implicit self-basis (Amendment 1) — the manifest compiler rejects
+        // naming it explicitly, so it's added back here.
+        return suggest.mode === "prune"
+          ? [...suggest.basis, field.key]
+          : suggest.basis;
+      }),
   );
   if (args.entity === "expense") {
     for (const key of [
@@ -132,11 +141,13 @@ async function applyPreviewSuggestions(args: {
   const basis = args.model.fields
     .filter((field) => dependencyKeys.has(field.key))
     .reduce<Record<string, string | null>>((result, field) => {
-      result[field.key] = z
-        .string()
-        .nullable()
-        .catch(null)
-        .parse(args.merged[field.key]);
+      const raw = args.merged[field.key];
+      // A text-array basis value (a prune target's own self-basis, or a
+      // sibling array field) JSON-encodes the same way the client's
+      // `basisValueOf` does — the field-suggest registry parses it back.
+      result[field.key] = Array.isArray(raw)
+        ? JSON.stringify(raw)
+        : z.string().nullable().catch(null).parse(raw);
       return result;
     }, {});
   basis.__resolutionContext = JSON.stringify(args.fieldResolutions);
@@ -172,7 +183,10 @@ async function applyPreviewSuggestions(args: {
       const applied =
         basisMode === "suggested" &&
         args.explicit[field] === undefined &&
-        suggestion.confidence === "high";
+        suggestion.confidence === "high" &&
+        // A `remove` proposal is always a review-and-approve action, never a
+        // silent auto-apply — even at high confidence.
+        suggestion.operation !== "remove";
       if (applied) args.proposed[field] = suggestion.value;
       suggestions[field] = { ...suggestion, applied };
     }

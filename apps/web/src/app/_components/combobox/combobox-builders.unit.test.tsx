@@ -130,6 +130,57 @@ describe("entity picker value adapters", () => {
   });
 });
 
+describe("buildLocationComboboxItem tree presentation", () => {
+  it("groups under the root ancestor and sets depth to the path length", () => {
+    const locationId = testShortcode("location", "LOC-9ABC");
+    const rootId = testShortcode("location", "LOC-1ABC");
+    const parentId = testShortcode("location", "LOC-2ABC");
+
+    const item = buildLocationComboboxItem({
+      id: locationId,
+      name: "Drawer 2",
+      type: "drawer",
+      ancestors: [
+        { id: rootId, name: "Garage" },
+        { id: parentId, name: "Workbench" },
+      ],
+    });
+
+    expect(item.presentation).toEqual({
+      group: { id: rootId, label: "Garage", order: 0 },
+      depth: 2,
+    });
+  });
+
+  it("groups a root location under itself at depth 0", () => {
+    const locationId = testShortcode("location", "LOC-1ABC");
+
+    const item = buildLocationComboboxItem({
+      id: locationId,
+      name: "Garage",
+      type: "room",
+      ancestors: [],
+    });
+
+    expect(item.presentation).toEqual({
+      group: { id: locationId, label: "Garage", order: 0 },
+      depth: 0,
+    });
+  });
+
+  it("carries no presentation when ancestors were never loaded", () => {
+    const locationId = testShortcode("location", "LOC-1ABC");
+
+    const item = buildLocationComboboxItem({
+      id: locationId,
+      name: "Freshly created shelf",
+      type: "shelf",
+    });
+
+    expect(item.presentation).toBeUndefined();
+  });
+});
+
 describe("location search picker imagery", () => {
   it.each([
     ["live", "drawer"],
