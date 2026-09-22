@@ -2233,6 +2233,24 @@ public enum Operations {
                 ///
                 /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/urlSearch`.
                 public var urlSearch: Swift.String?
+                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/DataStatusPayload`.
+                @frozen public enum DataStatusPayloadPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case complete = "complete"
+                    case needsData = "needs_data"
+                    case defect = "defect"
+                }
+                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/dataStatus`.
+                public typealias DataStatusPayload = [Operations.Resources_expense_list.Input.Query.DataStatusPayloadPayload]
+                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/dataStatus`.
+                public var dataStatus: Operations.Resources_expense_list.Input.Query.DataStatusPayload?
+                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/DataGapPayload`.
+                @frozen public enum DataGapPayloadPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case expenseCost = "expense_cost"
+                }
+                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/dataGap`.
+                public typealias DataGapPayload = [Operations.Resources_expense_list.Input.Query.DataGapPayloadPayload]
+                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/dataGap`.
+                public var dataGap: Operations.Resources_expense_list.Input.Query.DataGapPayload?
                 /// project shortcode, e.g. PRJ-4K7M
                 ///
                 /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/ProjectIdPayload`.
@@ -2584,7 +2602,7 @@ public enum Operations {
                 ///
                 /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/pageSize`.
                 public var pageSize: Swift.Int?
-                /// Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: name, cost, lineKind, productQuantity, date, costType, trade, project, product, vendor, orderId, createdAt, updatedAt. Default: -date
+                /// Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: name, cost, lineKind, productQuantity, date, costType, trade, project, product, vendor, orderId, createdAt, updatedAt, dataQuality. Default: -date
                 ///
                 /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/sort`.
                 public var sort: Swift.String?
@@ -2619,6 +2637,8 @@ public enum Operations {
                 ///   - productQuantityMax: Inclusive upper bound on recorded product quantity
                 ///   - notesSearch: Substring match on notes
                 ///   - urlSearch: Substring match on url
+                ///   - dataStatus:
+                ///   - dataGap:
                 ///   - projectId:
                 ///   - includeSubProjects:
                 ///   - projectPresenceFilter:
@@ -2645,7 +2665,7 @@ public enum Operations {
                 ///   - searchQuery:
                 ///   - page: Page number, starting at 1 (default 1)
                 ///   - pageSize: Items per page (default 10, maximum 500)
-                ///   - sort: Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: name, cost, lineKind, productQuantity, date, costType, trade, project, product, vendor, orderId, createdAt, updatedAt. Default: -date
+                ///   - sort: Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: name, cost, lineKind, productQuantity, date, costType, trade, project, product, vendor, orderId, createdAt, updatedAt, dataQuality. Default: -date
                 ///   - groupBy: Group rows by one field. One of: costType
                 public init(
                     createdFrom: Swift.String? = nil,
@@ -2668,6 +2688,8 @@ public enum Operations {
                     productQuantityMax: Swift.Double? = nil,
                     notesSearch: Swift.String? = nil,
                     urlSearch: Swift.String? = nil,
+                    dataStatus: Operations.Resources_expense_list.Input.Query.DataStatusPayload? = nil,
+                    dataGap: Operations.Resources_expense_list.Input.Query.DataGapPayload? = nil,
                     projectId: Operations.Resources_expense_list.Input.Query.ProjectIdPayload? = nil,
                     includeSubProjects: Swift.Bool? = nil,
                     projectPresenceFilter: Operations.Resources_expense_list.Input.Query.ProjectPresenceFilterPayload? = nil,
@@ -2717,6 +2739,8 @@ public enum Operations {
                     self.productQuantityMax = productQuantityMax
                     self.notesSearch = notesSearch
                     self.urlSearch = urlSearch
+                    self.dataStatus = dataStatus
+                    self.dataGap = dataGap
                     self.projectId = projectId
                     self.includeSubProjects = includeSubProjects
                     self.projectPresenceFilter = projectPresenceFilter
@@ -3733,6 +3757,25 @@ public enum Operations {
                 public var search: Swift.String?
                 /// - Remark: Generated from `#/paths/api/v1/financial-accounts/GET/query/provisional`.
                 public var provisional: Swift.Bool?
+                /// - Remark: Generated from `#/paths/api/v1/financial-accounts/GET/query/DataStatusPayload`.
+                @frozen public enum DataStatusPayloadPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case complete = "complete"
+                    case needsData = "needs_data"
+                    case defect = "defect"
+                }
+                /// - Remark: Generated from `#/paths/api/v1/financial-accounts/GET/query/dataStatus`.
+                public typealias DataStatusPayload = [Operations.Resources_financialAccount_list.Input.Query.DataStatusPayloadPayload]
+                /// - Remark: Generated from `#/paths/api/v1/financial-accounts/GET/query/dataStatus`.
+                public var dataStatus: Operations.Resources_financialAccount_list.Input.Query.DataStatusPayload?
+                /// - Remark: Generated from `#/paths/api/v1/financial-accounts/GET/query/DataGapPayload`.
+                @frozen public enum DataGapPayloadPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case financialAccountLedgerParty = "financial_account_ledger_party"
+                    case financialAccountConfirmed = "financial_account_confirmed"
+                }
+                /// - Remark: Generated from `#/paths/api/v1/financial-accounts/GET/query/dataGap`.
+                public typealias DataGapPayload = [Operations.Resources_financialAccount_list.Input.Query.DataGapPayloadPayload]
+                /// - Remark: Generated from `#/paths/api/v1/financial-accounts/GET/query/dataGap`.
+                public var dataGap: Operations.Resources_financialAccount_list.Input.Query.DataGapPayload?
                 /// - Remark: Generated from `#/paths/api/v1/financial-accounts/GET/query/ledgerPartyId`.
                 public var ledgerPartyId: [Swift.String]?
                 /// - Remark: Generated from `#/paths/api/v1/financial-accounts/GET/query/IdentityKindPayload`.
@@ -3770,7 +3813,7 @@ public enum Operations {
                 ///
                 /// - Remark: Generated from `#/paths/api/v1/financial-accounts/GET/query/pageSize`.
                 public var pageSize: Swift.Int?
-                /// Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: name, provisional, transactionCount, createdAt, updatedAt. Default: -name
+                /// Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: name, provisional, transactionCount, createdAt, updatedAt, dataQuality. Default: -name
                 ///
                 /// - Remark: Generated from `#/paths/api/v1/financial-accounts/GET/query/sort`.
                 public var sort: Swift.String?
@@ -3804,6 +3847,8 @@ public enum Operations {
                 ///   - vendorSearch:
                 ///   - search:
                 ///   - provisional:
+                ///   - dataStatus:
+                ///   - dataGap:
                 ///   - ledgerPartyId:
                 ///   - identityKind:
                 ///   - last4:
@@ -3813,7 +3858,7 @@ public enum Operations {
                 ///   - searchQuery:
                 ///   - page: Page number, starting at 1 (default 1)
                 ///   - pageSize: Items per page (default 10, maximum 500)
-                ///   - sort: Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: name, provisional, transactionCount, createdAt, updatedAt. Default: -name
+                ///   - sort: Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: name, provisional, transactionCount, createdAt, updatedAt, dataQuality. Default: -name
                 ///   - groupBy: Group rows by one field. One of: name, provisional, transactionCount, createdAt, updatedAt
                 public init(
                     createdFrom: Swift.String? = nil,
@@ -3831,6 +3876,8 @@ public enum Operations {
                     vendorSearch: Swift.String? = nil,
                     search: Swift.String? = nil,
                     provisional: Swift.Bool? = nil,
+                    dataStatus: Operations.Resources_financialAccount_list.Input.Query.DataStatusPayload? = nil,
+                    dataGap: Operations.Resources_financialAccount_list.Input.Query.DataGapPayload? = nil,
                     ledgerPartyId: [Swift.String]? = nil,
                     identityKind: Operations.Resources_financialAccount_list.Input.Query.IdentityKindPayload? = nil,
                     last4: Swift.String? = nil,
@@ -3858,6 +3905,8 @@ public enum Operations {
                     self.vendorSearch = vendorSearch
                     self.search = search
                     self.provisional = provisional
+                    self.dataStatus = dataStatus
+                    self.dataGap = dataGap
                     self.ledgerPartyId = ledgerPartyId
                     self.identityKind = identityKind
                     self.last4 = last4
@@ -4684,6 +4733,25 @@ public enum Operations {
                 public var amountMin: Swift.Double?
                 /// - Remark: Generated from `#/paths/api/v1/financial-transactions/GET/query/amountMax`.
                 public var amountMax: Swift.Double?
+                /// - Remark: Generated from `#/paths/api/v1/financial-transactions/GET/query/DataStatusPayload`.
+                @frozen public enum DataStatusPayloadPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case complete = "complete"
+                    case needsData = "needs_data"
+                    case defect = "defect"
+                }
+                /// - Remark: Generated from `#/paths/api/v1/financial-transactions/GET/query/dataStatus`.
+                public typealias DataStatusPayload = [Operations.Resources_financialTransaction_list.Input.Query.DataStatusPayloadPayload]
+                /// - Remark: Generated from `#/paths/api/v1/financial-transactions/GET/query/dataStatus`.
+                public var dataStatus: Operations.Resources_financialTransaction_list.Input.Query.DataStatusPayload?
+                /// - Remark: Generated from `#/paths/api/v1/financial-transactions/GET/query/DataGapPayload`.
+                @frozen public enum DataGapPayloadPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case financialTransactionAllocation = "financial_transaction_allocation"
+                    case financialTransactionMerchant = "financial_transaction_merchant"
+                }
+                /// - Remark: Generated from `#/paths/api/v1/financial-transactions/GET/query/dataGap`.
+                public typealias DataGapPayload = [Operations.Resources_financialTransaction_list.Input.Query.DataGapPayloadPayload]
+                /// - Remark: Generated from `#/paths/api/v1/financial-transactions/GET/query/dataGap`.
+                public var dataGap: Operations.Resources_financialTransaction_list.Input.Query.DataGapPayload?
                 /// financialAccount shortcode, e.g. FAC-4K7M
                 ///
                 /// - Remark: Generated from `#/paths/api/v1/financial-transactions/GET/query/AccountIdPayload`.
@@ -4829,7 +4897,7 @@ public enum Operations {
                 ///
                 /// - Remark: Generated from `#/paths/api/v1/financial-transactions/GET/query/pageSize`.
                 public var pageSize: Swift.Int?
-                /// Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: transactionDate, postedDate, amount, merchant, kind, status, createdAt, updatedAt. Default: -transactionDate
+                /// Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: transactionDate, postedDate, amount, merchant, kind, status, createdAt, updatedAt, dataQuality. Default: -transactionDate
                 ///
                 /// - Remark: Generated from `#/paths/api/v1/financial-transactions/GET/query/sort`.
                 public var sort: Swift.String?
@@ -4874,6 +4942,8 @@ public enum Operations {
                 ///   - transactionDateTo: Calendar day as "YYYY-MM-DD"
                 ///   - amountMin:
                 ///   - amountMax:
+                ///   - dataStatus:
+                ///   - dataGap:
                 ///   - accountId:
                 ///   - purchaseId:
                 ///   - purchasePresenceFilter:
@@ -4883,7 +4953,7 @@ public enum Operations {
                 ///   - searchQuery:
                 ///   - page: Page number, starting at 1 (default 1)
                 ///   - pageSize: Items per page (default 10, maximum 500)
-                ///   - sort: Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: transactionDate, postedDate, amount, merchant, kind, status, createdAt, updatedAt. Default: -transactionDate
+                ///   - sort: Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: transactionDate, postedDate, amount, merchant, kind, status, createdAt, updatedAt, dataQuality. Default: -transactionDate
                 ///   - groupBy: Group rows by one field. One of: transactionDate, postedDate, amount, merchant, kind, status, createdAt, updatedAt
                 public init(
                     createdFrom: Swift.String? = nil,
@@ -4909,6 +4979,8 @@ public enum Operations {
                     transactionDateTo: Swift.String? = nil,
                     amountMin: Swift.Double? = nil,
                     amountMax: Swift.Double? = nil,
+                    dataStatus: Operations.Resources_financialTransaction_list.Input.Query.DataStatusPayload? = nil,
+                    dataGap: Operations.Resources_financialTransaction_list.Input.Query.DataGapPayload? = nil,
                     accountId: Operations.Resources_financialTransaction_list.Input.Query.AccountIdPayload? = nil,
                     purchaseId: Operations.Resources_financialTransaction_list.Input.Query.PurchaseIdPayload? = nil,
                     purchasePresenceFilter: Operations.Resources_financialTransaction_list.Input.Query.PurchasePresenceFilterPayload? = nil,
@@ -4944,6 +5016,8 @@ public enum Operations {
                     self.transactionDateTo = transactionDateTo
                     self.amountMin = amountMin
                     self.amountMax = amountMax
+                    self.dataStatus = dataStatus
+                    self.dataGap = dataGap
                     self.accountId = accountId
                     self.purchaseId = purchaseId
                     self.purchasePresenceFilter = purchasePresenceFilter
@@ -5701,6 +5775,25 @@ public enum Operations {
                 ///
                 /// - Remark: Generated from `#/paths/api/v1/garden-entries/GET/query/observedOnTo`.
                 public var observedOnTo: Swift.String?
+                /// - Remark: Generated from `#/paths/api/v1/garden-entries/GET/query/DataStatusPayload`.
+                @frozen public enum DataStatusPayloadPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case complete = "complete"
+                    case needsData = "needs_data"
+                    case defect = "defect"
+                }
+                /// - Remark: Generated from `#/paths/api/v1/garden-entries/GET/query/dataStatus`.
+                public typealias DataStatusPayload = [Operations.Resources_gardenEntry_list.Input.Query.DataStatusPayloadPayload]
+                /// - Remark: Generated from `#/paths/api/v1/garden-entries/GET/query/dataStatus`.
+                public var dataStatus: Operations.Resources_gardenEntry_list.Input.Query.DataStatusPayload?
+                /// - Remark: Generated from `#/paths/api/v1/garden-entries/GET/query/DataGapPayload`.
+                @frozen public enum DataGapPayloadPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case gardenEntryNote = "garden_entry_note"
+                    case gardenEntryHarvestAmount = "garden_entry_harvest_amount"
+                }
+                /// - Remark: Generated from `#/paths/api/v1/garden-entries/GET/query/dataGap`.
+                public typealias DataGapPayload = [Operations.Resources_gardenEntry_list.Input.Query.DataGapPayloadPayload]
+                /// - Remark: Generated from `#/paths/api/v1/garden-entries/GET/query/dataGap`.
+                public var dataGap: Operations.Resources_gardenEntry_list.Input.Query.DataGapPayload?
                 /// - Remark: Generated from `#/paths/api/v1/garden-entries/GET/query/locationId`.
                 public var locationId: [Swift.String]?
                 /// - Remark: Generated from `#/paths/api/v1/garden-entries/GET/query/plantingId`.
@@ -5719,7 +5812,7 @@ public enum Operations {
                 ///
                 /// - Remark: Generated from `#/paths/api/v1/garden-entries/GET/query/pageSize`.
                 public var pageSize: Swift.Int?
-                /// Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: observedOn, createdAt, updatedAt, kind. Default: -observedOn
+                /// Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: observedOn, createdAt, updatedAt, kind, dataQuality. Default: -observedOn
                 ///
                 /// - Remark: Generated from `#/paths/api/v1/garden-entries/GET/query/sort`.
                 public var sort: Swift.String?
@@ -5744,13 +5837,15 @@ public enum Operations {
                 ///   - kind:
                 ///   - observedOnFrom: Inclusive lower bound on observation date
                 ///   - observedOnTo: Inclusive upper bound on observation date
+                ///   - dataStatus:
+                ///   - dataGap:
                 ///   - locationId:
                 ///   - plantingId:
                 ///   - journalPlantingId: planting shortcode, e.g. PLT-4K7M
                 ///   - searchQuery:
                 ///   - page: Page number, starting at 1 (default 1)
                 ///   - pageSize: Items per page (default 10, maximum 500)
-                ///   - sort: Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: observedOn, createdAt, updatedAt, kind. Default: -observedOn
+                ///   - sort: Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: observedOn, createdAt, updatedAt, kind, dataQuality. Default: -observedOn
                 ///   - groupBy: Group rows by one field. One of: observedOn, createdAt, updatedAt, kind
                 public init(
                     createdFrom: Swift.String? = nil,
@@ -5760,6 +5855,8 @@ public enum Operations {
                     kind: Operations.Resources_gardenEntry_list.Input.Query.KindPayload? = nil,
                     observedOnFrom: Swift.String? = nil,
                     observedOnTo: Swift.String? = nil,
+                    dataStatus: Operations.Resources_gardenEntry_list.Input.Query.DataStatusPayload? = nil,
+                    dataGap: Operations.Resources_gardenEntry_list.Input.Query.DataGapPayload? = nil,
                     locationId: [Swift.String]? = nil,
                     plantingId: [Swift.String]? = nil,
                     journalPlantingId: Swift.String? = nil,
@@ -5776,6 +5873,8 @@ public enum Operations {
                     self.kind = kind
                     self.observedOnFrom = observedOnFrom
                     self.observedOnTo = observedOnTo
+                    self.dataStatus = dataStatus
+                    self.dataGap = dataGap
                     self.locationId = locationId
                     self.plantingId = plantingId
                     self.journalPlantingId = journalPlantingId
@@ -6528,6 +6627,25 @@ public enum Operations {
                 ///
                 /// - Remark: Generated from `#/paths/api/v1/garden-entries/timeline/GET/query/observedOnTo`.
                 public var observedOnTo: Swift.String?
+                /// - Remark: Generated from `#/paths/api/v1/garden-entries/timeline/GET/query/DataStatusPayload`.
+                @frozen public enum DataStatusPayloadPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case complete = "complete"
+                    case needsData = "needs_data"
+                    case defect = "defect"
+                }
+                /// - Remark: Generated from `#/paths/api/v1/garden-entries/timeline/GET/query/dataStatus`.
+                public typealias DataStatusPayload = [Operations.Resources_gardenEntry_timeline.Input.Query.DataStatusPayloadPayload]
+                /// - Remark: Generated from `#/paths/api/v1/garden-entries/timeline/GET/query/dataStatus`.
+                public var dataStatus: Operations.Resources_gardenEntry_timeline.Input.Query.DataStatusPayload?
+                /// - Remark: Generated from `#/paths/api/v1/garden-entries/timeline/GET/query/DataGapPayload`.
+                @frozen public enum DataGapPayloadPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case gardenEntryNote = "garden_entry_note"
+                    case gardenEntryHarvestAmount = "garden_entry_harvest_amount"
+                }
+                /// - Remark: Generated from `#/paths/api/v1/garden-entries/timeline/GET/query/dataGap`.
+                public typealias DataGapPayload = [Operations.Resources_gardenEntry_timeline.Input.Query.DataGapPayloadPayload]
+                /// - Remark: Generated from `#/paths/api/v1/garden-entries/timeline/GET/query/dataGap`.
+                public var dataGap: Operations.Resources_gardenEntry_timeline.Input.Query.DataGapPayload?
                 /// - Remark: Generated from `#/paths/api/v1/garden-entries/timeline/GET/query/locationId`.
                 public var locationId: [Swift.String]?
                 /// - Remark: Generated from `#/paths/api/v1/garden-entries/timeline/GET/query/plantingId`.
@@ -6565,6 +6683,8 @@ public enum Operations {
                 ///   - kind:
                 ///   - observedOnFrom: Inclusive lower bound on observation date
                 ///   - observedOnTo: Inclusive upper bound on observation date
+                ///   - dataStatus:
+                ///   - dataGap:
                 ///   - locationId:
                 ///   - plantingId:
                 ///   - journalPlantingId: planting shortcode, e.g. PLT-4K7M
@@ -6581,6 +6701,8 @@ public enum Operations {
                     kind: Operations.Resources_gardenEntry_timeline.Input.Query.KindPayload? = nil,
                     observedOnFrom: Swift.String? = nil,
                     observedOnTo: Swift.String? = nil,
+                    dataStatus: Operations.Resources_gardenEntry_timeline.Input.Query.DataStatusPayload? = nil,
+                    dataGap: Operations.Resources_gardenEntry_timeline.Input.Query.DataGapPayload? = nil,
                     locationId: [Swift.String]? = nil,
                     plantingId: [Swift.String]? = nil,
                     journalPlantingId: Swift.String? = nil,
@@ -6597,6 +6719,8 @@ public enum Operations {
                     self.kind = kind
                     self.observedOnFrom = observedOnFrom
                     self.observedOnTo = observedOnTo
+                    self.dataStatus = dataStatus
+                    self.dataGap = dataGap
                     self.locationId = locationId
                     self.plantingId = plantingId
                     self.journalPlantingId = journalPlantingId
@@ -9669,6 +9793,24 @@ public enum Operations {
                 ///
                 /// - Remark: Generated from `#/paths/api/v1/ingredients/GET/query/usuallyOnHand`.
                 public var usuallyOnHand: Swift.Bool?
+                /// - Remark: Generated from `#/paths/api/v1/ingredients/GET/query/DataStatusPayload`.
+                @frozen public enum DataStatusPayloadPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case complete = "complete"
+                    case needsData = "needs_data"
+                    case defect = "defect"
+                }
+                /// - Remark: Generated from `#/paths/api/v1/ingredients/GET/query/dataStatus`.
+                public typealias DataStatusPayload = [Operations.Resources_ingredient_list.Input.Query.DataStatusPayloadPayload]
+                /// - Remark: Generated from `#/paths/api/v1/ingredients/GET/query/dataStatus`.
+                public var dataStatus: Operations.Resources_ingredient_list.Input.Query.DataStatusPayload?
+                /// - Remark: Generated from `#/paths/api/v1/ingredients/GET/query/DataGapPayload`.
+                @frozen public enum DataGapPayloadPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case ingredientProduct = "ingredient_product"
+                }
+                /// - Remark: Generated from `#/paths/api/v1/ingredients/GET/query/dataGap`.
+                public typealias DataGapPayload = [Operations.Resources_ingredient_list.Input.Query.DataGapPayloadPayload]
+                /// - Remark: Generated from `#/paths/api/v1/ingredients/GET/query/dataGap`.
+                public var dataGap: Operations.Resources_ingredient_list.Input.Query.DataGapPayload?
                 /// - Remark: Generated from `#/paths/api/v1/ingredients/GET/query/productPresenceFilter`.
                 @frozen public enum ProductPresenceFilterPayload: String, Codable, Hashable, Sendable, CaseIterable {
                     case has = "has"
@@ -9726,7 +9868,7 @@ public enum Operations {
                 ///
                 /// - Remark: Generated from `#/paths/api/v1/ingredients/GET/query/pageSize`.
                 public var pageSize: Swift.Int?
-                /// Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: createdAt, updatedAt, name, appearsInRecipes, product. Default: -createdAt
+                /// Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: createdAt, updatedAt, name, appearsInRecipes, product, dataQuality. Default: -createdAt
                 ///
                 /// - Remark: Generated from `#/paths/api/v1/ingredients/GET/query/sort`.
                 public var sort: Swift.String?
@@ -9751,6 +9893,8 @@ public enum Operations {
                 ///   - updatedTo: Calendar day as "YYYY-MM-DD"
                 ///   - nameFilter: Filter by ingredient name (substring)
                 ///   - usuallyOnHand: Filter by ingredients usually kept on hand
+                ///   - dataStatus:
+                ///   - dataGap:
                 ///   - productPresenceFilter:
                 ///   - ownRecipePresenceFilter: Filter to ingredients that are / aren't used by at least one live recipe of your own (excludes cookbook imports).
                 ///   - recipePresenceFilter: Filter to ingredients that are / aren't used by at least one live recipe
@@ -9763,7 +9907,7 @@ public enum Operations {
                 ///   - searchQuery:
                 ///   - page: Page number, starting at 1 (default 1)
                 ///   - pageSize: Items per page (default 10, maximum 500)
-                ///   - sort: Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: createdAt, updatedAt, name, appearsInRecipes, product. Default: -createdAt
+                ///   - sort: Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: createdAt, updatedAt, name, appearsInRecipes, product, dataQuality. Default: -createdAt
                 ///   - groupBy: Group rows by one field. One of: createdAt, updatedAt, name, appearsInRecipes, product
                 public init(
                     createdFrom: Swift.String? = nil,
@@ -9772,6 +9916,8 @@ public enum Operations {
                     updatedTo: Swift.String? = nil,
                     nameFilter: Swift.String? = nil,
                     usuallyOnHand: Swift.Bool? = nil,
+                    dataStatus: Operations.Resources_ingredient_list.Input.Query.DataStatusPayload? = nil,
+                    dataGap: Operations.Resources_ingredient_list.Input.Query.DataGapPayload? = nil,
                     productPresenceFilter: Operations.Resources_ingredient_list.Input.Query.ProductPresenceFilterPayload? = nil,
                     ownRecipePresenceFilter: Operations.Resources_ingredient_list.Input.Query.OwnRecipePresenceFilterPayload? = nil,
                     recipePresenceFilter: Operations.Resources_ingredient_list.Input.Query.RecipePresenceFilterPayload? = nil,
@@ -9793,6 +9939,8 @@ public enum Operations {
                     self.updatedTo = updatedTo
                     self.nameFilter = nameFilter
                     self.usuallyOnHand = usuallyOnHand
+                    self.dataStatus = dataStatus
+                    self.dataGap = dataGap
                     self.productPresenceFilter = productPresenceFilter
                     self.ownRecipePresenceFilter = ownRecipePresenceFilter
                     self.recipePresenceFilter = recipePresenceFilter
@@ -10547,6 +10695,24 @@ public enum Operations {
                 public var ingredientPresenceFilter: Operations.Resources_inventory_list.Input.Query.IngredientPresenceFilterPayload?
                 /// - Remark: Generated from `#/paths/api/v1/inventory/GET/query/ingredientSearch`.
                 public var ingredientSearch: Swift.String?
+                /// - Remark: Generated from `#/paths/api/v1/inventory/GET/query/DataStatusPayload`.
+                @frozen public enum DataStatusPayloadPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case complete = "complete"
+                    case needsData = "needs_data"
+                    case defect = "defect"
+                }
+                /// - Remark: Generated from `#/paths/api/v1/inventory/GET/query/dataStatus`.
+                public typealias DataStatusPayload = [Operations.Resources_inventory_list.Input.Query.DataStatusPayloadPayload]
+                /// - Remark: Generated from `#/paths/api/v1/inventory/GET/query/dataStatus`.
+                public var dataStatus: Operations.Resources_inventory_list.Input.Query.DataStatusPayload?
+                /// - Remark: Generated from `#/paths/api/v1/inventory/GET/query/DataGapPayload`.
+                @frozen public enum DataGapPayloadPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case inventoryVerified = "inventory_verified"
+                }
+                /// - Remark: Generated from `#/paths/api/v1/inventory/GET/query/dataGap`.
+                public typealias DataGapPayload = [Operations.Resources_inventory_list.Input.Query.DataGapPayloadPayload]
+                /// - Remark: Generated from `#/paths/api/v1/inventory/GET/query/dataGap`.
+                public var dataGap: Operations.Resources_inventory_list.Input.Query.DataGapPayload?
                 /// Filter by product name (substring)
                 ///
                 /// - Remark: Generated from `#/paths/api/v1/inventory/GET/query/productNameFilter`.
@@ -10728,7 +10894,7 @@ public enum Operations {
                 ///
                 /// - Remark: Generated from `#/paths/api/v1/inventory/GET/query/pageSize`.
                 public var pageSize: Swift.Int?
-                /// Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: createdAt, updatedAt, name, product, location, amount, valuation, verifiedAt. Default: -createdAt
+                /// Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: createdAt, updatedAt, name, product, location, amount, valuation, verifiedAt, dataQuality. Default: -createdAt
                 ///
                 /// - Remark: Generated from `#/paths/api/v1/inventory/GET/query/sort`.
                 public var sort: Swift.String?
@@ -10757,6 +10923,8 @@ public enum Operations {
                 ///   - ingredientId:
                 ///   - ingredientPresenceFilter:
                 ///   - ingredientSearch:
+                ///   - dataStatus:
+                ///   - dataGap:
                 ///   - productNameFilter: Filter by product name (substring)
                 ///   - locationNameFilter: Filter by location name (substring)
                 ///   - locationIdFilter: Filter by exact location ID
@@ -10772,7 +10940,7 @@ public enum Operations {
                 ///   - searchQuery:
                 ///   - page: Page number, starting at 1 (default 1)
                 ///   - pageSize: Items per page (default 10, maximum 500)
-                ///   - sort: Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: createdAt, updatedAt, name, product, location, amount, valuation, verifiedAt. Default: -createdAt
+                ///   - sort: Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: createdAt, updatedAt, name, product, location, amount, valuation, verifiedAt, dataQuality. Default: -createdAt
                 ///   - groupBy: Group rows by one field. One of: createdAt, updatedAt, name, product, location, amount, valuation, verifiedAt
                 public init(
                     createdFrom: Swift.String? = nil,
@@ -10782,6 +10950,8 @@ public enum Operations {
                     ingredientId: [Swift.String]? = nil,
                     ingredientPresenceFilter: Operations.Resources_inventory_list.Input.Query.IngredientPresenceFilterPayload? = nil,
                     ingredientSearch: Swift.String? = nil,
+                    dataStatus: Operations.Resources_inventory_list.Input.Query.DataStatusPayload? = nil,
+                    dataGap: Operations.Resources_inventory_list.Input.Query.DataGapPayload? = nil,
                     productNameFilter: Swift.String? = nil,
                     locationNameFilter: Swift.String? = nil,
                     locationIdFilter: Operations.Resources_inventory_list.Input.Query.LocationIdFilterPayload? = nil,
@@ -10807,6 +10977,8 @@ public enum Operations {
                     self.ingredientId = ingredientId
                     self.ingredientPresenceFilter = ingredientPresenceFilter
                     self.ingredientSearch = ingredientSearch
+                    self.dataStatus = dataStatus
+                    self.dataGap = dataGap
                     self.productNameFilter = productNameFilter
                     self.locationNameFilter = locationNameFilter
                     self.locationIdFilter = locationIdFilter
@@ -13111,6 +13283,24 @@ public enum Operations {
                 public typealias KindPayload = [Operations.Resources_ledgerParty_list.Input.Query.KindPayloadPayload]
                 /// - Remark: Generated from `#/paths/api/v1/ledger-parties/GET/query/kind`.
                 public var kind: Operations.Resources_ledgerParty_list.Input.Query.KindPayload?
+                /// - Remark: Generated from `#/paths/api/v1/ledger-parties/GET/query/DataStatusPayload`.
+                @frozen public enum DataStatusPayloadPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case complete = "complete"
+                    case needsData = "needs_data"
+                    case defect = "defect"
+                }
+                /// - Remark: Generated from `#/paths/api/v1/ledger-parties/GET/query/dataStatus`.
+                public typealias DataStatusPayload = [Operations.Resources_ledgerParty_list.Input.Query.DataStatusPayloadPayload]
+                /// - Remark: Generated from `#/paths/api/v1/ledger-parties/GET/query/dataStatus`.
+                public var dataStatus: Operations.Resources_ledgerParty_list.Input.Query.DataStatusPayload?
+                /// - Remark: Generated from `#/paths/api/v1/ledger-parties/GET/query/DataGapPayload`.
+                @frozen public enum DataGapPayloadPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case ledgerPartyFinancialAccount = "ledger_party_financial_account"
+                }
+                /// - Remark: Generated from `#/paths/api/v1/ledger-parties/GET/query/dataGap`.
+                public typealias DataGapPayload = [Operations.Resources_ledgerParty_list.Input.Query.DataGapPayloadPayload]
+                /// - Remark: Generated from `#/paths/api/v1/ledger-parties/GET/query/dataGap`.
+                public var dataGap: Operations.Resources_ledgerParty_list.Input.Query.DataGapPayload?
                 /// - Remark: Generated from `#/paths/api/v1/ledger-parties/GET/query/mealId`.
                 public var mealId: [Swift.String]?
                 /// - Remark: Generated from `#/paths/api/v1/ledger-parties/GET/query/mealPresenceFilter`.
@@ -13141,7 +13331,7 @@ public enum Operations {
                 ///
                 /// - Remark: Generated from `#/paths/api/v1/ledger-parties/GET/query/pageSize`.
                 public var pageSize: Swift.Int?
-                /// Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: name, kind, createdAt, updatedAt. Default: -name
+                /// Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: name, kind, createdAt, updatedAt, dataQuality. Default: -name
                 ///
                 /// - Remark: Generated from `#/paths/api/v1/ledger-parties/GET/query/sort`.
                 public var sort: Swift.String?
@@ -13165,6 +13355,8 @@ public enum Operations {
                 ///   - updatedTo: Calendar day as "YYYY-MM-DD"
                 ///   - search:
                 ///   - kind:
+                ///   - dataStatus:
+                ///   - dataGap:
                 ///   - mealId:
                 ///   - mealPresenceFilter:
                 ///   - mealSearch:
@@ -13173,7 +13365,7 @@ public enum Operations {
                 ///   - recipeSearch:
                 ///   - page: Page number, starting at 1 (default 1)
                 ///   - pageSize: Items per page (default 10, maximum 500)
-                ///   - sort: Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: name, kind, createdAt, updatedAt. Default: -name
+                ///   - sort: Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: name, kind, createdAt, updatedAt, dataQuality. Default: -name
                 ///   - groupBy: Group rows by one field. One of: name, kind, createdAt, updatedAt
                 public init(
                     createdFrom: Swift.String? = nil,
@@ -13182,6 +13374,8 @@ public enum Operations {
                     updatedTo: Swift.String? = nil,
                     search: Swift.String? = nil,
                     kind: Operations.Resources_ledgerParty_list.Input.Query.KindPayload? = nil,
+                    dataStatus: Operations.Resources_ledgerParty_list.Input.Query.DataStatusPayload? = nil,
+                    dataGap: Operations.Resources_ledgerParty_list.Input.Query.DataGapPayload? = nil,
                     mealId: [Swift.String]? = nil,
                     mealPresenceFilter: Operations.Resources_ledgerParty_list.Input.Query.MealPresenceFilterPayload? = nil,
                     mealSearch: Swift.String? = nil,
@@ -13199,6 +13393,8 @@ public enum Operations {
                     self.updatedTo = updatedTo
                     self.search = search
                     self.kind = kind
+                    self.dataStatus = dataStatus
+                    self.dataGap = dataGap
                     self.mealId = mealId
                     self.mealPresenceFilter = mealPresenceFilter
                     self.mealSearch = mealSearch
@@ -13946,6 +14142,24 @@ public enum Operations {
                 ///
                 /// - Remark: Generated from `#/paths/api/v1/ledger-transfers/GET/query/dateTo`.
                 public var dateTo: Swift.String?
+                /// - Remark: Generated from `#/paths/api/v1/ledger-transfers/GET/query/DataStatusPayload`.
+                @frozen public enum DataStatusPayloadPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case complete = "complete"
+                    case needsData = "needs_data"
+                    case defect = "defect"
+                }
+                /// - Remark: Generated from `#/paths/api/v1/ledger-transfers/GET/query/dataStatus`.
+                public typealias DataStatusPayload = [Operations.Resources_ledgerTransfer_list.Input.Query.DataStatusPayloadPayload]
+                /// - Remark: Generated from `#/paths/api/v1/ledger-transfers/GET/query/dataStatus`.
+                public var dataStatus: Operations.Resources_ledgerTransfer_list.Input.Query.DataStatusPayload?
+                /// - Remark: Generated from `#/paths/api/v1/ledger-transfers/GET/query/DataGapPayload`.
+                @frozen public enum DataGapPayloadPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case ledgerTransferTransaction = "ledger_transfer_transaction"
+                }
+                /// - Remark: Generated from `#/paths/api/v1/ledger-transfers/GET/query/dataGap`.
+                public typealias DataGapPayload = [Operations.Resources_ledgerTransfer_list.Input.Query.DataGapPayloadPayload]
+                /// - Remark: Generated from `#/paths/api/v1/ledger-transfers/GET/query/dataGap`.
+                public var dataGap: Operations.Resources_ledgerTransfer_list.Input.Query.DataGapPayload?
                 /// - Remark: Generated from `#/paths/api/v1/ledger-transfers/GET/query/fromPartyId`.
                 public var fromPartyId: [Swift.String]?
                 /// - Remark: Generated from `#/paths/api/v1/ledger-transfers/GET/query/toPartyId`.
@@ -13958,7 +14172,7 @@ public enum Operations {
                 ///
                 /// - Remark: Generated from `#/paths/api/v1/ledger-transfers/GET/query/pageSize`.
                 public var pageSize: Swift.Int?
-                /// Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: date, amount, createdAt, updatedAt. Default: -date
+                /// Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: date, amount, createdAt, updatedAt, dataQuality. Default: -date
                 ///
                 /// - Remark: Generated from `#/paths/api/v1/ledger-transfers/GET/query/sort`.
                 public var sort: Swift.String?
@@ -13982,11 +14196,13 @@ public enum Operations {
                 ///   - updatedTo: Calendar day as "YYYY-MM-DD"
                 ///   - dateFrom: Calendar day as "YYYY-MM-DD"
                 ///   - dateTo: Calendar day as "YYYY-MM-DD"
+                ///   - dataStatus:
+                ///   - dataGap:
                 ///   - fromPartyId:
                 ///   - toPartyId:
                 ///   - page: Page number, starting at 1 (default 1)
                 ///   - pageSize: Items per page (default 10, maximum 500)
-                ///   - sort: Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: date, amount, createdAt, updatedAt. Default: -date
+                ///   - sort: Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: date, amount, createdAt, updatedAt, dataQuality. Default: -date
                 ///   - groupBy: Group rows by one field. One of: date, amount, createdAt, updatedAt
                 public init(
                     createdFrom: Swift.String? = nil,
@@ -13995,6 +14211,8 @@ public enum Operations {
                     updatedTo: Swift.String? = nil,
                     dateFrom: Swift.String? = nil,
                     dateTo: Swift.String? = nil,
+                    dataStatus: Operations.Resources_ledgerTransfer_list.Input.Query.DataStatusPayload? = nil,
+                    dataGap: Operations.Resources_ledgerTransfer_list.Input.Query.DataGapPayload? = nil,
                     fromPartyId: [Swift.String]? = nil,
                     toPartyId: [Swift.String]? = nil,
                     page: Swift.Int? = nil,
@@ -14008,6 +14226,8 @@ public enum Operations {
                     self.updatedTo = updatedTo
                     self.dateFrom = dateFrom
                     self.dateTo = dateTo
+                    self.dataStatus = dataStatus
+                    self.dataGap = dataGap
                     self.fromPartyId = fromPartyId
                     self.toPartyId = toPartyId
                     self.page = page
@@ -15275,6 +15495,25 @@ public enum Operations {
                 public typealias ItemTypeFilterPayload = [Operations.Resources_location_list.Input.Query.ItemTypeFilterPayloadPayload]
                 /// - Remark: Generated from `#/paths/api/v1/locations/GET/query/itemTypeFilter`.
                 public var itemTypeFilter: Operations.Resources_location_list.Input.Query.ItemTypeFilterPayload?
+                /// - Remark: Generated from `#/paths/api/v1/locations/GET/query/DataStatusPayload`.
+                @frozen public enum DataStatusPayloadPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case complete = "complete"
+                    case needsData = "needs_data"
+                    case defect = "defect"
+                }
+                /// - Remark: Generated from `#/paths/api/v1/locations/GET/query/dataStatus`.
+                public typealias DataStatusPayload = [Operations.Resources_location_list.Input.Query.DataStatusPayloadPayload]
+                /// - Remark: Generated from `#/paths/api/v1/locations/GET/query/dataStatus`.
+                public var dataStatus: Operations.Resources_location_list.Input.Query.DataStatusPayload?
+                /// - Remark: Generated from `#/paths/api/v1/locations/GET/query/DataGapPayload`.
+                @frozen public enum DataGapPayloadPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case locationAiDescription = "location_ai_description"
+                    case locationType = "location_type"
+                }
+                /// - Remark: Generated from `#/paths/api/v1/locations/GET/query/dataGap`.
+                public typealias DataGapPayload = [Operations.Resources_location_list.Input.Query.DataGapPayloadPayload]
+                /// - Remark: Generated from `#/paths/api/v1/locations/GET/query/dataGap`.
+                public var dataGap: Operations.Resources_location_list.Input.Query.DataGapPayload?
                 /// product shortcode, e.g. PRD-4K7M
                 ///
                 /// - Remark: Generated from `#/paths/api/v1/locations/GET/query/ProductIdPayload`.
@@ -15458,7 +15697,7 @@ public enum Operations {
                 ///
                 /// - Remark: Generated from `#/paths/api/v1/locations/GET/query/pageSize`.
                 public var pageSize: Swift.Int?
-                /// Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: createdAt, updatedAt, name, type, parent, lastBulkInventory, valuation, inventoryEntries. Default: -createdAt
+                /// Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: createdAt, updatedAt, name, type, parent, lastBulkInventory, valuation, inventoryEntries, dataQuality. Default: -createdAt
                 ///
                 /// - Remark: Generated from `#/paths/api/v1/locations/GET/query/sort`.
                 public var sort: Swift.String?
@@ -15483,6 +15722,8 @@ public enum Operations {
                 ///   - aiDescriptionPresenceFilter: Filter to locations that do / don't have an AI-generated description.
                 ///   - nameFilter: Filter by location name (substring)
                 ///   - itemTypeFilter:
+                ///   - dataStatus:
+                ///   - dataGap:
                 ///   - productId:
                 ///   - productPresenceFilter: Filter to locations that are / aren't an instance of a Product. "has" is the vessel set (totes, bins, racks); "none" is rooms, areas and drawers.
                 ///   - parentId:
@@ -15498,7 +15739,7 @@ public enum Operations {
                 ///   - searchQuery:
                 ///   - page: Page number, starting at 1 (default 1)
                 ///   - pageSize: Items per page (default 10, maximum 500)
-                ///   - sort: Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: createdAt, updatedAt, name, type, parent, lastBulkInventory, valuation, inventoryEntries. Default: -createdAt
+                ///   - sort: Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: createdAt, updatedAt, name, type, parent, lastBulkInventory, valuation, inventoryEntries, dataQuality. Default: -createdAt
                 ///   - groupBy: Group rows by one field. One of: type
                 public init(
                     createdFrom: Swift.String? = nil,
@@ -15511,6 +15752,8 @@ public enum Operations {
                     aiDescriptionPresenceFilter: Operations.Resources_location_list.Input.Query.AiDescriptionPresenceFilterPayload? = nil,
                     nameFilter: Swift.String? = nil,
                     itemTypeFilter: Operations.Resources_location_list.Input.Query.ItemTypeFilterPayload? = nil,
+                    dataStatus: Operations.Resources_location_list.Input.Query.DataStatusPayload? = nil,
+                    dataGap: Operations.Resources_location_list.Input.Query.DataGapPayload? = nil,
                     productId: Operations.Resources_location_list.Input.Query.ProductIdPayload? = nil,
                     productPresenceFilter: Operations.Resources_location_list.Input.Query.ProductPresenceFilterPayload? = nil,
                     parentId: Operations.Resources_location_list.Input.Query.ParentIdPayload? = nil,
@@ -15539,6 +15782,8 @@ public enum Operations {
                     self.aiDescriptionPresenceFilter = aiDescriptionPresenceFilter
                     self.nameFilter = nameFilter
                     self.itemTypeFilter = itemTypeFilter
+                    self.dataStatus = dataStatus
+                    self.dataGap = dataGap
                     self.productId = productId
                     self.productPresenceFilter = productPresenceFilter
                     self.parentId = parentId
@@ -16476,6 +16721,24 @@ public enum Operations {
                 public typealias MealKindPayload = [Operations.Resources_meal_list.Input.Query.MealKindPayloadPayload]
                 /// - Remark: Generated from `#/paths/api/v1/meals/GET/query/mealKind`.
                 public var mealKind: Operations.Resources_meal_list.Input.Query.MealKindPayload?
+                /// - Remark: Generated from `#/paths/api/v1/meals/GET/query/DataStatusPayload`.
+                @frozen public enum DataStatusPayloadPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case complete = "complete"
+                    case needsData = "needs_data"
+                    case defect = "defect"
+                }
+                /// - Remark: Generated from `#/paths/api/v1/meals/GET/query/dataStatus`.
+                public typealias DataStatusPayload = [Operations.Resources_meal_list.Input.Query.DataStatusPayloadPayload]
+                /// - Remark: Generated from `#/paths/api/v1/meals/GET/query/dataStatus`.
+                public var dataStatus: Operations.Resources_meal_list.Input.Query.DataStatusPayload?
+                /// - Remark: Generated from `#/paths/api/v1/meals/GET/query/DataGapPayload`.
+                @frozen public enum DataGapPayloadPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case mealContents = "meal_contents"
+                }
+                /// - Remark: Generated from `#/paths/api/v1/meals/GET/query/dataGap`.
+                public typealias DataGapPayload = [Operations.Resources_meal_list.Input.Query.DataGapPayloadPayload]
+                /// - Remark: Generated from `#/paths/api/v1/meals/GET/query/dataGap`.
+                public var dataGap: Operations.Resources_meal_list.Input.Query.DataGapPayload?
                 /// - Remark: Generated from `#/paths/api/v1/meals/GET/query/mealTypePresenceFilter`.
                 @frozen public enum MealTypePresenceFilterPayload: String, Codable, Hashable, Sendable, CaseIterable {
                     case has = "has"
@@ -16553,7 +16816,7 @@ public enum Operations {
                 ///
                 /// - Remark: Generated from `#/paths/api/v1/meals/GET/query/pageSize`.
                 public var pageSize: Swift.Int?
-                /// Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: date, name, mealType, createdAt, updatedAt. Default: -date
+                /// Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: date, name, mealType, createdAt, updatedAt, dataQuality. Default: -date
                 ///
                 /// - Remark: Generated from `#/paths/api/v1/meals/GET/query/sort`.
                 public var sort: Swift.String?
@@ -16578,6 +16841,8 @@ public enum Operations {
                 ///   - updatedTo: Calendar day as "YYYY-MM-DD"
                 ///   - mealType:
                 ///   - mealKind:
+                ///   - dataStatus:
+                ///   - dataGap:
                 ///   - mealTypePresenceFilter:
                 ///   - recipeCostCoverage: Meals with a live recipe whose priced ingredients are incomplete.
                 ///   - from: Only meals on or after this day
@@ -16597,7 +16862,7 @@ public enum Operations {
                 ///   - searchQuery:
                 ///   - page: Page number, starting at 1 (default 1)
                 ///   - pageSize: Items per page (default 10, maximum 500)
-                ///   - sort: Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: date, name, mealType, createdAt, updatedAt. Default: -date
+                ///   - sort: Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: date, name, mealType, createdAt, updatedAt, dataQuality. Default: -date
                 ///   - groupBy: Group rows by one field. One of: date, name, mealType, createdAt, updatedAt
                 public init(
                     createdFrom: Swift.String? = nil,
@@ -16606,6 +16871,8 @@ public enum Operations {
                     updatedTo: Swift.String? = nil,
                     mealType: Operations.Resources_meal_list.Input.Query.MealTypePayload? = nil,
                     mealKind: Operations.Resources_meal_list.Input.Query.MealKindPayload? = nil,
+                    dataStatus: Operations.Resources_meal_list.Input.Query.DataStatusPayload? = nil,
+                    dataGap: Operations.Resources_meal_list.Input.Query.DataGapPayload? = nil,
                     mealTypePresenceFilter: Operations.Resources_meal_list.Input.Query.MealTypePresenceFilterPayload? = nil,
                     recipeCostCoverage: Operations.Resources_meal_list.Input.Query.RecipeCostCoveragePayload? = nil,
                     from: Swift.String? = nil,
@@ -16634,6 +16901,8 @@ public enum Operations {
                     self.updatedTo = updatedTo
                     self.mealType = mealType
                     self.mealKind = mealKind
+                    self.dataStatus = dataStatus
+                    self.dataGap = dataGap
                     self.mealTypePresenceFilter = mealTypePresenceFilter
                     self.recipeCostCoverage = recipeCostCoverage
                     self.from = from
@@ -17892,6 +18161,25 @@ public enum Operations {
                 public typealias StatusPayload = [Operations.Resources_planting_list.Input.Query.StatusPayloadPayload]
                 /// - Remark: Generated from `#/paths/api/v1/plantings/GET/query/status`.
                 public var status: Operations.Resources_planting_list.Input.Query.StatusPayload?
+                /// - Remark: Generated from `#/paths/api/v1/plantings/GET/query/DataStatusPayload`.
+                @frozen public enum DataStatusPayloadPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case complete = "complete"
+                    case needsData = "needs_data"
+                    case defect = "defect"
+                }
+                /// - Remark: Generated from `#/paths/api/v1/plantings/GET/query/dataStatus`.
+                public typealias DataStatusPayload = [Operations.Resources_planting_list.Input.Query.DataStatusPayloadPayload]
+                /// - Remark: Generated from `#/paths/api/v1/plantings/GET/query/dataStatus`.
+                public var dataStatus: Operations.Resources_planting_list.Input.Query.DataStatusPayload?
+                /// - Remark: Generated from `#/paths/api/v1/plantings/GET/query/DataGapPayload`.
+                @frozen public enum DataGapPayloadPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case plantingVariety = "planting_variety"
+                    case plantingLocation = "planting_location"
+                }
+                /// - Remark: Generated from `#/paths/api/v1/plantings/GET/query/dataGap`.
+                public typealias DataGapPayload = [Operations.Resources_planting_list.Input.Query.DataGapPayloadPayload]
+                /// - Remark: Generated from `#/paths/api/v1/plantings/GET/query/dataGap`.
+                public var dataGap: Operations.Resources_planting_list.Input.Query.DataGapPayload?
                 /// - Remark: Generated from `#/paths/api/v1/plantings/GET/query/locationId`.
                 public var locationId: [Swift.String]?
                 /// - Remark: Generated from `#/paths/api/v1/plantings/GET/query/ingredientId`.
@@ -17914,7 +18202,7 @@ public enum Operations {
                 ///
                 /// - Remark: Generated from `#/paths/api/v1/plantings/GET/query/pageSize`.
                 public var pageSize: Swift.Int?
-                /// Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: createdAt, updatedAt, status, sowedOn, finishedOn. Default: -createdAt
+                /// Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: createdAt, updatedAt, status, sowedOn, finishedOn, dataQuality. Default: -createdAt
                 ///
                 /// - Remark: Generated from `#/paths/api/v1/plantings/GET/query/sort`.
                 public var sort: Swift.String?
@@ -17938,6 +18226,8 @@ public enum Operations {
                 ///   - updatedFrom: Calendar day as "YYYY-MM-DD"
                 ///   - updatedTo: Calendar day as "YYYY-MM-DD"
                 ///   - status:
+                ///   - dataStatus:
+                ///   - dataGap:
                 ///   - locationId:
                 ///   - ingredientId:
                 ///   - taskId:
@@ -17946,7 +18236,7 @@ public enum Operations {
                 ///   - searchQuery:
                 ///   - page: Page number, starting at 1 (default 1)
                 ///   - pageSize: Items per page (default 10, maximum 500)
-                ///   - sort: Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: createdAt, updatedAt, status, sowedOn, finishedOn. Default: -createdAt
+                ///   - sort: Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: createdAt, updatedAt, status, sowedOn, finishedOn, dataQuality. Default: -createdAt
                 ///   - groupBy: Group rows by one field. One of: createdAt, updatedAt, status, sowedOn, finishedOn
                 public init(
                     createdFrom: Swift.String? = nil,
@@ -17954,6 +18244,8 @@ public enum Operations {
                     updatedFrom: Swift.String? = nil,
                     updatedTo: Swift.String? = nil,
                     status: Operations.Resources_planting_list.Input.Query.StatusPayload? = nil,
+                    dataStatus: Operations.Resources_planting_list.Input.Query.DataStatusPayload? = nil,
+                    dataGap: Operations.Resources_planting_list.Input.Query.DataGapPayload? = nil,
                     locationId: [Swift.String]? = nil,
                     ingredientId: [Swift.String]? = nil,
                     taskId: [Swift.String]? = nil,
@@ -17970,6 +18262,8 @@ public enum Operations {
                     self.updatedFrom = updatedFrom
                     self.updatedTo = updatedTo
                     self.status = status
+                    self.dataStatus = dataStatus
+                    self.dataGap = dataGap
                     self.locationId = locationId
                     self.ingredientId = ingredientId
                     self.taskId = taskId
@@ -18717,6 +19011,25 @@ public enum Operations {
                 public typealias StatusPayload = [Operations.Resources_planting_timeline.Input.Query.StatusPayloadPayload]
                 /// - Remark: Generated from `#/paths/api/v1/plantings/timeline/GET/query/status`.
                 public var status: Operations.Resources_planting_timeline.Input.Query.StatusPayload?
+                /// - Remark: Generated from `#/paths/api/v1/plantings/timeline/GET/query/DataStatusPayload`.
+                @frozen public enum DataStatusPayloadPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case complete = "complete"
+                    case needsData = "needs_data"
+                    case defect = "defect"
+                }
+                /// - Remark: Generated from `#/paths/api/v1/plantings/timeline/GET/query/dataStatus`.
+                public typealias DataStatusPayload = [Operations.Resources_planting_timeline.Input.Query.DataStatusPayloadPayload]
+                /// - Remark: Generated from `#/paths/api/v1/plantings/timeline/GET/query/dataStatus`.
+                public var dataStatus: Operations.Resources_planting_timeline.Input.Query.DataStatusPayload?
+                /// - Remark: Generated from `#/paths/api/v1/plantings/timeline/GET/query/DataGapPayload`.
+                @frozen public enum DataGapPayloadPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case plantingVariety = "planting_variety"
+                    case plantingLocation = "planting_location"
+                }
+                /// - Remark: Generated from `#/paths/api/v1/plantings/timeline/GET/query/dataGap`.
+                public typealias DataGapPayload = [Operations.Resources_planting_timeline.Input.Query.DataGapPayloadPayload]
+                /// - Remark: Generated from `#/paths/api/v1/plantings/timeline/GET/query/dataGap`.
+                public var dataGap: Operations.Resources_planting_timeline.Input.Query.DataGapPayload?
                 /// - Remark: Generated from `#/paths/api/v1/plantings/timeline/GET/query/locationId`.
                 public var locationId: [Swift.String]?
                 /// - Remark: Generated from `#/paths/api/v1/plantings/timeline/GET/query/ingredientId`.
@@ -18756,6 +19069,8 @@ public enum Operations {
                 ///   - updatedFrom: Calendar day as "YYYY-MM-DD"
                 ///   - updatedTo: Calendar day as "YYYY-MM-DD"
                 ///   - status:
+                ///   - dataStatus:
+                ///   - dataGap:
                 ///   - locationId:
                 ///   - ingredientId:
                 ///   - taskId:
@@ -18772,6 +19087,8 @@ public enum Operations {
                     updatedFrom: Swift.String? = nil,
                     updatedTo: Swift.String? = nil,
                     status: Operations.Resources_planting_timeline.Input.Query.StatusPayload? = nil,
+                    dataStatus: Operations.Resources_planting_timeline.Input.Query.DataStatusPayload? = nil,
+                    dataGap: Operations.Resources_planting_timeline.Input.Query.DataGapPayload? = nil,
                     locationId: [Swift.String]? = nil,
                     ingredientId: [Swift.String]? = nil,
                     taskId: [Swift.String]? = nil,
@@ -18788,6 +19105,8 @@ public enum Operations {
                     self.updatedFrom = updatedFrom
                     self.updatedTo = updatedTo
                     self.status = status
+                    self.dataStatus = dataStatus
+                    self.dataGap = dataGap
                     self.locationId = locationId
                     self.ingredientId = ingredientId
                     self.taskId = taskId
@@ -19138,6 +19457,25 @@ public enum Operations {
                 public var updatedTo: Swift.String?
                 /// - Remark: Generated from `#/paths/api/v1/product-categories/GET/query/search`.
                 public var search: Swift.String?
+                /// - Remark: Generated from `#/paths/api/v1/product-categories/GET/query/DataStatusPayload`.
+                @frozen public enum DataStatusPayloadPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case complete = "complete"
+                    case needsData = "needs_data"
+                    case defect = "defect"
+                }
+                /// - Remark: Generated from `#/paths/api/v1/product-categories/GET/query/dataStatus`.
+                public typealias DataStatusPayload = [Operations.Resources_productCategory_list.Input.Query.DataStatusPayloadPayload]
+                /// - Remark: Generated from `#/paths/api/v1/product-categories/GET/query/dataStatus`.
+                public var dataStatus: Operations.Resources_productCategory_list.Input.Query.DataStatusPayload?
+                /// - Remark: Generated from `#/paths/api/v1/product-categories/GET/query/DataGapPayload`.
+                @frozen public enum DataGapPayloadPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case categoryDescription = "category_description"
+                    case categoryFeature = "category_feature"
+                }
+                /// - Remark: Generated from `#/paths/api/v1/product-categories/GET/query/dataGap`.
+                public typealias DataGapPayload = [Operations.Resources_productCategory_list.Input.Query.DataGapPayloadPayload]
+                /// - Remark: Generated from `#/paths/api/v1/product-categories/GET/query/dataGap`.
+                public var dataGap: Operations.Resources_productCategory_list.Input.Query.DataGapPayload?
                 /// Page number, starting at 1 (default 1)
                 ///
                 /// - Remark: Generated from `#/paths/api/v1/product-categories/GET/query/page`.
@@ -19146,7 +19484,7 @@ public enum Operations {
                 ///
                 /// - Remark: Generated from `#/paths/api/v1/product-categories/GET/query/pageSize`.
                 public var pageSize: Swift.Int?
-                /// Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: name, sortOrder, updatedAt. Default: -sortOrder
+                /// Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: name, sortOrder, updatedAt, dataQuality. Default: -sortOrder
                 ///
                 /// - Remark: Generated from `#/paths/api/v1/product-categories/GET/query/sort`.
                 public var sort: Swift.String?
@@ -19168,9 +19506,11 @@ public enum Operations {
                 ///   - updatedFrom: Calendar day as "YYYY-MM-DD"
                 ///   - updatedTo: Calendar day as "YYYY-MM-DD"
                 ///   - search:
+                ///   - dataStatus:
+                ///   - dataGap:
                 ///   - page: Page number, starting at 1 (default 1)
                 ///   - pageSize: Items per page (default 10, maximum 500)
-                ///   - sort: Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: name, sortOrder, updatedAt. Default: -sortOrder
+                ///   - sort: Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: name, sortOrder, updatedAt, dataQuality. Default: -sortOrder
                 ///   - groupBy: Group rows by one field. One of: name, sortOrder, updatedAt
                 public init(
                     createdFrom: Swift.String? = nil,
@@ -19178,6 +19518,8 @@ public enum Operations {
                     updatedFrom: Swift.String? = nil,
                     updatedTo: Swift.String? = nil,
                     search: Swift.String? = nil,
+                    dataStatus: Operations.Resources_productCategory_list.Input.Query.DataStatusPayload? = nil,
+                    dataGap: Operations.Resources_productCategory_list.Input.Query.DataGapPayload? = nil,
                     page: Swift.Int? = nil,
                     pageSize: Swift.Int? = nil,
                     sort: Swift.String? = nil,
@@ -19188,6 +19530,8 @@ public enum Operations {
                     self.updatedFrom = updatedFrom
                     self.updatedTo = updatedTo
                     self.search = search
+                    self.dataStatus = dataStatus
+                    self.dataGap = dataGap
                     self.page = page
                     self.pageSize = pageSize
                     self.sort = sort
@@ -23063,6 +23407,25 @@ public enum Operations {
                 ///
                 /// - Remark: Generated from `#/paths/api/v1/projects/GET/query/location`.
                 public var location: [Swift.String]?
+                /// - Remark: Generated from `#/paths/api/v1/projects/GET/query/DataStatusPayload`.
+                @frozen public enum DataStatusPayloadPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case complete = "complete"
+                    case needsData = "needs_data"
+                    case defect = "defect"
+                }
+                /// - Remark: Generated from `#/paths/api/v1/projects/GET/query/dataStatus`.
+                public typealias DataStatusPayload = [Operations.Resources_project_list.Input.Query.DataStatusPayloadPayload]
+                /// - Remark: Generated from `#/paths/api/v1/projects/GET/query/dataStatus`.
+                public var dataStatus: Operations.Resources_project_list.Input.Query.DataStatusPayload?
+                /// - Remark: Generated from `#/paths/api/v1/projects/GET/query/DataGapPayload`.
+                @frozen public enum DataGapPayloadPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case projectKind = "project_kind"
+                    case projectStartDate = "project_start_date"
+                }
+                /// - Remark: Generated from `#/paths/api/v1/projects/GET/query/dataGap`.
+                public typealias DataGapPayload = [Operations.Resources_project_list.Input.Query.DataGapPayloadPayload]
+                /// - Remark: Generated from `#/paths/api/v1/projects/GET/query/dataGap`.
+                public var dataGap: Operations.Resources_project_list.Input.Query.DataGapPayload?
                 /// Calendar day as "YYYY-MM-DD"
                 ///
                 /// - Remark: Generated from `#/paths/api/v1/projects/GET/query/dateFrom`.
@@ -23170,7 +23533,7 @@ public enum Operations {
                 ///
                 /// - Remark: Generated from `#/paths/api/v1/projects/GET/query/pageSize`.
                 public var pageSize: Swift.Int?
-                /// Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: name, status, kind, startDate, costEstimate, createdAt, updatedAt. Default: -createdAt
+                /// Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: name, status, kind, startDate, costEstimate, createdAt, updatedAt, dataQuality. Default: -createdAt
                 ///
                 /// - Remark: Generated from `#/paths/api/v1/projects/GET/query/sort`.
                 public var sort: Swift.String?
@@ -23220,6 +23583,8 @@ public enum Operations {
                 ///   - status:
                 ///   - kind:
                 ///   - location: Any exact match against locations[]
+                ///   - dataStatus:
+                ///   - dataGap:
                 ///   - dateFrom: Calendar day as "YYYY-MM-DD"
                 ///   - dateTo: Calendar day as "YYYY-MM-DD"
                 ///   - completionYear:
@@ -23232,7 +23597,7 @@ public enum Operations {
                 ///   - searchQuery:
                 ///   - page: Page number, starting at 1 (default 1)
                 ///   - pageSize: Items per page (default 10, maximum 500)
-                ///   - sort: Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: name, status, kind, startDate, costEstimate, createdAt, updatedAt. Default: -createdAt
+                ///   - sort: Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: name, status, kind, startDate, costEstimate, createdAt, updatedAt, dataQuality. Default: -createdAt
                 ///   - groupBy: Group rows by one field. One of: name, status, kind, startDate, costEstimate, createdAt, updatedAt
                 public init(
                     createdFrom: Swift.String? = nil,
@@ -23264,6 +23629,8 @@ public enum Operations {
                     status: Operations.Resources_project_list.Input.Query.StatusPayload? = nil,
                     kind: Operations.Resources_project_list.Input.Query.KindPayload? = nil,
                     location: [Swift.String]? = nil,
+                    dataStatus: Operations.Resources_project_list.Input.Query.DataStatusPayload? = nil,
+                    dataGap: Operations.Resources_project_list.Input.Query.DataGapPayload? = nil,
                     dateFrom: Swift.String? = nil,
                     dateTo: Swift.String? = nil,
                     completionYear: Swift.String? = nil,
@@ -23308,6 +23675,8 @@ public enum Operations {
                     self.status = status
                     self.kind = kind
                     self.location = location
+                    self.dataStatus = dataStatus
+                    self.dataGap = dataGap
                     self.dateFrom = dateFrom
                     self.dateTo = dateTo
                     self.completionYear = completionYear
@@ -24772,9 +25141,8 @@ public enum Operations {
                     case documentCount = "documentCount"
                     case createdAt = "createdAt"
                     case updatedAt = "updatedAt"
-                    case dataQuality = "dataQuality"
                 }
-                /// Group rows by one field. One of: orderId, displayLabel, date, statedTotal, vendor, expenseCount, expenseTotal, reconciliationGap, documentCount, createdAt, updatedAt, dataQuality
+                /// Group rows by one field. One of: orderId, displayLabel, date, statedTotal, vendor, expenseCount, expenseTotal, reconciliationGap, documentCount, createdAt, updatedAt
                 ///
                 /// - Remark: Generated from `#/paths/api/v1/purchases/GET/query/groupBy`.
                 public var groupBy: Operations.Resources_purchase_list.Input.Query.GroupByPayload?
@@ -24817,7 +25185,7 @@ public enum Operations {
                 ///   - page: Page number, starting at 1 (default 1)
                 ///   - pageSize: Items per page (default 10, maximum 500)
                 ///   - sort: Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: orderId, displayLabel, date, statedTotal, vendor, expenseCount, expenseTotal, reconciliationGap, documentCount, createdAt, updatedAt, dataQuality. Default: -date
-                ///   - groupBy: Group rows by one field. One of: orderId, displayLabel, date, statedTotal, vendor, expenseCount, expenseTotal, reconciliationGap, documentCount, createdAt, updatedAt, dataQuality
+                ///   - groupBy: Group rows by one field. One of: orderId, displayLabel, date, statedTotal, vendor, expenseCount, expenseTotal, reconciliationGap, documentCount, createdAt, updatedAt
                 public init(
                     createdFrom: Swift.String? = nil,
                     createdTo: Swift.String? = nil,
@@ -25655,6 +26023,26 @@ public enum Operations {
                 public var totalMinutesMin: Swift.Double?
                 /// - Remark: Generated from `#/paths/api/v1/recipes/GET/query/totalMinutesMax`.
                 public var totalMinutesMax: Swift.Double?
+                /// - Remark: Generated from `#/paths/api/v1/recipes/GET/query/DataStatusPayload`.
+                @frozen public enum DataStatusPayloadPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case complete = "complete"
+                    case needsData = "needs_data"
+                    case defect = "defect"
+                }
+                /// - Remark: Generated from `#/paths/api/v1/recipes/GET/query/dataStatus`.
+                public typealias DataStatusPayload = [Operations.Resources_recipe_list.Input.Query.DataStatusPayloadPayload]
+                /// - Remark: Generated from `#/paths/api/v1/recipes/GET/query/dataStatus`.
+                public var dataStatus: Operations.Resources_recipe_list.Input.Query.DataStatusPayload?
+                /// - Remark: Generated from `#/paths/api/v1/recipes/GET/query/DataGapPayload`.
+                @frozen public enum DataGapPayloadPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case recipeIngredients = "recipe_ingredients"
+                    case recipeInstructions = "recipe_instructions"
+                    case recipeSource = "recipe_source"
+                }
+                /// - Remark: Generated from `#/paths/api/v1/recipes/GET/query/dataGap`.
+                public typealias DataGapPayload = [Operations.Resources_recipe_list.Input.Query.DataGapPayloadPayload]
+                /// - Remark: Generated from `#/paths/api/v1/recipes/GET/query/dataGap`.
+                public var dataGap: Operations.Resources_recipe_list.Input.Query.DataGapPayload?
                 /// cookbook shortcode, e.g. CKB-4K7M
                 ///
                 /// - Remark: Generated from `#/paths/api/v1/recipes/GET/query/CookbookIdPayload`.
@@ -25782,7 +26170,7 @@ public enum Operations {
                 ///
                 /// - Remark: Generated from `#/paths/api/v1/recipes/GET/query/pageSize`.
                 public var pageSize: Swift.Int?
-                /// Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: createdAt, updatedAt, name, cookbook, costTotal, caloriesTotal, source, yield, tags, totalMinutes. Default: -createdAt
+                /// Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: createdAt, updatedAt, name, cookbook, costTotal, caloriesTotal, source, yield, tags, totalMinutes, dataQuality. Default: -createdAt
                 ///
                 /// - Remark: Generated from `#/paths/api/v1/recipes/GET/query/sort`.
                 public var sort: Swift.String?
@@ -25811,6 +26199,8 @@ public enum Operations {
                 ///   - tagFilters:
                 ///   - totalMinutesMin:
                 ///   - totalMinutesMax:
+                ///   - dataStatus:
+                ///   - dataGap:
                 ///   - cookbookId:
                 ///   - cookbookPresenceFilter:
                 ///   - tagsPresenceFilter:
@@ -25825,7 +26215,7 @@ public enum Operations {
                 ///   - searchQuery:
                 ///   - page: Page number, starting at 1 (default 1)
                 ///   - pageSize: Items per page (default 10, maximum 500)
-                ///   - sort: Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: createdAt, updatedAt, name, cookbook, costTotal, caloriesTotal, source, yield, tags, totalMinutes. Default: -createdAt
+                ///   - sort: Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: createdAt, updatedAt, name, cookbook, costTotal, caloriesTotal, source, yield, tags, totalMinutes, dataQuality. Default: -createdAt
                 ///   - groupBy: Group rows by one field. One of: name
                 public init(
                     createdFrom: Swift.String? = nil,
@@ -25842,6 +26232,8 @@ public enum Operations {
                     tagFilters: [Swift.String]? = nil,
                     totalMinutesMin: Swift.Double? = nil,
                     totalMinutesMax: Swift.Double? = nil,
+                    dataStatus: Operations.Resources_recipe_list.Input.Query.DataStatusPayload? = nil,
+                    dataGap: Operations.Resources_recipe_list.Input.Query.DataGapPayload? = nil,
                     cookbookId: Operations.Resources_recipe_list.Input.Query.CookbookIdPayload? = nil,
                     cookbookPresenceFilter: Operations.Resources_recipe_list.Input.Query.CookbookPresenceFilterPayload? = nil,
                     tagsPresenceFilter: Operations.Resources_recipe_list.Input.Query.TagsPresenceFilterPayload? = nil,
@@ -25873,6 +26265,8 @@ public enum Operations {
                     self.tagFilters = tagFilters
                     self.totalMinutesMin = totalMinutesMin
                     self.totalMinutesMax = totalMinutesMax
+                    self.dataStatus = dataStatus
+                    self.dataGap = dataGap
                     self.cookbookId = cookbookId
                     self.cookbookPresenceFilter = cookbookPresenceFilter
                     self.tagsPresenceFilter = tagsPresenceFilter
@@ -27308,6 +27702,25 @@ public enum Operations {
                 public typealias TradePayload = [Operations.Resources_task_list.Input.Query.TradePayloadPayload]
                 /// - Remark: Generated from `#/paths/api/v1/tasks/GET/query/trade`.
                 public var trade: Operations.Resources_task_list.Input.Query.TradePayload?
+                /// - Remark: Generated from `#/paths/api/v1/tasks/GET/query/DataStatusPayload`.
+                @frozen public enum DataStatusPayloadPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case complete = "complete"
+                    case needsData = "needs_data"
+                    case defect = "defect"
+                }
+                /// - Remark: Generated from `#/paths/api/v1/tasks/GET/query/dataStatus`.
+                public typealias DataStatusPayload = [Operations.Resources_task_list.Input.Query.DataStatusPayloadPayload]
+                /// - Remark: Generated from `#/paths/api/v1/tasks/GET/query/dataStatus`.
+                public var dataStatus: Operations.Resources_task_list.Input.Query.DataStatusPayload?
+                /// - Remark: Generated from `#/paths/api/v1/tasks/GET/query/DataGapPayload`.
+                @frozen public enum DataGapPayloadPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case taskDueDate = "task_due_date"
+                    case taskTrade = "task_trade"
+                }
+                /// - Remark: Generated from `#/paths/api/v1/tasks/GET/query/dataGap`.
+                public typealias DataGapPayload = [Operations.Resources_task_list.Input.Query.DataGapPayloadPayload]
+                /// - Remark: Generated from `#/paths/api/v1/tasks/GET/query/dataGap`.
+                public var dataGap: Operations.Resources_task_list.Input.Query.DataGapPayload?
                 /// project shortcode, e.g. PRJ-4K7M
                 ///
                 /// - Remark: Generated from `#/paths/api/v1/tasks/GET/query/ProjectIdPayload`.
@@ -27524,7 +27937,7 @@ public enum Operations {
                 ///
                 /// - Remark: Generated from `#/paths/api/v1/tasks/GET/query/pageSize`.
                 public var pageSize: Swift.Int?
-                /// Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: name, status, dueDate, trade, project, subjectProduct, createdAt, updatedAt. Default: -createdAt
+                /// Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: name, status, dueDate, trade, project, subjectProduct, createdAt, updatedAt, dataQuality. Default: -createdAt
                 ///
                 /// - Remark: Generated from `#/paths/api/v1/tasks/GET/query/sort`.
                 public var sort: Swift.String?
@@ -27552,6 +27965,8 @@ public enum Operations {
                 ///   - search:
                 ///   - status:
                 ///   - trade:
+                ///   - dataStatus:
+                ///   - dataGap:
                 ///   - projectId:
                 ///   - subjectProductId:
                 ///   - topLevelOnly:
@@ -27573,7 +27988,7 @@ public enum Operations {
                 ///   - searchQuery:
                 ///   - page: Page number, starting at 1 (default 1)
                 ///   - pageSize: Items per page (default 10, maximum 500)
-                ///   - sort: Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: name, status, dueDate, trade, project, subjectProduct, createdAt, updatedAt. Default: -createdAt
+                ///   - sort: Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: name, status, dueDate, trade, project, subjectProduct, createdAt, updatedAt, dataQuality. Default: -createdAt
                 ///   - groupBy: Group rows by one field. One of: status
                 public init(
                     createdFrom: Swift.String? = nil,
@@ -27589,6 +28004,8 @@ public enum Operations {
                     search: Swift.String? = nil,
                     status: Operations.Resources_task_list.Input.Query.StatusPayload? = nil,
                     trade: Operations.Resources_task_list.Input.Query.TradePayload? = nil,
+                    dataStatus: Operations.Resources_task_list.Input.Query.DataStatusPayload? = nil,
+                    dataGap: Operations.Resources_task_list.Input.Query.DataGapPayload? = nil,
                     projectId: Operations.Resources_task_list.Input.Query.ProjectIdPayload? = nil,
                     subjectProductId: Operations.Resources_task_list.Input.Query.SubjectProductIdPayload? = nil,
                     topLevelOnly: Swift.Bool? = nil,
@@ -27626,6 +28043,8 @@ public enum Operations {
                     self.search = search
                     self.status = status
                     self.trade = trade
+                    self.dataStatus = dataStatus
+                    self.dataGap = dataGap
                     self.projectId = projectId
                     self.subjectProductId = subjectProductId
                     self.topLevelOnly = topLevelOnly
@@ -28495,6 +28914,25 @@ public enum Operations {
                 public typealias TradePayload = [Operations.Resources_task_timeline.Input.Query.TradePayloadPayload]
                 /// - Remark: Generated from `#/paths/api/v1/tasks/timeline/GET/query/trade`.
                 public var trade: Operations.Resources_task_timeline.Input.Query.TradePayload?
+                /// - Remark: Generated from `#/paths/api/v1/tasks/timeline/GET/query/DataStatusPayload`.
+                @frozen public enum DataStatusPayloadPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case complete = "complete"
+                    case needsData = "needs_data"
+                    case defect = "defect"
+                }
+                /// - Remark: Generated from `#/paths/api/v1/tasks/timeline/GET/query/dataStatus`.
+                public typealias DataStatusPayload = [Operations.Resources_task_timeline.Input.Query.DataStatusPayloadPayload]
+                /// - Remark: Generated from `#/paths/api/v1/tasks/timeline/GET/query/dataStatus`.
+                public var dataStatus: Operations.Resources_task_timeline.Input.Query.DataStatusPayload?
+                /// - Remark: Generated from `#/paths/api/v1/tasks/timeline/GET/query/DataGapPayload`.
+                @frozen public enum DataGapPayloadPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case taskDueDate = "task_due_date"
+                    case taskTrade = "task_trade"
+                }
+                /// - Remark: Generated from `#/paths/api/v1/tasks/timeline/GET/query/dataGap`.
+                public typealias DataGapPayload = [Operations.Resources_task_timeline.Input.Query.DataGapPayloadPayload]
+                /// - Remark: Generated from `#/paths/api/v1/tasks/timeline/GET/query/dataGap`.
+                public var dataGap: Operations.Resources_task_timeline.Input.Query.DataGapPayload?
                 /// project shortcode, e.g. PRJ-4K7M
                 ///
                 /// - Remark: Generated from `#/paths/api/v1/tasks/timeline/GET/query/ProjectIdPayload`.
@@ -28736,6 +29174,8 @@ public enum Operations {
                 ///   - search:
                 ///   - status:
                 ///   - trade:
+                ///   - dataStatus:
+                ///   - dataGap:
                 ///   - projectId:
                 ///   - subjectProductId:
                 ///   - topLevelOnly:
@@ -28773,6 +29213,8 @@ public enum Operations {
                     search: Swift.String? = nil,
                     status: Operations.Resources_task_timeline.Input.Query.StatusPayload? = nil,
                     trade: Operations.Resources_task_timeline.Input.Query.TradePayload? = nil,
+                    dataStatus: Operations.Resources_task_timeline.Input.Query.DataStatusPayload? = nil,
+                    dataGap: Operations.Resources_task_timeline.Input.Query.DataGapPayload? = nil,
                     projectId: Operations.Resources_task_timeline.Input.Query.ProjectIdPayload? = nil,
                     subjectProductId: Operations.Resources_task_timeline.Input.Query.SubjectProductIdPayload? = nil,
                     topLevelOnly: Swift.Bool? = nil,
@@ -28810,6 +29252,8 @@ public enum Operations {
                     self.search = search
                     self.status = status
                     self.trade = trade
+                    self.dataStatus = dataStatus
+                    self.dataGap = dataGap
                     self.projectId = projectId
                     self.subjectProductId = subjectProductId
                     self.topLevelOnly = topLevelOnly
@@ -30527,6 +30971,26 @@ public enum Operations {
                 ///
                 /// - Remark: Generated from `#/paths/api/v1/vendors/GET/query/latestPurchaseDateTo`.
                 public var latestPurchaseDateTo: Swift.String?
+                /// - Remark: Generated from `#/paths/api/v1/vendors/GET/query/DataStatusPayload`.
+                @frozen public enum DataStatusPayloadPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case complete = "complete"
+                    case needsData = "needs_data"
+                    case defect = "defect"
+                }
+                /// - Remark: Generated from `#/paths/api/v1/vendors/GET/query/dataStatus`.
+                public typealias DataStatusPayload = [Operations.Resources_vendor_list.Input.Query.DataStatusPayloadPayload]
+                /// - Remark: Generated from `#/paths/api/v1/vendors/GET/query/dataStatus`.
+                public var dataStatus: Operations.Resources_vendor_list.Input.Query.DataStatusPayload?
+                /// - Remark: Generated from `#/paths/api/v1/vendors/GET/query/DataGapPayload`.
+                @frozen public enum DataGapPayloadPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case vendorOrderEvidence = "vendor_order_evidence"
+                    case vendorLogo = "vendor_logo"
+                    case vendorWebsite = "vendor_website"
+                }
+                /// - Remark: Generated from `#/paths/api/v1/vendors/GET/query/dataGap`.
+                public typealias DataGapPayload = [Operations.Resources_vendor_list.Input.Query.DataGapPayloadPayload]
+                /// - Remark: Generated from `#/paths/api/v1/vendors/GET/query/dataGap`.
+                public var dataGap: Operations.Resources_vendor_list.Input.Query.DataGapPayload?
                 /// - Remark: Generated from `#/paths/api/v1/vendors/GET/query/latestPurchaseDatePresenceFilter`.
                 @frozen public enum LatestPurchaseDatePresenceFilterPayload: String, Codable, Hashable, Sendable, CaseIterable {
                     case has = "has"
@@ -30551,7 +31015,7 @@ public enum Operations {
                 ///
                 /// - Remark: Generated from `#/paths/api/v1/vendors/GET/query/pageSize`.
                 public var pageSize: Swift.Int?
-                /// Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: name, purchaseCount, spend, latestPurchaseDate, createdAt, updatedAt. Default: -spend
+                /// Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: name, purchaseCount, spend, latestPurchaseDate, createdAt, updatedAt, dataQuality. Default: -spend
                 ///
                 /// - Remark: Generated from `#/paths/api/v1/vendors/GET/query/sort`.
                 public var sort: Swift.String?
@@ -30597,12 +31061,14 @@ public enum Operations {
                 ///   - spendMax:
                 ///   - latestPurchaseDateFrom: Calendar day as "YYYY-MM-DD"
                 ///   - latestPurchaseDateTo: Calendar day as "YYYY-MM-DD"
+                ///   - dataStatus:
+                ///   - dataGap:
                 ///   - latestPurchaseDatePresenceFilter:
                 ///   - logoPresenceFilter:
                 ///   - searchQuery:
                 ///   - page: Page number, starting at 1 (default 1)
                 ///   - pageSize: Items per page (default 10, maximum 500)
-                ///   - sort: Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: name, purchaseCount, spend, latestPurchaseDate, createdAt, updatedAt. Default: -spend
+                ///   - sort: Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: name, purchaseCount, spend, latestPurchaseDate, createdAt, updatedAt, dataQuality. Default: -spend
                 ///   - groupBy: Group rows by one field. One of: name, purchaseCount, spend, latestPurchaseDate, createdAt, updatedAt
                 public init(
                     createdFrom: Swift.String? = nil,
@@ -30631,6 +31097,8 @@ public enum Operations {
                     spendMax: Swift.Double? = nil,
                     latestPurchaseDateFrom: Swift.String? = nil,
                     latestPurchaseDateTo: Swift.String? = nil,
+                    dataStatus: Operations.Resources_vendor_list.Input.Query.DataStatusPayload? = nil,
+                    dataGap: Operations.Resources_vendor_list.Input.Query.DataGapPayload? = nil,
                     latestPurchaseDatePresenceFilter: Operations.Resources_vendor_list.Input.Query.LatestPurchaseDatePresenceFilterPayload? = nil,
                     logoPresenceFilter: Operations.Resources_vendor_list.Input.Query.LogoPresenceFilterPayload? = nil,
                     searchQuery: Swift.String? = nil,
@@ -30665,6 +31133,8 @@ public enum Operations {
                     self.spendMax = spendMax
                     self.latestPurchaseDateFrom = latestPurchaseDateFrom
                     self.latestPurchaseDateTo = latestPurchaseDateTo
+                    self.dataStatus = dataStatus
+                    self.dataGap = dataGap
                     self.latestPurchaseDatePresenceFilter = latestPurchaseDatePresenceFilter
                     self.logoPresenceFilter = logoPresenceFilter
                     self.searchQuery = searchQuery
@@ -31416,6 +31886,24 @@ public enum Operations {
                 public var search: Swift.String?
                 /// - Remark: Generated from `#/paths/api/v1/wishes/GET/query/acquired`.
                 public var acquired: Swift.Bool?
+                /// - Remark: Generated from `#/paths/api/v1/wishes/GET/query/DataStatusPayload`.
+                @frozen public enum DataStatusPayloadPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case complete = "complete"
+                    case needsData = "needs_data"
+                    case defect = "defect"
+                }
+                /// - Remark: Generated from `#/paths/api/v1/wishes/GET/query/dataStatus`.
+                public typealias DataStatusPayload = [Operations.Resources_wish_list.Input.Query.DataStatusPayloadPayload]
+                /// - Remark: Generated from `#/paths/api/v1/wishes/GET/query/dataStatus`.
+                public var dataStatus: Operations.Resources_wish_list.Input.Query.DataStatusPayload?
+                /// - Remark: Generated from `#/paths/api/v1/wishes/GET/query/DataGapPayload`.
+                @frozen public enum DataGapPayloadPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case wishCandidate = "wish_candidate"
+                }
+                /// - Remark: Generated from `#/paths/api/v1/wishes/GET/query/dataGap`.
+                public typealias DataGapPayload = [Operations.Resources_wish_list.Input.Query.DataGapPayloadPayload]
+                /// - Remark: Generated from `#/paths/api/v1/wishes/GET/query/dataGap`.
+                public var dataGap: Operations.Resources_wish_list.Input.Query.DataGapPayload?
                 /// - Remark: Generated from `#/paths/api/v1/wishes/GET/query/candidateProductId`.
                 public var candidateProductId: [Swift.String]?
                 /// - Remark: Generated from `#/paths/api/v1/wishes/GET/query/searchQuery`.
@@ -31428,7 +31916,7 @@ public enum Operations {
                 ///
                 /// - Remark: Generated from `#/paths/api/v1/wishes/GET/query/pageSize`.
                 public var pageSize: Swift.Int?
-                /// Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: name, acquiredAt, priceRange, createdAt, updatedAt. Default: -createdAt
+                /// Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: name, acquiredAt, priceRange, createdAt, updatedAt, dataQuality. Default: -createdAt
                 ///
                 /// - Remark: Generated from `#/paths/api/v1/wishes/GET/query/sort`.
                 public var sort: Swift.String?
@@ -31456,11 +31944,13 @@ public enum Operations {
                 ///   - productSearch:
                 ///   - search:
                 ///   - acquired:
+                ///   - dataStatus:
+                ///   - dataGap:
                 ///   - candidateProductId:
                 ///   - searchQuery:
                 ///   - page: Page number, starting at 1 (default 1)
                 ///   - pageSize: Items per page (default 10, maximum 500)
-                ///   - sort: Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: name, acquiredAt, priceRange, createdAt, updatedAt. Default: -createdAt
+                ///   - sort: Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: name, acquiredAt, priceRange, createdAt, updatedAt, dataQuality. Default: -createdAt
                 ///   - groupBy: Group rows by one field. One of: name, acquiredAt, priceRange, createdAt, updatedAt
                 public init(
                     createdFrom: Swift.String? = nil,
@@ -31472,6 +31962,8 @@ public enum Operations {
                     productSearch: Swift.String? = nil,
                     search: Swift.String? = nil,
                     acquired: Swift.Bool? = nil,
+                    dataStatus: Operations.Resources_wish_list.Input.Query.DataStatusPayload? = nil,
+                    dataGap: Operations.Resources_wish_list.Input.Query.DataGapPayload? = nil,
                     candidateProductId: [Swift.String]? = nil,
                     searchQuery: Swift.String? = nil,
                     page: Swift.Int? = nil,
@@ -31488,6 +31980,8 @@ public enum Operations {
                     self.productSearch = productSearch
                     self.search = search
                     self.acquired = acquired
+                    self.dataStatus = dataStatus
+                    self.dataGap = dataGap
                     self.candidateProductId = candidateProductId
                     self.searchQuery = searchQuery
                     self.page = page
