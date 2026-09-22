@@ -18,6 +18,7 @@ import {
   imageDerivative,
   imageDescriptionCorrection,
   imageProcessingJob,
+  imageSighting,
   importFinding,
   importHunt,
   importPreparedOrder,
@@ -250,6 +251,33 @@ const mkVendorAccount = async (db: Database) => {
   });
 };
 
+const mkDevice = (db: Database) =>
+  insertWithShortcode(db, "device", {
+    installationId: uniq("installation"),
+    name: uniq("Device"),
+    platform: "ios",
+  });
+
+const mkImageSighting = async (
+  db: Database,
+  values: Partial<
+    Pick<
+      typeof imageSighting.$inferInsert,
+      "imageId" | "ledgerPartyId" | "deviceId"
+    >
+  >,
+) =>
+  insertWithShortcode(db, "imageSighting", {
+    imageId: values.imageId ?? (await mkImage(db)).id,
+    ledgerPartyId: values.ledgerPartyId ?? (await mkLedgerParty(db)).id,
+    deviceId: values.deviceId ?? (await mkDevice(db)).id,
+    assetKey: uniq("asset"),
+    localIdentifier: uniq("local"),
+    sourceType: "userLibrary",
+    matchKind: "import",
+    observedAt: new Date(),
+  });
+
 const mkImportRun = async (
   db: Database,
   values: Partial<
@@ -445,6 +473,7 @@ const TARGET_FACTORIES = {
   financialTransaction: mkFinancialTransaction,
   wish: mkWish,
   importRun: mkImportRun,
+  device: mkDevice,
 } satisfies Partial<Record<Entity, (db: Database) => Promise<{ id: string }>>>;
 
 /** One factory per must-target-live edge: insert a live SOURCE row whose FK
@@ -1465,6 +1494,22 @@ const SOURCE_FACTORIES = {
       platform: "ios",
       productId: parseEntityId("product", targetId),
     }),
+  "ImageSighting.imageId": (db, targetId) =>
+    mkImageSighting(db, { imageId: parseEntityId("image", targetId) }),
+  "ImageSighting.ledgerPartyId": (db, targetId) =>
+    mkImageSighting(db, {
+      ledgerPartyId: parseEntityId("ledgerParty", targetId),
+    }),
+  "ImageSighting.deviceId": (db, targetId) =>
+    mkImageSighting(db, { deviceId: parseEntityId("device", targetId) }),
+  "Image.capturedByPartyId": (db, targetId) =>
+    insertWithShortcode(db, "image", {
+      key: uniq("test/img"),
+      filename: "img.png",
+      size: 1,
+      contentType: "image/png",
+      capturedByPartyId: parseEntityId("ledgerParty", targetId),
+    }),
 } satisfies Record<
   string,
   (db: Database, targetId: string) => Promise<{ id: string }>
@@ -1583,11 +1628,11 @@ const derivedMustTargetLiveEdges = deriveMustTargetLiveEdges();
 describe("findReferentialLivenessViolations", () => {
   const ctx = withTestDb();
 
-  it("derives 130 must-target-live edges from INCOMING_EDGES × ENTITY_EDGE_SEMANTICS", () => {
+  it("derives 134 must-target-live edges from INCOMING_EDGES × ENTITY_EDGE_SEMANTICS", () => {
     // Mirrors EXPECTED_EDGE_COUNT in detectors-integrity.ts — an independent
     // spot check computed from the same two source-of-truth maps, not from the
     // detector's own (unexported) derivation.
-    expect(derivedMustTargetLiveEdges).toHaveLength(130);
+    expect(derivedMustTargetLiveEdges).toHaveLength(134);
   });
 
   it("the hand-written fixture map covers exactly the derived edges (a new edge fails here, not silently)", () => {
