@@ -180,7 +180,8 @@ function usePhotoRunImages(runId: string) {
 
 function PhotoRunTargets({ run }: { run: ImportRunDetail }) {
   const images = usePhotoRunImages(run.publicId);
-  if (images.isLoading)
+  // A failed background refetch must not replace photos already on screen.
+  if (images.isLoading && !images.data)
     return (
       <Card>
         <CardContent>
@@ -188,7 +189,7 @@ function PhotoRunTargets({ run }: { run: ImportRunDetail }) {
         </CardContent>
       </Card>
     );
-  if (images.isError)
+  if (images.isError && !images.data)
     return (
       <Card>
         <CardContent>
