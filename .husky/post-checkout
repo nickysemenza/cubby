@@ -5,7 +5,12 @@
 # the new tree's recipebridge/ (or a local path-dep) differs from the built one.
 [ "$3" = "1" ] || exit 0
 ROOT="$(git rev-parse --show-toplevel)"
-node "$ROOT/scripts/ensure-wasm.ts"
+# `git worktree add` fires this before the new tree has node_modules, and
+# ensure-wasm.ts imports zod; `pnpm agent:setup` builds the WASM right after
+# its install, so a fresh worktree skips instead of printing a module crash.
+if [ -d "$ROOT/node_modules/zod" ]; then
+  node "$ROOT/scripts/ensure-wasm.ts"
+fi
 # Cubby.xcodeproj is generated and gitignored; after a branch switch it can
 # reference files the new tree lacks (actool then dies on a nil object).
 . "$ROOT/scripts/ensure-xcodeproj.sh"
