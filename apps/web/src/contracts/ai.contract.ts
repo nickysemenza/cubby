@@ -11,6 +11,7 @@ import {
   approveDetectedInventoryItemOut,
   detectedInventorySchema,
   enrichmentProposalPrecomputeInput,
+  externalIdKindSuggestionInput,
   fieldSuggestionsInput,
   fieldSuggestionsOut,
   ingredientMergeSuggestionBatchInput,
@@ -18,6 +19,7 @@ import {
   locationDescriptionSchema,
   productIdentificationInput,
   productIdentificationSchema,
+  suggestExternalIdKindOut,
   usdaFoodSuggestionBatchInput,
   usdaFoodSuggestionBatchOut,
   usdaFoodSuggestionInput,
@@ -86,6 +88,12 @@ export const aiContract = defineContract("ai", {
   suggestFields: query({
     input: fieldSuggestionsInput,
     output: fieldSuggestionsOut,
+    http: false,
+  }),
+  // Same reason as `suggestFields`: a per-row hint, not a public HTTP query.
+  suggestExternalIdKind: query({
+    input: externalIdKindSuggestionInput,
+    output: suggestExternalIdKindOut,
     http: false,
   }),
   usageRecent: query({

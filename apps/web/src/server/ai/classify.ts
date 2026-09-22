@@ -15,6 +15,32 @@ import type { AiDecisionFeature } from "~/server/ai/features";
 import { type JevPort, runJevChoice } from "~/server/ai/jev";
 import type { AiRunContext } from "~/server/ai/run-feature";
 
+/** One runner-up: the caller (`resolveEnumTarget`) applies its own
+ * `labelOf`/`describe` to render this into the wire's `label`/`detail`. */
+export interface ClassifyAlternative<Value extends string> {
+  value: Value;
+  probability: number;
+}
+
+/** Top-3 runners-up (after the winner) from Jev's ranked distribution,
+ * mapped back to the roster's own values. Empty when `runJevChoice` has
+ * nothing to rank (an exhaustive vocabulary of one). */
+function alternativesFrom<Value extends string>(
+  ranked: { index: number; probability: number }[],
+  selectedIndex: number | null,
+  values: readonly Value[],
+): ClassifyAlternative<Value>[] {
+  return ranked
+    .filter((entry) => entry.index !== selectedIndex)
+    .slice(0, 3)
+    .flatMap((entry) => {
+      const value = values[entry.index];
+      return value === undefined
+        ? []
+        : [{ value, probability: entry.probability }];
+    });
+}
+
 export async function classifyWithJev<Value extends string>(args: {
   feature: AiDecisionFeature;
   subject: string;
@@ -28,19 +54,28 @@ export async function classifyWithJev<Value extends string>(args: {
   confidence: Confidence;
   probability: number;
   reasoning: "";
+  alternatives: ClassifyAlternative<Value>[];
 }> {
-  const { selectedIndex, confidence, probability } = await runJevChoice({
-    feature: args.feature,
-    subject: args.subject,
-    rules: args.rules,
-    choices: args.values.map((value) => `${value}: ${args.describe(value)}`),
-    usage: args.usage,
-    allowNone: false,
-    port: args.port,
-  });
+  const { selectedIndex, confidence, probability, ranked } = await runJevChoice(
+    {
+      feature: args.feature,
+      subject: args.subject,
+      rules: args.rules,
+      choices: args.values.map((value) => `${value}: ${args.describe(value)}`),
+      usage: args.usage,
+      allowNone: false,
+      port: args.port,
+    },
+  );
   const value = selectedIndex === null ? undefined : args.values[selectedIndex];
   if (value === undefined) {
     throw new Error("Jev classification returned no value.");
   }
-  return { value, confidence, probability, reasoning: "" };
+  return {
+    value,
+    confidence,
+    probability,
+    reasoning: "",
+    alternatives: alternativesFrom(ranked, selectedIndex, args.values),
+  };
 }

@@ -103,6 +103,12 @@ export interface JevChoiceResult {
   confidence: Confidence;
   /** Jev's calibrated probability for the selected choice, before bucketing. */
   probability: number;
+  /**
+   * Every candidate's calibrated probability, desc by probability, `none`
+   * excluded — the winner is `ranked[0]` (barring a probability tie). A
+   * caller wanting runners-up filters out `selectedIndex` itself.
+   */
+  ranked: { index: number; probability: number }[];
 }
 
 /**
@@ -115,8 +121,10 @@ export type JevPort = (input: JevChoiceInput) => Promise<JevChoiceResponse>;
 // Jev's calibrated probability for the winning choice is bucketed into the
 // public `confidence` here. TODO: expose the raw probability on the wire (a
 // nullable field on the suggestion schemas) once the proposal UI has a place
-// to show it.
-function decisionConfidence(probability: number): Confidence {
+// to show it. Exported so a caller that computes its own aggregate
+// probability (e.g. the min across several prune-target removals) can bucket
+// it the same way instead of re-deriving the thresholds.
+export function decisionConfidence(probability: number): Confidence {
   if (probability >= 0.85) return "high";
   if (probability >= 0.6) return "medium";
   return "low";
@@ -286,12 +294,17 @@ export async function runJevChoice(args: {
     throw new Error("Jev selected a key absent from its probability map.");
   }
   const confidence = decisionConfidence(selectedProbability);
+  const ranked = Object.entries(answer.probabilities)
+    .filter(([key]) => key !== NONE_KEY)
+    .map(([key, probability]) => ({ index: Number(key.slice(1)), probability }))
+    .sort((a, b) => b.probability - a.probability);
 
   if (answer.choice === NONE_KEY) {
     return {
       selectedIndex: null,
       confidence,
       probability: selectedProbability,
+      ranked,
     };
   }
   const selectedIndex = Number(answer.choice.slice(1));
@@ -301,5 +314,10 @@ export async function runJevChoice(args: {
   ) {
     throw new Error("Jev selected an unknown candidate key.");
   }
-  return { selectedIndex, confidence, probability: selectedProbability };
+  return {
+    selectedIndex,
+    confidence,
+    probability: selectedProbability,
+    ranked,
+  };
 }

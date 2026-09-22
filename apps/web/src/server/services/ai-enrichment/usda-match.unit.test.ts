@@ -137,6 +137,7 @@ describe("suggestUsdaFood", () => {
           confidence: "high",
           probability: 0.99,
           reasoning: "matched",
+          alternatives: [],
         };
       },
     };
@@ -160,6 +161,7 @@ describe("suggestUsdaFood", () => {
         confidence: "low",
         probability: 0.1,
         reasoning: "hallucinated an fdcId",
+        alternatives: [],
       }),
     };
 
@@ -184,6 +186,7 @@ describe("suggestUsdaFood", () => {
           confidence: "low",
           probability: 0.1,
           reasoning: "n/a",
+          alternatives: [],
         };
       },
     };
@@ -207,6 +210,7 @@ describe("suggestUsdaFood", () => {
           confidence: "low",
           probability: 0.1,
           reasoning: "n/a",
+          alternatives: [],
         };
       },
     };

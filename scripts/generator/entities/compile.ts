@@ -96,10 +96,42 @@ const compileEditIntents = (
  * fields must stay acyclic so one request can resolve them in dependency
  * order (see `docs/entities.md`).
  */
-const isValidSuggestTarget = (field: EntityField): boolean =>
-  (field.kind === "enum" && field.control?.kind === "select") ||
-  (field.reference !== null && !field.reference.multiple) ||
-  (field.kind === "text" && field.nullable);
+const isValidSuggestTarget = (
+  field: EntityField,
+  mode: "fill" | "prune",
+): boolean =>
+  mode === "prune"
+    ? field.kind === "text-array"
+    : (field.kind === "enum" && field.control?.kind === "select") ||
+      (field.reference !== null && !field.reference.multiple) ||
+      (field.kind === "text" && field.nullable);
+
+const validateSuggestField = (
+  field: EntityField,
+  fieldKeys: ReadonlySet<string>,
+  context: string,
+): void => {
+  const fieldContext = `${context}.${field.key}.control.suggest`;
+  const mode = field.control?.suggest?.mode ?? "fill";
+  if (!isValidSuggestTarget(field, mode))
+    throw new EntityDeclarationError(
+      mode === "prune"
+        ? `${fieldContext} prune target must be a text-array field.`
+        : `${fieldContext} target must be a select-controlled enum, a singular (non-multiple) reference, or a nullable text field.`,
+    );
+  for (const key of field.control?.suggest?.basis ?? []) {
+    // A prune target judges its own current entries and is therefore an
+    // implicit self-basis; naming itself explicitly stays an error.
+    if (key === field.key)
+      throw new EntityDeclarationError(
+        `${fieldContext}.basis cannot name its own field (${key}).`,
+      );
+    if (!fieldKeys.has(key))
+      throw new EntityDeclarationError(
+        `${fieldContext}.basis references ${key}, which is not a model field on this entity.`,
+      );
+  }
+};
 
 const validateFieldSuggestions = (
   fields: readonly EntityField[],
@@ -110,24 +142,8 @@ const validateFieldSuggestions = (
     (field) => field.control?.suggest != null,
   );
   if (suggestFields.length === 0) return;
-  for (const field of suggestFields) {
-    const fieldContext = `${context}.${field.key}.control.suggest`;
-    if (!isValidSuggestTarget(field))
-      throw new EntityDeclarationError(
-        `${fieldContext} target must be a select-controlled enum, a singular (non-multiple) reference, or a nullable text field.`,
-      );
-    const basis = field.control?.suggest?.basis ?? [];
-    for (const key of basis) {
-      if (key === field.key)
-        throw new EntityDeclarationError(
-          `${fieldContext}.basis cannot name its own field (${key}).`,
-        );
-      if (!fieldKeys.has(key))
-        throw new EntityDeclarationError(
-          `${fieldContext}.basis references ${key}, which is not a model field on this entity.`,
-        );
-    }
-  }
+  for (const field of suggestFields)
+    validateSuggestField(field, fieldKeys, context);
   // Edge basisKey -> targetKey only when basisKey is itself a suggest
   // target: the server resolves that basis value from the same request, so
   // it must be reachable before `field.key` resolves.

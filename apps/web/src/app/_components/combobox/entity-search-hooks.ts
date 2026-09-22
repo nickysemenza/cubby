@@ -253,6 +253,37 @@ const resolveSearchPath = (
   };
 };
 
+/**
+ * Renumbers each grouped item's `presentation.group.order` to its group's
+ * first-appearance index in `items` — every builder that stamps a group
+ * (e.g. `buildLocationComboboxItem`) has no visibility into its siblings, so
+ * it can only ever assign one constant. The blank-query roster is typically
+ * sorted by the row's OWN name, not clustered by root, so without this a
+ * root's rows interleave with other roots' and the group header (rendered
+ * on every `group.id` transition, `EntityPicker`) would repeat. Leaves
+ * ungrouped items untouched and preserves each group's internal order.
+ */
+export function stabilizeGroupOrder<TId extends string>(
+  items: readonly ComboboxItem<TId>[],
+): ComboboxItem<TId>[] {
+  const orderByGroupId = new Map<string, number>();
+  return items.map((item) => {
+    const group = item.presentation?.group;
+    if (!group) return item;
+    let order = orderByGroupId.get(group.id);
+    if (order === undefined) {
+      order = orderByGroupId.size;
+      orderByGroupId.set(group.id, order);
+    }
+    return order === group.order
+      ? item
+      : {
+          ...item,
+          presentation: { ...item.presentation, group: { ...group, order } },
+        };
+  });
+}
+
 const buildSearchItems = <
   E extends PickerSearchEntity,
   TId extends string,
@@ -273,7 +304,7 @@ const buildSearchItems = <
     // TDetail is the smaller picker-facing structural shape that config needs.
     return [config.buildDetail(exactItem as TDetail)];
   }
-  if (useBlankPath) return (rows ?? []).map(config.build);
+  if (useBlankPath) return stabilizeGroupOrder((rows ?? []).map(config.build));
   return (searchHits ?? []).map(config.buildSearchHit);
 };
 

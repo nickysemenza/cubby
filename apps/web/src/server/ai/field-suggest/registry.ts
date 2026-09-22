@@ -24,6 +24,10 @@ import {
   mealTypeValues,
 } from "@cubby/schemas/meal-classification";
 import {
+  type ProductCategoryFeature,
+  productCategoryFeatureValues,
+} from "@cubby/schemas/product-category-fields";
+import {
   TRADE_LABELS,
   type Trade,
   tradeValues,
@@ -33,6 +37,12 @@ import {
   type ProjectKind,
   projectKindValues,
 } from "@cubby/schemas/project-fields";
+import { isCollectionTag } from "@cubby/shared/collection-tag";
+import {
+  redundantTokens,
+  type RedundantTokenMatch,
+} from "@cubby/shared/redundant-tokens";
+import { z } from "zod";
 
 import {
   COST_TYPE_DESCRIPTIONS,
@@ -43,8 +53,11 @@ import {
   MEAL_KIND_RULES,
   MEAL_TYPE_DESCRIPTIONS,
   MEAL_TYPE_RULES,
+  PRODUCT_CATEGORY_FEATURE_DESCRIPTIONS,
+  PRODUCT_CATEGORY_FEATURE_RULES,
   PROJECT_KIND_DESCRIPTIONS,
   PROJECT_KIND_RULES,
+  TAG_PRUNE_RULES,
   TRADE_DESCRIPTIONS,
   TRADE_RULES,
 } from "~/server/ai/vocabularies";
@@ -114,10 +127,41 @@ export interface TextRosterSuggestSpec {
   subject(basis: ResolvedBasis): string;
 }
 
+/**
+ * A `control.suggest.mode: "prune"` target: instead of picking a value, it
+ * proposes *removing* entries from its own current array (an implicit
+ * self-basis — `docs/entities.md`). `suggest-fields.ts`'s `resolvePruneTarget`
+ * is the only reader: it parses the self-basis JSON array via `candidates`,
+ * asks `deterministic` for the subset `redundantTokens` already flags at
+ * probability 1, then spends at most `maxJevCandidates` per-tag Jev binary
+ * calls (`rules` + `subject`) on the rest.
+ */
+export interface ArrayPruneSuggestSpec {
+  kind: "prune";
+  rules: string;
+  /** The target field's own manifest key (e.g. `"tags"`) — where the
+   * self-basis JSON array lives in `raw`. */
+  arrayKey: string;
+  /** Caps the per-survivor Jev calls a large ad-hoc tag list could incur. */
+  maxJevCandidates: number;
+  /** Every current entry eligible for pruning: the self-basis array minus
+   * `collection:*` (Collections' own namespace, never a prune candidate). */
+  candidates(basis: ResolvedBasis, raw: RawBasis): readonly string[];
+  /** The subset of `candidates(...)` already redundant with no Jev call. */
+  deterministic(
+    basis: ResolvedBasis,
+    raw: RawBasis,
+    db: Database,
+  ): Promise<readonly RedundantTokenMatch[]>;
+  /** One survivor tag's Jev subject line. */
+  subject(basis: ResolvedBasis, value: string): string;
+}
+
 export type FieldSuggestSpec =
   | EnumSuggestSpec<string>
   | ReferenceSuggestSpec<unknown>
-  | TextRosterSuggestSpec;
+  | TextRosterSuggestSpec
+  | ArrayPruneSuggestSpec;
 
 type AnyEntityFieldModel =
   (typeof entityFieldModels)[keyof typeof entityFieldModels];
@@ -230,6 +274,40 @@ const renderProductCategoryOption = (
     .join(" — ");
 };
 
+const jsonStringArraySchema = z.array(z.string());
+
+/** Parses a JSON-encoded string array from a basis value (self-basis tags,
+ * or a sibling text-array basis field like `aliases`); `null`/invalid JSON/a
+ * non-array shape all read as "no signal" rather than throwing — a raw basis
+ * value is untrusted client input. */
+function parseJsonStringArray(
+  raw: string | null | undefined,
+): readonly string[] | null {
+  if (!raw) return null;
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    const result = jsonStringArraySchema.safeParse(parsed);
+    return result.success ? result.data : null;
+  } catch {
+    return null;
+  }
+}
+
+/** `raw[arrayKey]`'s current entries minus `collection:*` (Collections' own
+ * namespace, never a prune candidate) — every `ArrayPruneSuggestSpec`'s
+ * `candidates` is this same parse, so it is factored out once. */
+function pruneCandidates(raw: RawBasis, arrayKey: string): readonly string[] {
+  return (parseJsonStringArray(raw[arrayKey] ?? null) ?? []).filter(
+    (value) => !isCollectionTag(value),
+  );
+}
+
+/** `product.tags`'s subject line: the shared product subject plus the one
+ * candidate tag under review — `ArrayPruneSuggestSpec.subject` is called once
+ * per survivor, not once per request. */
+const productTagPruneSubject = (basis: ResolvedBasis, value: string): string =>
+  `${renderSubject("product", basis)}\nCandidate tag: "${value}"`;
+
 export const FIELD_SUGGEST_REGISTRY = {
   "planting.status": {
     kind: "enum",
@@ -263,6 +341,13 @@ export const FIELD_SUGGEST_REGISTRY = {
     // Categories are a taxonomy rather than a household-sized roster. Show
     // every live node; `runAiSelection` uses its overflow path above Jev's
     // choice limit instead of silently dropping broad roots or their leaves.
+    //
+    // The picker's pinned "Suggested" section (`use-auto-field-suggestion.ts`
+    // `seedItems`) reads Jev's `alternatives`, which only the decision-tier
+    // path produces — the overflow chat-tier pick (`selection.ts`) always
+    // returns `alternatives: []`. Past `JEV_MAX_CANDIDATES` (254) live nodes
+    // this roster crosses into overflow and "Suggested" quietly degrades to
+    // the single winner. 29 nodes today; revisit if the taxonomy grows.
     maxCandidates: Number.MAX_SAFE_INTEGER,
     roster: async (db, basis) =>
       rankCategoryCandidates(await listProductCategoryTreeOptions(db), basis),
@@ -272,6 +357,39 @@ export const FIELD_SUGGEST_REGISTRY = {
     renderLine: renderProductCategoryOption,
     subject: (basis) => renderSubject("product", basis),
   } satisfies ReferenceSuggestSpec<ProductCategorySuggestionOption>,
+  "product.tags": {
+    kind: "prune",
+    rules: TAG_PRUNE_RULES,
+    arrayKey: "tags",
+    maxJevCandidates: 8,
+    candidates: (_basis, raw) => pruneCandidates(raw, "tags"),
+    // `raw.categoryId` is the still-unresolved shortcode (`RawBasis`, unlike
+    // `basis.categoryId`'s display label) — the same raw-shortcode-lookup
+    // shape as `inventory.locationId`'s `productId` above. Reuses
+    // `product.categoryId`'s own roster fetch rather than a new query: the
+    // taxonomy is small (29 nodes today) and already loaded for that target
+    // when both are requested together.
+    deterministic: async (basis, raw, db) => {
+      const values = pruneCandidates(raw, "tags");
+      if (values.length === 0) return [];
+      const categoryShortcode = raw.categoryId ?? null;
+      const category = categoryShortcode
+        ? (await listProductCategoryTreeOptions(db)).find(
+            (option) => option.id === categoryShortcode,
+          )
+        : null;
+      return redundantTokens({
+        values,
+        restating: {
+          manufacturer: basis.manufacturer,
+          classification: category?.path.map((node) => node.name) ?? null,
+          feature: category?.feature ?? null,
+          alias: parseJsonStringArray(basis.aliases),
+        },
+      });
+    },
+    subject: productTagPruneSubject,
+  } satisfies ArrayPruneSuggestSpec,
   "location.type": {
     kind: "enum",
     values: locationType.options,
@@ -308,6 +426,14 @@ export const FIELD_SUGGEST_REGISTRY = {
     rules: PROJECT_KIND_RULES,
     subject: (basis) => renderSubject("project", basis),
   } satisfies EnumSuggestSpec<ProjectKind>,
+  "project.defaultTrade": {
+    kind: "enum",
+    values: tradeValues,
+    describe: (v) => TRADE_DESCRIPTIONS[v],
+    labelOf: (v) => TRADE_LABELS[v],
+    rules: TRADE_RULES,
+    subject: (basis) => renderSubject("project", basis),
+  } satisfies EnumSuggestSpec<Trade>,
   "meal.mealType": {
     kind: "enum",
     values: mealTypeValues,
@@ -413,6 +539,21 @@ export const FIELD_SUGGEST_REGISTRY = {
     },
     subject: (basis) => renderSubject("expense", basis),
   } satisfies TextRosterSuggestSpec,
+  "purchase.defaultTrade": {
+    kind: "enum",
+    values: tradeValues,
+    describe: (v) => TRADE_DESCRIPTIONS[v],
+    labelOf: (v) => TRADE_LABELS[v],
+    rules: TRADE_RULES,
+    subject: (basis) => renderSubject("purchase", basis),
+  } satisfies EnumSuggestSpec<Trade>,
+  "productCategory.feature": {
+    kind: "enum",
+    values: productCategoryFeatureValues,
+    describe: (v) => PRODUCT_CATEGORY_FEATURE_DESCRIPTIONS[v],
+    rules: PRODUCT_CATEGORY_FEATURE_RULES,
+    subject: (basis) => renderSubject("productCategory", basis),
+  } satisfies EnumSuggestSpec<ProductCategoryFeature>,
 } satisfies Record<GeneratedSuggestFieldKey, FieldSuggestSpec>;
 
 export function fieldSuggestSpecFor(

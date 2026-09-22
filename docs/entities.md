@@ -331,17 +331,32 @@ does not accidentally widen the candidate set. Scope constrains discovery,
 not stored values: existing selections remain visible and can be removed even
 when another field changes and they no longer match the candidate query.
 
-`control.suggest: { basis }` marks a field whose value the decision tier (Jev)
-infers from named sibling fields, so the browser editor can auto-fill it while
-untouched and offer a one-tap apply once a value already exists. `basis` names
-model field keys on the same entity only — never an `intents.editorFields`
+`control.suggest: { basis, mode }` marks a field whose value the decision tier
+(Jev) infers from named sibling fields, so the browser editor can auto-fill it
+while untouched and offer a one-tap apply once a value already exists. `basis`
+names model field keys on the same entity only — never an `intents.editorFields`
 pseudo field, since detail/table/bulk surfaces have no editor-field data to
-read. The target must be a select-controlled enum, a singular (non-multiple)
-reference, or a nullable text field (a roster-backed name, e.g. `expense.vendor`);
-the compiler rejects anything else, a basis key that doesn't resolve to a model
-field, a basis key naming the field itself, and any cycle in the basis → target
-edges across an entity's suggest fields, so one request can always resolve every
-target in dependency order. The generated `suggestFieldKeys` tuple
+read. `mode: "fill"` (the default) targets a select-controlled enum, a singular
+(non-multiple) reference, or a nullable text field (a roster-backed name, e.g.
+`expense.vendor`); the compiler rejects anything else, a basis key that doesn't
+resolve to a model field, a basis key naming the field itself, and any cycle in
+the basis → target edges across an entity's suggest fields, so one request can
+always resolve every target in dependency order.
+
+`mode: "prune"` targets a `text-array` field instead (the compiler rejects any
+other kind) and proposes *removals* rather than a value: entries whose value
+restates one of the named `basis` fields (a manufacturer name, a classification
+path segment) are candidates to drop, never to add. A prune target judges its
+own current entries, so it is an implicit self-basis — naming it explicitly in
+`basis` is still an error, but the client and server both fold the target's own
+current value into the resolved basis automatically, JSON-encoded since the
+value is an array. The resulting `FieldSuggestion` carries
+`operation: "remove"` and a `removals[]` list instead of a plain `value`; the
+generic review surfaces render it as a removal proposal, never an auto-apply,
+and a form-mode `FieldSuggestionProvider` skips prune targets by default
+(record surfaces — list/detail — request them).
+
+The generated `suggestFieldKeys` tuple
 (`packages/schemas/src/generated/entity-field-model.gen.ts`) lists every
 declared `"entity.field"` suggest target, and its `GeneratedSuggestFieldKey`
 union type-enforces that the server's field-suggest registry carries exactly

@@ -596,6 +596,13 @@ export const ProductForm: FC<ProductFormProps> = (props) => {
       <FieldSuggestionProvider
         entity="product"
         mode={product ? "edit" : "create"}
+        // Explicit roster: `product.tags` is the entity's only other
+        // `control.suggest` field (a `mode: "prune"` target once the tag
+        // pruning work lands), and a form-mode provider has no business
+        // firing that target — pruning is a record-surface operation until
+        // the tags `ChipsInput` wiring lands. Naming `categoryId` alone keeps
+        // this provider scoped to `fill` targets even after that lands.
+        fieldKeys={["categoryId"]}
         staticBasis={classificationEvidenceBasis}
         paths={{
           name: productFormFieldPaths.name,

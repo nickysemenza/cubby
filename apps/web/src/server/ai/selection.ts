@@ -91,6 +91,10 @@ export interface AiSelectionOutcome<C> {
   probability: number | null;
   /** Empty for a decision-tier pick, which writes no prose. */
   reasoning: string;
+  /** Top-3 runners-up (after `selected`), from Jev's ranked distribution.
+   * Always `[]` on the overflow/chat-tier path — a prose pick has no
+   * distribution to rank — and when there were no candidates to choose from. */
+  alternatives: { candidate: C; probability: number }[];
 }
 
 /** The overflow model is copying an id out of prose; tolerate the
@@ -121,6 +125,7 @@ export async function runAiSelection<C>(
       confidence: "low",
       probability: null,
       reasoning: "No candidates were available to choose from.",
+      alternatives: [],
     };
   }
 
@@ -142,6 +147,7 @@ export async function runAiSelection<C>(
       confidence: result.confidence,
       probability: null,
       reasoning: result.reasoning,
+      alternatives: [],
     };
   }
 
@@ -153,6 +159,15 @@ export async function runAiSelection<C>(
     usage: args.usage,
     port: args.jev,
   });
+  const alternatives = result.ranked
+    .filter((entry) => entry.index !== result.selectedIndex)
+    .slice(0, 3)
+    .flatMap((entry) => {
+      const candidate = shown[entry.index];
+      return candidate === undefined
+        ? []
+        : [{ candidate, probability: entry.probability }];
+    });
   return {
     selected:
       result.selectedIndex === null
@@ -161,5 +176,6 @@ export async function runAiSelection<C>(
     confidence: result.confidence,
     probability: result.probability,
     reasoning: "",
+    alternatives,
   };
 }

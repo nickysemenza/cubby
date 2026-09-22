@@ -15,6 +15,24 @@ const suggestion: FieldSuggestion = {
   probability: 0.97,
   detail: null,
   reasoning: "",
+  alternatives: [],
+  operation: "set",
+  removals: [],
+};
+
+const removeSuggestion: FieldSuggestion = {
+  value: "apparel, jacquemus",
+  label: "Remove apparel, jacquemus",
+  confidence: "high",
+  probability: 0.9,
+  detail: "restates classification, manufacturer",
+  reasoning: "",
+  alternatives: [],
+  operation: "remove",
+  removals: [
+    { value: "jacquemus", probability: 0.95, reason: "restates manufacturer" },
+    { value: "apparel", probability: 0.9, reason: "restates classification" },
+  ],
 };
 
 describe("inline suggestion review", () => {
@@ -35,6 +53,55 @@ describe("inline suggestion review", () => {
       ).toBe(shown);
     },
   );
+
+  it.each([
+    [0.849, false],
+    [0.85, true],
+    [0.95, true],
+  ] as const)(
+    "a remove (prune) suggestion gates at 0.85, never the 0.95 alternative floor — probability=%s",
+    (probability, shown) => {
+      expect(
+        actionableSuggestion(
+          { ...removeSuggestion, probability },
+          "apparel, jacquemus, mount",
+        ),
+      ).toBe(shown);
+      // `alternative: true` (the "provided" basisMode gate) never raises a
+      // remove op's floor to 0.95.
+      expect(
+        actionableSuggestion({ ...removeSuggestion, probability }, null, true),
+      ).toBe(shown);
+    },
+  );
+
+  it("shows a remove proposal's own apply/secondary labels and muted reason", () => {
+    const save = vi.fn().mockResolvedValue(undefined);
+    render(
+      <SuggestionReview
+        suggestion={removeSuggestion}
+        currentValue="apparel, jacquemus, mount"
+        questionKey="tags"
+        onApply={save}
+      >
+        <span>mount</span>
+      </SuggestionReview>,
+    );
+    // The current chips (`children`) always render for a remove proposal —
+    // there is no "replace with a new value" arrow flow.
+    expect(screen.getByText("mount")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Remove apparel, jacquemus — restates classification, manufacturer",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Use suggestion" }),
+    ).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Remove tags" }));
+    expect(save).toHaveBeenCalledOnce();
+    expect(screen.getByRole("button", { name: "Keep" })).toBeInTheDocument();
+  });
 
   it("requires 0.95 for a provided alternative even when the stored value is explicit None", () => {
     expect(

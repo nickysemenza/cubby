@@ -27,6 +27,9 @@ interface SuggestTarget {
   readonly reference: ManifestField["reference"];
   /** The model fields (of the same entity) whose values feed this target. */
   readonly basis: readonly string[];
+  /** `"fill"` proposes a value; `"prune"` (text-array only) proposes
+   * removing entries that restate a `basis` field. */
+  readonly mode: "fill" | "prune";
 }
 
 export interface SuggestTargets {
@@ -88,8 +91,14 @@ export function suggestTargetsFor(
       label: field.label,
       reference: field.reference,
       basis: suggest.basis,
+      mode: suggest.mode,
     });
     for (const basisKey of suggest.basis) basisKeys.add(basisKey);
+    // A prune target judges its own current entries, so it is an implicit
+    // self-basis (the manifest compiler rejects naming it explicitly) — add
+    // it here so every caller that watches `basisKeys` (the provider, a
+    // record's basis snapshot) ships the target's current value too.
+    if (suggest.mode === "prune") basisKeys.add(field.key);
   }
   if (targets.length === 0) return EMPTY_TARGETS;
   return { targets, basisKeys: [...basisKeys] };
@@ -103,11 +112,14 @@ function fieldByKey(
 }
 
 const basisIdSchema = z.object({ id: z.string() });
+const basisArraySchema = z.array(z.string());
 
 /**
  * A basis value in the shape `ai.suggestFields` wants: a trimmed string, an
  * id pulled off a picker's `{ id }` value (`ComboboxItem`-shaped or a raw
- * `{id}`), or `null` when the value carries nothing usable.
+ * `{id}`), a JSON-encoded array (a text-array field's current entries — a
+ * prune target's own self-basis, or a sibling array field like `aliases`),
+ * or `null` when the value carries nothing usable.
  */
 export function basisValueOf(value: unknown): string | null {
   const text = z.string().safeParse(value);
@@ -120,6 +132,8 @@ export function basisValueOf(value: unknown): string | null {
     const trimmed = withId.data.id.trim();
     return trimmed.length > 0 ? trimmed : null;
   }
+  const array = basisArraySchema.safeParse(value);
+  if (array.success) return JSON.stringify(array.data);
   return null;
 }
 
