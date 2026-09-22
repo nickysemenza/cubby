@@ -1,12 +1,13 @@
-import { importRunShortcode } from "@cubby/schemas/identifiers";
-import { imageWithEntitySchema } from "@cubby/schemas/image";
+import { imageShortcode, importRunShortcode } from "@cubby/schemas/identifiers";
+import type {
+  PhotoRunImage,
+  PhotoRunReview,
+} from "@cubby/schemas/photo-import-run";
 import { render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { image } from "~/entities/image.functions";
 import type { ImportRunDetail } from "~/lib/purchase-import-run-detail";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
-import { mock } from "~/lib/test/mock-schema";
 
 import { PhotoImportRunView } from "./photo-run-detail";
 
@@ -99,57 +100,46 @@ const run: ImportRunDetail = {
   approvals: [],
 };
 
-const runImages = [
-  mock(imageWithEntitySchema, {
-    seed: 1,
-    overrides: {
-      id: "IMG-4K7M",
-      filename: "closet-sweater.jpg",
-      url: "https://img.example.com/closet-sweater.jpg",
-      importTarget: { runId: run.publicId, state: "completed", position: 1 },
-      analysisSummary: {
-        description: "A folded sweater",
-        classifications: ["sweater", "wool"],
-        recognizedText: "Patagonia\nSize M",
-      },
-    },
-  }),
-  mock(imageWithEntitySchema, {
-    seed: 2,
-    overrides: {
-      id: "IMG-4K7N",
-      filename: "closet-jacket.jpg",
-      url: "https://img.example.com/closet-jacket.jpg",
-      importTarget: { runId: run.publicId, state: "completed", position: 2 },
-      analysisSummary: {
-        description: null,
-        classifications: [],
-        recognizedText: null,
-      },
-    },
-  }),
-  mock(imageWithEntitySchema, {
-    seed: 3,
-    overrides: {
-      id: "IMG-4K7P",
-      filename: "closet-unsorted.jpg",
-      url: "https://img.example.com/closet-unsorted.jpg",
-      importTarget: { runId: run.publicId, state: "pending", position: 3 },
-    },
-  }),
-];
+const photo = (
+  id: string,
+  position: number,
+  targetState: "completed" | "pending",
+  text: { description?: string; recognizedText?: string; cutout?: boolean },
+): PhotoRunImage => ({
+  id: imageShortcode.parse(id),
+  position,
+  targetState,
+  originalUrl: `https://img.example.com/${id}.jpg`,
+  cutoutUrl: text.cutout ? `https://img.example.com/${id}-cutout.png` : null,
+  cutout: null,
+  describe: null,
+  cutoutReason: null,
+  description: text.description ?? null,
+  recognizedText: text.recognizedText ?? null,
+});
+
+const review: PhotoRunReview = {
+  review: {
+    runId: RUN_ID,
+    runStatus: "completed",
+    proposals: [],
+    unassignedImageIds: [],
+  },
+  images: [
+    photo("IMG-4K7M", 1, "completed", {
+      description: "A folded sweater",
+      cutout: true,
+    }),
+    photo("IMG-4K7N", 2, "completed", { recognizedText: "Patagonia\nSize M" }),
+    photo("IMG-4K7P", 3, "pending", {}),
+  ],
+};
 
 beforeEach(() => {
   harness = createBrowserTestHarness();
   harness.queryClient.setQueryData(
-    image.list.queryKey({
-      filters: { importRunId: [run.publicId] },
-      pagination: { pageIndex: 0, pageSize: 200 },
-    }),
-    {
-      meta: { pageIndex: 0, pageSize: 200, totalCount: runImages.length },
-      items: runImages,
-    },
+    ["purchase-import", "run", RUN_ID, "photo-review"],
+    review,
   );
 });
 
@@ -158,7 +148,7 @@ afterEach(() => {
 });
 
 describe("PhotoImportRunView", () => {
-  it("shows the run header, progress tally, and images grouped by target state", async () => {
+  it("shows the run header, progress tally, and every run photo with its cutout and description", async () => {
     render(<PhotoImportRunView run={run} />, { wrapper: harness.wrapper });
 
     expect(
@@ -171,7 +161,7 @@ describe("PhotoImportRunView", () => {
       screen.getByText("Fall closet batch, top shelf"),
     ).toBeInTheDocument();
 
-    // Progress tally derived from `run.targets`, not from the images fetch.
+    // Progress tally derived from `run.targets`, not from the review fetch.
     // SAFETY: the "Progress" heading always renders inside its own `Card`
     // (see `PhotoRunProgress`), so the nearest `[data-slot="card"]` ancestor
     // is never null.
@@ -181,44 +171,20 @@ describe("PhotoImportRunView", () => {
     expect(within(progress).getByText("2")).toBeInTheDocument();
     expect(within(progress).getByText("1")).toBeInTheDocument();
 
-    // Images are grouped into one section per target state. Each card has
-    // two links to the same image (thumbnail + filename), so assert that at
-    // least one resolves to the right detail route rather than picking one.
-    // SAFETY: each state group heading renders inside its own `Card` (see
-    // `PhotoRunTargets`), so the nearest `[data-slot="card"]` ancestor is
-    // never null.
-    const completedSection = (
-      await screen.findByRole("heading", { name: "Completed" })
-    ).closest('[data-slot="card"]') as HTMLElement;
-    const sweaterLinks = within(completedSection).getAllByRole("link", {
-      name: /closet-sweater\.jpg/,
-    });
+    // Every run photo is a row linking to its image, with the cutout beside
+    // the original once the device has produced one.
     expect(
-      sweaterLinks.some((link) =>
-        link.getAttribute("href")?.includes("IMG-4K7M"),
-      ),
-    ).toBe(true);
+      await screen.findByRole("link", { name: "Open photo IMG-4K7M" }),
+    ).toHaveAttribute("href", "/images/IMG-4K7M");
     expect(
-      within(completedSection).getAllByRole("link", {
-        name: /closet-jacket\.jpg/,
-      }),
-    ).not.toHaveLength(0);
+      screen.getByRole("link", { name: "Open photo IMG-4K7P" }),
+    ).toBeInTheDocument();
+    expect(screen.getByAltText("Cutout of IMG-4K7M")).toBeInTheDocument();
+    expect(screen.queryByAltText("Cutout of IMG-4K7N")).not.toBeInTheDocument();
 
-    // SAFETY: same invariant as `completedSection` above.
-    const pendingSection = (
-      await screen.findByRole("heading", { name: "Pending" })
-    ).closest('[data-slot="card"]') as HTMLElement;
-    expect(
-      within(pendingSection).getAllByRole("link", {
-        name: /closet-unsorted\.jpg/,
-      }),
-    ).not.toHaveLength(0);
-
-    // OCR snippet (first line only) and classification chips render for the
-    // image that has an analysis summary.
+    // The description wins; without one, only the OCR text's first line shows.
+    expect(screen.getByText("A folded sweater")).toBeInTheDocument();
     expect(screen.getByText("Patagonia")).toBeInTheDocument();
     expect(screen.queryByText("Size M")).not.toBeInTheDocument();
-    expect(screen.getByText("sweater")).toBeInTheDocument();
-    expect(screen.getByText("wool")).toBeInTheDocument();
   });
 });

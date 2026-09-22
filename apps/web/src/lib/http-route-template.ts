@@ -108,6 +108,10 @@ const DYNAMIC_TRACE_ROUTES: ReadonlyArray<{
     template: "/api/import/runs/:publicId/agent",
   },
   {
+    pattern: /^\/api\/import\/runs\/[^/]+\/photo-groups$/u,
+    template: "/api/import/runs/:publicId/photo-groups",
+  },
+  {
     pattern: /^\/api\/import\/runs\/[^/]+\/agent\/.*$/u,
     template: "/api/import/runs/:publicId/agent/:splat",
   },
