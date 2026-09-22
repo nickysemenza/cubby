@@ -19,6 +19,11 @@ export interface PickerPresentation {
    * the row so a tree reads as a tree. `treePickerItems` (`tree-items.ts`)
    * sets this for every parent-linked entity's grouped list. */
   depth?: number;
+  /** What the list row shows instead of `name` — a tree node's own label
+   * ("Pants") while `name` stays the value the closed control displays and
+   * the input filters on ("Apparel / Clothes / Pants"). A row without it
+   * renders `name`. */
+  rowLabel?: string;
   /** Short action/status cue, e.g. "Need 2" or "In progress". */
   status?: {
     label: string;
