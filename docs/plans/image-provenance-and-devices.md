@@ -1,7 +1,8 @@
 # Image provenance, device participation, and background-activity visibility
 
-Status: **approved, in delivery** (2026-09-21). PR order and lane ownership are
-at the end; each PR removes its own line here when it merges.
+Status: **shipped** (2026-09-22). Every PR below is merged; the production
+schema expansion (runbook parts 1–3) is the remaining operator step and must
+run before the deployed code is exercised.
 
 ## Outcome
 
@@ -118,16 +119,20 @@ matched by a library scan regains its capture date and GPS and flips
 
 | PR | Scope | Status |
 | --- | --- | --- |
-| 0 | Generator emits open output schemas; regenerated `CubbyAPI`; response-body guard test | in PR |
-| 1 | `Device` entity, companion enforcement + legacy-hello compatibility, connections link | next |
-| 2 | Native participation switch, first-sign-in sheet, gate matrix, REST identity headers, generic Device create/update | |
-| 3a | `ImageSighting` entity, Image derived fields, derivation + adapter hook, commit `library` items, `attach_files` source fix, `screenshot`, edges, runbook, glossary, ADR | |
-| 3b | `imageList` onto `listScaffold`, Image data quality, provenance heuristics + `classifyImageProvenance`, location field renderer | |
-| 4 | Native activity center, iOS bottom accessory, macOS sidebar rows, Activity "This device", `Route.localActivity`, `CubbyLink.activity` | |
-| 5 | Native library metadata on import, `LibraryMetadataSync` backfill via generic sighting create, provenance section | |
-| 6 | Server EXIF extraction background task, `backfillImageMetadata` | |
+| 0 | Generator emits open output schemas; regenerated `CubbyAPI`; response-body guard test | #1190 |
+| 1 | `Device` entity, companion enforcement, connections link | #1193 |
+| 2 | Native participation switch, first-sign-in sheet, gate matrix, REST identity headers, generic Device create/update | #1194 |
+| 3a | `ImageSighting` entity, Image derived fields, derivation + adapter hook, commit `library` items, `attach_files` source fix, `screenshot`, edges, runbook, glossary, ADR | #1198 |
+| 3b | `imageList` onto `listScaffold`, Image data quality, provenance heuristics + `classifyImageProvenance`, location field renderer | #1200 |
+| 4 | Native activity center, iOS bottom accessory, macOS sidebar rows, Activity "This device", `Route.localActivity`, `CubbyLink.activity` | #1192 |
+| 5 | Native library metadata on import, `LibraryMetadataSync` backfill via generic sighting create, provenance section | #1199 |
+| 6 | Server EXIF extraction background task, `backfillImageMetadata` | #1201 |
 
-Rollout: 0 (deploy + install everywhere) → 1 → 2 (TestFlight) → 3a/3b
-(runbook expand → deploy → `classifyImageProvenance` dry-run → apply) → 4/5
-(TestFlight) → 6 (deploy → backfill). All new inputs are optional so older
-native payloads stay valid throughout.
+Rollout lesson: `deploy.yaml` deploys every push to `main` and never applies
+schema, while auto-merge lands a green PR the moment CI passes — so the
+schema-bearing PRs deployed *before* their runbook ran. A PR that adds a
+table or column must not be auto-merged until its runbook has been applied
+and read back (`docs/todos.md` carries the standing rule). Operator steps
+still open: apply runbook parts 1–3, then `classifyImageProvenance`
+dry-run → apply, then `backfillImageMetadata`; answer the participation
+sheet on each install.

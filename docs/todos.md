@@ -360,13 +360,15 @@ history is the archive. Permanent product constraints live in the
 
 ## Requires database changes
 
-- **Image provenance, `Device` entity, participation, activity bar** — in
-  delivery; see the [plan](plans/image-provenance-and-devices.md) for model,
-  derivation rule, compatibility constraints, and the PR table. Two new
-  manifest entities (`Device` `DEV-`, `ImageSighting` `IMS-`) plus additive
-  Image columns; runbook `docs/runbooks/image-provenance-schema.md` lands with
-  PR 3a. Hard gate: the open-output native client from PR 0 must be installed
-  on every household device before any server deploy adds a response field.
+- **Schema-bearing PRs must not auto-merge ahead of their runbook.**
+  `deploy.yaml` deploys every `main` push and never applies schema; the
+  image-provenance PRs (#1193, #1198, #1201) auto-merged green and deployed
+  against a database that lacked `Device`, `ImageSighting` and the new
+  `Image` columns until `docs/runbooks/image-provenance-schema.md` was run by
+  hand. Rule: a PR whose runbook adds a table/column is opened as a draft or
+  without auto-merge until the expansion is applied and read back; consider
+  a CI job that diffs `application-schema.json` against the live schema and
+  blocks merge on a missing column.
 
 - **HIGH PRIORITY — Generic durable data exceptions.** Every scored entity
   (`dataChecksByEntity`/`scoredEntities` in
