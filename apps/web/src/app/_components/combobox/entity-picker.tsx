@@ -183,7 +183,7 @@ function EntityPickerItemContent<TId extends string>({
     <span className="flex min-w-0 flex-1 flex-col">
       <span className="flex min-w-0 items-baseline gap-2 max-sm:flex-wrap max-sm:gap-x-2">
         <span className="min-w-0 flex-1 truncate max-sm:basis-full">
-          {item.name}
+          {item.presentation?.rowLabel ?? item.name}
         </span>
         {item.secondary ? (
           <span className="max-w-40 truncate text-xs text-muted-foreground max-sm:max-w-full">

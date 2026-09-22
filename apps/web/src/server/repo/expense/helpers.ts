@@ -288,7 +288,12 @@ const expenseTradeFieldResolution = (
     source,
     sourceEntity,
     matchesFallback: effectiveTrade === (row.fallbackTrade ?? null),
-    canReset: row.trade !== null,
+    // A principal line must keep a trade from somewhere (Expense, Purchase, or
+    // effective Project) — offering reset with no fallback would only send the
+    // write into validateExpenseInheritance's "requires a trade" error.
+    canReset:
+      row.trade !== null &&
+      (row.lineKind !== "principal" || (row.fallbackTrade ?? null) !== null),
   };
 };
 

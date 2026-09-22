@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { entityRefSchema } from "./entity";
+import { fieldResolutionSchema } from "./field-resolution";
 
 export const fieldExplanationInput = entityRefSchema.extend({
   field: z.string().min(1),
@@ -24,6 +25,7 @@ export const fieldExplanationOutput = z.object({
     description: z.string(),
   }),
   sources: z.array(fieldExplanationSource),
+  resolution: fieldResolutionSchema.nullable(),
   truncated: z.boolean(),
   evidenceFingerprint: z.string().nullable(),
   actions: z.array(

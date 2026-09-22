@@ -56,7 +56,11 @@ export function treePickerItems<T>(
   ) => {
     items.push({
       id: idOf(node),
-      name: labelOf(node),
+      // The full path is the item's value label: it is what the closed
+      // control shows once this node is selected and what typing filters
+      // on. The row itself renders the node's own label via `rowLabel`,
+      // since the group header and indent already carry the ancestry.
+      name: [...ancestorLabels, labelOf(node)].join(" / "),
       detail:
         depth === 0
           ? undefined
@@ -66,6 +70,7 @@ export function treePickerItems<T>(
       presentation: {
         group: { id: rootId, label: rootLabel, order: rootOrderIndex },
         depth,
+        rowLabel: labelOf(node),
       },
     });
     for (const child of childrenOf.get(idOf(node)) ?? []) {
