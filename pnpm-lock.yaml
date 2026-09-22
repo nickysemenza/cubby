@@ -834,6 +834,9 @@ importers:
       '@vitest/ui':
         specifier: 5.0.1
         version: 5.0.1(vitest@5.0.1)
+      concurrently:
+        specifier: ^10.0.5
+        version: 10.0.5
       dotenv:
         specifier: ^17.4.2
         version: 17.4.2

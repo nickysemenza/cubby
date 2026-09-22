@@ -556,6 +556,23 @@ history is the archive. Permanent product constraints live in the
   [docs/agents/xcode-mcp.md](agents/xcode-mcp.md) without Storybook's weight.
   Promote when agents keep reproducing edge states against real data; decide
   how it stays out of the production bundle (`mock-schema.ts` imports faker).
+  The data half is now covered: `pnpm db:dev:up/push/seed` plus `pnpm
+  dev:local` (`apps/web/tooling/scenarios/corpus.ts`) gives a persistent
+  local database with named, non-empty entities in every state the corpus
+  covers, so `dev:local` no longer needs the shared prod `DATABASE_URL` for
+  this. What remains is the route/component-preview half — driving one
+  component into an arbitrary state (loading/error/edge) without navigating
+  the full app to reach it.
+
+- **E2E against the dev server.** `pnpm --filter @cubby/web test:e2e:watch`
+  runs Playwright against a `vite build --watch` Worker bundle plus warm
+  PostgreSQL/IntegreSQL containers, not the Node `vite dev` server — Node
+  `vite dev` is not workerd, so tests that depend on Worker-only behavior
+  (bindings, Durable Objects, the entity-kernel routes as actually deployed)
+  would not exercise the real runtime there. Investigate whether a
+  `dev:local`-backed lane is worth adding as a faster iteration path for
+  UI-only specs; it could never become the CI merge gate (`docs/ci.md`
+  requires the workerd-backed harness), only an optional local shortcut.
 
 - **Declarative "many, clamped to one" cardinality.** The image-provenance
   work chose a many-row `ImageSighting` entity plus derived declared-`one`

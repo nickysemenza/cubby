@@ -11,6 +11,10 @@ import {
 } from "../../tooling/e2e-worker-resources";
 import { createE2EDatabase } from "./e2e-database";
 import { createE2EObjectStorage } from "./e2e-object-storage";
+import {
+  ensureHarnessServiceBundles,
+  type HarnessServiceBundles,
+} from "./harness-services/bundle";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -33,7 +37,8 @@ export interface E2EWorkerRuntime {
   close(): Promise<void>;
 }
 
-function installDatabaseEnvironment(databaseUrl: string) {
+/** Exported for tooling/dev-db-seed.ts, which needs this before its own `createHarness` call too. */
+export function installDatabaseEnvironment(databaseUrl: string) {
   const previous = new Map<EnvironmentKey, string | undefined>();
   for (const key of e2eEnvironmentKeys) previous.set(key, process.env[key]);
   process.env.E2E_DATABASE_URL = databaseUrl;
@@ -49,7 +54,12 @@ function installDatabaseEnvironment(databaseUrl: string) {
   };
 }
 
-function createHarness(databaseUrl: string, objectStorageUrl: string) {
+/** Exported for tooling/dev-db-seed.ts, which points this at the persistent dev database. */
+export function createHarness(
+  databaseUrl: string,
+  objectStorageUrl: string,
+  harnessServiceBundles: HarnessServiceBundles,
+) {
   const compatibilityDate = z
     .object({ compatibility_date: z.string() })
     .parse(
@@ -87,28 +97,32 @@ function createHarness(databaseUrl: string, objectStorageUrl: string) {
       {
         config: {
           name: "e2e-usda-empty",
-          main: "tests/e2e/harness-services/usda-empty.ts",
+          main: harnessServiceBundles.usdaEmpty,
+          no_bundle: true,
           compatibility_date: compatibilityDate,
         },
       },
       {
         config: {
           name: "e2e-upc-empty",
-          main: "tests/e2e/harness-services/upc-empty.ts",
+          main: harnessServiceBundles.upcEmpty,
+          no_bundle: true,
           compatibility_date: compatibilityDate,
         },
       },
       {
         config: {
           name: "e2e-purchase-agent-empty",
-          main: "tests/e2e/harness-services/purchase-agent-empty.ts",
+          main: harnessServiceBundles.purchaseAgentEmpty,
+          no_bundle: true,
           compatibility_date: compatibilityDate,
         },
       },
       {
         config: {
           name: "e2e-queue-sink",
-          main: "tests/e2e/harness-services/queue-sink.ts",
+          main: harnessServiceBundles.queueSink,
+          no_bundle: true,
           compatibility_date: compatibilityDate,
           queues: {
             consumers: [
@@ -178,7 +192,12 @@ export async function createE2EWorkerRuntime({
     const objectStorage = await createE2EObjectStorage();
     resources.objectStorage = objectStorage;
 
-    harness = createHarness(database.databaseUrl, objectStorage.url);
+    const harnessServiceBundles = await ensureHarnessServiceBundles();
+    harness = createHarness(
+      database.databaseUrl,
+      objectStorage.url,
+      harnessServiceBundles,
+    );
     resources.harness = harness;
     const { url } = await harness.listen();
     const baseURL = url.origin;
