@@ -5,6 +5,7 @@ import {
 } from "@cubby/schemas/data-quality";
 import { entitySchema, type Entity } from "@cubby/schemas/entity";
 import { describe, expect, it } from "vitest";
+import { z } from "zod";
 
 import { problemQueryDeclarations } from "./problem-registry";
 import { viewManifest } from "./view-manifest";
@@ -29,7 +30,7 @@ const isScoredEntity = (entity: Entity): entity is ScoredEntity =>
   Object.hasOwn(dataChecksByEntity, entity);
 
 const dataGapValues = (value: string | readonly string[]): string[] =>
-  Array.isArray(value) ? value : [value];
+  z.array(z.string()).safeParse(value).data ?? [z.string().parse(value)];
 
 const fromViewManifest = (): DataGapUsage[] =>
   Object.entries(viewManifest).flatMap(([entityKey, views]) => {

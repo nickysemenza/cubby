@@ -285,7 +285,7 @@ export const dataQualityFilterPredicates = <Filters extends object>(
   return predicates;
 };
 
-export const DATA_QUALITY_SORT = "dataQuality";
+const DATA_QUALITY_SORT = "dataQuality";
 
 /** `resolve` for `buildOrderBy`: the score, asc = weakest row first. */
 export const dataQualitySortResolver =

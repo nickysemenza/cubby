@@ -8,7 +8,7 @@ import {
   type FilterDescriptor,
 } from "./declarations.ts";
 
-export type CompiledDataQualityCheck = Readonly<{
+type CompiledDataQualityCheck = Readonly<{
   id: string;
   facet: string;
   kind: "missing" | "defect";
@@ -17,7 +17,7 @@ export type CompiledDataQualityCheck = Readonly<{
   message: string;
 }>;
 
-export type CompiledDataQuality = Readonly<{
+type CompiledDataQuality = Readonly<{
   checks: readonly CompiledDataQualityCheck[];
   exceptions: boolean;
   related: readonly string[];
@@ -30,14 +30,14 @@ export interface CompiledDataQualityResult {
   descriptors: readonly FilterDescriptor[];
 }
 
-export const DATA_QUALITY_FIELD = "dataQuality";
-export const DATA_GAPS_FIELD = "dataGaps";
+const DATA_QUALITY_FIELD = "dataQuality";
+const DATA_GAPS_FIELD = "dataGaps";
 /**
  * The sort shares the column's id: a list column sorts by its own id, so the
  * one "Data quality" column is what sorts by score (asc = weakest first).
  */
-export const DATA_QUALITY_SORT = "dataQuality";
-export const DATA_QUALITY_LIST_RENDERER = "data-quality";
+const DATA_QUALITY_SORT = "dataQuality";
+const DATA_QUALITY_LIST_RENDERER = "data-quality";
 
 const STATUS_OPTIONS = [
   { value: "complete", label: "Complete", color: "var(--slate)" },

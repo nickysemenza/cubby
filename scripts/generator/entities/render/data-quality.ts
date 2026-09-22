@@ -5,7 +5,7 @@ type ScoredEntity = CompiledEntity & {
   dataQuality: NonNullable<CompiledEntity["dataQuality"]>;
 };
 
-export const scoredEntitiesFor = (
+const scoredEntitiesFor = (
   entities: readonly CompiledEntity[],
 ): ScoredEntity[] =>
   entities.flatMap((entity) =>

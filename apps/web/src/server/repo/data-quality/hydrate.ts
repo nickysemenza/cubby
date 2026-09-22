@@ -55,7 +55,7 @@ export const calculateDataQualityScore = (
   return Math.max(0, score);
 };
 
-export const qualityStatus = (
+const qualityStatus = (
   gaps: readonly Pick<DataQualityGap, "kind">[],
 ): DataQuality["status"] =>
   gaps.some((gap) => gap.kind === "defect")
