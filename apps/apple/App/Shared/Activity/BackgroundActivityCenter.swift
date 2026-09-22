@@ -231,6 +231,20 @@ extension BrowserBridgeSettingsModel: BackgroundActivitySource {
     }
 }
 
+/// A thin adapter over `AppModel.storedLibraryMetadataSync`, exactly like `CompanionActivitySource`
+/// below and for the same reason: the sync instance itself is rebuilt on a host change
+/// (`AppModel.rebindClients()`), so a stable, closure-based adapter registered once avoids ever
+/// registering (and leaking) a new `RegisteredSource` per rebind.
+final class LibraryMetadataSyncActivitySource: BackgroundActivitySource {
+    private let activities: () -> [BackgroundActivity]
+
+    init(activities: @escaping () -> [BackgroundActivity]) {
+        self.activities = activities
+    }
+
+    var currentActivities: [BackgroundActivity] { activities() }
+}
+
 /// A thin adapter over `AppModel.companionImageActivity`: the companion websocket worker is a
 /// value type (`CompanionImageWorkerActivity`), so it cannot itself conform to a class-bound
 /// protocol. This mirrors `AppModel.localExecutionLabel`'s old title mapping exactly, and — unlike

@@ -72,6 +72,11 @@ public struct PhotoLocalAnalysis: Codable, Hashable, Sendable, Identifiable {
     public let recognizedText: [PhotoRecognizedText]
     public let featurePrint: PhotoFeaturePrint
     public let provenance: PhotoAnalysisProvenance
+    /// This asset's PhotoKit facts, when the source is the library — the photo-import commit
+    /// item's `library` sibling of `analysis` is built straight from this
+    /// (`LibrarySightingBuilder.reportFields(for:installationID:)`). `nil` for a file/camera import,
+    /// which has no PhotoKit asset behind it.
+    public let library: LibraryAssetMetadata?
 
     public init(
         id: String,
@@ -87,7 +92,8 @@ public struct PhotoLocalAnalysis: Codable, Hashable, Sendable, Identifiable {
         classifications: [PhotoClassification],
         recognizedText: [PhotoRecognizedText],
         featurePrint: PhotoFeaturePrint,
-        provenance: PhotoAnalysisProvenance
+        provenance: PhotoAnalysisProvenance,
+        library: LibraryAssetMetadata? = nil
     ) {
         self.id = id
         self.analysisVersion = analysisVersion
@@ -103,6 +109,7 @@ public struct PhotoLocalAnalysis: Codable, Hashable, Sendable, Identifiable {
         self.recognizedText = recognizedText
         self.featurePrint = featurePrint
         self.provenance = provenance
+        self.library = library
     }
 }
 
@@ -110,11 +117,19 @@ public struct PhotoAnalysisInput: Sendable {
     public let id: String
     public let file: PhotoFile
     public let provenance: PhotoAnalysisProvenance
+    /// Built once per selection by the caller (`PhotoImportManifest.prepareIfNeeded`), which
+    /// batches the expensive `cloudIdentifierMappings` lookup itself — this type only carries the
+    /// already-resolved result through to `LocalPhotoAnalyzer`.
+    public let library: LibraryAssetMetadata?
 
-    public init(id: String, file: PhotoFile, provenance: PhotoAnalysisProvenance) {
+    public init(
+        id: String, file: PhotoFile, provenance: PhotoAnalysisProvenance,
+        library: LibraryAssetMetadata? = nil
+    ) {
         self.id = id
         self.file = file
         self.provenance = provenance
+        self.library = library
     }
 }
 
@@ -170,7 +185,8 @@ public struct LocalPhotoAnalyzer: Sendable {
             classifications: classifications,
             recognizedText: recognizedText,
             featurePrint: featurePrint,
-            provenance: input.provenance)
+            provenance: input.provenance,
+            library: input.library)
         try Task.checkCancellation()
         return result
     }

@@ -133,4 +133,86 @@ struct PhotoAnalysisStoreTests {
         try await store.migrateLegacyHashCacheIfNeeded(fileURL: missingURL)
         #expect(try await store.record(for: "anything") == nil)
     }
+
+    // MARK: - v2_library_sighting_sync (PR 5)
+
+    @Test func unsentLibrarySightingReportsFalse() async throws {
+        let store = try makeStore()
+        let sent = try await store.librarySightingSent(
+            host: "cubby.example", localIdentifier: "asset-1", imageId: "IMG-1", version: 1,
+            modificationDate: nil)
+        #expect(!sent)
+    }
+
+    @Test func markingASightingSentMakesItSkippedForTheSameModificationDate() async throws {
+        let store = try makeStore()
+        let date = Date(timeIntervalSince1970: 1000)
+        try await store.markLibrarySightingSent(
+            host: "cubby.example", localIdentifier: "asset-1", imageId: "IMG-1", version: 1,
+            modificationDate: date, cloudIdentifier: "cloud-1")
+        let sent = try await store.librarySightingSent(
+            host: "cubby.example", localIdentifier: "asset-1", imageId: "IMG-1", version: 1,
+            modificationDate: date)
+        #expect(sent)
+    }
+
+    @Test func aChangedModificationDateIsTreatedAsUnsentAgain() async throws {
+        let store = try makeStore()
+        let date = Date(timeIntervalSince1970: 1000)
+        try await store.markLibrarySightingSent(
+            host: "cubby.example", localIdentifier: "asset-1", imageId: "IMG-1", version: 1,
+            modificationDate: date, cloudIdentifier: nil)
+        let sentAfterEdit = try await store.librarySightingSent(
+            host: "cubby.example", localIdentifier: "asset-1", imageId: "IMG-1", version: 1,
+            modificationDate: date.addingTimeInterval(60))
+        #expect(!sentAfterEdit)
+    }
+
+    @Test func nilModificationDatesAreComparedNullSafely() async throws {
+        let store = try makeStore()
+        try await store.markLibrarySightingSent(
+            host: "cubby.example", localIdentifier: "asset-1", imageId: "IMG-1", version: 1,
+            modificationDate: nil, cloudIdentifier: nil)
+        #expect(
+            try await store.librarySightingSent(
+                host: "cubby.example", localIdentifier: "asset-1", imageId: "IMG-1", version: 1,
+                modificationDate: nil))
+    }
+
+    @Test func differentHostsOrImagesAreIndependentSightings() async throws {
+        let store = try makeStore()
+        let date = Date(timeIntervalSince1970: 1000)
+        try await store.markLibrarySightingSent(
+            host: "a.example", localIdentifier: "asset-1", imageId: "IMG-1", version: 1,
+            modificationDate: date, cloudIdentifier: nil)
+        #expect(
+            !(try await store.librarySightingSent(
+                host: "b.example", localIdentifier: "asset-1", imageId: "IMG-1", version: 1,
+                modificationDate: date)))
+        #expect(
+            !(try await store.librarySightingSent(
+                host: "a.example", localIdentifier: "asset-1", imageId: "IMG-2", version: 1,
+                modificationDate: date)))
+    }
+
+    @Test func markingTwiceUpsertsRatherThanAccumulatingRows() async throws {
+        let store = try makeStore()
+        let firstDate = Date(timeIntervalSince1970: 1000)
+        let secondDate = Date(timeIntervalSince1970: 2000)
+        try await store.markLibrarySightingSent(
+            host: "cubby.example", localIdentifier: "asset-1", imageId: "IMG-1", version: 1,
+            modificationDate: firstDate, cloudIdentifier: "cloud-1")
+        try await store.markLibrarySightingSent(
+            host: "cubby.example", localIdentifier: "asset-1", imageId: "IMG-1", version: 1,
+            modificationDate: secondDate, cloudIdentifier: "cloud-2")
+        // Only the latest `modificationDate` is remembered — the first is unsent again.
+        #expect(
+            !(try await store.librarySightingSent(
+                host: "cubby.example", localIdentifier: "asset-1", imageId: "IMG-1", version: 1,
+                modificationDate: firstDate)))
+        #expect(
+            try await store.librarySightingSent(
+                host: "cubby.example", localIdentifier: "asset-1", imageId: "IMG-1", version: 1,
+                modificationDate: secondDate))
+    }
 }

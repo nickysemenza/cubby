@@ -188,6 +188,62 @@ public actor PhotoAnalysisStore {
         }
     }
 
+    /// `LibraryMetadataSync`'s send-once gate: true when this exact `(host, localIdentifier,
+    /// imageId, version)` was already sent with this same `modificationDate` — a changed
+    /// `modificationDate` (the asset was edited in Photos) makes this `false` again, so the sync
+    /// resends.
+    public func librarySightingSent(
+        host: String, localIdentifier: String, imageId: String, version: Int, modificationDate: Date?
+    ) throws -> Bool {
+        try database.read { db in
+            try Bool.fetchOne(
+                db,
+                sql: """
+                    SELECT EXISTS(
+                      SELECT 1 FROM library_sighting_sync
+                      WHERE host = ? AND local_identifier = ? AND image_id = ? AND version = ?
+                        AND modification_date IS ?
+                    )
+                    """,
+                arguments: [
+                    host, localIdentifier, imageId, version,
+                    modificationDate?.timeIntervalSinceReferenceDate,
+                ]) ?? false
+        }
+    }
+
+    /// Records a successful `ImageSighting` write so a later pass does not resend it — upserted on
+    /// `(host, local_identifier, image_id, version)`, so a resend (a changed `modificationDate`)
+    /// replaces the prior row rather than accumulating one per edit.
+    public func markLibrarySightingSent(
+        host: String, localIdentifier: String, imageId: String, version: Int, modificationDate: Date?,
+        cloudIdentifier: String?
+    ) throws {
+        try database.write { db in
+            try db.execute(
+                sql: """
+                    INSERT INTO library_sighting_sync (
+                      host, local_identifier, image_id, version, modification_date, cloud_identifier, sent_at
+                    ) VALUES (
+                      :host, :localIdentifier, :imageId, :version, :modificationDate, :cloudIdentifier, :sentAt
+                    )
+                    ON CONFLICT(host, local_identifier, image_id, version) DO UPDATE SET
+                      modification_date = excluded.modification_date,
+                      cloud_identifier = excluded.cloud_identifier,
+                      sent_at = excluded.sent_at
+                    """,
+                arguments: [
+                    "host": host,
+                    "localIdentifier": localIdentifier,
+                    "imageId": imageId,
+                    "version": version,
+                    "modificationDate": modificationDate?.timeIntervalSinceReferenceDate,
+                    "cloudIdentifier": cloudIdentifier,
+                    "sentAt": Date.now.timeIntervalSinceReferenceDate,
+                ])
+        }
+    }
+
     public func classifiedCount(newerThan classifyVersion: Int) throws -> Int {
         try database.read { db in
             try Int.fetchOne(
@@ -298,6 +354,18 @@ public actor PhotoAnalysisStore {
                 table.column("full_analysis_version", .integer)
             }
             try db.create(index: "photo_analysis_classify_version", on: table, columns: ["classify_version"])
+        }
+        migrator.registerMigration("v2_library_sighting_sync") { db in
+            try db.create(table: "library_sighting_sync") { table in
+                table.column("host", .text).notNull()
+                table.column("local_identifier", .text).notNull()
+                table.column("image_id", .text).notNull()
+                table.column("version", .integer).notNull()
+                table.column("modification_date", .double)
+                table.column("cloud_identifier", .text)
+                table.column("sent_at", .double).notNull()
+                table.primaryKey(["host", "local_identifier", "image_id", "version"])
+            }
         }
         return migrator
     }

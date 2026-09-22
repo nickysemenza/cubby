@@ -23,6 +23,11 @@ public struct PhotoImportBatchItem: Sendable {
     public let createCapturedAt: Date?
     public let replaceConfirmed: Bool
     public let duplicateChoice: PhotoImportDuplicateChoice
+    /// Convenience mirror of `analysis.library` — the commit item's `library` sibling of
+    /// `analysis` is built from this, not from `analysis` itself (`analysesMatch` in the server's
+    /// commit service compares `analysis` by JSON equality across every item resolving to one
+    /// image, and per-asset library data must not participate in that comparison).
+    public var library: LibraryAssetMetadata? { analysis.library }
 
     public init(
         clientID: String,
@@ -139,6 +144,10 @@ public actor PhotoImportTransaction {
     private let put: PresignedUpload.FilePut
     private let maximumConcurrentUploads: Int
     private let idempotencyKey: String
+    /// This install's id (`AppInstallationID.current`, lowercased), passed by the caller since
+    /// CubbyKit itself has no notion of "this app's installation" — the server resolves it to a
+    /// `Device` row and records no sighting when it is `nil` or unresolvable.
+    private let deviceID: String?
     private var stagedByClientID: [String: Staged] = [:]
     private var committedClientIDs: [String]?
 
@@ -146,6 +155,7 @@ public actor PhotoImportTransaction {
         client: CubbyClient,
         idempotencyKey: String = UUID().uuidString,
         maximumConcurrentUploads: Int = 4,
+        deviceID: String? = nil,
         put: @escaping PresignedUpload.FilePut = {
             try await PresignedUpload.putFile($0, to: $1, contentType: $2)
         }
@@ -153,6 +163,7 @@ public actor PhotoImportTransaction {
         self.client = client
         self.idempotencyKey = idempotencyKey
         self.maximumConcurrentUploads = max(1, maximumConcurrentUploads)
+        self.deviceID = deviceID
         self.put = put
     }
 
@@ -228,7 +239,11 @@ public actor PhotoImportTransaction {
                 destination: destination,
                 duplicateDecision: duplicateDecision,
                 replaceConfirmed: item.replaceConfirmed,
-                analysis: payload(item.analysis))
+                analysis: payload(item.analysis),
+                library: item.library.map {
+                    LibrarySightingBuilder.reportFields(
+                        for: $0, installationID: deviceID ?? "unknown")
+                })
         }
         var drafts: [PhotoImportCreatePayload] = []
         var seenDrafts = Set<String>()
@@ -251,7 +266,7 @@ public actor PhotoImportTransaction {
         do {
             _ = try await client.commitPhotoImport(
                 PhotoImportCommitInput(
-                    idempotencyKey: idempotencyKey, images: images, creates: drafts))
+                    idempotencyKey: idempotencyKey, deviceId: deviceID, images: images, creates: drafts))
         } catch let apiError as CubbyAPIError {
             // A rejected 4xx request has a definite outcome: never route it through the full
             // ambiguous-commit reconciliation below, and never return committed ids for it — for
