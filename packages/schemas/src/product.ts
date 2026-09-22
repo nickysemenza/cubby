@@ -13,11 +13,7 @@ import {
   numericRangeFields,
   timestampedFields,
 } from "./base-entity";
-import {
-  dataQuality,
-  dataQualityStatus,
-  productDataCheck,
-} from "./data-quality";
+import { dataQuality, productDataCheck } from "./data-quality";
 import { amount } from "./codec";
 import { requiredName } from "./common";
 import { money, moneyNullable, positiveMoneyNullable } from "./money";
@@ -230,8 +226,6 @@ export const productFilterFields = {
   upcPresenceFilter: presenceFilter,
   externalIdSource: oneOrMany(externalIdSource).optional(),
   externalIdPresenceFilter: presenceFilter,
-  dataStatus: dataQualityStatus.optional(),
-  dataGap: oneOrMany(productDataCheck).optional(),
   inventoryPresenceFilter: presenceFilter,
   inventoryMultiplicity: z
     .enum(["duplicate_within_placement"])
@@ -585,10 +579,15 @@ const productLocationRefOut = z.object({
   ancestors: z.array(productLocationAncestorOut),
 });
 
+// The embedded location is an identity reference for the movement timeline,
+// not a place to read the location's own completeness (its `valuation` is
+// null for the same reason), so the location's `dataQuality` stays off it.
+const { dataQuality: _locationDataQuality, ...locationEmbedFields } =
+  locationOutFields;
 const productInventoryWithLocationOut = z.object({
   ...productInventoryFields,
   location: z.object({
-    ...locationOutFields,
+    ...locationEmbedFields,
     displayImage: imageUrlSummary.nullable(),
     ancestors: z.array(productLocationAncestorOut),
   }),

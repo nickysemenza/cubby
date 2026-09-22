@@ -8,7 +8,11 @@ import type {
   RecipeFlowArtifact,
   RecipeFlowPlan,
 } from "@cubby/schemas/recipe-flow";
-import { testEntityId, testShortcode } from "@cubby/schemas/testing";
+import {
+  testCompleteDataQuality,
+  testEntityId,
+  testShortcode,
+} from "@cubby/schemas/testing";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { Database } from "~/server/db";
@@ -67,6 +71,7 @@ const recipe: RecipeOut = recipeOut.parse({
   images: [],
   createdAt: new Date("2026-01-01"),
   updatedAt: new Date("2026-01-01"),
+  dataQuality: testCompleteDataQuality(),
 });
 
 const validPlan = (): RecipeFlowPlan => ({

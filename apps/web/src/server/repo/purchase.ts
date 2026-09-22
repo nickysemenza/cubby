@@ -76,11 +76,8 @@ import {
   logAuditEntry,
 } from "~/server/repo/audit-log";
 import {
-  loadPurchaseDataQualities,
-  purchaseAnyDataGapCondition,
-  purchaseDataGapCondition,
-  purchaseDefectCondition,
-  purchaseNeedsDataCondition,
+  gapCondition,
+  loadDataQualities,
   touchDataQualityTargets,
 } from "~/server/repo/data-quality";
 import {
@@ -111,7 +108,6 @@ import {
 import {
   calculateFinancialReconciliation,
   postedRefundTotalSql,
-  purchaseFinancialMismatchSql,
   settleableExpenseTotalSql,
   settleableUnpricedExpenseCountSql,
 } from "~/server/repo/financial-reconciliation";
@@ -578,20 +574,12 @@ export const buildPurchaseWhereClause = async (
     presenceCondition(purchase.orderId, filters.orderIdPresenceFilter),
     expenseStatusCondition(filters.expenseStatus),
     reconciliationCondition(filters.reconciliation),
+    // The canonical settlement worklist: the raw financial mismatch minus an
+    // active, evidence-bound exception — exactly the check's gap condition.
     filters.financialReconciliation === "mismatch"
-      ? sql.raw(purchaseFinancialMismatchSql('"Purchase"'))
+      ? gapCondition("purchase", "settlement_mismatch")
       : undefined,
     documentPresenceCondition(filters.documentPresenceFilter),
-    filters.dataStatus === "needs_data"
-      ? purchaseNeedsDataCondition()
-      : filters.dataStatus === "defect"
-        ? purchaseDefectCondition()
-        : filters.dataStatus === "complete"
-          ? sql`NOT ${purchaseAnyDataGapCondition()}`
-          : undefined,
-    filters.dataGap
-      ? or(...[filters.dataGap].flat().map(purchaseDataGapCondition))
-      : undefined,
     filters.expenseTotalMin !== undefined
       ? sql`${purchaseExpenseCount} > ${purchaseUnpricedExpenseCount} AND ${purchaseExpenseTotal} >= ${filters.expenseTotalMin}`
       : undefined,
@@ -649,8 +637,9 @@ export const purchaseList = async (
       db,
       rows.map((row) => row.id),
     ),
-    loadPurchaseDataQualities(
+    loadDataQualities(
       db,
+      "purchase",
       rows.map((row) => row.id),
     ),
   ]);
@@ -680,7 +669,7 @@ export const getPurchaseByID = async (
       .limit(1),
     loadPurchaseImages(db, id),
     loadPurchaseFinancialAggregates(db, [id]),
-    loadPurchaseDataQualities(db, [id]),
+    loadDataQualities(db, "purchase", [id]),
   ]);
   const [row] = rows;
   if (!row) {
@@ -792,7 +781,16 @@ export const getPurchaseExpenses = async (
     extras: expenseInheritanceReadExtras(),
     ...relations.expense.withProject,
   });
-  return (await hydrateExpenseProjectAllocations(db, rows)).map(dbExpenseToAPI);
+  const [hydrated, dataQualities] = await Promise.all([
+    hydrateExpenseProjectAllocations(db, rows),
+    loadDataQualities(
+      db,
+      "expense",
+      rows.map((row) => row.id),
+    ),
+  ]);
+  // SAFETY: `row` came from `rows`, which `dataQualities` was loaded for.
+  return hydrated.map((row) => dbExpenseToAPI(row, dataQualities.get(row.id)!));
 };
 
 /**
@@ -1394,9 +1392,19 @@ export const splitExpense = async (
     extras: expenseInheritanceReadExtras(),
     ...relations.expense.withProject,
   });
+  const [hydratedCreated, createdDataQualities] = await Promise.all([
+    hydrateExpenseProjectAllocations(db, rows),
+    loadDataQualities(
+      db,
+      "expense",
+      rows.map((row) => row.id),
+    ),
+  ]);
   return {
-    items: (await hydrateExpenseProjectAllocations(db, rows)).map(
-      dbExpenseToAPI,
+    // SAFETY: `row` came from `rows`, which `createdDataQualities` was loaded
+    // for.
+    items: hydratedCreated.map((row) =>
+      dbExpenseToAPI(row, createdDataQualities.get(row.id)!),
     ),
     priceAffectedProductIds,
   };

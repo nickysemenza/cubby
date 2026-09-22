@@ -16,7 +16,7 @@ import { match } from "ts-pattern";
 import { isUnspecifiedManufacturer } from "~/lib/manufacturer-utils";
 import type { Database } from "~/server/db";
 import { inventoryEntry, product, productExternalId } from "~/server/db/schema";
-import { enrichProductRowsWithDataQuality } from "~/server/repo/data-quality";
+import { attachDataQuality } from "~/server/repo/data-quality";
 import { getDb, imageOrder, notDeleted } from "~/server/repo/database-helpers";
 import { categorySummarySql } from "~/server/repo/product-category-sql";
 
@@ -117,7 +117,7 @@ export const findProductsByFoodIdentifiers = async (
   });
 
   const priced = await enrichProductRowsWithPricing(db, res);
-  const qualified = await enrichProductRowsWithDataQuality(db, priced);
+  const qualified = await attachDataQuality(db, "product", priced);
   const coverImageUrls = await getProductCoverImageUrlsByProductIds(
     db,
     qualified.map((row) => row.id),
@@ -224,7 +224,7 @@ const findProductToAPI = async (
 
   const priced = (await enrichProductRowsWithPricing(db, [res]))[0];
   if (!priced) return null;
-  const qualified = (await enrichProductRowsWithDataQuality(db, [priced]))[0];
+  const qualified = (await attachDataQuality(db, "product", [priced]))[0];
   if (!qualified) return null;
   const coverImageUrl =
     (await getProductCoverImageUrlsByProductIds(db, [qualified.id])).get(

@@ -113,7 +113,7 @@ store.
 | 41 | Currency | Lines are written at the USD figure the page shows; a page with no USD figure gets a `foreign_currency` finding and no lines. Nothing is scaled from `statedTotal` or held for settlement *(review: tenet 5)*. Further handling is deferred until the first such order exists. |
 | 42 | Dedupe key | The existing `Purchase.orderId` + `Purchase_vendorId_orderId_key`; `vendorAccountId` is an attribute *(review)*. |
 | 43 | Public prefixes | `VendorAccount` is `VACCT-`; `ImportRun` has the public `PIR-` handle used by agents and URLs while retaining an internal UUID; `ImportFinding` remains internal to its run/Problem surface. |
-| 44 | Completeness | Every entity gets a 0–100 completeness score derived from its data-quality checks, each check weighted and carrying an `expectedIf` predicate; a Purchase at a `receipt_only` vendor is complete at amount + project + date, one at an `online_account` vendor is not complete without lines. Generalises today's `complete \| needs_data \| defect` (§10 item 2). |
+| 44 | Completeness | Every entity gets a 0–100 completeness score derived from its data-quality checks, each check weighted and carrying an `expectedIf` predicate; a Purchase at a `receipt_only` vendor is complete at amount + project + date, one at an `online_account` vendor is not complete without lines. Generalises today's `complete \| needs_data \| defect` (§10 item 2). **Status (2026-09):** shipped for every scored household entity via manifest `capabilities.dataQuality` (docs/entities.md → "Data quality"); durable exceptions remain Product/Purchase-only (docs/todos.md). |
 | 45 | "Tried, not available" | A data exception with reason `history_expired` (or `unavailable`) on `empty_expenses` / `primary_document`. The agent sets it automatically for orders older than the earliest order the vendor still shows; a human can set it from the Purchase. |
 | 46 | Exception staleness | **All** data exceptions are fingerprinted on the inputs their check reads (live expense count, document set, `orderId`, …) instead of the row's `updatedAt`: an exception is valid while the check's inputs are unchanged. Reasons stay mandatory and typed as today. |
 | 47 | Hunt | A charge at an `online_account` vendor with no allocated Purchase opens a hunt: Gmail match (sender, date window, amount) → order id → targeted browser fetch. No email match → on the next run the browser walks the orders list bounded to the charge date ±7 days → still nothing → `expected order not found` Problem. |
@@ -704,6 +704,17 @@ first, as separate small PRs, in numeric order.
      have checks, and only Product has a sort (`identity_strength`). The
      import expectation detectors (§4.8), the Problems worklists, and the
      enrichment backlog all read this instead of their own predicates.
+
+   **Status (2026-09):** The score, vendor-aware expectations (`expected`
+   predicates per check), and manifest declaration
+   (`capabilities.dataQuality`) shipped for every household entity that
+   carries checks, not just Purchase and Product — see `docs/entities.md` →
+   "Data quality" and `docs/agents/domain-rules.md` for the fingerprint
+   contract. The `identity_strength` sort mentioned above is superseded by
+   the generic `dataQuality` sort (shared with the score column, ascending =
+   weakest first). Durable "not available" exceptions remain Product/Purchase
+   only; generalizing them is tracked as its own todo (docs/todos.md →
+   "Requires database changes" → "Generic durable data exceptions").
 3. **Google provider in better-auth.** Enable `google` with `linkSocial`,
    offline access, incremental scopes; a settings card to connect/disconnect.
 4. **Job id through AI telemetry.** `jobKind`/`jobId` on `AiRunContext`,

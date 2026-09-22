@@ -1,4 +1,5 @@
 import type { ActorContext } from "@cubby/schemas/context";
+import type { DataQuality } from "@cubby/schemas/data-quality";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import {
   type GardenEntryFilters,
@@ -51,6 +52,7 @@ import {
   diffUnorderedIdSet,
   logAuditEntry,
 } from "~/server/repo/audit-log";
+import { loadDataQualities } from "~/server/repo/data-quality";
 import {
   associatePendingImages,
   buildPartialUpdateValues,
@@ -167,7 +169,7 @@ const plantingRow = async (db: GardenDb, id: PlantingId) => {
 
 type PlantingWithReferences = Awaited<ReturnType<typeof plantingRow>>;
 
-const mapPlanting = (row: PlantingWithReferences) => {
+const mapPlanting = (row: PlantingWithReferences, dataQuality: DataQuality) => {
   const gardenGuideKey = resolveGardenGuideKey(row.ingredient.gardenGuideKey);
   const { sow, transplant } = guideWindowsFor(gardenGuideKey);
   return plantingOut.parse({
@@ -191,6 +193,7 @@ const mapPlanting = (row: PlantingWithReferences) => {
       ingredientName: row.ingredient.name,
       variety: row.variety,
     }),
+    dataQuality,
   });
 };
 
@@ -239,7 +242,7 @@ const gardenEntryDisplayName = (row: {
   return `${kindLabel} · ${row.observedOn} · ${row.locationName}`;
 };
 
-const mapEntry = (row: GardenEntryWithReferences) =>
+const mapEntry = (row: GardenEntryWithReferences, dataQuality: DataQuality) =>
   gardenEntryOut.parse({
     ...row,
     id: parseShortcodeFor("gardenEntry", row.shortcode),
@@ -268,10 +271,15 @@ const mapEntry = (row: GardenEntryWithReferences) =>
       locationName: row.location.name,
     }),
     images: mapImages(row.images),
+    dataQuality,
   });
 
-export const getPlanting = async (db: GardenDb, id: PlantingId) =>
-  mapPlanting(await plantingRow(db, id));
+export const getPlanting = async (db: GardenDb, id: PlantingId) => {
+  const row = await plantingRow(db, id);
+  const dataQualities = await loadDataQualities(db, "planting", [id]);
+  // SAFETY: `row` was just fetched live by `id`, so its quality was evaluated.
+  return mapPlanting(row, dataQualities.get(id)!);
+};
 
 export const getGardenEntry = async (db: GardenDb, id: GardenEntryId) => {
   const row = await unwrapDb(db).query.gardenEntry.findFirst({
@@ -295,7 +303,9 @@ export const getGardenEntry = async (db: GardenDb, id: GardenEntryId) => {
       "CONSTRAINT_VIOLATION",
       "The garden entry no longer exists.",
     );
-  return mapEntry(row);
+  const dataQualities = await loadDataQualities(db, "gardenEntry", [id]);
+  // SAFETY: `row` was just fetched live by `id`, so its quality was evaluated.
+  return mapEntry(row, dataQualities.get(id)!);
 };
 
 /**
@@ -707,7 +717,15 @@ export const plantingList = async (
       }),
     count: () => countWhere(db, planting, where),
   });
-  const items = await withDisplayImages(db, "planting", rows, mapPlanting);
+  const dataQualities = await loadDataQualities(
+    db,
+    "planting",
+    rows.map((row) => parseEntityId("planting", row.id)),
+  );
+  const items = await withDisplayImages(db, "planting", rows, (row) =>
+    // SAFETY: `row` came from `rows`, which `dataQualities` was loaded for.
+    mapPlanting(row, dataQualities.get(parseEntityId("planting", row.id))!),
+  );
   return { data: items, count };
 };
 
@@ -866,8 +884,16 @@ export const gardenEntryList = async (
       }),
     count: () => countWhere(db, gardenEntry, where),
   });
+  const dataQualities = await loadDataQualities(
+    db,
+    "gardenEntry",
+    rows.map((row) => parseEntityId("gardenEntry", row.id)),
+  );
   return {
-    data: await withDisplayImages(db, "gardenEntry", rows, mapEntry),
+    data: await withDisplayImages(db, "gardenEntry", rows, (row) =>
+      // SAFETY: `row` came from `rows`, which `dataQualities` was loaded for.
+      mapEntry(row, dataQualities.get(parseEntityId("gardenEntry", row.id))!),
+    ),
     count,
   };
 };

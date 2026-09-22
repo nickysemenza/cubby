@@ -1,4 +1,5 @@
 import { financialTransactionListResponse } from "@cubby/schemas/financial-transaction";
+import { testCompleteDataQuality } from "@cubby/schemas/testing";
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -39,6 +40,7 @@ function transactionResponse({
         accountName: "Household Card",
         createdAt: new Date("2026-08-16T00:00:00.000Z"),
         updatedAt: new Date("2026-08-16T00:00:00.000Z"),
+        dataQuality: testCompleteDataQuality(),
       },
     ],
     meta: { pageIndex: 0, pageSize: 100, totalCount: 1 },

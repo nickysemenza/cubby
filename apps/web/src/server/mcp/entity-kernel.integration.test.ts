@@ -19,8 +19,23 @@ import { callMcpTool } from "./mcp-test-utils";
 import { registerEntityTools } from "./tools/entity.tools";
 import type { ToolArguments } from "./tools/tool-registration";
 
+// A scored entity's write summary carries its data-quality coverage beside
+// the identity; a get summary does not (`response-projection.ts`).
 const wishSummaryResultSchema = z.object({
-  item: z.object({ id: z.string(), name: z.string() }).strict(),
+  item: z
+    .object({
+      id: z.string(),
+      name: z.string(),
+      coverage: z
+        .object({
+          status: z.string().nullable(),
+          missingChecks: z.array(z.string()),
+          defectChecks: z.array(z.string()),
+        })
+        .strict()
+        .optional(),
+    })
+    .strict(),
 });
 const listSummarySchema = z.object({
   items: z.array(z.object({ id: z.string(), name: z.string() }).strict()),

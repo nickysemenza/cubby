@@ -1,5 +1,5 @@
 import type { ProjectListItemOut } from "@cubby/schemas/project";
-import { testShortcode } from "@cubby/schemas/testing";
+import { testCompleteDataQuality, testShortcode } from "@cubby/schemas/testing";
 import { describe, expect, it } from "vitest";
 
 import { buildProjectTree } from "./project-tree";
@@ -62,6 +62,7 @@ function proj(id: string, parentProjectId?: string): ProjectListItemOut {
         costEstimate: null,
       },
     },
+    dataQuality: testCompleteDataQuality(),
   };
 }
 

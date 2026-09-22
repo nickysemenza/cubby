@@ -485,13 +485,16 @@ export const viewManifest = defineViewManifest({
       id: "unpriced-stocked",
       label: "Stocked but unpriced",
       description: "On a shelf, with no price to value it by",
-      // The schema comment on `pricePresenceFilter` describes exactly this
-      // pairing. Unpriced stock is invisible to the location valuation rollup:
-      // a null price yields a null entry valuation and the rollup omits it.
-      filters: [
-        { id: "location", value: [FILTER_ANY] },
-        { id: "price", value: "none-real" },
-      ],
+      // `product_price`'s own `expected` is exactly this pairing (placement
+      // 'stock', not a `misc:` bucket) — see checks/product.ts. Unpriced stock
+      // is invisible to the location valuation rollup: a null price yields a
+      // null entry valuation and the rollup omits it.
+      //
+      // NARROWER than the old `location: FILTER_ANY` leg: that admitted any
+      // placement (including `installed`), while the check's `hasStock` is
+      // `placement = 'stock'` only. An installed, unpriced fixture no longer
+      // appears here.
+      filters: [{ id: "dataGaps", value: ["product_price"] }],
       problem: {
         key: "productsMissingPrice",
         title: "Stocked products with no price",
@@ -501,7 +504,7 @@ export const viewManifest = defineViewManifest({
       },
       layout: {
         ...DEFAULT_CURATED_LAYOUT,
-        columnVisibility: { price: true, location: true },
+        columnVisibility: { dataGaps: true, price: true, location: true },
       },
     },
     {
@@ -651,14 +654,13 @@ export const viewManifest = defineViewManifest({
       id: "needs-a-product",
       label: "Needs a product",
       description: "Used by one of your own recipes, with nothing to cost it",
-      // `ownRecipes`, not `appearsInRecipes`: the cookbook import supplies the
-      // overwhelming majority of ingredient usages on this database, and
-      // counting them turns ~24 actionable rows into ~1000. A cookbook recipe
-      // you can't cost is not a gap in your own data.
-      filters: [
-        { id: "ownRecipes", value: "has" },
-        { id: "product", value: "none" },
-      ],
+      // `ingredient_product`'s own `expected` is "not a sub-recipe, used by
+      // one of the household's own recipes" (checks/ingredient.ts) — the
+      // cookbook import supplies the overwhelming majority of ingredient
+      // usages on this database, and counting them turns ~24 actionable rows
+      // into ~1000. A cookbook recipe you can't cost is not a gap in your own
+      // data.
+      filters: [{ id: "dataGaps", value: ["ingredient_product"] }],
       problem: {
         key: "ingredientsWithoutProduct",
         title: "Ingredients with no product",
@@ -713,12 +715,11 @@ export const viewManifest = defineViewManifest({
       id: "undescribed",
       label: "No AI description",
       description: "Locations with photos that haven't been described yet",
-      // `image: has` is not decoration: describing a location with no photo
-      // isn't possible, so without it this selects a backlog nothing can drain.
-      filters: [
-        { id: "image", value: "has" },
-        { id: "aiDescription", value: "none" },
-      ],
+      // `location_ai_description`'s own `expected` is "has a displayable
+      // photo" (checks/location.ts) — describing a location with no photo
+      // isn't possible, so without that gate this would select a backlog
+      // nothing can drain.
+      filters: [{ id: "dataGaps", value: ["location_ai_description"] }],
       problem: {
         key: "locationsWithoutAiDescription",
         title: "Missing AI Descriptions",
@@ -839,12 +840,12 @@ export const viewManifest = defineViewManifest({
       id: "never-verified",
       label: "Never verified",
       description: "Entries whose count has never been checked against a shelf",
-      // No placement filter, deliberately: the inventory list defaults an
-      // omitted `placementFilter` to `"stock"`, which is exactly the
-      // `stockOnly()` guard the detector carried. Installed fixtures never get
-      // a `verifiedAt` (nobody recounts a wired-in dimmer), so including them
+      // `inventory_verified`'s own `expected` is `placement = 'stock'`
+      // (checks/inventory.ts) — the same guard the inventory list's default
+      // `placementFilter` applied. Installed fixtures never get a
+      // `verifiedAt` (nobody recounts a wired-in dimmer), so including them
       // would make this list permanently undrainable.
-      filters: [{ id: "verifiedAt", value: "none" }],
+      filters: [{ id: "dataGaps", value: ["inventory_verified"] }],
       // Oldest first — the longest-unverified entries lead.
       sort: [{ id: "createdAt", desc: false }],
       problem: {
@@ -1068,15 +1069,18 @@ const standaloneEntityProblems = [
     continuation: { kind: "entity-list" as const },
     freshness: { kind: "live" as const },
     title: "Products with no images",
+    // `product_image`'s own `expected` is "has inventory" (checks/product.ts)
+    // — STOCKED products, regardless of ingredient link. NARROWER than the old
+    // predicate for a non-stocked, non-ingredient product with no image (now
+    // excluded), and WIDER for a stocked product that IS an ingredient (now
+    // included, where it used to be excluded). See the migration note in this
+    // lane's report for the population delta.
     description: "Non-ingredient products with no displayable image.",
     emptyMessage: "Every standalone product has an image.",
     source: {
       kind: "entity" as const,
       entity: "product" as const,
-      filters: [
-        { id: "image", value: "none" },
-        { id: "ingredient", value: FILTER_NONE },
-      ],
+      filters: [{ id: "dataGaps", value: ["product_image"] }],
       sort: [{ id: "createdAt", desc: false }],
       columnVisibility: { image: true, ingredient: true },
     },

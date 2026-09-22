@@ -16,7 +16,9 @@ describe("problemListLocation", () => {
     expect(location).toMatchObject({ entity: "product" });
     expect(location?.href).toContain("/products?");
     expect(location?.href).toContain("worklist=productsMissingPrice");
-    expect(location?.href).toContain("location=__any__");
+    // The view's own filter (the `product_price` data-quality gap) rides on
+    // the URL so the list opens narrowed exactly as the Problems count was.
+    expect(location?.href).toContain("dataGaps=product_price");
   });
 
   it("does not create a fake list continuation for derived results", () => {

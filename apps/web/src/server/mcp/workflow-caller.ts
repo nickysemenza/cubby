@@ -14,7 +14,6 @@ import type { z } from "zod";
 
 import {
   clearDataException,
-  findProductExternalIdCollisions,
   setDataException,
 } from "~/server/repo/data-quality";
 import { previewFinancialStatementImport } from "~/server/repo/financial-statement-preview";
@@ -23,6 +22,7 @@ import {
   saveImageDescriptionCorrection,
 } from "~/server/repo/image-processing";
 import { patchProductExternalIds } from "~/server/repo/product";
+import { findProductExternalIdCollisions } from "~/server/repo/product/external-id-collisions";
 import { reclassifyPurchaseDocument } from "~/server/repo/purchase";
 import { bindShortcodeResolver } from "~/server/repo/shortcode-resolver";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";

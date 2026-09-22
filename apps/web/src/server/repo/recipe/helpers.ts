@@ -1,3 +1,4 @@
+import type { DataQuality } from "@cubby/schemas/data-quality";
 import type { DisplayImageSummary } from "@cubby/schemas/display-images";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type { ImageOut } from "@cubby/schemas/image";
@@ -199,7 +200,7 @@ export const dbRecipeToTopLevel = (
 
 type RecipeShallowOut = Omit<
   RecipeListItem,
-  "mealCount" | "sectionCount" | "displayImages"
+  "mealCount" | "sectionCount" | "displayImages" | "dataQuality"
 >;
 
 export const dbRecipeToAPIShallow: (
@@ -217,6 +218,7 @@ export type RecipeListDB = RecipeSelect & {
 export const dbRecipeToListAPI = (
   recipeData: RecipeListDB,
   displayImages: DisplayImageSummary[],
+  dataQuality: DataQuality,
 ): RecipeListItem => {
   const { mealCount, sectionCount, ...rest } = recipeData;
   return {
@@ -226,6 +228,7 @@ export const dbRecipeToListAPI = (
     mealCount: Number(mealCount),
     sectionCount: Number(sectionCount),
     displayImages,
+    dataQuality,
   };
 };
 
@@ -250,10 +253,14 @@ const mapRecipeSections = (
     };
   });
 
-export const dbRecipeToAPI = (recipeData: RecipeDeepDB): RecipeOut => {
+export const dbRecipeToAPI = (
+  recipeData: RecipeDeepDB,
+  dataQuality: DataQuality,
+): RecipeOut => {
   const baseRecipe = dbRecipeToAPIShallow(recipeData);
   return {
     ...baseRecipe,
+    dataQuality,
     images: mapRecipeImages(recipeData.images),
     sections: mapRecipeSections(recipeData.sections),
   };

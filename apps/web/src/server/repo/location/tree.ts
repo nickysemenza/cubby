@@ -26,6 +26,7 @@ import {
   product,
   productImage,
 } from "~/server/db/schema";
+import { loadDataQualities } from "~/server/repo/data-quality";
 import {
   getDb,
   imageOrder,
@@ -181,7 +182,7 @@ export const buildLocationTree = async (db: Database, rootId?: LocationId) => {
           ),
         })
       : Promise.resolve([]);
-  const [allLocationImages, inventoryByLocationId, valuations] =
+  const [allLocationImages, inventoryByLocationId, valuations, dataQualities] =
     await Promise.all([
       loadLocationImages(),
       // One loader for items and their count, so the tree's `directItemCount`
@@ -191,6 +192,7 @@ export const buildLocationTree = async (db: Database, rootId?: LocationId) => {
       // rolls up its ENTIRE subtree, including anything below this query's
       // anchor (or below a node outside it, for a rootId-anchored subtree).
       computeLocationValuations(db),
+      loadDataQualities(db, "location", locationIds),
     ]);
 
   const imagesByLocationId = new Map<
@@ -244,7 +246,13 @@ export const buildLocationTree = async (db: Database, rootId?: LocationId) => {
     : rootLocations;
 
   const tree: InfLocation[] = roots.map((x) => {
-    return buildLocationWithChildren(x, undefined, false, valuations);
+    return buildLocationWithChildren(
+      x,
+      undefined,
+      false,
+      valuations,
+      dataQualities,
+    );
   });
   return hydrateImageReadProjection(db, tree);
 };

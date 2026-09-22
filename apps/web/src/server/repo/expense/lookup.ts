@@ -23,6 +23,7 @@ import { uniq } from "es-toolkit";
 import { householdLocalDate } from "~/lib/household-date";
 import type { Database } from "~/server/db";
 import { expense, purchase } from "~/server/db/schema";
+import { loadDataQualities } from "~/server/repo/data-quality";
 import {
   auditDateWhereConditions,
   countWhere,
@@ -485,10 +486,17 @@ export const expenseList = async (
       }),
     count: () => countWhere(db, expense, whereClause),
   });
-  const allocations = await loadExpenseProjectAllocations(
-    db,
-    rows.map((row) => row.id),
-  );
+  const [allocations, dataQualities] = await Promise.all([
+    loadExpenseProjectAllocations(
+      db,
+      rows.map((row) => row.id),
+    ),
+    loadDataQualities(
+      db,
+      "expense",
+      rows.map((row) => row.id),
+    ),
+  ]);
   const allocationsByExpense = new Map<
     (typeof rows)[number]["id"],
     typeof allocations
@@ -507,7 +515,8 @@ export const expenseList = async (
         ...row,
         projectAllocations: allocationsByExpense.get(row.id) ?? [],
       })),
-      dbExpenseToAPI,
+      // SAFETY: `row` came from `rows`, which `dataQualities` was loaded for.
+      (row) => dbExpenseToAPI(row, dataQualities.get(row.id)!),
     ),
     count,
   };

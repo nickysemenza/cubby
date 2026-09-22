@@ -80,7 +80,7 @@ struct GenericEntityEditModelTests {
         #"{"action":"update","entity":"product","item":{"id":"PRD-2345","name":"Sample","aliases":[],"tags":[],"manufacturer":"x","model":null,"notes":null,"expectedQuantity":null,"categoryId":null,"images":[],"externalIds":[],"pricing":{"source":"explicit","knownExpenseCount":0,"unknownExpenseCount":0,"knownUnitCount":0,"partial":false},"usdaUnavailable":null,"stockTracked":null,"dataQuality":{"status":"complete","score":100,"facets":[],"gaps":[],"exceptions":[],"relatedGaps":[],"relatedExceptions":[]},"createdAt":"2026-01-01T00:00:00.000Z","updatedAt":"2026-01-01T00:00:00.000Z","category":null,"itemImageCount":0,"labelImageCount":0,"labelImages":[],"classificationEvidence":"","coverImageUrl":null},"sideEffects":{"backgroundBatches":[]}}"#
             .utf8)
     nonisolated private static let locationCreated = Data(
-        #"{"action":"create","entity":"location","item":{"id":"LOC-9ABC","name":"Bin 9","aliases":[],"notes":null,"lastBulkInventory":null,"aiDescription":null,"images":[],"createdAt":"2026-01-01T00:00:00.000Z","updatedAt":"2026-01-01T00:00:00.000Z"},"sideEffects":{"backgroundBatches":[]}}"#
+        #"{"action":"create","entity":"location","item":{"id":"LOC-9ABC","name":"Bin 9","aliases":[],"notes":null,"lastBulkInventory":null,"aiDescription":null,"images":[],"createdAt":"2026-01-01T00:00:00.000Z","updatedAt":"2026-01-01T00:00:00.000Z","dataQuality":{"status":"complete","score":100,"facets":[],"gaps":[],"exceptions":[],"relatedGaps":[],"relatedExceptions":[]}},"sideEffects":{"backgroundBatches":[]}}"#
             .utf8)
 
     private static let productOriginal: JSONValue = [

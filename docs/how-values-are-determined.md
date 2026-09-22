@@ -89,24 +89,6 @@ Notes present reports whether this product has non-empty notes.
 - Value paths: List `notesPresence`; Summary `notesPresence`
 - Source dependencies: Product notes (`notes`)
 
-### Data Gaps (`dataGaps`)
-
-Data gaps are the current checks reported by this product's data-quality evaluation.
-
-- Rule: `product.data-gaps`, version 1
-- Resolver: Declared field projection
-- Value paths: List `dataGaps`; Summary `dataGaps`
-- Source dependencies: Detected gaps (`dataGaps`)
-
-### Data quality (`dataQuality`)
-
-Data-quality gaps are evaluated from the fields and relationships in this product projection.
-
-- Rule: `product.data-quality`, version 1
-- Resolver: Declared field projection
-- Value paths: List `dataQuality.status`; Summary `dataQuality.status`
-- Source dependencies: Detected gaps (`dataQuality.gaps`)
-
 ### Net basis (`expenseTotal`)
 
 Net basis is the sum of cost across this product's live expenses, including negative refund lines.
@@ -176,6 +158,24 @@ On-hand units are the sum of live inventory quantities after applying each entry
 - Resolver: Product quantity ledger
 - Value paths: Default `onHandUnits`
 - Source dependencies: Live inventory entries (`inventoryEntry`)
+
+### Data quality (`dataQuality`)
+
+Data-quality gaps and the 0–100 completeness score are evaluated from the checks this entity declares.
+
+- Rule: `product.data-quality`, version 1
+- Resolver: Declared field projection
+- Value paths: List `dataQuality.status`; Summary `dataQuality.status`
+- Source dependencies: Detected gaps (`dataQuality.gaps`)
+
+### Data gaps (`dataGaps`)
+
+Data gaps are the current checks reported by this entity's data-quality evaluation.
+
+- Rule: `product.data-gaps`, version 1
+- Resolver: Declared field projection
+- Value paths: List `dataQuality.gaps`; Summary `dataQuality.gaps`
+- Source dependencies: Detected gaps (`dataQuality.gaps`)
 
 ## Recipes (`recipe`)
 
@@ -250,6 +250,24 @@ The time cell shows the recipe source's time text together with its normalized t
 - Value paths: List `meta.times`; Summary `meta.times`
 - Source dependencies: Recipe time metadata (`meta.times`)
 
+### Data quality (`dataQuality`)
+
+Data-quality gaps and the 0–100 completeness score are evaluated from the checks this entity declares.
+
+- Rule: `recipe.data-quality`, version 1
+- Resolver: Declared field projection
+- Value paths: List `dataQuality.status`; Summary `dataQuality.status`
+- Source dependencies: Detected gaps (`dataQuality.gaps`)
+
+### Data gaps (`dataGaps`)
+
+Data gaps are the current checks reported by this entity's data-quality evaluation.
+
+- Rule: `recipe.data-gaps`, version 1
+- Resolver: Declared field projection
+- Value paths: List `dataQuality.gaps`; Summary `dataQuality.gaps`
+- Source dependencies: Detected gaps (`dataQuality.gaps`)
+
 ## Ingredients (`ingredient`)
 
 ### Guide sow window (`guideSowWindow`)
@@ -269,6 +287,24 @@ The transplanting window comes from the selected garden guide entry adjusted to 
 - Resolver: Declared field projection
 - Value paths: Default `guideTransplantWindow`
 - Source dependencies: Garden guide key (`gardenGuideKey`)
+
+### Data quality (`dataQuality`)
+
+Data-quality gaps and the 0–100 completeness score are evaluated from the checks this entity declares.
+
+- Rule: `ingredient.data-quality`, version 1
+- Resolver: Declared field projection
+- Value paths: List `dataQuality.status`; Summary `dataQuality.status`
+- Source dependencies: Detected gaps (`dataQuality.gaps`)
+
+### Data gaps (`dataGaps`)
+
+Data gaps are the current checks reported by this entity's data-quality evaluation.
+
+- Rule: `ingredient.data-gaps`, version 1
+- Resolver: Declared field projection
+- Value paths: List `dataQuality.gaps`; Summary `dataQuality.gaps`
+- Source dependencies: Detected gaps (`dataQuality.gaps`)
 
 ## Cookbooks (`cookbook`)
 
@@ -306,6 +342,24 @@ A cookbook needs re-extraction when its stored import payload uses the legacy sh
 - Value paths: Default `needsReextract`
 - Source dependencies: Source recipe count (`sourceRecipeCount`)
 
+### Data quality (`dataQuality`)
+
+Data-quality gaps and the 0–100 completeness score are evaluated from the checks this entity declares.
+
+- Rule: `cookbook.data-quality`, version 1
+- Resolver: Declared field projection
+- Value paths: List `dataQuality.status`; Summary `dataQuality.status`
+- Source dependencies: Detected gaps (`dataQuality.gaps`)
+
+### Data gaps (`dataGaps`)
+
+Data gaps are the current checks reported by this entity's data-quality evaluation.
+
+- Rule: `cookbook.data-gaps`, version 1
+- Resolver: Declared field projection
+- Value paths: List `dataQuality.gaps`; Summary `dataQuality.gaps`
+- Source dependencies: Detected gaps (`dataQuality.gaps`)
+
 ## Locations (`location`)
 
 ### Product (`product`)
@@ -335,6 +389,24 @@ Location valuation rolls up canonical inventory values; the list shows direct co
 - Value paths: List `valuation.directValuation`; Detail `valuation.totalValuation`; Summary `valuation.directValuation`
 - Source dependencies: Direct item count (`valuation.directItemCount`); Priced direct items (`valuation.directPricedCount`); Unpriced direct items (`valuation.directUnpricedCount`); Total rolled-up item count (`valuation.totalItemCount`); Rolled-up pricing coverage (`valuation.total`)
 
+### Data quality (`dataQuality`)
+
+Data-quality gaps and the 0–100 completeness score are evaluated from the checks this entity declares.
+
+- Rule: `location.data-quality`, version 1
+- Resolver: Declared field projection
+- Value paths: List `dataQuality.status`; Summary `dataQuality.status`
+- Source dependencies: Detected gaps (`dataQuality.gaps`)
+
+### Data gaps (`dataGaps`)
+
+Data gaps are the current checks reported by this entity's data-quality evaluation.
+
+- Rule: `location.data-gaps`, version 1
+- Resolver: Declared field projection
+- Value paths: List `dataQuality.gaps`; Summary `dataQuality.gaps`
+- Source dependencies: Detected gaps (`dataQuality.gaps`)
+
 ## Inventory (`inventory`)
 
 ### Effective owner (`effectiveOwnership`)
@@ -354,6 +426,24 @@ This is the stored valuation produced when Cubby last evaluated the inventory am
 - Resolver: Product valuation
 - Value paths: Default `valuation`
 - Source dependencies: Inventory amount (`amount`); Current unit mappings (`product.unitMappings`); Current effective product price (`product.price`)
+
+### Data quality (`dataQuality`)
+
+Data-quality gaps and the 0–100 completeness score are evaluated from the checks this entity declares.
+
+- Rule: `inventory.data-quality`, version 1
+- Resolver: Declared field projection
+- Value paths: List `dataQuality.status`; Summary `dataQuality.status`
+- Source dependencies: Detected gaps (`dataQuality.gaps`)
+
+### Data gaps (`dataGaps`)
+
+Data gaps are the current checks reported by this entity's data-quality evaluation.
+
+- Rule: `inventory.data-gaps`, version 1
+- Resolver: Declared field projection
+- Value paths: List `dataQuality.gaps`; Summary `dataQuality.gaps`
+- Source dependencies: Detected gaps (`dataQuality.gaps`)
 
 ## Meals (`meal`)
 
@@ -402,6 +492,44 @@ Recipe names are projected from the meal's current recipe composition.
 - Value paths: Default `recipeNames`
 - Source dependencies: Recipe composition (`recipes`)
 
+### Data quality (`dataQuality`)
+
+Data-quality gaps and the 0–100 completeness score are evaluated from the checks this entity declares.
+
+- Rule: `meal.data-quality`, version 1
+- Resolver: Declared field projection
+- Value paths: List `dataQuality.status`; Summary `dataQuality.status`
+- Source dependencies: Detected gaps (`dataQuality.gaps`)
+
+### Data gaps (`dataGaps`)
+
+Data gaps are the current checks reported by this entity's data-quality evaluation.
+
+- Rule: `meal.data-gaps`, version 1
+- Resolver: Declared field projection
+- Value paths: List `dataQuality.gaps`; Summary `dataQuality.gaps`
+- Source dependencies: Detected gaps (`dataQuality.gaps`)
+
+## Ledger Parties (`ledgerParty`)
+
+### Data quality (`dataQuality`)
+
+Data-quality gaps and the 0–100 completeness score are evaluated from the checks this entity declares.
+
+- Rule: `ledgerParty.data-quality`, version 1
+- Resolver: Declared field projection
+- Value paths: List `dataQuality.status`; Summary `dataQuality.status`
+- Source dependencies: Detected gaps (`dataQuality.gaps`)
+
+### Data gaps (`dataGaps`)
+
+Data gaps are the current checks reported by this entity's data-quality evaluation.
+
+- Rule: `ledgerParty.data-gaps`, version 1
+- Resolver: Declared field projection
+- Value paths: List `dataQuality.gaps`; Summary `dataQuality.gaps`
+- Source dependencies: Detected gaps (`dataQuality.gaps`)
+
 ## Transfers (`ledgerTransfer`)
 
 ### Classification (`classification`)
@@ -412,6 +540,24 @@ Classification is derived from the transfer's source and destination party roles
 - Resolver: Declared field projection
 - Value paths: Default `classification`
 - Source dependencies: Source party (`fromPartyId`); Destination party (`toPartyId`); Evidence transactions (`evidenceTransactionIds`)
+
+### Data quality (`dataQuality`)
+
+Data-quality gaps and the 0–100 completeness score are evaluated from the checks this entity declares.
+
+- Rule: `ledgerTransfer.data-quality`, version 1
+- Resolver: Declared field projection
+- Value paths: List `dataQuality.status`; Summary `dataQuality.status`
+- Source dependencies: Detected gaps (`dataQuality.gaps`)
+
+### Data gaps (`dataGaps`)
+
+Data gaps are the current checks reported by this entity's data-quality evaluation.
+
+- Rule: `ledgerTransfer.data-gaps`, version 1
+- Resolver: Declared field projection
+- Value paths: List `dataQuality.gaps`; Summary `dataQuality.gaps`
+- Source dependencies: Detected gaps (`dataQuality.gaps`)
 
 ## Projects (`project`)
 
@@ -441,6 +587,24 @@ The parent project name is read from the current live parent project selected by
 - Resolver: Declared field projection
 - Value paths: Default `parentProjectName`
 - Source dependencies: Parent project (`parentProjectId`)
+
+### Data quality (`dataQuality`)
+
+Data-quality gaps and the 0–100 completeness score are evaluated from the checks this entity declares.
+
+- Rule: `project.data-quality`, version 1
+- Resolver: Declared field projection
+- Value paths: List `dataQuality.status`; Summary `dataQuality.status`
+- Source dependencies: Detected gaps (`dataQuality.gaps`)
+
+### Data gaps (`dataGaps`)
+
+Data gaps are the current checks reported by this entity's data-quality evaluation.
+
+- Rule: `project.data-gaps`, version 1
+- Resolver: Declared field projection
+- Value paths: List `dataQuality.gaps`; Summary `dataQuality.gaps`
+- Source dependencies: Detected gaps (`dataQuality.gaps`)
 
 ## Tasks (`task`)
 
@@ -480,6 +644,24 @@ Task images are the current live Image attachments in canonical attachment order
 - Value paths: List `displayImages`; Detail `images`; Summary `displayImages`
 - Source dependencies: Selected task images (`displayImages`)
 
+### Data quality (`dataQuality`)
+
+Data-quality gaps and the 0–100 completeness score are evaluated from the checks this entity declares.
+
+- Rule: `task.data-quality`, version 1
+- Resolver: Declared field projection
+- Value paths: List `dataQuality.status`; Summary `dataQuality.status`
+- Source dependencies: Detected gaps (`dataQuality.gaps`)
+
+### Data gaps (`dataGaps`)
+
+Data gaps are the current checks reported by this entity's data-quality evaluation.
+
+- Rule: `task.data-gaps`, version 1
+- Resolver: Declared field projection
+- Value paths: List `dataQuality.gaps`; Summary `dataQuality.gaps`
+- Source dependencies: Detected gaps (`dataQuality.gaps`)
+
 ## Vendors (`vendor`)
 
 ### Purchases (`purchaseCount`)
@@ -507,6 +689,24 @@ Latest purchase date is the most recent date among this vendor's live purchases.
 - Resolver: Declared field projection
 - Value paths: Default `latestPurchaseDate`
 - Source dependencies: Live purchase count (`purchaseCount`)
+
+### Data quality (`dataQuality`)
+
+Data-quality gaps and the 0–100 completeness score are evaluated from the checks this entity declares.
+
+- Rule: `vendor.data-quality`, version 1
+- Resolver: Declared field projection
+- Value paths: List `dataQuality.status`; Summary `dataQuality.status`
+- Source dependencies: Detected gaps (`dataQuality.gaps`)
+
+### Data gaps (`dataGaps`)
+
+Data gaps are the current checks reported by this entity's data-quality evaluation.
+
+- Rule: `vendor.data-gaps`, version 1
+- Resolver: Declared field projection
+- Value paths: List `dataQuality.gaps`; Summary `dataQuality.gaps`
+- Source dependencies: Detected gaps (`dataQuality.gaps`)
 
 ## Purchases (`purchase`)
 
@@ -562,15 +762,6 @@ Purchase images are the current live document attachments in canonical attachmen
 - Value paths: List `displayImages`; Detail `images`; Summary `displayImages`
 - Source dependencies: Selected purchase images (`displayImages`)
 
-### Data Quality (`dataQuality`)
-
-Data-quality gaps are evaluated from this purchase's current totals, line coverage, documents, and settlement state.
-
-- Rule: `purchase.data-quality`, version 1
-- Resolver: Declared field projection
-- Value paths: List `dataQuality.status`; Summary `dataQuality.status`
-- Source dependencies: Detected gaps (`dataQuality.gaps`)
-
 ### Transaction Count (`transactionCount`)
 
 Transaction count is the number of confirmed financial transactions included in this purchase's settlement reconciliation.
@@ -580,9 +771,18 @@ Transaction count is the number of confirmed financial transactions included in 
 - Value paths: List `financialReconciliation.transactionCount`; Summary `financialReconciliation.transactionCount`
 - Source dependencies: Financial reconciliation (`financialReconciliation`)
 
-### Data Gaps (`dataGaps`)
+### Data quality (`dataQuality`)
 
-Data gaps are the current checks reported by this purchase's data-quality evaluation.
+Data-quality gaps and the 0–100 completeness score are evaluated from the checks this entity declares.
+
+- Rule: `purchase.data-quality`, version 1
+- Resolver: Declared field projection
+- Value paths: List `dataQuality.status`; Summary `dataQuality.status`
+- Source dependencies: Detected gaps (`dataQuality.gaps`)
+
+### Data gaps (`dataGaps`)
+
+Data gaps are the current checks reported by this entity's data-quality evaluation.
 
 - Rule: `purchase.data-gaps`, version 1
 - Resolver: Declared field projection
@@ -598,6 +798,24 @@ Transaction count is the number of live financial transactions linked to this ac
 - Rule: `financial-account.transaction-count`, version 1
 - Resolver: Declared field projection
 - Value paths: Default `transactionCount`
+
+### Data quality (`dataQuality`)
+
+Data-quality gaps and the 0–100 completeness score are evaluated from the checks this entity declares.
+
+- Rule: `financialAccount.data-quality`, version 1
+- Resolver: Declared field projection
+- Value paths: List `dataQuality.status`; Summary `dataQuality.status`
+- Source dependencies: Detected gaps (`dataQuality.gaps`)
+
+### Data gaps (`dataGaps`)
+
+Data gaps are the current checks reported by this entity's data-quality evaluation.
+
+- Rule: `financialAccount.data-gaps`, version 1
+- Resolver: Declared field projection
+- Value paths: List `dataQuality.gaps`; Summary `dataQuality.gaps`
+- Source dependencies: Detected gaps (`dataQuality.gaps`)
 
 ## Transactions (`financialTransaction`)
 
@@ -618,6 +836,24 @@ Possible vendors come from prior settled transactions with the same normalized m
 - Resolver: Merchant and vendor inference
 - Value paths: Default `vendorInference`
 - Source dependencies: Merchant label (`merchant`); Transaction status (`status`); Confirmed allocations (`allocations`); Transfer link (`ledgerTransferId`); Matching settled transactions (`vendorInference`)
+
+### Data quality (`dataQuality`)
+
+Data-quality gaps and the 0–100 completeness score are evaluated from the checks this entity declares.
+
+- Rule: `financialTransaction.data-quality`, version 1
+- Resolver: Declared field projection
+- Value paths: List `dataQuality.status`; Summary `dataQuality.status`
+- Source dependencies: Detected gaps (`dataQuality.gaps`)
+
+### Data gaps (`dataGaps`)
+
+Data gaps are the current checks reported by this entity's data-quality evaluation.
+
+- Rule: `financialTransaction.data-gaps`, version 1
+- Resolver: Declared field projection
+- Value paths: List `dataQuality.gaps`; Summary `dataQuality.gaps`
+- Source dependencies: Detected gaps (`dataQuality.gaps`)
 
 ## Wishlist (`wish`)
 
@@ -647,6 +883,24 @@ Price range is the low and high effective price across priced live candidates; u
 - Resolver: Declared field projection
 - Value paths: Default `priceRange`
 - Source dependencies: Candidate products and effective prices (`candidates`)
+
+### Data quality (`dataQuality`)
+
+Data-quality gaps and the 0–100 completeness score are evaluated from the checks this entity declares.
+
+- Rule: `wish.data-quality`, version 1
+- Resolver: Declared field projection
+- Value paths: List `dataQuality.status`; Summary `dataQuality.status`
+- Source dependencies: Detected gaps (`dataQuality.gaps`)
+
+### Data gaps (`dataGaps`)
+
+Data gaps are the current checks reported by this entity's data-quality evaluation.
+
+- Rule: `wish.data-gaps`, version 1
+- Resolver: Declared field projection
+- Value paths: List `dataQuality.gaps`; Summary `dataQuality.gaps`
+- Source dependencies: Detected gaps (`dataQuality.gaps`)
 
 ## Expenses (`expense`)
 
@@ -715,6 +969,24 @@ Source claims preserve the imported or recorded evidence attached to this expens
 - Value paths: Default `sourceClaims`
 - Source dependencies: Recorded source claims (`sourceClaims`)
 - Available actions: Edit source
+
+### Data quality (`dataQuality`)
+
+Data-quality gaps and the 0–100 completeness score are evaluated from the checks this entity declares.
+
+- Rule: `expense.data-quality`, version 1
+- Resolver: Declared field projection
+- Value paths: List `dataQuality.status`; Summary `dataQuality.status`
+- Source dependencies: Detected gaps (`dataQuality.gaps`)
+
+### Data gaps (`dataGaps`)
+
+Data gaps are the current checks reported by this entity's data-quality evaluation.
+
+- Rule: `expense.data-gaps`, version 1
+- Resolver: Declared field projection
+- Value paths: List `dataQuality.gaps`; Summary `dataQuality.gaps`
+- Source dependencies: Detected gaps (`dataQuality.gaps`)
 
 ## USDA Foods (`usda-food`)
 
@@ -829,6 +1101,24 @@ The transplanting window comes from this planting's crop guide adjusted to the h
 - Value paths: Default `guideTransplantWindow`
 - Source dependencies: Crop ingredient (`ingredientId`)
 
+### Data quality (`dataQuality`)
+
+Data-quality gaps and the 0–100 completeness score are evaluated from the checks this entity declares.
+
+- Rule: `planting.data-quality`, version 1
+- Resolver: Declared field projection
+- Value paths: List `dataQuality.status`; Summary `dataQuality.status`
+- Source dependencies: Detected gaps (`dataQuality.gaps`)
+
+### Data gaps (`dataGaps`)
+
+Data gaps are the current checks reported by this entity's data-quality evaluation.
+
+- Rule: `planting.data-gaps`, version 1
+- Resolver: Declared field projection
+- Value paths: List `dataQuality.gaps`; Summary `dataQuality.gaps`
+- Source dependencies: Detected gaps (`dataQuality.gaps`)
+
 ## Garden Entries (`gardenEntry`)
 
 ### Images (`images`)
@@ -839,6 +1129,24 @@ Garden entry images are the current live Image attachments in canonical attachme
 - Resolver: Declared field projection
 - Value paths: List `displayImages`; Detail `images`; Summary `displayImages`
 - Source dependencies: Selected garden entry images (`displayImages`)
+
+### Data quality (`dataQuality`)
+
+Data-quality gaps and the 0–100 completeness score are evaluated from the checks this entity declares.
+
+- Rule: `gardenEntry.data-quality`, version 1
+- Resolver: Declared field projection
+- Value paths: List `dataQuality.status`; Summary `dataQuality.status`
+- Source dependencies: Detected gaps (`dataQuality.gaps`)
+
+### Data gaps (`dataGaps`)
+
+Data gaps are the current checks reported by this entity's data-quality evaluation.
+
+- Rule: `gardenEntry.data-gaps`, version 1
+- Resolver: Declared field projection
+- Value paths: List `dataQuality.gaps`; Summary `dataQuality.gaps`
+- Source dependencies: Detected gaps (`dataQuality.gaps`)
 
 ## Product Categories (`productCategory`)
 
@@ -855,3 +1163,21 @@ The root-to-category classification path, including this category.
 
 - Rule: `productCategory.path`, version 1
 - Resolver: Declared field projection
+
+### Data quality (`dataQuality`)
+
+Data-quality gaps and the 0–100 completeness score are evaluated from the checks this entity declares.
+
+- Rule: `productCategory.data-quality`, version 1
+- Resolver: Declared field projection
+- Value paths: List `dataQuality.status`; Summary `dataQuality.status`
+- Source dependencies: Detected gaps (`dataQuality.gaps`)
+
+### Data gaps (`dataGaps`)
+
+Data gaps are the current checks reported by this entity's data-quality evaluation.
+
+- Rule: `productCategory.data-gaps`, version 1
+- Resolver: Declared field projection
+- Value paths: List `dataQuality.gaps`; Summary `dataQuality.gaps`
+- Source dependencies: Detected gaps (`dataQuality.gaps`)

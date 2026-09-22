@@ -39,6 +39,7 @@ import { cookbook, image, product, recipe } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
 import { runWithConflictRecovery } from "~/server/errors/db-errors";
 import { logAuditEntry } from "~/server/repo/audit-log";
+import { loadDataQualities } from "~/server/repo/data-quality";
 import {
   getDb,
   notDeleted,
@@ -252,10 +253,17 @@ const readCookbookSummaries = async (
   // The linked product's own cover, via the shared batched reader rather than a
   // third join — ProductImage carries the cover flag, so inlining it here would
   // mean duplicating that resolution.
-  const productCovers = await getProductCoverImageUrlsByProductIds(
-    db,
-    rows.flatMap((r) => (r.productId ? [r.productId] : [])),
-  );
+  const [productCovers, dataQualities] = await Promise.all([
+    getProductCoverImageUrlsByProductIds(
+      db,
+      rows.flatMap((r) => (r.productId ? [r.productId] : [])),
+    ),
+    loadDataQualities(
+      db,
+      "cookbook",
+      rows.map((r) => r.id),
+    ),
+  ]);
 
   return withDisplayImages(
     db,
@@ -273,6 +281,8 @@ const readCookbookSummaries = async (
               coverUrl: productCovers.get(productId) ?? null,
             }
           : null,
+      // SAFETY: `r` came from `rows`, which `dataQualities` was loaded for.
+      dataQuality: dataQualities.get(r.id)!,
     }),
   );
 };

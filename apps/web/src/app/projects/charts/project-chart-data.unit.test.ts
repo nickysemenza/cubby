@@ -1,5 +1,5 @@
 import { type ExpenseOut, expenseOut } from "@cubby/schemas/project";
-import { testShortcode } from "@cubby/schemas/testing";
+import { testCompleteDataQuality, testShortcode } from "@cubby/schemas/testing";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -39,6 +39,7 @@ const expense = (id: string, overrides: Partial<ExpenseOut>): ExpenseOut =>
     sourceClaims: [],
     createdAt: new Date("2026-01-01"),
     updatedAt: new Date("2026-01-01"),
+    dataQuality: testCompleteDataQuality(),
     ...overrides,
   });
 

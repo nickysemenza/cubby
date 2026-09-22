@@ -1,7 +1,7 @@
 import type { ImageOut } from "@cubby/schemas/image";
 import { imageOut } from "@cubby/schemas/image";
 import type { InfLocation, LocationType } from "@cubby/schemas/location";
-import { testShortcode } from "@cubby/schemas/testing";
+import { testCompleteDataQuality, testShortcode } from "@cubby/schemas/testing";
 import { describe, expect, it } from "vitest";
 
 import { categorySummaryFixture } from "../../../../tooling/product-category-fixtures";
@@ -55,6 +55,7 @@ function loc(
     notes: null,
     images: extra.images ?? [],
     valuation: null,
+    dataQuality: testCompleteDataQuality(),
     createdAt: new Date("2026-01-01T00:00:00Z"),
     updatedAt: new Date("2026-01-01T00:00:00Z"),
     children: extra.children ?? [],

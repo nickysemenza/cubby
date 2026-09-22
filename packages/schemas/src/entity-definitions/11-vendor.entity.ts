@@ -849,6 +849,31 @@ export default defineEntity({
     merge: true,
     operationOwners: { delete: "kernel", merge: "kernel" },
     mcp: ["get", "list", "search", "create", "update", "delete", "merge"],
+    dataQuality: {
+      checks: [
+        {
+          id: "vendor_order_evidence",
+          facet: "identity",
+          weight: 2,
+          label: "Order evidence",
+          message: "No order evidence is recorded for this vendor.",
+        },
+        {
+          id: "vendor_logo",
+          facet: "provenance",
+          weight: 1,
+          label: "Logo",
+          message: "No logo is recorded for this vendor.",
+        },
+        {
+          id: "vendor_website",
+          facet: "identity",
+          weight: 1,
+          label: "Website",
+          message: "No website is recorded for this vendor.",
+        },
+      ],
+    },
   },
   extensions: {
     countFilter: null,

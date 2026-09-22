@@ -83,13 +83,49 @@
                     "childCount": 0,
                     "directItemCount": 1,
                     "totalItemCount": 1,
-                    "children": []
+                    "children": [],
+                    "dataQuality": {
+                      "status": "complete",
+                      "score": 100,
+                      "facets": [],
+                      "gaps": [],
+                      "exceptions": [],
+                      "relatedGaps": [],
+                      "relatedExceptions": []
+                    }
                   }
-                ]
+                ],
+                "dataQuality": {
+                  "status": "complete",
+                  "score": 100,
+                  "facets": [],
+                  "gaps": [],
+                  "exceptions": [],
+                  "relatedGaps": [],
+                  "relatedExceptions": []
+                }
               }
-            ]
+            ],
+            "dataQuality": {
+              "status": "complete",
+              "score": 100,
+              "facets": [],
+              "gaps": [],
+              "exceptions": [],
+              "relatedGaps": [],
+              "relatedExceptions": []
+            }
           }
-        ]
+        ],
+        "dataQuality": {
+          "status": "complete",
+          "score": 100,
+          "facets": [],
+          "gaps": [],
+          "exceptions": [],
+          "relatedGaps": [],
+          "relatedExceptions": []
+        }
       },
       {
         "id": "LOC-789A",
@@ -124,11 +160,38 @@
             "childCount": 0,
             "directItemCount": 1,
             "totalItemCount": 1,
-            "children": []
+            "children": [],
+            "dataQuality": {
+              "status": "complete",
+              "score": 100,
+              "facets": [],
+              "gaps": [],
+              "exceptions": [],
+              "relatedGaps": [],
+              "relatedExceptions": []
+            }
           }
-        ]
+        ],
+        "dataQuality": {
+          "status": "complete",
+          "score": 100,
+          "facets": [],
+          "gaps": [],
+          "exceptions": [],
+          "relatedGaps": [],
+          "relatedExceptions": []
+        }
       }
-    ]
+    ],
+    "dataQuality": {
+      "status": "complete",
+      "score": 100,
+      "facets": [],
+      "gaps": [],
+      "exceptions": [],
+      "relatedGaps": [],
+      "relatedExceptions": []
+    }
   },
   {
     "id": "LOC-9ABC",
@@ -146,6 +209,15 @@
     "childCount": 0,
     "directItemCount": 0,
     "totalItemCount": 0,
-    "children": []
+    "children": [],
+    "dataQuality": {
+      "status": "complete",
+      "score": 100,
+      "facets": [],
+      "gaps": [],
+      "exceptions": [],
+      "relatedGaps": [],
+      "relatedExceptions": []
+    }
   }
 ]

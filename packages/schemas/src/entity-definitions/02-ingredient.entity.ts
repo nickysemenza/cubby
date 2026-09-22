@@ -631,6 +631,17 @@ export default defineEntity({
       "merge",
       "bulkUpdate",
     ],
+    dataQuality: {
+      checks: [
+        {
+          id: "ingredient_product",
+          facet: "linkage",
+          weight: 2,
+          label: "Product link",
+          message: "No product is linked to this ingredient.",
+        },
+      ],
+    },
   },
   extensions: {
     countFilter: "recipeIdNull",

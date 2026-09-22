@@ -1,5 +1,6 @@
 import type { ShortcodeFor } from "@cubby/shared";
 import { SHORTCODE_CHARS, SHORTCODE_PREFIX } from "@cubby/shared";
+import type { DataQuality } from "../data-quality";
 import {
   parseEntityId,
   parseShortcodeFor,
@@ -96,4 +97,21 @@ export function testShortcode<E extends ShortcodeEntity>(
   }
   const code = `${SHORTCODE_PREFIX[entity]}${deterministicBody(entity, seed)}`;
   return parseShortcodeFor(entity, code);
+}
+
+/**
+ * A fully-satisfied `DataQuality` block for fixtures that build a scored
+ * entity's output but exercise nothing about data quality itself — every
+ * `capabilities.dataQuality` entity's read shape requires the field.
+ */
+export function testCompleteDataQuality(): DataQuality {
+  return {
+    status: "complete",
+    score: 100,
+    facets: [],
+    gaps: [],
+    exceptions: [],
+    relatedGaps: [],
+    relatedExceptions: [],
+  };
 }

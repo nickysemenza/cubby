@@ -1,4 +1,5 @@
 import type { ActorContext } from "@cubby/schemas/context";
+import type { DataQuality } from "@cubby/schemas/data-quality";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 import {
@@ -35,6 +36,7 @@ import {
 } from "~/server/db/schema";
 import { createAppError, createBlockedError } from "~/server/errors/app-error";
 import { computeChanges, logAuditEntry } from "~/server/repo/audit-log";
+import { loadDataQualities } from "~/server/repo/data-quality";
 import {
   auditDateWhereConditions,
   buildPartialUpdateValues,
@@ -115,7 +117,10 @@ type FinancialAccountRow = Omit<
   ledgerPartyName: string | null;
 };
 
-const toOut = (row: FinancialAccountRow): FinancialAccountOut =>
+const toOut = (
+  row: FinancialAccountRow,
+  dataQuality: DataQuality,
+): FinancialAccountOut =>
   financialAccountOut.parse({
     id: parseShortcodeFor("financialAccount", row.shortcode),
     name: row.name,
@@ -130,6 +135,7 @@ const toOut = (row: FinancialAccountRow): FinancialAccountOut =>
     ledgerPartyName: row.ledgerPartyName,
     notes: row.notes,
     transactionCount: Number(row.transactionCount),
+    dataQuality,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   });
@@ -254,8 +260,14 @@ export async function listFinancialAccounts(
       .offset(skip),
     countWhere(db, financialAccount, where),
   );
+  const dataQualities = await loadDataQualities(
+    db,
+    "financialAccount",
+    rows.map((row) => row.id),
+  );
   return {
-    data: rows.map(toOut),
+    // SAFETY: `row` came from `rows`, which `dataQualities` was loaded for.
+    data: rows.map((row) => toOut(row, dataQualities.get(row.id)!)),
     count,
   };
 }
@@ -275,7 +287,13 @@ const financialAccountReader = createEntityReader<
       .limit(1);
     return row;
   },
-  fromDB: (_db, row) => toOut(row),
+  fromDB: async (db, row) => {
+    const dataQualities = await loadDataQualities(db, "financialAccount", [
+      row.id,
+    ]);
+    // SAFETY: `row` was just fetched live by id, so its quality was evaluated.
+    return toOut(row, dataQualities.get(row.id)!);
+  },
 });
 
 const getFinancialAccountByID = financialAccountReader.getByID;

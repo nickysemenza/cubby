@@ -348,6 +348,7 @@ describe("declared entity displays", () => {
       expect(details.map(({ id, header }) => ({ id, header }))).toEqual([
         { id: "kind", header: "Kind" },
         { id: "notes", header: "Notes" },
+        { id: "dataQuality", header: "Data quality" },
       ]);
       expect(details[0]).toMatchObject({
         cellIsOverride: false,
@@ -439,11 +440,12 @@ describe("declared entity displays", () => {
   describe("declared width/format/mobile/sorting", () => {
     // Most of `product`'s `list: true` roster is plain scalars, exercised
     // here with zero overrides — the cleanest surface for the generic
-    // mapping itself. Three fields still force an override regardless
-    // (`dataQuality` is `kind: "json"`; `servingAsLocations` and the
-    // `ledgerExpectedQuantity` field aliased to the "expectedQuantity"
-    // column id are both nested under `quantityLedger` on the list row, so
-    // `readKey: null`), matching `apps/web/src/app/products/productlist.tsx`.
+    // mapping itself. Two fields still force an override regardless
+    // (`servingAsLocations` and the `ledgerExpectedQuantity` field aliased
+    // to the "expectedQuantity" column id are both nested under
+    // `quantityLedger` on the list row, so `readKey: null`), matching
+    // `apps/web/src/app/products/productlist.tsx`; `dataQuality` comes from
+    // its manifest-declared renderer.
     interface ProductRow {
       fdc_id: number | null;
       manufacturer: string;
@@ -469,18 +471,14 @@ describe("declared entity displays", () => {
       primaryGtin: null,
     };
 
-    // The three fields that force an override, minimally stood in (a plain
+    // The two fields that force an override, minimally stood in (a plain
     // `cell: () => null` display column) — same shape as the task fixture's
     // required overrides above.
     function buildProductOverrides<TRecord extends object>(
       helper: ReturnType<typeof createCubbyColumnHelper<TRecord>>,
     ) {
       return createCubbyColumnCollection<TRecord>((add) => {
-        for (const id of [
-          "dataQuality",
-          "servingAsLocations",
-          "expectedQuantity",
-        ]) {
+        for (const id of ["servingAsLocations", "expectedQuantity"]) {
           add(helper.display({ id, cell: () => null }));
         }
       });

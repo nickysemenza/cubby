@@ -1,6 +1,9 @@
+import type { DataQuality } from "@cubby/schemas/data-quality";
 import type { Entity } from "@cubby/schemas/entity";
 import type { ListRendererId } from "@cubby/schemas/entity-manifest";
+import type { CookbookSummary } from "@cubby/schemas/recipe";
 
+import { renderOptionCell } from "~/app/_components/data-table/columnHelpers";
 import {
   createCubbyColumnCollection,
   type CubbyColumnCollection,
@@ -15,6 +18,7 @@ import type {
   EntityListResultByEntity,
   ListEntity,
 } from "~/entities/generated/entity-lists.gen";
+import { dataQualityOptions } from "~/lib/data-quality-options";
 
 import {
   implemented,
@@ -28,12 +32,34 @@ type ListRenderer<E extends ListEntity> = (
   helper: CubbyColumnHelper<ListRowOf<E>>,
 ) => CubbyColumnCollection<ListRowOf<E>>;
 
+/**
+ * Entities outside the kernel list roster whose index still builds columns
+ * from the manifest through a client-mode override (`list-columns/*.tsx`),
+ * keyed to the row type that override pages.
+ */
+type ClientListRows = { cookbook: CookbookSummary };
+
+type ClientListRenderer<TRow extends object> = (
+  helper: CubbyColumnHelper<TRow>,
+) => CubbyColumnCollection<TRow>;
+
+// Ranges over every entity, not just `ListEntity`: a scored entity with no
+// generic list read (cookbook — bespoke browser, no pagination envelope, see
+// cookbook.ts) still gets the manifest's `dataQuality` list-renderer id and
+// must carry a disposition here.
 type ListRendererEntity = {
-  [E in ListEntity]: ListRendererId<E> extends never ? never : E;
-}[ListEntity];
+  [E in Entity]: ListRendererId<E> extends never ? never : E;
+}[Entity];
 
 type EntityListRendererCoverage<E extends ListRendererEntity> = Readonly<
-  Record<ListRendererId<E>, PresentationCoverage<ListRenderer<E>>>
+  Record<
+    ListRendererId<E>,
+    E extends ListEntity
+      ? PresentationCoverage<ListRenderer<E>>
+      : E extends keyof ClientListRows
+        ? PresentationCoverage<ClientListRenderer<ClientListRows[E]>>
+        : PresentationCoverage<never>
+  >
 >;
 
 const recipeSourceRenderer: ListRenderer<"recipe"> = (helper) =>
@@ -61,10 +87,79 @@ const recipeSourceRenderer: ListRenderer<"recipe"> = (helper) =>
     );
   });
 
+type ScoredRow = { dataQuality: DataQuality };
+
+/** List entities whose rows carry a `dataQuality` (manifest `capabilities.dataQuality`). */
+type ScoredListEntity = {
+  [E in ListEntity]: ListRowOf<E> extends ScoredRow ? E : never;
+}[ListEntity];
+
+/**
+ * The one `dataQuality` column every scored entity shares: the status badge
+ * with the 0–100 score beside it. Its id is also the sort field, so the
+ * column header sorts by score (asc = weakest row first — the worklist).
+ */
+const dataQualityRenderer = <TRow extends ScoredRow>(
+  helper: CubbyColumnHelper<TRow>,
+): CubbyColumnCollection<TRow> =>
+  createCubbyColumnCollection<TRow>((add) => {
+    add(
+      helper.accessor((row) => row.dataQuality.status, {
+        id: "dataQuality",
+        header: "Data quality",
+        enableSorting: true,
+        meta: {
+          className: "w-32",
+          mobile: { slot: "meta", priority: 75 },
+        },
+        cell: (info) => (
+          <span className="inline-flex items-center gap-1.5">
+            {renderOptionCell(info.getValue(), dataQualityOptions)}
+            <span className="text-xs text-muted-foreground tabular-nums">
+              {Math.round(info.row.original.dataQuality.score)}
+            </span>
+          </span>
+        ),
+      }),
+    );
+  });
+
+const scoredCoverage = <E extends ScoredListEntity>() => ({
+  "data-quality": implemented<ListRenderer<E>>((helper) =>
+    dataQualityRenderer(helper),
+  ),
+});
+
 export const listRendererCoverage = {
   recipe: {
     "recipe-source": implemented(recipeSourceRenderer),
+    ...scoredCoverage<"recipe">(),
   },
+  product: scoredCoverage<"product">(),
+  purchase: scoredCoverage<"purchase">(),
+  // pantry and garden entities
+  ingredient: scoredCoverage<"ingredient">(),
+  cookbook: {
+    "data-quality": implemented<ClientListRenderer<CookbookSummary>>((helper) =>
+      dataQualityRenderer(helper),
+    ),
+  },
+  location: scoredCoverage<"location">(),
+  inventory: scoredCoverage<"inventory">(),
+  meal: scoredCoverage<"meal">(),
+  productCategory: scoredCoverage<"productCategory">(),
+  // finance and project entities
+  project: scoredCoverage<"project">(),
+  task: scoredCoverage<"task">(),
+  vendor: scoredCoverage<"vendor">(),
+  financialAccount: scoredCoverage<"financialAccount">(),
+  financialTransaction: scoredCoverage<"financialTransaction">(),
+  expense: scoredCoverage<"expense">(),
+  wish: scoredCoverage<"wish">(),
+  planting: scoredCoverage<"planting">(),
+  gardenEntry: scoredCoverage<"gardenEntry">(),
+  ledgerParty: scoredCoverage<"ledgerParty">(),
+  ledgerTransfer: scoredCoverage<"ledgerTransfer">(),
 } satisfies {
   [E in ListRendererEntity]: EntityListRendererCoverage<E>;
 };
@@ -79,10 +174,20 @@ export function listRendererColumns<TRecord extends object>(
   renderer: string,
   helper: CubbyColumnHelper<TRecord>,
 ): CubbyColumnCollection<TRecord> {
-  if (entity !== "recipe" || renderer !== "recipe-source") {
-    throw new Error(`No web list renderer coverage for ${renderer}`);
+  const entry = Object.entries(listRendererCoverage).find(
+    ([key]) => key === entity,
+  )?.[1];
+  const disposition:
+    | PresentationCoverage<
+        ListRenderer<ListEntity> | ClientListRenderer<CookbookSummary>
+      >
+    | undefined =
+    entry === undefined
+      ? undefined
+      : Object.entries(entry).find(([key]) => key === renderer)?.[1];
+  if (disposition === undefined) {
+    throw new Error(`No web list renderer coverage for ${entity}.${renderer}`);
   }
-  const disposition = listRendererCoverage.recipe["recipe-source"];
   if (disposition.kind !== "implemented") {
     throw new Error(`Web list renderer ${renderer} is not implemented`);
   }
@@ -91,7 +196,7 @@ export function listRendererColumns<TRecord extends object>(
   // that entity-specific row association.
   const rendered = disposition.implementation(helper as never);
   const erasedRendered: unknown = rendered;
-  // SAFETY: the entity check above binds this recipe renderer to the same
-  // TRecord helper accepted by the generic column compiler.
+  // SAFETY: the lookup above bound this renderer to the same TRecord helper
+  // accepted by the generic column compiler.
   return erasedRendered as CubbyColumnCollection<TRecord>;
 }

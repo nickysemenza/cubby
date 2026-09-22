@@ -1,6 +1,6 @@
 import { entityRecommendationsOut } from "@cubby/schemas/entity-recommendations";
 import { expenseOut } from "@cubby/schemas/project";
-import { testShortcode } from "@cubby/schemas/testing";
+import { testCompleteDataQuality, testShortcode } from "@cubby/schemas/testing";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -41,6 +41,7 @@ const expense = expenseOut.parse({
   sourceClaims: [],
   createdAt: new Date("2026-01-01"),
   updatedAt: new Date("2026-01-01"),
+  dataQuality: testCompleteDataQuality(),
 });
 
 const recommendationData = (basisKey: string, assigned = false) =>

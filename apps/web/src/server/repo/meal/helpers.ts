@@ -1,3 +1,4 @@
+import type { DataQuality } from "@cubby/schemas/data-quality";
 import {
   type MealId,
   parseShortcodeFor,
@@ -68,7 +69,10 @@ type MealRow = {
   images: Array<{ image: MappableImageRecord; deletedAt: Date | null }>;
 };
 
-export const dbMealToAPI = (row: MealRow): MealOut => {
+export const dbMealToAPI = (
+  row: MealRow,
+  dataQuality: DataQuality,
+): MealOut => {
   const recipes: MealRecipeOut[] = row.recipes
     // `relations.meal.full.recipes` already filters soft-deleted occurrences
     // (`where: notDeleted(mealRecipe)`); the to-one `recipe` join can't be
@@ -108,6 +112,7 @@ export const dbMealToAPI = (row: MealRow): MealOut => {
     recipes,
     totals: aggregateTotals(recipes.map((recipe) => recipe.scaledTotals)),
     images: mapImages(row.images),
+    dataQuality,
     // `name` is a nullable, user-editable label; an unnamed meal falls back to
     // its date so every surface has a non-blank identity to show.
     displayName: row.name?.trim() || row.date,

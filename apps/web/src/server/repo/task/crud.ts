@@ -42,6 +42,7 @@ import {
   logAuditEntries,
   logAuditEntry,
 } from "~/server/repo/audit-log";
+import { loadDataQualities } from "~/server/repo/data-quality";
 import {
   associatePendingImages,
   batchUpdateWithCaseWhen,
@@ -325,18 +326,21 @@ const taskReader = createEntityReader({
   entity: "task",
   fetchById: fetchTaskWithProject,
   fromDB: async (db, row) => {
-    const [deps, subtaskCounts] = await Promise.all([
+    const [deps, subtaskCounts, dataQualities] = await Promise.all([
       taskDependencyIds(db, [row.id]),
       taskSubtaskCounts(db, [row.id]),
+      loadDataQualities(db, "task", [row.id]),
     ]);
     const counts = subtaskCounts.get(row.id);
     const [hydrated] = await hydrateTaskInheritanceRows(db, [row]);
+    // SAFETY: `row` was just fetched live by id, so its quality was evaluated.
     return dbTaskToAPI(
       hydrated!,
       deps.blockedBy.get(row.id) ?? [],
       deps.blocking.get(row.id) ?? [],
       counts?.count ?? 0,
       counts?.doneCount ?? 0,
+      dataQualities.get(row.id)!,
     );
   },
 });
@@ -364,9 +368,10 @@ export const getTasksByIDs = async (
     ...relations.task.withProject,
   });
   const rows = await hydrateTaskInheritanceRows(db, rawRows);
-  const [deps, subtaskCounts] = await Promise.all([
+  const [deps, subtaskCounts, dataQualities] = await Promise.all([
     taskDependencyIds(db, ids),
     taskSubtaskCounts(db, ids),
+    loadDataQualities(db, "task", ids),
   ]);
   return rows.map((row) => {
     const counts = subtaskCounts.get(row.id);
@@ -376,6 +381,8 @@ export const getTasksByIDs = async (
       deps.blocking.get(row.id) ?? [],
       counts?.count ?? 0,
       counts?.doneCount ?? 0,
+      // SAFETY: `row` came from `rows`, which `dataQualities` was loaded for.
+      dataQualities.get(row.id)!,
     );
   });
 };

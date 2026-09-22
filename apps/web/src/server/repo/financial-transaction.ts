@@ -1,4 +1,5 @@
 import type { ActorContext } from "@cubby/schemas/context";
+import type { DataQuality } from "@cubby/schemas/data-quality";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 import type {
@@ -30,7 +31,10 @@ import {
 } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
 import { computeChanges, logAuditEntry } from "~/server/repo/audit-log";
-import { touchDataQualityTargets } from "~/server/repo/data-quality";
+import {
+  loadDataQualities,
+  touchDataQualityTargets,
+} from "~/server/repo/data-quality";
 import {
   auditDateWhereConditions,
   buildPartialUpdateValues,
@@ -139,7 +143,10 @@ type FinancialTransactionRow = Omit<
   accountName: string | null;
 };
 
-const toOut = (row: FinancialTransactionRow): FinancialTransactionOut => {
+const toOut = (
+  row: FinancialTransactionRow,
+  dataQuality: DataQuality,
+): FinancialTransactionOut => {
   const allocations = (row.allocations ?? []).map((allocation) => ({
     purchaseId: parseShortcodeFor("purchase", allocation.purchaseId),
     amount: Number(allocation.amount),
@@ -177,6 +184,7 @@ const toOut = (row: FinancialTransactionRow): FinancialTransactionOut => {
       row.merchant?.trim() ||
       row.rawDescription?.trim() ||
       capitalize(row.kind.replaceAll("_", " ")),
+    dataQuality,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   });
@@ -335,10 +343,16 @@ export async function listFinancialTransactions(
         .offset(skip),
     count: () => countWhere(db, financialTransaction, where),
   });
+  const dataQualities = await loadDataQualities(
+    db,
+    "financialTransaction",
+    rows.map((row) => row.id),
+  );
   return {
     data: await enrichFinancialTransactionsWithVendorInference(
       db,
-      rows.map(toOut),
+      // SAFETY: `row` came from `rows`, which `dataQualities` was loaded for.
+      rows.map((row) => toOut(row, dataQualities.get(row.id)!)),
     ),
     count,
   };
@@ -361,10 +375,18 @@ const financialTransactionReader = createEntityReader<
       .limit(1);
     return row;
   },
-  fromDB: async (db, row) =>
-    (
-      await enrichFinancialTransactionsWithVendorInference(db, [toOut(row)])
-    )[0]!,
+  fromDB: async (db, row) => {
+    const dataQualities = await loadDataQualities(db, "financialTransaction", [
+      row.id,
+    ]);
+    return (
+      await enrichFinancialTransactionsWithVendorInference(db, [
+        // SAFETY: `row` was just fetched live by id, so its quality was
+        // evaluated.
+        toOut(row, dataQualities.get(row.id)!),
+      ])
+    )[0]!;
+  },
 });
 
 const getFinancialTransactionByID = financialTransactionReader.getByID;

@@ -42,7 +42,16 @@
       "displayImages": [],
       "createdAt": "2026-03-05T00:00:00.000Z",
       "updatedAt": "2026-03-05T00:00:00.000Z",
-      "displayName": "Server meal label"
+      "displayName": "Server meal label",
+      "dataQuality": {
+        "status": "complete",
+        "score": 100,
+        "facets": [],
+        "gaps": [],
+        "exceptions": [],
+        "relatedGaps": [],
+        "relatedExceptions": []
+      }
     }
   ],
   "meta": {

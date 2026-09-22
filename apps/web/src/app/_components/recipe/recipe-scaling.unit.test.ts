@@ -1,6 +1,10 @@
 import type { Amount } from "@cubby/schemas/codec";
 import { type RecipeOut, recipeOut } from "@cubby/schemas/recipe";
-import { testEntityId, testShortcode } from "@cubby/schemas/testing";
+import {
+  testCompleteDataQuality,
+  testEntityId,
+  testShortcode,
+} from "@cubby/schemas/testing";
 import { describe, expect, it } from "vitest";
 
 import { scaleRecipe } from "./recipe-scaling";
@@ -52,6 +56,7 @@ const recipe = (
     ],
     createdAt: new Date("2026-01-01"),
     updatedAt: new Date("2026-01-01"),
+    dataQuality: testCompleteDataQuality(),
     ...extra,
   });
 

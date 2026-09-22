@@ -1964,7 +1964,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/BrowserBridgeOperationCapture/type`.
             public var _type: Components.Schemas.BrowserBridgeOperationCapture._TypePayload
             /// - Remark: Generated from `#/components/schemas/BrowserBridgeOperationCapture/allowedHosts`.
-            public var allowedHosts: Components.Schemas.InputSchema162
+            public var allowedHosts: Components.Schemas.InputSchema172
             /// - Remark: Generated from `#/components/schemas/BrowserBridgeOperationCapture/enhancedEvidence`.
             public var enhancedEvidence: Swift.Bool
             /// - Remark: Generated from `#/components/schemas/BrowserBridgeOperationCapture/recoveryURL`.
@@ -2019,7 +2019,7 @@ extension Components {
             ///   - evidenceScope:
             public init(
                 _type: Components.Schemas.BrowserBridgeOperationCapture._TypePayload,
-                allowedHosts: Components.Schemas.InputSchema162,
+                allowedHosts: Components.Schemas.InputSchema172,
                 enhancedEvidence: Swift.Bool,
                 recoveryURL: Swift.String? = nil,
                 evidenceScope: Components.Schemas.BrowserBridgeOperationCapture.EvidenceScopePayload? = nil
@@ -2044,7 +2044,7 @@ extension Components {
                     forKey: ._type
                 )
                 self.allowedHosts = try container.decode(
-                    Components.Schemas.InputSchema162.self,
+                    Components.Schemas.InputSchema172.self,
                     forKey: .allowedHosts
                 )
                 self.enhancedEvidence = try container.decode(
@@ -2079,7 +2079,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/BrowserBridgeOperationFollowCapturedLink/linkID`.
             public var linkID: Swift.String
             /// - Remark: Generated from `#/components/schemas/BrowserBridgeOperationFollowCapturedLink/allowedHosts`.
-            public var allowedHosts: Components.Schemas.InputSchema162
+            public var allowedHosts: Components.Schemas.InputSchema172
             /// Creates a new `BrowserBridgeOperationFollowCapturedLink`.
             ///
             /// - Parameters:
@@ -2089,7 +2089,7 @@ extension Components {
             public init(
                 _type: Components.Schemas.BrowserBridgeOperationFollowCapturedLink._TypePayload,
                 linkID: Swift.String,
-                allowedHosts: Components.Schemas.InputSchema162
+                allowedHosts: Components.Schemas.InputSchema172
             ) {
                 self._type = _type
                 self.linkID = linkID
@@ -2111,7 +2111,7 @@ extension Components {
                     forKey: .linkID
                 )
                 self.allowedHosts = try container.decode(
-                    Components.Schemas.InputSchema162.self,
+                    Components.Schemas.InputSchema172.self,
                     forKey: .allowedHosts
                 )
                 try decoder.ensureNoAdditionalProperties(knownKeys: [
@@ -2132,7 +2132,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/BrowserBridgeOperationNavigate/url`.
             public var url: Swift.String
             /// - Remark: Generated from `#/components/schemas/BrowserBridgeOperationNavigate/allowedHosts`.
-            public var allowedHosts: Components.Schemas.InputSchema162
+            public var allowedHosts: Components.Schemas.InputSchema172
             /// Creates a new `BrowserBridgeOperationNavigate`.
             ///
             /// - Parameters:
@@ -2142,7 +2142,7 @@ extension Components {
             public init(
                 _type: Components.Schemas.BrowserBridgeOperationNavigate._TypePayload,
                 url: Swift.String,
-                allowedHosts: Components.Schemas.InputSchema162
+                allowedHosts: Components.Schemas.InputSchema172
             ) {
                 self._type = _type
                 self.url = url
@@ -2164,7 +2164,7 @@ extension Components {
                     forKey: .url
                 )
                 self.allowedHosts = try container.decode(
-                    Components.Schemas.InputSchema162.self,
+                    Components.Schemas.InputSchema172.self,
                     forKey: .allowedHosts
                 )
                 try decoder.ensureNoAdditionalProperties(knownKeys: [
@@ -3775,6 +3775,8 @@ extension Components {
             public var needsReextract: Swift.Bool
             /// - Remark: Generated from `#/components/schemas/CookbookSummary/product`.
             public var product: Components.Schemas.CookbookProductSummary?
+            /// - Remark: Generated from `#/components/schemas/CookbookSummary/dataQuality`.
+            public var dataQuality: Components.Schemas.DataQuality
             /// - Remark: Generated from `#/components/schemas/CookbookSummary/displayImages`.
             public var displayImages: Components.Schemas.DisplayImagesField
             /// Creates a new `CookbookSummary`.
@@ -3789,6 +3791,7 @@ extension Components {
             ///   - sourceRecipeCount:
             ///   - needsReextract:
             ///   - product:
+            ///   - dataQuality:
             ///   - displayImages:
             public init(
                 id: Components.Schemas.CookbookShortcode,
@@ -3800,6 +3803,7 @@ extension Components {
                 sourceRecipeCount: Swift.Int,
                 needsReextract: Swift.Bool,
                 product: Components.Schemas.CookbookProductSummary? = nil,
+                dataQuality: Components.Schemas.DataQuality,
                 displayImages: Components.Schemas.DisplayImagesField
             ) {
                 self.id = id
@@ -3811,6 +3815,7 @@ extension Components {
                 self.sourceRecipeCount = sourceRecipeCount
                 self.needsReextract = needsReextract
                 self.product = product
+                self.dataQuality = dataQuality
                 self.displayImages = displayImages
             }
             public enum CodingKeys: String, CodingKey {
@@ -3823,6 +3828,7 @@ extension Components {
                 case sourceRecipeCount
                 case needsReextract
                 case product
+                case dataQuality
                 case displayImages
             }
             public init(from decoder: any Swift.Decoder) throws {
@@ -3863,6 +3869,10 @@ extension Components {
                     Components.Schemas.CookbookProductSummary.self,
                     forKey: .product
                 )
+                self.dataQuality = try container.decode(
+                    Components.Schemas.DataQuality.self,
+                    forKey: .dataQuality
+                )
                 self.displayImages = try container.decode(
                     Components.Schemas.DisplayImagesField.self,
                     forKey: .displayImages
@@ -3877,6 +3887,7 @@ extension Components {
                     "sourceRecipeCount",
                     "needsReextract",
                     "product",
+                    "dataQuality",
                     "displayImages"
                 ])
             }
@@ -4112,53 +4123,6 @@ extension Components {
                 ])
             }
         }
-        /// - Remark: Generated from `#/components/schemas/DataCheck`.
-        public struct DataCheck: Codable, Hashable, Sendable {
-            /// - Remark: Generated from `#/components/schemas/DataCheck/value1`.
-            public var value1: Components.Schemas.PurchaseDataCheck?
-            /// - Remark: Generated from `#/components/schemas/DataCheck/value2`.
-            public var value2: Components.Schemas.ProductDataCheck?
-            /// Creates a new `DataCheck`.
-            ///
-            /// - Parameters:
-            ///   - value1:
-            ///   - value2:
-            public init(
-                value1: Components.Schemas.PurchaseDataCheck? = nil,
-                value2: Components.Schemas.ProductDataCheck? = nil
-            ) {
-                self.value1 = value1
-                self.value2 = value2
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                var errors: [any Swift.Error] = []
-                do {
-                    self.value1 = try decoder.decodeFromSingleValueContainer()
-                } catch {
-                    errors.append(error)
-                }
-                do {
-                    self.value2 = try decoder.decodeFromSingleValueContainer()
-                } catch {
-                    errors.append(error)
-                }
-                try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
-                    [
-                        self.value1,
-                        self.value2
-                    ],
-                    type: Self.self,
-                    codingPath: decoder.codingPath,
-                    errors: errors
-                )
-            }
-            public func encode(to encoder: any Swift.Encoder) throws {
-                try encoder.encodeFirstNonNilValueToSingleValueContainer([
-                    self.value1,
-                    self.value2
-                ])
-            }
-        }
         /// - Remark: Generated from `#/components/schemas/DataExceptionReason`.
         @frozen public enum DataExceptionReason: String, Codable, Hashable, Sendable, CaseIterable {
             case notIssued = "not_issued"
@@ -4261,21 +4225,21 @@ extension Components {
                 ])
             }
         }
+        /// - Remark: Generated from `#/components/schemas/DataQualityCheckKind`.
+        @frozen public enum DataQualityCheckKind: String, Codable, Hashable, Sendable, CaseIterable {
+            case missing = "missing"
+            case defect = "defect"
+        }
         /// - Remark: Generated from `#/components/schemas/DataQualityException`.
         public struct DataQualityException: Codable, Hashable, Sendable {
             /// - Remark: Generated from `#/components/schemas/DataQualityException/check`.
-            public var check: Components.Schemas.DataCheck
+            public var check: Swift.String
             /// - Remark: Generated from `#/components/schemas/DataQualityException/reason`.
             public var reason: Components.Schemas.DataExceptionReason
             /// - Remark: Generated from `#/components/schemas/DataQualityException/note`.
             public var note: Swift.String
             /// - Remark: Generated from `#/components/schemas/DataQualityException/targetType`.
-            @frozen public enum TargetTypePayload: String, Codable, Hashable, Sendable, CaseIterable {
-                case purchase = "purchase"
-                case product = "product"
-            }
-            /// - Remark: Generated from `#/components/schemas/DataQualityException/targetType`.
-            public var targetType: Components.Schemas.DataQualityException.TargetTypePayload
+            public var targetType: Swift.String
             /// - Remark: Generated from `#/components/schemas/DataQualityException/targetId`.
             public var targetId: Swift.String
             /// - Remark: Generated from `#/components/schemas/DataQualityException/state`.
@@ -4295,10 +4259,10 @@ extension Components {
             ///   - targetId:
             ///   - state:
             public init(
-                check: Components.Schemas.DataCheck,
+                check: Swift.String,
                 reason: Components.Schemas.DataExceptionReason,
                 note: Swift.String,
-                targetType: Components.Schemas.DataQualityException.TargetTypePayload,
+                targetType: Swift.String,
                 targetId: Swift.String,
                 state: Components.Schemas.DataQualityException.StatePayload
             ) {
@@ -4320,7 +4284,7 @@ extension Components {
             public init(from decoder: any Swift.Decoder) throws {
                 let container = try decoder.container(keyedBy: CodingKeys.self)
                 self.check = try container.decode(
-                    Components.Schemas.DataCheck.self,
+                    Swift.String.self,
                     forKey: .check
                 )
                 self.reason = try container.decode(
@@ -4332,7 +4296,7 @@ extension Components {
                     forKey: .note
                 )
                 self.targetType = try container.decode(
-                    Components.Schemas.DataQualityException.TargetTypePayload.self,
+                    Swift.String.self,
                     forKey: .targetType
                 )
                 self.targetId = try container.decode(
@@ -4410,22 +4374,19 @@ extension Components {
             case settlement = "settlement"
             case provenance = "provenance"
             case integrity = "integrity"
+            case content = "content"
+            case linkage = "linkage"
         }
         /// - Remark: Generated from `#/components/schemas/DataQualityGap`.
         public struct DataQualityGap: Codable, Hashable, Sendable {
             /// - Remark: Generated from `#/components/schemas/DataQualityGap/check`.
-            public var check: Components.Schemas.DataCheck
+            public var check: Swift.String
             /// - Remark: Generated from `#/components/schemas/DataQualityGap/facet`.
             public var facet: Components.Schemas.DataQualityFacetName
             /// - Remark: Generated from `#/components/schemas/DataQualityGap/kind`.
-            public var kind: Components.Schemas.DataQualityGapKind
+            public var kind: Components.Schemas.DataQualityCheckKind
             /// - Remark: Generated from `#/components/schemas/DataQualityGap/targetType`.
-            @frozen public enum TargetTypePayload: String, Codable, Hashable, Sendable, CaseIterable {
-                case purchase = "purchase"
-                case product = "product"
-            }
-            /// - Remark: Generated from `#/components/schemas/DataQualityGap/targetType`.
-            public var targetType: Components.Schemas.DataQualityGap.TargetTypePayload
+            public var targetType: Swift.String
             /// - Remark: Generated from `#/components/schemas/DataQualityGap/targetId`.
             public var targetId: Swift.String
             /// - Remark: Generated from `#/components/schemas/DataQualityGap/message`.
@@ -4440,10 +4401,10 @@ extension Components {
             ///   - targetId:
             ///   - message:
             public init(
-                check: Components.Schemas.DataCheck,
+                check: Swift.String,
                 facet: Components.Schemas.DataQualityFacetName,
-                kind: Components.Schemas.DataQualityGapKind,
-                targetType: Components.Schemas.DataQualityGap.TargetTypePayload,
+                kind: Components.Schemas.DataQualityCheckKind,
+                targetType: Swift.String,
                 targetId: Swift.String,
                 message: Swift.String
             ) {
@@ -4465,7 +4426,7 @@ extension Components {
             public init(from decoder: any Swift.Decoder) throws {
                 let container = try decoder.container(keyedBy: CodingKeys.self)
                 self.check = try container.decode(
-                    Components.Schemas.DataCheck.self,
+                    Swift.String.self,
                     forKey: .check
                 )
                 self.facet = try container.decode(
@@ -4473,11 +4434,11 @@ extension Components {
                     forKey: .facet
                 )
                 self.kind = try container.decode(
-                    Components.Schemas.DataQualityGapKind.self,
+                    Components.Schemas.DataQualityCheckKind.self,
                     forKey: .kind
                 )
                 self.targetType = try container.decode(
-                    Components.Schemas.DataQualityGap.TargetTypePayload.self,
+                    Swift.String.self,
                     forKey: .targetType
                 )
                 self.targetId = try container.decode(
@@ -4497,11 +4458,6 @@ extension Components {
                     "message"
                 ])
             }
-        }
-        /// - Remark: Generated from `#/components/schemas/DataQualityGapKind`.
-        @frozen public enum DataQualityGapKind: String, Codable, Hashable, Sendable, CaseIterable {
-            case missing = "missing"
-            case defect = "defect"
         }
         /// - Remark: Generated from `#/components/schemas/DataQualityStatus`.
         @frozen public enum DataQualityStatus: String, Codable, Hashable, Sendable, CaseIterable {
@@ -7009,6 +6965,8 @@ extension Components {
             public var createdAt: Foundation.Date
             /// - Remark: Generated from `#/components/schemas/ExpenseDetail/updatedAt`.
             public var updatedAt: Foundation.Date
+            /// - Remark: Generated from `#/components/schemas/ExpenseDetail/dataQuality`.
+            public var dataQuality: Components.Schemas.DataQuality
             /// - Remark: Generated from `#/components/schemas/ExpenseDetail/displayImages`.
             public var displayImages: Components.Schemas.DisplayImagesField
             /// - Remark: Generated from `#/components/schemas/ExpenseDetail/attachments`.
@@ -7047,6 +7005,7 @@ extension Components {
             ///   - sourceClaims:
             ///   - createdAt:
             ///   - updatedAt:
+            ///   - dataQuality:
             ///   - displayImages:
             ///   - attachments:
             public init(
@@ -7081,6 +7040,7 @@ extension Components {
                 sourceClaims: Components.Schemas.LedgerSourceClaimsOut,
                 createdAt: Foundation.Date,
                 updatedAt: Foundation.Date,
+                dataQuality: Components.Schemas.DataQuality,
                 displayImages: Components.Schemas.DisplayImagesField,
                 attachments: Components.Schemas.OutputSchema437
             ) {
@@ -7115,6 +7075,7 @@ extension Components {
                 self.sourceClaims = sourceClaims
                 self.createdAt = createdAt
                 self.updatedAt = updatedAt
+                self.dataQuality = dataQuality
                 self.displayImages = displayImages
                 self.attachments = attachments
             }
@@ -7150,6 +7111,7 @@ extension Components {
                 case sourceClaims
                 case createdAt
                 case updatedAt
+                case dataQuality
                 case displayImages
                 case attachments
             }
@@ -7279,6 +7241,10 @@ extension Components {
                     Foundation.Date.self,
                     forKey: .updatedAt
                 )
+                self.dataQuality = try container.decode(
+                    Components.Schemas.DataQuality.self,
+                    forKey: .dataQuality
+                )
                 self.displayImages = try container.decode(
                     Components.Schemas.DisplayImagesField.self,
                     forKey: .displayImages
@@ -7319,6 +7285,7 @@ extension Components {
                     "sourceClaims",
                     "createdAt",
                     "updatedAt",
+                    "dataQuality",
                     "displayImages",
                     "attachments"
                 ])
@@ -7407,6 +7374,8 @@ extension Components {
             public var createdAt: Foundation.Date
             /// - Remark: Generated from `#/components/schemas/ExpenseListItem/updatedAt`.
             public var updatedAt: Foundation.Date
+            /// - Remark: Generated from `#/components/schemas/ExpenseListItem/dataQuality`.
+            public var dataQuality: Components.Schemas.DataQuality
             /// - Remark: Generated from `#/components/schemas/ExpenseListItem/displayImages`.
             public var displayImages: Components.Schemas.DisplayImagesField
             /// Creates a new `ExpenseListItem`.
@@ -7443,6 +7412,7 @@ extension Components {
             ///   - sourceClaims:
             ///   - createdAt:
             ///   - updatedAt:
+            ///   - dataQuality:
             ///   - displayImages:
             public init(
                 fieldResolutions: Components.Schemas.OptionalFieldResolutions? = nil,
@@ -7476,6 +7446,7 @@ extension Components {
                 sourceClaims: Components.Schemas.LedgerSourceClaimsOut,
                 createdAt: Foundation.Date,
                 updatedAt: Foundation.Date,
+                dataQuality: Components.Schemas.DataQuality,
                 displayImages: Components.Schemas.DisplayImagesField
             ) {
                 self.fieldResolutions = fieldResolutions
@@ -7509,6 +7480,7 @@ extension Components {
                 self.sourceClaims = sourceClaims
                 self.createdAt = createdAt
                 self.updatedAt = updatedAt
+                self.dataQuality = dataQuality
                 self.displayImages = displayImages
             }
             public enum CodingKeys: String, CodingKey {
@@ -7543,6 +7515,7 @@ extension Components {
                 case sourceClaims
                 case createdAt
                 case updatedAt
+                case dataQuality
                 case displayImages
             }
             public init(from decoder: any Swift.Decoder) throws {
@@ -7671,6 +7644,10 @@ extension Components {
                     Foundation.Date.self,
                     forKey: .updatedAt
                 )
+                self.dataQuality = try container.decode(
+                    Components.Schemas.DataQuality.self,
+                    forKey: .dataQuality
+                )
                 self.displayImages = try container.decode(
                     Components.Schemas.DisplayImagesField.self,
                     forKey: .displayImages
@@ -7707,6 +7684,7 @@ extension Components {
                     "sourceClaims",
                     "createdAt",
                     "updatedAt",
+                    "dataQuality",
                     "displayImages"
                 ])
             }
@@ -7817,6 +7795,8 @@ extension Components {
             public var createdAt: Foundation.Date
             /// - Remark: Generated from `#/components/schemas/ExpenseOut/updatedAt`.
             public var updatedAt: Foundation.Date
+            /// - Remark: Generated from `#/components/schemas/ExpenseOut/dataQuality`.
+            public var dataQuality: Components.Schemas.DataQuality
             /// Creates a new `ExpenseOut`.
             ///
             /// - Parameters:
@@ -7851,6 +7831,7 @@ extension Components {
             ///   - sourceClaims:
             ///   - createdAt:
             ///   - updatedAt:
+            ///   - dataQuality:
             public init(
                 fieldResolutions: Components.Schemas.OptionalFieldResolutions? = nil,
                 projectAllocations: Components.Schemas.OptionalProjectAllocations? = nil,
@@ -7882,7 +7863,8 @@ extension Components {
                 funders: Components.Schemas.LedgerAttributions,
                 sourceClaims: Components.Schemas.LedgerSourceClaimsOut,
                 createdAt: Foundation.Date,
-                updatedAt: Foundation.Date
+                updatedAt: Foundation.Date,
+                dataQuality: Components.Schemas.DataQuality
             ) {
                 self.fieldResolutions = fieldResolutions
                 self.projectAllocations = projectAllocations
@@ -7915,6 +7897,7 @@ extension Components {
                 self.sourceClaims = sourceClaims
                 self.createdAt = createdAt
                 self.updatedAt = updatedAt
+                self.dataQuality = dataQuality
             }
             public enum CodingKeys: String, CodingKey {
                 case fieldResolutions
@@ -7948,6 +7931,7 @@ extension Components {
                 case sourceClaims
                 case createdAt
                 case updatedAt
+                case dataQuality
             }
             public init(from decoder: any Swift.Decoder) throws {
                 let container = try decoder.container(keyedBy: CodingKeys.self)
@@ -8075,6 +8059,10 @@ extension Components {
                     Foundation.Date.self,
                     forKey: .updatedAt
                 )
+                self.dataQuality = try container.decode(
+                    Components.Schemas.DataQuality.self,
+                    forKey: .dataQuality
+                )
                 try decoder.ensureNoAdditionalProperties(knownKeys: [
                     "fieldResolutions",
                     "projectAllocations",
@@ -8106,7 +8094,8 @@ extension Components {
                     "funders",
                     "sourceClaims",
                     "createdAt",
-                    "updatedAt"
+                    "updatedAt",
+                    "dataQuality"
                 ])
             }
         }
@@ -9245,6 +9234,8 @@ extension Components {
             public var createdAt: Foundation.Date
             /// - Remark: Generated from `#/components/schemas/FinancialAccountDetail/updatedAt`.
             public var updatedAt: Foundation.Date
+            /// - Remark: Generated from `#/components/schemas/FinancialAccountDetail/dataQuality`.
+            public var dataQuality: Components.Schemas.DataQuality
             /// - Remark: Generated from `#/components/schemas/FinancialAccountDetail/displayImages`.
             public var displayImages: Components.Schemas.DisplayImagesField
             /// - Remark: Generated from `#/components/schemas/FinancialAccountDetail/attachments`.
@@ -9265,6 +9256,7 @@ extension Components {
             ///   - transactionCount:
             ///   - createdAt:
             ///   - updatedAt:
+            ///   - dataQuality:
             ///   - displayImages:
             ///   - attachments:
             public init(
@@ -9281,6 +9273,7 @@ extension Components {
                 transactionCount: Swift.Int,
                 createdAt: Foundation.Date,
                 updatedAt: Foundation.Date,
+                dataQuality: Components.Schemas.DataQuality,
                 displayImages: Components.Schemas.DisplayImagesField,
                 attachments: Components.Schemas.OutputSchema437
             ) {
@@ -9297,6 +9290,7 @@ extension Components {
                 self.transactionCount = transactionCount
                 self.createdAt = createdAt
                 self.updatedAt = updatedAt
+                self.dataQuality = dataQuality
                 self.displayImages = displayImages
                 self.attachments = attachments
             }
@@ -9314,6 +9308,7 @@ extension Components {
                 case transactionCount
                 case createdAt
                 case updatedAt
+                case dataQuality
                 case displayImages
                 case attachments
             }
@@ -9371,6 +9366,10 @@ extension Components {
                     Foundation.Date.self,
                     forKey: .updatedAt
                 )
+                self.dataQuality = try container.decode(
+                    Components.Schemas.DataQuality.self,
+                    forKey: .dataQuality
+                )
                 self.displayImages = try container.decode(
                     Components.Schemas.DisplayImagesField.self,
                     forKey: .displayImages
@@ -9393,6 +9392,7 @@ extension Components {
                     "transactionCount",
                     "createdAt",
                     "updatedAt",
+                    "dataQuality",
                     "displayImages",
                     "attachments"
                 ])
@@ -10006,6 +10006,8 @@ extension Components {
             public var createdAt: Foundation.Date
             /// - Remark: Generated from `#/components/schemas/FinancialAccountListItem/updatedAt`.
             public var updatedAt: Foundation.Date
+            /// - Remark: Generated from `#/components/schemas/FinancialAccountListItem/dataQuality`.
+            public var dataQuality: Components.Schemas.DataQuality
             /// - Remark: Generated from `#/components/schemas/FinancialAccountListItem/displayImages`.
             public var displayImages: Components.Schemas.DisplayImagesField
             /// Creates a new `FinancialAccountListItem`.
@@ -10024,6 +10026,7 @@ extension Components {
             ///   - transactionCount:
             ///   - createdAt:
             ///   - updatedAt:
+            ///   - dataQuality:
             ///   - displayImages:
             public init(
                 id: Components.Schemas.FinancialAccountShortcode,
@@ -10039,6 +10042,7 @@ extension Components {
                 transactionCount: Swift.Int,
                 createdAt: Foundation.Date,
                 updatedAt: Foundation.Date,
+                dataQuality: Components.Schemas.DataQuality,
                 displayImages: Components.Schemas.DisplayImagesField
             ) {
                 self.id = id
@@ -10054,6 +10058,7 @@ extension Components {
                 self.transactionCount = transactionCount
                 self.createdAt = createdAt
                 self.updatedAt = updatedAt
+                self.dataQuality = dataQuality
                 self.displayImages = displayImages
             }
             public enum CodingKeys: String, CodingKey {
@@ -10070,6 +10075,7 @@ extension Components {
                 case transactionCount
                 case createdAt
                 case updatedAt
+                case dataQuality
                 case displayImages
             }
             public init(from decoder: any Swift.Decoder) throws {
@@ -10126,6 +10132,10 @@ extension Components {
                     Foundation.Date.self,
                     forKey: .updatedAt
                 )
+                self.dataQuality = try container.decode(
+                    Components.Schemas.DataQuality.self,
+                    forKey: .dataQuality
+                )
                 self.displayImages = try container.decode(
                     Components.Schemas.DisplayImagesField.self,
                     forKey: .displayImages
@@ -10144,6 +10154,7 @@ extension Components {
                     "transactionCount",
                     "createdAt",
                     "updatedAt",
+                    "dataQuality",
                     "displayImages"
                 ])
             }
@@ -10214,6 +10225,8 @@ extension Components {
             public var createdAt: Foundation.Date
             /// - Remark: Generated from `#/components/schemas/FinancialAccountOut/updatedAt`.
             public var updatedAt: Foundation.Date
+            /// - Remark: Generated from `#/components/schemas/FinancialAccountOut/dataQuality`.
+            public var dataQuality: Components.Schemas.DataQuality
             /// Creates a new `FinancialAccountOut`.
             ///
             /// - Parameters:
@@ -10230,6 +10243,7 @@ extension Components {
             ///   - transactionCount:
             ///   - createdAt:
             ///   - updatedAt:
+            ///   - dataQuality:
             public init(
                 id: Components.Schemas.FinancialAccountShortcode,
                 name: Swift.String,
@@ -10243,7 +10257,8 @@ extension Components {
                 ledgerPartyName: Swift.String? = nil,
                 transactionCount: Swift.Int,
                 createdAt: Foundation.Date,
-                updatedAt: Foundation.Date
+                updatedAt: Foundation.Date,
+                dataQuality: Components.Schemas.DataQuality
             ) {
                 self.id = id
                 self.name = name
@@ -10258,6 +10273,7 @@ extension Components {
                 self.transactionCount = transactionCount
                 self.createdAt = createdAt
                 self.updatedAt = updatedAt
+                self.dataQuality = dataQuality
             }
             public enum CodingKeys: String, CodingKey {
                 case id
@@ -10273,6 +10289,7 @@ extension Components {
                 case transactionCount
                 case createdAt
                 case updatedAt
+                case dataQuality
             }
             public init(from decoder: any Swift.Decoder) throws {
                 let container = try decoder.container(keyedBy: CodingKeys.self)
@@ -10328,6 +10345,10 @@ extension Components {
                     Foundation.Date.self,
                     forKey: .updatedAt
                 )
+                self.dataQuality = try container.decode(
+                    Components.Schemas.DataQuality.self,
+                    forKey: .dataQuality
+                )
                 try decoder.ensureNoAdditionalProperties(knownKeys: [
                     "id",
                     "name",
@@ -10341,7 +10362,8 @@ extension Components {
                     "ledgerPartyName",
                     "transactionCount",
                     "createdAt",
-                    "updatedAt"
+                    "updatedAt",
+                    "dataQuality"
                 ])
             }
         }
@@ -10927,6 +10949,8 @@ extension Components {
             public var createdAt: Foundation.Date
             /// - Remark: Generated from `#/components/schemas/FinancialTransactionDetail/updatedAt`.
             public var updatedAt: Foundation.Date
+            /// - Remark: Generated from `#/components/schemas/FinancialTransactionDetail/dataQuality`.
+            public var dataQuality: Components.Schemas.DataQuality
             /// - Remark: Generated from `#/components/schemas/FinancialTransactionDetail/displayImages`.
             public var displayImages: Components.Schemas.DisplayImagesField
             /// - Remark: Generated from `#/components/schemas/FinancialTransactionDetail/attachments`.
@@ -10954,6 +10978,7 @@ extension Components {
             ///   - displayName:
             ///   - createdAt:
             ///   - updatedAt:
+            ///   - dataQuality:
             ///   - displayImages:
             ///   - attachments:
             public init(
@@ -10977,6 +11002,7 @@ extension Components {
                 displayName: Swift.String,
                 createdAt: Foundation.Date,
                 updatedAt: Foundation.Date,
+                dataQuality: Components.Schemas.DataQuality,
                 displayImages: Components.Schemas.DisplayImagesField,
                 attachments: Components.Schemas.OutputSchema437
             ) {
@@ -11000,6 +11026,7 @@ extension Components {
                 self.displayName = displayName
                 self.createdAt = createdAt
                 self.updatedAt = updatedAt
+                self.dataQuality = dataQuality
                 self.displayImages = displayImages
                 self.attachments = attachments
             }
@@ -11024,6 +11051,7 @@ extension Components {
                 case displayName
                 case createdAt
                 case updatedAt
+                case dataQuality
                 case displayImages
                 case attachments
             }
@@ -11109,6 +11137,10 @@ extension Components {
                     Foundation.Date.self,
                     forKey: .updatedAt
                 )
+                self.dataQuality = try container.decode(
+                    Components.Schemas.DataQuality.self,
+                    forKey: .dataQuality
+                )
                 self.displayImages = try container.decode(
                     Components.Schemas.DisplayImagesField.self,
                     forKey: .displayImages
@@ -11138,6 +11170,7 @@ extension Components {
                     "displayName",
                     "createdAt",
                     "updatedAt",
+                    "dataQuality",
                     "displayImages",
                     "attachments"
                 ])
@@ -11206,6 +11239,8 @@ extension Components {
             public var createdAt: Foundation.Date
             /// - Remark: Generated from `#/components/schemas/FinancialTransactionListItem/updatedAt`.
             public var updatedAt: Foundation.Date
+            /// - Remark: Generated from `#/components/schemas/FinancialTransactionListItem/dataQuality`.
+            public var dataQuality: Components.Schemas.DataQuality
             /// - Remark: Generated from `#/components/schemas/FinancialTransactionListItem/displayImages`.
             public var displayImages: Components.Schemas.DisplayImagesField
             /// Creates a new `FinancialTransactionListItem`.
@@ -11231,6 +11266,7 @@ extension Components {
             ///   - displayName:
             ///   - createdAt:
             ///   - updatedAt:
+            ///   - dataQuality:
             ///   - displayImages:
             public init(
                 id: Components.Schemas.FinancialTransactionShortcode,
@@ -11253,6 +11289,7 @@ extension Components {
                 displayName: Swift.String,
                 createdAt: Foundation.Date,
                 updatedAt: Foundation.Date,
+                dataQuality: Components.Schemas.DataQuality,
                 displayImages: Components.Schemas.DisplayImagesField
             ) {
                 self.id = id
@@ -11275,6 +11312,7 @@ extension Components {
                 self.displayName = displayName
                 self.createdAt = createdAt
                 self.updatedAt = updatedAt
+                self.dataQuality = dataQuality
                 self.displayImages = displayImages
             }
             public enum CodingKeys: String, CodingKey {
@@ -11298,6 +11336,7 @@ extension Components {
                 case displayName
                 case createdAt
                 case updatedAt
+                case dataQuality
                 case displayImages
             }
             public init(from decoder: any Swift.Decoder) throws {
@@ -11382,6 +11421,10 @@ extension Components {
                     Foundation.Date.self,
                     forKey: .updatedAt
                 )
+                self.dataQuality = try container.decode(
+                    Components.Schemas.DataQuality.self,
+                    forKey: .dataQuality
+                )
                 self.displayImages = try container.decode(
                     Components.Schemas.DisplayImagesField.self,
                     forKey: .displayImages
@@ -11407,6 +11450,7 @@ extension Components {
                     "displayName",
                     "createdAt",
                     "updatedAt",
+                    "dataQuality",
                     "displayImages"
                 ])
             }
@@ -11514,6 +11558,8 @@ extension Components {
             public var createdAt: Foundation.Date
             /// - Remark: Generated from `#/components/schemas/FinancialTransactionOut/updatedAt`.
             public var updatedAt: Foundation.Date
+            /// - Remark: Generated from `#/components/schemas/FinancialTransactionOut/dataQuality`.
+            public var dataQuality: Components.Schemas.DataQuality
             /// Creates a new `FinancialTransactionOut`.
             ///
             /// - Parameters:
@@ -11537,6 +11583,7 @@ extension Components {
             ///   - displayName:
             ///   - createdAt:
             ///   - updatedAt:
+            ///   - dataQuality:
             public init(
                 id: Components.Schemas.FinancialTransactionShortcode,
                 accountId: Components.Schemas.FinancialAccountShortcode,
@@ -11557,7 +11604,8 @@ extension Components {
                 vendorInference: Components.Schemas.MerchantVendorInference? = nil,
                 displayName: Swift.String,
                 createdAt: Foundation.Date,
-                updatedAt: Foundation.Date
+                updatedAt: Foundation.Date,
+                dataQuality: Components.Schemas.DataQuality
             ) {
                 self.id = id
                 self.accountId = accountId
@@ -11579,6 +11627,7 @@ extension Components {
                 self.displayName = displayName
                 self.createdAt = createdAt
                 self.updatedAt = updatedAt
+                self.dataQuality = dataQuality
             }
             public enum CodingKeys: String, CodingKey {
                 case id
@@ -11601,6 +11650,7 @@ extension Components {
                 case displayName
                 case createdAt
                 case updatedAt
+                case dataQuality
             }
             public init(from decoder: any Swift.Decoder) throws {
                 let container = try decoder.container(keyedBy: CodingKeys.self)
@@ -11684,6 +11734,10 @@ extension Components {
                     Foundation.Date.self,
                     forKey: .updatedAt
                 )
+                self.dataQuality = try container.decode(
+                    Components.Schemas.DataQuality.self,
+                    forKey: .dataQuality
+                )
                 try decoder.ensureNoAdditionalProperties(knownKeys: [
                     "id",
                     "accountId",
@@ -11704,7 +11758,8 @@ extension Components {
                     "vendorInference",
                     "displayName",
                     "createdAt",
-                    "updatedAt"
+                    "updatedAt",
+                    "dataQuality"
                 ])
             }
         }
@@ -12337,6 +12392,8 @@ extension Components {
             public var createdAt: Foundation.Date
             /// - Remark: Generated from `#/components/schemas/GardenEntryDetail/updatedAt`.
             public var updatedAt: Foundation.Date
+            /// - Remark: Generated from `#/components/schemas/GardenEntryDetail/dataQuality`.
+            public var dataQuality: Components.Schemas.DataQuality
             /// - Remark: Generated from `#/components/schemas/GardenEntryDetail/displayImages`.
             public var displayImages: Components.Schemas.DisplayImagesField
             /// - Remark: Generated from `#/components/schemas/GardenEntryDetail/attachments`.
@@ -12357,6 +12414,7 @@ extension Components {
             ///   - plantings:
             ///   - createdAt:
             ///   - updatedAt:
+            ///   - dataQuality:
             ///   - displayImages:
             ///   - attachments:
             public init(
@@ -12373,6 +12431,7 @@ extension Components {
                 plantings: Components.Schemas.OutputSchema136,
                 createdAt: Foundation.Date,
                 updatedAt: Foundation.Date,
+                dataQuality: Components.Schemas.DataQuality,
                 displayImages: Components.Schemas.DisplayImagesField,
                 attachments: Components.Schemas.OutputSchema437
             ) {
@@ -12389,6 +12448,7 @@ extension Components {
                 self.plantings = plantings
                 self.createdAt = createdAt
                 self.updatedAt = updatedAt
+                self.dataQuality = dataQuality
                 self.displayImages = displayImages
                 self.attachments = attachments
             }
@@ -12406,6 +12466,7 @@ extension Components {
                 case plantings
                 case createdAt
                 case updatedAt
+                case dataQuality
                 case displayImages
                 case attachments
             }
@@ -12463,6 +12524,10 @@ extension Components {
                     Foundation.Date.self,
                     forKey: .updatedAt
                 )
+                self.dataQuality = try container.decode(
+                    Components.Schemas.DataQuality.self,
+                    forKey: .dataQuality
+                )
                 self.displayImages = try container.decode(
                     Components.Schemas.DisplayImagesField.self,
                     forKey: .displayImages
@@ -12485,6 +12550,7 @@ extension Components {
                     "plantings",
                     "createdAt",
                     "updatedAt",
+                    "dataQuality",
                     "displayImages",
                     "attachments"
                 ])
@@ -12523,6 +12589,8 @@ extension Components {
             public var createdAt: Foundation.Date
             /// - Remark: Generated from `#/components/schemas/GardenEntryListItem/updatedAt`.
             public var updatedAt: Foundation.Date
+            /// - Remark: Generated from `#/components/schemas/GardenEntryListItem/dataQuality`.
+            public var dataQuality: Components.Schemas.DataQuality
             /// - Remark: Generated from `#/components/schemas/GardenEntryListItem/displayImages`.
             public var displayImages: Components.Schemas.DisplayImagesField
             /// Creates a new `GardenEntryListItem`.
@@ -12541,6 +12609,7 @@ extension Components {
             ///   - plantings:
             ///   - createdAt:
             ///   - updatedAt:
+            ///   - dataQuality:
             ///   - displayImages:
             public init(
                 id: Components.Schemas.GardenEntryShortcode,
@@ -12556,6 +12625,7 @@ extension Components {
                 plantings: Components.Schemas.OutputSchema136,
                 createdAt: Foundation.Date,
                 updatedAt: Foundation.Date,
+                dataQuality: Components.Schemas.DataQuality,
                 displayImages: Components.Schemas.DisplayImagesField
             ) {
                 self.id = id
@@ -12571,6 +12641,7 @@ extension Components {
                 self.plantings = plantings
                 self.createdAt = createdAt
                 self.updatedAt = updatedAt
+                self.dataQuality = dataQuality
                 self.displayImages = displayImages
             }
             public enum CodingKeys: String, CodingKey {
@@ -12587,6 +12658,7 @@ extension Components {
                 case plantings
                 case createdAt
                 case updatedAt
+                case dataQuality
                 case displayImages
             }
             public init(from decoder: any Swift.Decoder) throws {
@@ -12643,6 +12715,10 @@ extension Components {
                     Foundation.Date.self,
                     forKey: .updatedAt
                 )
+                self.dataQuality = try container.decode(
+                    Components.Schemas.DataQuality.self,
+                    forKey: .dataQuality
+                )
                 self.displayImages = try container.decode(
                     Components.Schemas.DisplayImagesField.self,
                     forKey: .displayImages
@@ -12661,6 +12737,7 @@ extension Components {
                     "plantings",
                     "createdAt",
                     "updatedAt",
+                    "dataQuality",
                     "displayImages"
                 ])
             }
@@ -12731,6 +12808,8 @@ extension Components {
             public var createdAt: Foundation.Date
             /// - Remark: Generated from `#/components/schemas/GardenEntryOut/updatedAt`.
             public var updatedAt: Foundation.Date
+            /// - Remark: Generated from `#/components/schemas/GardenEntryOut/dataQuality`.
+            public var dataQuality: Components.Schemas.DataQuality
             /// Creates a new `GardenEntryOut`.
             ///
             /// - Parameters:
@@ -12747,6 +12826,7 @@ extension Components {
             ///   - plantings:
             ///   - createdAt:
             ///   - updatedAt:
+            ///   - dataQuality:
             public init(
                 id: Components.Schemas.GardenEntryShortcode,
                 locationId: Components.Schemas.LocationShortcode,
@@ -12760,7 +12840,8 @@ extension Components {
                 locationName: Swift.String,
                 plantings: Components.Schemas.OutputSchema136,
                 createdAt: Foundation.Date,
-                updatedAt: Foundation.Date
+                updatedAt: Foundation.Date,
+                dataQuality: Components.Schemas.DataQuality
             ) {
                 self.id = id
                 self.locationId = locationId
@@ -12775,6 +12856,7 @@ extension Components {
                 self.plantings = plantings
                 self.createdAt = createdAt
                 self.updatedAt = updatedAt
+                self.dataQuality = dataQuality
             }
             public enum CodingKeys: String, CodingKey {
                 case id
@@ -12790,6 +12872,7 @@ extension Components {
                 case plantings
                 case createdAt
                 case updatedAt
+                case dataQuality
             }
             public init(from decoder: any Swift.Decoder) throws {
                 let container = try decoder.container(keyedBy: CodingKeys.self)
@@ -12845,6 +12928,10 @@ extension Components {
                     Foundation.Date.self,
                     forKey: .updatedAt
                 )
+                self.dataQuality = try container.decode(
+                    Components.Schemas.DataQuality.self,
+                    forKey: .dataQuality
+                )
                 try decoder.ensureNoAdditionalProperties(knownKeys: [
                     "id",
                     "locationId",
@@ -12858,7 +12945,8 @@ extension Components {
                     "locationName",
                     "plantings",
                     "createdAt",
-                    "updatedAt"
+                    "updatedAt",
+                    "dataQuality"
                 ])
             }
         }
@@ -19638,6 +19726,15 @@ extension Components {
                     yield &self.storage.value.updatedAt
                 }
             }
+            /// - Remark: Generated from `#/components/schemas/InfLocation/dataQuality`.
+            public var dataQuality: Components.Schemas.DataQuality {
+                get  {
+                    self.storage.value.dataQuality
+                }
+                _modify {
+                    yield &self.storage.value.dataQuality
+                }
+            }
             /// - Remark: Generated from `#/components/schemas/InfLocation/children`.
             public var children: Components.Schemas.OutputSchema202? {
                 get  {
@@ -19708,6 +19805,7 @@ extension Components {
             ///   - valuation:
             ///   - createdAt:
             ///   - updatedAt:
+            ///   - dataQuality:
             ///   - children:
             ///   - parent:
             ///   - childCount:
@@ -19728,6 +19826,7 @@ extension Components {
                 valuation: Components.Schemas.LocationValuation? = nil,
                 createdAt: Foundation.Date,
                 updatedAt: Foundation.Date,
+                dataQuality: Components.Schemas.DataQuality,
                 children: Components.Schemas.OutputSchema202? = nil,
                 parent: Components.Schemas.OutputSchema203? = nil,
                 childCount: Swift.Int? = nil,
@@ -19749,6 +19848,7 @@ extension Components {
                     valuation: valuation,
                     createdAt: createdAt,
                     updatedAt: updatedAt,
+                    dataQuality: dataQuality,
                     children: children,
                     parent: parent,
                     childCount: childCount,
@@ -19771,6 +19871,7 @@ extension Components {
                 case valuation
                 case createdAt
                 case updatedAt
+                case dataQuality
                 case children
                 case parent
                 case childCount
@@ -19815,6 +19916,8 @@ extension Components {
                 var createdAt: Foundation.Date
                 /// - Remark: Generated from `#/components/schemas/InfLocation/updatedAt`.
                 var updatedAt: Foundation.Date
+                /// - Remark: Generated from `#/components/schemas/InfLocation/dataQuality`.
+                var dataQuality: Components.Schemas.DataQuality
                 /// - Remark: Generated from `#/components/schemas/InfLocation/children`.
                 var children: Components.Schemas.OutputSchema202?
                 /// - Remark: Generated from `#/components/schemas/InfLocation/parent`.
@@ -19841,6 +19944,7 @@ extension Components {
                     valuation: Components.Schemas.LocationValuation? = nil,
                     createdAt: Foundation.Date,
                     updatedAt: Foundation.Date,
+                    dataQuality: Components.Schemas.DataQuality,
                     children: Components.Schemas.OutputSchema202? = nil,
                     parent: Components.Schemas.OutputSchema203? = nil,
                     childCount: Swift.Int? = nil,
@@ -19861,6 +19965,7 @@ extension Components {
                     self.valuation = valuation
                     self.createdAt = createdAt
                     self.updatedAt = updatedAt
+                    self.dataQuality = dataQuality
                     self.children = children
                     self.parent = parent
                     self.childCount = childCount
@@ -19923,6 +20028,10 @@ extension Components {
                         Foundation.Date.self,
                         forKey: .updatedAt
                     )
+                    self.dataQuality = try container.decode(
+                        Components.Schemas.DataQuality.self,
+                        forKey: .dataQuality
+                    )
                     self.children = try container.decodeIfPresent(
                         Components.Schemas.OutputSchema202.self,
                         forKey: .children
@@ -19961,6 +20070,7 @@ extension Components {
                         "valuation",
                         "createdAt",
                         "updatedAt",
+                        "dataQuality",
                         "children",
                         "parent",
                         "childCount",
@@ -20130,6 +20240,8 @@ extension Components {
             public var createdAt: Foundation.Date
             /// - Remark: Generated from `#/components/schemas/IngredientDetail/updatedAt`.
             public var updatedAt: Foundation.Date
+            /// - Remark: Generated from `#/components/schemas/IngredientDetail/dataQuality`.
+            public var dataQuality: Components.Schemas.DataQuality
             /// - Remark: Generated from `#/components/schemas/IngredientDetail/recipe`.
             public var recipe: Components.Schemas.RecipeTopLevel?
             /// - Remark: Generated from `#/components/schemas/IngredientDetail/recipeUsages`.
@@ -20155,6 +20267,7 @@ extension Components {
             ///   - guideTransplantWindow:
             ///   - createdAt:
             ///   - updatedAt:
+            ///   - dataQuality:
             ///   - recipe:
             ///   - recipeUsages:
             ///   - appearsInRecipes:
@@ -20172,6 +20285,7 @@ extension Components {
                 guideTransplantWindow: Swift.String? = nil,
                 createdAt: Foundation.Date,
                 updatedAt: Foundation.Date,
+                dataQuality: Components.Schemas.DataQuality,
                 recipe: Components.Schemas.RecipeTopLevel? = nil,
                 recipeUsages: Components.Schemas.OutputSchema163,
                 appearsInRecipes: Components.Schemas.OutputSchema164,
@@ -20189,6 +20303,7 @@ extension Components {
                 self.guideTransplantWindow = guideTransplantWindow
                 self.createdAt = createdAt
                 self.updatedAt = updatedAt
+                self.dataQuality = dataQuality
                 self.recipe = recipe
                 self.recipeUsages = recipeUsages
                 self.appearsInRecipes = appearsInRecipes
@@ -20207,6 +20322,7 @@ extension Components {
                 case guideTransplantWindow
                 case createdAt
                 case updatedAt
+                case dataQuality
                 case recipe
                 case recipeUsages
                 case appearsInRecipes
@@ -20256,6 +20372,10 @@ extension Components {
                     Foundation.Date.self,
                     forKey: .updatedAt
                 )
+                self.dataQuality = try container.decode(
+                    Components.Schemas.DataQuality.self,
+                    forKey: .dataQuality
+                )
                 self.recipe = try container.decodeIfPresent(
                     Components.Schemas.RecipeTopLevel.self,
                     forKey: .recipe
@@ -20291,6 +20411,7 @@ extension Components {
                     "guideTransplantWindow",
                     "createdAt",
                     "updatedAt",
+                    "dataQuality",
                     "recipe",
                     "recipeUsages",
                     "appearsInRecipes",
@@ -20368,6 +20489,8 @@ extension Components {
             public var createdAt: Foundation.Date
             /// - Remark: Generated from `#/components/schemas/IngredientListItem/updatedAt`.
             public var updatedAt: Foundation.Date
+            /// - Remark: Generated from `#/components/schemas/IngredientListItem/dataQuality`.
+            public var dataQuality: Components.Schemas.DataQuality
             /// - Remark: Generated from `#/components/schemas/IngredientListItem/displayImages`.
             public var displayImages: Components.Schemas.DisplayImagesField
             /// - Remark: Generated from `#/components/schemas/IngredientListItem/product`.
@@ -20389,6 +20512,7 @@ extension Components {
             ///   - guideTransplantWindow:
             ///   - createdAt:
             ///   - updatedAt:
+            ///   - dataQuality:
             ///   - displayImages:
             ///   - product:
             ///   - appearsInRecipes:
@@ -20404,6 +20528,7 @@ extension Components {
                 guideTransplantWindow: Swift.String? = nil,
                 createdAt: Foundation.Date,
                 updatedAt: Foundation.Date,
+                dataQuality: Components.Schemas.DataQuality,
                 displayImages: Components.Schemas.DisplayImagesField,
                 product: [Components.Schemas.ProductWithMappingsOut],
                 appearsInRecipes: [Components.Schemas.RecipeRefOut],
@@ -20419,6 +20544,7 @@ extension Components {
                 self.guideTransplantWindow = guideTransplantWindow
                 self.createdAt = createdAt
                 self.updatedAt = updatedAt
+                self.dataQuality = dataQuality
                 self.displayImages = displayImages
                 self.product = product
                 self.appearsInRecipes = appearsInRecipes
@@ -20435,6 +20561,7 @@ extension Components {
                 case guideTransplantWindow
                 case createdAt
                 case updatedAt
+                case dataQuality
                 case displayImages
                 case product
                 case appearsInRecipes
@@ -20482,6 +20609,10 @@ extension Components {
                     Foundation.Date.self,
                     forKey: .updatedAt
                 )
+                self.dataQuality = try container.decode(
+                    Components.Schemas.DataQuality.self,
+                    forKey: .dataQuality
+                )
                 self.displayImages = try container.decode(
                     Components.Schemas.DisplayImagesField.self,
                     forKey: .displayImages
@@ -20509,6 +20640,7 @@ extension Components {
                     "guideTransplantWindow",
                     "createdAt",
                     "updatedAt",
+                    "dataQuality",
                     "displayImages",
                     "product",
                     "appearsInRecipes",
@@ -20622,6 +20754,8 @@ extension Components {
             public var createdAt: Foundation.Date
             /// - Remark: Generated from `#/components/schemas/IngredientOut/updatedAt`.
             public var updatedAt: Foundation.Date
+            /// - Remark: Generated from `#/components/schemas/IngredientOut/dataQuality`.
+            public var dataQuality: Components.Schemas.DataQuality
             /// Creates a new `IngredientOut`.
             ///
             /// - Parameters:
@@ -20635,6 +20769,7 @@ extension Components {
             ///   - guideTransplantWindow:
             ///   - createdAt:
             ///   - updatedAt:
+            ///   - dataQuality:
             public init(
                 id: Components.Schemas.IngredientShortcode,
                 name: Swift.String,
@@ -20645,7 +20780,8 @@ extension Components {
                 guideSowWindow: Swift.String? = nil,
                 guideTransplantWindow: Swift.String? = nil,
                 createdAt: Foundation.Date,
-                updatedAt: Foundation.Date
+                updatedAt: Foundation.Date,
+                dataQuality: Components.Schemas.DataQuality
             ) {
                 self.id = id
                 self.name = name
@@ -20657,6 +20793,7 @@ extension Components {
                 self.guideTransplantWindow = guideTransplantWindow
                 self.createdAt = createdAt
                 self.updatedAt = updatedAt
+                self.dataQuality = dataQuality
             }
             public enum CodingKeys: String, CodingKey {
                 case id
@@ -20669,6 +20806,7 @@ extension Components {
                 case guideTransplantWindow
                 case createdAt
                 case updatedAt
+                case dataQuality
             }
             public init(from decoder: any Swift.Decoder) throws {
                 let container = try decoder.container(keyedBy: CodingKeys.self)
@@ -20712,6 +20850,10 @@ extension Components {
                     Foundation.Date.self,
                     forKey: .updatedAt
                 )
+                self.dataQuality = try container.decode(
+                    Components.Schemas.DataQuality.self,
+                    forKey: .dataQuality
+                )
                 try decoder.ensureNoAdditionalProperties(knownKeys: [
                     "id",
                     "name",
@@ -20722,7 +20864,8 @@ extension Components {
                     "guideSowWindow",
                     "guideTransplantWindow",
                     "createdAt",
-                    "updatedAt"
+                    "updatedAt",
+                    "dataQuality"
                 ])
             }
         }
@@ -21208,25 +21351,25 @@ extension Components {
                 ])
             }
         }
-        /// - Remark: Generated from `#/components/schemas/input_schema162`.
-        public typealias InputSchema162 = [Swift.String]
-        /// - Remark: Generated from `#/components/schemas/input_schema173`.
-        public struct InputSchema173: Codable, Hashable, Sendable {
-            /// - Remark: Generated from `#/components/schemas/input_schema173/kind`.
+        /// - Remark: Generated from `#/components/schemas/input_schema172`.
+        public typealias InputSchema172 = [Swift.String]
+        /// - Remark: Generated from `#/components/schemas/input_schema183`.
+        public struct InputSchema183: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/input_schema183/kind`.
             @frozen public enum KindPayload: String, Codable, Hashable, Sendable, CaseIterable {
                 case product = "product"
             }
-            /// - Remark: Generated from `#/components/schemas/input_schema173/kind`.
-            public var kind: Components.Schemas.InputSchema173.KindPayload
-            /// - Remark: Generated from `#/components/schemas/input_schema173/value`.
+            /// - Remark: Generated from `#/components/schemas/input_schema183/kind`.
+            public var kind: Components.Schemas.InputSchema183.KindPayload
+            /// - Remark: Generated from `#/components/schemas/input_schema183/value`.
             public var value: Components.Schemas.ProductShortcode
-            /// Creates a new `InputSchema173`.
+            /// Creates a new `InputSchema183`.
             ///
             /// - Parameters:
             ///   - kind:
             ///   - value:
             public init(
-                kind: Components.Schemas.InputSchema173.KindPayload,
+                kind: Components.Schemas.InputSchema183.KindPayload,
                 value: Components.Schemas.ProductShortcode
             ) {
                 self.kind = kind
@@ -21237,9 +21380,9 @@ extension Components {
                 case value
             }
         }
-        /// - Remark: Generated from `#/components/schemas/input_schema178`.
-        public struct InputSchema178: Codable, Hashable, Sendable {
-            /// - Remark: Generated from `#/components/schemas/input_schema178/orderBy`.
+        /// - Remark: Generated from `#/components/schemas/input_schema188`.
+        public struct InputSchema188: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/input_schema188/orderBy`.
             @frozen public enum OrderByPayload: String, Codable, Hashable, Sendable, CaseIterable {
                 case fdcId = "fdc_id"
                 case description = "description"
@@ -21247,23 +21390,23 @@ extension Components {
                 case relevance = "relevance"
                 case linkedProducts = "linkedProducts"
             }
-            /// - Remark: Generated from `#/components/schemas/input_schema178/orderBy`.
-            public var orderBy: Components.Schemas.InputSchema178.OrderByPayload?
-            /// - Remark: Generated from `#/components/schemas/input_schema178/direction`.
+            /// - Remark: Generated from `#/components/schemas/input_schema188/orderBy`.
+            public var orderBy: Components.Schemas.InputSchema188.OrderByPayload?
+            /// - Remark: Generated from `#/components/schemas/input_schema188/direction`.
             @frozen public enum DirectionPayload: String, Codable, Hashable, Sendable, CaseIterable {
                 case asc = "asc"
                 case desc = "desc"
             }
-            /// - Remark: Generated from `#/components/schemas/input_schema178/direction`.
-            public var direction: Components.Schemas.InputSchema178.DirectionPayload?
-            /// Creates a new `InputSchema178`.
+            /// - Remark: Generated from `#/components/schemas/input_schema188/direction`.
+            public var direction: Components.Schemas.InputSchema188.DirectionPayload?
+            /// Creates a new `InputSchema188`.
             ///
             /// - Parameters:
             ///   - orderBy:
             ///   - direction:
             public init(
-                orderBy: Components.Schemas.InputSchema178.OrderByPayload? = nil,
-                direction: Components.Schemas.InputSchema178.DirectionPayload? = nil
+                orderBy: Components.Schemas.InputSchema188.OrderByPayload? = nil,
+                direction: Components.Schemas.InputSchema188.DirectionPayload? = nil
             ) {
                 self.orderBy = orderBy
                 self.direction = direction
@@ -21507,6 +21650,8 @@ extension Components {
             public var createdAt: Foundation.Date
             /// - Remark: Generated from `#/components/schemas/InventoryDetail/updatedAt`.
             public var updatedAt: Foundation.Date
+            /// - Remark: Generated from `#/components/schemas/InventoryDetail/dataQuality`.
+            public var dataQuality: Components.Schemas.DataQuality
             /// - Remark: Generated from `#/components/schemas/InventoryDetail/product`.
             public var product: Components.Schemas.InventoryDetailProductOut
             /// - Remark: Generated from `#/components/schemas/InventoryDetail/location`.
@@ -21530,6 +21675,7 @@ extension Components {
             ///   - effectiveOwnership:
             ///   - createdAt:
             ///   - updatedAt:
+            ///   - dataQuality:
             ///   - product:
             ///   - location:
             ///   - displayName:
@@ -21546,6 +21692,7 @@ extension Components {
                 effectiveOwnership: Components.Schemas.EffectiveInventoryOwnership,
                 createdAt: Foundation.Date,
                 updatedAt: Foundation.Date,
+                dataQuality: Components.Schemas.DataQuality,
                 product: Components.Schemas.InventoryDetailProductOut,
                 location: Components.Schemas.LocationOut,
                 displayName: Swift.String,
@@ -21562,6 +21709,7 @@ extension Components {
                 self.effectiveOwnership = effectiveOwnership
                 self.createdAt = createdAt
                 self.updatedAt = updatedAt
+                self.dataQuality = dataQuality
                 self.product = product
                 self.location = location
                 self.displayName = displayName
@@ -21579,6 +21727,7 @@ extension Components {
                 case effectiveOwnership
                 case createdAt
                 case updatedAt
+                case dataQuality
                 case product
                 case location
                 case displayName
@@ -21627,6 +21776,10 @@ extension Components {
                     Foundation.Date.self,
                     forKey: .updatedAt
                 )
+                self.dataQuality = try container.decode(
+                    Components.Schemas.DataQuality.self,
+                    forKey: .dataQuality
+                )
                 self.product = try container.decode(
                     Components.Schemas.InventoryDetailProductOut.self,
                     forKey: .product
@@ -21658,6 +21811,7 @@ extension Components {
                     "effectiveOwnership",
                     "createdAt",
                     "updatedAt",
+                    "dataQuality",
                     "product",
                     "location",
                     "displayName",
@@ -21884,6 +22038,8 @@ extension Components {
             public var createdAt: Foundation.Date
             /// - Remark: Generated from `#/components/schemas/InventoryEntryOut/updatedAt`.
             public var updatedAt: Foundation.Date
+            /// - Remark: Generated from `#/components/schemas/InventoryEntryOut/dataQuality`.
+            public var dataQuality: Components.Schemas.DataQuality
             /// Creates a new `InventoryEntryOut`.
             ///
             /// - Parameters:
@@ -21897,6 +22053,7 @@ extension Components {
             ///   - effectiveOwnership:
             ///   - createdAt:
             ///   - updatedAt:
+            ///   - dataQuality:
             public init(
                 id: Components.Schemas.InventoryShortcode,
                 amount: Components.Schemas.OutputSchema166,
@@ -21907,7 +22064,8 @@ extension Components {
                 ownerLedgerPartyId: Components.Schemas.LedgerPartyShortcode? = nil,
                 effectiveOwnership: Components.Schemas.EffectiveInventoryOwnership,
                 createdAt: Foundation.Date,
-                updatedAt: Foundation.Date
+                updatedAt: Foundation.Date,
+                dataQuality: Components.Schemas.DataQuality
             ) {
                 self.id = id
                 self.amount = amount
@@ -21919,6 +22077,7 @@ extension Components {
                 self.effectiveOwnership = effectiveOwnership
                 self.createdAt = createdAt
                 self.updatedAt = updatedAt
+                self.dataQuality = dataQuality
             }
             public enum CodingKeys: String, CodingKey {
                 case id
@@ -21931,6 +22090,7 @@ extension Components {
                 case effectiveOwnership
                 case createdAt
                 case updatedAt
+                case dataQuality
             }
             public init(from decoder: any Swift.Decoder) throws {
                 let container = try decoder.container(keyedBy: CodingKeys.self)
@@ -21974,6 +22134,10 @@ extension Components {
                     Foundation.Date.self,
                     forKey: .updatedAt
                 )
+                self.dataQuality = try container.decode(
+                    Components.Schemas.DataQuality.self,
+                    forKey: .dataQuality
+                )
                 try decoder.ensureNoAdditionalProperties(knownKeys: [
                     "id",
                     "amount",
@@ -21984,7 +22148,8 @@ extension Components {
                     "ownerLedgerPartyId",
                     "effectiveOwnership",
                     "createdAt",
-                    "updatedAt"
+                    "updatedAt",
+                    "dataQuality"
                 ])
             }
         }
@@ -22012,6 +22177,8 @@ extension Components {
             public var createdAt: Foundation.Date
             /// - Remark: Generated from `#/components/schemas/InventoryListItem/updatedAt`.
             public var updatedAt: Foundation.Date
+            /// - Remark: Generated from `#/components/schemas/InventoryListItem/dataQuality`.
+            public var dataQuality: Components.Schemas.DataQuality
             /// - Remark: Generated from `#/components/schemas/InventoryListItem/displayImages`.
             public var displayImages: Components.Schemas.DisplayImagesField
             /// - Remark: Generated from `#/components/schemas/InventoryListItem/product`.
@@ -22033,6 +22200,7 @@ extension Components {
             ///   - effectiveOwnership:
             ///   - createdAt:
             ///   - updatedAt:
+            ///   - dataQuality:
             ///   - displayImages:
             ///   - product:
             ///   - location:
@@ -22048,6 +22216,7 @@ extension Components {
                 effectiveOwnership: Components.Schemas.EffectiveInventoryOwnership,
                 createdAt: Foundation.Date,
                 updatedAt: Foundation.Date,
+                dataQuality: Components.Schemas.DataQuality,
                 displayImages: Components.Schemas.DisplayImagesField,
                 product: Components.Schemas.InventoryListProductOut,
                 location: Components.Schemas.InventoryListLocationOut,
@@ -22063,6 +22232,7 @@ extension Components {
                 self.effectiveOwnership = effectiveOwnership
                 self.createdAt = createdAt
                 self.updatedAt = updatedAt
+                self.dataQuality = dataQuality
                 self.displayImages = displayImages
                 self.product = product
                 self.location = location
@@ -22079,6 +22249,7 @@ extension Components {
                 case effectiveOwnership
                 case createdAt
                 case updatedAt
+                case dataQuality
                 case displayImages
                 case product
                 case location
@@ -22126,6 +22297,10 @@ extension Components {
                     Foundation.Date.self,
                     forKey: .updatedAt
                 )
+                self.dataQuality = try container.decode(
+                    Components.Schemas.DataQuality.self,
+                    forKey: .dataQuality
+                )
                 self.displayImages = try container.decode(
                     Components.Schemas.DisplayImagesField.self,
                     forKey: .displayImages
@@ -22153,6 +22328,7 @@ extension Components {
                     "effectiveOwnership",
                     "createdAt",
                     "updatedAt",
+                    "dataQuality",
                     "displayImages",
                     "product",
                     "location",
@@ -23021,6 +23197,8 @@ extension Components {
             public var createdAt: Foundation.Date
             /// - Remark: Generated from `#/components/schemas/InventoryWithLocationAndProductOut/updatedAt`.
             public var updatedAt: Foundation.Date
+            /// - Remark: Generated from `#/components/schemas/InventoryWithLocationAndProductOut/dataQuality`.
+            public var dataQuality: Components.Schemas.DataQuality
             /// - Remark: Generated from `#/components/schemas/InventoryWithLocationAndProductOut/product`.
             public var product: Components.Schemas.InventoryDetailProductOut
             /// - Remark: Generated from `#/components/schemas/InventoryWithLocationAndProductOut/location`.
@@ -23040,6 +23218,7 @@ extension Components {
             ///   - effectiveOwnership:
             ///   - createdAt:
             ///   - updatedAt:
+            ///   - dataQuality:
             ///   - product:
             ///   - location:
             ///   - displayName:
@@ -23054,6 +23233,7 @@ extension Components {
                 effectiveOwnership: Components.Schemas.EffectiveInventoryOwnership,
                 createdAt: Foundation.Date,
                 updatedAt: Foundation.Date,
+                dataQuality: Components.Schemas.DataQuality,
                 product: Components.Schemas.InventoryDetailProductOut,
                 location: Components.Schemas.LocationOut,
                 displayName: Swift.String
@@ -23068,6 +23248,7 @@ extension Components {
                 self.effectiveOwnership = effectiveOwnership
                 self.createdAt = createdAt
                 self.updatedAt = updatedAt
+                self.dataQuality = dataQuality
                 self.product = product
                 self.location = location
                 self.displayName = displayName
@@ -23083,6 +23264,7 @@ extension Components {
                 case effectiveOwnership
                 case createdAt
                 case updatedAt
+                case dataQuality
                 case product
                 case location
                 case displayName
@@ -23129,6 +23311,10 @@ extension Components {
                     Foundation.Date.self,
                     forKey: .updatedAt
                 )
+                self.dataQuality = try container.decode(
+                    Components.Schemas.DataQuality.self,
+                    forKey: .dataQuality
+                )
                 self.product = try container.decode(
                     Components.Schemas.InventoryDetailProductOut.self,
                     forKey: .product
@@ -23152,6 +23338,7 @@ extension Components {
                     "effectiveOwnership",
                     "createdAt",
                     "updatedAt",
+                    "dataQuality",
                     "product",
                     "location",
                     "displayName"
@@ -23285,6 +23472,8 @@ extension Components {
             public var createdAt: Foundation.Date
             /// - Remark: Generated from `#/components/schemas/LedgerPartyDetail/updatedAt`.
             public var updatedAt: Foundation.Date
+            /// - Remark: Generated from `#/components/schemas/LedgerPartyDetail/dataQuality`.
+            public var dataQuality: Components.Schemas.DataQuality
             /// - Remark: Generated from `#/components/schemas/LedgerPartyDetail/displayImages`.
             public var displayImages: Components.Schemas.DisplayImagesField
             /// - Remark: Generated from `#/components/schemas/LedgerPartyDetail/attachments`.
@@ -23298,6 +23487,7 @@ extension Components {
             ///   - notes:
             ///   - createdAt:
             ///   - updatedAt:
+            ///   - dataQuality:
             ///   - displayImages:
             ///   - attachments:
             public init(
@@ -23307,6 +23497,7 @@ extension Components {
                 notes: Swift.String? = nil,
                 createdAt: Foundation.Date,
                 updatedAt: Foundation.Date,
+                dataQuality: Components.Schemas.DataQuality,
                 displayImages: Components.Schemas.DisplayImagesField,
                 attachments: Components.Schemas.OutputSchema437
             ) {
@@ -23316,6 +23507,7 @@ extension Components {
                 self.notes = notes
                 self.createdAt = createdAt
                 self.updatedAt = updatedAt
+                self.dataQuality = dataQuality
                 self.displayImages = displayImages
                 self.attachments = attachments
             }
@@ -23326,6 +23518,7 @@ extension Components {
                 case notes
                 case createdAt
                 case updatedAt
+                case dataQuality
                 case displayImages
                 case attachments
             }
@@ -23355,6 +23548,10 @@ extension Components {
                     Foundation.Date.self,
                     forKey: .updatedAt
                 )
+                self.dataQuality = try container.decode(
+                    Components.Schemas.DataQuality.self,
+                    forKey: .dataQuality
+                )
                 self.displayImages = try container.decode(
                     Components.Schemas.DisplayImagesField.self,
                     forKey: .displayImages
@@ -23370,6 +23567,7 @@ extension Components {
                     "notes",
                     "createdAt",
                     "updatedAt",
+                    "dataQuality",
                     "displayImages",
                     "attachments"
                 ])
@@ -23395,6 +23593,8 @@ extension Components {
             public var createdAt: Foundation.Date
             /// - Remark: Generated from `#/components/schemas/LedgerPartyListItem/updatedAt`.
             public var updatedAt: Foundation.Date
+            /// - Remark: Generated from `#/components/schemas/LedgerPartyListItem/dataQuality`.
+            public var dataQuality: Components.Schemas.DataQuality
             /// - Remark: Generated from `#/components/schemas/LedgerPartyListItem/displayImages`.
             public var displayImages: Components.Schemas.DisplayImagesField
             /// Creates a new `LedgerPartyListItem`.
@@ -23406,6 +23606,7 @@ extension Components {
             ///   - notes:
             ///   - createdAt:
             ///   - updatedAt:
+            ///   - dataQuality:
             ///   - displayImages:
             public init(
                 id: Components.Schemas.LedgerPartyShortcode,
@@ -23414,6 +23615,7 @@ extension Components {
                 notes: Swift.String? = nil,
                 createdAt: Foundation.Date,
                 updatedAt: Foundation.Date,
+                dataQuality: Components.Schemas.DataQuality,
                 displayImages: Components.Schemas.DisplayImagesField
             ) {
                 self.id = id
@@ -23422,6 +23624,7 @@ extension Components {
                 self.notes = notes
                 self.createdAt = createdAt
                 self.updatedAt = updatedAt
+                self.dataQuality = dataQuality
                 self.displayImages = displayImages
             }
             public enum CodingKeys: String, CodingKey {
@@ -23431,6 +23634,7 @@ extension Components {
                 case notes
                 case createdAt
                 case updatedAt
+                case dataQuality
                 case displayImages
             }
             public init(from decoder: any Swift.Decoder) throws {
@@ -23459,6 +23663,10 @@ extension Components {
                     Foundation.Date.self,
                     forKey: .updatedAt
                 )
+                self.dataQuality = try container.decode(
+                    Components.Schemas.DataQuality.self,
+                    forKey: .dataQuality
+                )
                 self.displayImages = try container.decode(
                     Components.Schemas.DisplayImagesField.self,
                     forKey: .displayImages
@@ -23470,6 +23678,7 @@ extension Components {
                     "notes",
                     "createdAt",
                     "updatedAt",
+                    "dataQuality",
                     "displayImages"
                 ])
             }
@@ -23526,6 +23735,8 @@ extension Components {
             public var createdAt: Foundation.Date
             /// - Remark: Generated from `#/components/schemas/LedgerPartyOut/updatedAt`.
             public var updatedAt: Foundation.Date
+            /// - Remark: Generated from `#/components/schemas/LedgerPartyOut/dataQuality`.
+            public var dataQuality: Components.Schemas.DataQuality
             /// Creates a new `LedgerPartyOut`.
             ///
             /// - Parameters:
@@ -23535,13 +23746,15 @@ extension Components {
             ///   - notes:
             ///   - createdAt:
             ///   - updatedAt:
+            ///   - dataQuality:
             public init(
                 id: Components.Schemas.LedgerPartyShortcode,
                 name: Swift.String,
                 kind: Components.Schemas.LedgerPartyKind,
                 notes: Swift.String? = nil,
                 createdAt: Foundation.Date,
-                updatedAt: Foundation.Date
+                updatedAt: Foundation.Date,
+                dataQuality: Components.Schemas.DataQuality
             ) {
                 self.id = id
                 self.name = name
@@ -23549,6 +23762,7 @@ extension Components {
                 self.notes = notes
                 self.createdAt = createdAt
                 self.updatedAt = updatedAt
+                self.dataQuality = dataQuality
             }
             public enum CodingKeys: String, CodingKey {
                 case id
@@ -23557,6 +23771,7 @@ extension Components {
                 case notes
                 case createdAt
                 case updatedAt
+                case dataQuality
             }
             public init(from decoder: any Swift.Decoder) throws {
                 let container = try decoder.container(keyedBy: CodingKeys.self)
@@ -23584,13 +23799,18 @@ extension Components {
                     Foundation.Date.self,
                     forKey: .updatedAt
                 )
+                self.dataQuality = try container.decode(
+                    Components.Schemas.DataQuality.self,
+                    forKey: .dataQuality
+                )
                 try decoder.ensureNoAdditionalProperties(knownKeys: [
                     "id",
                     "name",
                     "kind",
                     "notes",
                     "createdAt",
-                    "updatedAt"
+                    "updatedAt",
+                    "dataQuality"
                 ])
             }
         }
@@ -24245,6 +24465,8 @@ extension Components {
             public var createdAt: Foundation.Date
             /// - Remark: Generated from `#/components/schemas/LedgerTransferDetail/updatedAt`.
             public var updatedAt: Foundation.Date
+            /// - Remark: Generated from `#/components/schemas/LedgerTransferDetail/dataQuality`.
+            public var dataQuality: Components.Schemas.DataQuality
             /// - Remark: Generated from `#/components/schemas/LedgerTransferDetail/displayImages`.
             public var displayImages: Components.Schemas.DisplayImagesField
             /// - Remark: Generated from `#/components/schemas/LedgerTransferDetail/attachments`.
@@ -24265,6 +24487,7 @@ extension Components {
             ///   - evidenceTransactionIds:
             ///   - createdAt:
             ///   - updatedAt:
+            ///   - dataQuality:
             ///   - displayImages:
             ///   - attachments:
             public init(
@@ -24281,6 +24504,7 @@ extension Components {
                 evidenceTransactionIds: Components.Schemas.OutputSchema199,
                 createdAt: Foundation.Date,
                 updatedAt: Foundation.Date,
+                dataQuality: Components.Schemas.DataQuality,
                 displayImages: Components.Schemas.DisplayImagesField,
                 attachments: Components.Schemas.OutputSchema437
             ) {
@@ -24297,6 +24521,7 @@ extension Components {
                 self.evidenceTransactionIds = evidenceTransactionIds
                 self.createdAt = createdAt
                 self.updatedAt = updatedAt
+                self.dataQuality = dataQuality
                 self.displayImages = displayImages
                 self.attachments = attachments
             }
@@ -24314,6 +24539,7 @@ extension Components {
                 case evidenceTransactionIds
                 case createdAt
                 case updatedAt
+                case dataQuality
                 case displayImages
                 case attachments
             }
@@ -24371,6 +24597,10 @@ extension Components {
                     Foundation.Date.self,
                     forKey: .updatedAt
                 )
+                self.dataQuality = try container.decode(
+                    Components.Schemas.DataQuality.self,
+                    forKey: .dataQuality
+                )
                 self.displayImages = try container.decode(
                     Components.Schemas.DisplayImagesField.self,
                     forKey: .displayImages
@@ -24393,6 +24623,7 @@ extension Components {
                     "evidenceTransactionIds",
                     "createdAt",
                     "updatedAt",
+                    "dataQuality",
                     "displayImages",
                     "attachments"
                 ])
@@ -24428,6 +24659,8 @@ extension Components {
             public var createdAt: Foundation.Date
             /// - Remark: Generated from `#/components/schemas/LedgerTransferListItem/updatedAt`.
             public var updatedAt: Foundation.Date
+            /// - Remark: Generated from `#/components/schemas/LedgerTransferListItem/dataQuality`.
+            public var dataQuality: Components.Schemas.DataQuality
             /// - Remark: Generated from `#/components/schemas/LedgerTransferListItem/displayImages`.
             public var displayImages: Components.Schemas.DisplayImagesField
             /// Creates a new `LedgerTransferListItem`.
@@ -24446,6 +24679,7 @@ extension Components {
             ///   - evidenceTransactionIds:
             ///   - createdAt:
             ///   - updatedAt:
+            ///   - dataQuality:
             ///   - displayImages:
             public init(
                 id: Components.Schemas.LedgerTransferShortcode,
@@ -24461,6 +24695,7 @@ extension Components {
                 evidenceTransactionIds: Components.Schemas.OutputSchema199,
                 createdAt: Foundation.Date,
                 updatedAt: Foundation.Date,
+                dataQuality: Components.Schemas.DataQuality,
                 displayImages: Components.Schemas.DisplayImagesField
             ) {
                 self.id = id
@@ -24476,6 +24711,7 @@ extension Components {
                 self.evidenceTransactionIds = evidenceTransactionIds
                 self.createdAt = createdAt
                 self.updatedAt = updatedAt
+                self.dataQuality = dataQuality
                 self.displayImages = displayImages
             }
             public enum CodingKeys: String, CodingKey {
@@ -24492,6 +24728,7 @@ extension Components {
                 case evidenceTransactionIds
                 case createdAt
                 case updatedAt
+                case dataQuality
                 case displayImages
             }
             public init(from decoder: any Swift.Decoder) throws {
@@ -24548,6 +24785,10 @@ extension Components {
                     Foundation.Date.self,
                     forKey: .updatedAt
                 )
+                self.dataQuality = try container.decode(
+                    Components.Schemas.DataQuality.self,
+                    forKey: .dataQuality
+                )
                 self.displayImages = try container.decode(
                     Components.Schemas.DisplayImagesField.self,
                     forKey: .displayImages
@@ -24566,6 +24807,7 @@ extension Components {
                     "evidenceTransactionIds",
                     "createdAt",
                     "updatedAt",
+                    "dataQuality",
                     "displayImages"
                 ])
             }
@@ -24636,6 +24878,8 @@ extension Components {
             public var createdAt: Foundation.Date
             /// - Remark: Generated from `#/components/schemas/LedgerTransferOut/updatedAt`.
             public var updatedAt: Foundation.Date
+            /// - Remark: Generated from `#/components/schemas/LedgerTransferOut/dataQuality`.
+            public var dataQuality: Components.Schemas.DataQuality
             /// Creates a new `LedgerTransferOut`.
             ///
             /// - Parameters:
@@ -24652,6 +24896,7 @@ extension Components {
             ///   - evidenceTransactionIds:
             ///   - createdAt:
             ///   - updatedAt:
+            ///   - dataQuality:
             public init(
                 id: Components.Schemas.LedgerTransferShortcode,
                 fromPartyId: Components.Schemas.LedgerPartyShortcode,
@@ -24665,7 +24910,8 @@ extension Components {
                 sourceClaims: Components.Schemas.LedgerSourceClaimsOut,
                 evidenceTransactionIds: Components.Schemas.OutputSchema199,
                 createdAt: Foundation.Date,
-                updatedAt: Foundation.Date
+                updatedAt: Foundation.Date,
+                dataQuality: Components.Schemas.DataQuality
             ) {
                 self.id = id
                 self.fromPartyId = fromPartyId
@@ -24680,6 +24926,7 @@ extension Components {
                 self.evidenceTransactionIds = evidenceTransactionIds
                 self.createdAt = createdAt
                 self.updatedAt = updatedAt
+                self.dataQuality = dataQuality
             }
             public enum CodingKeys: String, CodingKey {
                 case id
@@ -24695,6 +24942,7 @@ extension Components {
                 case evidenceTransactionIds
                 case createdAt
                 case updatedAt
+                case dataQuality
             }
             public init(from decoder: any Swift.Decoder) throws {
                 let container = try decoder.container(keyedBy: CodingKeys.self)
@@ -24750,6 +24998,10 @@ extension Components {
                     Foundation.Date.self,
                     forKey: .updatedAt
                 )
+                self.dataQuality = try container.decode(
+                    Components.Schemas.DataQuality.self,
+                    forKey: .dataQuality
+                )
                 try decoder.ensureNoAdditionalProperties(knownKeys: [
                     "id",
                     "fromPartyId",
@@ -24763,7 +25015,8 @@ extension Components {
                     "sourceClaims",
                     "evidenceTransactionIds",
                     "createdAt",
-                    "updatedAt"
+                    "updatedAt",
+                    "dataQuality"
                 ])
             }
         }
@@ -25155,6 +25408,8 @@ extension Components {
             public var createdAt: Foundation.Date
             /// - Remark: Generated from `#/components/schemas/LocationDetail/updatedAt`.
             public var updatedAt: Foundation.Date
+            /// - Remark: Generated from `#/components/schemas/LocationDetail/dataQuality`.
+            public var dataQuality: Components.Schemas.DataQuality
             /// - Remark: Generated from `#/components/schemas/LocationDetail/children`.
             public var children: Components.Schemas.OutputSchema202?
             /// - Remark: Generated from `#/components/schemas/LocationDetail/parent`.
@@ -25187,6 +25442,7 @@ extension Components {
             ///   - valuation:
             ///   - createdAt:
             ///   - updatedAt:
+            ///   - dataQuality:
             ///   - children:
             ///   - parent:
             ///   - childCount:
@@ -25209,6 +25465,7 @@ extension Components {
                 valuation: Components.Schemas.LocationValuation? = nil,
                 createdAt: Foundation.Date,
                 updatedAt: Foundation.Date,
+                dataQuality: Components.Schemas.DataQuality,
                 children: Components.Schemas.OutputSchema202? = nil,
                 parent: Components.Schemas.OutputSchema203? = nil,
                 childCount: Swift.Int? = nil,
@@ -25231,6 +25488,7 @@ extension Components {
                 self.valuation = valuation
                 self.createdAt = createdAt
                 self.updatedAt = updatedAt
+                self.dataQuality = dataQuality
                 self.children = children
                 self.parent = parent
                 self.childCount = childCount
@@ -25254,6 +25512,7 @@ extension Components {
                 case valuation
                 case createdAt
                 case updatedAt
+                case dataQuality
                 case children
                 case parent
                 case childCount
@@ -25317,6 +25576,10 @@ extension Components {
                     Foundation.Date.self,
                     forKey: .updatedAt
                 )
+                self.dataQuality = try container.decode(
+                    Components.Schemas.DataQuality.self,
+                    forKey: .dataQuality
+                )
                 self.children = try container.decodeIfPresent(
                     Components.Schemas.OutputSchema202.self,
                     forKey: .children
@@ -25363,6 +25626,7 @@ extension Components {
                     "valuation",
                     "createdAt",
                     "updatedAt",
+                    "dataQuality",
                     "children",
                     "parent",
                     "childCount",
@@ -25505,6 +25769,8 @@ extension Components {
             public var createdAt: Foundation.Date
             /// - Remark: Generated from `#/components/schemas/LocationListItem/updatedAt`.
             public var updatedAt: Foundation.Date
+            /// - Remark: Generated from `#/components/schemas/LocationListItem/dataQuality`.
+            public var dataQuality: Components.Schemas.DataQuality
             /// - Remark: Generated from `#/components/schemas/LocationListItem/displayImages`.
             public var displayImages: Components.Schemas.DisplayImagesField
             /// - Remark: Generated from `#/components/schemas/LocationListItem/children`.
@@ -25772,6 +26038,7 @@ extension Components {
             ///   - valuation:
             ///   - createdAt:
             ///   - updatedAt:
+            ///   - dataQuality:
             ///   - displayImages:
             ///   - children:
             ///   - parent:
@@ -25790,6 +26057,7 @@ extension Components {
                 valuation: Components.Schemas.LocationValuation? = nil,
                 createdAt: Foundation.Date,
                 updatedAt: Foundation.Date,
+                dataQuality: Components.Schemas.DataQuality,
                 displayImages: Components.Schemas.DisplayImagesField,
                 children: [Components.Schemas.LocationListRefOut],
                 parent: Components.Schemas.LocationListRefOut? = nil,
@@ -25808,6 +26076,7 @@ extension Components {
                 self.valuation = valuation
                 self.createdAt = createdAt
                 self.updatedAt = updatedAt
+                self.dataQuality = dataQuality
                 self.displayImages = displayImages
                 self.children = children
                 self.parent = parent
@@ -25827,6 +26096,7 @@ extension Components {
                 case valuation
                 case createdAt
                 case updatedAt
+                case dataQuality
                 case displayImages
                 case children
                 case parent
@@ -25886,6 +26156,10 @@ extension Components {
                     Foundation.Date.self,
                     forKey: .updatedAt
                 )
+                self.dataQuality = try container.decode(
+                    Components.Schemas.DataQuality.self,
+                    forKey: .dataQuality
+                )
                 self.displayImages = try container.decode(
                     Components.Schemas.DisplayImagesField.self,
                     forKey: .displayImages
@@ -25916,6 +26190,7 @@ extension Components {
                     "valuation",
                     "createdAt",
                     "updatedAt",
+                    "dataQuality",
                     "displayImages",
                     "children",
                     "parent",
@@ -26040,6 +26315,8 @@ extension Components {
             public var createdAt: Foundation.Date
             /// - Remark: Generated from `#/components/schemas/LocationOut/updatedAt`.
             public var updatedAt: Foundation.Date
+            /// - Remark: Generated from `#/components/schemas/LocationOut/dataQuality`.
+            public var dataQuality: Components.Schemas.DataQuality
             /// Creates a new `LocationOut`.
             ///
             /// - Parameters:
@@ -26056,6 +26333,7 @@ extension Components {
             ///   - valuation:
             ///   - createdAt:
             ///   - updatedAt:
+            ///   - dataQuality:
             public init(
                 id: Components.Schemas.LocationShortcode,
                 name: Swift.String,
@@ -26069,7 +26347,8 @@ extension Components {
                 images: Components.Schemas.OutputSchema133,
                 valuation: Components.Schemas.LocationValuation? = nil,
                 createdAt: Foundation.Date,
-                updatedAt: Foundation.Date
+                updatedAt: Foundation.Date,
+                dataQuality: Components.Schemas.DataQuality
             ) {
                 self.id = id
                 self.name = name
@@ -26084,6 +26363,7 @@ extension Components {
                 self.valuation = valuation
                 self.createdAt = createdAt
                 self.updatedAt = updatedAt
+                self.dataQuality = dataQuality
             }
             public enum CodingKeys: String, CodingKey {
                 case id
@@ -26099,6 +26379,7 @@ extension Components {
                 case valuation
                 case createdAt
                 case updatedAt
+                case dataQuality
             }
             public init(from decoder: any Swift.Decoder) throws {
                 let container = try decoder.container(keyedBy: CodingKeys.self)
@@ -26154,6 +26435,10 @@ extension Components {
                     Foundation.Date.self,
                     forKey: .updatedAt
                 )
+                self.dataQuality = try container.decode(
+                    Components.Schemas.DataQuality.self,
+                    forKey: .dataQuality
+                )
                 try decoder.ensureNoAdditionalProperties(knownKeys: [
                     "id",
                     "name",
@@ -26167,7 +26452,8 @@ extension Components {
                     "images",
                     "valuation",
                     "createdAt",
-                    "updatedAt"
+                    "updatedAt",
+                    "dataQuality"
                 ])
             }
         }
@@ -26649,6 +26935,8 @@ extension Components {
             public var createdAt: Foundation.Date
             /// - Remark: Generated from `#/components/schemas/MealDetail/updatedAt`.
             public var updatedAt: Foundation.Date
+            /// - Remark: Generated from `#/components/schemas/MealDetail/dataQuality`.
+            public var dataQuality: Components.Schemas.DataQuality
             /// - Remark: Generated from `#/components/schemas/MealDetail/displayImages`.
             public var displayImages: Components.Schemas.DisplayImagesField
             /// - Remark: Generated from `#/components/schemas/MealDetail/attachments`.
@@ -26669,6 +26957,7 @@ extension Components {
             ///   - recipeNames:
             ///   - createdAt:
             ///   - updatedAt:
+            ///   - dataQuality:
             ///   - displayImages:
             ///   - attachments:
             public init(
@@ -26685,6 +26974,7 @@ extension Components {
                 recipeNames: Components.Schemas.InputSchema56,
                 createdAt: Foundation.Date,
                 updatedAt: Foundation.Date,
+                dataQuality: Components.Schemas.DataQuality,
                 displayImages: Components.Schemas.DisplayImagesField,
                 attachments: Components.Schemas.OutputSchema437
             ) {
@@ -26701,6 +26991,7 @@ extension Components {
                 self.recipeNames = recipeNames
                 self.createdAt = createdAt
                 self.updatedAt = updatedAt
+                self.dataQuality = dataQuality
                 self.displayImages = displayImages
                 self.attachments = attachments
             }
@@ -26718,6 +27009,7 @@ extension Components {
                 case recipeNames
                 case createdAt
                 case updatedAt
+                case dataQuality
                 case displayImages
                 case attachments
             }
@@ -26775,6 +27067,10 @@ extension Components {
                     Foundation.Date.self,
                     forKey: .updatedAt
                 )
+                self.dataQuality = try container.decode(
+                    Components.Schemas.DataQuality.self,
+                    forKey: .dataQuality
+                )
                 self.displayImages = try container.decode(
                     Components.Schemas.DisplayImagesField.self,
                     forKey: .displayImages
@@ -26797,6 +27093,7 @@ extension Components {
                     "recipeNames",
                     "createdAt",
                     "updatedAt",
+                    "dataQuality",
                     "displayImages",
                     "attachments"
                 ])
@@ -26896,6 +27193,8 @@ extension Components {
             public var createdAt: Foundation.Date
             /// - Remark: Generated from `#/components/schemas/MealListItem/updatedAt`.
             public var updatedAt: Foundation.Date
+            /// - Remark: Generated from `#/components/schemas/MealListItem/dataQuality`.
+            public var dataQuality: Components.Schemas.DataQuality
             /// - Remark: Generated from `#/components/schemas/MealListItem/displayImages`.
             public var displayImages: Components.Schemas.DisplayImagesField
             /// Creates a new `MealListItem`.
@@ -26914,6 +27213,7 @@ extension Components {
             ///   - recipeNames:
             ///   - createdAt:
             ///   - updatedAt:
+            ///   - dataQuality:
             ///   - displayImages:
             public init(
                 id: Components.Schemas.MealShortcode,
@@ -26929,6 +27229,7 @@ extension Components {
                 recipeNames: Components.Schemas.InputSchema56,
                 createdAt: Foundation.Date,
                 updatedAt: Foundation.Date,
+                dataQuality: Components.Schemas.DataQuality,
                 displayImages: Components.Schemas.DisplayImagesField
             ) {
                 self.id = id
@@ -26944,6 +27245,7 @@ extension Components {
                 self.recipeNames = recipeNames
                 self.createdAt = createdAt
                 self.updatedAt = updatedAt
+                self.dataQuality = dataQuality
                 self.displayImages = displayImages
             }
             public enum CodingKeys: String, CodingKey {
@@ -26960,6 +27262,7 @@ extension Components {
                 case recipeNames
                 case createdAt
                 case updatedAt
+                case dataQuality
                 case displayImages
             }
             public init(from decoder: any Swift.Decoder) throws {
@@ -27016,6 +27319,10 @@ extension Components {
                     Foundation.Date.self,
                     forKey: .updatedAt
                 )
+                self.dataQuality = try container.decode(
+                    Components.Schemas.DataQuality.self,
+                    forKey: .dataQuality
+                )
                 self.displayImages = try container.decode(
                     Components.Schemas.DisplayImagesField.self,
                     forKey: .displayImages
@@ -27034,6 +27341,7 @@ extension Components {
                     "recipeNames",
                     "createdAt",
                     "updatedAt",
+                    "dataQuality",
                     "displayImages"
                 ])
             }
@@ -27935,6 +28243,8 @@ extension Components {
             public var createdAt: Foundation.Date
             /// - Remark: Generated from `#/components/schemas/MealOut/updatedAt`.
             public var updatedAt: Foundation.Date
+            /// - Remark: Generated from `#/components/schemas/MealOut/dataQuality`.
+            public var dataQuality: Components.Schemas.DataQuality
             /// Creates a new `MealOut`.
             ///
             /// - Parameters:
@@ -27951,6 +28261,7 @@ extension Components {
             ///   - recipeNames:
             ///   - createdAt:
             ///   - updatedAt:
+            ///   - dataQuality:
             public init(
                 id: Components.Schemas.MealShortcode,
                 date: Components.Schemas.PlainDate,
@@ -27964,7 +28275,8 @@ extension Components {
                 displayName: Swift.String,
                 recipeNames: Components.Schemas.InputSchema56,
                 createdAt: Foundation.Date,
-                updatedAt: Foundation.Date
+                updatedAt: Foundation.Date,
+                dataQuality: Components.Schemas.DataQuality
             ) {
                 self.id = id
                 self.date = date
@@ -27979,6 +28291,7 @@ extension Components {
                 self.recipeNames = recipeNames
                 self.createdAt = createdAt
                 self.updatedAt = updatedAt
+                self.dataQuality = dataQuality
             }
             public enum CodingKeys: String, CodingKey {
                 case id
@@ -27994,6 +28307,7 @@ extension Components {
                 case recipeNames
                 case createdAt
                 case updatedAt
+                case dataQuality
             }
             public init(from decoder: any Swift.Decoder) throws {
                 let container = try decoder.container(keyedBy: CodingKeys.self)
@@ -28049,6 +28363,10 @@ extension Components {
                     Foundation.Date.self,
                     forKey: .updatedAt
                 )
+                self.dataQuality = try container.decode(
+                    Components.Schemas.DataQuality.self,
+                    forKey: .dataQuality
+                )
                 try decoder.ensureNoAdditionalProperties(knownKeys: [
                     "id",
                     "date",
@@ -28062,7 +28380,8 @@ extension Components {
                     "displayName",
                     "recipeNames",
                     "createdAt",
-                    "updatedAt"
+                    "updatedAt",
+                    "dataQuality"
                 ])
             }
         }
@@ -31674,6 +31993,8 @@ extension Components {
             public var createdAt: Foundation.Date
             /// - Remark: Generated from `#/components/schemas/PlantingDetail/updatedAt`.
             public var updatedAt: Foundation.Date
+            /// - Remark: Generated from `#/components/schemas/PlantingDetail/dataQuality`.
+            public var dataQuality: Components.Schemas.DataQuality
             /// - Remark: Generated from `#/components/schemas/PlantingDetail/displayImages`.
             public var displayImages: Components.Schemas.DisplayImagesField
             /// - Remark: Generated from `#/components/schemas/PlantingDetail/attachments`.
@@ -31703,6 +32024,7 @@ extension Components {
             ///   - guideTransplantWindow:
             ///   - createdAt:
             ///   - updatedAt:
+            ///   - dataQuality:
             ///   - displayImages:
             ///   - attachments:
             public init(
@@ -31728,6 +32050,7 @@ extension Components {
                 guideTransplantWindow: Swift.String? = nil,
                 createdAt: Foundation.Date,
                 updatedAt: Foundation.Date,
+                dataQuality: Components.Schemas.DataQuality,
                 displayImages: Components.Schemas.DisplayImagesField,
                 attachments: Components.Schemas.OutputSchema437
             ) {
@@ -31753,6 +32076,7 @@ extension Components {
                 self.guideTransplantWindow = guideTransplantWindow
                 self.createdAt = createdAt
                 self.updatedAt = updatedAt
+                self.dataQuality = dataQuality
                 self.displayImages = displayImages
                 self.attachments = attachments
             }
@@ -31779,6 +32103,7 @@ extension Components {
                 case guideTransplantWindow
                 case createdAt
                 case updatedAt
+                case dataQuality
                 case displayImages
                 case attachments
             }
@@ -31872,6 +32197,10 @@ extension Components {
                     Foundation.Date.self,
                     forKey: .updatedAt
                 )
+                self.dataQuality = try container.decode(
+                    Components.Schemas.DataQuality.self,
+                    forKey: .dataQuality
+                )
                 self.displayImages = try container.decode(
                     Components.Schemas.DisplayImagesField.self,
                     forKey: .displayImages
@@ -31903,6 +32232,7 @@ extension Components {
                     "guideTransplantWindow",
                     "createdAt",
                     "updatedAt",
+                    "dataQuality",
                     "displayImages",
                     "attachments"
                 ])
@@ -31954,6 +32284,8 @@ extension Components {
             public var createdAt: Foundation.Date
             /// - Remark: Generated from `#/components/schemas/PlantingListItem/updatedAt`.
             public var updatedAt: Foundation.Date
+            /// - Remark: Generated from `#/components/schemas/PlantingListItem/dataQuality`.
+            public var dataQuality: Components.Schemas.DataQuality
             /// - Remark: Generated from `#/components/schemas/PlantingListItem/displayImages`.
             public var displayImages: Components.Schemas.DisplayImagesField
             /// Creates a new `PlantingListItem`.
@@ -31981,6 +32313,7 @@ extension Components {
             ///   - guideTransplantWindow:
             ///   - createdAt:
             ///   - updatedAt:
+            ///   - dataQuality:
             ///   - displayImages:
             public init(
                 id: Components.Schemas.PlantingShortcode,
@@ -32005,6 +32338,7 @@ extension Components {
                 guideTransplantWindow: Swift.String? = nil,
                 createdAt: Foundation.Date,
                 updatedAt: Foundation.Date,
+                dataQuality: Components.Schemas.DataQuality,
                 displayImages: Components.Schemas.DisplayImagesField
             ) {
                 self.id = id
@@ -32029,6 +32363,7 @@ extension Components {
                 self.guideTransplantWindow = guideTransplantWindow
                 self.createdAt = createdAt
                 self.updatedAt = updatedAt
+                self.dataQuality = dataQuality
                 self.displayImages = displayImages
             }
             public enum CodingKeys: String, CodingKey {
@@ -32054,6 +32389,7 @@ extension Components {
                 case guideTransplantWindow
                 case createdAt
                 case updatedAt
+                case dataQuality
                 case displayImages
             }
             public init(from decoder: any Swift.Decoder) throws {
@@ -32146,6 +32482,10 @@ extension Components {
                     Foundation.Date.self,
                     forKey: .updatedAt
                 )
+                self.dataQuality = try container.decode(
+                    Components.Schemas.DataQuality.self,
+                    forKey: .dataQuality
+                )
                 self.displayImages = try container.decode(
                     Components.Schemas.DisplayImagesField.self,
                     forKey: .displayImages
@@ -32173,6 +32513,7 @@ extension Components {
                     "guideTransplantWindow",
                     "createdAt",
                     "updatedAt",
+                    "dataQuality",
                     "displayImages"
                 ])
             }
@@ -32261,6 +32602,8 @@ extension Components {
             public var createdAt: Foundation.Date
             /// - Remark: Generated from `#/components/schemas/PlantingOut/updatedAt`.
             public var updatedAt: Foundation.Date
+            /// - Remark: Generated from `#/components/schemas/PlantingOut/dataQuality`.
+            public var dataQuality: Components.Schemas.DataQuality
             /// Creates a new `PlantingOut`.
             ///
             /// - Parameters:
@@ -32286,6 +32629,7 @@ extension Components {
             ///   - guideTransplantWindow:
             ///   - createdAt:
             ///   - updatedAt:
+            ///   - dataQuality:
             public init(
                 id: Components.Schemas.PlantingShortcode,
                 ingredientId: Components.Schemas.IngredientShortcode,
@@ -32308,7 +32652,8 @@ extension Components {
                 guideSowWindow: Swift.String? = nil,
                 guideTransplantWindow: Swift.String? = nil,
                 createdAt: Foundation.Date,
-                updatedAt: Foundation.Date
+                updatedAt: Foundation.Date,
+                dataQuality: Components.Schemas.DataQuality
             ) {
                 self.id = id
                 self.ingredientId = ingredientId
@@ -32332,6 +32677,7 @@ extension Components {
                 self.guideTransplantWindow = guideTransplantWindow
                 self.createdAt = createdAt
                 self.updatedAt = updatedAt
+                self.dataQuality = dataQuality
             }
             public enum CodingKeys: String, CodingKey {
                 case id
@@ -32356,6 +32702,7 @@ extension Components {
                 case guideTransplantWindow
                 case createdAt
                 case updatedAt
+                case dataQuality
             }
             public init(from decoder: any Swift.Decoder) throws {
                 let container = try decoder.container(keyedBy: CodingKeys.self)
@@ -32447,6 +32794,10 @@ extension Components {
                     Foundation.Date.self,
                     forKey: .updatedAt
                 )
+                self.dataQuality = try container.decode(
+                    Components.Schemas.DataQuality.self,
+                    forKey: .dataQuality
+                )
                 try decoder.ensureNoAdditionalProperties(knownKeys: [
                     "id",
                     "ingredientId",
@@ -32469,7 +32820,8 @@ extension Components {
                     "guideSowWindow",
                     "guideTransplantWindow",
                     "createdAt",
-                    "updatedAt"
+                    "updatedAt",
+                    "dataQuality"
                 ])
             }
         }
@@ -33365,6 +33717,8 @@ extension Components {
             public var createdAt: Foundation.Date
             /// - Remark: Generated from `#/components/schemas/ProductCategoryDetail/updatedAt`.
             public var updatedAt: Foundation.Date
+            /// - Remark: Generated from `#/components/schemas/ProductCategoryDetail/dataQuality`.
+            public var dataQuality: Components.Schemas.DataQuality
             /// - Remark: Generated from `#/components/schemas/ProductCategoryDetail/displayImages`.
             public var displayImages: Components.Schemas.DisplayImagesField
             /// - Remark: Generated from `#/components/schemas/ProductCategoryDetail/attachments`.
@@ -33383,6 +33737,7 @@ extension Components {
             ///   - path:
             ///   - createdAt:
             ///   - updatedAt:
+            ///   - dataQuality:
             ///   - displayImages:
             ///   - attachments:
             public init(
@@ -33397,6 +33752,7 @@ extension Components {
                 path: Components.Schemas.OutputSchema297,
                 createdAt: Foundation.Date,
                 updatedAt: Foundation.Date,
+                dataQuality: Components.Schemas.DataQuality,
                 displayImages: Components.Schemas.DisplayImagesField,
                 attachments: Components.Schemas.OutputSchema437
             ) {
@@ -33411,6 +33767,7 @@ extension Components {
                 self.path = path
                 self.createdAt = createdAt
                 self.updatedAt = updatedAt
+                self.dataQuality = dataQuality
                 self.displayImages = displayImages
                 self.attachments = attachments
             }
@@ -33426,6 +33783,7 @@ extension Components {
                 case path
                 case createdAt
                 case updatedAt
+                case dataQuality
                 case displayImages
                 case attachments
             }
@@ -33475,6 +33833,10 @@ extension Components {
                     Foundation.Date.self,
                     forKey: .updatedAt
                 )
+                self.dataQuality = try container.decode(
+                    Components.Schemas.DataQuality.self,
+                    forKey: .dataQuality
+                )
                 self.displayImages = try container.decode(
                     Components.Schemas.DisplayImagesField.self,
                     forKey: .displayImages
@@ -33495,6 +33857,7 @@ extension Components {
                     "path",
                     "createdAt",
                     "updatedAt",
+                    "dataQuality",
                     "displayImages",
                     "attachments"
                 ])
@@ -33539,6 +33902,8 @@ extension Components {
             public var createdAt: Foundation.Date
             /// - Remark: Generated from `#/components/schemas/ProductCategoryListItem/updatedAt`.
             public var updatedAt: Foundation.Date
+            /// - Remark: Generated from `#/components/schemas/ProductCategoryListItem/dataQuality`.
+            public var dataQuality: Components.Schemas.DataQuality
             /// - Remark: Generated from `#/components/schemas/ProductCategoryListItem/displayImages`.
             public var displayImages: Components.Schemas.DisplayImagesField
             /// Creates a new `ProductCategoryListItem`.
@@ -33555,6 +33920,7 @@ extension Components {
             ///   - path:
             ///   - createdAt:
             ///   - updatedAt:
+            ///   - dataQuality:
             ///   - displayImages:
             public init(
                 id: Components.Schemas.ProductCategoryShortcode,
@@ -33568,6 +33934,7 @@ extension Components {
                 path: Components.Schemas.OutputSchema297,
                 createdAt: Foundation.Date,
                 updatedAt: Foundation.Date,
+                dataQuality: Components.Schemas.DataQuality,
                 displayImages: Components.Schemas.DisplayImagesField
             ) {
                 self.id = id
@@ -33581,6 +33948,7 @@ extension Components {
                 self.path = path
                 self.createdAt = createdAt
                 self.updatedAt = updatedAt
+                self.dataQuality = dataQuality
                 self.displayImages = displayImages
             }
             public enum CodingKeys: String, CodingKey {
@@ -33595,6 +33963,7 @@ extension Components {
                 case path
                 case createdAt
                 case updatedAt
+                case dataQuality
                 case displayImages
             }
             public init(from decoder: any Swift.Decoder) throws {
@@ -33643,6 +34012,10 @@ extension Components {
                     Foundation.Date.self,
                     forKey: .updatedAt
                 )
+                self.dataQuality = try container.decode(
+                    Components.Schemas.DataQuality.self,
+                    forKey: .dataQuality
+                )
                 self.displayImages = try container.decode(
                     Components.Schemas.DisplayImagesField.self,
                     forKey: .displayImages
@@ -33659,6 +34032,7 @@ extension Components {
                     "path",
                     "createdAt",
                     "updatedAt",
+                    "dataQuality",
                     "displayImages"
                 ])
             }
@@ -33725,6 +34099,8 @@ extension Components {
             public var createdAt: Foundation.Date
             /// - Remark: Generated from `#/components/schemas/ProductCategoryOut/updatedAt`.
             public var updatedAt: Foundation.Date
+            /// - Remark: Generated from `#/components/schemas/ProductCategoryOut/dataQuality`.
+            public var dataQuality: Components.Schemas.DataQuality
             /// Creates a new `ProductCategoryOut`.
             ///
             /// - Parameters:
@@ -33739,6 +34115,7 @@ extension Components {
             ///   - path:
             ///   - createdAt:
             ///   - updatedAt:
+            ///   - dataQuality:
             public init(
                 id: Components.Schemas.ProductCategoryShortcode,
                 name: Swift.String,
@@ -33750,7 +34127,8 @@ extension Components {
                 parentName: Swift.String? = nil,
                 path: Components.Schemas.OutputSchema297,
                 createdAt: Foundation.Date,
-                updatedAt: Foundation.Date
+                updatedAt: Foundation.Date,
+                dataQuality: Components.Schemas.DataQuality
             ) {
                 self.id = id
                 self.name = name
@@ -33763,6 +34141,7 @@ extension Components {
                 self.path = path
                 self.createdAt = createdAt
                 self.updatedAt = updatedAt
+                self.dataQuality = dataQuality
             }
             public enum CodingKeys: String, CodingKey {
                 case id
@@ -33776,6 +34155,7 @@ extension Components {
                 case path
                 case createdAt
                 case updatedAt
+                case dataQuality
             }
             public init(from decoder: any Swift.Decoder) throws {
                 let container = try decoder.container(keyedBy: CodingKeys.self)
@@ -33823,6 +34203,10 @@ extension Components {
                     Foundation.Date.self,
                     forKey: .updatedAt
                 )
+                self.dataQuality = try container.decode(
+                    Components.Schemas.DataQuality.self,
+                    forKey: .dataQuality
+                )
                 try decoder.ensureNoAdditionalProperties(knownKeys: [
                     "id",
                     "name",
@@ -33834,7 +34218,8 @@ extension Components {
                     "parentName",
                     "path",
                     "createdAt",
-                    "updatedAt"
+                    "updatedAt",
+                    "dataQuality"
                 ])
             }
         }
@@ -34203,8 +34588,10 @@ extension Components {
         /// - Remark: Generated from `#/components/schemas/ProductDataCheck`.
         @frozen public enum ProductDataCheck: String, Codable, Hashable, Sendable, CaseIterable {
             case productManufacturer = "product_manufacturer"
+            case productExternalId = "product_external_id"
             case productCategory = "product_category"
             case productModel = "product_model"
+            case productPrice = "product_price"
             case productImage = "product_image"
             case amazonAsin = "amazon_asin"
             case duplicateExternalId = "duplicate_external_id"
@@ -34255,8 +34642,6 @@ extension Components {
             public var stockTracked: Swift.Bool?
             /// - Remark: Generated from `#/components/schemas/ProductDetail/labelNutrition`.
             public var labelNutrition: Components.Schemas.ProductLabelNutrition?
-            /// - Remark: Generated from `#/components/schemas/ProductDetail/dataQuality`.
-            public var dataQuality: Components.Schemas.DataQuality
             /// - Remark: Generated from `#/components/schemas/ProductDetail/createdAt`.
             public var createdAt: Foundation.Date
             /// - Remark: Generated from `#/components/schemas/ProductDetail/updatedAt`.
@@ -34271,6 +34656,8 @@ extension Components {
             public var labelImages: Components.Schemas.OutputSchema30
             /// - Remark: Generated from `#/components/schemas/ProductDetail/classificationEvidence`.
             public var classificationEvidence: Swift.String
+            /// - Remark: Generated from `#/components/schemas/ProductDetail/dataQuality`.
+            public var dataQuality: Components.Schemas.DataQuality
             /// - Remark: Generated from `#/components/schemas/ProductDetail/coverImageUrl`.
             public var coverImageUrl: Swift.String?
             /// - Remark: Generated from `#/components/schemas/ProductDetail/ingredient`.
@@ -34321,7 +34708,6 @@ extension Components {
             ///   - usdaUnavailable:
             ///   - stockTracked:
             ///   - labelNutrition:
-            ///   - dataQuality:
             ///   - createdAt:
             ///   - updatedAt:
             ///   - category:
@@ -34329,6 +34715,7 @@ extension Components {
             ///   - labelImageCount:
             ///   - labelImages:
             ///   - classificationEvidence:
+            ///   - dataQuality:
             ///   - coverImageUrl:
             ///   - ingredient:
             ///   - unitMappings:
@@ -34363,7 +34750,6 @@ extension Components {
                 usdaUnavailable: Swift.Bool? = nil,
                 stockTracked: Swift.Bool? = nil,
                 labelNutrition: Components.Schemas.ProductLabelNutrition? = nil,
-                dataQuality: Components.Schemas.DataQuality,
                 createdAt: Foundation.Date,
                 updatedAt: Foundation.Date,
                 category: Components.Schemas.ProductCategorySummary? = nil,
@@ -34371,6 +34757,7 @@ extension Components {
                 labelImageCount: Swift.Int,
                 labelImages: Components.Schemas.OutputSchema30,
                 classificationEvidence: Swift.String,
+                dataQuality: Components.Schemas.DataQuality,
                 coverImageUrl: Swift.String? = nil,
                 ingredient: Components.Schemas.OutputSchema280? = nil,
                 unitMappings: [Components.Schemas.UnitMappingOut],
@@ -34405,7 +34792,6 @@ extension Components {
                 self.usdaUnavailable = usdaUnavailable
                 self.stockTracked = stockTracked
                 self.labelNutrition = labelNutrition
-                self.dataQuality = dataQuality
                 self.createdAt = createdAt
                 self.updatedAt = updatedAt
                 self.category = category
@@ -34413,6 +34799,7 @@ extension Components {
                 self.labelImageCount = labelImageCount
                 self.labelImages = labelImages
                 self.classificationEvidence = classificationEvidence
+                self.dataQuality = dataQuality
                 self.coverImageUrl = coverImageUrl
                 self.ingredient = ingredient
                 self.unitMappings = unitMappings
@@ -34448,7 +34835,6 @@ extension Components {
                 case usdaUnavailable
                 case stockTracked
                 case labelNutrition
-                case dataQuality
                 case createdAt
                 case updatedAt
                 case category
@@ -34456,6 +34842,7 @@ extension Components {
                 case labelImageCount
                 case labelImages
                 case classificationEvidence
+                case dataQuality
                 case coverImageUrl
                 case ingredient
                 case unitMappings
@@ -34549,10 +34936,6 @@ extension Components {
                     Components.Schemas.ProductLabelNutrition.self,
                     forKey: .labelNutrition
                 )
-                self.dataQuality = try container.decode(
-                    Components.Schemas.DataQuality.self,
-                    forKey: .dataQuality
-                )
                 self.createdAt = try container.decode(
                     Foundation.Date.self,
                     forKey: .createdAt
@@ -34580,6 +34963,10 @@ extension Components {
                 self.classificationEvidence = try container.decode(
                     Swift.String.self,
                     forKey: .classificationEvidence
+                )
+                self.dataQuality = try container.decode(
+                    Components.Schemas.DataQuality.self,
+                    forKey: .dataQuality
                 )
                 self.coverImageUrl = try container.decodeIfPresent(
                     Swift.String.self,
@@ -34657,7 +35044,6 @@ extension Components {
                     "usdaUnavailable",
                     "stockTracked",
                     "labelNutrition",
-                    "dataQuality",
                     "createdAt",
                     "updatedAt",
                     "category",
@@ -34665,6 +35051,7 @@ extension Components {
                     "labelImageCount",
                     "labelImages",
                     "classificationEvidence",
+                    "dataQuality",
                     "coverImageUrl",
                     "ingredient",
                     "unitMappings",
@@ -35134,8 +35521,6 @@ extension Components {
             public var stockTracked: Swift.Bool?
             /// - Remark: Generated from `#/components/schemas/ProductListItem/labelNutrition`.
             public var labelNutrition: Components.Schemas.ProductLabelNutrition?
-            /// - Remark: Generated from `#/components/schemas/ProductListItem/dataQuality`.
-            public var dataQuality: Components.Schemas.DataQuality
             /// - Remark: Generated from `#/components/schemas/ProductListItem/createdAt`.
             public var createdAt: Foundation.Date
             /// - Remark: Generated from `#/components/schemas/ProductListItem/updatedAt`.
@@ -35150,6 +35535,8 @@ extension Components {
             public var labelImages: Components.Schemas.OutputSchema30
             /// - Remark: Generated from `#/components/schemas/ProductListItem/classificationEvidence`.
             public var classificationEvidence: Swift.String
+            /// - Remark: Generated from `#/components/schemas/ProductListItem/dataQuality`.
+            public var dataQuality: Components.Schemas.DataQuality
             /// - Remark: Generated from `#/components/schemas/ProductListItem/displayImages`.
             public var displayImages: Components.Schemas.DisplayImagesField
             /// - Remark: Generated from `#/components/schemas/ProductListItem/unitMappings`.
@@ -35284,7 +35671,6 @@ extension Components {
             ///   - usdaUnavailable:
             ///   - stockTracked:
             ///   - labelNutrition:
-            ///   - dataQuality:
             ///   - createdAt:
             ///   - updatedAt:
             ///   - category:
@@ -35292,6 +35678,7 @@ extension Components {
             ///   - labelImageCount:
             ///   - labelImages:
             ///   - classificationEvidence:
+            ///   - dataQuality:
             ///   - displayImages:
             ///   - unitMappings:
             ///   - unitPriceMappings:
@@ -35330,7 +35717,6 @@ extension Components {
                 usdaUnavailable: Swift.Bool? = nil,
                 stockTracked: Swift.Bool? = nil,
                 labelNutrition: Components.Schemas.ProductLabelNutrition? = nil,
-                dataQuality: Components.Schemas.DataQuality,
                 createdAt: Foundation.Date,
                 updatedAt: Foundation.Date,
                 category: Components.Schemas.ProductCategorySummary? = nil,
@@ -35338,6 +35724,7 @@ extension Components {
                 labelImageCount: Swift.Int,
                 labelImages: Components.Schemas.OutputSchema30,
                 classificationEvidence: Swift.String,
+                dataQuality: Components.Schemas.DataQuality,
                 displayImages: Components.Schemas.DisplayImagesField,
                 unitMappings: Components.Schemas.OutputSchema273,
                 unitPriceMappings: Components.Schemas.ProductUnitPriceMappings,
@@ -35376,7 +35763,6 @@ extension Components {
                 self.usdaUnavailable = usdaUnavailable
                 self.stockTracked = stockTracked
                 self.labelNutrition = labelNutrition
-                self.dataQuality = dataQuality
                 self.createdAt = createdAt
                 self.updatedAt = updatedAt
                 self.category = category
@@ -35384,6 +35770,7 @@ extension Components {
                 self.labelImageCount = labelImageCount
                 self.labelImages = labelImages
                 self.classificationEvidence = classificationEvidence
+                self.dataQuality = dataQuality
                 self.displayImages = displayImages
                 self.unitMappings = unitMappings
                 self.unitPriceMappings = unitPriceMappings
@@ -35423,7 +35810,6 @@ extension Components {
                 case usdaUnavailable
                 case stockTracked
                 case labelNutrition
-                case dataQuality
                 case createdAt
                 case updatedAt
                 case category
@@ -35431,6 +35817,7 @@ extension Components {
                 case labelImageCount
                 case labelImages
                 case classificationEvidence
+                case dataQuality
                 case displayImages
                 case unitMappings
                 case unitPriceMappings
@@ -35528,10 +35915,6 @@ extension Components {
                     Components.Schemas.ProductLabelNutrition.self,
                     forKey: .labelNutrition
                 )
-                self.dataQuality = try container.decode(
-                    Components.Schemas.DataQuality.self,
-                    forKey: .dataQuality
-                )
                 self.createdAt = try container.decode(
                     Foundation.Date.self,
                     forKey: .createdAt
@@ -35559,6 +35942,10 @@ extension Components {
                 self.classificationEvidence = try container.decode(
                     Swift.String.self,
                     forKey: .classificationEvidence
+                )
+                self.dataQuality = try container.decode(
+                    Components.Schemas.DataQuality.self,
+                    forKey: .dataQuality
                 )
                 self.displayImages = try container.decode(
                     Components.Schemas.DisplayImagesField.self,
@@ -35652,7 +36039,6 @@ extension Components {
                     "usdaUnavailable",
                     "stockTracked",
                     "labelNutrition",
-                    "dataQuality",
                     "createdAt",
                     "updatedAt",
                     "category",
@@ -35660,6 +36046,7 @@ extension Components {
                     "labelImageCount",
                     "labelImages",
                     "classificationEvidence",
+                    "dataQuality",
                     "displayImages",
                     "unitMappings",
                     "unitPriceMappings",
@@ -36050,8 +36437,6 @@ extension Components {
             public var stockTracked: Swift.Bool?
             /// - Remark: Generated from `#/components/schemas/ProductTopLevelOut/labelNutrition`.
             public var labelNutrition: Components.Schemas.ProductLabelNutrition?
-            /// - Remark: Generated from `#/components/schemas/ProductTopLevelOut/dataQuality`.
-            public var dataQuality: Components.Schemas.DataQuality
             /// - Remark: Generated from `#/components/schemas/ProductTopLevelOut/createdAt`.
             public var createdAt: Foundation.Date
             /// - Remark: Generated from `#/components/schemas/ProductTopLevelOut/updatedAt`.
@@ -36066,6 +36451,8 @@ extension Components {
             public var labelImages: Components.Schemas.OutputSchema30
             /// - Remark: Generated from `#/components/schemas/ProductTopLevelOut/classificationEvidence`.
             public var classificationEvidence: Swift.String
+            /// - Remark: Generated from `#/components/schemas/ProductTopLevelOut/dataQuality`.
+            public var dataQuality: Components.Schemas.DataQuality
             /// - Remark: Generated from `#/components/schemas/ProductTopLevelOut/coverImageUrl`.
             public var coverImageUrl: Swift.String?
             /// Creates a new `ProductTopLevelOut`.
@@ -36090,7 +36477,6 @@ extension Components {
             ///   - usdaUnavailable:
             ///   - stockTracked:
             ///   - labelNutrition:
-            ///   - dataQuality:
             ///   - createdAt:
             ///   - updatedAt:
             ///   - category:
@@ -36098,6 +36484,7 @@ extension Components {
             ///   - labelImageCount:
             ///   - labelImages:
             ///   - classificationEvidence:
+            ///   - dataQuality:
             ///   - coverImageUrl:
             public init(
                 id: Components.Schemas.ProductShortcode,
@@ -36119,7 +36506,6 @@ extension Components {
                 usdaUnavailable: Swift.Bool? = nil,
                 stockTracked: Swift.Bool? = nil,
                 labelNutrition: Components.Schemas.ProductLabelNutrition? = nil,
-                dataQuality: Components.Schemas.DataQuality,
                 createdAt: Foundation.Date,
                 updatedAt: Foundation.Date,
                 category: Components.Schemas.ProductCategorySummary? = nil,
@@ -36127,6 +36513,7 @@ extension Components {
                 labelImageCount: Swift.Int,
                 labelImages: Components.Schemas.OutputSchema30,
                 classificationEvidence: Swift.String,
+                dataQuality: Components.Schemas.DataQuality,
                 coverImageUrl: Swift.String? = nil
             ) {
                 self.id = id
@@ -36148,7 +36535,6 @@ extension Components {
                 self.usdaUnavailable = usdaUnavailable
                 self.stockTracked = stockTracked
                 self.labelNutrition = labelNutrition
-                self.dataQuality = dataQuality
                 self.createdAt = createdAt
                 self.updatedAt = updatedAt
                 self.category = category
@@ -36156,6 +36542,7 @@ extension Components {
                 self.labelImageCount = labelImageCount
                 self.labelImages = labelImages
                 self.classificationEvidence = classificationEvidence
+                self.dataQuality = dataQuality
                 self.coverImageUrl = coverImageUrl
             }
             public enum CodingKeys: String, CodingKey {
@@ -36178,7 +36565,6 @@ extension Components {
                 case usdaUnavailable
                 case stockTracked
                 case labelNutrition
-                case dataQuality
                 case createdAt
                 case updatedAt
                 case category
@@ -36186,6 +36572,7 @@ extension Components {
                 case labelImageCount
                 case labelImages
                 case classificationEvidence
+                case dataQuality
                 case coverImageUrl
             }
             public init(from decoder: any Swift.Decoder) throws {
@@ -36266,10 +36653,6 @@ extension Components {
                     Components.Schemas.ProductLabelNutrition.self,
                     forKey: .labelNutrition
                 )
-                self.dataQuality = try container.decode(
-                    Components.Schemas.DataQuality.self,
-                    forKey: .dataQuality
-                )
                 self.createdAt = try container.decode(
                     Foundation.Date.self,
                     forKey: .createdAt
@@ -36298,6 +36681,10 @@ extension Components {
                     Swift.String.self,
                     forKey: .classificationEvidence
                 )
+                self.dataQuality = try container.decode(
+                    Components.Schemas.DataQuality.self,
+                    forKey: .dataQuality
+                )
                 self.coverImageUrl = try container.decodeIfPresent(
                     Swift.String.self,
                     forKey: .coverImageUrl
@@ -36322,7 +36709,6 @@ extension Components {
                     "usdaUnavailable",
                     "stockTracked",
                     "labelNutrition",
-                    "dataQuality",
                     "createdAt",
                     "updatedAt",
                     "category",
@@ -36330,6 +36716,7 @@ extension Components {
                     "labelImageCount",
                     "labelImages",
                     "classificationEvidence",
+                    "dataQuality",
                     "coverImageUrl"
                 ])
             }
@@ -36556,8 +36943,6 @@ extension Components {
             public var stockTracked: Swift.Bool?
             /// - Remark: Generated from `#/components/schemas/ProductWithMappingsAndFoodOut/labelNutrition`.
             public var labelNutrition: Components.Schemas.ProductLabelNutrition?
-            /// - Remark: Generated from `#/components/schemas/ProductWithMappingsAndFoodOut/dataQuality`.
-            public var dataQuality: Components.Schemas.DataQuality
             /// - Remark: Generated from `#/components/schemas/ProductWithMappingsAndFoodOut/createdAt`.
             public var createdAt: Foundation.Date
             /// - Remark: Generated from `#/components/schemas/ProductWithMappingsAndFoodOut/updatedAt`.
@@ -36572,6 +36957,8 @@ extension Components {
             public var labelImages: Components.Schemas.OutputSchema30
             /// - Remark: Generated from `#/components/schemas/ProductWithMappingsAndFoodOut/classificationEvidence`.
             public var classificationEvidence: Swift.String
+            /// - Remark: Generated from `#/components/schemas/ProductWithMappingsAndFoodOut/dataQuality`.
+            public var dataQuality: Components.Schemas.DataQuality
             /// - Remark: Generated from `#/components/schemas/ProductWithMappingsAndFoodOut/coverImageUrl`.
             public var coverImageUrl: Swift.String?
             /// - Remark: Generated from `#/components/schemas/ProductWithMappingsAndFoodOut/unitMappings`.
@@ -36600,7 +36987,6 @@ extension Components {
             ///   - usdaUnavailable:
             ///   - stockTracked:
             ///   - labelNutrition:
-            ///   - dataQuality:
             ///   - createdAt:
             ///   - updatedAt:
             ///   - category:
@@ -36608,6 +36994,7 @@ extension Components {
             ///   - labelImageCount:
             ///   - labelImages:
             ///   - classificationEvidence:
+            ///   - dataQuality:
             ///   - coverImageUrl:
             ///   - unitMappings:
             ///   - food:
@@ -36631,7 +37018,6 @@ extension Components {
                 usdaUnavailable: Swift.Bool? = nil,
                 stockTracked: Swift.Bool? = nil,
                 labelNutrition: Components.Schemas.ProductLabelNutrition? = nil,
-                dataQuality: Components.Schemas.DataQuality,
                 createdAt: Foundation.Date,
                 updatedAt: Foundation.Date,
                 category: Components.Schemas.ProductCategorySummary? = nil,
@@ -36639,6 +37025,7 @@ extension Components {
                 labelImageCount: Swift.Int,
                 labelImages: Components.Schemas.OutputSchema30,
                 classificationEvidence: Swift.String,
+                dataQuality: Components.Schemas.DataQuality,
                 coverImageUrl: Swift.String? = nil,
                 unitMappings: [Components.Schemas.UnitMappingOut],
                 food: Components.Schemas.FoodSummary? = nil
@@ -36662,7 +37049,6 @@ extension Components {
                 self.usdaUnavailable = usdaUnavailable
                 self.stockTracked = stockTracked
                 self.labelNutrition = labelNutrition
-                self.dataQuality = dataQuality
                 self.createdAt = createdAt
                 self.updatedAt = updatedAt
                 self.category = category
@@ -36670,6 +37056,7 @@ extension Components {
                 self.labelImageCount = labelImageCount
                 self.labelImages = labelImages
                 self.classificationEvidence = classificationEvidence
+                self.dataQuality = dataQuality
                 self.coverImageUrl = coverImageUrl
                 self.unitMappings = unitMappings
                 self.food = food
@@ -36694,7 +37081,6 @@ extension Components {
                 case usdaUnavailable
                 case stockTracked
                 case labelNutrition
-                case dataQuality
                 case createdAt
                 case updatedAt
                 case category
@@ -36702,6 +37088,7 @@ extension Components {
                 case labelImageCount
                 case labelImages
                 case classificationEvidence
+                case dataQuality
                 case coverImageUrl
                 case unitMappings
                 case food
@@ -36784,10 +37171,6 @@ extension Components {
                     Components.Schemas.ProductLabelNutrition.self,
                     forKey: .labelNutrition
                 )
-                self.dataQuality = try container.decode(
-                    Components.Schemas.DataQuality.self,
-                    forKey: .dataQuality
-                )
                 self.createdAt = try container.decode(
                     Foundation.Date.self,
                     forKey: .createdAt
@@ -36815,6 +37198,10 @@ extension Components {
                 self.classificationEvidence = try container.decode(
                     Swift.String.self,
                     forKey: .classificationEvidence
+                )
+                self.dataQuality = try container.decode(
+                    Components.Schemas.DataQuality.self,
+                    forKey: .dataQuality
                 )
                 self.coverImageUrl = try container.decodeIfPresent(
                     Swift.String.self,
@@ -36848,7 +37235,6 @@ extension Components {
                     "usdaUnavailable",
                     "stockTracked",
                     "labelNutrition",
-                    "dataQuality",
                     "createdAt",
                     "updatedAt",
                     "category",
@@ -36856,6 +37242,7 @@ extension Components {
                     "labelImageCount",
                     "labelImages",
                     "classificationEvidence",
+                    "dataQuality",
                     "coverImageUrl",
                     "unitMappings",
                     "food"
@@ -36906,8 +37293,6 @@ extension Components {
             public var stockTracked: Swift.Bool?
             /// - Remark: Generated from `#/components/schemas/ProductWithMappingsOut/labelNutrition`.
             public var labelNutrition: Components.Schemas.ProductLabelNutrition?
-            /// - Remark: Generated from `#/components/schemas/ProductWithMappingsOut/dataQuality`.
-            public var dataQuality: Components.Schemas.DataQuality
             /// - Remark: Generated from `#/components/schemas/ProductWithMappingsOut/createdAt`.
             public var createdAt: Foundation.Date
             /// - Remark: Generated from `#/components/schemas/ProductWithMappingsOut/updatedAt`.
@@ -36922,6 +37307,8 @@ extension Components {
             public var labelImages: Components.Schemas.OutputSchema30
             /// - Remark: Generated from `#/components/schemas/ProductWithMappingsOut/classificationEvidence`.
             public var classificationEvidence: Swift.String
+            /// - Remark: Generated from `#/components/schemas/ProductWithMappingsOut/dataQuality`.
+            public var dataQuality: Components.Schemas.DataQuality
             /// - Remark: Generated from `#/components/schemas/ProductWithMappingsOut/coverImageUrl`.
             public var coverImageUrl: Swift.String?
             /// - Remark: Generated from `#/components/schemas/ProductWithMappingsOut/unitMappings`.
@@ -36948,7 +37335,6 @@ extension Components {
             ///   - usdaUnavailable:
             ///   - stockTracked:
             ///   - labelNutrition:
-            ///   - dataQuality:
             ///   - createdAt:
             ///   - updatedAt:
             ///   - category:
@@ -36956,6 +37342,7 @@ extension Components {
             ///   - labelImageCount:
             ///   - labelImages:
             ///   - classificationEvidence:
+            ///   - dataQuality:
             ///   - coverImageUrl:
             ///   - unitMappings:
             public init(
@@ -36978,7 +37365,6 @@ extension Components {
                 usdaUnavailable: Swift.Bool? = nil,
                 stockTracked: Swift.Bool? = nil,
                 labelNutrition: Components.Schemas.ProductLabelNutrition? = nil,
-                dataQuality: Components.Schemas.DataQuality,
                 createdAt: Foundation.Date,
                 updatedAt: Foundation.Date,
                 category: Components.Schemas.ProductCategorySummary? = nil,
@@ -36986,6 +37372,7 @@ extension Components {
                 labelImageCount: Swift.Int,
                 labelImages: Components.Schemas.OutputSchema30,
                 classificationEvidence: Swift.String,
+                dataQuality: Components.Schemas.DataQuality,
                 coverImageUrl: Swift.String? = nil,
                 unitMappings: [Components.Schemas.UnitMappingOut]
             ) {
@@ -37008,7 +37395,6 @@ extension Components {
                 self.usdaUnavailable = usdaUnavailable
                 self.stockTracked = stockTracked
                 self.labelNutrition = labelNutrition
-                self.dataQuality = dataQuality
                 self.createdAt = createdAt
                 self.updatedAt = updatedAt
                 self.category = category
@@ -37016,6 +37402,7 @@ extension Components {
                 self.labelImageCount = labelImageCount
                 self.labelImages = labelImages
                 self.classificationEvidence = classificationEvidence
+                self.dataQuality = dataQuality
                 self.coverImageUrl = coverImageUrl
                 self.unitMappings = unitMappings
             }
@@ -37039,7 +37426,6 @@ extension Components {
                 case usdaUnavailable
                 case stockTracked
                 case labelNutrition
-                case dataQuality
                 case createdAt
                 case updatedAt
                 case category
@@ -37047,6 +37433,7 @@ extension Components {
                 case labelImageCount
                 case labelImages
                 case classificationEvidence
+                case dataQuality
                 case coverImageUrl
                 case unitMappings
             }
@@ -37128,10 +37515,6 @@ extension Components {
                     Components.Schemas.ProductLabelNutrition.self,
                     forKey: .labelNutrition
                 )
-                self.dataQuality = try container.decode(
-                    Components.Schemas.DataQuality.self,
-                    forKey: .dataQuality
-                )
                 self.createdAt = try container.decode(
                     Foundation.Date.self,
                     forKey: .createdAt
@@ -37159,6 +37542,10 @@ extension Components {
                 self.classificationEvidence = try container.decode(
                     Swift.String.self,
                     forKey: .classificationEvidence
+                )
+                self.dataQuality = try container.decode(
+                    Components.Schemas.DataQuality.self,
+                    forKey: .dataQuality
                 )
                 self.coverImageUrl = try container.decodeIfPresent(
                     Swift.String.self,
@@ -37188,7 +37575,6 @@ extension Components {
                     "usdaUnavailable",
                     "stockTracked",
                     "labelNutrition",
-                    "dataQuality",
                     "createdAt",
                     "updatedAt",
                     "category",
@@ -37196,6 +37582,7 @@ extension Components {
                     "labelImageCount",
                     "labelImages",
                     "classificationEvidence",
+                    "dataQuality",
                     "coverImageUrl",
                     "unitMappings"
                 ])
@@ -37446,6 +37833,8 @@ extension Components {
             public var rollup: Components.Schemas.ProjectOutputFieldsProjectRollup
             /// - Remark: Generated from `#/components/schemas/ProjectDetail/dates`.
             public var dates: Components.Schemas.ProjectOutputFieldsProjectDateWindow
+            /// - Remark: Generated from `#/components/schemas/ProjectDetail/dataQuality`.
+            public var dataQuality: Components.Schemas.DataQuality
             /// - Remark: Generated from `#/components/schemas/ProjectDetail/displayImages`.
             public var displayImages: Components.Schemas.DisplayImagesField
             /// - Remark: Generated from `#/components/schemas/ProjectDetail/attachments`.
@@ -37476,6 +37865,7 @@ extension Components {
             ///   - updatedAt:
             ///   - rollup:
             ///   - dates:
+            ///   - dataQuality:
             ///   - displayImages:
             ///   - attachments:
             public init(
@@ -37502,6 +37892,7 @@ extension Components {
                 updatedAt: Foundation.Date,
                 rollup: Components.Schemas.ProjectOutputFieldsProjectRollup,
                 dates: Components.Schemas.ProjectOutputFieldsProjectDateWindow,
+                dataQuality: Components.Schemas.DataQuality,
                 displayImages: Components.Schemas.DisplayImagesField,
                 attachments: Components.Schemas.OutputSchema437
             ) {
@@ -37528,6 +37919,7 @@ extension Components {
                 self.updatedAt = updatedAt
                 self.rollup = rollup
                 self.dates = dates
+                self.dataQuality = dataQuality
                 self.displayImages = displayImages
                 self.attachments = attachments
             }
@@ -37555,6 +37947,7 @@ extension Components {
                 case updatedAt
                 case rollup
                 case dates
+                case dataQuality
                 case displayImages
                 case attachments
             }
@@ -37652,6 +38045,10 @@ extension Components {
                     Components.Schemas.ProjectOutputFieldsProjectDateWindow.self,
                     forKey: .dates
                 )
+                self.dataQuality = try container.decode(
+                    Components.Schemas.DataQuality.self,
+                    forKey: .dataQuality
+                )
                 self.displayImages = try container.decode(
                     Components.Schemas.DisplayImagesField.self,
                     forKey: .displayImages
@@ -37684,6 +38081,7 @@ extension Components {
                     "updatedAt",
                     "rollup",
                     "dates",
+                    "dataQuality",
                     "displayImages",
                     "attachments"
                 ])
@@ -37760,6 +38158,8 @@ extension Components {
             public var rollup: Components.Schemas.ProjectOutputFieldsProjectRollup
             /// - Remark: Generated from `#/components/schemas/ProjectListItem/dates`.
             public var dates: Components.Schemas.ProjectOutputFieldsProjectDateWindow
+            /// - Remark: Generated from `#/components/schemas/ProjectListItem/dataQuality`.
+            public var dataQuality: Components.Schemas.DataQuality
             /// - Remark: Generated from `#/components/schemas/ProjectListItem/displayImages`.
             public var displayImages: Components.Schemas.DisplayImagesField
             /// Creates a new `ProjectListItem`.
@@ -37788,6 +38188,7 @@ extension Components {
             ///   - updatedAt:
             ///   - rollup:
             ///   - dates:
+            ///   - dataQuality:
             ///   - displayImages:
             public init(
                 fieldResolutions: Components.Schemas.OptionalFieldResolutions? = nil,
@@ -37813,6 +38214,7 @@ extension Components {
                 updatedAt: Foundation.Date,
                 rollup: Components.Schemas.ProjectOutputFieldsProjectRollup,
                 dates: Components.Schemas.ProjectOutputFieldsProjectDateWindow,
+                dataQuality: Components.Schemas.DataQuality,
                 displayImages: Components.Schemas.DisplayImagesField
             ) {
                 self.fieldResolutions = fieldResolutions
@@ -37838,6 +38240,7 @@ extension Components {
                 self.updatedAt = updatedAt
                 self.rollup = rollup
                 self.dates = dates
+                self.dataQuality = dataQuality
                 self.displayImages = displayImages
             }
             public enum CodingKeys: String, CodingKey {
@@ -37864,6 +38267,7 @@ extension Components {
                 case updatedAt
                 case rollup
                 case dates
+                case dataQuality
                 case displayImages
             }
             public init(from decoder: any Swift.Decoder) throws {
@@ -37960,6 +38364,10 @@ extension Components {
                     Components.Schemas.ProjectOutputFieldsProjectDateWindow.self,
                     forKey: .dates
                 )
+                self.dataQuality = try container.decode(
+                    Components.Schemas.DataQuality.self,
+                    forKey: .dataQuality
+                )
                 self.displayImages = try container.decode(
                     Components.Schemas.DisplayImagesField.self,
                     forKey: .displayImages
@@ -37988,6 +38396,7 @@ extension Components {
                     "updatedAt",
                     "rollup",
                     "dates",
+                    "dataQuality",
                     "displayImages"
                 ])
             }
@@ -38092,6 +38501,8 @@ extension Components {
             public var rollup: Components.Schemas.ProjectOutputFieldsProjectRollup
             /// - Remark: Generated from `#/components/schemas/ProjectOut/dates`.
             public var dates: Components.Schemas.ProjectOutputFieldsProjectDateWindow
+            /// - Remark: Generated from `#/components/schemas/ProjectOut/dataQuality`.
+            public var dataQuality: Components.Schemas.DataQuality
             /// Creates a new `ProjectOut`.
             ///
             /// - Parameters:
@@ -38118,6 +38529,7 @@ extension Components {
             ///   - updatedAt:
             ///   - rollup:
             ///   - dates:
+            ///   - dataQuality:
             public init(
                 fieldResolutions: Components.Schemas.OptionalFieldResolutions? = nil,
                 id: Components.Schemas.ProjectShortcode,
@@ -38141,7 +38553,8 @@ extension Components {
                 createdAt: Foundation.Date,
                 updatedAt: Foundation.Date,
                 rollup: Components.Schemas.ProjectOutputFieldsProjectRollup,
-                dates: Components.Schemas.ProjectOutputFieldsProjectDateWindow
+                dates: Components.Schemas.ProjectOutputFieldsProjectDateWindow,
+                dataQuality: Components.Schemas.DataQuality
             ) {
                 self.fieldResolutions = fieldResolutions
                 self.id = id
@@ -38166,6 +38579,7 @@ extension Components {
                 self.updatedAt = updatedAt
                 self.rollup = rollup
                 self.dates = dates
+                self.dataQuality = dataQuality
             }
             public enum CodingKeys: String, CodingKey {
                 case fieldResolutions
@@ -38191,6 +38605,7 @@ extension Components {
                 case updatedAt
                 case rollup
                 case dates
+                case dataQuality
             }
             public init(from decoder: any Swift.Decoder) throws {
                 let container = try decoder.container(keyedBy: CodingKeys.self)
@@ -38286,6 +38701,10 @@ extension Components {
                     Components.Schemas.ProjectOutputFieldsProjectDateWindow.self,
                     forKey: .dates
                 )
+                self.dataQuality = try container.decode(
+                    Components.Schemas.DataQuality.self,
+                    forKey: .dataQuality
+                )
                 try decoder.ensureNoAdditionalProperties(knownKeys: [
                     "fieldResolutions",
                     "id",
@@ -38309,7 +38728,8 @@ extension Components {
                     "createdAt",
                     "updatedAt",
                     "rollup",
-                    "dates"
+                    "dates",
+                    "dataQuality"
                 ])
             }
         }
@@ -38818,18 +39238,6 @@ extension Components {
                 case pendingImageIds
             }
         }
-        /// - Remark: Generated from `#/components/schemas/PurchaseDataCheck`.
-        @frozen public enum PurchaseDataCheck: String, Codable, Hashable, Sendable, CaseIterable {
-            case purchaseDate = "purchase_date"
-            case orderId = "order_id"
-            case statedTotal = "stated_total"
-            case primaryDocument = "primary_document"
-            case emptyExpenses = "empty_expenses"
-            case unpricedExpense = "unpriced_expense"
-            case paperworkMismatch = "paperwork_mismatch"
-            case settlementReference = "settlement_reference"
-            case settlementMismatch = "settlement_mismatch"
-        }
         /// - Remark: Generated from `#/components/schemas/PurchaseDetail`.
         public struct PurchaseDetail: Codable, Hashable, Sendable {
             /// - Remark: Generated from `#/components/schemas/PurchaseDetail/id`.
@@ -38872,14 +39280,14 @@ extension Components {
             public var documentCount: Swift.Int
             /// - Remark: Generated from `#/components/schemas/PurchaseDetail/images`.
             public var images: Components.Schemas.PurchaseImages
-            /// - Remark: Generated from `#/components/schemas/PurchaseDetail/dataQuality`.
-            public var dataQuality: Components.Schemas.DataQuality
             /// - Remark: Generated from `#/components/schemas/PurchaseDetail/displayName`.
             public var displayName: Swift.String
             /// - Remark: Generated from `#/components/schemas/PurchaseDetail/createdAt`.
             public var createdAt: Foundation.Date
             /// - Remark: Generated from `#/components/schemas/PurchaseDetail/updatedAt`.
             public var updatedAt: Foundation.Date
+            /// - Remark: Generated from `#/components/schemas/PurchaseDetail/dataQuality`.
+            public var dataQuality: Components.Schemas.DataQuality
             /// - Remark: Generated from `#/components/schemas/PurchaseDetail/displayImages`.
             public var displayImages: Components.Schemas.DisplayImagesField
             /// - Remark: Generated from `#/components/schemas/PurchaseDetail/attachments`.
@@ -38907,10 +39315,10 @@ extension Components {
             ///   - financialReconciliation:
             ///   - documentCount:
             ///   - images:
-            ///   - dataQuality:
             ///   - displayName:
             ///   - createdAt:
             ///   - updatedAt:
+            ///   - dataQuality:
             ///   - displayImages:
             ///   - attachments:
             public init(
@@ -38934,10 +39342,10 @@ extension Components {
                 financialReconciliation: Components.Schemas.FinancialReconciliationSummary,
                 documentCount: Swift.Int,
                 images: Components.Schemas.PurchaseImages,
-                dataQuality: Components.Schemas.DataQuality,
                 displayName: Swift.String,
                 createdAt: Foundation.Date,
                 updatedAt: Foundation.Date,
+                dataQuality: Components.Schemas.DataQuality,
                 displayImages: Components.Schemas.DisplayImagesField,
                 attachments: Components.Schemas.OutputSchema437
             ) {
@@ -38961,10 +39369,10 @@ extension Components {
                 self.financialReconciliation = financialReconciliation
                 self.documentCount = documentCount
                 self.images = images
-                self.dataQuality = dataQuality
                 self.displayName = displayName
                 self.createdAt = createdAt
                 self.updatedAt = updatedAt
+                self.dataQuality = dataQuality
                 self.displayImages = displayImages
                 self.attachments = attachments
             }
@@ -38989,10 +39397,10 @@ extension Components {
                 case financialReconciliation
                 case documentCount
                 case images
-                case dataQuality
                 case displayName
                 case createdAt
                 case updatedAt
+                case dataQuality
                 case displayImages
                 case attachments
             }
@@ -39078,10 +39486,6 @@ extension Components {
                     Components.Schemas.PurchaseImages.self,
                     forKey: .images
                 )
-                self.dataQuality = try container.decode(
-                    Components.Schemas.DataQuality.self,
-                    forKey: .dataQuality
-                )
                 self.displayName = try container.decode(
                     Swift.String.self,
                     forKey: .displayName
@@ -39093,6 +39497,10 @@ extension Components {
                 self.updatedAt = try container.decode(
                     Foundation.Date.self,
                     forKey: .updatedAt
+                )
+                self.dataQuality = try container.decode(
+                    Components.Schemas.DataQuality.self,
+                    forKey: .dataQuality
                 )
                 self.displayImages = try container.decode(
                     Components.Schemas.DisplayImagesField.self,
@@ -39123,10 +39531,10 @@ extension Components {
                     "financialReconciliation",
                     "documentCount",
                     "images",
-                    "dataQuality",
                     "displayName",
                     "createdAt",
                     "updatedAt",
+                    "dataQuality",
                     "displayImages",
                     "attachments"
                 ])
@@ -39281,14 +39689,14 @@ extension Components {
             public var documentCount: Swift.Int
             /// - Remark: Generated from `#/components/schemas/PurchaseListItem/images`.
             public var images: Components.Schemas.PurchaseImages
-            /// - Remark: Generated from `#/components/schemas/PurchaseListItem/dataQuality`.
-            public var dataQuality: Components.Schemas.DataQuality
             /// - Remark: Generated from `#/components/schemas/PurchaseListItem/displayName`.
             public var displayName: Swift.String
             /// - Remark: Generated from `#/components/schemas/PurchaseListItem/createdAt`.
             public var createdAt: Foundation.Date
             /// - Remark: Generated from `#/components/schemas/PurchaseListItem/updatedAt`.
             public var updatedAt: Foundation.Date
+            /// - Remark: Generated from `#/components/schemas/PurchaseListItem/dataQuality`.
+            public var dataQuality: Components.Schemas.DataQuality
             /// - Remark: Generated from `#/components/schemas/PurchaseListItem/displayImages`.
             public var displayImages: Components.Schemas.DisplayImagesField
             /// Creates a new `PurchaseListItem`.
@@ -39314,10 +39722,10 @@ extension Components {
             ///   - financialReconciliation:
             ///   - documentCount:
             ///   - images:
-            ///   - dataQuality:
             ///   - displayName:
             ///   - createdAt:
             ///   - updatedAt:
+            ///   - dataQuality:
             ///   - displayImages:
             public init(
                 id: Components.Schemas.PurchaseShortcode,
@@ -39340,10 +39748,10 @@ extension Components {
                 financialReconciliation: Components.Schemas.FinancialReconciliationSummary,
                 documentCount: Swift.Int,
                 images: Components.Schemas.PurchaseImages,
-                dataQuality: Components.Schemas.DataQuality,
                 displayName: Swift.String,
                 createdAt: Foundation.Date,
                 updatedAt: Foundation.Date,
+                dataQuality: Components.Schemas.DataQuality,
                 displayImages: Components.Schemas.DisplayImagesField
             ) {
                 self.id = id
@@ -39366,10 +39774,10 @@ extension Components {
                 self.financialReconciliation = financialReconciliation
                 self.documentCount = documentCount
                 self.images = images
-                self.dataQuality = dataQuality
                 self.displayName = displayName
                 self.createdAt = createdAt
                 self.updatedAt = updatedAt
+                self.dataQuality = dataQuality
                 self.displayImages = displayImages
             }
             public enum CodingKeys: String, CodingKey {
@@ -39393,10 +39801,10 @@ extension Components {
                 case financialReconciliation
                 case documentCount
                 case images
-                case dataQuality
                 case displayName
                 case createdAt
                 case updatedAt
+                case dataQuality
                 case displayImages
             }
             public init(from decoder: any Swift.Decoder) throws {
@@ -39481,10 +39889,6 @@ extension Components {
                     Components.Schemas.PurchaseImages.self,
                     forKey: .images
                 )
-                self.dataQuality = try container.decode(
-                    Components.Schemas.DataQuality.self,
-                    forKey: .dataQuality
-                )
                 self.displayName = try container.decode(
                     Swift.String.self,
                     forKey: .displayName
@@ -39496,6 +39900,10 @@ extension Components {
                 self.updatedAt = try container.decode(
                     Foundation.Date.self,
                     forKey: .updatedAt
+                )
+                self.dataQuality = try container.decode(
+                    Components.Schemas.DataQuality.self,
+                    forKey: .dataQuality
                 )
                 self.displayImages = try container.decode(
                     Components.Schemas.DisplayImagesField.self,
@@ -39522,10 +39930,10 @@ extension Components {
                     "financialReconciliation",
                     "documentCount",
                     "images",
-                    "dataQuality",
                     "displayName",
                     "createdAt",
                     "updatedAt",
+                    "dataQuality",
                     "displayImages"
                 ])
             }
@@ -39610,14 +40018,14 @@ extension Components {
             public var documentCount: Swift.Int
             /// - Remark: Generated from `#/components/schemas/PurchaseOut/images`.
             public var images: Components.Schemas.PurchaseImages
-            /// - Remark: Generated from `#/components/schemas/PurchaseOut/dataQuality`.
-            public var dataQuality: Components.Schemas.DataQuality
             /// - Remark: Generated from `#/components/schemas/PurchaseOut/displayName`.
             public var displayName: Swift.String
             /// - Remark: Generated from `#/components/schemas/PurchaseOut/createdAt`.
             public var createdAt: Foundation.Date
             /// - Remark: Generated from `#/components/schemas/PurchaseOut/updatedAt`.
             public var updatedAt: Foundation.Date
+            /// - Remark: Generated from `#/components/schemas/PurchaseOut/dataQuality`.
+            public var dataQuality: Components.Schemas.DataQuality
             /// Creates a new `PurchaseOut`.
             ///
             /// - Parameters:
@@ -39641,10 +40049,10 @@ extension Components {
             ///   - financialReconciliation:
             ///   - documentCount:
             ///   - images:
-            ///   - dataQuality:
             ///   - displayName:
             ///   - createdAt:
             ///   - updatedAt:
+            ///   - dataQuality:
             public init(
                 id: Components.Schemas.PurchaseShortcode,
                 vendorId: Components.Schemas.VendorShortcode,
@@ -39666,10 +40074,10 @@ extension Components {
                 financialReconciliation: Components.Schemas.FinancialReconciliationSummary,
                 documentCount: Swift.Int,
                 images: Components.Schemas.PurchaseImages,
-                dataQuality: Components.Schemas.DataQuality,
                 displayName: Swift.String,
                 createdAt: Foundation.Date,
-                updatedAt: Foundation.Date
+                updatedAt: Foundation.Date,
+                dataQuality: Components.Schemas.DataQuality
             ) {
                 self.id = id
                 self.vendorId = vendorId
@@ -39691,10 +40099,10 @@ extension Components {
                 self.financialReconciliation = financialReconciliation
                 self.documentCount = documentCount
                 self.images = images
-                self.dataQuality = dataQuality
                 self.displayName = displayName
                 self.createdAt = createdAt
                 self.updatedAt = updatedAt
+                self.dataQuality = dataQuality
             }
             public enum CodingKeys: String, CodingKey {
                 case id
@@ -39717,10 +40125,10 @@ extension Components {
                 case financialReconciliation
                 case documentCount
                 case images
-                case dataQuality
                 case displayName
                 case createdAt
                 case updatedAt
+                case dataQuality
             }
             public init(from decoder: any Swift.Decoder) throws {
                 let container = try decoder.container(keyedBy: CodingKeys.self)
@@ -39804,10 +40212,6 @@ extension Components {
                     Components.Schemas.PurchaseImages.self,
                     forKey: .images
                 )
-                self.dataQuality = try container.decode(
-                    Components.Schemas.DataQuality.self,
-                    forKey: .dataQuality
-                )
                 self.displayName = try container.decode(
                     Swift.String.self,
                     forKey: .displayName
@@ -39819,6 +40223,10 @@ extension Components {
                 self.updatedAt = try container.decode(
                     Foundation.Date.self,
                     forKey: .updatedAt
+                )
+                self.dataQuality = try container.decode(
+                    Components.Schemas.DataQuality.self,
+                    forKey: .dataQuality
                 )
                 try decoder.ensureNoAdditionalProperties(knownKeys: [
                     "id",
@@ -39841,10 +40249,10 @@ extension Components {
                     "financialReconciliation",
                     "documentCount",
                     "images",
-                    "dataQuality",
                     "displayName",
                     "createdAt",
-                    "updatedAt"
+                    "updatedAt",
+                    "dataQuality"
                 ])
             }
         }
@@ -40131,6 +40539,8 @@ extension Components {
             public var forkedFromRecipeId: Components.Schemas.RecipeShortcode?
             /// - Remark: Generated from `#/components/schemas/RecipeDetail/forkedFromRecipeName`.
             public var forkedFromRecipeName: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/RecipeDetail/dataQuality`.
+            public var dataQuality: Components.Schemas.DataQuality
             /// - Remark: Generated from `#/components/schemas/RecipeDetail/displayImages`.
             public var displayImages: Components.Schemas.DisplayImagesField
             /// - Remark: Generated from `#/components/schemas/RecipeDetail/attachments`.
@@ -40153,6 +40563,7 @@ extension Components {
             ///   - images:
             ///   - forkedFromRecipeId:
             ///   - forkedFromRecipeName:
+            ///   - dataQuality:
             ///   - displayImages:
             ///   - attachments:
             public init(
@@ -40171,6 +40582,7 @@ extension Components {
                 images: Components.Schemas.OutputSchema133,
                 forkedFromRecipeId: Components.Schemas.RecipeShortcode? = nil,
                 forkedFromRecipeName: Swift.String? = nil,
+                dataQuality: Components.Schemas.DataQuality,
                 displayImages: Components.Schemas.DisplayImagesField,
                 attachments: Components.Schemas.OutputSchema437
             ) {
@@ -40189,6 +40601,7 @@ extension Components {
                 self.images = images
                 self.forkedFromRecipeId = forkedFromRecipeId
                 self.forkedFromRecipeName = forkedFromRecipeName
+                self.dataQuality = dataQuality
                 self.displayImages = displayImages
                 self.attachments = attachments
             }
@@ -40208,6 +40621,7 @@ extension Components {
                 case images
                 case forkedFromRecipeId
                 case forkedFromRecipeName
+                case dataQuality
                 case displayImages
                 case attachments
             }
@@ -40273,6 +40687,10 @@ extension Components {
                     Swift.String.self,
                     forKey: .forkedFromRecipeName
                 )
+                self.dataQuality = try container.decode(
+                    Components.Schemas.DataQuality.self,
+                    forKey: .dataQuality
+                )
                 self.displayImages = try container.decode(
                     Components.Schemas.DisplayImagesField.self,
                     forKey: .displayImages
@@ -40297,6 +40715,7 @@ extension Components {
                     "images",
                     "forkedFromRecipeId",
                     "forkedFromRecipeName",
+                    "dataQuality",
                     "displayImages",
                     "attachments"
                 ])
@@ -40394,6 +40813,8 @@ extension Components {
             public var forkedFromRecipeId: Components.Schemas.RecipeShortcode?
             /// - Remark: Generated from `#/components/schemas/RecipeDetailMcpOut/forkedFromRecipeName`.
             public var forkedFromRecipeName: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/RecipeDetailMcpOut/dataQuality`.
+            public var dataQuality: Components.Schemas.DataQuality
             /// Creates a new `RecipeDetailMcpOut`.
             ///
             /// - Parameters:
@@ -40412,6 +40833,7 @@ extension Components {
             ///   - images:
             ///   - forkedFromRecipeId:
             ///   - forkedFromRecipeName:
+            ///   - dataQuality:
             public init(
                 id: Components.Schemas.RecipeShortcode,
                 name: Swift.String,
@@ -40427,7 +40849,8 @@ extension Components {
                 totals: Components.Schemas.MealTotals? = nil,
                 images: Components.Schemas.OutputSchema133,
                 forkedFromRecipeId: Components.Schemas.RecipeShortcode? = nil,
-                forkedFromRecipeName: Swift.String? = nil
+                forkedFromRecipeName: Swift.String? = nil,
+                dataQuality: Components.Schemas.DataQuality
             ) {
                 self.id = id
                 self.name = name
@@ -40444,6 +40867,7 @@ extension Components {
                 self.images = images
                 self.forkedFromRecipeId = forkedFromRecipeId
                 self.forkedFromRecipeName = forkedFromRecipeName
+                self.dataQuality = dataQuality
             }
             public enum CodingKeys: String, CodingKey {
                 case id
@@ -40461,6 +40885,7 @@ extension Components {
                 case images
                 case forkedFromRecipeId
                 case forkedFromRecipeName
+                case dataQuality
             }
             public init(from decoder: any Swift.Decoder) throws {
                 let container = try decoder.container(keyedBy: CodingKeys.self)
@@ -40524,6 +40949,10 @@ extension Components {
                     Swift.String.self,
                     forKey: .forkedFromRecipeName
                 )
+                self.dataQuality = try container.decode(
+                    Components.Schemas.DataQuality.self,
+                    forKey: .dataQuality
+                )
                 try decoder.ensureNoAdditionalProperties(knownKeys: [
                     "id",
                     "name",
@@ -40539,7 +40968,8 @@ extension Components {
                     "totals",
                     "images",
                     "forkedFromRecipeId",
-                    "forkedFromRecipeName"
+                    "forkedFromRecipeName",
+                    "dataQuality"
                 ])
             }
         }
@@ -40904,6 +41334,8 @@ extension Components {
             public var forkedFromRecipeId: Components.Schemas.RecipeShortcode?
             /// - Remark: Generated from `#/components/schemas/RecipeListItem/forkedFromRecipeName`.
             public var forkedFromRecipeName: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/RecipeListItem/dataQuality`.
+            public var dataQuality: Components.Schemas.DataQuality
             /// - Remark: Generated from `#/components/schemas/RecipeListItem/totals`.
             public var totals: Components.Schemas.MealTotals?
             /// - Remark: Generated from `#/components/schemas/RecipeListItem/mealCount`.
@@ -40927,6 +41359,7 @@ extension Components {
             ///   - notes:
             ///   - forkedFromRecipeId:
             ///   - forkedFromRecipeName:
+            ///   - dataQuality:
             ///   - totals:
             ///   - mealCount:
             ///   - sectionCount:
@@ -40944,6 +41377,7 @@ extension Components {
                 notes: Components.Schemas.RecipeNotes? = nil,
                 forkedFromRecipeId: Components.Schemas.RecipeShortcode? = nil,
                 forkedFromRecipeName: Swift.String? = nil,
+                dataQuality: Components.Schemas.DataQuality,
                 totals: Components.Schemas.MealTotals? = nil,
                 mealCount: Swift.Int,
                 sectionCount: Swift.Int,
@@ -40961,6 +41395,7 @@ extension Components {
                 self.notes = notes
                 self.forkedFromRecipeId = forkedFromRecipeId
                 self.forkedFromRecipeName = forkedFromRecipeName
+                self.dataQuality = dataQuality
                 self.totals = totals
                 self.mealCount = mealCount
                 self.sectionCount = sectionCount
@@ -40979,6 +41414,7 @@ extension Components {
                 case notes
                 case forkedFromRecipeId
                 case forkedFromRecipeName
+                case dataQuality
                 case totals
                 case mealCount
                 case sectionCount
@@ -41034,6 +41470,10 @@ extension Components {
                     Swift.String.self,
                     forKey: .forkedFromRecipeName
                 )
+                self.dataQuality = try container.decode(
+                    Components.Schemas.DataQuality.self,
+                    forKey: .dataQuality
+                )
                 self.totals = try container.decodeIfPresent(
                     Components.Schemas.MealTotals.self,
                     forKey: .totals
@@ -41063,6 +41503,7 @@ extension Components {
                     "notes",
                     "forkedFromRecipeId",
                     "forkedFromRecipeName",
+                    "dataQuality",
                     "totals",
                     "mealCount",
                     "sectionCount",
@@ -42734,7 +43175,7 @@ extension Components {
                 /// - Remark: Generated from `#/components/schemas/ScanAtLocationInput/code/value1`.
                 public var value1: Components.Schemas.ProductFindOrCreateByCodeInput?
                 /// - Remark: Generated from `#/components/schemas/ScanAtLocationInput/code/value2`.
-                public var value2: Components.Schemas.InputSchema173?
+                public var value2: Components.Schemas.InputSchema183?
                 /// Creates a new `CodePayload`.
                 ///
                 /// - Parameters:
@@ -42742,7 +43183,7 @@ extension Components {
                 ///   - value2:
                 public init(
                     value1: Components.Schemas.ProductFindOrCreateByCodeInput? = nil,
-                    value2: Components.Schemas.InputSchema173? = nil
+                    value2: Components.Schemas.InputSchema183? = nil
                 ) {
                     self.value1 = value1
                     self.value2 = value2
@@ -44090,6 +44531,8 @@ extension Components {
             public var createdAt: Foundation.Date
             /// - Remark: Generated from `#/components/schemas/TaskDetail/updatedAt`.
             public var updatedAt: Foundation.Date
+            /// - Remark: Generated from `#/components/schemas/TaskDetail/dataQuality`.
+            public var dataQuality: Components.Schemas.DataQuality
             /// - Remark: Generated from `#/components/schemas/TaskDetail/displayImages`.
             public var displayImages: Components.Schemas.DisplayImagesField
             /// - Remark: Generated from `#/components/schemas/TaskDetail/attachments`.
@@ -44118,6 +44561,7 @@ extension Components {
             ///   - images:
             ///   - createdAt:
             ///   - updatedAt:
+            ///   - dataQuality:
             ///   - displayImages:
             ///   - attachments:
             public init(
@@ -44142,6 +44586,7 @@ extension Components {
                 images: Components.Schemas.OutputSchema133,
                 createdAt: Foundation.Date,
                 updatedAt: Foundation.Date,
+                dataQuality: Components.Schemas.DataQuality,
                 displayImages: Components.Schemas.DisplayImagesField,
                 attachments: Components.Schemas.OutputSchema437
             ) {
@@ -44166,6 +44611,7 @@ extension Components {
                 self.images = images
                 self.createdAt = createdAt
                 self.updatedAt = updatedAt
+                self.dataQuality = dataQuality
                 self.displayImages = displayImages
                 self.attachments = attachments
             }
@@ -44191,6 +44637,7 @@ extension Components {
                 case images
                 case createdAt
                 case updatedAt
+                case dataQuality
                 case displayImages
                 case attachments
             }
@@ -44280,6 +44727,10 @@ extension Components {
                     Foundation.Date.self,
                     forKey: .updatedAt
                 )
+                self.dataQuality = try container.decode(
+                    Components.Schemas.DataQuality.self,
+                    forKey: .dataQuality
+                )
                 self.displayImages = try container.decode(
                     Components.Schemas.DisplayImagesField.self,
                     forKey: .displayImages
@@ -44310,6 +44761,7 @@ extension Components {
                     "images",
                     "createdAt",
                     "updatedAt",
+                    "dataQuality",
                     "displayImages",
                     "attachments"
                 ])
@@ -44361,6 +44813,8 @@ extension Components {
             public var createdAt: Foundation.Date
             /// - Remark: Generated from `#/components/schemas/TaskListItem/updatedAt`.
             public var updatedAt: Foundation.Date
+            /// - Remark: Generated from `#/components/schemas/TaskListItem/dataQuality`.
+            public var dataQuality: Components.Schemas.DataQuality
             /// - Remark: Generated from `#/components/schemas/TaskListItem/displayImages`.
             public var displayImages: Components.Schemas.DisplayImagesField
             /// Creates a new `TaskListItem`.
@@ -44387,6 +44841,7 @@ extension Components {
             ///   - images:
             ///   - createdAt:
             ///   - updatedAt:
+            ///   - dataQuality:
             ///   - displayImages:
             public init(
                 fieldResolutions: Components.Schemas.OptionalFieldResolutions? = nil,
@@ -44410,6 +44865,7 @@ extension Components {
                 images: Components.Schemas.OutputSchema133,
                 createdAt: Foundation.Date,
                 updatedAt: Foundation.Date,
+                dataQuality: Components.Schemas.DataQuality,
                 displayImages: Components.Schemas.DisplayImagesField
             ) {
                 self.fieldResolutions = fieldResolutions
@@ -44433,6 +44889,7 @@ extension Components {
                 self.images = images
                 self.createdAt = createdAt
                 self.updatedAt = updatedAt
+                self.dataQuality = dataQuality
                 self.displayImages = displayImages
             }
             public enum CodingKeys: String, CodingKey {
@@ -44457,6 +44914,7 @@ extension Components {
                 case images
                 case createdAt
                 case updatedAt
+                case dataQuality
                 case displayImages
             }
             public init(from decoder: any Swift.Decoder) throws {
@@ -44545,6 +45003,10 @@ extension Components {
                     Foundation.Date.self,
                     forKey: .updatedAt
                 )
+                self.dataQuality = try container.decode(
+                    Components.Schemas.DataQuality.self,
+                    forKey: .dataQuality
+                )
                 self.displayImages = try container.decode(
                     Components.Schemas.DisplayImagesField.self,
                     forKey: .displayImages
@@ -44571,6 +45033,7 @@ extension Components {
                     "images",
                     "createdAt",
                     "updatedAt",
+                    "dataQuality",
                     "displayImages"
                 ])
             }
@@ -44659,6 +45122,8 @@ extension Components {
             public var createdAt: Foundation.Date
             /// - Remark: Generated from `#/components/schemas/TaskOut/updatedAt`.
             public var updatedAt: Foundation.Date
+            /// - Remark: Generated from `#/components/schemas/TaskOut/dataQuality`.
+            public var dataQuality: Components.Schemas.DataQuality
             /// Creates a new `TaskOut`.
             ///
             /// - Parameters:
@@ -44683,6 +45148,7 @@ extension Components {
             ///   - images:
             ///   - createdAt:
             ///   - updatedAt:
+            ///   - dataQuality:
             public init(
                 fieldResolutions: Components.Schemas.OptionalFieldResolutions? = nil,
                 id: Components.Schemas.TaskShortcode,
@@ -44704,7 +45170,8 @@ extension Components {
                 doneSubtaskCount: Swift.Int,
                 images: Components.Schemas.OutputSchema133,
                 createdAt: Foundation.Date,
-                updatedAt: Foundation.Date
+                updatedAt: Foundation.Date,
+                dataQuality: Components.Schemas.DataQuality
             ) {
                 self.fieldResolutions = fieldResolutions
                 self.id = id
@@ -44727,6 +45194,7 @@ extension Components {
                 self.images = images
                 self.createdAt = createdAt
                 self.updatedAt = updatedAt
+                self.dataQuality = dataQuality
             }
             public enum CodingKeys: String, CodingKey {
                 case fieldResolutions
@@ -44750,6 +45218,7 @@ extension Components {
                 case images
                 case createdAt
                 case updatedAt
+                case dataQuality
             }
             public init(from decoder: any Swift.Decoder) throws {
                 let container = try decoder.container(keyedBy: CodingKeys.self)
@@ -44837,6 +45306,10 @@ extension Components {
                     Foundation.Date.self,
                     forKey: .updatedAt
                 )
+                self.dataQuality = try container.decode(
+                    Components.Schemas.DataQuality.self,
+                    forKey: .dataQuality
+                )
                 try decoder.ensureNoAdditionalProperties(knownKeys: [
                     "fieldResolutions",
                     "id",
@@ -44858,7 +45331,8 @@ extension Components {
                     "doneSubtaskCount",
                     "images",
                     "createdAt",
-                    "updatedAt"
+                    "updatedAt",
+                    "dataQuality"
                 ])
             }
         }
@@ -45995,17 +46469,17 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/UsdaListInput/sort`.
             public struct SortPayload: Codable, Hashable, Sendable {
                 /// - Remark: Generated from `#/components/schemas/UsdaListInput/sort/value1`.
-                public var value1: Components.Schemas.InputSchema178?
+                public var value1: Components.Schemas.InputSchema188?
                 /// - Remark: Generated from `#/components/schemas/UsdaListInput/sort/value2`.
-                public var value2: [Components.Schemas.InputSchema178]?
+                public var value2: [Components.Schemas.InputSchema188]?
                 /// Creates a new `SortPayload`.
                 ///
                 /// - Parameters:
                 ///   - value1:
                 ///   - value2:
                 public init(
-                    value1: Components.Schemas.InputSchema178? = nil,
-                    value2: [Components.Schemas.InputSchema178]? = nil
+                    value1: Components.Schemas.InputSchema188? = nil,
+                    value2: [Components.Schemas.InputSchema188]? = nil
                 ) {
                     self.value1 = value1
                     self.value2 = value2
@@ -47067,6 +47541,8 @@ extension Components {
             public var createdAt: Foundation.Date
             /// - Remark: Generated from `#/components/schemas/VendorDetail/updatedAt`.
             public var updatedAt: Foundation.Date
+            /// - Remark: Generated from `#/components/schemas/VendorDetail/dataQuality`.
+            public var dataQuality: Components.Schemas.DataQuality
             /// - Remark: Generated from `#/components/schemas/VendorDetail/displayImages`.
             public var displayImages: Components.Schemas.DisplayImagesField
             /// - Remark: Generated from `#/components/schemas/VendorDetail/attachments`.
@@ -47090,6 +47566,7 @@ extension Components {
             ///   - logo:
             ///   - createdAt:
             ///   - updatedAt:
+            ///   - dataQuality:
             ///   - displayImages:
             ///   - attachments:
             public init(
@@ -47109,6 +47586,7 @@ extension Components {
                 logo: Components.Schemas.ImageOut? = nil,
                 createdAt: Foundation.Date,
                 updatedAt: Foundation.Date,
+                dataQuality: Components.Schemas.DataQuality,
                 displayImages: Components.Schemas.DisplayImagesField,
                 attachments: Components.Schemas.OutputSchema437
             ) {
@@ -47128,6 +47606,7 @@ extension Components {
                 self.logo = logo
                 self.createdAt = createdAt
                 self.updatedAt = updatedAt
+                self.dataQuality = dataQuality
                 self.displayImages = displayImages
                 self.attachments = attachments
             }
@@ -47148,6 +47627,7 @@ extension Components {
                 case logo
                 case createdAt
                 case updatedAt
+                case dataQuality
                 case displayImages
                 case attachments
             }
@@ -47217,6 +47697,10 @@ extension Components {
                     Foundation.Date.self,
                     forKey: .updatedAt
                 )
+                self.dataQuality = try container.decode(
+                    Components.Schemas.DataQuality.self,
+                    forKey: .dataQuality
+                )
                 self.displayImages = try container.decode(
                     Components.Schemas.DisplayImagesField.self,
                     forKey: .displayImages
@@ -47242,6 +47726,7 @@ extension Components {
                     "logo",
                     "createdAt",
                     "updatedAt",
+                    "dataQuality",
                     "displayImages",
                     "attachments"
                 ])
@@ -47297,6 +47782,8 @@ extension Components {
             public var createdAt: Foundation.Date
             /// - Remark: Generated from `#/components/schemas/VendorListItem/updatedAt`.
             public var updatedAt: Foundation.Date
+            /// - Remark: Generated from `#/components/schemas/VendorListItem/dataQuality`.
+            public var dataQuality: Components.Schemas.DataQuality
             /// - Remark: Generated from `#/components/schemas/VendorListItem/displayImages`.
             public var displayImages: Components.Schemas.DisplayImagesField
             /// Creates a new `VendorListItem`.
@@ -47318,6 +47805,7 @@ extension Components {
             ///   - logo:
             ///   - createdAt:
             ///   - updatedAt:
+            ///   - dataQuality:
             ///   - displayImages:
             public init(
                 id: Components.Schemas.VendorShortcode,
@@ -47336,6 +47824,7 @@ extension Components {
                 logo: Components.Schemas.ImageOut? = nil,
                 createdAt: Foundation.Date,
                 updatedAt: Foundation.Date,
+                dataQuality: Components.Schemas.DataQuality,
                 displayImages: Components.Schemas.DisplayImagesField
             ) {
                 self.id = id
@@ -47354,6 +47843,7 @@ extension Components {
                 self.logo = logo
                 self.createdAt = createdAt
                 self.updatedAt = updatedAt
+                self.dataQuality = dataQuality
                 self.displayImages = displayImages
             }
             public enum CodingKeys: String, CodingKey {
@@ -47373,6 +47863,7 @@ extension Components {
                 case logo
                 case createdAt
                 case updatedAt
+                case dataQuality
                 case displayImages
             }
             public init(from decoder: any Swift.Decoder) throws {
@@ -47441,6 +47932,10 @@ extension Components {
                     Foundation.Date.self,
                     forKey: .updatedAt
                 )
+                self.dataQuality = try container.decode(
+                    Components.Schemas.DataQuality.self,
+                    forKey: .dataQuality
+                )
                 self.displayImages = try container.decode(
                     Components.Schemas.DisplayImagesField.self,
                     forKey: .displayImages
@@ -47462,6 +47957,7 @@ extension Components {
                     "logo",
                     "createdAt",
                     "updatedAt",
+                    "dataQuality",
                     "displayImages"
                 ])
             }
@@ -47540,6 +48036,8 @@ extension Components {
             public var createdAt: Foundation.Date
             /// - Remark: Generated from `#/components/schemas/VendorOut/updatedAt`.
             public var updatedAt: Foundation.Date
+            /// - Remark: Generated from `#/components/schemas/VendorOut/dataQuality`.
+            public var dataQuality: Components.Schemas.DataQuality
             /// Creates a new `VendorOut`.
             ///
             /// - Parameters:
@@ -47559,6 +48057,7 @@ extension Components {
             ///   - logo:
             ///   - createdAt:
             ///   - updatedAt:
+            ///   - dataQuality:
             public init(
                 id: Components.Schemas.VendorShortcode,
                 name: Swift.String,
@@ -47575,7 +48074,8 @@ extension Components {
                 latestPurchaseDate: Components.Schemas.PlainDate? = nil,
                 logo: Components.Schemas.ImageOut? = nil,
                 createdAt: Foundation.Date,
-                updatedAt: Foundation.Date
+                updatedAt: Foundation.Date,
+                dataQuality: Components.Schemas.DataQuality
             ) {
                 self.id = id
                 self.name = name
@@ -47593,6 +48093,7 @@ extension Components {
                 self.logo = logo
                 self.createdAt = createdAt
                 self.updatedAt = updatedAt
+                self.dataQuality = dataQuality
             }
             public enum CodingKeys: String, CodingKey {
                 case id
@@ -47611,6 +48112,7 @@ extension Components {
                 case logo
                 case createdAt
                 case updatedAt
+                case dataQuality
             }
             public init(from decoder: any Swift.Decoder) throws {
                 let container = try decoder.container(keyedBy: CodingKeys.self)
@@ -47678,6 +48180,10 @@ extension Components {
                     Foundation.Date.self,
                     forKey: .updatedAt
                 )
+                self.dataQuality = try container.decode(
+                    Components.Schemas.DataQuality.self,
+                    forKey: .dataQuality
+                )
                 try decoder.ensureNoAdditionalProperties(knownKeys: [
                     "id",
                     "name",
@@ -47694,7 +48200,8 @@ extension Components {
                     "latestPurchaseDate",
                     "logo",
                     "createdAt",
-                    "updatedAt"
+                    "updatedAt",
+                    "dataQuality"
                 ])
             }
         }
@@ -47902,6 +48409,8 @@ extension Components {
             public var createdAt: Foundation.Date
             /// - Remark: Generated from `#/components/schemas/WishDetail/updatedAt`.
             public var updatedAt: Foundation.Date
+            /// - Remark: Generated from `#/components/schemas/WishDetail/dataQuality`.
+            public var dataQuality: Components.Schemas.DataQuality
             /// - Remark: Generated from `#/components/schemas/WishDetail/displayImages`.
             public var displayImages: Components.Schemas.DisplayImagesField
             /// - Remark: Generated from `#/components/schemas/WishDetail/attachments`.
@@ -47918,6 +48427,7 @@ extension Components {
             ///   - priceRange:
             ///   - createdAt:
             ///   - updatedAt:
+            ///   - dataQuality:
             ///   - displayImages:
             ///   - attachments:
             public init(
@@ -47930,6 +48440,7 @@ extension Components {
                 priceRange: Components.Schemas.WishPriceRangeOut? = nil,
                 createdAt: Foundation.Date,
                 updatedAt: Foundation.Date,
+                dataQuality: Components.Schemas.DataQuality,
                 displayImages: Components.Schemas.DisplayImagesField,
                 attachments: Components.Schemas.OutputSchema437
             ) {
@@ -47942,6 +48453,7 @@ extension Components {
                 self.priceRange = priceRange
                 self.createdAt = createdAt
                 self.updatedAt = updatedAt
+                self.dataQuality = dataQuality
                 self.displayImages = displayImages
                 self.attachments = attachments
             }
@@ -47955,6 +48467,7 @@ extension Components {
                 case priceRange
                 case createdAt
                 case updatedAt
+                case dataQuality
                 case displayImages
                 case attachments
             }
@@ -47996,6 +48509,10 @@ extension Components {
                     Foundation.Date.self,
                     forKey: .updatedAt
                 )
+                self.dataQuality = try container.decode(
+                    Components.Schemas.DataQuality.self,
+                    forKey: .dataQuality
+                )
                 self.displayImages = try container.decode(
                     Components.Schemas.DisplayImagesField.self,
                     forKey: .displayImages
@@ -48014,6 +48531,7 @@ extension Components {
                     "priceRange",
                     "createdAt",
                     "updatedAt",
+                    "dataQuality",
                     "displayImages",
                     "attachments"
                 ])
@@ -48039,6 +48557,8 @@ extension Components {
             public var createdAt: Foundation.Date
             /// - Remark: Generated from `#/components/schemas/WishListItem/updatedAt`.
             public var updatedAt: Foundation.Date
+            /// - Remark: Generated from `#/components/schemas/WishListItem/dataQuality`.
+            public var dataQuality: Components.Schemas.DataQuality
             /// - Remark: Generated from `#/components/schemas/WishListItem/displayImages`.
             public var displayImages: Components.Schemas.DisplayImagesField
             /// Creates a new `WishListItem`.
@@ -48053,6 +48573,7 @@ extension Components {
             ///   - priceRange:
             ///   - createdAt:
             ///   - updatedAt:
+            ///   - dataQuality:
             ///   - displayImages:
             public init(
                 id: Components.Schemas.WishShortcode,
@@ -48064,6 +48585,7 @@ extension Components {
                 priceRange: Components.Schemas.WishPriceRangeOut? = nil,
                 createdAt: Foundation.Date,
                 updatedAt: Foundation.Date,
+                dataQuality: Components.Schemas.DataQuality,
                 displayImages: Components.Schemas.DisplayImagesField
             ) {
                 self.id = id
@@ -48075,6 +48597,7 @@ extension Components {
                 self.priceRange = priceRange
                 self.createdAt = createdAt
                 self.updatedAt = updatedAt
+                self.dataQuality = dataQuality
                 self.displayImages = displayImages
             }
             public enum CodingKeys: String, CodingKey {
@@ -48087,6 +48610,7 @@ extension Components {
                 case priceRange
                 case createdAt
                 case updatedAt
+                case dataQuality
                 case displayImages
             }
             public init(from decoder: any Swift.Decoder) throws {
@@ -48127,6 +48651,10 @@ extension Components {
                     Foundation.Date.self,
                     forKey: .updatedAt
                 )
+                self.dataQuality = try container.decode(
+                    Components.Schemas.DataQuality.self,
+                    forKey: .dataQuality
+                )
                 self.displayImages = try container.decode(
                     Components.Schemas.DisplayImagesField.self,
                     forKey: .displayImages
@@ -48141,6 +48669,7 @@ extension Components {
                     "priceRange",
                     "createdAt",
                     "updatedAt",
+                    "dataQuality",
                     "displayImages"
                 ])
             }
@@ -48203,6 +48732,8 @@ extension Components {
             public var createdAt: Foundation.Date
             /// - Remark: Generated from `#/components/schemas/WishOut/updatedAt`.
             public var updatedAt: Foundation.Date
+            /// - Remark: Generated from `#/components/schemas/WishOut/dataQuality`.
+            public var dataQuality: Components.Schemas.DataQuality
             /// Creates a new `WishOut`.
             ///
             /// - Parameters:
@@ -48215,6 +48746,7 @@ extension Components {
             ///   - priceRange:
             ///   - createdAt:
             ///   - updatedAt:
+            ///   - dataQuality:
             public init(
                 id: Components.Schemas.WishShortcode,
                 name: Swift.String,
@@ -48224,7 +48756,8 @@ extension Components {
                 candidateCount: Swift.Int,
                 priceRange: Components.Schemas.WishPriceRangeOut? = nil,
                 createdAt: Foundation.Date,
-                updatedAt: Foundation.Date
+                updatedAt: Foundation.Date,
+                dataQuality: Components.Schemas.DataQuality
             ) {
                 self.id = id
                 self.name = name
@@ -48235,6 +48768,7 @@ extension Components {
                 self.priceRange = priceRange
                 self.createdAt = createdAt
                 self.updatedAt = updatedAt
+                self.dataQuality = dataQuality
             }
             public enum CodingKeys: String, CodingKey {
                 case id
@@ -48246,6 +48780,7 @@ extension Components {
                 case priceRange
                 case createdAt
                 case updatedAt
+                case dataQuality
             }
             public init(from decoder: any Swift.Decoder) throws {
                 let container = try decoder.container(keyedBy: CodingKeys.self)
@@ -48285,6 +48820,10 @@ extension Components {
                     Foundation.Date.self,
                     forKey: .updatedAt
                 )
+                self.dataQuality = try container.decode(
+                    Components.Schemas.DataQuality.self,
+                    forKey: .dataQuality
+                )
                 try decoder.ensureNoAdditionalProperties(knownKeys: [
                     "id",
                     "name",
@@ -48294,7 +48833,8 @@ extension Components {
                     "candidateCount",
                     "priceRange",
                     "createdAt",
-                    "updatedAt"
+                    "updatedAt",
+                    "dataQuality"
                 ])
             }
         }

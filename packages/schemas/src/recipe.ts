@@ -199,6 +199,7 @@ export const recipeGraphListOut = z.array(recipeGraphOut);
 // graph (the list/pickers never read `.sections` — that was the ~4.7s over-fetch).
 export const recipeListItemOut = z.object({
   ...recipeTopLevelFields,
+  dataQuality: generatedRecipeFieldSchemas.read.dataQuality,
   totals: recipeTotals.nullish(),
   // Live MealRecipe rows under a live Meal — a soft-deleted Meal's plan
   // doesn't count. Backs the list's "Meals" column.

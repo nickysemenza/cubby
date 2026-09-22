@@ -241,13 +241,19 @@ struct NativeListAdaptersTests {
         return try! JSONEncoder.cubby().encode(payload)
     }
 
+    nonisolated private static let completeDataQuality = DataQuality(
+        status: .complete, score: 100, facets: [], gaps: [], exceptions: [],
+        relatedGaps: [], relatedExceptions: [])
+
     nonisolated private static let cookbooks = [
         CookbookSummary(
             id: "CKB-1", book: "Alpha Cookbook", author: ["Author A"], subjects: ["Soup"],
-            recipeCount: 1, sourceRecipeCount: 1, needsReextract: false, displayImages: []),
+            recipeCount: 1, sourceRecipeCount: 1, needsReextract: false,
+            dataQuality: completeDataQuality, displayImages: []),
         CookbookSummary(
             id: "CKB-2", book: "Beta Cookbook", author: ["Author B"], subjects: ["Bread"],
-            recipeCount: 2, sourceRecipeCount: 2, needsReextract: false, displayImages: []),
+            recipeCount: 2, sourceRecipeCount: 2, needsReextract: false,
+            dataQuality: completeDataQuality, displayImages: []),
     ]
 
     nonisolated private static let cookbooksPayload: Data = {

@@ -41,6 +41,7 @@ import {
   diffUnorderedIdSet,
   logAuditEntry,
 } from "~/server/repo/audit-log";
+import { loadDataQualities } from "~/server/repo/data-quality";
 import {
   assertNoDependents,
   buildPartialUpdateValues,
@@ -136,12 +137,19 @@ const projectReader = createEntityReader({
     // Whole-tree parent/child map + this project's subtree rollup — see
     // subtree.ts's doc comment for why the tree is loaded in full rather than
     // walked with per-row queries.
-    const [projectContext, deps] = await Promise.all([
+    const [projectContext, deps, dataQualities] = await Promise.all([
       loadProjectSubtreeRollups(db, [row.id]),
       projectDependencyIds(db, [row.id]),
+      loadDataQualities(db, "project", [row.id]),
     ]);
 
-    return hydrateProjectRow(row, projectContext, deps);
+    // SAFETY: `row` was just fetched live by id, so its quality was evaluated.
+    return hydrateProjectRow(
+      row,
+      projectContext,
+      deps,
+      dataQualities.get(row.id)!,
+    );
   },
 });
 

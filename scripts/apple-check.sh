@@ -86,7 +86,8 @@ fi
 # CI-only: reuse the SPM clone directory .github/actions/setup-apple-tools
 # cached, instead of resolving Sentry/GRDB/Nuke from scratch every run. Local
 # builds keep SPM clones inside the DerivedData `pnpm apple` also uses, so the
-# two never thrash each other.
+# two never thrash each other. The expansion below is the bash 3.2 (macOS
+# default) spelling that survives `set -u` when the array is empty.
 clone_args=()
 if [ "$mode" = "ci" ]; then
   clone_args+=(-clonedSourcePackagesDirPath apps/apple/SourcePackages)
@@ -97,7 +98,7 @@ xcodebuild \
   -scheme Cubby-iOS \
   -destination "generic/platform=iOS Simulator" \
   -derivedDataPath apps/apple/DerivedData \
-  "${clone_args[@]}" \
+  ${clone_args[@]+"${clone_args[@]}"} \
   -skipPackagePluginValidation \
   -skipMacroValidation \
   "${build_settings[@]}" \

@@ -1,6 +1,6 @@
 import { entityRecommendationsOut } from "@cubby/schemas/entity-recommendations";
 import { inventoryWithLocationAndProductOut } from "@cubby/schemas/inventory";
-import { testShortcode } from "@cubby/schemas/testing";
+import { testCompleteDataQuality, testShortcode } from "@cubby/schemas/testing";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -50,6 +50,7 @@ const inventoryitem = inventoryWithLocationAndProductOut.parse({
     valuation: null,
     createdAt: now,
     updatedAt: now,
+    dataQuality: testCompleteDataQuality(),
   },
   product: {
     id: testShortcode("product", "PRD-TMTO"),
@@ -69,6 +70,7 @@ const inventoryitem = inventoryWithLocationAndProductOut.parse({
     createdAt: now,
     updatedAt: now,
   },
+  dataQuality: testCompleteDataQuality(),
 });
 const recommendation = entityRecommendationsOut.parse({
   source: { entityType: "inventory", entityId: INVENTORY_ID },

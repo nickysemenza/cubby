@@ -32,6 +32,7 @@ import { sumBy, uniq } from "es-toolkit";
 import { householdDaysFromNow, householdLocalDate } from "~/lib/household-date";
 import type { Database } from "~/server/db";
 import { expense, project, task } from "~/server/db/schema";
+import { loadDataQualities } from "~/server/repo/data-quality";
 import {
   countWhere,
   getDb,
@@ -241,6 +242,7 @@ export async function projectDashboardSummary(
     undatedExpenseCount,
     attention,
     forwardCommittedRows,
+    dataQualities,
   ] = await Promise.all([
     projectDependencyIds(db, ids),
     ids.length > 0
@@ -321,10 +323,13 @@ export async function projectDashboardSummary(
             ),
           )
       : Promise.resolve([{ in30Days: 0, in60Days: 0, in90Days: 0 }]),
+    loadDataQualities(db, "project", ids),
   ]);
 
   const projects = projectRows.map((row) =>
-    hydrateProjectRow(row, subtreeLoad, deps),
+    // SAFETY: `row` came from `projectRows`, whose ids (`ids`) `dataQualities`
+    // was loaded for.
+    hydrateProjectRow(row, subtreeLoad, deps, dataQualities.get(row.id)!),
   );
 
   // Every non-done top-level task on a scoped project — exactly
@@ -423,9 +428,10 @@ export async function projectDashboardSummary(
   }
 
   const nextTaskIds = nextTaskRows.map((r) => r.id);
-  const [nextDeps, nextSubtaskCounts] = await Promise.all([
+  const [nextDeps, nextSubtaskCounts, nextDataQualities] = await Promise.all([
     taskDependencyIds(db, nextTaskIds),
     taskSubtaskCounts(db, nextTaskIds),
+    loadDataQualities(db, "task", nextTaskIds),
   ]);
   const hydratedNextTaskRows = await hydrateTaskInheritanceRows(
     db,
@@ -439,6 +445,9 @@ export async function projectDashboardSummary(
       nextDeps.blocking.get(row.id) ?? [],
       counts?.count ?? 0,
       counts?.doneCount ?? 0,
+      // SAFETY: `row` came from `hydratedNextTaskRows`, whose ids
+      // (`nextTaskIds`) `nextDataQualities` was loaded for.
+      nextDataQualities.get(row.id)!,
     );
   });
 

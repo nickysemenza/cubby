@@ -678,6 +678,24 @@ export default defineEntity({
     merge: false,
     operationOwners: { delete: "kernel", merge: null },
     mcp: ["get", "list", "create", "update", "delete", "bulkUpdate"],
+    dataQuality: {
+      checks: [
+        {
+          id: "planting_variety",
+          facet: "identity",
+          weight: 1,
+          label: "Variety",
+          message: "No variety is recorded for this planting.",
+        },
+        {
+          id: "planting_location",
+          facet: "linkage",
+          weight: 1,
+          label: "Location",
+          message: "No location is recorded for this planting.",
+        },
+      ],
+    },
   },
   extensions: {
     countFilter: null,

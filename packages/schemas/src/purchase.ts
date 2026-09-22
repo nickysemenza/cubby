@@ -6,7 +6,6 @@ import {
 } from "./generated/entity-field-schemas.purchase.gen";
 import { auditDateFilterFields, uniqueBy } from "./base-entity";
 import { relationMutationOut } from "./common";
-import { dataCheck, dataQualityStatus } from "./data-quality";
 import {
   expenseShortcode,
   imageShortcode,
@@ -131,8 +130,6 @@ export const purchaseFilterFields = {
   reconciliation: oneOrMany(purchaseReconciliation).optional(),
   financialReconciliation: z.enum(["mismatch"]).optional(),
   documentPresenceFilter: presenceFilter,
-  dataStatus: dataQualityStatus.optional(),
-  dataGap: oneOrMany(dataCheck).optional(),
 };
 export const purchaseFiltersSchema = z.object(purchaseFilterFields);
 export type PurchaseFilters = z.infer<typeof purchaseFiltersSchema>;

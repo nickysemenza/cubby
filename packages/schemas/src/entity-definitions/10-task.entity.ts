@@ -1022,6 +1022,24 @@ export default defineEntity({
     merge: false,
     operationOwners: { delete: "kernel", merge: null },
     mcp: ["get", "list", "search", "create", "update", "delete", "bulkUpdate"],
+    dataQuality: {
+      checks: [
+        {
+          id: "task_due_date",
+          facet: "paperwork",
+          weight: 1,
+          label: "Due date",
+          message: "No due date is recorded.",
+        },
+        {
+          id: "task_trade",
+          facet: "identity",
+          weight: 1,
+          label: "Trade",
+          message: "No trade is recorded for this task.",
+        },
+      ],
+    },
   },
   extensions: {
     countFilter: null,

@@ -2,7 +2,7 @@ import type { Amount } from "@cubby/schemas/codec";
 import type { IngredientWithFoodOut } from "@cubby/schemas/ingredient";
 import type { ProductLabelNutrition } from "@cubby/schemas/nutrition";
 import type { RecipeOut, SectionIngredientOut } from "@cubby/schemas/recipe";
-import { testShortcode } from "@cubby/schemas/testing";
+import { testCompleteDataQuality, testShortcode } from "@cubby/schemas/testing";
 
 import {
   type CostingRow,
@@ -136,6 +136,7 @@ export const ingredientWith = (
   gardenGuideKey: null,
   guideSowWindow: null,
   guideTransplantWindow: null,
+  dataQuality: testCompleteDataQuality(),
   ...dates,
   product,
 });
@@ -208,6 +209,7 @@ export const makeSubRecipe = (
   meta: null,
   yield: yieldValue,
   images: [],
+  dataQuality: testCompleteDataQuality(),
   forkedFromRecipeId: null,
   forkedFromRecipeName: null,
   sections: [
@@ -225,6 +227,7 @@ export const makeRootRecipe = (rows: CostingRow[]): RecipeOut => ({
   meta: null,
   yield: null,
   images: [],
+  dataQuality: testCompleteDataQuality(),
   forkedFromRecipeId: null,
   forkedFromRecipeName: null,
   sections: rows.map((row, i) => {

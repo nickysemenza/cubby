@@ -1,5 +1,5 @@
 import type { ProjectOut } from "@cubby/schemas/project";
-import { testShortcode } from "@cubby/schemas/testing";
+import { testCompleteDataQuality, testShortcode } from "@cubby/schemas/testing";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -67,6 +67,7 @@ function projectFixture(): ProjectOut {
         costEstimate: null,
       },
     },
+    dataQuality: testCompleteDataQuality(),
   };
 }
 

@@ -6,14 +6,17 @@
  * fraction — the population a backlog is measured against — and nothing else in
  * the codebase computes it. Each count here is deliberately the SAME population
  * its paired detector scans, minus that detector's failing predicate, so
- * "N of M" can't quietly compare two different sets.
+ * "N of M" can't quietly compare two different sets. Four of the six now reuse
+ * a data-quality check's own `expectedCondition` for that population, rather
+ * than a hand-derived duplicate — the same SQL the paired `dataGaps` filter
+ * scopes to.
  *
  * All plain `count(*)`s over already-indexed columns. Callers should run this
  * inside `withConnection` so the six queries share one pooled connection.
  */
 
 import type { CoverageTotals } from "@cubby/schemas/problems";
-import { and, eq, exists, isNull, notExists, sql } from "drizzle-orm";
+import { and, eq, exists, notExists, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
 import type { Database } from "~/server/db";
@@ -22,12 +25,9 @@ import {
   inventoryEntry,
   location,
   product,
-  purchase,
-  recipe,
-  recipeSection,
-  recipeSectionIngredient,
   vendor,
 } from "~/server/db/schema";
+import { expectedCondition } from "~/server/repo/data-quality/sql";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
 import { stockOnly } from "~/server/repo/inventory/placement";
 
@@ -42,10 +42,15 @@ export const findCoverageTotals = async (
   const dbClient = getDb(db);
   const childLocation = alias(location, "child_location");
 
+  // Matches the `productsWithNoImages` Problem's `dataGaps=product_image`
+  // population: `product_image`'s own `expected` (checks/product.ts) is
+  // "has inventory" — stocked products, regardless of ingredient link.
   const products = await dbClient
     .select({ count: COUNT })
     .from(product)
-    .where(and(notDeleted(product), isNull(product.ingredientId)));
+    .where(
+      and(notDeleted(product), expectedCondition("product", "product_image")),
+    );
 
   const leafLocations = await dbClient
     .select({ count: COUNT })
@@ -92,54 +97,37 @@ export const findCoverageTotals = async (
       ),
     );
 
-  // Matches the `neverVerifiedInventory` view's population — same reasoning as
-  // stockedLocations above.
+  // Matches the `neverVerifiedInventory` Problem's `dataGaps=inventory_verified`
+  // population, per that check's own `expected` (checks/inventory.ts).
   const inventoryEntries = await dbClient
     .select({ count: COUNT })
     .from(inventoryEntry)
-    .where(and(notDeleted(inventoryEntry), stockOnly()));
+    .where(
+      and(
+        notDeleted(inventoryEntry),
+        expectedCondition("inventory", "inventory_verified"),
+      ),
+    );
 
+  // Matches the `ingredientsWithoutProduct` Problem's
+  // `dataGaps=ingredient_product` population, per that check's own `expected`
+  // (checks/ingredient.ts).
   const recipeIngredients = await dbClient
-    .select({ count: sql<number>`count(distinct ${ingredient.id})::int` })
+    .select({ count: COUNT })
     .from(ingredient)
-    .innerJoin(
-      recipeSectionIngredient,
+    .where(
       and(
-        eq(recipeSectionIngredient.ingredientId, ingredient.id),
-        notDeleted(recipeSectionIngredient),
+        notDeleted(ingredient),
+        expectedCondition("ingredient", "ingredient_product"),
       ),
-    )
-    .innerJoin(
-      recipeSection,
-      and(
-        eq(recipeSection.id, recipeSectionIngredient.recipeSectionId),
-        notDeleted(recipeSection),
-      ),
-    )
-    .innerJoin(
-      recipe,
-      and(
-        eq(recipe.id, recipeSection.recipeId),
-        notDeleted(recipe),
-        isNull(recipe.cookbookId),
-      ),
-    )
-    .where(and(notDeleted(ingredient), isNull(ingredient.recipeId)));
+    );
 
+  // Matches the `vendorsWithoutLogos` Problem's `dataGaps=vendor_logo`
+  // population, per that check's own `expected` (checks/vendor.ts).
   const activeVendors = await dbClient
     .select({ count: COUNT })
     .from(vendor)
-    .where(
-      and(
-        notDeleted(vendor),
-        exists(
-          dbClient
-            .select({ one: sql`1` })
-            .from(purchase)
-            .where(and(eq(purchase.vendorId, vendor.id), notDeleted(purchase))),
-        ),
-      ),
-    );
+    .where(and(notDeleted(vendor), expectedCondition("vendor", "vendor_logo")));
 
   return {
     productsWithNoImages: first(products),

@@ -77,13 +77,7 @@ import {
 import { createAppError } from "~/server/errors/app-error";
 import { observeOperationPhase } from "~/server/observed-request";
 import { computeChanges, logAuditEntry } from "~/server/repo/audit-log";
-import {
-  loadProductDataQualities,
-  productAnyDataGapCondition,
-  productDataGapCondition,
-  productDefectCondition,
-  productNeedsDataCondition,
-} from "~/server/repo/data-quality";
+import { loadDataQualities } from "~/server/repo/data-quality";
 import {
   assertNoDependents,
   associatePendingImages,
@@ -293,28 +287,15 @@ const resolveProductSort = (sort: SortParams) => {
       sql`${categorySummarySql(sql`${product.categoryId}`)}::jsonb->'path' ${sql.raw(dirSql)}`,
     ];
 
-  if (sort.orderBy === "identity_strength") {
-    return [
-      // A barcode outranks other external ids because this sort IS the
-      // enrichment worklist: a barcode resolves to USDA and to the UPC
-      // provider, and an ASIN resolves to neither. Two EXISTS rather than one
-      // aggregate — CASE is sequential, so the second only runs for products
-      // with no barcode. The `<> ''` guard the scalar needed is gone:
-      // `externalId` is notNull and the gtin CHECK makes an empty value
-      // unrepresentable.
-      sql.raw(`CASE
-        WHEN EXISTS (SELECT 1 FROM "ProductExternalId" pei WHERE pei."productId" = "product"."id" AND pei."deletedAt" IS NULL AND pei."source" = 'gtin') THEN 0
-        WHEN EXISTS (SELECT 1 FROM "ProductExternalId" pei WHERE pei."productId" = "product"."id" AND pei."deletedAt" IS NULL) THEN 1
-        WHEN lower(trim("product"."manufacturer")) NOT IN ('', 'generic', '(unspecified)') AND coalesce(trim("product"."model"), '') <> '' THEN 2
-        WHEN coalesce(trim("product"."model"), '') <> '' THEN 3
-        ELSE 4 END ${dirSql}`),
-    ];
-  }
-
   return null;
 };
 
 const productScaffold = listScaffold("product", product);
+
+const loadProductDataQualities = (
+  db: Database | DrizzleTransaction,
+  ids: ProductId[],
+) => loadDataQualities(db, "product", ids);
 
 const productListOrderBy = (
   sorts: SortParams[],
@@ -740,9 +721,6 @@ export const buildProductWhere = async (
     );
   const productIdsWithGtin = gtinRows;
 
-  const selectedDataGaps = filters.dataGap ? [filters.dataGap].flat() : [];
-  const needsData = productNeedsDataCondition();
-
   // Mirrors `foodLookupParamFromProduct` returning null (no explicit fdc_id AND
   // no barcode to auto-match) OR'd with "no label nutrition override" — a
   // label supersedes the USDA lookup outright, so a labelled product counts as
@@ -953,16 +931,6 @@ export const buildProductWhere = async (
   ];
 
   const qualityConditions = () => [
-    filters.dataStatus === "needs_data"
-      ? needsData
-      : filters.dataStatus === "defect"
-        ? productDefectCondition()
-        : filters.dataStatus === "complete"
-          ? sql`NOT ${productAnyDataGapCondition()}`
-          : undefined,
-    selectedDataGaps.length > 0
-      ? or(...selectedDataGaps.map(productDataGapCondition))
-      : undefined,
     presenceCondition(product.fdc_id, filters.usdaPresenceFilter, NO_USDA_KEY),
     filters.pricePresenceFilter === "none"
       ? and(

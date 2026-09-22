@@ -1,5 +1,9 @@
 import { type RecipeOut, recipeOut } from "@cubby/schemas/recipe";
-import { testEntityId, testShortcode } from "@cubby/schemas/testing";
+import {
+  testCompleteDataQuality,
+  testEntityId,
+  testShortcode,
+} from "@cubby/schemas/testing";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -19,6 +23,7 @@ const recipe = (): RecipeOut =>
     images: [],
     createdAt: new Date(),
     updatedAt: new Date(),
+    dataQuality: testCompleteDataQuality(),
     sections: [
       {
         id: testEntityId("recipe", "section"),

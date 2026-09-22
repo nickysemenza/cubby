@@ -56,7 +56,9 @@ struct EntityOperationsTests {
             {
               "items": [
                 { "id": "LPY-2345", "name": "Household", "kind": "household", "displayImages": [],
-                  "createdAt": "2026-01-01T00:00:00.000Z", "updatedAt": "2026-01-01T00:00:00.000Z" }
+                  "createdAt": "2026-01-01T00:00:00.000Z", "updatedAt": "2026-01-01T00:00:00.000Z",
+                  "dataQuality": { "status": "complete", "score": 100, "facets": [], "gaps": [],
+                    "exceptions": [], "relatedGaps": [], "relatedExceptions": [] } }
               ],
               "meta": { "pageIndex": 0, "pageSize": 20, "totalCount": 1 }
             }

@@ -33,7 +33,10 @@ import {
 } from "./pagination";
 import { unitMappingOut } from "./unitmapping";
 import { inventoryPlacement as cycleSafeInventoryPlacement } from "./inventory-fields";
-import { generatedInventoryItemFieldSchemas } from "./generated/entity-field-schemas.inventory.gen";
+import {
+  generatedInventoryItemFieldSchemas,
+  generatedInventoryItemFilterFields,
+} from "./generated/entity-field-schemas.inventory.gen";
 import { displayImagesField } from "./display-images";
 import { inventoryOwnershipSelection } from "./inventory-ownership";
 
@@ -76,6 +79,7 @@ export const inventoryPlacementFilter = z.enum([
 export const inventoryFilterFields = {
   ...auditDateFilterFields,
   ...inventoryRelatedFilterFields,
+  ...generatedInventoryItemFilterFields,
   productNameFilter: z
     .string()
     .optional()

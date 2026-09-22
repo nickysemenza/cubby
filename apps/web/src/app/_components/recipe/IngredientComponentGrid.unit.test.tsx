@@ -8,7 +8,11 @@ import {
   type SectionIngredientOut,
   sectionIngredientOut,
 } from "@cubby/schemas/recipe";
-import { testEntityId, testShortcode } from "@cubby/schemas/testing";
+import {
+  testCompleteDataQuality,
+  testEntityId,
+  testShortcode,
+} from "@cubby/schemas/testing";
 import { act, render, screen, within } from "@testing-library/react";
 import { ok } from "neverthrow";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -60,6 +64,7 @@ const recipe = (id: string, name: string) =>
     tags: [],
     createdAt: new Date("2026-01-01"),
     updatedAt: new Date("2026-01-01"),
+    dataQuality: testCompleteDataQuality(),
   });
 
 const ingredient = (

@@ -139,6 +139,8 @@ extension EntityDescriptor {
                 case "productQuantityMax": query.productQuantityMax = try value.double(name)
                 case "notesSearch": query.notesSearch = try value.string(name)
                 case "urlSearch": query.urlSearch = try value.string(name)
+                case "dataStatus": query.dataStatus = try value.enumCases(name)
+                case "dataGap": query.dataGap = try value.enumCases(name)
                 case "projectId": query.projectId = value.strings.map { .init(value1: $0) }
                 case "includeSubProjects": query.includeSubProjects = try value.bool(name)
                 case "projectPresenceFilter": query.projectPresenceFilter = try value.enumCase(name)
@@ -192,6 +194,8 @@ extension EntityDescriptor {
                 case "vendorSearch": query.vendorSearch = try value.string(name)
                 case "search": query.search = try value.string(name)
                 case "provisional": query.provisional = try value.bool(name)
+                case "dataStatus": query.dataStatus = try value.enumCases(name)
+                case "dataGap": query.dataGap = try value.enumCases(name)
                 case "ledgerPartyId": query.ledgerPartyId = value.strings
                 case "identityKind": query.identityKind = try value.enumCases(name)
                 case "last4": query.last4 = try value.string(name)
@@ -236,6 +240,8 @@ extension EntityDescriptor {
                 case "transactionDateTo": query.transactionDateTo = try value.string(name)
                 case "amountMin": query.amountMin = try value.double(name)
                 case "amountMax": query.amountMax = try value.double(name)
+                case "dataStatus": query.dataStatus = try value.enumCases(name)
+                case "dataGap": query.dataGap = try value.enumCases(name)
                 case "accountId": query.accountId = value.strings.map { .init(value1: $0) }
                 case "purchaseId": query.purchaseId = value.strings.map { .init(value1: $0) }
                 case "purchasePresenceFilter": query.purchasePresenceFilter = try value.enumCase(name)
@@ -264,6 +270,8 @@ extension EntityDescriptor {
                 case "kind": query.kind = try value.enumCases(name)
                 case "observedOnFrom": query.observedOnFrom = try value.string(name)
                 case "observedOnTo": query.observedOnTo = try value.string(name)
+                case "dataStatus": query.dataStatus = try value.enumCases(name)
+                case "dataGap": query.dataGap = try value.enumCases(name)
                 case "locationId": query.locationId = value.strings
                 case "plantingId": query.plantingId = value.strings
                 case "journalPlantingId": query.journalPlantingId = try value.string(name)
@@ -288,6 +296,8 @@ extension EntityDescriptor {
                 case "updatedTo": query.updatedTo = try value.string(name)
                 case "nameFilter": query.nameFilter = try value.string(name)
                 case "usuallyOnHand": query.usuallyOnHand = try value.bool(name)
+                case "dataStatus": query.dataStatus = try value.enumCases(name)
+                case "dataGap": query.dataGap = try value.enumCases(name)
                 case "productPresenceFilter": query.productPresenceFilter = try value.enumCase(name)
                 case "ownRecipePresenceFilter": query.ownRecipePresenceFilter = try value.enumCase(name)
                 case "recipePresenceFilter": query.recipePresenceFilter = try value.enumCase(name)
@@ -319,6 +329,8 @@ extension EntityDescriptor {
                 case "ingredientId": query.ingredientId = value.strings
                 case "ingredientPresenceFilter": query.ingredientPresenceFilter = try value.enumCase(name)
                 case "ingredientSearch": query.ingredientSearch = try value.string(name)
+                case "dataStatus": query.dataStatus = try value.enumCases(name)
+                case "dataGap": query.dataGap = try value.enumCases(name)
                 case "productNameFilter": query.productNameFilter = try value.string(name)
                 case "locationNameFilter": query.locationNameFilter = try value.string(name)
                 case "locationIdFilter": query.locationIdFilter = .init(value1: try value.string(name))
@@ -352,6 +364,8 @@ extension EntityDescriptor {
                 case "updatedTo": query.updatedTo = try value.string(name)
                 case "search": query.search = try value.string(name)
                 case "kind": query.kind = try value.enumCases(name)
+                case "dataStatus": query.dataStatus = try value.enumCases(name)
+                case "dataGap": query.dataGap = try value.enumCases(name)
                 case "mealId": query.mealId = value.strings
                 case "mealPresenceFilter": query.mealPresenceFilter = try value.enumCase(name)
                 case "mealSearch": query.mealSearch = try value.string(name)
@@ -378,6 +392,8 @@ extension EntityDescriptor {
                 case "updatedTo": query.updatedTo = try value.string(name)
                 case "dateFrom": query.dateFrom = try value.string(name)
                 case "dateTo": query.dateTo = try value.string(name)
+                case "dataStatus": query.dataStatus = try value.enumCases(name)
+                case "dataGap": query.dataGap = try value.enumCases(name)
                 case "fromPartyId": query.fromPartyId = value.strings
                 case "toPartyId": query.toPartyId = value.strings
                 case "groupBy": query.groupBy = try value.enumCase(name)
@@ -404,6 +420,8 @@ extension EntityDescriptor {
                 case "aiDescriptionPresenceFilter": query.aiDescriptionPresenceFilter = try value.enumCase(name)
                 case "nameFilter": query.nameFilter = try value.string(name)
                 case "itemTypeFilter": query.itemTypeFilter = try value.enumCases(name)
+                case "dataStatus": query.dataStatus = try value.enumCases(name)
+                case "dataGap": query.dataGap = try value.enumCases(name)
                 case "productId": query.productId = value.strings.map { .init(value1: $0) }
                 case "productPresenceFilter": query.productPresenceFilter = try value.enumCase(name)
                 case "parentId": query.parentId = value.strings.map { .init(value1: $0) }
@@ -437,6 +455,8 @@ extension EntityDescriptor {
                 case "updatedTo": query.updatedTo = try value.string(name)
                 case "mealType": query.mealType = try value.enumCases(name)
                 case "mealKind": query.mealKind = try value.enumCases(name)
+                case "dataStatus": query.dataStatus = try value.enumCases(name)
+                case "dataGap": query.dataGap = try value.enumCases(name)
                 case "mealTypePresenceFilter": query.mealTypePresenceFilter = try value.enumCase(name)
                 case "recipeCostCoverage": query.recipeCostCoverage = try value.enumCase(name)
                 case "from": query.from = try value.string(name)
@@ -473,6 +493,8 @@ extension EntityDescriptor {
                 case "updatedFrom": query.updatedFrom = try value.string(name)
                 case "updatedTo": query.updatedTo = try value.string(name)
                 case "status": query.status = try value.enumCases(name)
+                case "dataStatus": query.dataStatus = try value.enumCases(name)
+                case "dataGap": query.dataGap = try value.enumCases(name)
                 case "locationId": query.locationId = value.strings
                 case "ingredientId": query.ingredientId = value.strings
                 case "taskId": query.taskId = value.strings
@@ -539,12 +561,12 @@ extension EntityDescriptor {
                 case "notesPresenceFilter": query.notesPresenceFilter = try value.enumCase(name)
                 case "stockTrackedPresenceFilter": query.stockTrackedPresenceFilter = try value.enumCase(name)
                 case "tagFilters": query.tagFilters = value.strings
+                case "dataStatus": query.dataStatus = try value.enumCases(name)
+                case "dataGap": query.dataGap = try value.enumCases(name)
                 case "kitId": query.kitId = value.strings
                 case "upcPresenceFilter": query.upcPresenceFilter = try value.enumCase(name)
                 case "externalIdSource": query.externalIdSource = value.strings
                 case "externalIdPresenceFilter": query.externalIdPresenceFilter = try value.enumCase(name)
-                case "dataStatus": query.dataStatus = try value.enumCase(name)
-                case "dataGap": query.dataGap = try value.enumCases(name)
                 case "inventoryPresenceFilter": query.inventoryPresenceFilter = try value.enumCase(name)
                 case "inventoryMultiplicity": query.inventoryMultiplicity = try value.enumCase(name)
                 case "ownershipReconciliation": query.ownershipReconciliation = try value.enumCase(name)
@@ -599,6 +621,8 @@ extension EntityDescriptor {
                 case "updatedFrom": query.updatedFrom = try value.string(name)
                 case "updatedTo": query.updatedTo = try value.string(name)
                 case "search": query.search = try value.string(name)
+                case "dataStatus": query.dataStatus = try value.enumCases(name)
+                case "dataGap": query.dataGap = try value.enumCases(name)
                 case "groupBy": query.groupBy = try value.enumCase(name)
                 default: throw EntityFilterError.unknownParameter(.productCategory, name)
                 }
@@ -642,6 +666,8 @@ extension EntityDescriptor {
                 case "status": query.status = try value.enumCases(name)
                 case "kind": query.kind = try value.enumCases(name)
                 case "location": query.location = value.strings
+                case "dataStatus": query.dataStatus = try value.enumCases(name)
+                case "dataGap": query.dataGap = try value.enumCases(name)
                 case "dateFrom": query.dateFrom = try value.string(name)
                 case "dateTo": query.dateTo = try value.string(name)
                 case "completionYear": query.completionYear = try value.string(name)
@@ -677,6 +703,8 @@ extension EntityDescriptor {
                 case "statedTotalPresenceFilter": query.statedTotalPresenceFilter = try value.enumCase(name)
                 case "expenseTotalMin": query.expenseTotalMin = try value.double(name)
                 case "expenseTotalMax": query.expenseTotalMax = try value.double(name)
+                case "dataStatus": query.dataStatus = try value.enumCases(name)
+                case "dataGap": query.dataGap = try value.enumCases(name)
                 case "vendorId": query.vendorId = value.strings.map { .init(value1: $0) }
                 case "expenseId": query.expenseId = value.strings
                 case "expensePresenceFilter": query.expensePresenceFilter = try value.enumCase(name)
@@ -696,12 +724,6 @@ extension EntityDescriptor {
                 case "reconciliation": query.reconciliation = try value.enumCases(name)
                 case "financialReconciliation": query.financialReconciliation = try value.enumCase(name)
                 case "documentPresenceFilter": query.documentPresenceFilter = try value.enumCase(name)
-                case "dataStatus": query.dataStatus = try value.enumCase(name)
-                case "dataGap": query.dataGap = try value.strings.map { raw in
-                    try EntityFilterValue.anyOfCase(name, raw, .init(value1: .init(rawValue: raw), value2: .init(rawValue: raw))) {
-                        $0.value1 != nil || $0.value2 != nil
-                    }
-                }
                 case "searchQuery": query.searchQuery = try value.string(name)
                 case "groupBy": query.groupBy = try value.enumCase(name)
                 default: throw EntityFilterError.unknownParameter(.purchase, name)
@@ -731,6 +753,8 @@ extension EntityDescriptor {
                 case "tagFilters": query.tagFilters = value.strings
                 case "totalMinutesMin": query.totalMinutesMin = try value.double(name)
                 case "totalMinutesMax": query.totalMinutesMax = try value.double(name)
+                case "dataStatus": query.dataStatus = try value.enumCases(name)
+                case "dataGap": query.dataGap = try value.enumCases(name)
                 case "cookbookId": query.cookbookId = value.strings.map { .init(value1: $0) }
                 case "cookbookPresenceFilter": query.cookbookPresenceFilter = try value.enumCase(name)
                 case "tagsPresenceFilter": query.tagsPresenceFilter = try value.enumCase(name)
@@ -770,6 +794,8 @@ extension EntityDescriptor {
                 case "search": query.search = try value.string(name)
                 case "status": query.status = try value.enumCases(name)
                 case "trade": query.trade = try value.enumCases(name)
+                case "dataStatus": query.dataStatus = try value.enumCases(name)
+                case "dataGap": query.dataGap = try value.enumCases(name)
                 case "projectId": query.projectId = value.strings.map { .init(value1: $0) }
                 case "subjectProductId": query.subjectProductId = value.strings.map { .init(value1: $0) }
                 case "topLevelOnly": query.topLevelOnly = try value.bool(name)
@@ -829,6 +855,8 @@ extension EntityDescriptor {
                 case "spendMax": query.spendMax = try value.double(name)
                 case "latestPurchaseDateFrom": query.latestPurchaseDateFrom = try value.string(name)
                 case "latestPurchaseDateTo": query.latestPurchaseDateTo = try value.string(name)
+                case "dataStatus": query.dataStatus = try value.enumCases(name)
+                case "dataGap": query.dataGap = try value.enumCases(name)
                 case "latestPurchaseDatePresenceFilter": query.latestPurchaseDatePresenceFilter = try value.enumCase(name)
                 case "logoPresenceFilter": query.logoPresenceFilter = try value.enumCase(name)
                 case "searchQuery": query.searchQuery = try value.string(name)
@@ -877,6 +905,8 @@ extension EntityDescriptor {
                 case "productSearch": query.productSearch = try value.string(name)
                 case "search": query.search = try value.string(name)
                 case "acquired": query.acquired = try value.bool(name)
+                case "dataStatus": query.dataStatus = try value.enumCases(name)
+                case "dataGap": query.dataGap = try value.enumCases(name)
                 case "candidateProductId": query.candidateProductId = value.strings
                 case "searchQuery": query.searchQuery = try value.string(name)
                 case "groupBy": query.groupBy = try value.enumCase(name)
@@ -903,6 +933,8 @@ extension EntityDescriptor {
                 case "lineKind": ["principal", "tax", "shipping", "discount", "fee", "tip", "other_adjustment"]
                 case "lineBasis": ["item_line", "allocation"]
                 case "trade": ["planning", "demolition", "building", "drywall", "electrical", "plumbing", "mechanical", "cabinetry", "countertop", "flooring", "millwork", "finishes", "appliances", "landscaping", "logistics", "metalworking", "crafts", "auto", "other"]
+                case "dataStatus": ["complete", "needs_data", "defect"]
+                case "dataGap": ["expense_cost"]
                 case "projectPresenceFilter": ["has", "none"]
                 case "productPresenceFilter": ["has", "none"]
                 case "vendorPresenceFilter": ["has", "none"]
@@ -922,6 +954,8 @@ extension EntityDescriptor {
                 case "financialTransactionPresenceFilter": ["has", "none"]
                 case "purchasePresenceFilter": ["has", "none"]
                 case "vendorPresenceFilter": ["has", "none"]
+                case "dataStatus": ["complete", "needs_data", "defect"]
+                case "dataGap": ["financial_account_ledger_party", "financial_account_confirmed"]
                 case "identityKind": ["credit_card", "bank_account", "stored_value", "cash", "other"]
                 case "sourceAliasPresenceFilter": ["has", "none"]
                 case "groupBy": ["name", "provisional", "transactionCount", "createdAt", "updatedAt"]
@@ -934,6 +968,8 @@ extension EntityDescriptor {
                 case "productPresenceFilter": ["has", "none"]
                 case "kind": ["purchase", "refund", "account_transfer", "credit_card_payment", "fee", "interest", "income", "adjustment", "other"]
                 case "status": ["expected", "pending", "posted", "void"]
+                case "dataStatus": ["complete", "needs_data", "defect"]
+                case "dataGap": ["financial_transaction_allocation", "financial_transaction_merchant"]
                 case "purchasePresenceFilter": ["has", "none"]
                 case "allocationIntegrity": ["defect"]
                 case "groupBy": ["transactionDate", "postedDate", "amount", "merchant", "kind", "status", "createdAt", "updatedAt"]
@@ -942,11 +978,15 @@ extension EntityDescriptor {
         case .gardenEntry:
             switch wireKey {
                 case "kind": ["note", "harvest"]
+                case "dataStatus": ["complete", "needs_data", "defect"]
+                case "dataGap": ["garden_entry_note", "garden_entry_harvest_amount"]
                 case "groupBy": ["observedOn", "createdAt", "updatedAt", "kind"]
                 default: nil
             }
         case .ingredient:
             switch wireKey {
+                case "dataStatus": ["complete", "needs_data", "defect"]
+                case "dataGap": ["ingredient_product"]
                 case "productPresenceFilter": ["has", "none"]
                 case "ownRecipePresenceFilter": ["has", "none"]
                 case "recipePresenceFilter": ["has", "none"]
@@ -958,6 +998,8 @@ extension EntityDescriptor {
         case .inventory:
             switch wireKey {
                 case "ingredientPresenceFilter": ["has", "none"]
+                case "dataStatus": ["complete", "needs_data", "defect"]
+                case "dataGap": ["inventory_verified"]
                 case "placementFilter": ["stock", "installed", "all"]
                 case "locationRole": ["global_unknown"]
                 case "verifiedPresenceFilter": ["has", "none"]
@@ -968,6 +1010,8 @@ extension EntityDescriptor {
         case .ledgerParty:
             switch wireKey {
                 case "kind": ["member", "guest", "household"]
+                case "dataStatus": ["complete", "needs_data", "defect"]
+                case "dataGap": ["ledger_party_financial_account"]
                 case "mealPresenceFilter": ["has", "none"]
                 case "recipePresenceFilter": ["has", "none"]
                 case "groupBy": ["name", "kind", "createdAt", "updatedAt"]
@@ -975,6 +1019,8 @@ extension EntityDescriptor {
             }
         case .ledgerTransfer:
             switch wireKey {
+                case "dataStatus": ["complete", "needs_data", "defect"]
+                case "dataGap": ["ledger_transfer_transaction"]
                 case "groupBy": ["date", "amount", "createdAt", "updatedAt"]
                 default: nil
             }
@@ -983,6 +1029,8 @@ extension EntityDescriptor {
                 case "ingredientPresenceFilter": ["has", "none"]
                 case "aiDescriptionPresenceFilter": ["has", "none"]
                 case "itemTypeFilter": ["house", "room", "area", "bed", "planter", "bag", "box", "shelf", "table", "drawer", "cart", "cabinet"]
+                case "dataStatus": ["complete", "needs_data", "defect"]
+                case "dataGap": ["location_ai_description", "location_type"]
                 case "productPresenceFilter": ["has", "none"]
                 case "parentPresenceFilter": ["has", "none"]
                 case "inventoryPresenceFilter": ["has", "none"]
@@ -995,6 +1043,8 @@ extension EntityDescriptor {
             switch wireKey {
                 case "mealType": ["breakfast", "brunch", "lunch", "snack", "dinner", "dessert"]
                 case "mealKind": ["cooked", "leftovers", "eating_out", "takeout", "other"]
+                case "dataStatus": ["complete", "needs_data", "defect"]
+                case "dataGap": ["meal_contents"]
                 case "mealTypePresenceFilter": ["has", "none"]
                 case "recipeCostCoverage": ["understated"]
                 case "recipePresenceFilter": ["has", "none"]
@@ -1007,6 +1057,8 @@ extension EntityDescriptor {
         case .planting:
             switch wireKey {
                 case "status": ["planned", "growing", "finished"]
+                case "dataStatus": ["complete", "needs_data", "defect"]
+                case "dataGap": ["planting_variety", "planting_location"]
                 case "groupBy": ["createdAt", "updatedAt", "status", "sowedOn", "finishedOn"]
                 default: nil
             }
@@ -1025,10 +1077,10 @@ extension EntityDescriptor {
                 case "modelPresenceFilter": ["has", "none"]
                 case "notesPresenceFilter": ["has", "none"]
                 case "stockTrackedPresenceFilter": ["has", "none"]
+                case "dataStatus": ["complete", "needs_data", "defect"]
+                case "dataGap": ["product_manufacturer", "product_external_id", "product_category", "product_model", "product_price", "product_image", "amazon_asin", "duplicate_external_id"]
                 case "upcPresenceFilter": ["has", "none"]
                 case "externalIdPresenceFilter": ["has", "none"]
-                case "dataStatus": ["complete", "needs_data", "defect"]
-                case "dataGap": ["product_manufacturer", "product_category", "product_model", "product_image", "amazon_asin", "duplicate_external_id"]
                 case "inventoryPresenceFilter": ["has", "none"]
                 case "inventoryMultiplicity": ["duplicate_within_placement"]
                 case "ownershipReconciliation": ["disposed_still_on_hand"]
@@ -1055,6 +1107,8 @@ extension EntityDescriptor {
             }
         case .productCategory:
             switch wireKey {
+                case "dataStatus": ["complete", "needs_data", "defect"]
+                case "dataGap": ["category_description", "category_feature"]
                 case "groupBy": ["name", "sortOrder", "updatedAt"]
                 default: nil
             }
@@ -1069,6 +1123,8 @@ extension EntityDescriptor {
                 case "vendorPresenceFilter": ["has", "none"]
                 case "status": ["planning", "not_started", "in_progress", "done"]
                 case "kind": ["furniture", "workshop", "household", "renovation", "garden", "trip"]
+                case "dataStatus": ["complete", "needs_data", "defect"]
+                case "dataGap": ["project_kind", "project_start_date"]
                 case "parentProjectPresenceFilter": ["has", "none"]
                 case "imagePresenceFilter": ["has", "none"]
                 case "attention": ["stalled", "missing_budget", "blocked_no_next_action"]
@@ -1078,6 +1134,8 @@ extension EntityDescriptor {
         case .purchase:
             switch wireKey {
                 case "statedTotalPresenceFilter": ["has", "none"]
+                case "dataStatus": ["complete", "needs_data", "defect"]
+                case "dataGap": ["purchase_date", "order_id", "stated_total", "primary_document", "empty_expenses", "unpriced_expense", "paperwork_mismatch", "settlement_reference", "settlement_mismatch", "product_manufacturer", "product_external_id", "product_category", "product_model", "product_price", "product_image", "amazon_asin", "duplicate_external_id"]
                 case "expensePresenceFilter": ["has", "none"]
                 case "financialTransactionPresenceFilter": ["has", "none"]
                 case "productPresenceFilter": ["has", "none"]
@@ -1087,8 +1145,6 @@ extension EntityDescriptor {
                 case "reconciliation": ["unknown", "match", "refund_adjusted", "mismatch"]
                 case "financialReconciliation": ["mismatch"]
                 case "documentPresenceFilter": ["has", "none"]
-                case "dataStatus": ["complete", "needs_data", "defect"]
-                case "dataGap": ["purchase_date", "order_id", "stated_total", "primary_document", "empty_expenses", "unpriced_expense", "paperwork_mismatch", "settlement_reference", "settlement_mismatch", "product_manufacturer", "product_category", "product_model", "product_image", "amazon_asin", "duplicate_external_id"]
                 case "groupBy": ["orderId", "displayLabel", "date", "statedTotal", "vendor", "expenseCount", "expenseTotal", "reconciliationGap", "documentCount", "createdAt", "updatedAt"]
                 default: nil
             }
@@ -1096,6 +1152,8 @@ extension EntityDescriptor {
             switch wireKey {
                 case "ingredientPresenceFilter": ["has", "none"]
                 case "mealPresenceFilter": ["has", "none"]
+                case "dataStatus": ["complete", "needs_data", "defect"]
+                case "dataGap": ["recipe_ingredients", "recipe_instructions", "recipe_source"]
                 case "cookbookPresenceFilter": ["has", "none"]
                 case "tagsPresenceFilter": ["has", "none"]
                 case "imagePresenceFilter": ["has", "none"]
@@ -1111,6 +1169,8 @@ extension EntityDescriptor {
                 case "parentTaskPresenceFilter": ["has", "none"]
                 case "status": ["not_started", "later", "in_progress", "blocked", "done"]
                 case "trade": ["planning", "demolition", "building", "drywall", "electrical", "plumbing", "mechanical", "cabinetry", "countertop", "flooring", "millwork", "finishes", "appliances", "landscaping", "logistics", "metalworking", "crafts", "auto", "other"]
+                case "dataStatus": ["complete", "needs_data", "defect"]
+                case "dataGap": ["task_due_date", "task_trade"]
                 case "duePresenceFilter": ["has", "none"]
                 case "dueRelative": ["beforeToday", "onOrBeforeToday"]
                 case "completion": ["all", "open", "done"]
@@ -1128,6 +1188,8 @@ extension EntityDescriptor {
                 case "productPresenceFilter": ["has", "none"]
                 case "projectPresenceFilter": ["has", "none"]
                 case "financialTransactionPresenceFilter": ["has", "none"]
+                case "dataStatus": ["complete", "needs_data", "defect"]
+                case "dataGap": ["vendor_order_evidence", "vendor_logo", "vendor_website"]
                 case "latestPurchaseDatePresenceFilter": ["has", "none"]
                 case "logoPresenceFilter": ["has", "none"]
                 case "groupBy": ["name", "purchaseCount", "spend", "latestPurchaseDate", "createdAt", "updatedAt"]
@@ -1142,6 +1204,8 @@ extension EntityDescriptor {
         case .wish:
             switch wireKey {
                 case "productPresenceFilter": ["has", "none"]
+                case "dataStatus": ["complete", "needs_data", "defect"]
+                case "dataGap": ["wish_candidate"]
                 case "groupBy": ["name", "acquiredAt", "priceRange", "createdAt", "updatedAt"]
                 default: nil
             }
@@ -1165,6 +1229,8 @@ extension EntityDescriptor {
                 case "kind": query.kind = try value.enumCases(name)
                 case "observedOnFrom": query.observedOnFrom = try value.string(name)
                 case "observedOnTo": query.observedOnTo = try value.string(name)
+                case "dataStatus": query.dataStatus = try value.enumCases(name)
+                case "dataGap": query.dataGap = try value.enumCases(name)
                 case "locationId": query.locationId = value.strings
                 case "plantingId": query.plantingId = value.strings
                 case "journalPlantingId": query.journalPlantingId = try value.string(name)
@@ -1187,6 +1253,8 @@ extension EntityDescriptor {
                 case "updatedFrom": query.updatedFrom = try value.string(name)
                 case "updatedTo": query.updatedTo = try value.string(name)
                 case "status": query.status = try value.enumCases(name)
+                case "dataStatus": query.dataStatus = try value.enumCases(name)
+                case "dataGap": query.dataGap = try value.enumCases(name)
                 case "locationId": query.locationId = value.strings
                 case "ingredientId": query.ingredientId = value.strings
                 case "taskId": query.taskId = value.strings
@@ -1252,12 +1320,12 @@ extension EntityDescriptor {
                 case "notesPresenceFilter": query.notesPresenceFilter = try value.enumCase(name)
                 case "stockTrackedPresenceFilter": query.stockTrackedPresenceFilter = try value.enumCase(name)
                 case "tagFilters": query.tagFilters = value.strings
+                case "dataStatus": query.dataStatus = try value.enumCases(name)
+                case "dataGap": query.dataGap = try value.enumCases(name)
                 case "kitId": query.kitId = value.strings
                 case "upcPresenceFilter": query.upcPresenceFilter = try value.enumCase(name)
                 case "externalIdSource": query.externalIdSource = value.strings
                 case "externalIdPresenceFilter": query.externalIdPresenceFilter = try value.enumCase(name)
-                case "dataStatus": query.dataStatus = try value.enumCase(name)
-                case "dataGap": query.dataGap = try value.enumCases(name)
                 case "inventoryPresenceFilter": query.inventoryPresenceFilter = try value.enumCase(name)
                 case "inventoryMultiplicity": query.inventoryMultiplicity = try value.enumCase(name)
                 case "ownershipReconciliation": query.ownershipReconciliation = try value.enumCase(name)
@@ -1319,6 +1387,8 @@ extension EntityDescriptor {
                 case "search": query.search = try value.string(name)
                 case "status": query.status = try value.enumCases(name)
                 case "trade": query.trade = try value.enumCases(name)
+                case "dataStatus": query.dataStatus = try value.enumCases(name)
+                case "dataGap": query.dataGap = try value.enumCases(name)
                 case "projectId": query.projectId = value.strings.map { .init(value1: $0) }
                 case "subjectProductId": query.subjectProductId = value.strings.map { .init(value1: $0) }
                 case "topLevelOnly": query.topLevelOnly = try value.bool(name)

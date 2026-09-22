@@ -3,6 +3,7 @@ import { sql } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
 import { cookbook, recipe } from "~/server/db/schema";
+import { gapCondition } from "~/server/repo/data-quality/sql";
 import { getDb } from "~/server/repo/database-helpers";
 
 /**
@@ -13,6 +14,11 @@ import { getDb } from "~/server/repo/database-helpers";
  * The left join makes a never-imported cookbook visible. Keeping the recipe
  * liveness predicate in the join (rather than WHERE) preserves that zero-row
  * case and makes a soft-deleted recipe count as missing.
+ *
+ * The HAVING predicate is `cookbook_import_incomplete`'s own `gapCondition`
+ * (checks/cookbook.ts) rather than a second hand-derived comparison — one
+ * statement of "more source recipes than live imported ones", shared with the
+ * `dataGaps=cookbook_import_incomplete` filter on the cookbook list.
  */
 export const findPartiallyImportedCookbooks = async (
   db: Database,
@@ -30,7 +36,7 @@ export const findPartiallyImportedCookbooks = async (
       AND ${recipe.deletedAt} IS NULL
     WHERE ${cookbook.deletedAt} IS NULL
     GROUP BY ${cookbook.id}
-    HAVING ${cookbook.sourceRecipeCount} > count(${recipe.id})
+    HAVING ${gapCondition("cookbook", "cookbook_import_incomplete")}
     ORDER BY ${cookbook.name}
   `);
   return result.rows;

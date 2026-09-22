@@ -1302,6 +1302,24 @@ export default defineEntity({
     merge: false,
     operationOwners: { delete: "kernel", merge: null },
     mcp: ["get", "list", "search", "create", "update", "delete"],
+    dataQuality: {
+      checks: [
+        {
+          id: "project_kind",
+          facet: "identity",
+          weight: 1,
+          label: "Kind",
+          message: "No project kind is recorded.",
+        },
+        {
+          id: "project_start_date",
+          facet: "paperwork",
+          weight: 1,
+          label: "Start date",
+          message: "No start date is recorded once a project leaves planning.",
+        },
+      ],
+    },
   },
   extensions: {
     countFilter: null,
