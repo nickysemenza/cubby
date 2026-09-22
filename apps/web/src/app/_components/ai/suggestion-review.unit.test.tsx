@@ -1,12 +1,15 @@
 import type { FieldSuggestion } from "@cubby/schemas/ai";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { toast } from "sonner";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   actionableSuggestion,
   SuggestionReview,
   SuggestionVisitProvider,
 } from "./suggestion-review";
+
+afterEach(() => vi.restoreAllMocks());
 
 const suggestion: FieldSuggestion = {
   value: "tools",
@@ -46,6 +49,7 @@ describe("inline suggestion review", () => {
   });
 
   it("shows both values, requires acceptance, and retains the proposal after a failed save", async () => {
+    const errorSpy = vi.spyOn(toast, "error").mockImplementation(() => "");
     const save = vi
       .fn()
       .mockRejectedValueOnce(new Error("unavailable"))
@@ -63,12 +67,15 @@ describe("inline suggestion review", () => {
     expect(screen.getByText("Suggested: Tools")).toBeInTheDocument();
     expect(save).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "Use suggestion" }));
-    await screen.findByRole("alert");
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent("unavailable");
     expect(screen.getByText("Materials")).toBeInTheDocument();
+    expect(errorSpy).toHaveBeenCalledTimes(1);
     fireEvent.click(screen.getByRole("button", { name: "Use suggestion" }));
     await waitFor(() =>
       expect(screen.queryByText("Suggested: Tools")).not.toBeInTheDocument(),
     );
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
     expect(save).toHaveBeenCalledTimes(2);
   });
 

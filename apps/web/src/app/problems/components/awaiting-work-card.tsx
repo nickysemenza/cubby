@@ -3,8 +3,8 @@ import { useQuery } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
+import { ErrorDisplay } from "~/components/feedback/error-display";
 import { Row, Stack } from "~/components/layout";
-import { Button } from "~/components/ui/button";
 import {
   Card,
   CardContent,
@@ -107,16 +107,11 @@ export function AwaitingWorkCard({
   let body: ReactNode;
   if (awaiting.isError) {
     body = (
-      <Row align="center" gap="sm">
-        <Description size="xs">Couldn't read the waiting counts.</Description>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => void awaiting.refetch()}
-        >
-          Retry
-        </Button>
-      </Row>
+      <ErrorDisplay
+        error={awaiting.error}
+        title="the waiting counts"
+        onRetry={() => void awaiting.refetch()}
+      />
     );
   } else if (!data) {
     body = <Description size="xs">Checking…</Description>;

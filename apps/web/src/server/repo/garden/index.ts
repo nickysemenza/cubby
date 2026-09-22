@@ -23,7 +23,6 @@ import {
   and,
   desc,
   eq,
-  exists,
   gte,
   inArray,
   isNull,
@@ -803,14 +802,17 @@ export const gardenEntryList = async (
   const where = gardenEntryScaffold.where(filters, [
     buildGardenEntryWhere(),
     eqAnyRequested(gardenEntry.locationId, locationIds),
+    // Uncorrelated `IN` sub-select, not a correlated `EXISTS` — same alias
+    // trap `journalPredicate` documents above: the relational list query
+    // aliases its outer GardenEntry table while the count query does not.
     plantingIds && plantingIds.length > 0
-      ? exists(
+      ? inArray(
+          gardenEntry.id,
           unwrapDb(db)
-            .select({ id: gardenEntryPlanting.id })
+            .select({ id: gardenEntryPlanting.gardenEntryId })
             .from(gardenEntryPlanting)
             .where(
               and(
-                eq(gardenEntryPlanting.gardenEntryId, gardenEntry.id),
                 inArray(gardenEntryPlanting.plantingId, plantingIds),
                 notDeleted(gardenEntryPlanting),
               ),

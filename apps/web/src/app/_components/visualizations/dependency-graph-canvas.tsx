@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { z } from "zod";
 
+import { ErrorDisplay } from "~/components/feedback/error-display";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { NativeSelect } from "~/components/ui/native-select";
@@ -154,6 +155,7 @@ export function DependencyGraphCanvas({
     moved: boolean;
   } | null>(null);
   const [state, setState] = useState("Loading graph layout…");
+  const [error, setError] = useState<unknown>(null);
   const [attempt, setAttempt] = useState(0);
   const [scale, setScale] = useState(1);
   const scaleRef = useRef(1);
@@ -165,6 +167,7 @@ export function DependencyGraphCanvas({
     let disposed = false;
     const container = host.current;
     setState("Loading graph layout…");
+    setError(null);
     setGroups([]);
     setGroup("");
     const worker = new Worker(
@@ -237,19 +240,22 @@ export function DependencyGraphCanvas({
           setScale(1);
           setGroups(headings);
           setState("");
-        } catch {
-          if (!disposed)
-            setState(
-              "Graph layout could not load. Use the record and relationship list below or retry.",
-            );
+        } catch (err) {
+          if (!disposed) {
+            setState("");
+            setError(err);
+          }
         }
       },
     );
-    worker.addEventListener("error", () => {
-      if (!disposed)
-        setState(
-          "Graph layout could not load. Use the record and relationship list below or retry.",
+    worker.addEventListener("error", (event) => {
+      if (!disposed) {
+        setState("");
+        setError(
+          event.error ??
+            new Error(event.message || "Graph layout worker failed"),
         );
+      }
     });
     worker.postMessage({ dot, componentDots }, []);
     return () => {
@@ -286,7 +292,7 @@ export function DependencyGraphCanvas({
 
   useEffect(() => {
     const container = host.current;
-    if (!container || state) return;
+    if (!container || state || error) return;
     let gestureScale: number | null = null;
     const onWheel = (event: WheelEvent) => {
       if (!event.ctrlKey) return;
@@ -344,8 +350,8 @@ export function DependencyGraphCanvas({
       container.removeEventListener("gesturechange", onGestureChange);
       container.removeEventListener("gestureend", onGestureEnd);
     };
-  }, [changeScale, state]);
-  const ready = !state;
+  }, [changeScale, state, error]);
+  const ready = !state && !error;
   return (
     <Stack gap="sm">
       <Row wrap gap="sm">
@@ -431,18 +437,13 @@ export function DependencyGraphCanvas({
         Pinch to zoom; scroll or drag to explore. Tab to records; arrow keys
         scroll the canvas. Fit graph shows the overview.
       </p>
-      {state && (
-        <output>
-          {state}
-          {state.includes("could not") && (
-            <Button
-              variant="outline"
-              onClick={() => setAttempt((value) => value + 1)}
-            >
-              Retry layout
-            </Button>
-          )}
-        </output>
+      {state && !error && <output>{state}</output>}
+      {error !== null && (
+        <ErrorDisplay
+          error={error}
+          title="the dependency graph layout"
+          onRetry={() => setAttempt((value) => value + 1)}
+        />
       )}
       <section
         ref={host}

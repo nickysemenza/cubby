@@ -47,6 +47,8 @@ export function useEntityCreateController<
   return {
     error,
     isPending: commands.isPending,
+    // SILENT: `submitAsync` stores the failure in `error` above before
+    // rethrowing; `submit` is the fire-and-forget form of the same call.
     submit: (data: TData) => void submitAsync(data).catch(() => undefined),
     submitAsync,
     cancel: () => navigate({ to: `/${entities[entity].basePath}` }),

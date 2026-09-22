@@ -11,6 +11,7 @@ import { useNavigate } from "@tanstack/react-router";
 import { ChevronRight, Equal, MapPin, Search, Settings, X } from "lucide-react";
 import * as React from "react";
 
+import { ErrorDisplay } from "~/components/feedback/error-display";
 import { Row } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
 import {
@@ -528,12 +529,9 @@ function SearchResults({
   if (error && !isLoading) {
     return (
       <CommandGroup heading="Search unavailable">
-        <CommandItem
-          onSelect={retry}
-          className="justify-center text-destructive"
-        >
-          Search could not load. Try again
-        </CommandItem>
+        <div className="px-2 py-1.5">
+          <ErrorDisplay error={error} title="search results" onRetry={retry} />
+        </div>
       </CommandGroup>
     );
   }

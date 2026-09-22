@@ -18,6 +18,9 @@ self.addEventListener(
           : viz.renderString(dot, { format: "svg" });
       self.postMessage({ svg }, { transfer: [] });
     } catch {
+      // SILENT: Graphviz/viz.js failures here are internal renderer errors
+      // (malformed DOT, wasm init) rather than something a household member
+      // can act on; the canvas falls back to the record/relationship list.
       self.postMessage(
         {
           error:

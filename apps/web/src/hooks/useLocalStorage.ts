@@ -83,6 +83,9 @@ export function useLocalStorage<Schema extends z.ZodType>(
           }),
         );
       } catch (error) {
+        // SILENT: private-mode/quota-exceeded localStorage throws on write; the
+        // updated value stays in the in-memory `cache` for this session only
+        // (already logged below via console.error).
         console.error(`Error setting localStorage key "${key}":`, error);
       }
     },

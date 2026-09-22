@@ -34,6 +34,7 @@ import { Input } from "~/components/ui/input";
 import { EntityIcon } from "~/entities/entities";
 import { entityDetailFor } from "~/entities/entity-detail.functions";
 import { entityListFor } from "~/entities/entity-list.functions";
+import { getAppErrorDetails } from "~/lib/error-utils";
 
 type InventoryListItem = z.infer<typeof inventoryListItemOut>;
 
@@ -344,8 +345,7 @@ export default function BulkMoveForm({
       );
       setIsSubmitting(false);
     } catch (err) {
-      console.error("Error moving inventory items:", err);
-      setError("Failed to move inventory items. Please try again.");
+      setError(getAppErrorDetails(err).message);
       setIsSubmitting(false);
     }
   };

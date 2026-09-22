@@ -26,9 +26,6 @@ export default function NewRecipeForm({
     onSuccess: () => {
       toast.success("Recipe added to your book.");
     },
-    onError: () => {
-      toast.error("Failed to create recipe");
-    },
   });
 
   return (

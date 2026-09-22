@@ -150,7 +150,10 @@ it("retains navigable relationships when worker layout fails", async () => {
       }}
     />,
   );
-  expect(await screen.findByText(/Graph layout could not load/)).toBeVisible();
+  expect(
+    await screen.findByText(/Couldn't load the dependency graph layout/),
+  ).toBeVisible();
+  expect(screen.getByText("layout unavailable")).toBeVisible();
   fireEvent.click(screen.getByText("Record and relationship list (1)"));
   expect(screen.getByRole("link", { name: "Impact driver" })).toHaveAttribute(
     "href",

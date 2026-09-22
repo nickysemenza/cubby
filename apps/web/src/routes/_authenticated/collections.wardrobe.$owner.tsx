@@ -5,6 +5,7 @@ import { z } from "zod";
 
 import { CollectionProductsTable } from "~/app/collections/collection-detail-page";
 import { collection } from "~/app/collections/collection.functions";
+import { ErrorDisplay } from "~/components/feedback/error-display";
 import { Stack } from "~/components/layout";
 import { Page } from "~/components/page/Page";
 import { entityDetailFor } from "~/entities/entity-detail.functions";
@@ -55,7 +56,11 @@ function WardrobePage() {
         {result.isPending ? (
           <p>Loading wardrobe…</p>
         ) : result.isError ? (
-          <p role="alert">Could not load the wardrobe.</p>
+          <ErrorDisplay
+            error={result.error}
+            title="the wardrobe"
+            onRetry={() => void result.refetch()}
+          />
         ) : (
           <CollectionProductsTable
             products={result.data.products}

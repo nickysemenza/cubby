@@ -102,7 +102,8 @@ const classifyLine = (unit: string | null): LineKind => {
     if (k === "weight") return "weight";
     if (k === "volume") return "volume";
   } catch {
-    // Unknown unit -> treat as a count (the common "2 eggs" / "1 zucchini" case).
+    // SILENT: unknown unit -> treat as a count (the common "2 eggs" /
+    // "1 zucchini" case); the "count" return below already covers this.
   }
   return "count";
 };

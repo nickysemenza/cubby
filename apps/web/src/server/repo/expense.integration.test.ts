@@ -490,6 +490,26 @@ describe("expense workflow", () => {
         2,
       );
     });
+
+    // CUBBY-11R: the relational list leg threw `invalid reference to
+    // FROM-clause entry for table "Expense"` under a `trade` filter, because
+    // `buildExpenseWhereClause` applied it as a raw-aliased predicate that
+    // only the unaliased analytics leg could resolve. Pins that the list and
+    // analytics legs agree again now that both run through `tradeCondition`.
+    it("keeps the relational list and analytics in agreement under a trade filter", async () => {
+      const caller = createExpenseWorkflowCaller(ctx.db);
+      await seedProjectMix();
+      const filters = { trade: "drywall" as const };
+
+      const [listed, analytics] = await Promise.all([
+        expenseList(ctx.db, filters, [], { pageIndex: 0, pageSize: 500 }),
+        caller.analytics(filters),
+      ]);
+
+      expect(listed.data.length).toBe(3);
+      expect(listed.count).toBe(3);
+      expect(analytics.summary.count).toBe(3);
+    });
   });
 });
 

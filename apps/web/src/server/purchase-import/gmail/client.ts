@@ -48,7 +48,8 @@ const parseError = async (response: Response): Promise<GmailApiError> => {
       }
     }
   } catch {
-    // Keep the status-line error if Gmail returned a non-JSON body.
+    // SILENT: a non-JSON error body falls back to the HTTP status line
+    // already computed above — `message`/`reason` just keep their defaults.
   }
   return new GmailApiError({ status: response.status, message, reason });
 };

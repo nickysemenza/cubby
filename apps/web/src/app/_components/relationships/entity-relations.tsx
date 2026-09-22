@@ -20,6 +20,7 @@ import {
 } from "~/app/_components/relatedness/entity-recommendations";
 import { EntityGraphPicker } from "~/app/_components/relationships/entity-graph-picker";
 import { inventory } from "~/app/inventory/inventory.functions";
+import { ErrorDisplay } from "~/components/feedback/error-display";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
@@ -222,7 +223,7 @@ function useEntityRelationsModel({
   const [pages, setPages] = useState(new Map<string, EntityGraphOutput>());
   const [visibleCounts, setVisibleCounts] = useState(new Map<string, number>());
   const [busy, setBusy] = useState(new Set<string>());
-  const [errors, setErrors] = useState(new Set<string>());
+  const [errors, setErrors] = useState(new Map<string, unknown>());
   const pending = useRef(new Set<string>());
   const requestVersion = useRef(new Map<string, number>());
   const [selectedEdgeId, setSelectedEdgeId] = useState<string>();
@@ -255,7 +256,7 @@ function useEntityRelationsModel({
     requestVersion.current.set(key, version);
     setBusy((old) => new Set(old).add(branchKey));
     setErrors((old) => {
-      const next = new Set(old);
+      const next = new Map(old);
       next.delete(branchKey);
       return next;
     });
@@ -267,8 +268,8 @@ function useEntityRelationsModel({
       if (requestVersion.current.get(key) !== version) return undefined;
       setPages((old) => new Map(old).set(key, page));
       return page;
-    } catch {
-      setErrors((old) => new Set(old).add(branchKey));
+    } catch (error) {
+      setErrors((old) => new Map(old).set(branchKey, error));
       return undefined;
     } finally {
       pending.current.delete(key);
@@ -509,16 +510,11 @@ function EntityRelationsContent(
           operations={recommendationOperations}
           actionOperations={recommendationActionOperations}
         />
-        <Stack gap="sm">
-          <p role="alert">Relationships could not be loaded.</p>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => void initial.refetch()}
-          >
-            Retry relationships
-          </Button>
-        </Stack>
+        <ErrorDisplay
+          error={initial.error}
+          title="relationships"
+          onRetry={() => void initial.refetch()}
+        />
       </Stack>
     );
   return (
@@ -694,7 +690,7 @@ function RelationshipBranches({
   counts: ReadonlyMap<string, number>;
   collapsed: ReadonlySet<string>;
   busy: ReadonlySet<string>;
-  errors: ReadonlySet<string>;
+  errors: ReadonlyMap<string, unknown>;
   capacity: boolean;
   neighborhoodKeys?: ReadonlySet<string>;
   router: ReturnType<typeof useRouter>;
@@ -791,16 +787,11 @@ function RelationshipBranches({
               )}
             </Row>
             {errors.has(key) && (
-              <p role="alert" className="text-sm text-destructive">
-                More records could not load.{" "}
-                <Button
-                  variant="link"
-                  size="sm"
-                  onClick={() => void onMore(branch)}
-                >
-                  Retry
-                </Button>
-              </p>
+              <ErrorDisplay
+                error={errors.get(key)}
+                title="more records"
+                onRetry={() => void onMore(branch)}
+              />
             )}
             {current.view !== "graph" && (
               <ul className="mt-1 divide-y divide-border">
@@ -1012,16 +1003,11 @@ function GraphPathPanel({
         </p>
         {paths.isFetching && <output>Searching for paths…</output>}
         {paths.isError && (
-          <p role="alert" className="text-sm text-destructive">
-            Paths could not be searched.{}
-            <Button
-              variant="link"
-              size="sm"
-              onClick={() => void paths.refetch()}
-            >
-              Retry
-            </Button>
-          </p>
+          <ErrorDisplay
+            error={paths.error}
+            title="paths"
+            onRetry={() => void paths.refetch()}
+          />
         )}
         {destination && paths.data?.paths.length === 0 && (
           <p>

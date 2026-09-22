@@ -578,6 +578,9 @@ async function assertNoBlockingCounts(
     try {
       blockers = [toPublicImpact(item, publicIdByEntityId, "throw")];
     } catch {
+      // SILENT: see the comment above — the typed `createBlockedError` thrown
+      // below is the refusal itself; losing the structured `blockers[]`
+      // extra must not replace it with a bookkeeping-detail error instead.
       blockers = [];
     }
   }

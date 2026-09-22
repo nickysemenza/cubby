@@ -39,6 +39,12 @@ export type VariablesOf<TFn extends MutationOptionsFn> =
     : never;
 
 type ActionSuccess<TData> = ReactNode | ((data: TData) => ReactNode);
+/**
+ * A static string is a PREFIX, not the whole toast title: the shown title is
+ * `${actionError}: ${getErrorMessage(error)}` so the raw message stays
+ * visible even when the error carries no `diagnostics` (and so no Details
+ * action). The factory form still returns the complete title verbatim.
+ */
 type ActionError<TError extends Error> = string | ((error: TError) => string);
 
 function isActionSuccessFactory<TData>(
@@ -57,6 +63,7 @@ interface ActionPresentation<TData, TError extends Error> {
   success?: ActionSuccess<TData>;
   successToastId?: string;
   onSuccess?: (data: TData) => void;
+  /** See `ActionError` — a static string is a prefix, not the full title. */
   error?: ActionError<TError>;
 }
 
@@ -85,7 +92,7 @@ function showError<TError extends Error>(
       ? getErrorMessage(error)
       : isActionErrorFactory(actionError)
         ? actionError(error)
-        : actionError,
+        : `${actionError}: ${getErrorMessage(error)}`,
   );
 }
 

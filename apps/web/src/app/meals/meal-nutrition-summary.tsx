@@ -308,7 +308,6 @@ export function NutritionSummary({
   const remove = useMutation(
     meal.removeFood.mutationOptions({
       onSuccess: () => toast.success("Food removed"),
-      onError: (error) => toast.error(getErrorMessage(error)),
     }),
   );
   if (query.error)

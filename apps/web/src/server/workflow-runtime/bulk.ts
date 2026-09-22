@@ -210,6 +210,8 @@ export async function* executeBulkWorkflow<
         error,
       });
     } catch (error) {
+      // SILENT: diagnostic subscribers cannot roll back a write or block the
+      // bulk run's own effect handling; a broken observer must not fail it.
       console.error("Workflow observer failed", error);
     }
   };

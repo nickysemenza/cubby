@@ -238,7 +238,10 @@ export function appErrorFromUnknown(error: UnparsedError): AppError | null {
       if (carrier.data.originalError !== undefined)
         pending.push(carrier.data.originalError);
     } catch {
-      // Inspecting an arbitrary thrown value can itself throw.
+      // SILENT: this walks an arbitrary thrown value looking for a `cause`/
+      // `originalError` chain; a throwing getter or similar must not crash
+      // the diagnostic path itself, so that candidate is just dropped from
+      // the queue and the walk continues.
     }
   }
   return null;

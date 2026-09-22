@@ -16,6 +16,7 @@ import {
 
 import { recipe } from "~/app/recipes/recipe.functions";
 import { useContainerDimensions } from "~/hooks/useContainerDimensions";
+import { getAppErrorDetails } from "~/lib/error-utils";
 
 import { VisualizationPlaceholder } from "./visualization-placeholder";
 import { VizOverlay, VizTooltip } from "./viz-overlay";
@@ -38,7 +39,7 @@ const resolvedNetworkNode = (
 ): NetworkNode | null => (isNetworkNode(endpoint) ? endpoint : null);
 
 export default function IngredientNetwork() {
-  const { data, isError, isLoading, refetch } = useQuery(
+  const { data, isError, error, isLoading, refetch } = useQuery(
     recipe.getIngredientCooccurrence.queryOptions({ minEdgeWeight: 2 }),
   );
 
@@ -55,7 +56,7 @@ export default function IngredientNetwork() {
     return (
       <VisualizationPlaceholder
         message="Ingredient relationships are unavailable"
-        subMessage="Try again to reload recipe co-occurrences."
+        subMessage={getAppErrorDetails(error).message}
         height={400}
         onRetry={() => void refetch()}
       />

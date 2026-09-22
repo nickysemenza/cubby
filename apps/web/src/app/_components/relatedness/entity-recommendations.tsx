@@ -16,6 +16,7 @@ import {
 } from "~/app/_components/entity-media/entity-display-images";
 import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import { RelatedProductRow } from "~/app/_components/relatedness/related-product-row";
+import { ErrorDisplay } from "~/components/feedback/error-display";
 import { Row, Stack } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
@@ -166,9 +167,7 @@ export function EntityRecommendations({
   if (query.isError) {
     return (
       <Row align="center" justify="between" gap="sm">
-        <p role="alert" className="text-sm text-muted-foreground">
-          Suggestions could not be loaded.
-        </p>
+        <ErrorDisplay error={query.error} title="suggestions" />
         <Button
           type="button"
           size="sm"

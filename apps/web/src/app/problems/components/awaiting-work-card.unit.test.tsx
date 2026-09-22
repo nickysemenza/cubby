@@ -99,9 +99,7 @@ describe("AwaitingWorkCard", () => {
     render(<AwaitingWorkCard operations={operations} />, {
       wrapper: harness.wrapper,
     });
-    expect(
-      await screen.findByText("Couldn't read the waiting counts."),
-    ).toBeInTheDocument();
+    expect(await screen.findByText("db down")).toBeInTheDocument();
     expect(screen.queryByText("Nothing waiting.")).toBeNull();
   });
 

@@ -14,6 +14,7 @@ import {
   TableHeader,
   TableRow,
 } from "~/components/ui/table";
+import { getAppErrorDetails } from "~/lib/error-utils";
 
 import { VisualizationPlaceholder } from "../visualizations/visualization-placeholder";
 import { IngredientUsageChart } from "./ingredient-usage-chart";
@@ -34,7 +35,7 @@ export function IngredientUsagePanel({
   /** Compact mode: cap the chart to `limit` bars, skip the table. */
   limit?: number;
 }) {
-  const { data, isError, isLoading, refetch } = useQuery(
+  const { data, isError, error, isLoading, refetch } = useQuery(
     recipe.getIngredientUsage.queryOptions({ cookbookId }),
   );
 
@@ -51,7 +52,7 @@ export function IngredientUsagePanel({
     return (
       <VisualizationPlaceholder
         message="Ingredient usage is unavailable"
-        subMessage="Try again to reload recipe usage counts."
+        subMessage={getAppErrorDetails(error).message}
         height={400}
         onRetry={() => void refetch()}
       />

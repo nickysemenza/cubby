@@ -63,8 +63,9 @@ export function useWakeLock(): WakeLockState {
       try {
         await sentinel.release();
       } catch {
-        // A release can reject if the lock was already dropped by the browser
-        // (e.g. on backgrounding). Nothing actionable — treat as released.
+        // SILENT: a release can reject if the lock was already dropped by the
+        // browser (e.g. on backgrounding). `sentinelRef` and `active` are
+        // already cleared above, so there's nothing left to reconcile.
       }
     }
   }, []);
@@ -78,8 +79,8 @@ export function useWakeLock(): WakeLockState {
       sentinelRef.current = sentinel;
       setActive(true);
     } catch {
-      // request() rejects when the document isn't visible/active; the
-      // visibilitychange handler will retry once we're foregrounded again.
+      // SILENT: request() rejects when the document isn't visible/active; the
+      // visibilitychange handler retries once we're foregrounded again.
       setActive(false);
     }
   }, []);

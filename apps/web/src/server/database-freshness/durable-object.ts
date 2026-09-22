@@ -3,6 +3,7 @@ import {
   type ProblemsCount,
   problemsCountSchema,
 } from "@cubby/schemas/problems";
+import * as Sentry from "@sentry/tanstackstart-react";
 import { DurableObject } from "cloudflare:workers";
 
 import { runWithExecutionCtx, setCfEnv } from "~/server/cf-env";
@@ -109,6 +110,10 @@ export class DatabaseFreshnessDurableObject extends DurableObject<Env> {
       const retryAt = this.readRefreshState().refresh_due_at;
       if (retryAt !== null) await this.ctx.storage.setAlarm(retryAt);
       console.error("problems.counts.refresh.failed", error);
+      // Not rethrown deliberately: the retry above is already scheduled at a
+      // known delay, so letting the alarm also throw would invite the
+      // platform's own backoff retry to race it. Sentry still gets the event.
+      Sentry.captureException(error);
       return;
     }
     const { refresh_due_at: dueAt } = this.readRefreshState();

@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 
 import { entityLabel } from "~/entities/entities";
+import { getAppErrorDetails } from "~/lib/error-utils";
 import { search } from "~/lib/search.functions";
 
 import { EntityPicker } from "../combobox/entity-picker";
@@ -45,7 +46,7 @@ export function EntityGraphPicker({
       value={null}
       onSearchChange={setDraft}
       isLoading={results.isFetching}
-      error={results.isError ? "Search could not load. Try again." : null}
+      error={results.isError ? getAppErrorDetails(results.error).message : null}
       setValue={(item) => {
         const hit = results.data?.find((result) => result.id === item?.id);
         if (hit) onSelect({ entity: hit.entityType, id: hit.id });

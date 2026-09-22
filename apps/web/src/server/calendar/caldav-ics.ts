@@ -62,6 +62,8 @@ function parseEvent(body: string): ICAL.Component {
   try {
     calendar = new ICAL.Component(ICAL.parse(body));
   } catch {
+    // SILENT: invalid() has return type `never` and always throws; it replaces
+    // ICAL.parse's raw parser exception with a clearer client-facing message.
     invalid("malformed iCalendar");
   }
   if (calendar.name !== "vcalendar") invalid("VCALENDAR is required");
@@ -150,6 +152,8 @@ function instant(
   try {
     new Intl.DateTimeFormat("en-US", { timeZone: zone }).format();
   } catch {
+    // SILENT: invalid() has return type `never` and always throws; it replaces
+    // the raw Intl exception with a clearer client-facing message.
     invalid(`unresolvable timezone ${zone}`);
   }
   const resolved = new TZDate(

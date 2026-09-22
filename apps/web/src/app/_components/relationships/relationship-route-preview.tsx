@@ -12,6 +12,7 @@ import { z } from "zod";
 
 import { formatDate } from "~/app/projects/project-formatting";
 import { EntityIdentityMark } from "~/components/entity/entity-identity-mark";
+import { ErrorDisplay } from "~/components/feedback/error-display";
 import { Button } from "~/components/ui/button";
 import type { EntityDetailRoute } from "~/entities/entities";
 import {
@@ -318,17 +319,11 @@ export function RelationshipRoutePreview({
   if (query.isError) {
     return (
       <RelationshipRoutePreviewState source={resolvedSource}>
-        <div className="space-y-2">
-          <p>Relationships could not be loaded.</p>
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            onClick={() => void query.refetch()}
-          >
-            Retry
-          </Button>
-        </div>
+        <ErrorDisplay
+          error={query.error}
+          title="relationships"
+          onRetry={() => void query.refetch()}
+        />
       </RelationshipRoutePreviewState>
     );
   }

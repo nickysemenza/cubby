@@ -9,8 +9,8 @@ import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { NoneValue } from "~/components/ui/none-value";
 import { StatusText } from "~/components/ui/status-text";
+import { readJsonOrThrow } from "~/lib/http-error";
 import {
-  purchaseImportRunsError,
   purchaseImportRunsResponse,
   type PurchaseImportRunSummary,
 } from "~/lib/purchase-import-run-detail";
@@ -41,16 +41,12 @@ export const PurchaseImportRuns: DetailSlotComponent<"purchase"> = ({
       const response = await fetch(
         `/api/import/runs?purchaseId=${encodeURIComponent(purchase.id)}`,
       );
-      const body: unknown = await response.json();
-      if (!response.ok) {
-        const parsed = purchaseImportRunsError.safeParse(body);
-        throw new Error(
-          parsed.success
-            ? parsed.data.error
-            : "Purchase import runs could not load.",
-        );
-      }
-      return purchaseImportRunsResponse.parse(body).runs;
+      const data = await readJsonOrThrow(
+        response,
+        purchaseImportRunsResponse,
+        "Purchase import runs could not load.",
+      );
+      return data.runs;
     },
   });
 

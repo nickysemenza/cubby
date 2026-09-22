@@ -95,6 +95,11 @@ export function scheduleCalendarFeedDirty(
   const execution = getExecutionCtx();
   const origin = execution?.origin ?? options.origin;
   if (!origin || !getCalendarFeedNamespace()) return;
+  // SILENT: best-effort background dirty-mark from a `waitUntil` task, run
+  // after the response is already committed — there is no result channel
+  // left to report into. A failure here leaves the calendar feed stale
+  // until the next write successfully re-marks it dirty (known gap, see
+  // docs/todos.md).
   const task = calendarFeedStateFor(origin)
     .then(async (state) => await state.markDirty(reason))
     .catch((error) => {

@@ -127,6 +127,7 @@ export function useLocationHierarchy(
     data: isLoading ? null : hierarchyData,
     isLoading,
     isError: locations.isError,
+    error: locations.error,
     refetch: locations.refetch,
   };
 }

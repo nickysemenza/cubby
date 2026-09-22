@@ -18,6 +18,7 @@ import type {
 import { useWatch } from "react-hook-form";
 import { z } from "zod";
 
+import { showErrorToast } from "~/components/feedback/error-details";
 import { AliasesField } from "~/components/forms/aliases-field";
 import { ArrayFieldManager } from "~/components/forms/array-field-manager";
 import { Row, Stack } from "~/components/layout";
@@ -895,7 +896,7 @@ export function ProductFormFields<TFieldValues extends ProductFormFieldValues>({
         }
       }
     } catch (err) {
-      console.error(`[Product Form] UPC lookup failed:`, err);
+      showErrorToast(err, "UPC lookup failed");
     } finally {
       setIsLookingUp(false);
     }

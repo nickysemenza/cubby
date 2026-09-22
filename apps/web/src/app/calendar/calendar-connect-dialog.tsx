@@ -9,6 +9,7 @@ import { toast } from "sonner";
 
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { calendar } from "~/app/calendar/calendar.functions";
+import { ErrorDisplay } from "~/components/feedback/error-display";
 import { Row, Stack } from "~/components/layout";
 import { Button, buttonVariants } from "~/components/ui/button";
 import {
@@ -82,24 +83,21 @@ function CredentialValue({
   );
 }
 
-function CalendarAccessError({ onRetry }: { onRetry: () => void }) {
+function CalendarAccessError({
+  error,
+  onRetry,
+}: {
+  error: unknown;
+  onRetry: () => void;
+}) {
   return (
-    <Stack gap="sm">
-      <StatusText tone="warning">
-        Calendar access could not be loaded. Try again.
-      </StatusText>
-      <Row justify="end">
-        <Button variant="outline" size="sm" onClick={onRetry}>
-          Try again
-        </Button>
-      </Row>
-    </Stack>
+    <ErrorDisplay error={error} title="calendar access" onRetry={onRetry} />
   );
 }
 
 export function CalendarConnectionStatus({
   caldav,
-  hasError,
+  error,
   isPending,
 }: {
   caldav:
@@ -109,16 +107,12 @@ export function CalendarConnectionStatus({
       }
     | null
     | undefined;
-  hasError: boolean;
+  error: unknown;
   isPending: boolean;
 }) {
   if (isPending) return <StatusText>Checking Calendar connection…</StatusText>;
-  if (hasError) {
-    return (
-      <StatusText tone="warning">
-        Calendar connection status is unavailable. Try again shortly.
-      </StatusText>
-    );
+  if (error !== null && error !== undefined) {
+    return <ErrorDisplay error={error} title="calendar connection status" />;
   }
   if (caldav?.refreshFailedAt) {
     return (
@@ -275,14 +269,14 @@ function FeedRow({
 export function CalendarSubscriptionSection({
   token,
   isPending,
-  hasError,
+  error,
   isRotating,
   onCreateOrRotate,
   onRetry,
 }: {
   token: string | null;
   isPending: boolean;
-  hasError: boolean;
+  error: unknown;
   isRotating: boolean;
   onCreateOrRotate: () => void;
   onRetry: () => void;
@@ -320,8 +314,8 @@ export function CalendarSubscriptionSection({
         </>
       ) : isPending ? (
         <StatusText>Loading subscriptions…</StatusText>
-      ) : hasError ? (
-        <CalendarAccessError onRetry={onRetry} />
+      ) : error !== null && error !== undefined ? (
+        <CalendarAccessError error={error} onRetry={onRetry} />
       ) : (
         <Row justify="end">
           <Button disabled={isRotating} onClick={onCreateOrRotate}>
@@ -405,7 +399,10 @@ export function CalendarConnectDialog() {
           </DialogDescription>
         </DialogHeader>
         {credential.error ? (
-          <CalendarAccessError onRetry={() => void credential.refetch()} />
+          <CalendarAccessError
+            error={credential.error}
+            onRetry={() => void credential.refetch()}
+          />
         ) : (
           <Stack gap="lg">
             <CalendarAppPasswordSection
@@ -413,7 +410,10 @@ export function CalendarConnectDialog() {
               issued={issued}
               isRotating={rotateCredential.isPending}
               isRevoking={revokeCredential.isPending}
+              // SILENT: `useActionMutation` already toasts the failure; the
+              // dialog stays open for a retry.
               onRotate={() => void issuePassword().catch(() => undefined)}
+              // SILENT: `useActionMutation` already toasts the failure.
               onRevoke={() =>
                 void revokeCredential
                   .mutateAsync(undefined)
@@ -426,14 +426,15 @@ export function CalendarConnectDialog() {
             />
             <CalendarConnectionStatus
               caldav={inspection.data?.caldav}
-              hasError={inspection.error !== null}
+              error={inspection.error}
               isPending={inspection.isPending}
             />
             <CalendarSubscriptionSection
               token={rotatedToken ?? feed.data?.token ?? null}
               isPending={feed.isPending}
-              hasError={feed.error !== null}
+              error={feed.error}
               isRotating={rotateFeed.isPending}
+              // SILENT: `useActionMutation` already toasts the failure.
               onCreateOrRotate={() =>
                 void rotateFeed
                   .mutateAsync(undefined)

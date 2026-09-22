@@ -12,6 +12,7 @@ import {
   CardTitle,
 } from "~/components/ui/card";
 import { authClient } from "~/lib/auth-client";
+import { getAppErrorDetails } from "~/lib/error-utils";
 import { GMAIL_READONLY_SCOPE } from "~/lib/google-auth-constants";
 import { pageTitle } from "~/lib/page-title";
 import { urlStringParam } from "~/lib/search-params";
@@ -131,8 +132,8 @@ function NativeAuthStart({
           result.error.message || "Google sign-in could not be started.",
         );
       }
-    } catch {
-      setError("Google sign-in could not be started.");
+    } catch (error) {
+      setError(getAppErrorDetails(error).message);
     } finally {
       setBusy(false);
     }

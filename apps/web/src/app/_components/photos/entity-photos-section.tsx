@@ -4,6 +4,7 @@ import { ImagePlus } from "lucide-react";
 import { useRef } from "react";
 import { toast } from "sonner";
 
+import { showErrorToast } from "~/components/feedback/error-details";
 import { Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Spinner } from "~/components/ui/spinner";
@@ -12,7 +13,6 @@ import {
   type EntityMutationTransport,
   type EntityMutationVariables,
 } from "~/entities/entity-contracts";
-import { getErrorMessage } from "~/lib/error-utils";
 import type { imageUpload } from "~/lib/image.functions";
 
 import EntityImageList from "../EntityImageList";
@@ -74,7 +74,7 @@ export function EntityPhotosSection<E extends GalleryEntity>({
         // Sequential by design — see the doc comment above.
         await capture(id, file, { asCover: false });
       } catch (error) {
-        toast.error(`Photo failed: ${getErrorMessage(error)}`);
+        showErrorToast(error, "Photo failed");
         return;
       }
     }

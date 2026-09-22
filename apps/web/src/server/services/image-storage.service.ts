@@ -219,6 +219,8 @@ const initiatePendingUpload = async <TDatabase>(
       CULL_PENDING_IMAGES_DEFAULT_HOURS,
     );
   } catch (error) {
+    // SILENT: see the comment above — a failed opportunistic cull must not
+    // block the upload it precedes; the next presign call retries it.
     console.error("image.cull-on-presign.failed", error);
   }
   const url = ports.objectStorage.getPublicUrl(key);
@@ -378,6 +380,9 @@ const importImageFromUrlWithPorts = async <TDatabase>(
       sourceAssetUrl: params.sourceUrl,
     });
   } catch (error) {
+    // SILENT: this is rollback for the DB-record failure being rethrown
+    // below (`error`); losing the rollback itself only strands the R2
+    // object, and must not replace the original failure.
     await ports.objectStorage.deleteObject(stored.key).catch((cleanupError) => {
       console.error("Failed to roll back imported image object:", cleanupError);
     });
@@ -826,7 +831,12 @@ const attachFileToEntityWithPorts = async <TDatabase>(
     try {
       await ports.objectStorage.deleteObject(key);
       await ports.repository.deleteImages(db, [pendingImageId]);
-    } catch {
+    } catch (cleanupError) {
+      // SILENT: the attachment already succeeded via dedupe reuse; a failed
+      // cleanup of the now-redundant upload only strands that one object, and
+      // must not fail a request that already succeeded. `cleanupWarning`
+      // (surfaced in the response below) already tells the caller.
+      console.error("Failed to clean up redundant upload:", cleanupError);
       cleanupWarning =
         "The attachment was reused, but its redundant upload could not be cleaned up.";
     }
@@ -847,6 +857,9 @@ const attachFileToEntityWithPorts = async <TDatabase>(
       // silently delete nothing and strand the staged object.
       await ports.repository.deleteImages(db, [source.stagedImageId]);
     } catch (cleanupError) {
+      // SILENT: see the comment above — best-effort; `findCullablePendingImages`
+      // sweeps an unassociated PENDING row anyway, and `cleanupWarning`
+      // (surfaced in the response below) already tells the caller.
       console.error("Failed to clean up staged upload:", cleanupError);
       cleanupWarning =
         "The attachment succeeded, but its staged upload could not be cleaned up.";
@@ -878,6 +891,8 @@ const deleteStoredObjectsWithPorts = async <TDatabase>(
     try {
       await ports.objectStorage.deleteObject(key);
     } catch (error) {
+      // SILENT: see the function doc above — best-effort R2 cleanup for a row
+      // already removed from the DB; a failed delete only strands bytes.
       console.error("Error deleting image from R2:", error);
     }
   }

@@ -661,16 +661,22 @@ const ingredientListImpl = async (
   const { take, skip } = ingredientScaffold.page(pagination);
 
   if (readIntent === "ids") {
-    const rows = await dbClient
-      .select({ id: ingredient.shortcode })
-      .from(ingredient)
-      .where(whereClause)
-      .orderBy(...orderByClause)
+    // Routed through the relational builder, not a plain `.select().from()`,
+    // so `orderByClause` resolves against the same `"ingredient"` alias a
+    // resolver sort hand-qualifies (see `resolveIngredientSort` above) — a
+    // plain select has no alias, so a resolver sort would throw
+    // `missing FROM-clause entry for table "ingredient"`.
+    const rows = await dbClient.query.ingredient.findMany({
+      columns: { shortcode: true },
+      where: whereClause,
+      orderBy: orderByClause,
       // One look-ahead row tells the bulk scan whether another page exists,
       // avoiding a count query it would otherwise discard.
-      .limit(take + 1)
-      .offset(skip);
-    return { data: rows.slice(0, take), hasMore: rows.length > take };
+      limit: take + 1,
+      offset: skip,
+    });
+    const data = rows.map((row) => ({ id: row.shortcode }));
+    return { data: data.slice(0, take), hasMore: data.length > take };
   }
 
   // Lean list shape: products (mapped) + a jsonb {id,name}[] of the recipes the

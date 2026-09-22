@@ -90,6 +90,8 @@ export function useConversionAnswer(search: string): ConversionAnswer | null {
             const money = wasm.conv_amount_to_kind(mappings, "money", amount);
             cost = money ? wasm.format_amount(money) : null;
           } catch {
+            // SILENT: WASM probe — pricing is optional on this inline answer;
+            // no money-unit path just means the result renders without a cost.
             cost = null;
           }
 

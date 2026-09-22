@@ -79,7 +79,7 @@ export function useGraphExplorer(
     initialSelected ?? restored?.selected ?? rootKey,
   );
   const [busy, setBusy] = useState(new Set<string>());
-  const [errors, setErrors] = useState(new Set<string>());
+  const [errors, setErrors] = useState(new Map<string, unknown>());
   const pending = useRef(new Set<string>());
   const generation = useRef(0);
   useEffect(() => {
@@ -138,7 +138,7 @@ export function useGraphExplorer(
     const version = generation.current;
     setBusy((old) => new Set(old).add(key));
     setErrors((old) => {
-      const next = new Set(old);
+      const next = new Map(old);
       next.delete(key);
       return next;
     });
@@ -153,9 +153,9 @@ export function useGraphExplorer(
         ]),
       );
       return result;
-    } catch {
+    } catch (error) {
       if (version === generation.current)
-        setErrors((old) => new Set(old).add(key));
+        setErrors((old) => new Map(old).set(key, error));
       return undefined;
     } finally {
       if (version === generation.current) {
@@ -224,7 +224,7 @@ export function useGraphExplorer(
     setHistory({ trail: [rootKey], cursor: 0 });
     setSelected(rootKey);
     setBusy(new Set());
-    setErrors(new Set());
+    setErrors(new Map());
   };
   const clearPath = () => {
     setPathEdges(new Set());

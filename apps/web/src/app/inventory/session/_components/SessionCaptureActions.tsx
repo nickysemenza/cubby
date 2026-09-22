@@ -32,6 +32,7 @@ import { LocationSweep } from "~/app/_components/inventory/location-sweep/Locati
 import { useLocationPhotoCapture } from "~/app/_components/locations/use-location-photo-capture";
 import { useUpcAwareCreate } from "~/app/_components/products/use-upc-aware-create";
 import { product } from "~/app/products/product.functions";
+import { showErrorToast } from "~/components/feedback/error-details";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Description } from "~/components/ui/description";
@@ -47,7 +48,6 @@ import { Spinner } from "~/components/ui/spinner";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { focusOnMount } from "~/hooks/focus-on-mount";
 import { ai } from "~/lib/ai.functions";
-import { getErrorMessage } from "~/lib/error-utils";
 import { imageUpload } from "~/lib/image.functions";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
 
@@ -114,7 +114,14 @@ export function SessionCaptureActions({
   // drains.
   const invalidateCapture = () => invalidate({ watch: true });
 
-  const uploadImage = useMutation(imageUpload.uploadImage.mutationOptions());
+  const uploadImage = useMutation(
+    imageUpload.uploadImage.mutationOptions({
+      // No toast here: `submitPhotoIdentity`'s catch below already turns any
+      // failure in that flow into one `showErrorToast`; a populated
+      // `onError` would additionally trigger the global toast.
+      onError: () => {},
+    }),
+  );
   // Location photos go through the shared capture hook rather than a local
   // upload→attach pair: it also invalidates `location.makeTree`, which this
   // workbench reads for every stop's `imageCount`. The old local path only
@@ -144,7 +151,6 @@ export function SessionCaptureActions({
           ),
         );
       },
-      onError: (error) => toast.error(getErrorMessage(error)),
     }),
   );
   const approveDetectedItem = useMutation(
@@ -158,6 +164,11 @@ export function SessionCaptureActions({
           ),
         );
       },
+      // No toast here: `addSuggestion`'s catch below already turns this
+      // failure into one `showErrorToast` (and rethrows so the proposal row
+      // reappears); a populated `onError` would additionally trigger the
+      // global toast.
+      onError: () => {},
     }),
   );
   const createInventory = useMutation(
@@ -166,12 +177,22 @@ export function SessionCaptureActions({
       "create",
     )({
       onSuccess: () => invalidate({ watch: true }),
-      onError: (error) => toast.error(getErrorMessage(error)),
+      // No toast here: `submitPhotoIdentity`'s catch below already turns any
+      // failure in that flow into one `showErrorToast`; a populated
+      // `onError` would additionally trigger the global toast.
+      onError: () => {},
     }),
   );
-  const quickCreateProduct = useMutation(product.quickCreate.mutationOptions());
+  const quickCreateProduct = useMutation(
+    product.quickCreate.mutationOptions({
+      // No toast here: `submitPhotoIdentity`'s catch below already turns any
+      // failure in that flow into one `showErrorToast`; a populated
+      // `onError` would additionally trigger the global toast.
+      onError: () => {},
+    }),
+  );
   const updateProduct = useMutation(
-    entityMutationOptionsFactory("product", "update")(),
+    entityMutationOptionsFactory("product", "update")({ onError: () => {} }),
   );
   const handleFile = async (file: File) => {
     try {
@@ -179,7 +200,7 @@ export function SessionCaptureActions({
       invalidateCapture();
       toast.success("Photo attached and description updated.");
     } catch (error) {
-      toast.error(`Photo failed: ${getErrorMessage(error)}`);
+      showErrorToast(error, "Photo failed");
     }
   };
 
@@ -217,7 +238,7 @@ export function SessionCaptureActions({
         productId,
       });
     } catch (error) {
-      toast.error(`Could not add suggestion: ${getErrorMessage(error)}`);
+      showErrorToast(error, "Could not add suggestion");
       throw error;
     }
     removeSuggestion(index);
@@ -272,7 +293,7 @@ export function SessionCaptureActions({
       setPendingPhoto(null);
       setPhotoName("");
     } catch (error) {
-      toast.error(`Add failed: ${getErrorMessage(error)}`);
+      showErrorToast(error, "Add failed");
     }
   };
 
@@ -567,11 +588,7 @@ function ManualAdd({ locationId }: { locationId: LocationShortcode }) {
   // Name-only quick-create for unbarcoded garage items: skip the full ProductForm
   // (manufacturer required) and use the quickCreate endpoint, which defaults the
   // manufacturer. The created product is selected straight into the picker.
-  const quickCreateProduct = useMutation(
-    product.quickCreate.mutationOptions({
-      onError: (error) => toast.error(getErrorMessage(error)),
-    }),
-  );
+  const quickCreateProduct = useMutation(product.quickCreate.mutationOptions());
   const quickCreateMutateRef = useRef(quickCreateProduct.mutateAsync);
   quickCreateMutateRef.current = quickCreateProduct.mutateAsync;
   const handleQuickCreate = useCallback(

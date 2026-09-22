@@ -312,9 +312,11 @@ export function useBarcodeScanner({
                 onScanRef.current(barcode);
               }
             }
-          } catch {
-            // Detection can fail on individual frames — ignore
           }
+          // SILENT: per-frame barcode detection can fail transiently at
+          // ~11 Hz; the next animation frame retries, so surfacing every
+          // miss would spam the user while pointing the camera around.
+          catch {}
 
           if (!cancelled) {
             rafRef.current = requestAnimationFrame(detectFrame);
@@ -416,6 +418,8 @@ export function useScanBeep(enabled = true): () => void {
       const context = contextRef.current;
       // Also re-arms after iOS suspends the context (call, interruption).
       if (context.state !== "running") {
+        // SILENT: best-effort resume, retried on the next pointerdown/touchend
+        // prime; a rejected resume here just means the beep stays silent.
         void context.resume().catch(() => {});
       }
     };
@@ -432,6 +436,8 @@ export function useScanBeep(enabled = true): () => void {
   // Release the audio hardware when the scanner surface unmounts.
   useEffect(() => {
     return () => {
+      // SILENT: teardown on unmount; nothing left to recover into if closing
+      // the audio hardware fails.
       void contextRef.current?.close().catch(() => {});
       contextRef.current = null;
     };
