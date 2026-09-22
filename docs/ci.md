@@ -249,6 +249,42 @@ from a partial or stale run.
 | --- | ---: | --- | --- | --- | ---: |
 | [#1102](https://github.com/nickysemenza/cubby/pull/1102) / `ac4aad71` | not captured | validation 168s; auxiliary 54s; Rust 21s; web node 97s; web UI 67s; PostgreSQL 121s; Chromium 358s; WebKit 183s; Apple checks 647s; Apple package 308s | macOS pnpm-store hit (732 MiB; setup 72s); Rust FFI target hits | no | 82s |
 
+### 2026-09-22 cache repairs, compiled-output caches, generator speed
+
+Baseline: six green PR runs on 2026-09-22 before these changes. Apple checks
+467–569s (p50 524s), Apple package tests 196–377s, Validation 182–245s (p50
+216s), chromium shards 242–300s. The repository's Actions cache was at 13.4 GB
+of 10 GB, 8.26 GB of it per-PR `spm-clones` copies. Walls are GitHub job
+metadata; "warm" samples are exact-head job reruns.
+
+| PR | Change | Samples (wall) | Result |
+| --- | --- | --- | --- |
+| [#1206](https://github.com/nickysemenza/cubby/pull/1206) | `openapi-gen-v1` was a 204 B empty entry saved by a failed run and exact-hit ever after; key v2, save only when the binary exists | Apple checks 345/381/387/418s (p50 **384s**) | retained; generator step ~3 min → under 15s |
+| [#1208](https://github.com/nickysemenza/cubby/pull/1208) | Nx `wasm` target skips when setup-node-with-deps already restored the exact-key package | Validation 110/126/132/133/145s (p50 **132s**) | retained |
+| [#1210](https://github.com/nickysemenza/cubby/pull/1210) | Cache CubbyKit `.build`; blob-hash mtimes (`scripts/stamp-source-mtimes.ts`) | Apple package tests 64/80/107s (cold seed 381s) | retained |
+| [#1211](https://github.com/nickysemenza/cubby/pull/1211) | Cache DerivedData the same way; `spm-clones`/DerivedData saved by main only | Apple checks 188/278s warm; xcodebuild 1m45s recompiling only the changed modules | retained |
+| [#1216](https://github.com/nickysemenza/cubby/pull/1216) | `workers-tests` joins the `check:all` run-many | `check:all` 57/65/69/78s (p50 94s before) | retained |
+| [#1213](https://github.com/nickysemenza/cubby/pull/1213) | Three chromium shards | slowest shard 247s, then 218s with **2 of 3 shards failing** on test-isolation leaks | rejected until those tests stop depending on shard mates; also needs the ruleset's required check names changed |
+
+Local measurements behind #1210: CubbyKit `swift build --build-tests` cold 76s;
+`.build` restored with fresh-checkout mtimes 41s; restored and stamped 3s; one
+CubbyKit file changed 8s. Build logs show the critical path is our own code
+(the generated `CubbyAPI` client, 43–113s cold, then CubbyKit and tests), not
+third-party packages (30–55s).
+
+Developer-loop changes from the same pass: `pnpm generate` formats its sealed
+artifacts in parallel with the workspace oxfmt binary instead of serial `pnpm
+exec` spawns (105s → 5–9s, byte-identical output,
+[#1217](https://github.com/nickysemenza/cubby/pull/1217)); generated files
+resolve by regeneration through the `cubby-generated` merge driver
+([#1218](https://github.com/nickysemenza/cubby/pull/1218)); the post-checkout
+hook no longer crashes before a new worktree's install
+([#1212](https://github.com/nickysemenza/cubby/pull/1212)).
+
+Open: the WebKit lane failed on about half of the day's runs, main included,
+each time on a different test; with that and chromium's shard-sensitive tests
+fixed, the web lanes are the remaining critical path.
+
 ### 2026-09-21 Apple setup caches, path filter, chromium shards
 
 Exact-head runs of [#1163](https://github.com/nickysemenza/cubby/pull/1163)
