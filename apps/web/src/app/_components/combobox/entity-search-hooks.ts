@@ -81,12 +81,12 @@ export interface UseEntitySearchConfig<TId extends string, TRow, TDetail> {
     openDialog: (name: string) => Promise<ComboboxItem<TId>>,
   ) => ((name: string) => Promise<ComboboxItem<TId>>) | undefined;
   /**
-   * "dialog"/"upcAware" render `EntitySearchCreateDialog` (the generic
-   * `EntityEditDialog` capture request, or `ProductCreateDialog` for
-   * product) on create; "none" leaves creation entirely to `useOnCreateNew`
-   * (vendor mints its own row on save, with no dialog in the picker at all).
+   * "dialog" renders `EntitySearchCreateDialog` (the generic
+   * `EntityEditDialog` capture request) on create; "none" leaves creation
+   * entirely to `useOnCreateNew` (vendor mints its own row on save, with no
+   * dialog in the picker at all).
    */
-  createNew: "dialog" | "upcAware" | "none";
+  createNew: "dialog" | "none";
   /** Required when `createNew` isn't "none": parses the dialog's raw save
    * result into the shape `buildDetail` expects. */
   parseCreatedResult?: CreatedResultParser<TDetail>;

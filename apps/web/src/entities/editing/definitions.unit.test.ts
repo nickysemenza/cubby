@@ -306,8 +306,10 @@ describe("entity edit definitions", () => {
 
   // A product's read projection nests `Date`s inside its `unitMappings` rows
   // (`unitMappingOut.createdAt`), which the value bag's `z.json()` branch
-  // rejects: opening the editor threw. The record value is projected instead,
-  // and an untouched edit stays a no-op — in particular the write-only `upc`
+  // rejects: opening the editor threw. `unitMappings`' `FieldOptions.initial`
+  // (`productUnitMappingsInitial`) projects each row to its input shape
+  // (`{id,a,b,source}`) before the Date ever reaches the form, and an
+  // untouched edit stays a no-op — in particular the write-only `upc`
   // (`readKey: null`, seeded `null`) must not reach the wire as `upc: null`,
   // which `syncPrimaryGtin` would read as "retire the primary GTIN".
   it("opens a record with nested Dates and keeps an untouched edit empty, write-only fields included", () => {
@@ -340,7 +342,12 @@ describe("entity edit definitions", () => {
     if (!("definition" in resolved)) throw new Error("product must resolve");
     const values = initialEntityEditValues(resolved, request);
     expect(values.unitMappings).toEqual([
-      expect.objectContaining({ createdAt: "2026-01-02T03:04:05.000Z" }),
+      {
+        id: "6b1c2c1e-0000-4000-8000-000000000001",
+        a: { value: 8, unit: "oz" },
+        b: { value: 1, unit: "each" },
+        source: "manual",
+      },
     ]);
     expect(values.upc).toBeNull();
     const untouched = buildEntityEdit(resolved, request, values);

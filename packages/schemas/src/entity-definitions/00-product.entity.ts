@@ -28,7 +28,7 @@ import { productCategorySummary } from "../product-category-fields";
 export default defineEntity({
   key: "product",
   names: { singular: "Product", plural: "Products" },
-  route: { basePath: "products", create: "page", list: true, detail: true },
+  route: { basePath: "products", create: "dialog", list: true, detail: true },
   table: "Product",
   identifiers: { brand: "ProductId", shortcode: "PRD-" },
   presentation: {
@@ -169,13 +169,59 @@ export default defineEntity({
       ],
       timeline: { fields: ["purchaseDate"] },
     },
+    // Restructures the generated Apple editor too (`GenericEntityEditModel`
+    // reads these `EditSection`s the same way) — intended, not a web-only
+    // change. Photos & manuals has no `fields` entry: the shell's image
+    // block and product's `media` presentation hook render it outside this
+    // grouping (`entity-edit-dialog-content.tsx`, `editor-presentations.tsx`).
+    edit: {
+      sections: [
+        {
+          id: "identity",
+          title: "Identity",
+          fields: ["name", "model", "manufacturer", "categoryId", "notes"],
+        },
+        {
+          id: "names-and-tags",
+          title: "Names & tags",
+          fields: ["aliases", "tags"],
+        },
+        {
+          id: "stock-and-price",
+          title: "Stock & price",
+          fields: ["expectedQuantity", "price", "stockTracked"],
+        },
+        {
+          id: "identifiers",
+          title: "Identifiers",
+          fields: ["upc", "isbn", "externalIds"],
+        },
+        {
+          id: "nutrition",
+          title: "Nutrition",
+          collapsed: true,
+          fields: [
+            "fdc_id",
+            "labelNutrition",
+            "ingredientId",
+            "usdaUnavailable",
+            "growsIngredientId",
+          ],
+        },
+        {
+          id: "unit-conversions",
+          title: "Unit conversions",
+          fields: ["unitMappings"],
+        },
+      ],
+    },
   },
   model: {
     fields: [
       {
         key: "name",
         kind: "text",
-        control: { kind: "text", section: "identity-name" },
+        control: { kind: "text" },
         display: { list: true, detail: true, standard: "name", detailOrder: 0 },
         validation: {
           read: z
@@ -214,7 +260,7 @@ export default defineEntity({
           "Compatibility or ecosystem tokens only — battery platform, mount, thread, size standard. Never the manufacturer, a classification word, or a path node; those belong in manufacturer/categoryId. `collection:*` entries are managed by Collections. Leave empty when nothing fits.",
         control: {
           kind: "specialized",
-          renderer: "tag-list",
+          renderer: "product-tags",
           suggest: {
             basis: ["manufacturer", "categoryId", "aliases"],
             mode: "prune",
@@ -248,8 +294,9 @@ export default defineEntity({
         key: "upc",
         kind: "text",
         nullable: true,
+        label: "UPC",
         readKey: null,
-        control: { kind: "text" },
+        control: { kind: "specialized", renderer: "upc-lookup", width: "half" },
         provenance: {
           kind: "relation",
           sources: [{ label: "Product identifiers" }],
@@ -264,8 +311,9 @@ export default defineEntity({
         key: "isbn",
         kind: "text",
         nullable: true,
+        label: "ISBN",
         readKey: null,
-        control: { kind: "text" },
+        control: { kind: "text", width: "half" },
         provenance: {
           kind: "relation",
           sources: [{ label: "Product identifiers" }],
@@ -288,7 +336,7 @@ export default defineEntity({
         // Was "USDA FDC ID"; the list column has always headed this "FDC" —
         // declaration wins, so the detail label follows the list now too.
         label: "FDC",
-        control: { kind: "number" },
+        control: { kind: "specialized", renderer: "usda-food" },
         display: {
           list: true,
           listOrder: 3,
@@ -308,7 +356,7 @@ export default defineEntity({
       {
         key: "manufacturer",
         kind: "text",
-        control: { kind: "text", section: "manufacturer" },
+        control: { kind: "text", width: "half" },
         display: {
           list: true,
           listOrder: 1,
@@ -331,7 +379,7 @@ export default defineEntity({
         key: "model",
         kind: "text",
         nullable: true,
-        control: { kind: "text", section: "identity-model" },
+        control: { kind: "text", width: "half" },
         display: {
           list: true,
           listOrder: 4,
@@ -350,7 +398,7 @@ export default defineEntity({
         key: "notes",
         kind: "text",
         nullable: true,
-        control: { kind: "textarea", section: "notes" },
+        control: { kind: "textarea" },
         display: {
           list: true,
           detail: true,
@@ -368,7 +416,7 @@ export default defineEntity({
         key: "expectedQuantity",
         kind: "number",
         nullable: true,
-        control: { kind: "number" },
+        control: { kind: "number", width: "half" },
         // The list now shows the ledger's computed expectedQuantity
         // (`ledgerExpectedQuantity`, aliased to this same "expectedQuantity"
         // column id) instead of this raw stored override — this field stays
@@ -388,7 +436,6 @@ export default defineEntity({
         control: {
           kind: "specialized",
           renderer: "entity-select",
-          section: "category",
           suggest: {
             basis: ["name", "manufacturer", "notes", "classificationEvidence"],
           },
@@ -490,7 +537,7 @@ export default defineEntity({
         // substitution and keep "Price" on the list without touching the
         // detail label.
         label: "Valuation price",
-        control: { kind: "number", renderer: "money" },
+        control: { kind: "number", renderer: "money", width: "half" },
         display: {
           list: true,
           listOrder: 9,
@@ -531,7 +578,7 @@ export default defineEntity({
         key: "unitMappings",
         kind: "json",
         readKey: null,
-        control: { kind: "specialized", renderer: "structured-field" },
+        control: { kind: "specialized", renderer: "unit-mappings" },
         provenance: {
           kind: "relation",
           sources: [{ label: "Unit mappings" }],
@@ -553,7 +600,7 @@ export default defineEntity({
         // (it's a physical Product column, not a synthesized child-table
         // projection), so it still reaches `productTopLevelFields` (the
         // output roster) for costing/API consumers.
-        control: { kind: "specialized", renderer: "structured-field" },
+        control: { kind: "specialized", renderer: "label-nutrition" },
         validation: {
           read: productLabelNutrition.nullable(),
           create: productLabelNutrition.nullable().optional(),
@@ -562,9 +609,14 @@ export default defineEntity({
       },
       {
         key: "externalIds",
+        // Stays `text-array`: the field kind only gates the pruning
+        // (`control.suggest.mode: "prune"`) and section-coverage machinery,
+        // neither of which cares that the array holds objects rather than
+        // strings here — the `external-ids` renderer owns the real
+        // `ExternalIdInput[]` shape end to end.
         kind: "text-array",
         label: "External IDs",
-        control: { kind: "specialized", renderer: "tag-list" },
+        control: { kind: "specialized", renderer: "external-ids" },
         provenance: {
           kind: "relation",
           sources: [{ label: "Product identifiers" }],
@@ -623,12 +675,15 @@ export default defineEntity({
         },
       },
       {
+        // No editor `control`: the generic dialog shell renders the shared
+        // photo-capture field itself for any intent whose roster includes
+        // this key (`entity-edit-dialog-content.tsx`) — same convention as
+        // meal/location's `pendingImageIds`.
         key: "pendingImageIds",
         kind: "identifier",
         label: "Pending Image IDs",
         readKey: null,
         reference: { entity: "image", multiple: true },
-        control: { kind: "specialized", renderer: "entity-multi-select" },
         validation: {
           read: null,
           create: z.array(imageShortcode).optional(),
@@ -655,7 +710,6 @@ export default defineEntity({
         label: "Remove Image IDs",
         readKey: null,
         reference: { entity: "image", multiple: true },
-        control: { kind: "specialized", renderer: "entity-multi-select" },
         validation: {
           read: null,
           create: null,
@@ -1296,18 +1350,42 @@ export default defineEntity({
         full: [
           "name",
           "aliases",
+          "tags",
           "manufacturer",
           "model",
           "categoryId",
           "ingredientId",
           "growsIngredientId",
           "upc",
+          "isbn",
           "fdc_id",
+          "expectedQuantity",
           "price",
           "stockTracked",
           "unitMappings",
           "labelNutrition",
+          "externalIds",
+          "usdaUnavailable",
           "notes",
+          "pendingImageIds",
+          "pendingImagePurposes",
+          "removeImageIds",
+          "imageOrder",
+        ],
+        // The compact "Show product details" panel on quick-inventory-add
+        // (a bespoke multi-entity form, not the generic editor): everything
+        // `full` covers except identity (name/manufacturer render outside
+        // this panel) and the fields owned by the shell's own image block.
+        quickDetails: [
+          "model",
+          "notes",
+          "categoryId",
+          "upc",
+          "isbn",
+          "fdc_id",
+          "expectedQuantity",
+          "ingredientId",
+          "unitMappings",
         ],
         identity: ["name", "aliases", "manufacturer", "model", "categoryId"],
         price: ["price"],

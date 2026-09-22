@@ -17,7 +17,8 @@ const MIN_IDENTIFIER_LENGTH = 2;
 
 /**
  * One external-ID row's Kind hint, mounted under the Kind select
- * (`ProductExternalIds`, `product-form-fields.tsx`). Binds the generic
+ * (`ProductExternalIdsField`, `entities/editing/product-editor-fields.tsx`).
+ * Binds the generic
  * `useRowEnumSuggestion` to `ai.suggestExternalIdKind` — server-side regex
  * fast paths answer the common shapes (ASIN, barcode) with no model call;
  * everything else goes to Jev.

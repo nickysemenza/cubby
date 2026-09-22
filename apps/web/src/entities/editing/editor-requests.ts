@@ -112,6 +112,30 @@ export const expenseCaptureRequest = (input?: {
   };
 };
 
+/**
+ * The rich "full" create request (unlike `captureRequest("product")`'s
+ * name+manufacturer-only quick add) — used where a caller has more than a
+ * bare name to seed: the USDA food detail page's "create product"/"link to
+ * an ingredient" actions.
+ */
+export const productCreateRequest = (input?: {
+  name?: string;
+  manufacturer?: string;
+  upc?: string | null;
+  fdcId?: number | null;
+  ingredientId?: EntityEditDraft<"product">["ingredientId"];
+}): Omit<EntityEditRequest<"product", "create", "full">, "surface"> & {
+  intent: "full";
+} => {
+  const seed: MutableDraft<"product"> = {};
+  if (input?.name) seed.name = input.name;
+  if (input?.manufacturer) seed.manufacturer = input.manufacturer;
+  if (input?.upc !== undefined) seed.upc = input.upc;
+  if (input?.fdcId !== undefined) seed.fdc_id = input.fdcId;
+  if (input?.ingredientId !== undefined) seed.ingredientId = input.ingredientId;
+  return { entity: "product", operation: "create", intent: "full", seed };
+};
+
 export const projectCaptureRequest = (input?: {
   parentProjectId?: ProjectShortcode | null;
   date?: string;

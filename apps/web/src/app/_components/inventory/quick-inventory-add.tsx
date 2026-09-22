@@ -4,7 +4,10 @@ import type {
   LocationShortcode,
   ProductShortcode,
 } from "@cubby/schemas/identifiers";
-import { productCategoryShortcode } from "@cubby/schemas/identifiers";
+import {
+  ingredientShortcode,
+  productCategoryShortcode,
+} from "@cubby/schemas/identifiers";
 import { unitMappingInput } from "@cubby/schemas/unitmapping";
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
 import { fdcId, upc } from "@cubby/usda-schemas";
@@ -17,9 +20,7 @@ import { z } from "zod";
 
 import { FieldSuggestionProvider } from "~/app/_components/ai/field-suggestion-provider";
 import {
-  getOptionalIngredientId,
   getOptionalProductShortcode,
-  optionalIngredientField,
   requiredProductField,
 } from "~/app/_components/form-fields";
 import {
@@ -32,25 +33,46 @@ import { Row } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Collapsible, CollapsibleContent } from "~/components/ui/collapsible";
 import { Spinner } from "~/components/ui/spinner";
+import { EntityIntentFields } from "~/entities/editing/entity-primitive-fields";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { useImageState } from "~/hooks/useImageState";
 import { getErrorMessage } from "~/lib/error-utils";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
 import { cn } from "~/lib/utils";
+import { wasm } from "~/lib/wasm";
 
 import type { ComboboxItem } from "../combobox/combobox-types";
 import { WithEntitySearch } from "../combobox/with-search-hook";
-import {
-  isbnFormField,
-  type ProductFormFieldPaths,
-  ProductFormFields,
-} from "../products/product-form-fields";
+import { PendingImageUpload } from "../PendingImageUpload";
+import { IdentifyProductButton } from "../products/identify-product-with-ai";
 import { useUpcAwareCreate } from "../products/use-upc-aware-create";
 import { AmountFieldGroup, DEFAULT_AMOUNT_UNIT } from "./amount-field-group";
 import {
   useCreateInventoryMutation,
   useProductLookupInvalidation,
 } from "./hooks";
+
+/**
+ * Client-side counterpart to the deleted `@cubby/schemas/isbn`'s `isbn` Zod
+ * export — see `product-editor-fields.tsx`'s own doc comment for the reason
+ * this lives with the form rather than `packages/schemas`. Only this
+ * bespoke create form still needs it; the generic editor reads/writes
+ * `primaryGtin` through `definitions.ts`'s `productIsbnInitial` instead.
+ */
+const isbnFormField = z
+  .string()
+  .trim()
+  .transform((value, ctx) => {
+    const normalized = wasm.normalize_isbn(value);
+    if (!normalized) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "expected a valid ISBN-10 or ISBN-13",
+      });
+      return z.NEVER;
+    }
+    return normalized.gtin14;
+  });
 
 interface QuickInventoryAddProps {
   locationId: LocationShortcode;
@@ -96,7 +118,10 @@ const createFormSchema = z
     fdc_id: fdcId.nullable(),
     expectedQuantity: z.number().int().positive().nullable(),
     price: z.number().positive().nullable(),
-    ingredient: optionalIngredientField,
+    // `EntityIntentFields`' generic reference picker writes the raw
+    // shortcode string directly, unlike the retired `ComboboxItem`-typed
+    // `ingredient` field.
+    ingredientId: z.string().nullable(),
     unitMappings: z.array(unitMappingInput),
     amount: amount,
   })
@@ -106,28 +131,6 @@ const createFormSchema = z
     fdc_id: data.fdc_id === 0 ? null : data.fdc_id,
   }));
 type CreateFormValues = z.input<typeof createFormSchema>;
-
-const createProductFormFieldPaths = {
-  name: "name",
-  manufacturer: "manufacturer",
-  model: "model",
-  notes: "notes",
-  categoryId: "categoryId",
-  upc: "upc",
-  isbn: "isbn",
-  fdcId: "fdc_id",
-  expectedQuantity: "expectedQuantity",
-  price: "price",
-  ingredient: "ingredient",
-  unitMappings: "unitMappings",
-  unitMapping: (index: number) => ({
-    valueA: `unitMappings.${index}.a.value`,
-    unitA: `unitMappings.${index}.a.unit`,
-    valueB: `unitMappings.${index}.b.value`,
-    unitB: `unitMappings.${index}.b.unit`,
-    source: `unitMappings.${index}.source`,
-  }),
-} satisfies ProductFormFieldPaths<CreateFormValues>;
 
 export function QuickInventoryAdd({
   locationId,
@@ -194,7 +197,7 @@ export function QuickInventoryAdd({
       fdc_id: null,
       expectedQuantity: null,
       price: null,
-      ingredient: null,
+      ingredientId: null,
       unitMappings: [],
       amount: { value: 1, unit: DEFAULT_AMOUNT_UNIT },
     },
@@ -227,7 +230,10 @@ export function QuickInventoryAdd({
         fdc_id: values.fdc_id,
         expectedQuantity: values.expectedQuantity,
         price: values.price,
-        ingredientId: getOptionalIngredientId(values.ingredient) ?? null,
+        ingredientId:
+          values.ingredientId == null
+            ? null
+            : ingredientShortcode.parse(values.ingredientId),
         unitMappings: values.unitMappings,
         ...imageState.getImageData(true),
       });
@@ -280,7 +286,7 @@ export function QuickInventoryAdd({
         fdc_id: null,
         expectedQuantity: null,
         price: null,
-        ingredient: null,
+        ingredientId: null,
         unitMappings: [],
         amount: { value: 1, unit: DEFAULT_AMOUNT_UNIT },
       });
@@ -414,26 +420,39 @@ export function QuickInventoryAdd({
               "data-[panel-open]:animate-in data-[panel-open]:fade-in-0",
             )}
           >
-            <div className="pt-4">
-              {/* `ProductFormFields` renders Classification with
-                  `suggestField="categoryId"` — without a provider mounted
-                  here, `useAutoFieldSuggestion` now reports it loudly in dev
-                  (see the discard-dialog gap this guard exists to catch). */}
+            <div className="space-y-4 pt-4">
+              {/* `categoryId` renders with `suggestField="categoryId"` —
+                  without a provider mounted here, `useAutoFieldSuggestion`
+                  now reports it loudly in dev (see the discard-dialog gap
+                  this guard exists to catch). */}
               <FieldSuggestionProvider
                 entity="product"
                 mode="create"
                 fieldKeys={["categoryId"]}
               >
-                <ProductFormFields
+                <EntityIntentFields
+                  entity="product"
+                  intent="quickDetails"
                   mode="create"
-                  form={createForm}
-                  paths={createProductFormFieldPaths}
-                  imageHandlers={imageState}
-                  hideNameField
-                  hidePrice
-                  compact
                 />
               </FieldSuggestionProvider>
+              {/* Images stay hand-wired here (not the generic editor's
+                  shell): this compact panel has no `pendingImageIds` in its
+                  own roster, and `useImageState` already owns the create
+                  form's pending-image lifecycle. */}
+              <PendingImageUpload
+                entityType="PRODUCT"
+                onImagesChange={imageState.handlePendingImagesChange}
+              />
+              <IdentifyProductButton
+                form={{
+                  setValue: (update) =>
+                    createForm.setValue(update.field, update.value, {
+                      shouldDirty: true,
+                    }),
+                }}
+                pendingImages={imageState.pendingImages}
+              />
             </div>
           </CollapsibleContent>
         </Collapsible>

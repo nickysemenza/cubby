@@ -23,8 +23,12 @@ enum NativePresentationCoverage {
     private static let implementedControls: Set<ControlRendererID> = [
         .amount, .entityMultiSelect, .ledgerAttributions, .tagList, .vendorName,
     ]
-    /// Control renderers drawn by the primitive control of their `controlKind`.
-    private static let genericControls: Set<ControlRendererID> = [.entitySelect, .money, .url]
+    /// Control renderers drawn by the primitive control of their `controlKind`. `upcLookup`/
+    /// `usdaFood` are plain text/number fields on web too once their AI action strips away —
+    /// the native shell just draws the primitive control and skips the action.
+    private static let genericControls: Set<ControlRendererID> = [
+        .entitySelect, .money, .url, .upcLookup, .usdaFood,
+    ]
     /// Control renderers the editor's image block owns; never a field control.
     private static let imageBlockControls: Set<ControlRendererID> = [.imageOrder]
 

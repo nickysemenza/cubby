@@ -60,11 +60,6 @@ const EntityEditDialog = lazy(() =>
     default: module.EntityEditDialog,
   })),
 );
-const ProductCreateDialog = lazy(() =>
-  import("~/app/_components/products/product-create-dialog").then((module) => ({
-    default: module.ProductCreateDialog,
-  })),
-);
 
 export interface WithEntitySearchProps<TId extends string = string> {
   /** Candidate filters derived from the owning editor's dependent fields. */
@@ -444,17 +439,22 @@ function productConfig(
     // Never actually queried (`splitBlankTyped: false`), but the config shape
     // still needs a value.
     buildSearchHit: (hit) => buildSearchHitComboboxItem(hit, "product"),
+    // A pasted/typed UPC still skips the create dialog (`useProductCreateNew`
+    // wraps `useUpcAwareCreate` around the same `openDialog` every other
+    // `createNew: "dialog"` entity uses) — the dialog itself is the generic
+    // `EntityEditDialog` capture request now, same as ingredient/location.
     useOnCreateNew: useProductCreateNew,
-    createNew: "upcAware",
+    createNew: "dialog",
     parseCreatedResult: parseCreated(productTopLevelOut),
   };
 }
 
 /**
- * Renders the shared create dialog for the three entities that use it.
- * Takes `parseCreatedResult`/`buildDetail` directly (rather than a whole
- * `config`) so each concretely-typed caller feeds it concretely-typed
- * arguments — no generic config union to bridge with an unsafe cast.
+ * Renders the shared create dialog for the three entities that use it — the
+ * generic `EntityEditDialog` capture request. Takes `parseCreatedResult`/
+ * `buildDetail` directly (rather than a whole `config`) so each concretely-
+ * typed caller feeds it concretely-typed arguments — no generic config union
+ * to bridge with an unsafe cast.
  */
 function EntitySearchCreateDialog<TId extends string, TDetail>({
   entity,
@@ -479,18 +479,6 @@ function EntitySearchCreateDialog<TId extends string, TDetail>({
     if (parsed === undefined) return;
     resolveWithEntity(buildDetail(parsed));
   };
-  if (entity === "product") {
-    return (
-      <Suspense fallback={null}>
-        <ProductCreateDialog
-          open
-          onOpenChange={setIsDialogOpen}
-          seed={{ name: pendingName }}
-          onSuccess={onSuccess}
-        />
-      </Suspense>
-    );
-  }
   return (
     <Suspense fallback={null}>
       <EntityEditDialog

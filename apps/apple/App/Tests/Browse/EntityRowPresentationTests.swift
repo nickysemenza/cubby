@@ -73,7 +73,7 @@ struct EntityRowPresentationTests {
         // than fail this test or pass as generic by accident.
         let nativeControls: Set<ControlRendererID> = [
             .amount, .entityMultiSelect, .ledgerAttributions, .tagList, .vendorName,
-            .entitySelect, .money, .url,
+            .entitySelect, .money, .url, .upcLookup, .usdaFood,
         ]
         for renderer in nativeControls {
             #expect(!NativePresentationCoverage.control(renderer).isUnsupported)

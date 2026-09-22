@@ -44,6 +44,7 @@ import {
   EntityPrimitiveFields,
 } from "./entity-primitive-fields";
 import type { EntityEditResultFor } from "./intent-types";
+import { productMedia } from "./product-editor-fields";
 import type {
   EntityEditContext,
   EntityEditOperation,
@@ -64,7 +65,7 @@ interface EntityEditorFieldsProps {
  * `media` hook. A presentation types its hook as
  * `EntityEditorPresentation<E>["media"]`.
  */
-interface EntityEditorMediaInput {
+export interface EntityEditorMediaInput {
   form: EntityEditorForm;
   record?: EntityEditRecord;
   /** Uploaded-but-unattached images of this session, in gallery order. */
@@ -73,7 +74,7 @@ interface EntityEditorMediaInput {
   existingImages: readonly PendingImage[];
 }
 
-interface EntityEditorMediaOutput {
+export interface EntityEditorMediaOutput {
   /** Rendered directly under the image block (e.g. an identify-from-photo button). */
   actions?: ReactNode;
   /**
@@ -281,6 +282,22 @@ function VendorCaptureFields() {
 
 function PurchaseCaptureFields() {
   return <EntityIntentFields entity="purchase" intent="capture" />;
+}
+
+/**
+ * Product's rich fields are entirely generic now (`inspector.edit.sections`
+ * declares its section grammar) — the only bespoke piece left is the `media`
+ * hook below (Identify product, manuals, label images).
+ */
+function ProductFields({ record }: EntityEditorFieldsProps) {
+  return (
+    <EntityIntentFields
+      entity="product"
+      intent="full"
+      mode={record ? "edit" : "create"}
+      record={record}
+    />
+  );
 }
 
 function FinancialAccountFields({ form, record }: EntityEditorFieldsProps) {
@@ -507,6 +524,8 @@ type EntityEditorPresentationKey =
   | "project:create:capture"
   | "vendor:create:capture"
   | "purchase:create:capture"
+  | "product:create:full"
+  | "product:update:full"
   | "financialAccount:create:capture"
   | "financialAccount:update:full"
   | "financialTransaction:create:capture"
@@ -528,6 +547,8 @@ interface PresentationEntityByKey {
   "project:create:capture": "project";
   "vendor:create:capture": "vendor";
   "purchase:create:capture": "purchase";
+  "product:create:full": "product";
+  "product:update:full": "product";
   "financialAccount:create:capture": "financialAccount";
   "financialAccount:update:full": "financialAccount";
   "financialTransaction:create:capture": "financialTransaction";
@@ -602,6 +623,24 @@ const presentations = {
       "One vendor order or receipt event. Its Expenses are the categorized spend lines added afterward, and every dollar lives on them.",
     Fields: PurchaseCaptureFields,
     successMessage: (result) => `Logged "${purchaseLabel(result)}"`,
+  },
+  "product:create:full": {
+    title: () => "New product",
+    description: () =>
+      "Add the thing you own to track what you have and what it's worth. Scan a barcode or add one by hand.",
+    size: "lg",
+    Fields: ProductFields,
+    media: productMedia,
+    successMessage: (result) => `Added "${resultName(result, "product")}"`,
+  },
+  "product:update:full": {
+    title: () => "Edit product",
+    description: () => "Change this product's own fields.",
+    submitLabel: "Save changes",
+    size: "lg",
+    Fields: ProductFields,
+    media: productMedia,
+    successMessage: () => "Product updated",
   },
   "financialAccount:create:capture": {
     title: () => "New Account",

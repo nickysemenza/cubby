@@ -71,43 +71,6 @@ function devToolControl<TFieldValues extends FieldValues>(
   return control as never;
 }
 
-// Base props shared by all forms
-interface BaseFormProps {
-  isPending: boolean;
-  error?: string | readonly string[];
-  onCancel?: () => void;
-}
-
-// Generic create mode props
-interface CreateModeProps<TCreateData> extends BaseFormProps {
-  mode: "create";
-  onCreate: (data: TCreateData) => void;
-  onEdit?: never;
-  // The entity property will be specified in the consuming component
-}
-
-// Generic edit mode props
-interface EditModeProps<TEditData, TEntity> extends BaseFormProps {
-  mode: "edit";
-  onEdit: (data: TEditData) => void;
-  onCreate?: never;
-  entity: TEntity;
-}
-
-/**
- * Shared create/edit prop union for a rich entity form built on
- * `useEntityFormController` — replaces each form's hand-rolled
- * `Create*FormProps`/`Edit*FormProps` pair. Keeps `EditModeProps`'s `entity`
- * field name (rather than e.g. `record`) so these forms stay assignable to
- * `ComponentType<EditModeProps<TEditData, TEntity>>`, the shape a detail
- * edit surface (`ProductEditDialog`) invokes the form with.
- */
-export type EntityFormProps<
-  TCreateData,
-  TEditData = TCreateData,
-  TEntity = TCreateData,
-> = CreateModeProps<TCreateData> | EditModeProps<TEditData, TEntity>;
-
 export function getSubmitButtonText(mode: "create" | "edit"): string {
   return mode === "create" ? "Create" : "Save";
 }

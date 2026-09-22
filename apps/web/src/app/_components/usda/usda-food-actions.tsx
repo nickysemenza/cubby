@@ -1,5 +1,4 @@
 import type { IngredientShortcode } from "@cubby/schemas/identifiers";
-import type { ProductCreateInput } from "@cubby/schemas/product";
 import type { FoodSummaryWithLinkedProducts } from "@cubby/schemas/usda";
 import { useRouter } from "@tanstack/react-router";
 import { Link2, PackagePlus } from "lucide-react";
@@ -14,21 +13,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from "~/components/ui/dialog";
-import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
-import { getErrorMessage } from "~/lib/error-utils";
-import { savedWithBackgroundWork } from "~/lib/recompute-summary";
+import { productCreateRequest } from "~/entities/editing/editor-requests";
+import { EntityEditDialog } from "~/entities/editing/entity-edit-dialog";
 
 import type { ComboboxItem } from "../combobox/combobox-types";
 import { EntityPicker } from "../combobox/entity-picker";
 import { WithEntitySearch } from "../combobox/with-search-hook";
-import { useEntityActionMutation } from "../hooks/useActionMutation";
-import { ProductCreateDialog } from "../products/product-create-dialog";
-import { ProductForm } from "../products/product-form";
-
-const productCreateMutationOptions = entityMutationOptionsFactory(
-  "product",
-  "create",
-);
 
 /**
  * USDA-food-derived prefill shared by both actions below: manufacturer/UPC/
@@ -37,13 +27,13 @@ const productCreateMutationOptions = entityMutationOptionsFactory(
  */
 function foodProductPrefill(food: FoodSummaryWithLinkedProducts) {
   return {
-    initialName: food.foodInfo.description || undefined,
-    initialManufacturer:
+    name: food.foodInfo.description || undefined,
+    manufacturer:
       food.brandedFoodInfo?.brand_owner ??
       food.brandedFoodInfo?.brand_name ??
       undefined,
-    initialUpc: food.brandedFoodInfo?.gtin_upc ?? null,
-    initialFdcId: food.fdc_id,
+    upc: food.brandedFoodInfo?.gtin_upc ?? null,
+    fdcId: food.fdc_id,
   };
 }
 
@@ -61,15 +51,10 @@ function CreateProductFromFoodButton({
         <PackagePlus />
         Create product from this food
       </Button>
-      <ProductCreateDialog
+      <EntityEditDialog
         open={open}
         onOpenChange={setOpen}
-        seed={{
-          name: foodProductPrefill(food).initialName,
-          manufacturer: foodProductPrefill(food).initialManufacturer,
-          upc: foodProductPrefill(food).initialUpc,
-          fdcId: foodProductPrefill(food).initialFdcId,
-        }}
+        request={productCreateRequest(foodProductPrefill(food))}
         onSuccess={() => void router.invalidate()}
       />
     </>
@@ -101,91 +86,63 @@ function LinkFoodToIngredientButton({
     setOpen(next);
   };
 
-  const createProduct = useEntityActionMutation({
-    entity: "product",
-    operation: "create",
-    mutationFn: productCreateMutationOptions,
-    success: (product) =>
-      savedWithBackgroundWork(
-        product.sideEffects,
-        `Linked ${foodName} to ${ingredient?.name ?? "ingredient"}`,
-      ),
-    onSuccess: () => {
-      void router.invalidate();
-      handleOpenChange(false);
-    },
-    error: (err) => `Failed to create product: ${getErrorMessage(err)}`,
-  });
-
   return (
     <>
       <Button variant="outline" size="sm" onClick={() => setOpen(true)}>
         <Link2 />
         Link to an ingredient
       </Button>
-      <Dialog open={open} onOpenChange={handleOpenChange}>
+      <Dialog open={open && !ingredient} onOpenChange={handleOpenChange}>
         <DialogContent size="xl">
-          {!ingredient ? (
-            <>
-              <DialogHeader>
-                <DialogTitle>Link {foodName} to an ingredient</DialogTitle>
-                <DialogDescription>
-                  Choose the ingredient this food should back — a new product
-                  carrying the USDA link is created for it.
-                </DialogDescription>
-              </DialogHeader>
-              <div className="mt-4">
-                <WithEntitySearch entity="ingredient">
-                  {({
-                    items,
-                    onSearchChange,
-                    isLoading,
-                    onCreateNew,
-                    onOpenChange,
-                  }) => (
-                    <EntityPicker
-                      entity="ingredient"
-                      label="ingredient"
-                      items={items}
-                      value={ingredient}
-                      setValue={setIngredient}
-                      onSearchChange={onSearchChange}
-                      isLoading={isLoading}
-                      onCreateNew={onCreateNew}
-                      onOpenChange={onOpenChange}
-                      openOnMount
-                      placeholder="Search ingredients…"
-                    />
-                  )}
-                </WithEntitySearch>
-              </div>
-            </>
-          ) : (
-            <>
-              <DialogHeader>
-                <DialogTitle>Create product for {ingredient.name}</DialogTitle>
-                <DialogDescription>
-                  Prefilled from {foodName}.
-                </DialogDescription>
-              </DialogHeader>
-              <div className="mt-4">
-                <ProductForm
-                  mode="create"
-                  isPending={createProduct.isPending}
-                  error={createProduct.error?.message}
-                  onCancel={() => setIngredient(null)}
-                  onCreate={(payload: ProductCreateInput) =>
-                    createProduct.mutate(payload)
-                  }
-                  initialIngredient={ingredient}
-                  embedded
-                  {...foodProductPrefill(food)}
+          <DialogHeader>
+            <DialogTitle>Link {foodName} to an ingredient</DialogTitle>
+            <DialogDescription>
+              Choose the ingredient this food should back — a new product
+              carrying the USDA link is created for it.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="mt-4">
+            <WithEntitySearch entity="ingredient">
+              {({
+                items,
+                onSearchChange,
+                isLoading,
+                onCreateNew,
+                onOpenChange,
+              }) => (
+                <EntityPicker
+                  entity="ingredient"
+                  label="ingredient"
+                  items={items}
+                  value={ingredient}
+                  setValue={setIngredient}
+                  onSearchChange={onSearchChange}
+                  isLoading={isLoading}
+                  onCreateNew={onCreateNew}
+                  onOpenChange={onOpenChange}
+                  openOnMount
+                  placeholder="Search ingredients…"
                 />
-              </div>
-            </>
-          )}
+              )}
+            </WithEntitySearch>
+          </div>
         </DialogContent>
       </Dialog>
+      {/* Step 2 — the generic create dialog, prefilled from the food and the
+          ingredient chosen above (closes the `ingredient → product → fdc_id`
+          hop in one save). */}
+      <EntityEditDialog
+        open={open && ingredient !== null}
+        onOpenChange={handleOpenChange}
+        request={productCreateRequest({
+          ...foodProductPrefill(food),
+          ingredientId: ingredient?.id,
+        })}
+        onSuccess={() => {
+          void router.invalidate();
+          handleOpenChange(false);
+        }}
+      />
     </>
   );
 }

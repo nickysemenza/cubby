@@ -17,12 +17,14 @@ import { verbDef } from "./action-verbs";
 
 describe("createActionFor", () => {
   it("uses the /new route when the entity has one", () => {
-    expect(createActionFor("product")).toEqual({ to: "/products/new" });
+    expect(createActionFor("recipe")).toEqual({ to: "/recipes/new" });
   });
 
   // The bug this exists for: a dialog-created entity has no `/new` route, so
   // anything reading `routes.new` alone concluded it couldn't be created.
-  it.each(["task", "project", "expense", "meal"] as const)(
+  // Product joined this list once its rich create/edit form moved onto the
+  // generic dialog (`route.create: "dialog"`).
+  it.each(["task", "project", "expense", "meal", "product"] as const)(
     "resolves %s to its deep-linked create dialog",
     (entity) => {
       expect(

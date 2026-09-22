@@ -1672,7 +1672,7 @@ describe("typed entity compiler", () => {
       "title: (record) => record.name",
     );
     expect(artifact("entity-routes.gen.ts")).toContain(
-      'product:{basePath:"products",routes:{detail:"/products/$shortcode",list:"/products",create:"page",new:"/products/new"}}',
+      'product:{basePath:"products",routes:{detail:"/products/$shortcode",list:"/products",create:"dialog"}}',
     );
     // Field schemas are read off the declaration BY KEY at load time — never
     // by a positional `definition.model.fields[N]` that a mid-roster insert
