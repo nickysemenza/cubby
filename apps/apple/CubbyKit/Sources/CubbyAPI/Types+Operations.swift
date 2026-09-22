@@ -4407,6 +4407,7 @@ public enum Operations {
                     case productCategory = "productCategory"
                     case importRun = "importRun"
                     case device = "device"
+                    case imageSighting = "imageSighting"
                 }
                 /// - Remark: Generated from `#/paths/api/v1/fieldExplanation/explain/GET/query/entityType`.
                 public var entityType: Operations.FieldExplanation_explain.Input.Query.EntityTypePayload
@@ -7750,6 +7751,998 @@ public enum Operations {
             /// - Throws: An error if `self` is not `.`default``.
             /// - SeeAlso: `.`default``.
             public var `default`: Operations.Resources_gardenEntry_timeline.Output.Default {
+                get throws {
+                    switch self {
+                    case let .`default`(_, response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "default",
+                            response: self
+                        )
+                    }
+                }
+            }
+        }
+        @frozen public enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            public init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            public var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            public static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
+    /// Use page=1&pageSize=20&sort=name,-createdAt. Filters are individual query parameters: text is literal, numbers and booleans are plain, and a list repeats its key (tag=a&tag=b). Response pagination metadata remains zero-based. Resource methods depend on entity capabilities.
+    ///
+    /// - Remark: HTTP `GET /api/v1/image-sightings`.
+    /// - Remark: Generated from `#/paths//api/v1/image-sightings/get(resources.imageSighting.list)`.
+    public enum Resources_imageSighting_list {
+        public static let id: Swift.String = "resources.imageSighting.list"
+        public struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/api/v1/image-sightings/GET/query`.
+            public struct Query: Sendable, Hashable {
+                /// Calendar day as "YYYY-MM-DD"
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/image-sightings/GET/query/createdFrom`.
+                public var createdFrom: Swift.String?
+                /// Calendar day as "YYYY-MM-DD"
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/image-sightings/GET/query/createdTo`.
+                public var createdTo: Swift.String?
+                /// Calendar day as "YYYY-MM-DD"
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/image-sightings/GET/query/updatedFrom`.
+                public var updatedFrom: Swift.String?
+                /// Calendar day as "YYYY-MM-DD"
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/image-sightings/GET/query/updatedTo`.
+                public var updatedTo: Swift.String?
+                /// - Remark: Generated from `#/paths/api/v1/image-sightings/GET/query/SourceTypePayload`.
+                @frozen public enum SourceTypePayloadPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case userLibrary = "userLibrary"
+                    case cloudShared = "cloudShared"
+                    case iTunesSynced = "iTunesSynced"
+                }
+                /// - Remark: Generated from `#/paths/api/v1/image-sightings/GET/query/sourceType`.
+                public typealias SourceTypePayload = [Operations.Resources_imageSighting_list.Input.Query.SourceTypePayloadPayload]
+                /// - Remark: Generated from `#/paths/api/v1/image-sightings/GET/query/sourceType`.
+                public var sourceType: Operations.Resources_imageSighting_list.Input.Query.SourceTypePayload?
+                /// - Remark: Generated from `#/paths/api/v1/image-sightings/GET/query/MatchKindPayload`.
+                @frozen public enum MatchKindPayloadPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case _import = "import"
+                    case libraryMatch = "libraryMatch"
+                }
+                /// - Remark: Generated from `#/paths/api/v1/image-sightings/GET/query/matchKind`.
+                public typealias MatchKindPayload = [Operations.Resources_imageSighting_list.Input.Query.MatchKindPayloadPayload]
+                /// - Remark: Generated from `#/paths/api/v1/image-sightings/GET/query/matchKind`.
+                public var matchKind: Operations.Resources_imageSighting_list.Input.Query.MatchKindPayload?
+                /// image shortcode, e.g. IMG-4K7M
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/image-sightings/GET/query/ImageIdPayload`.
+                public struct ImageIdPayloadPayload: Codable, Hashable, Sendable {
+                    /// image shortcode, e.g. IMG-4K7M
+                    ///
+                    /// - Remark: Generated from `#/paths/api/v1/image-sightings/GET/query/ImageIdPayload/value1`.
+                    public var value1: Swift.String?
+                    /// - Remark: Generated from `#/paths/api/v1/image-sightings/GET/query/ImageIdPayload/value2`.
+                    @frozen public enum Value2Payload: String, Codable, Hashable, Sendable, CaseIterable {
+                        case __unresolvableEntityFilter = "__unresolvable_entity_filter__"
+                    }
+                    /// - Remark: Generated from `#/paths/api/v1/image-sightings/GET/query/ImageIdPayload/value2`.
+                    public var value2: Operations.Resources_imageSighting_list.Input.Query.ImageIdPayloadPayload.Value2Payload?
+                    /// Creates a new `ImageIdPayloadPayload`.
+                    ///
+                    /// - Parameters:
+                    ///   - value1: image shortcode, e.g. IMG-4K7M
+                    ///   - value2:
+                    public init(
+                        value1: Swift.String? = nil,
+                        value2: Operations.Resources_imageSighting_list.Input.Query.ImageIdPayloadPayload.Value2Payload? = nil
+                    ) {
+                        self.value1 = value1
+                        self.value2 = value2
+                    }
+                    public init(from decoder: any Swift.Decoder) throws {
+                        var errors: [any Swift.Error] = []
+                        do {
+                            self.value1 = try decoder.decodeFromSingleValueContainer()
+                        } catch {
+                            errors.append(error)
+                        }
+                        do {
+                            self.value2 = try decoder.decodeFromSingleValueContainer()
+                        } catch {
+                            errors.append(error)
+                        }
+                        try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                            [
+                                self.value1,
+                                self.value2
+                            ],
+                            type: Self.self,
+                            codingPath: decoder.codingPath,
+                            errors: errors
+                        )
+                    }
+                    public func encode(to encoder: any Swift.Encoder) throws {
+                        try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                            self.value1,
+                            self.value2
+                        ])
+                    }
+                }
+                /// - Remark: Generated from `#/paths/api/v1/image-sightings/GET/query/imageId`.
+                public typealias ImageIdPayload = [Operations.Resources_imageSighting_list.Input.Query.ImageIdPayloadPayload]
+                /// - Remark: Generated from `#/paths/api/v1/image-sightings/GET/query/imageId`.
+                public var imageId: Operations.Resources_imageSighting_list.Input.Query.ImageIdPayload?
+                /// ledgerParty shortcode, e.g. LPY-4K7M
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/image-sightings/GET/query/LedgerPartyIdPayload`.
+                public struct LedgerPartyIdPayloadPayload: Codable, Hashable, Sendable {
+                    /// ledgerParty shortcode, e.g. LPY-4K7M
+                    ///
+                    /// - Remark: Generated from `#/paths/api/v1/image-sightings/GET/query/LedgerPartyIdPayload/value1`.
+                    public var value1: Swift.String?
+                    /// - Remark: Generated from `#/paths/api/v1/image-sightings/GET/query/LedgerPartyIdPayload/value2`.
+                    @frozen public enum Value2Payload: String, Codable, Hashable, Sendable, CaseIterable {
+                        case __unresolvableEntityFilter = "__unresolvable_entity_filter__"
+                    }
+                    /// - Remark: Generated from `#/paths/api/v1/image-sightings/GET/query/LedgerPartyIdPayload/value2`.
+                    public var value2: Operations.Resources_imageSighting_list.Input.Query.LedgerPartyIdPayloadPayload.Value2Payload?
+                    /// Creates a new `LedgerPartyIdPayloadPayload`.
+                    ///
+                    /// - Parameters:
+                    ///   - value1: ledgerParty shortcode, e.g. LPY-4K7M
+                    ///   - value2:
+                    public init(
+                        value1: Swift.String? = nil,
+                        value2: Operations.Resources_imageSighting_list.Input.Query.LedgerPartyIdPayloadPayload.Value2Payload? = nil
+                    ) {
+                        self.value1 = value1
+                        self.value2 = value2
+                    }
+                    public init(from decoder: any Swift.Decoder) throws {
+                        var errors: [any Swift.Error] = []
+                        do {
+                            self.value1 = try decoder.decodeFromSingleValueContainer()
+                        } catch {
+                            errors.append(error)
+                        }
+                        do {
+                            self.value2 = try decoder.decodeFromSingleValueContainer()
+                        } catch {
+                            errors.append(error)
+                        }
+                        try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                            [
+                                self.value1,
+                                self.value2
+                            ],
+                            type: Self.self,
+                            codingPath: decoder.codingPath,
+                            errors: errors
+                        )
+                    }
+                    public func encode(to encoder: any Swift.Encoder) throws {
+                        try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                            self.value1,
+                            self.value2
+                        ])
+                    }
+                }
+                /// - Remark: Generated from `#/paths/api/v1/image-sightings/GET/query/ledgerPartyId`.
+                public typealias LedgerPartyIdPayload = [Operations.Resources_imageSighting_list.Input.Query.LedgerPartyIdPayloadPayload]
+                /// - Remark: Generated from `#/paths/api/v1/image-sightings/GET/query/ledgerPartyId`.
+                public var ledgerPartyId: Operations.Resources_imageSighting_list.Input.Query.LedgerPartyIdPayload?
+                /// device shortcode, e.g. DEV-4K7M
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/image-sightings/GET/query/DeviceIdPayload`.
+                public struct DeviceIdPayloadPayload: Codable, Hashable, Sendable {
+                    /// device shortcode, e.g. DEV-4K7M
+                    ///
+                    /// - Remark: Generated from `#/paths/api/v1/image-sightings/GET/query/DeviceIdPayload/value1`.
+                    public var value1: Swift.String?
+                    /// - Remark: Generated from `#/paths/api/v1/image-sightings/GET/query/DeviceIdPayload/value2`.
+                    @frozen public enum Value2Payload: String, Codable, Hashable, Sendable, CaseIterable {
+                        case __unresolvableEntityFilter = "__unresolvable_entity_filter__"
+                    }
+                    /// - Remark: Generated from `#/paths/api/v1/image-sightings/GET/query/DeviceIdPayload/value2`.
+                    public var value2: Operations.Resources_imageSighting_list.Input.Query.DeviceIdPayloadPayload.Value2Payload?
+                    /// Creates a new `DeviceIdPayloadPayload`.
+                    ///
+                    /// - Parameters:
+                    ///   - value1: device shortcode, e.g. DEV-4K7M
+                    ///   - value2:
+                    public init(
+                        value1: Swift.String? = nil,
+                        value2: Operations.Resources_imageSighting_list.Input.Query.DeviceIdPayloadPayload.Value2Payload? = nil
+                    ) {
+                        self.value1 = value1
+                        self.value2 = value2
+                    }
+                    public init(from decoder: any Swift.Decoder) throws {
+                        var errors: [any Swift.Error] = []
+                        do {
+                            self.value1 = try decoder.decodeFromSingleValueContainer()
+                        } catch {
+                            errors.append(error)
+                        }
+                        do {
+                            self.value2 = try decoder.decodeFromSingleValueContainer()
+                        } catch {
+                            errors.append(error)
+                        }
+                        try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                            [
+                                self.value1,
+                                self.value2
+                            ],
+                            type: Self.self,
+                            codingPath: decoder.codingPath,
+                            errors: errors
+                        )
+                    }
+                    public func encode(to encoder: any Swift.Encoder) throws {
+                        try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                            self.value1,
+                            self.value2
+                        ])
+                    }
+                }
+                /// - Remark: Generated from `#/paths/api/v1/image-sightings/GET/query/deviceId`.
+                public typealias DeviceIdPayload = [Operations.Resources_imageSighting_list.Input.Query.DeviceIdPayloadPayload]
+                /// - Remark: Generated from `#/paths/api/v1/image-sightings/GET/query/deviceId`.
+                public var deviceId: Operations.Resources_imageSighting_list.Input.Query.DeviceIdPayload?
+                /// Page number, starting at 1 (default 1)
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/image-sightings/GET/query/page`.
+                public var page: Swift.Int?
+                /// Items per page (default 10, maximum 500)
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/image-sightings/GET/query/pageSize`.
+                public var pageSize: Swift.Int?
+                /// Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: observedAt, capturedAt, createdAt, updatedAt. Default: -observedAt
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/image-sightings/GET/query/sort`.
+                public var sort: Swift.String?
+                /// - Remark: Generated from `#/paths/api/v1/image-sightings/GET/query/groupBy`.
+                @frozen public enum GroupByPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case observedAt = "observedAt"
+                    case capturedAt = "capturedAt"
+                    case createdAt = "createdAt"
+                    case updatedAt = "updatedAt"
+                }
+                /// Group rows by one field. One of: observedAt, capturedAt, createdAt, updatedAt
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/image-sightings/GET/query/groupBy`.
+                public var groupBy: Operations.Resources_imageSighting_list.Input.Query.GroupByPayload?
+                /// Creates a new `Query`.
+                ///
+                /// - Parameters:
+                ///   - createdFrom: Calendar day as "YYYY-MM-DD"
+                ///   - createdTo: Calendar day as "YYYY-MM-DD"
+                ///   - updatedFrom: Calendar day as "YYYY-MM-DD"
+                ///   - updatedTo: Calendar day as "YYYY-MM-DD"
+                ///   - sourceType:
+                ///   - matchKind:
+                ///   - imageId:
+                ///   - ledgerPartyId:
+                ///   - deviceId:
+                ///   - page: Page number, starting at 1 (default 1)
+                ///   - pageSize: Items per page (default 10, maximum 500)
+                ///   - sort: Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: observedAt, capturedAt, createdAt, updatedAt. Default: -observedAt
+                ///   - groupBy: Group rows by one field. One of: observedAt, capturedAt, createdAt, updatedAt
+                public init(
+                    createdFrom: Swift.String? = nil,
+                    createdTo: Swift.String? = nil,
+                    updatedFrom: Swift.String? = nil,
+                    updatedTo: Swift.String? = nil,
+                    sourceType: Operations.Resources_imageSighting_list.Input.Query.SourceTypePayload? = nil,
+                    matchKind: Operations.Resources_imageSighting_list.Input.Query.MatchKindPayload? = nil,
+                    imageId: Operations.Resources_imageSighting_list.Input.Query.ImageIdPayload? = nil,
+                    ledgerPartyId: Operations.Resources_imageSighting_list.Input.Query.LedgerPartyIdPayload? = nil,
+                    deviceId: Operations.Resources_imageSighting_list.Input.Query.DeviceIdPayload? = nil,
+                    page: Swift.Int? = nil,
+                    pageSize: Swift.Int? = nil,
+                    sort: Swift.String? = nil,
+                    groupBy: Operations.Resources_imageSighting_list.Input.Query.GroupByPayload? = nil
+                ) {
+                    self.createdFrom = createdFrom
+                    self.createdTo = createdTo
+                    self.updatedFrom = updatedFrom
+                    self.updatedTo = updatedTo
+                    self.sourceType = sourceType
+                    self.matchKind = matchKind
+                    self.imageId = imageId
+                    self.ledgerPartyId = ledgerPartyId
+                    self.deviceId = deviceId
+                    self.page = page
+                    self.pageSize = pageSize
+                    self.sort = sort
+                    self.groupBy = groupBy
+                }
+            }
+            public var query: Operations.Resources_imageSighting_list.Input.Query
+            /// - Remark: Generated from `#/paths/api/v1/image-sightings/GET/header`.
+            public struct Headers: Sendable, Hashable {
+                public var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_imageSighting_list.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - accept:
+                public init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_imageSighting_list.AcceptableContentType>] = .defaultValues()) {
+                    self.accept = accept
+                }
+            }
+            public var headers: Operations.Resources_imageSighting_list.Input.Headers
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - query:
+            ///   - headers:
+            public init(
+                query: Operations.Resources_imageSighting_list.Input.Query = .init(),
+                headers: Operations.Resources_imageSighting_list.Input.Headers = .init()
+            ) {
+                self.query = query
+                self.headers = headers
+            }
+        }
+        @frozen public enum Output: Sendable, Hashable {
+            public struct Ok: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/image-sightings/GET/responses/200/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/image-sightings/GET/responses/200/content/application\/json`.
+                    case json(Components.Schemas.ImageSightingListPage)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.ImageSightingListPage {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.Resources_imageSighting_list.Output.Ok.Body
+                /// Creates a new `Ok`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.Resources_imageSighting_list.Output.Ok.Body) {
+                    self.body = body
+                }
+            }
+            /// 200
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/image-sightings/get(resources.imageSighting.list)/responses/200`.
+            ///
+            /// HTTP response code: `200 ok`.
+            case ok(Operations.Resources_imageSighting_list.Output.Ok)
+            /// The associated value of the enum case if `self` is `.ok`.
+            ///
+            /// - Throws: An error if `self` is not `.ok`.
+            /// - SeeAlso: `.ok`.
+            public var ok: Operations.Resources_imageSighting_list.Output.Ok {
+                get throws {
+                    switch self {
+                    case let .ok(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            public struct Default: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/image-sightings/GET/responses/default/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/image-sightings/GET/responses/default/content/application\/json`.
+                    case json(Components.Schemas.ApiError)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.ApiError {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.Resources_imageSighting_list.Output.Default.Body
+                /// Creates a new `Default`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.Resources_imageSighting_list.Output.Default.Body) {
+                    self.body = body
+                }
+            }
+            /// Error
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/image-sightings/get(resources.imageSighting.list)/responses/default`.
+            ///
+            /// HTTP response code: `default`.
+            case `default`(statusCode: Swift.Int, Operations.Resources_imageSighting_list.Output.Default)
+            /// The associated value of the enum case if `self` is `.`default``.
+            ///
+            /// - Throws: An error if `self` is not `.`default``.
+            /// - SeeAlso: `.`default``.
+            public var `default`: Operations.Resources_imageSighting_list.Output.Default {
+                get throws {
+                    switch self {
+                    case let .`default`(_, response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "default",
+                            response: self
+                        )
+                    }
+                }
+            }
+        }
+        @frozen public enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            public init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            public var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            public static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
+    /// - Remark: HTTP `POST /api/v1/image-sightings`.
+    /// - Remark: Generated from `#/paths//api/v1/image-sightings/post(resources.imageSighting.create)`.
+    public enum Resources_imageSighting_create {
+        public static let id: Swift.String = "resources.imageSighting.create"
+        public struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/api/v1/image-sightings/POST/header`.
+            public struct Headers: Sendable, Hashable {
+                public var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_imageSighting_create.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - accept:
+                public init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_imageSighting_create.AcceptableContentType>] = .defaultValues()) {
+                    self.accept = accept
+                }
+            }
+            public var headers: Operations.Resources_imageSighting_create.Input.Headers
+            /// - Remark: Generated from `#/paths/api/v1/image-sightings/POST/requestBody`.
+            @frozen public enum Body: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/image-sightings/POST/requestBody/content/application\/json`.
+                case json(Components.Schemas.ImageSightingCreateInput)
+            }
+            public var body: Operations.Resources_imageSighting_create.Input.Body?
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - headers:
+            ///   - body:
+            public init(
+                headers: Operations.Resources_imageSighting_create.Input.Headers = .init(),
+                body: Operations.Resources_imageSighting_create.Input.Body? = nil
+            ) {
+                self.headers = headers
+                self.body = body
+            }
+        }
+        @frozen public enum Output: Sendable, Hashable {
+            public struct Created: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/image-sightings/POST/responses/201/headers`.
+                public struct Headers: Sendable, Hashable {
+                    /// Created resource URL
+                    ///
+                    /// - Remark: Generated from `#/paths/api/v1/image-sightings/POST/responses/201/headers/Location`.
+                    public var location: Swift.String?
+                    /// Creates a new `Headers`.
+                    ///
+                    /// - Parameters:
+                    ///   - location: Created resource URL
+                    public init(location: Swift.String? = nil) {
+                        self.location = location
+                    }
+                }
+                /// Received HTTP response headers
+                public var headers: Operations.Resources_imageSighting_create.Output.Created.Headers
+                /// - Remark: Generated from `#/paths/api/v1/image-sightings/POST/responses/201/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/image-sightings/POST/responses/201/content/application\/json`.
+                    case json(Components.Schemas.GeneratedEntityMutationCreateResultImageSighting)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.GeneratedEntityMutationCreateResultImageSighting {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.Resources_imageSighting_create.Output.Created.Body
+                /// Creates a new `Created`.
+                ///
+                /// - Parameters:
+                ///   - headers: Received HTTP response headers
+                ///   - body: Received HTTP response body
+                public init(
+                    headers: Operations.Resources_imageSighting_create.Output.Created.Headers = .init(),
+                    body: Operations.Resources_imageSighting_create.Output.Created.Body
+                ) {
+                    self.headers = headers
+                    self.body = body
+                }
+            }
+            /// 201
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/image-sightings/post(resources.imageSighting.create)/responses/201`.
+            ///
+            /// HTTP response code: `201 created`.
+            case created(Operations.Resources_imageSighting_create.Output.Created)
+            /// The associated value of the enum case if `self` is `.created`.
+            ///
+            /// - Throws: An error if `self` is not `.created`.
+            /// - SeeAlso: `.created`.
+            public var created: Operations.Resources_imageSighting_create.Output.Created {
+                get throws {
+                    switch self {
+                    case let .created(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "created",
+                            response: self
+                        )
+                    }
+                }
+            }
+            public struct Default: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/image-sightings/POST/responses/default/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/image-sightings/POST/responses/default/content/application\/json`.
+                    case json(Components.Schemas.ApiError)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.ApiError {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.Resources_imageSighting_create.Output.Default.Body
+                /// Creates a new `Default`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.Resources_imageSighting_create.Output.Default.Body) {
+                    self.body = body
+                }
+            }
+            /// Error
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/image-sightings/post(resources.imageSighting.create)/responses/default`.
+            ///
+            /// HTTP response code: `default`.
+            case `default`(statusCode: Swift.Int, Operations.Resources_imageSighting_create.Output.Default)
+            /// The associated value of the enum case if `self` is `.`default``.
+            ///
+            /// - Throws: An error if `self` is not `.`default``.
+            /// - SeeAlso: `.`default``.
+            public var `default`: Operations.Resources_imageSighting_create.Output.Default {
+                get throws {
+                    switch self {
+                    case let .`default`(_, response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "default",
+                            response: self
+                        )
+                    }
+                }
+            }
+        }
+        @frozen public enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            public init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            public var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            public static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
+    /// - Remark: HTTP `GET /api/v1/image-sightings/{id}`.
+    /// - Remark: Generated from `#/paths//api/v1/image-sightings/{id}/get(resources.imageSighting.get)`.
+    public enum Resources_imageSighting_get {
+        public static let id: Swift.String = "resources.imageSighting.get"
+        public struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/api/v1/image-sightings/{id}/GET/path`.
+            public struct Path: Sendable, Hashable {
+                /// imageSighting shortcode, e.g. IMS-4K7M
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/image-sightings/{id}/GET/path/id`.
+                public var id: Swift.String
+                /// Creates a new `Path`.
+                ///
+                /// - Parameters:
+                ///   - id: imageSighting shortcode, e.g. IMS-4K7M
+                public init(id: Swift.String) {
+                    self.id = id
+                }
+            }
+            public var path: Operations.Resources_imageSighting_get.Input.Path
+            /// - Remark: Generated from `#/paths/api/v1/image-sightings/{id}/GET/header`.
+            public struct Headers: Sendable, Hashable {
+                public var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_imageSighting_get.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - accept:
+                public init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_imageSighting_get.AcceptableContentType>] = .defaultValues()) {
+                    self.accept = accept
+                }
+            }
+            public var headers: Operations.Resources_imageSighting_get.Input.Headers
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - path:
+            ///   - headers:
+            public init(
+                path: Operations.Resources_imageSighting_get.Input.Path,
+                headers: Operations.Resources_imageSighting_get.Input.Headers = .init()
+            ) {
+                self.path = path
+                self.headers = headers
+            }
+        }
+        @frozen public enum Output: Sendable, Hashable {
+            public struct Ok: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/image-sightings/{id}/GET/responses/200/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/image-sightings/{id}/GET/responses/200/content/application\/json`.
+                    case json(Components.Schemas.ImageSightingDetail)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.ImageSightingDetail {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.Resources_imageSighting_get.Output.Ok.Body
+                /// Creates a new `Ok`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.Resources_imageSighting_get.Output.Ok.Body) {
+                    self.body = body
+                }
+            }
+            /// 200
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/image-sightings/{id}/get(resources.imageSighting.get)/responses/200`.
+            ///
+            /// HTTP response code: `200 ok`.
+            case ok(Operations.Resources_imageSighting_get.Output.Ok)
+            /// The associated value of the enum case if `self` is `.ok`.
+            ///
+            /// - Throws: An error if `self` is not `.ok`.
+            /// - SeeAlso: `.ok`.
+            public var ok: Operations.Resources_imageSighting_get.Output.Ok {
+                get throws {
+                    switch self {
+                    case let .ok(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            public struct Default: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/image-sightings/{id}/GET/responses/default/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/image-sightings/{id}/GET/responses/default/content/application\/json`.
+                    case json(Components.Schemas.ApiError)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.ApiError {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.Resources_imageSighting_get.Output.Default.Body
+                /// Creates a new `Default`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.Resources_imageSighting_get.Output.Default.Body) {
+                    self.body = body
+                }
+            }
+            /// Error
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/image-sightings/{id}/get(resources.imageSighting.get)/responses/default`.
+            ///
+            /// HTTP response code: `default`.
+            case `default`(statusCode: Swift.Int, Operations.Resources_imageSighting_get.Output.Default)
+            /// The associated value of the enum case if `self` is `.`default``.
+            ///
+            /// - Throws: An error if `self` is not `.`default``.
+            /// - SeeAlso: `.`default``.
+            public var `default`: Operations.Resources_imageSighting_get.Output.Default {
+                get throws {
+                    switch self {
+                    case let .`default`(_, response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "default",
+                            response: self
+                        )
+                    }
+                }
+            }
+        }
+        @frozen public enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            public init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            public var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            public static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
+    /// - Remark: HTTP `PATCH /api/v1/image-sightings/{id}`.
+    /// - Remark: Generated from `#/paths//api/v1/image-sightings/{id}/patch(resources.imageSighting.update)`.
+    public enum Resources_imageSighting_update {
+        public static let id: Swift.String = "resources.imageSighting.update"
+        public struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/api/v1/image-sightings/{id}/PATCH/path`.
+            public struct Path: Sendable, Hashable {
+                /// imageSighting shortcode, e.g. IMS-4K7M
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/image-sightings/{id}/PATCH/path/id`.
+                public var id: Swift.String
+                /// Creates a new `Path`.
+                ///
+                /// - Parameters:
+                ///   - id: imageSighting shortcode, e.g. IMS-4K7M
+                public init(id: Swift.String) {
+                    self.id = id
+                }
+            }
+            public var path: Operations.Resources_imageSighting_update.Input.Path
+            /// - Remark: Generated from `#/paths/api/v1/image-sightings/{id}/PATCH/header`.
+            public struct Headers: Sendable, Hashable {
+                public var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_imageSighting_update.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - accept:
+                public init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_imageSighting_update.AcceptableContentType>] = .defaultValues()) {
+                    self.accept = accept
+                }
+            }
+            public var headers: Operations.Resources_imageSighting_update.Input.Headers
+            /// - Remark: Generated from `#/paths/api/v1/image-sightings/{id}/PATCH/requestBody`.
+            @frozen public enum Body: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/image-sightings/{id}/PATCH/requestBody/content/application\/json`.
+                case json(Components.Schemas.ImageSightingUpdateData)
+            }
+            public var body: Operations.Resources_imageSighting_update.Input.Body?
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - path:
+            ///   - headers:
+            ///   - body:
+            public init(
+                path: Operations.Resources_imageSighting_update.Input.Path,
+                headers: Operations.Resources_imageSighting_update.Input.Headers = .init(),
+                body: Operations.Resources_imageSighting_update.Input.Body? = nil
+            ) {
+                self.path = path
+                self.headers = headers
+                self.body = body
+            }
+        }
+        @frozen public enum Output: Sendable, Hashable {
+            public struct Ok: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/image-sightings/{id}/PATCH/responses/200/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/image-sightings/{id}/PATCH/responses/200/content/application\/json`.
+                    case json(Components.Schemas.GeneratedEntityMutationUpdateResultImageSighting)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.GeneratedEntityMutationUpdateResultImageSighting {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.Resources_imageSighting_update.Output.Ok.Body
+                /// Creates a new `Ok`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.Resources_imageSighting_update.Output.Ok.Body) {
+                    self.body = body
+                }
+            }
+            /// 200
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/image-sightings/{id}/patch(resources.imageSighting.update)/responses/200`.
+            ///
+            /// HTTP response code: `200 ok`.
+            case ok(Operations.Resources_imageSighting_update.Output.Ok)
+            /// The associated value of the enum case if `self` is `.ok`.
+            ///
+            /// - Throws: An error if `self` is not `.ok`.
+            /// - SeeAlso: `.ok`.
+            public var ok: Operations.Resources_imageSighting_update.Output.Ok {
+                get throws {
+                    switch self {
+                    case let .ok(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            public struct Default: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/image-sightings/{id}/PATCH/responses/default/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/image-sightings/{id}/PATCH/responses/default/content/application\/json`.
+                    case json(Components.Schemas.ApiError)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.ApiError {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.Resources_imageSighting_update.Output.Default.Body
+                /// Creates a new `Default`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.Resources_imageSighting_update.Output.Default.Body) {
+                    self.body = body
+                }
+            }
+            /// Error
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/image-sightings/{id}/patch(resources.imageSighting.update)/responses/default`.
+            ///
+            /// HTTP response code: `default`.
+            case `default`(statusCode: Swift.Int, Operations.Resources_imageSighting_update.Output.Default)
+            /// The associated value of the enum case if `self` is `.`default``.
+            ///
+            /// - Throws: An error if `self` is not `.`default``.
+            /// - SeeAlso: `.`default``.
+            public var `default`: Operations.Resources_imageSighting_update.Output.Default {
                 get throws {
                     switch self {
                     case let .`default`(_, response):
@@ -28258,6 +29251,7 @@ public enum Operations {
                     case productCategory = "productCategory"
                     case importRun = "importRun"
                     case device = "device"
+                    case imageSighting = "imageSighting"
                 }
                 /// - Remark: Generated from `#/paths/api/v1/recommendations/forEntity/GET/query/entityType`.
                 public var entityType: Operations.Recommendations_forEntity.Input.Query.EntityTypePayload

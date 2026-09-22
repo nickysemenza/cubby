@@ -6,7 +6,7 @@ import { type SQL, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import type { Database } from "~/server/db";
-import { importRun } from "~/server/db/schema";
+import { imageSighting, importRun } from "~/server/db/schema";
 import { cookbookListWhere } from "~/server/repo/cookbook";
 import { getDb } from "~/server/repo/database-helpers";
 import { notDeleted } from "~/server/repo/database-helpers/query";
@@ -74,6 +74,7 @@ const COUNT_WHERE = {
   planting: () => buildPlantingWhere(),
   gardenEntry: () => buildGardenEntryWhere(),
   importRun: () => notDeleted(importRun),
+  imageSighting: () => notDeleted(imageSighting),
 } satisfies Record<CountableEntity, CountWhere>;
 
 type EntityCounts = Record<CountableEntity, number>;

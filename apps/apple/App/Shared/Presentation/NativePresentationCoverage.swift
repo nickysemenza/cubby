@@ -85,7 +85,11 @@ enum NativePresentationCoverage {
             .recipeTotals,
             .vendorAgentHints,
             .wishCandidates,
-            .recipeYield:
+            .recipeYield,
+            .imageCaptureLocation,
+            .imageProvenanceEvidence,
+            .imageSightingCamera,
+            .imageSightingLocation:
             .unsupported("This structured detail is available on web.")
         }
     }

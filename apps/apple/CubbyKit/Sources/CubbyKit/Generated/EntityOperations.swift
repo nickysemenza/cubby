@@ -28,6 +28,7 @@ extension EntityKey {
         case .financialTransaction: [.create, .delete, .get, .list, .update]
         case .gardenEntry: [.create, .delete, .get, .list, .timeline, .update]
         case .image: [.delete, .update]
+        case .imageSighting: [.create, .delete, .get, .list, .update]
         case .ingredient: [.create, .delete, .get, .list, .update]
         case .inventory: [.create, .delete, .get, .list, .update]
         case .ledgerParty: [.create, .delete, .get, .list, .update]
@@ -59,6 +60,7 @@ extension EntityKey {
         case .financialTransaction: [.create, .get, .list, .update]
         case .gardenEntry: [.create, .get, .list, .timeline, .update]
         case .image: [.get, .list, .update]
+        case .imageSighting: [.create, .get, .list, .update]
         case .ingredient: [.create, .get, .list, .update]
         case .inventory: [.create, .get, .list, .update]
         case .ledgerParty: [.create, .get, .list, .update]
@@ -89,6 +91,7 @@ extension EntityKey {
         case .financialTransaction: .resource
         case .gardenEntry: .resource
         case .image: .image
+        case .imageSighting: .resource
         case .ingredient: .resource
         case .inventory: .resource
         case .ledgerParty: .resource
@@ -312,6 +315,29 @@ extension EntityDescriptor {
                 }
             }
             let page = try await client.resources_gardenEntry_list(query: query).ok.body.json
+            return ListPage(
+                items: try page.items.map(JSONValue.init(encoding:)),
+                meta: page.meta
+            )
+        case .imageSighting:
+            var query = Operations.Resources_imageSighting_list.Input.Query(page: page, pageSize: pageSize, sort: sort)
+            for name in filters.names {
+                guard let value = filters[name] else { continue }
+                switch name {
+                case "createdFrom": query.createdFrom = try value.string(name)
+                case "createdTo": query.createdTo = try value.string(name)
+                case "updatedFrom": query.updatedFrom = try value.string(name)
+                case "updatedTo": query.updatedTo = try value.string(name)
+                case "sourceType": query.sourceType = try value.enumCases(name)
+                case "matchKind": query.matchKind = try value.enumCases(name)
+                case "imageId": query.imageId = value.strings.map { .init(value1: $0) }
+                case "ledgerPartyId": query.ledgerPartyId = value.strings.map { .init(value1: $0) }
+                case "deviceId": query.deviceId = value.strings.map { .init(value1: $0) }
+                case "groupBy": query.groupBy = try value.enumCase(name)
+                default: throw EntityFilterError.unknownParameter(.imageSighting, name)
+                }
+            }
+            let page = try await client.resources_imageSighting_list(query: query).ok.body.json
             return ListPage(
                 items: try page.items.map(JSONValue.init(encoding:)),
                 meta: page.meta
@@ -1022,6 +1048,13 @@ extension EntityDescriptor {
                 case "groupBy": ["observedOn", "createdAt", "updatedAt", "kind"]
                 default: nil
             }
+        case .imageSighting:
+            switch wireKey {
+                case "sourceType": ["userLibrary", "cloudShared", "iTunesSynced"]
+                case "matchKind": ["import", "libraryMatch"]
+                case "groupBy": ["observedAt", "capturedAt", "createdAt", "updatedAt"]
+                default: nil
+            }
         case .ingredient:
             switch wireKey {
                 case "dataStatus": ["complete", "needs_data", "defect"]
@@ -1472,6 +1505,8 @@ extension EntityDescriptor {
             return try JSONValue(encoding: try await client.resources_financialTransaction_get(path: .init(id: id)).ok.body.json)
         case .gardenEntry:
             return try JSONValue(encoding: try await client.resources_gardenEntry_get(path: .init(id: id)).ok.body.json)
+        case .imageSighting:
+            return try JSONValue(encoding: try await client.resources_imageSighting_get(path: .init(id: id)).ok.body.json)
         case .ingredient:
             return try JSONValue(encoding: try await client.resources_ingredient_get(path: .init(id: id)).ok.body.json)
         case .inventory:
@@ -1527,6 +1562,9 @@ extension EntityDescriptor {
             return try createdID(created.item)
         case .gardenEntry:
             let created = try await client.resources_gardenEntry_create(body: .json(try body.decoded())).created.body.json
+            return try createdID(created.item)
+        case .imageSighting:
+            let created = try await client.resources_imageSighting_create(body: .json(try body.decoded())).created.body.json
             return try createdID(created.item)
         case .ingredient:
             let created = try await client.resources_ingredient_create(body: .json(try body.decoded())).created.body.json
@@ -1595,6 +1633,8 @@ extension EntityDescriptor {
             _ = try await client.resources_gardenEntry_update(path: .init(id: id), body: .json(try body.decoded())).ok
         case .image:
             _ = try await client.resources_image_update(path: .init(id: id), body: .json(try body.decoded())).ok
+        case .imageSighting:
+            _ = try await client.resources_imageSighting_update(path: .init(id: id), body: .json(try body.decoded())).ok
         case .ingredient:
             _ = try await client.resources_ingredient_update(path: .init(id: id), body: .json(try body.decoded())).ok
         case .inventory:

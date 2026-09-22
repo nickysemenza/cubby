@@ -204,6 +204,7 @@ struct EntityRowTests {
                 "sourceAssetUrl": "https://catalog.example/images/sample.jpg",
                 "sourceName": "Example Catalog",
                 "useOriginal": true,
+                "captureAttribution": "none",
                 "createdAt": "2026-01-01T00:00:00.000Z",
                 "updatedAt": "2026-01-01T00:00:00.000Z",
                 "purpose": "item",

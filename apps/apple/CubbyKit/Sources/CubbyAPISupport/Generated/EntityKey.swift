@@ -30,4 +30,5 @@ public enum EntityKey: String, CaseIterable, Codable, Sendable {
   case productCategory = "productCategory"
   case importRun = "importRun"
   case device = "device"
+  case imageSighting = "imageSighting"
 }

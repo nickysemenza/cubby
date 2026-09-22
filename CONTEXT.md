@@ -33,8 +33,20 @@ A Product whose movements net to one or more units owned, with no live inventory
 _Avoid_: lost product, missing inventory, shrinkage
 
 **Ledger Party**:
-An economic participant in household contribution accounting. Its kind is exactly member, guest, or household. A null attribution is unknown; unknown is not a party.
+An economic participant in household contribution accounting, and the identity behind Device ownership and Image Sighting reports. Its kind is exactly member, guest, or household. A null attribution is unknown; unknown is not a party.
 _Avoid_: payer, account owner, beneficiary
+
+**Device**:
+One install of the native app, registered on its first companion connection and identified by a stable per-install identifier rather than a session or push token. Optionally owned by a Ledger Party member and linked to the physical phone or Mac as a Product. An automatic-work switch, set on the device itself, and a remote-pause override, set from the web, together decide whether the job dispatcher sends it companion work; either one is enough to make it a plain viewer.
+_Avoid_: session, connection, install id
+
+**Image Sighting**:
+One party's report that a stored Image exists in their photo library or cloud asset store, made by one reporting Device. A repeat report for the same image, owner, and asset key replaces the sighting's observation columns rather than duplicating it. Several sightings on one Image are ordinary: Photo Library sync can put the same asset on a member's phone and Mac, and a photo shared between members can be reported by more than one Ledger Party.
+_Avoid_: upload record, device attachment, image copy
+
+**Capture Attribution**:
+How confidently an Image's derived capturer, timestamp, and location reflect reality. `none` is the default with nothing derived; `derived` means one Ledger Party's Image Sightings (or, failing that, embedded EXIF) settled it; `ambiguous` means several parties scored equally and no sighting decides it; `confirmed` means a member set it by hand, and a confirmed value is never recomputed.
+_Avoid_: provenance, source, upload metadata
 
 **Household Party**:
 The intentional shared participant used when spending or consumption belongs to the household collectively. It is not a synthetic person and does not imply a debt.

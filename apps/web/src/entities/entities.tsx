@@ -16,6 +16,7 @@ import {
   Carrot,
   ChefHat,
   CreditCard,
+  Eye,
   Hammer,
   Heart,
   Image,
@@ -197,6 +198,7 @@ const LUCIDE_ICONS = {
   Carrot,
   ChefHat,
   CreditCard,
+  Eye,
   Hammer,
   Heart,
   Image,
@@ -401,6 +403,10 @@ const entityDefinitions = withEntityNames({
   },
   device: {
     ...generatedBrowserRoutes.device,
+    color: INK.slate,
+  },
+  imageSighting: {
+    ...generatedBrowserRoutes.imageSighting,
     color: INK.slate,
   },
   purchase: {

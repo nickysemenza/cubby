@@ -6,6 +6,7 @@ import type {
   EntityRef,
   ImageId,
   ImageShortcode,
+  LedgerPartyId,
   ProductId,
   ProjectId,
   RecipeId,
@@ -45,7 +46,7 @@ import {
   type GetColumnData,
   sql,
 } from "drizzle-orm";
-import type { PgColumn, PgTable } from "drizzle-orm/pg-core";
+import type { PgColumn, PgTable, PgUpdateSetSource } from "drizzle-orm/pg-core";
 import { match } from "ts-pattern";
 
 import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
@@ -65,10 +66,12 @@ import {
   gardenEntry,
   gardenEntryImage,
   image,
+  imageSighting,
   importHunt,
   importPreparedOrder,
   importRun,
   importRunTarget,
+  ledgerParty,
   location,
   locationImage,
   meal,
@@ -106,6 +109,7 @@ import {
   type ListReadIntent,
   nextImageSortOrder,
   notDeleted,
+  unwrapDb,
   updateAndReturn,
   uuidArrayParam,
   withTransaction,
@@ -124,6 +128,10 @@ import {
   generateUniqueShortcode,
   insertWithShortcode,
 } from "~/server/repo/shortcode-utils";
+import type {
+  DeriveImageCaptureCurrent as ImageCaptureStateRow,
+  DeriveImageCaptureSighting as SightingCaptureRow,
+} from "~/server/services/image-capture-derivation";
 import { getR2PublicUrl } from "~/server/utils/r2-public-url";
 
 import { loadImageRepresentations } from "./image-processing";
@@ -376,7 +384,7 @@ export const createPendingImageRecord = async (
     sourceFingerprint?: { hash: string; aspectRatio: number };
     width?: number;
     height?: number;
-    source?: "own" | "catalog" | "unknown";
+    source?: "own" | "catalog" | "unknown" | "screenshot";
     sourcePageUrl?: string | null;
     sourceAssetUrl?: string | null;
     sourceName?: string | null;
@@ -423,10 +431,11 @@ export const createUploadedImageRecord = async (
     targetType?: string | null;
     targetId?: string | null;
     idempotencyKey?: string | null;
-    source?: "own" | "catalog" | "unknown";
+    source?: "own" | "catalog" | "unknown" | "screenshot";
     sourcePageUrl?: string | null;
     sourceAssetUrl?: string | null;
     sourceName?: string | null;
+    provenanceEvidence?: { basis: "import-url" } | null;
   },
 ) => {
   return await insertWithShortcode(db, "image", {
@@ -631,6 +640,89 @@ function isGardenEntryAssociationKindLabel(
   return kind in GARDEN_ENTRY_ASSOCIATION_KIND_LABELS;
 }
 
+/** Batch-resolve `Image.capturedByPartyId` to its live ledger party's
+ * shortcode/name, mirroring `loadImageRepresentations`'s shape — one query
+ * for a whole page rather than one join per row. */
+async function loadCapturedByParties(
+  db: Database,
+  partyIds: readonly (LedgerPartyId | null)[],
+): Promise<Map<LedgerPartyId, { shortcode: string; name: string }>> {
+  const ids = [
+    ...new Set(partyIds.filter((id): id is LedgerPartyId => id !== null)),
+  ];
+  if (ids.length === 0) return new Map();
+  const rows = await getDb(db)
+    .select({
+      id: ledgerParty.id,
+      shortcode: ledgerParty.shortcode,
+      name: ledgerParty.name,
+    })
+    .from(ledgerParty)
+    .where(and(inArray(ledgerParty.id, ids), notDeleted(ledgerParty)));
+  return new Map(rows.map((row) => [row.id, row]));
+}
+
+/**
+ * The three DB-touching seams `image-capture-derivation.ts`'s
+ * `deriveAndStoreImageCapture` calls instead of importing `~/server/db/schema`
+ * or `~/server/repo/database-helpers` directly — services are not allowed to
+ * touch either (see the `no-restricted-imports` lint rule). Kept together
+ * here rather than split across `image.ts`/`image-sighting.ts` so the service
+ * has one repo module to import from, with no import cycle back to
+ * `image-sighting.ts` (which itself calls into the derivation service).
+ */
+export async function getImageCaptureState(
+  db: Database | DrizzleTransaction,
+  imageId: ImageId,
+): Promise<ImageCaptureStateRow | undefined> {
+  return unwrapDb(db).query.image.findFirst({
+    where: eq(image.id, imageId),
+    columns: {
+      source: true,
+      captureAttribution: true,
+      capturedAt: true,
+      capturedAtOffsetMinutes: true,
+      captureLocation: true,
+      capturePlaceName: true,
+      captureDeviceLabel: true,
+      capturedByPartyId: true,
+      provenanceEvidence: true,
+    },
+  });
+}
+
+export async function setImageCaptureState(
+  db: Database | DrizzleTransaction,
+  imageId: ImageId,
+  result: ImageCaptureStateRow,
+): Promise<void> {
+  await unwrapDb(db).update(image).set(result).where(eq(image.id, imageId));
+}
+
+export async function getLiveSightingsForCapture(
+  db: Database | DrizzleTransaction,
+  imageId: ImageId,
+): Promise<SightingCaptureRow[]> {
+  return unwrapDb(db).query.imageSighting.findMany({
+    where: and(eq(imageSighting.imageId, imageId), notDeleted(imageSighting)),
+    columns: {
+      ledgerPartyId: true,
+      sourceType: true,
+      matchKind: true,
+      hashDistance: true,
+      aspectGate: true,
+      mediaSubtypes: true,
+      originalFilename: true,
+      location: true,
+      placeName: true,
+      capturedAtOffsetMinutes: true,
+      camera: true,
+      capturedAt: true,
+      addedAt: true,
+    },
+  });
+}
+
 /**
  * Transform image with pre-loaded relations to API format.
  * Expects relations to be loaded via `with` clause - no additional queries.
@@ -638,6 +730,7 @@ function isGardenEntryAssociationKindLabel(
  */
 const imageWithRelationsToAPI = (
   imageData: ImageWithRelations,
+  capturedByParty: { shortcode: string; name: string } | null = null,
 ): ImageWithEntity => {
   const associations: ImageAssociation[] = [
     ...imageData.productImages
@@ -763,6 +856,17 @@ const imageWithRelationsToAPI = (
     sourcePageUrl: imageData.sourcePageUrl,
     sourceAssetUrl: imageData.sourceAssetUrl,
     sourceName: imageData.sourceName,
+    capturedAt: imageData.capturedAt,
+    capturedAtOffsetMinutes: imageData.capturedAtOffsetMinutes,
+    captureLocation: imageData.captureLocation,
+    capturePlaceName: imageData.capturePlaceName,
+    captureDeviceLabel: imageData.captureDeviceLabel,
+    capturedByPartyId: capturedByParty
+      ? parseShortcodeFor("ledgerParty", capturedByParty.shortcode)
+      : null,
+    capturedByName: capturedByParty?.name ?? null,
+    captureAttribution: imageData.captureAttribution,
+    provenanceEvidence: imageData.provenanceEvidence,
     createdAt: imageData.createdAt,
     updatedAt: imageData.updatedAt,
     entityType: legacyEntityType,
@@ -908,6 +1012,9 @@ const imageReferenceCondition = (
     "ImageDescriptionCorrection.imageId": sql`FALSE`,
     // A run worklist row records history, never ownership of the image.
     "ImportRunTarget.imageId": sql`FALSE`,
+    // A sighting is reported evidence, not user ownership — same reasoning
+    // as the processing children above.
+    "ImageSighting.imageId": sql`FALSE`,
     "ImportPreparedOrder.primaryDocumentImageId": exists(
       dbc
         .select({ one: sql`1` })
@@ -1199,15 +1306,29 @@ export const imageList = async (
   });
 
   const imageShortcodes = images.map((item) => item.shortcode);
-  const [representations, processingIssues, importTargets, analysisSummaries] =
-    await Promise.all([
-      loadImageRepresentations(db, imageShortcodes),
-      loadImageProcessingIssues(db, imageShortcodes),
-      loadImportTargets(db, imageShortcodes),
-      loadImageAnalysisSummaries(db, imageShortcodes),
-    ]);
+  const [
+    representations,
+    processingIssues,
+    importTargets,
+    analysisSummaries,
+    capturedByParties,
+  ] = await Promise.all([
+    loadImageRepresentations(db, imageShortcodes),
+    loadImageProcessingIssues(db, imageShortcodes),
+    loadImportTargets(db, imageShortcodes),
+    loadImageAnalysisSummaries(db, imageShortcodes),
+    loadCapturedByParties(
+      db,
+      images.map((item) => item.capturedByPartyId),
+    ),
+  ]);
   const processedImages = images.map((item) => ({
-    ...imageWithRelationsToAPI(item),
+    ...imageWithRelationsToAPI(
+      item,
+      item.capturedByPartyId
+        ? (capturedByParties.get(item.capturedByPartyId) ?? null)
+        : null,
+    ),
     representations: representations.get(item.shortcode),
     processingIssue: processingIssues.get(item.shortcode) ?? null,
     importTarget: importTargets.get(item.shortcode) ?? null,
@@ -1233,16 +1354,19 @@ export const getImageById = async (
     throw createAppError("IMAGE_NOT_FOUND", "Image not found");
   }
 
-  const [representations, importTargets, analysisSummaries] = await Promise.all(
-    [
+  const [representations, importTargets, analysisSummaries, capturedByParties] =
+    await Promise.all([
       loadImageRepresentations(db, [imageRecord.shortcode]),
       loadImportTargets(db, [imageRecord.shortcode]),
       loadImageAnalysisSummaries(db, [imageRecord.shortcode]),
-    ],
-  );
+      loadCapturedByParties(db, [imageRecord.capturedByPartyId]),
+    ]);
+  const capturedByParty = imageRecord.capturedByPartyId
+    ? (capturedByParties.get(imageRecord.capturedByPartyId) ?? null)
+    : null;
 
   return {
-    ...imageWithRelationsToAPI(imageRecord),
+    ...imageWithRelationsToAPI(imageRecord, capturedByParty),
     representations: representations.get(imageRecord.shortcode),
     importTarget: importTargets.get(imageRecord.shortcode) ?? null,
     analysisSummary: analysisSummaries.get(imageRecord.shortcode) ?? null,
@@ -1271,8 +1395,17 @@ export const getImagesByShortcodes = async (
     db,
     records.map((row) => row.shortcode),
   );
+  const capturedByParties = await loadCapturedByParties(
+    db,
+    records.map((row) => row.capturedByPartyId),
+  );
   return records.map((row) => ({
-    ...imageWithRelationsToAPI(row),
+    ...imageWithRelationsToAPI(
+      row,
+      row.capturedByPartyId
+        ? (capturedByParties.get(row.capturedByPartyId) ?? null)
+        : null,
+    ),
     representations: representations.get(row.shortcode),
   }));
 };
@@ -1289,12 +1422,36 @@ export const updateImage = async (
   imageId: string,
   data: ImageUpdateInput,
 ): Promise<ImageWithEntity> => {
-  await updateAndReturn(
-    db,
-    image,
-    { filename: data.filename, useOriginal: data.useOriginal },
-    and(eq(image.id, imageId), notDeleted(image)),
-  );
+  // A manual write to either capture field is a confirmation: it always sets
+  // `captureAttribution: "confirmed"` (never overwritten by later derivation
+  // — see `deriveImageCapture`) and records `provenanceEvidence: { basis:
+  // "manual" }`, even when the caller clears `capturedByPartyId` to `null`.
+  const manualCapture =
+    data.capturedByPartyId !== undefined || data.capturedAt !== undefined;
+  await withTransaction(db, async (tx) => {
+    const capturedByPartyId =
+      data.capturedByPartyId === undefined
+        ? undefined
+        : data.capturedByPartyId === null
+          ? null
+          : await resolveOrThrow(tx, "ledgerParty", data.capturedByPartyId);
+    const values: PgUpdateSetSource<typeof image> = {
+      filename: data.filename,
+      useOriginal: data.useOriginal,
+    };
+    if (manualCapture) {
+      values.capturedAt = data.capturedAt;
+      values.capturedByPartyId = capturedByPartyId;
+      values.captureAttribution = "confirmed";
+      values.provenanceEvidence = { basis: "manual" };
+    }
+    await updateAndReturn(
+      tx,
+      image,
+      values,
+      and(eq(image.id, imageId), notDeleted(image)),
+    );
+  });
   return getImageById(db, imageId);
 };
 
@@ -1452,6 +1609,11 @@ export const IMAGE_HARD_DELETE = {
     effect: "hard-delete",
     description:
       "A confirmed description cannot outlive the image it describes.",
+  },
+  "ImageSighting.imageId": {
+    code: "deleteRow",
+    effect: "hard-delete",
+    description: "A sighting cannot outlive the image it reports on.",
   },
   "ImportPreparedOrder.primaryDocumentImageId": {
     code: "clearFk",
@@ -1649,6 +1811,29 @@ const IMAGE_EDGE_OPERATIONS = {
                 imageDescriptionCorrection.imageId,
                 parseImageIds(imageIds),
               )
+            : undefined,
+        );
+      return rows.map(({ imageId }) => imageId);
+    },
+    joinColumn: undefined,
+  },
+  "ImageSighting.imageId": {
+    countsAsOwnership: false,
+    clear: async (tx: DrizzleTransaction, imageIds: string[]) => {
+      await tx
+        .delete(imageSighting)
+        .where(inArray(imageSighting.imageId, parseImageIds(imageIds)));
+    },
+    findReferenced: async (
+      dbc: DrizzleClient | DrizzleTransaction,
+      imageIds?: string[],
+    ) => {
+      const rows = await dbc
+        .select({ imageId: imageSighting.imageId })
+        .from(imageSighting)
+        .where(
+          imageIds
+            ? inArray(imageSighting.imageId, parseImageIds(imageIds))
             : undefined,
         );
       return rows.map(({ imageId }) => imageId);
@@ -3037,10 +3222,11 @@ export const createAndAssociateUploadedImage = async (
     targetType?: string | null;
     targetId?: string | null;
     idempotencyKey?: string | null;
-    source?: "own" | "catalog" | "unknown";
+    source?: "own" | "catalog" | "unknown" | "screenshot";
     sourcePageUrl?: string | null;
     sourceAssetUrl?: string | null;
     sourceName?: string | null;
+    provenanceEvidence?: { basis: "import-url" } | null;
   },
   entity: AttachableImageRef,
   documentKind?: PurchaseDocumentKind,

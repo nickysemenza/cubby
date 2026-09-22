@@ -1081,6 +1081,21 @@ The public image URL is generated from this Image record's current object-storag
 - Value paths: Default `url`
 - Source dependencies: Image storage key (`key`)
 
+### Captured by (`capturedByPartyId`)
+
+The capturing member is derived by scoring the image's photo-library sightings, falling back to embedded EXIF evidence when there are none, and can always be set manually.
+
+- Rule: `image.capturedBy`, version 1
+- Resolver: Image capture provenance
+- Value paths: Default `capturedByPartyId`
+
+### Captured By Name (`capturedByName`)
+
+The current name of the derived capturing member, if set.
+
+- Rule: `image.capturedByName`, version 1
+- Resolver: Declared field projection
+
 ## Plantings (`planting`)
 
 ### Guide sow window (`guideSowWindow`)

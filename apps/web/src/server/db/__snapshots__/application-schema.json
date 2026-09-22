@@ -3146,6 +3146,61 @@
           "primaryKey": false,
           "notNull": false
         },
+        "capturedAt": {
+          "name": "capturedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "capturedAtOffsetMinutes": {
+          "name": "capturedAtOffsetMinutes",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "captureLocation": {
+          "name": "captureLocation",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "capturePlaceName": {
+          "name": "capturePlaceName",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "captureDeviceLabel": {
+          "name": "captureDeviceLabel",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "capturedByPartyId": {
+          "name": "capturedByPartyId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "captureAttribution": {
+          "name": "captureAttribution",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'none'"
+        },
+        "provenanceEvidence": {
+          "name": "provenanceEvidence",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "metadataRevision": {
+          "name": "metadataRevision",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
         "targetType": {
           "name": "targetType",
           "type": "text",
@@ -3274,9 +3329,38 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
+        },
+        "Image_capturedByPartyId_idx": {
+          "name": "Image_capturedByPartyId_idx",
+          "columns": [
+            {
+              "expression": "capturedByPartyId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
-      "foreignKeys": {},
+      "foreignKeys": {
+        "Image_capturedByPartyId_LedgerParty_id_fk": {
+          "name": "Image_capturedByPartyId_LedgerParty_id_fk",
+          "tableFrom": "Image",
+          "tableTo": "LedgerParty",
+          "columnsFrom": [
+            "capturedByPartyId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
@@ -4418,6 +4502,324 @@
         "ImageProcessingSubmissionJob_baseline_check": {
           "name": "ImageProcessingSubmissionJob_baseline_check",
           "value": "\"ImageProcessingSubmissionJob\".\"baselineAttempts\" >= 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.ImageSighting": {
+      "name": "ImageSighting",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "shortcode": {
+          "name": "shortcode",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "imageId": {
+          "name": "imageId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "ledgerPartyId": {
+          "name": "ledgerPartyId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "deviceId": {
+          "name": "deviceId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "assetKey": {
+          "name": "assetKey",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "cloudIdentifier": {
+          "name": "cloudIdentifier",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "localIdentifier": {
+          "name": "localIdentifier",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "sourceType": {
+          "name": "sourceType",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "mediaSubtypes": {
+          "name": "mediaSubtypes",
+          "type": "text[]",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'::text[]"
+        },
+        "originalFilename": {
+          "name": "originalFilename",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "pixelWidth": {
+          "name": "pixelWidth",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "pixelHeight": {
+          "name": "pixelHeight",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "hasAdjustments": {
+          "name": "hasAdjustments",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "capturedAt": {
+          "name": "capturedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "capturedAtOffsetMinutes": {
+          "name": "capturedAtOffsetMinutes",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "addedAt": {
+          "name": "addedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "location": {
+          "name": "location",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "placeName": {
+          "name": "placeName",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "camera": {
+          "name": "camera",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "matchKind": {
+          "name": "matchKind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "hashDistance": {
+          "name": "hashDistance",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "aspectGate": {
+          "name": "aspectGate",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "observedAt": {
+          "name": "observedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updatedAt": {
+          "name": "updatedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "deletedAt": {
+          "name": "deletedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "ImageSighting_shortcode_unique": {
+          "name": "ImageSighting_shortcode_unique",
+          "columns": [
+            {
+              "expression": "shortcode",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "ImageSighting_image_party_asset_key": {
+          "name": "ImageSighting_image_party_asset_key",
+          "columns": [
+            {
+              "expression": "imageId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "ledgerPartyId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "assetKey",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"ImageSighting\".\"deletedAt\" IS NULL",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "ImageSighting_imageId_idx": {
+          "name": "ImageSighting_imageId_idx",
+          "columns": [
+            {
+              "expression": "imageId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "ImageSighting_ledgerPartyId_idx": {
+          "name": "ImageSighting_ledgerPartyId_idx",
+          "columns": [
+            {
+              "expression": "ledgerPartyId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "ImageSighting_deviceId_idx": {
+          "name": "ImageSighting_deviceId_idx",
+          "columns": [
+            {
+              "expression": "deviceId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "ImageSighting_imageId_Image_id_fk": {
+          "name": "ImageSighting_imageId_Image_id_fk",
+          "tableFrom": "ImageSighting",
+          "tableTo": "Image",
+          "columnsFrom": [
+            "imageId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "ImageSighting_ledgerPartyId_LedgerParty_id_fk": {
+          "name": "ImageSighting_ledgerPartyId_LedgerParty_id_fk",
+          "tableFrom": "ImageSighting",
+          "tableTo": "LedgerParty",
+          "columnsFrom": [
+            "ledgerPartyId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "ImageSighting_deviceId_Device_id_fk": {
+          "name": "ImageSighting_deviceId_Device_id_fk",
+          "tableFrom": "ImageSighting",
+          "tableTo": "Device",
+          "columnsFrom": [
+            "deviceId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "ImageSighting_sourceType_check": {
+          "name": "ImageSighting_sourceType_check",
+          "value": "\"ImageSighting\".\"sourceType\" IN ('userLibrary', 'cloudShared', 'iTunesSynced')"
+        },
+        "ImageSighting_matchKind_check": {
+          "name": "ImageSighting_matchKind_check",
+          "value": "\"ImageSighting\".\"matchKind\" IN ('import', 'libraryMatch')"
         }
       },
       "isRLSEnabled": false

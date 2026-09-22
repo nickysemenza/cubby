@@ -10,6 +10,7 @@ const resolverLabels = {
   inventoryOwnership: "Inventory ownership",
   productValuation: "Product valuation",
   imageRepresentation: "Image representation",
+  imageCapture: "Image capture provenance",
   productQuantity: "Product quantity ledger",
   recipeTotals: "Recipe totals",
   locationValuation: "Location valuation",

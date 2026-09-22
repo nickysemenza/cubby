@@ -50,11 +50,34 @@ export type MappableImageRecord = {
   renderStatus?: ImageOut["renderStatus"] | null;
   storageStatus?: ImageOut["storageStatus"] | null;
   verifiedAt?: Date | null;
-  source?: "own" | "catalog" | "unknown" | null;
+  source?: "own" | "catalog" | "unknown" | "screenshot" | null;
   sourcePageUrl?: string | null;
   sourceAssetUrl?: string | null;
   sourceName?: string | null;
   useOriginal?: boolean;
+  capturedAt?: Date | null;
+  capturedAtOffsetMinutes?: number | null;
+  captureLocation?: {
+    lat: number;
+    lng: number;
+    altitude?: number;
+    horizontalAccuracy?: number;
+  } | null;
+  capturePlaceName?: string | null;
+  captureDeviceLabel?: string | null;
+  capturedByPartyId?: string | null;
+  captureAttribution?: "none" | "derived" | "ambiguous" | "confirmed" | null;
+  provenanceEvidence?: {
+    basis:
+      | "manual"
+      | "sighting"
+      | "import-url"
+      | "exif"
+      | "analysis"
+      | "filename";
+    ruleId?: string;
+    detail?: string;
+  } | null;
   createdAt: Date;
   updatedAt: Date;
   deletedAt?: Date | null;
@@ -105,6 +128,20 @@ export const mapImages = (
       sourceAssetUrl: dbImage.sourceAssetUrl ?? null,
       sourceName: dbImage.sourceName ?? null,
       useOriginal: dbImage.useOriginal ?? false,
+      capturedAt: dbImage.capturedAt ?? null,
+      capturedAtOffsetMinutes: dbImage.capturedAtOffsetMinutes ?? null,
+      captureLocation: dbImage.captureLocation ?? null,
+      capturePlaceName: dbImage.capturePlaceName ?? null,
+      captureDeviceLabel: dbImage.captureDeviceLabel ?? null,
+      // Not resolved here: `dbImage.capturedByPartyId` (when present) is the
+      // raw ledger-party uuid, not its public shortcode, and this generic
+      // join-row mapper has no DB access to resolve either it or the live
+      // party name. Callers that need them read from the dedicated Image
+      // list/detail path (`repo/image.ts`), which does.
+      capturedByPartyId: null,
+      capturedByName: null,
+      captureAttribution: dbImage.captureAttribution ?? "none",
+      provenanceEvidence: dbImage.provenanceEvidence ?? null,
       createdAt: dbImage.createdAt,
       updatedAt: dbImage.updatedAt,
     }));

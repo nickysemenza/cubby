@@ -382,6 +382,7 @@ const metadataSchemas = () => {
               "inventoryOwnership",
               "productValuation",
               "imageRepresentation",
+              "imageCapture",
               "productQuantity",
               "recipeTotals",
               "locationValuation",

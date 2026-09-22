@@ -126,7 +126,10 @@
     "./product-category": "./src/product-category.ts",
     "./product-category-fields": "./src/product-category-fields.ts",
     "./device": "./src/device.ts",
-    "./device-fields": "./src/device-fields.ts"
+    "./device-fields": "./src/device-fields.ts",
+    "./image-sighting": "./src/image-sighting.ts",
+    "./image-sighting-fields": "./src/image-sighting-fields.ts",
+    "./image-capture-fields": "./src/image-capture-fields.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

@@ -87,6 +87,7 @@ import {
   generatedFinancialAccountColumns,
   generatedFinancialTransactionColumns,
   generatedImageColumns,
+  generatedImageSightingColumns,
   generatedIngredientColumns,
   generatedInventoryColumns,
   generatedLedgerPartyColumns,
@@ -854,23 +855,61 @@ export const inventoryEntry = pgTable(
   ],
 );
 
-export const image = pgTable("Image", generatedImageColumns(), (table) => [
-  shortcodeUnique("Image", table.shortcode),
-  check(
-    "Image_perceptualHash_format_check",
-    sql`${table.perceptualHash} IS NULL OR ${table.perceptualHash} ~ '^[0-9a-f]{16}$'`,
-  ),
-  uniqueIndex("Image_key_key")
-    .on(table.key)
-    .where(sql`${table.deletedAt} IS NULL`),
-  index("Image_createdAt_idx").on(table.createdAt),
-  index("Image_status_idx").on(table.status),
-  uniqueIndex("Image_attachment_idempotency_key")
-    .on(table.targetType, table.targetId, table.idempotencyKey)
-    .where(
-      sql`${table.idempotencyKey} IS NOT NULL AND ${table.deletedAt} IS NULL`,
+/** A durable economic participant in the household ledger. */
+export const ledgerParty = pgTable(
+  "LedgerParty",
+  {
+    ...generatedLedgerPartyColumns(),
+    // Auth ownership is intentionally storage-only: a member claims it from
+    // Settings, never through generic ledger-party create/update forms.
+    userId: text("userId")
+      .$type<UserId>()
+      .references(() => user.id),
+  },
+  (table) => [
+    shortcodeUnique("LedgerParty", table.shortcode),
+    index("LedgerParty_kind_idx").on(table.kind),
+    uniqueIndex("LedgerParty_household_singleton_key")
+      .on(table.kind)
+      .where(sql`${table.deletedAt} IS NULL AND ${table.kind} = 'household'`),
+    uniqueIndex("LedgerParty_member_user_key")
+      .on(table.userId)
+      .where(sql`${table.deletedAt} IS NULL AND ${table.userId} IS NOT NULL`),
+    check(
+      "LedgerParty_kind_check",
+      sql`${table.kind} IN ('member', 'guest', 'household')`,
     ),
-]);
+    check(
+      "LedgerParty_user_member_check",
+      sql`${table.userId} IS NULL OR ${table.kind} = 'member'`,
+    ),
+  ],
+);
+
+export const image = pgTable(
+  "Image",
+  generatedImageColumns({
+    ledgerParty: (): AnyPgColumn => ledgerParty.id,
+  }),
+  (table) => [
+    shortcodeUnique("Image", table.shortcode),
+    check(
+      "Image_perceptualHash_format_check",
+      sql`${table.perceptualHash} IS NULL OR ${table.perceptualHash} ~ '^[0-9a-f]{16}$'`,
+    ),
+    uniqueIndex("Image_key_key")
+      .on(table.key)
+      .where(sql`${table.deletedAt} IS NULL`),
+    index("Image_createdAt_idx").on(table.createdAt),
+    index("Image_status_idx").on(table.status),
+    uniqueIndex("Image_attachment_idempotency_key")
+      .on(table.targetType, table.targetId, table.idempotencyKey)
+      .where(
+        sql`${table.idempotencyKey} IS NOT NULL AND ${table.deletedAt} IS NULL`,
+      ),
+    index("Image_capturedByPartyId_idx").on(table.capturedByPartyId),
+  ],
+);
 
 export const productImage = pgTable(
   "ProductImage",
@@ -1259,37 +1298,6 @@ export const vendor = pgTable(
   ],
 );
 
-/** A durable economic participant in the household ledger. */
-export const ledgerParty = pgTable(
-  "LedgerParty",
-  {
-    ...generatedLedgerPartyColumns(),
-    // Auth ownership is intentionally storage-only: a member claims it from
-    // Settings, never through generic ledger-party create/update forms.
-    userId: text("userId")
-      .$type<UserId>()
-      .references(() => user.id),
-  },
-  (table) => [
-    shortcodeUnique("LedgerParty", table.shortcode),
-    index("LedgerParty_kind_idx").on(table.kind),
-    uniqueIndex("LedgerParty_household_singleton_key")
-      .on(table.kind)
-      .where(sql`${table.deletedAt} IS NULL AND ${table.kind} = 'household'`),
-    uniqueIndex("LedgerParty_member_user_key")
-      .on(table.userId)
-      .where(sql`${table.deletedAt} IS NULL AND ${table.userId} IS NOT NULL`),
-    check(
-      "LedgerParty_kind_check",
-      sql`${table.kind} IN ('member', 'guest', 'household')`,
-    ),
-    check(
-      "LedgerParty_user_member_check",
-      sql`${table.userId} IS NULL OR ${table.kind} = 'member'`,
-    ),
-  ],
-);
-
 export const financialAccount = pgTable(
   "FinancialAccount",
   generatedFinancialAccountColumns({
@@ -1342,6 +1350,35 @@ export const device = pgTable(
     index("Device_ledgerPartyId_idx").on(table.ledgerPartyId),
     index("Device_productId_idx").on(table.productId),
     check("Device_platform_check", sql`${table.platform} IN ('ios', 'macos')`),
+  ],
+);
+
+/** One report of a stored Image appearing in a member's photo library or
+ * cloud asset — see the "Sightings, not arrays" decision in
+ * docs/plans/image-provenance-and-devices.md. */
+export const imageSighting = pgTable(
+  "ImageSighting",
+  generatedImageSightingColumns({
+    image: (): AnyPgColumn => image.id,
+    ledgerParty: (): AnyPgColumn => ledgerParty.id,
+    device: (): AnyPgColumn => device.id,
+  }),
+  (table) => [
+    shortcodeUnique("ImageSighting", table.shortcode),
+    uniqueIndex("ImageSighting_image_party_asset_key")
+      .on(table.imageId, table.ledgerPartyId, table.assetKey)
+      .where(sql`${table.deletedAt} IS NULL`),
+    index("ImageSighting_imageId_idx").on(table.imageId),
+    index("ImageSighting_ledgerPartyId_idx").on(table.ledgerPartyId),
+    index("ImageSighting_deviceId_idx").on(table.deviceId),
+    check(
+      "ImageSighting_sourceType_check",
+      sql`${table.sourceType} IN ('userLibrary', 'cloudShared', 'iTunesSynced')`,
+    ),
+    check(
+      "ImageSighting_matchKind_check",
+      sql`${table.matchKind} IN ('import', 'libraryMatch')`,
+    ),
   ],
 );
 

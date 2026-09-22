@@ -31,6 +31,8 @@ import {
   device,
   expenseAttribution,
   financialAccount,
+  image,
+  imageSighting,
   inventoryEntry,
   ledgerParty,
   ledgerTransfer,
@@ -159,6 +161,18 @@ export const LEDGER_PARTY_DELETE_EDGE_POLICY = {
     description:
       "Deleting a member clears its devices' owner rather than blocking the delete — a device survives as an unowned install.",
   },
+  "ImageSighting.ledgerPartyId": {
+    code: "block-image-sightings",
+    effect: "block",
+    description:
+      "A sighting's library owner retains its member scope; the reported evidence would be meaningless attached to no one.",
+  },
+  "Image.capturedByPartyId": {
+    code: "clear-captured-by",
+    effect: "detach",
+    description:
+      "Deleting a member clears the derived capturer on its images rather than blocking the delete — the image survives with no capturer until the next derivation.",
+  },
 } as const satisfies IncomingEdgePolicy<"ledgerParty", OperationDisposition>;
 
 export const LEDGER_PARTY_MERGE_EDGE_POLICY = {
@@ -245,6 +259,18 @@ export const LEDGER_PARTY_MERGE_EDGE_POLICY = {
     code: "repoint-devices",
     effect: "repoint",
     description: "A merged member's devices move to the surviving party.",
+  },
+  "ImageSighting.ledgerPartyId": {
+    code: "repoint-image-sightings",
+    effect: "repoint",
+    description:
+      "A merged member's reported image sightings move to the surviving party.",
+  },
+  "Image.capturedByPartyId": {
+    code: "repoint-captured-by",
+    effect: "repoint",
+    description:
+      "Images derived to a merged member move to the surviving party.",
   },
 } as const satisfies IncomingEdgePolicy<"ledgerParty", OperationDisposition>;
 
@@ -563,6 +589,15 @@ export async function deleteLedgerParties(
           notDeleted(inventoryEntry),
         ),
       );
+    const [sightings] = await tx
+      .select({ n: sql<number>`count(*)::int` })
+      .from(imageSighting)
+      .where(
+        and(
+          inArray(imageSighting.ledgerPartyId, ids),
+          notDeleted(imageSighting),
+        ),
+      );
     const [transfers] = await tx
       .select({ n: sql<number>`count(*)::int` })
       .from(ledgerTransfer)
@@ -581,12 +616,13 @@ export async function deleteLedgerParties(
         (inventoryOwners?.n ?? 0) +
         (transfers?.n ?? 0) +
         (portions?.n ?? 0) +
-        (foodEntries?.n ?? 0) >
+        (foodEntries?.n ?? 0) +
+        (sightings?.n ?? 0) >
       0
     )
       throw createAppError(
         "LEDGER_PARTY_HAS_EDGES",
-        "A ledger party with live attributions, accounts, inventory ownership, transfers, meal portions, or meal food entries cannot be deleted.",
+        "A ledger party with live attributions, accounts, inventory ownership, transfers, meal portions, meal food entries, or reported image sightings cannot be deleted.",
       );
     // "Device.ledgerPartyId" is a "detach" disposition, not a block: a device
     // survives its owner's deletion as an unowned install rather than
@@ -611,6 +647,14 @@ export async function deleteLedgerParties(
         })),
       );
     }
+    // "Image.capturedByPartyId" is also "detach": the image survives with no
+    // derived capturer rather than blocking the member delete. Image is not
+    // an auditable entity (`packages/schemas/src/audit.ts` excludes it), so
+    // this clears the FK without an audit entry, like every other Image write.
+    await tx
+      .update(image)
+      .set({ capturedByPartyId: null })
+      .where(and(inArray(image.capturedByPartyId, ids), notDeleted(image)));
     const { deleted } = await removeEntity(tx, {
       entity: "ledgerParty",
       ids,
@@ -1049,6 +1093,21 @@ export async function mergeLedgerParties(
         .where(and(inArray(device.ledgerPartyId, loserIds), notDeleted(device)))
         .returning({ id: device.id })
     ).length;
+    await tx
+      .update(imageSighting)
+      .set({ ledgerPartyId: keepId })
+      .where(
+        and(
+          inArray(imageSighting.ledgerPartyId, loserIds),
+          notDeleted(imageSighting),
+        ),
+      );
+    await tx
+      .update(image)
+      .set({ capturedByPartyId: keepId })
+      .where(
+        and(inArray(image.capturedByPartyId, loserIds), notDeleted(image)),
+      );
     await tx
       .update(ledgerTransfer)
       .set({ fromPartyId: keepId })

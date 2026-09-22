@@ -124,6 +124,20 @@ public protocol APIProtocol: Sendable {
     /// - Remark: HTTP `GET /api/v1/garden-entries/timeline`.
     /// - Remark: Generated from `#/paths//api/v1/garden-entries/timeline/get(resources.gardenEntry.timeline)`.
     func resources_gardenEntry_timeline(_ input: Operations.Resources_gardenEntry_timeline.Input) async throws -> Operations.Resources_gardenEntry_timeline.Output
+    /// Use page=1&pageSize=20&sort=name,-createdAt. Filters are individual query parameters: text is literal, numbers and booleans are plain, and a list repeats its key (tag=a&tag=b). Response pagination metadata remains zero-based. Resource methods depend on entity capabilities.
+    ///
+    /// - Remark: HTTP `GET /api/v1/image-sightings`.
+    /// - Remark: Generated from `#/paths//api/v1/image-sightings/get(resources.imageSighting.list)`.
+    func resources_imageSighting_list(_ input: Operations.Resources_imageSighting_list.Input) async throws -> Operations.Resources_imageSighting_list.Output
+    /// - Remark: HTTP `POST /api/v1/image-sightings`.
+    /// - Remark: Generated from `#/paths//api/v1/image-sightings/post(resources.imageSighting.create)`.
+    func resources_imageSighting_create(_ input: Operations.Resources_imageSighting_create.Input) async throws -> Operations.Resources_imageSighting_create.Output
+    /// - Remark: HTTP `GET /api/v1/image-sightings/{id}`.
+    /// - Remark: Generated from `#/paths//api/v1/image-sightings/{id}/get(resources.imageSighting.get)`.
+    func resources_imageSighting_get(_ input: Operations.Resources_imageSighting_get.Input) async throws -> Operations.Resources_imageSighting_get.Output
+    /// - Remark: HTTP `PATCH /api/v1/image-sightings/{id}`.
+    /// - Remark: Generated from `#/paths//api/v1/image-sightings/{id}/patch(resources.imageSighting.update)`.
+    func resources_imageSighting_update(_ input: Operations.Resources_imageSighting_update.Input) async throws -> Operations.Resources_imageSighting_update.Output
     /// - Remark: HTTP `GET /api/v1/image/analysis`.
     /// - Remark: Generated from `#/paths//api/v1/image/analysis/get(image.analysis)`.
     func image_analysis(_ input: Operations.Image_analysis.Input) async throws -> Operations.Image_analysis.Output
@@ -876,6 +890,54 @@ extension APIProtocol {
         try await resources_gardenEntry_timeline(Operations.Resources_gardenEntry_timeline.Input(
             query: query,
             headers: headers
+        ))
+    }
+    /// Use page=1&pageSize=20&sort=name,-createdAt. Filters are individual query parameters: text is literal, numbers and booleans are plain, and a list repeats its key (tag=a&tag=b). Response pagination metadata remains zero-based. Resource methods depend on entity capabilities.
+    ///
+    /// - Remark: HTTP `GET /api/v1/image-sightings`.
+    /// - Remark: Generated from `#/paths//api/v1/image-sightings/get(resources.imageSighting.list)`.
+    public func resources_imageSighting_list(
+        query: Operations.Resources_imageSighting_list.Input.Query = .init(),
+        headers: Operations.Resources_imageSighting_list.Input.Headers = .init()
+    ) async throws -> Operations.Resources_imageSighting_list.Output {
+        try await resources_imageSighting_list(Operations.Resources_imageSighting_list.Input(
+            query: query,
+            headers: headers
+        ))
+    }
+    /// - Remark: HTTP `POST /api/v1/image-sightings`.
+    /// - Remark: Generated from `#/paths//api/v1/image-sightings/post(resources.imageSighting.create)`.
+    public func resources_imageSighting_create(
+        headers: Operations.Resources_imageSighting_create.Input.Headers = .init(),
+        body: Operations.Resources_imageSighting_create.Input.Body? = nil
+    ) async throws -> Operations.Resources_imageSighting_create.Output {
+        try await resources_imageSighting_create(Operations.Resources_imageSighting_create.Input(
+            headers: headers,
+            body: body
+        ))
+    }
+    /// - Remark: HTTP `GET /api/v1/image-sightings/{id}`.
+    /// - Remark: Generated from `#/paths//api/v1/image-sightings/{id}/get(resources.imageSighting.get)`.
+    public func resources_imageSighting_get(
+        path: Operations.Resources_imageSighting_get.Input.Path,
+        headers: Operations.Resources_imageSighting_get.Input.Headers = .init()
+    ) async throws -> Operations.Resources_imageSighting_get.Output {
+        try await resources_imageSighting_get(Operations.Resources_imageSighting_get.Input(
+            path: path,
+            headers: headers
+        ))
+    }
+    /// - Remark: HTTP `PATCH /api/v1/image-sightings/{id}`.
+    /// - Remark: Generated from `#/paths//api/v1/image-sightings/{id}/patch(resources.imageSighting.update)`.
+    public func resources_imageSighting_update(
+        path: Operations.Resources_imageSighting_update.Input.Path,
+        headers: Operations.Resources_imageSighting_update.Input.Headers = .init(),
+        body: Operations.Resources_imageSighting_update.Input.Body? = nil
+    ) async throws -> Operations.Resources_imageSighting_update.Output {
+        try await resources_imageSighting_update(Operations.Resources_imageSighting_update.Input(
+            path: path,
+            headers: headers,
+            body: body
         ))
     }
     /// - Remark: HTTP `GET /api/v1/image/analysis`.

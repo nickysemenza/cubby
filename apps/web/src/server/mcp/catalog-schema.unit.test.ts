@@ -450,8 +450,10 @@ describe("MCP catalog schemas", () => {
       "expectedExternalId",
       "externalAccountId",
       "providerId",
-      // A Device's `installationId` is the native app's own install UUID, not
-      // a Cubby shortcode.
+      // Device.installationId (and the photo-import commit's top-level
+      // `deviceId`, which is the same installation id, not a `DEV-`
+      // shortcode) is the native app's own local identifier — never a
+      // public Cubby entity reference.
       "installationId",
     ]);
     const violations: string[] = [];
