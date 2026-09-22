@@ -328,13 +328,6 @@ history is the archive. Permanent product constraints live in the
   extract the Nutrition Facts panel into `labelNutrition` with the image as
   provenance.
 
-- **Line-level recipe patch over MCP.** Three one-field edits (onion `1 whole`
-  → `150 g`, basil `1 handful` → `15 g`, pasta 175 → 150 g) each resent all 12
-  lines and 6 instructions because the read projection strips section/line ids
-  and an update without section `id` replaces every section (see the compound
-  ingredient split note). Add `{action: "patchLine", recipeId, lineId, …}`;
-  `explain_recipe_costing` already exposes line ids.
-
 - **USDA search ranking and product-driven suggestion.** `search_usda_foods`
   is phrase/AND matching: `"chicken breast ground raw"` (sr_legacy) → 0,
   `"chicken, ground"` → 344. Tokenize and rank, and add

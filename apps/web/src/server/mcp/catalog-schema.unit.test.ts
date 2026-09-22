@@ -423,6 +423,7 @@ describe("MCP catalog schemas", () => {
       "entity_batch.items[].data.sections[].instructions[].id",
       "entity_batch.items[].data.unitMappings[].id",
       "update_meal_recipe.id",
+      "patch_recipe_line.lineId",
       "remove_meal_recipe.id",
       "save_meal_recipe_preparation.mealRecipeId",
       "update_statement_rows.selector.externalIds",
