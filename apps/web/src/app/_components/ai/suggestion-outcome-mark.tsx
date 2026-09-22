@@ -4,7 +4,8 @@ import type {
   FieldSuggestionOutcome,
   FieldSuggestionRemoval,
 } from "@cubby/schemas/ai";
-import { Sparkle } from "lucide-react";
+import { ClassicV2 } from "loading-dev";
+import { CircleAlert, Sparkle } from "lucide-react";
 import type { MouseEvent, ReactNode } from "react";
 
 import { Stack } from "~/components/layout";
@@ -14,6 +15,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "~/components/ui/popover";
+import { getErrorMessage } from "~/lib/error-utils";
 import { cn } from "~/lib/utils";
 
 import { formatProbability } from "./field-suggestion";
@@ -268,9 +270,19 @@ function OutcomePopoverBody({
   );
 }
 
-/** Phone touch-target footprint of an `inline`/`line` glyph. Shared with the
- * pending placeholder so a settling outcome swaps into space already taken. */
-const GLYPH_SLOT = "min-h-11 min-w-11 md:min-h-0 md:min-w-0";
+/** One footprint for every glyph state (checking, failed, outcome), so a
+ * settling query swaps icons in space already taken: phone touch target on
+ * `inline`/`line`, 12px elsewhere, smaller in a table cell. */
+function glyphTriggerClass(surface: SuggestionOutcomeSurface) {
+  return cn(
+    "inline-flex shrink-0 items-center justify-center rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-ring",
+    surface !== "cell" && "min-h-11 min-w-11 md:min-h-0 md:min-w-0",
+  );
+}
+
+function glyphIconClass(surface: SuggestionOutcomeSurface) {
+  return surface === "cell" ? "size-2.5" : "size-3";
+}
 
 /** The glyph itself — sized down and untabbable in a non-actionable table
  * cell, full touch-target size on `inline`/`line` surfaces. */
@@ -294,14 +306,11 @@ function MarkGlyph({
       tabIndex={surface === "cell" && !actionable ? -1 : undefined}
       onMouseDown={stopPropagation}
       onClick={stopPropagation}
-      className={cn(
-        "inline-flex shrink-0 items-center justify-center rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-ring",
-        surface !== "cell" && GLYPH_SLOT,
-      )}
+      className={glyphTriggerClass(surface)}
     >
       <Sparkle
         className={cn(
-          surface === "cell" ? "size-2.5" : "size-3",
+          glyphIconClass(surface),
           accented ? "text-primary" : "text-muted-foreground",
         )}
       />
@@ -309,19 +318,48 @@ function MarkGlyph({
   );
 }
 
-/** Inert stand-in holding an inline glyph's footprint until its outcome lands. */
-function PendingGlyphSlot({
-  reserve,
+/** The glyph before an outcome exists: rotating rays (the sparkle's own
+ * silhouette) while the field's query is in flight, an alert carrying the raw
+ * error once it fails. */
+function UnsettledMark({
+  pending,
+  error,
   surface,
 }: {
-  reserve?: boolean;
+  pending?: boolean;
+  error?: unknown;
   surface: SuggestionOutcomeSurface;
 }) {
-  if (!reserve || surface !== "inline") return null;
+  const failed = error !== undefined && error !== null;
+  if (!failed && !pending) return null;
+  const text = failed
+    ? `Suggestion unavailable: ${getErrorMessage(error)}`
+    : "Checking suggestion…";
   return (
-    <span aria-hidden className={cn("inline-flex shrink-0", GLYPH_SLOT)}>
-      <span className="size-3" />
-    </span>
+    <Popover>
+      <PopoverTrigger
+        openOnHover
+        closeDelay={150}
+        aria-label={text}
+        onMouseDown={stopPropagation}
+        onClick={stopPropagation}
+        className={glyphTriggerClass(surface)}
+      >
+        {failed ? (
+          <CircleAlert
+            className={cn(glyphIconClass(surface), "text-destructive")}
+          />
+        ) : (
+          <ClassicV2
+            size={surface === "cell" ? 10 : 12}
+            className="text-muted-foreground"
+          />
+        )}
+      </PopoverTrigger>
+      <PopoverContent side="bottom" className="w-auto max-w-xs p-2 text-xs">
+        {text}
+      </PopoverContent>
+    </Popover>
   );
 }
 
@@ -345,7 +383,8 @@ export function SuggestionOutcomeMark({
   actionable = false,
   dismissed = false,
   prune = false,
-  reserve,
+  pending,
+  error,
   review,
 }: {
   outcome?: FieldSuggestionOutcome | null;
@@ -361,17 +400,19 @@ export function SuggestionOutcomeMark({
   /** Dismissed this visit: the copy stays, the cobalt "act here" cue goes. */
   dismissed?: boolean;
   prune?: boolean;
-  /** The outcome is still in flight: hold the glyph's slot on an `inline`
-   * surface. On a phone the 44px glyph wraps onto its own line, so mounting
-   * it only on arrival pushed every later fact down mid-tap (a reset button
+  /** The outcome is still in flight. The glyph shows from the start rather
+   * than on arrival: on a phone the 44px glyph wraps onto its own line, so
+   * mounting it late pushed every later fact down mid-tap (a reset button
    * tapped as Jev settled received the tap on empty space). */
-  reserve?: boolean;
+  pending?: boolean;
+  /** The field's query failed; shown instead of silently omitting the mark. */
+  error?: unknown;
   review?: ReactNode;
 }) {
   const resolvedOutcome =
     outcome ?? (suggestion ? outcomeFromSuggestion(suggestion) : null);
   if (!resolvedOutcome)
-    return <PendingGlyphSlot reserve={reserve} surface={surface} />;
+    return <UnsettledMark pending={pending} error={error} surface={surface} />;
 
   const args: DescribeOutcomeArgs & { outcome: FieldSuggestionOutcome } = {
     outcome: resolvedOutcome,

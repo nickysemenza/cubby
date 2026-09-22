@@ -252,3 +252,27 @@ describe("SuggestionOutcomeMark", () => {
     expect(onMouseDown).not.toHaveBeenCalled();
   });
 });
+
+describe("unsettled mark", () => {
+  // Regression: a field whose query failed used to render no mark at all, and
+  // a pending one mounted its glyph late, pushing the row's content around.
+  it.each([
+    [{ pending: true }, "Checking suggestion…"],
+    [
+      { error: new Error("upstream 503") },
+      "Suggestion unavailable: upstream 503",
+    ],
+    [
+      { pending: true, error: new Error("upstream 503") },
+      "Suggestion unavailable: upstream 503",
+    ],
+  ])("%o shows %s before any outcome", (state, label) => {
+    render(<SuggestionOutcomeMark outcome={null} {...state} />);
+    expect(screen.getByRole("button", { name: label })).toBeInTheDocument();
+  });
+
+  it("renders nothing when neither pending nor failed", () => {
+    const { container } = render(<SuggestionOutcomeMark outcome={null} />);
+    expect(container).toBeEmptyDOMElement();
+  });
+});

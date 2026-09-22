@@ -695,6 +695,9 @@ importers:
       json-edit-react:
         specifier: ^1.30.2
         version: 1.30.2(react@19.3.0)
+      loading-dev:
+        specifier: 0.3.4
+        version: 0.3.4(react-dom@19.3.0(@types/react@19.3.0)(react@19.3.0))(react@19.3.0)
       lru-cache:
         specifier: ^11.5.2
         version: 11.5.2
@@ -8874,6 +8877,12 @@ packages:
     resolution: {integrity: sha512-liPHqaWMQ7rzZryQUDnbZ1Gclnnai3dIyaJ0nAgwZRXMzqbYrydrlCI0NDojRUbE5VYh5vu6hygEUZiH77nQkQ==}
     peerDependencies:
       react: ^16.8.0 || ^17 || ^18 || ^19
+
+  loading-dev@0.3.4:
+    resolution: {integrity: sha512-vFwHrUk4QFVya4FKvGWP0q1eSJUlFQAQIPI1KScxiLExxCEhlsRAumjtD72m45yKMYX8fGK7i+yxAj+wdYLSkQ==}
+    peerDependencies:
+      react: '>=19.0.0'
+      react-dom: '>=19.0.0'
 
   locate-path@3.0.0:
     resolution: {integrity: sha512-7AO748wWnIhNqAuaty2ZWHkQHRSNfPVIsPIfwEOWO22AmaoVrWavlOcMR5nzTLNYvp36X220/maaRsrec1G65A==}
@@ -18967,6 +18976,11 @@ snapshots:
   little-state-machine@4.8.1(react@19.3.0):
     dependencies:
       react: 19.3.0
+
+  loading-dev@0.3.4(react-dom@19.3.0(@types/react@19.3.0)(react@19.3.0))(react@19.3.0):
+    dependencies:
+      react: 19.3.0
+      react-dom: 19.3.0(@types/react@19.3.0)(react@19.3.0)
 
   locate-path@3.0.0:
     dependencies:

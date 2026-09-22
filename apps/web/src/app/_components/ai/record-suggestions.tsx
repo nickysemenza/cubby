@@ -73,7 +73,46 @@ type SuggestionRow = {
   suggestions: Record<string, FieldSuggestion | null>;
   outcomes: Record<string, FieldSuggestionOutcome>;
   pending: boolean;
+  error: unknown;
 };
+/** Folds one request group's query into its record's row. A record can be
+ * asked in several groups (suggested/provided/prune), one query each. */
+function mergeSuggestionRow(
+  previous: SuggestionRow | undefined,
+  record: SuggestionRecord,
+  source: FieldSuggestionSource,
+  query: {
+    data?: {
+      suggestions: Record<string, FieldSuggestion | null>;
+      outcomes?: Record<string, FieldSuggestionOutcome>;
+    };
+    isFetching: boolean;
+    isPending: boolean;
+    error: unknown;
+  },
+): SuggestionRow {
+  const sourceByField = new Map(previous?.sourceByField);
+  for (const field of source.targets) sourceByField.set(field, source);
+  return {
+    record,
+    sourceByField,
+    suggestions: {
+      ...previous?.suggestions,
+      ...query.data?.suggestions,
+    },
+    // The suggested/provided/prune request groups target disjoint field
+    // keys (a target belongs to exactly one group), so this merge never
+    // collides — each field's outcome comes from exactly one group's response.
+    outcomes: {
+      ...previous?.outcomes,
+      ...query.data?.outcomes,
+    },
+    pending:
+      (previous?.pending ?? false) || query.isFetching || query.isPending,
+    error: previous?.error ?? query.error,
+  };
+}
+
 const RecordSuggestionsContext = createContext<{
   entity: StandardEntity;
   rows: ReadonlyMap<string, SuggestionRow>;
@@ -527,26 +566,10 @@ function BoundRecordSuggestions({
   const rows = new Map<string, SuggestionRow>();
   for (const { record, source } of requests) {
     const query = bySource.get(JSON.stringify(source))!;
-    const previous = rows.get(record.id);
-    const sourceByField = new Map(previous?.sourceByField);
-    for (const field of source.targets) sourceByField.set(field, source);
-    rows.set(record.id, {
-      record,
-      sourceByField,
-      suggestions: {
-        ...previous?.suggestions,
-        ...query.data?.suggestions,
-      },
-      // The suggested/provided/prune request groups target disjoint field
-      // keys (a target belongs to exactly one group), so this merge never
-      // collides — each field's outcome comes from exactly one group's response.
-      outcomes: {
-        ...previous?.outcomes,
-        ...query.data?.outcomes,
-      },
-      pending:
-        (previous?.pending ?? false) || query.isFetching || query.isPending,
-    });
+    rows.set(
+      record.id,
+      mergeSuggestionRow(rows.get(record.id), record, source, query),
+    );
   }
   const context = {
     entity,
@@ -778,6 +801,7 @@ function ResolvedFieldSuggestion({
         currentLabel={current.label}
         questionKey={questionKey}
         pending={row.pending}
+        error={row.error}
         onApply={apply}
         applyLabel={usesInheritedValue ? "Use inherited value" : undefined}
         alternative={source.basisMode === "provided"}

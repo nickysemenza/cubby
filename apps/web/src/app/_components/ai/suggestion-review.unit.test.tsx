@@ -137,7 +137,7 @@ describe("inline suggestion review", () => {
       />,
     );
     expect(screen.getByText("Materials")).toBeInTheDocument();
-    expect(screen.getByText("Suggested: Tools")).toBeInTheDocument();
+    expect(screen.getByText("Tools")).toBeInTheDocument();
     expect(save).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "Use suggestion" }));
     const alert = await screen.findByRole("alert");
@@ -146,7 +146,7 @@ describe("inline suggestion review", () => {
     expect(errorSpy).toHaveBeenCalledTimes(1);
     fireEvent.click(screen.getByRole("button", { name: "Use suggestion" }));
     await waitFor(() =>
-      expect(screen.queryByText("Suggested: Tools")).not.toBeInTheDocument(),
+      expect(screen.queryByText("Tools")).not.toBeInTheDocument(),
     );
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
     expect(save).toHaveBeenCalledTimes(2);
@@ -170,7 +170,7 @@ describe("inline suggestion review", () => {
     fireEvent.click(screen.getByRole("button", { name: "Materials" }));
     expect(edit).toHaveBeenCalledOnce();
     fireEvent.click(screen.getByRole("button", { name: "Keep current" }));
-    expect(screen.queryByText("Suggested: Tools")).not.toBeInTheDocument();
+    expect(screen.queryByText("Tools")).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Materials" }));
     expect(edit).toHaveBeenCalledTimes(2);
   });
@@ -192,12 +192,12 @@ describe("inline suggestion review", () => {
     fireEvent.click(screen.getByRole("button", { name: "Keep current" }));
     view.rerender(content(null));
     view.rerender(content("first"));
-    expect(screen.queryByText("Suggested: Tools")).not.toBeInTheDocument();
+    expect(screen.queryByText("Tools")).not.toBeInTheDocument();
     view.rerender(content("changed"));
-    expect(screen.getByText("Suggested: Tools")).toBeInTheDocument();
+    expect(screen.getByText("Tools")).toBeInTheDocument();
     view.unmount();
     render(content("first"));
-    expect(screen.getByText("Suggested: Tools")).toBeInTheDocument();
+    expect(screen.getByText("Tools")).toBeInTheDocument();
   });
 });
 
@@ -264,7 +264,7 @@ describe("folded review", () => {
       // No inline "Suggested: Tools" text and no visible buttons — the review
       // lives inside the (closed) popover, not the cell's own flow.
       expect(screen.getByText("Materials")).toBeInTheDocument();
-      expect(screen.queryByText("Suggested: Tools")).not.toBeInTheDocument();
+      expect(screen.queryByText("Tools")).not.toBeInTheDocument();
       expect(
         screen.queryByRole("button", { name: "Use suggestion" }),
       ).not.toBeInTheDocument();
