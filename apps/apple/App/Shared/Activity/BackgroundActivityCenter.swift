@@ -41,7 +41,12 @@ final class BackgroundActivityCenter {
         }
     }
 
-    @ObservationIgnored private var sources: [RegisteredSource] = []
+    // Not `@ObservationIgnored`: `register(_:)` appending here must invalidate any reader of
+    // `activities`/`visibleActivities`/etc. that has not yet observed a registration — otherwise a
+    // source registered after a view's body last read `activities` (e.g. `PhotoClassificationSweep`,
+    // whose registration races `preparePhotoSubsystem()` opening the SQLite cache) never appears
+    // until something else happens to re-trigger that view.
+    private var sources: [RegisteredSource] = []
     private var transientActivities: [String: BackgroundActivity] = [:]
     @ObservationIgnored private var cancelHandlers: [String: () -> Void] = [:]
 
@@ -75,24 +80,33 @@ final class BackgroundActivityCenter {
 
     /// The mean of every visible activity's determinate progress, or `nil` when none report one.
     var aggregateProgress: Double? {
-        let determinate = visibleActivities.compactMap(\.progress)
-        guard !determinate.isEmpty else { return nil }
-        return determinate.reduce(0, +) / Double(determinate.count)
+        Self.aggregateProgress(among: visibleActivities)
     }
 
     /// A single line for the compact surfaces (the iOS bar's inline state, a notification): one
     /// activity reads as "Scanning library · 41%"; several as "3 tasks · Scanning library 41%".
     /// `nil` when nothing is running.
     var summary: String? {
-        let visible = visibleActivities
-        guard !visible.isEmpty else { return nil }
-        let percent = aggregateProgress.map { "\(Int(($0 * 100).rounded()))%" }
-        guard visible.count > 1, let primary = Self.primary(among: visible) else {
-            let title = visible[0].title
-            return percent.map { "\(title) · \($0)" } ?? title
-        }
-        let head = "\(visible.count) tasks · \(primary.title)"
-        return percent.map { "\(head) \($0)" } ?? head
+        Self.summary(among: visibleActivities)
+    }
+
+    /// One kind-scoped view over `visibleActivities`, e.g. `slice(.photoLibrary)` for a
+    /// Photos-screen strip. `primary`/`aggregateProgress`/`summary` here call the exact same
+    /// private static helpers as the unscoped properties above, over a filtered activity list — so
+    /// a screen-scoped strip can never phrase things differently from the iOS bar or the macOS
+    /// sidebar reading the same activities unscoped.
+    struct Slice {
+        let activities: [BackgroundActivity]
+
+        var isEmpty: Bool { activities.isEmpty }
+        var primary: BackgroundActivity? { BackgroundActivityCenter.primary(among: activities) }
+        var aggregateProgress: Double? { BackgroundActivityCenter.aggregateProgress(among: activities) }
+        var summary: String? { BackgroundActivityCenter.summary(among: activities) }
+    }
+
+    /// `visibleActivities` filtered to `kinds` — see `Slice`.
+    func slice(_ kinds: Set<BackgroundActivity.Kind>) -> Slice {
+        Slice(activities: visibleActivities.filter { kinds.contains($0.kind) })
     }
 
     private static func primary(among activities: [BackgroundActivity]) -> BackgroundActivity? {
@@ -103,6 +117,23 @@ final class BackgroundActivityCenter {
             if lhsDeterminate != rhsDeterminate { return lhsDeterminate }
             return lhs.startedAt < rhs.startedAt
         }
+    }
+
+    private static func aggregateProgress(among activities: [BackgroundActivity]) -> Double? {
+        let determinate = activities.compactMap(\.progress)
+        guard !determinate.isEmpty else { return nil }
+        return determinate.reduce(0, +) / Double(determinate.count)
+    }
+
+    private static func summary(among activities: [BackgroundActivity]) -> String? {
+        guard !activities.isEmpty else { return nil }
+        let percent = aggregateProgress(among: activities).map { "\(Int(($0 * 100).rounded()))%" }
+        guard activities.count > 1, let primary = primary(among: activities) else {
+            let title = activities[0].title
+            return percent.map { "\(title) · \($0)" } ?? title
+        }
+        let head = "\(activities.count) tasks · \(primary.title)"
+        return percent.map { "\(head) \($0)" } ?? head
     }
 
     // MARK: Transient activities
@@ -181,7 +212,7 @@ extension PhotoMatchStore: BackgroundActivitySource {
                 phase: .running,
                 progress: progress,
                 detail: total > 0 ? "\(completed) of \(total)" : nil,
-                startedAt: .now,
+                startedAt: repairStartedAt ?? .now,
                 link: .localActivity("photo-hash-repair"),
                 isUserInitiated: false,
                 isCancellable: false)
@@ -201,7 +232,7 @@ extension PhotoClassificationSweep: BackgroundActivitySource {
                 phase: .running,
                 progress: progress,
                 detail: "\(analysedCount) of \(totalCount)",
-                startedAt: .now,
+                startedAt: startedAt ?? .now,
                 link: .localActivity("photo-classification-sweep"),
                 isUserInitiated: false,
                 isCancellable: false)
@@ -223,7 +254,7 @@ extension BrowserBridgeSettingsModel: BackgroundActivitySource {
                 phase: .running,
                 progress: nil,
                 detail: nil,
-                startedAt: .now,
+                startedAt: syncStartedAt ?? .now,
                 link: .localActivity("browser-bridge-sync"),
                 isUserInitiated: true,
                 isCancellable: false)

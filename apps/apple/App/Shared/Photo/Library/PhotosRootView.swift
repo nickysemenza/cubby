@@ -108,6 +108,19 @@ private struct PhotoGridDiagnosticEntry: Encodable {
     let categories: [String]
 }
 
+/// Layer 7's full "Copy diagnostics" payload: `PhotoLibraryStore`'s field-freeze diagnostics
+/// (the six lines the header used to print on screen), the titles of whatever this device's
+/// Photos-scoped background activities are doing right now, and every currently loaded cell's
+/// classify state. Built only inside `CopyDiagnosticsButton`'s closure — never a stored or computed
+/// property read from `body` — because reading a per-cell state box eagerly there would subscribe
+/// this view to every cell's classify state on every render (`DeveloperOverlays.swift`'s doc
+/// comment on `CopyDiagnosticsButton`).
+private struct PhotoLibraryDiagnostics: Encodable {
+    let library: PhotoLibraryStore.LoadDiagnostics
+    let activities: [String]
+    let cells: [PhotoGridDiagnosticEntry]
+}
+
 struct PhotoSelectionBatch: Identifiable {
     let id = UUID()
     let items: [PhotoSelectionItem]
@@ -115,7 +128,10 @@ struct PhotoSelectionBatch: Identifiable {
 }
 
 private struct PhotoLibraryBrowser: View {
-    enum Filter: String, CaseIterable { case all = "All", missing = "Not in Cubby", found = "In Cubby" }
+    /// `PhotoLibraryFilter` lives in `PhotoLibraryHeader.swift` now (the header binds to it too);
+    /// this alias keeps every other reference in this file — `FilteredMonthAssetsCache` included —
+    /// unchanged.
+    typealias Filter = PhotoLibraryFilter
     @Environment(AppModel.self) private var appModel
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.developerOverlays) private var developerOverlays
@@ -176,7 +192,9 @@ private struct PhotoLibraryBrowser: View {
     var body: some View {
         VStack(spacing: 0) {
             if library.hasFullAccess {
-                controls
+                PhotoLibraryHeader(
+                    filter: $filter, selectedCategory: $selectedCategory, showsCategories: !picker,
+                    unanalysedCount: unanalysedCount)
                 ScrollViewReader { proxy in
                     ScrollView {
                         // `pinnedViews: .sectionHeaders` keeps each month's label on screen while
@@ -203,7 +221,9 @@ private struct PhotoLibraryBrowser: View {
                         }
                         .padding(.vertical, 12)
                     }
-                    .refreshable { await library.refresh(matches: matches, client: appModel.client) }
+                    .refreshControl(identifier: "photos.refresh") {
+                        await library.refresh(matches: matches, client: appModel.client)
+                    }
                     .onAppear {
                         // Scroll to the containing month first: `scrollTo` on an id nested two
                         // lazy containers deep (`LazyVStack` > `Section` > `LazyVGrid`) can miss
@@ -248,7 +268,17 @@ private struct PhotoLibraryBrowser: View {
             // conditional inside `ToolbarItem` still renders the item's Liquid Glass background
             // even when the condition is false, showing an empty glass pill in the toolbar.
             if developerOverlays && library.hasFullAccess {
-                ToolbarItem { CopyDiagnosticsButton { gridDiagnostics } }
+                ToolbarItem {
+                    CopyDiagnosticsButton {
+                        PhotoLibraryDiagnostics(
+                            library: library.loadDiagnostics,
+                            activities: appModel.backgroundActivity.slice(
+                                BackgroundActivity.Kind.photoLibrary
+                            )
+                            .activities.map { "\($0.title)\($0.detail.map { " · \($0)" } ?? "")" },
+                            cells: gridDiagnostics)
+                    }
+                }
             }
             if library.hasFullAccess && !ids.isEmpty {
                 ToolbarItem(placement: .primaryAction) {
@@ -297,9 +327,11 @@ private struct PhotoLibraryBrowser: View {
         .onChange(of: matches.revision) { _, _ in
             // A fresh batch of strong matches (`PhotoMatchStore.candidates`) is exactly what
             // `LibraryMetadataSync`'s candidate provider reads — re-plan the same way the sweep
-            // re-plans on `library.monthsRevision` above.
+            // re-plans on `library.monthsRevision` above. `revision` bumps on every scan batch and
+            // every visible-cell query batch, so a run already in flight simply finishes its
+            // current pass and re-plans once rather than restarting per bump.
             guard !picker else { return }
-            appModel.libraryMetadataSync?.reconcile(force: true)
+            appModel.libraryMetadataSync?.reconcile()
         }
         .onChange(of: scenePhase) { _, phase in
             guard !picker else { return }
@@ -318,75 +350,6 @@ private struct PhotoLibraryBrowser: View {
             Button("OK") { selectionError = nil }
         } message: {
             Text(selectionError ?? "")
-        }
-    }
-
-    private var controls: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Picker("Show", selection: $filter) {
-                ForEach(Filter.allCases, id: \.self) { Text($0.rawValue).tag($0) }
-            }
-            .pickerStyle(.segmented)
-            .accessibilityIdentifier("photos.filter")
-            if !picker { categoryChipRow }
-            HStack(spacing: 6) {
-                if library.isLoadingLibrary || library.isScanning || matches.isLoading || matches.isRepairing
-                {
-                    LoadingIndicator(label: "Loading photo library").controlSize(.mini)
-                }
-                VStack(alignment: .leading, spacing: 2) {
-                    if library.hasFullAccess && (library.count > 0 || library.isLoadingLibrary) {
-                        Text(library.scanStatus)
-                    }
-                    Text(matches.isLoading ? "Refreshing Cubby photos…" : matches.coverage)
-                }.font(.caption).monospacedDigit()
-                Spacer()
-                Button {
-                    Task { await library.refresh(matches: matches, client: appModel.client) }
-                } label: {
-                    Image(systemName: "arrow.clockwise")
-                }
-                .accessibilityLabel("Refresh photo matches")
-                .accessibilityIdentifier("photos.refresh")
-            }.foregroundStyle(.secondary)
-            if library.hasFullAccess {
-                Text(library.loadingDebugStatus)
-                    .font(.caption2.monospaced())
-                    .foregroundStyle(.secondary)
-                    .accessibilityIdentifier("photos.loading.debug")
-            }
-            if filter == .missing {
-                Text(
-                    "Includes unchecked photos and possible matches. More matches may appear while checking continues."
-                )
-                .font(.caption2).foregroundStyle(.secondary)
-            }
-        }.padding(12)
-    }
-
-    /// A second, single-select chip row (B4) below the ownership `Filter` picker: one chip per
-    /// `PhotoImportCatalog.categories` entry (never a hardcoded category name), plus the sweep's
-    /// live "Analysing… N of M" status while it runs.
-    private var categoryChipRow: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 6) {
-                    if let status = sweep?.statusText {
-                        Text(status).font(.caption2).foregroundStyle(.secondary)
-                    }
-                    ForEach(PhotoImportCatalog.categories, id: \.key) { category in
-                        CategoryChip(
-                            category: category, selected: selectedCategory?.key == category.key
-                        ) {
-                            selectedCategory = selectedCategory?.key == category.key ? nil : category
-                        }
-                    }
-                }
-            }
-            if selectedCategory != nil, unanalysedCount > 0 {
-                Text("\(unanalysedCount) photos not analysed yet")
-                    .font(.caption2).foregroundStyle(.secondary)
-            }
         }
     }
 
@@ -617,26 +580,6 @@ extension View {
                 guard sweep != nil else { return }
                 await loadCategoryFilter()
             }
-    }
-}
-
-private struct CategoryChip: View {
-    let category: PhotoCategory
-    let selected: Bool
-    let action: () -> Void
-
-    private var tint: Color {
-        let index = PhotoImportCatalog.categories.firstIndex { $0.key == category.key } ?? 0
-        return PorcelainTokens.chartRamp[index % PorcelainTokens.chartRamp.count]
-    }
-
-    var body: some View {
-        Button(action: action) {
-            Text("\(category.emoji) \(category.label)")
-        }
-        .buttonStyle(.bordered)
-        .tint(selected ? tint : nil)
-        .accessibilityAddTraits(selected ? .isSelected : [])
     }
 }
 
@@ -908,15 +851,4 @@ private struct PhotoLibraryPreview: View {
 #Preview("Developer overlays on", traits: .modifier(SignedInPreview())) {
     NavigationStack { PhotosRootView() }
         .environment(\.developerOverlays, true)
-}
-
-#Preview("Category chips") {
-    HStack {
-        ForEach(PhotoImportCatalog.categories, id: \.key) { category in
-            CategoryChip(
-                category: category, selected: category.key == PhotoImportCatalog.categories.first?.key
-            ) {}
-        }
-    }
-    .padding()
 }

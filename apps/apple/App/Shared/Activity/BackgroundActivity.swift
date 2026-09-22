@@ -42,3 +42,11 @@ struct BackgroundActivity: Identifiable, Hashable, Sendable {
     let isUserInitiated: Bool
     let isCancellable: Bool
 }
+
+extension BackgroundActivity.Kind {
+    /// The device-local Photos-screen work `BackgroundActivityCenter.slice(_:)` scopes a
+    /// Photos-screen strip to, so it can never phrase things differently from the iOS bar or the
+    /// macOS sidebar — both read the same `primary`/`aggregateProgress`/`summary` logic, just over
+    /// a filtered `visibleActivities`.
+    static let photoLibrary: Set<Self> = [.libraryScan, .hashRepair, .classificationSweep, .metadataSync]
+}

@@ -32,6 +32,11 @@ final class PhotoMatchStore {
     private(set) var hasIndex = false
     private(set) var isLoading = false
     private(set) var isRepairing = false
+    /// Set on the transition into repairing, cleared alongside `isRepairing`. SwiftUI reads
+    /// `currentActivities` on every body evaluation, so a literal `.now` there would make the
+    /// Activity screen's relative timestamp perpetually say "now" — this is computed once per
+    /// repair instead.
+    private(set) var repairStartedAt: Date?
     private(set) var totalCount = 0
     private(set) var remainingCount = 0
     private(set) var error: String?
@@ -275,7 +280,7 @@ final class PhotoMatchStore {
         analysisByID = [:]
         uncoalescedClassifiedCount = 0; lastClassifiedRevisionBump = .distantPast
         entriesRevision += 1
-        hasIndex = false; isLoading = false; isRepairing = false
+        hasIndex = false; isLoading = false; isRepairing = false; repairStartedAt = nil
         totalCount = 0; remainingCount = 0; repairFailures = 0; error = nil
         observers = []
         revision += 1
@@ -286,6 +291,7 @@ final class PhotoMatchStore {
         if let loadingTask { await loadingTask.value; return }
         repairTask?.cancel(); registrationTask?.cancel()
         isRepairing = false
+        repairStartedAt = nil
         registrationTask = nil
         let token = UUID()
         generation = token
@@ -465,9 +471,11 @@ final class PhotoMatchStore {
     private func repair(_ rows: [(id: ImageCode, url: URL)], client: CubbyClient, token: UUID) async {
         guard generation == token, !Task.isCancelled, !rows.isEmpty else { return }
         isRepairing = true; repairFailures = 0
+        repairStartedAt = .now
         defer {
             if generation == token {
                 isRepairing = false
+                repairStartedAt = nil
                 publishCellStates(for: cellStateBoxes.keys)
             }
         }

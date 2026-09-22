@@ -78,6 +78,14 @@ runs:
         path: packages/wasm
         key: wasm-pkg-${{ runner.os }}-${{ hashFiles('recipebridge/Cargo.toml', 'recipebridge/Cargo.lock', 'recipebridge/src/**', 'rust-toolchain.toml') }}
 
+    # packages/wasm now matches the exact recipebridge sources in the cache
+    # key (restored or just built), so the Nx `wasm` target need not rebuild
+    # it (project.json).
+    - name: Mark WASM pkg ready
+      if: inputs.wasm == 'restore'
+      shell: bash
+      run: echo "CUBBY_WASM_PKG_READY=1" >> "$GITHUB_ENV"
+
     # Recreating links from the pnpm store is faster than restoring node_modules;
     # measurements live in docs/ci.md.
     - name: Install dependencies

@@ -186,7 +186,11 @@ export default defineEntity({
         key: "lineKind",
         kind: "enum",
         label: "Line kind",
-        control: { kind: "select", section: "details" },
+        control: {
+          kind: "select",
+          section: "details",
+          suggest: { basis: ["name", "cost", "notes"] },
+        },
         display: {
           list: true,
           detail: true,

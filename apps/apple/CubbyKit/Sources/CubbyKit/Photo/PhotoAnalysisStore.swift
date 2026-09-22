@@ -22,6 +22,22 @@ public struct PhotoHashRecord: Sendable, Hashable {
     public let hashRevision: Int
 }
 
+/// One `library_sighting_sync` row's identity, keyed exactly like `librarySightingSent`'s
+/// single-row lookup — `librarySightingsSent(host:version:)` returns a set of these so
+/// `LibraryMetadataSync` can pre-filter a whole candidate batch against one query instead of one
+/// `SELECT` per candidate.
+public struct SentSightingKey: Hashable, Sendable {
+    public let localIdentifier: String
+    public let imageId: String
+    public let modificationDate: Date?
+
+    public init(localIdentifier: String, imageId: String, modificationDate: Date?) {
+        self.localIdentifier = localIdentifier
+        self.imageId = imageId
+        self.modificationDate = modificationDate
+    }
+}
+
 /// A Sendable copy of one local cache row. SQLite records stay confined inside `PhotoAnalysisStore`.
 public struct PhotoAssetSnapshot: Sendable, Hashable {
     public let localIdentifier: String
@@ -244,6 +260,25 @@ public actor PhotoAnalysisStore {
         }
     }
 
+    /// Batch form of `librarySightingSent`, for `LibraryMetadataSync`'s pre-run filter: one query
+    /// for every sighting already recorded at this `(host, version)`, rather than one `SELECT` per
+    /// candidate — planning a run against a mostly-synced library (thousands of already-sent
+    /// candidates) must not serialize thousands of single-row lookups before `totalCount` can even
+    /// be computed.
+    public func librarySightingsSent(host: String, version: Int) throws -> Set<SentSightingKey> {
+        try database.read { db in
+            let rows = try SentSightingRow.fetchAll(
+                db,
+                sql: """
+                    SELECT local_identifier, image_id, modification_date
+                    FROM library_sighting_sync
+                    WHERE host = ? AND version = ?
+                    """,
+                arguments: [host, version])
+            return Set(rows.map(\.key))
+        }
+    }
+
     public func classifiedCount(newerThan classifyVersion: Int) throws -> Int {
         try database.read { db in
             try Int.fetchOne(
@@ -397,6 +432,19 @@ public actor PhotoAnalysisStore {
                 "categories": try encode([String]()),
                 "topLabels": try encode([PhotoLabelScore]()),
             ])
+    }
+}
+
+private struct SentSightingRow: FetchableRecord {
+    let key: SentSightingKey
+
+    init(row: Row) throws {
+        let localIdentifier: String = row["local_identifier"]
+        let imageId: String = row["image_id"]
+        let modificationDateValue: Double? = row["modification_date"]
+        key = SentSightingKey(
+            localIdentifier: localIdentifier, imageId: imageId,
+            modificationDate: modificationDateValue.map(Date.init(timeIntervalSinceReferenceDate:)))
     }
 }
 
