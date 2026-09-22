@@ -1,4 +1,11 @@
-import { act, renderHook } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  render,
+  renderHook,
+  screen,
+} from "@testing-library/react";
+import { createPortal } from "react-dom";
 import { describe, expect, it } from "vitest";
 
 import { createCubbyColumnHelper, useCubbyTable } from "./table-features";
@@ -58,4 +65,51 @@ describe("useCellSelection", () => {
       focus: { row: 1, col: 1 },
     });
   });
+
+  // Regression: React bubbles keys from portaled descendants (the bulk-edit
+  // dialog opened from this table) through the container's onKeyDown, so with
+  // a cell selected, Space in the dialog opened a cell editor and never
+  // pressed the dialog's button (CI: "Date unknown" stayed unpressed).
+  it.each([" ", "Enter", "x"])(
+    "leaves %j alone when it comes from a portaled dialog",
+    (key) => {
+      let selectCell = () => {};
+      function Harness() {
+        const table = useCubbyTable({
+          data,
+          columns,
+          getRowId: (row) => row.id,
+        });
+        const selection = useCellSelection({
+          enabled: true,
+          rows: table.getRowModel().rows,
+          table,
+          scrollToFlatRow: noopScroll,
+        });
+        selectCell = () =>
+          table.selectCellRange({
+            anchorRowId: "row-a",
+            anchorColumnId: "alpha",
+            focusRowId: "row-a",
+            focusColumnId: "alpha",
+          });
+        return (
+          <div data-testid="table" {...selection.containerProps}>
+            {createPortal(
+              <button type="button">Date unknown</button>,
+              document.body,
+            )}
+          </div>
+        );
+      }
+      render(<Harness />);
+      act(() => selectCell());
+      const button = screen.getByRole("button", { name: "Date unknown" });
+      expect(fireEvent.keyDown(button, { key })).toBe(true);
+      // The table's own keys still work when they come from inside it.
+      expect(fireEvent.keyDown(screen.getByTestId("table"), { key })).toBe(
+        key === "Escape",
+      );
+    },
+  );
 });

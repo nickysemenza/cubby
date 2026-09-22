@@ -583,6 +583,15 @@ export function useCellSelection<TItem extends RowData>({
       // trigger buttons); key events bubble up here. Never hijack typing in an
       // input/textarea/select/contenteditable (an open editor or a filter).
       if (isTypingTarget(document.activeElement)) return;
+      // React also bubbles keys from portaled descendants (a bulk-edit dialog
+      // opened from this table) through here; only keys whose DOM target is
+      // inside the grid are table keys. Otherwise, with a cell selected, Space
+      // in that dialog opened a cell editor instead of pressing its button.
+      if (
+        event.target instanceof Node &&
+        !event.currentTarget.contains(event.target)
+      )
+        return;
       if (rowCount === 0 || colCount === 0) return;
 
       containerElRef.current = event.currentTarget;

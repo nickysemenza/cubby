@@ -2,13 +2,19 @@ import { expenseCreateInput, expenseOut } from "@cubby/schemas/project";
 import type { Page } from "@playwright/test";
 import { z } from "zod";
 
-import { expectViewportBounded, gotoAuthenticatedPage } from "./e2e-helpers";
-import { expect } from "./e2e-test";
+import {
+  expectViewportBounded,
+  gotoAuthenticatedPage,
+  readExpense,
+  uniqueName,
+} from "./e2e-helpers";
+import { expect, test } from "./e2e-test";
 
 const createdExpense = z.object({ item: expenseOut.pick({ id: true }) });
+const clearedExpense = z.object({ cost: z.number(), date: z.null() });
 
 export async function clearExpenseDatesInBrowser(page: Page, baseURL: string) {
-  const name = `Undated supplies ${Date.now()}`;
+  const name = uniqueName(test.info(), "Undated supplies");
   const response = await page.request.post("/api/v1/expenses", {
     headers: { Origin: baseURL },
     data: expenseCreateInput.parse({
@@ -22,8 +28,12 @@ export async function clearExpenseDatesInBrowser(page: Page, baseURL: string) {
   expect(response.status(), await response.text()).toBe(201);
   const { item } = createdExpense.parse(await response.json());
   await gotoAuthenticatedPage(page, `/expenses?q=${encodeURIComponent(name)}`);
-  if (await page.getByRole("list", { name: "Expenses list" }).isVisible()) {
-    const item = page.getByRole("listitem").filter({ hasText: name });
+  // Below md the list renders as cards (long-press selects); above it, a table.
+  if ((page.viewportSize()?.width ?? 0) < 768) {
+    const item = page
+      .getByRole("list", { name: "Expenses list" })
+      .getByRole("listitem")
+      .filter({ hasText: name });
     await item
       .getByRole("link", { name, exact: true })
       .dispatchEvent("touchstart");
@@ -47,14 +57,23 @@ export async function clearExpenseDatesInBrowser(page: Page, baseURL: string) {
     name: "Date unknown",
     exact: true,
   });
+  // `focus()` is not an actionability-checked action: on a control that is not
+  // yet visible and enabled it silently does nothing, and the Space below then
+  // lands elsewhere (CI: aria-pressed stayed "false" with no other error). Wait
+  // for the control, and prove focus landed, before pressing.
+  await expect(unknown).toBeVisible();
+  await expect(unknown).toBeEnabled();
   await unknown.focus();
+  await expect(unknown).toBeFocused();
   await page.keyboard.press("Space");
   await expect(unknown).toHaveAttribute("aria-pressed", "true");
   await expectViewportBounded(page);
   await dialog.getByRole("button", { name: "Update", exact: true }).click();
   await expect(dialog).not.toBeVisible();
-  const updated = await page.request.get(`/api/v1/expenses/${item.id}`);
-  expect(await updated.json()).toMatchObject({ cost: 0, date: null });
+  expect(await readExpense(page, item.id, clearedExpense)).toMatchObject({
+    cost: 0,
+    date: null,
+  });
   const refused = await page.request.patch(`/api/v1/expenses/${item.id}`, {
     headers: { Origin: baseURL },
     data: { cost: 12 },

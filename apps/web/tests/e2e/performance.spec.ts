@@ -1,11 +1,10 @@
 import { expect, test } from "./e2e-test";
-import { waitForAppHydration } from "./e2e-helpers";
+import { gotoAuthenticatedPage } from "./e2e-helpers";
 
 test("intent-preloaded navigation does not flash the route skeleton", async ({
   page,
 }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
-  await waitForAppHydration(page);
+  await gotoAuthenticatedPage(page, "/");
   const locations = page
     .getByRole("region", { name: "Pantry", exact: true })
     .getByRole("link", { name: "Locations", exact: true });

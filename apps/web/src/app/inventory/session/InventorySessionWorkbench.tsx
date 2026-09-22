@@ -188,14 +188,26 @@ export function InventorySessionWorkbench({
   );
   const unknownChildLocations = getUnknownChildLocations(unknownTreeLocation);
 
-  const locationIds = useMemo(() => {
-    const ids = sessionLocations.map((loc) => loc.id);
+  const sessionLocationIdList = useMemo(
+    () => sessionLocations.map((loc) => loc.id),
+    [sessionLocations],
+  );
+  // The Unknown tray's scope arrives later than the session's: Unknown comes
+  // from the `ensureGlobalUnknown` mutation, and its parked children from the
+  // tree refetch that follows. It is a separate query so that arrival never
+  // re-keys the session's own inventory — one combined key flipped the
+  // workbench back to its loading spinner, unmounting the review pane and
+  // closing a row's just-opened "Change" sheet mid-tap.
+  const trayLocationIds = useMemo(() => {
+    const sessionIds = new Set(sessionLocationIdList);
+    const ids: LocationShortcode[] = [];
     if (unknownLocation) ids.push(unknownLocation.id);
     // Also fetch the direct contents of locations parked under Unknown so their
     // tray rows can show a contents preview (they aren't session descendants).
     for (const loc of unknownChildLocations) ids.push(loc.id);
-    return ids;
-  }, [sessionLocations, unknownLocation, unknownChildLocations]);
+    // Recounting Unknown itself already reads it through the session query.
+    return ids.filter((id) => !sessionIds.has(id));
+  }, [sessionLocationIdList, unknownLocation, unknownChildLocations]);
 
   // Stock only: a recount is a walk-over-and-count exercise and a fixture is
   // not a thing you can count. This MUST match the snapshot predicate inside
@@ -203,10 +215,17 @@ export function InventorySessionWorkbench({
   // populations and every commit throws INVENTORY_STALE.
   const inventoryQuery = useQuery({
     ...inventory.getByLocationIds.queryOptions({
-      locationIds,
+      locationIds: sessionLocationIdList,
       placement: "stock",
     }),
-    enabled: locationIds.length > 0,
+    enabled: sessionLocationIdList.length > 0,
+  });
+  const trayInventoryQuery = useQuery({
+    ...inventory.getByLocationIds.queryOptions({
+      locationIds: trayLocationIds,
+      placement: "stock",
+    }),
+    enabled: trayLocationIds.length > 0,
   });
   const snapshotInput = currentLocation
     ? { locationId: currentLocation.id, placement: "stock" as const }
@@ -236,29 +255,24 @@ export function InventorySessionWorkbench({
 
   const inventoryByLocation = useMemo(() => {
     const map = new Map<string, InventoryItem[]>();
-    for (const item of inventoryQuery.data ?? []) {
+    for (const item of [
+      ...(inventoryQuery.data ?? []),
+      ...(trayInventoryQuery.data ?? []),
+    ]) {
       const rows = map.get(item.location.id) ?? [];
       rows.push(item);
       map.set(item.location.id, rows);
     }
     return map;
-  }, [inventoryQuery.data]);
+  }, [inventoryQuery.data, trayInventoryQuery.data]);
 
-  const sessionLocationIds = useMemo(
-    () => new Set(sessionLocations.map((location) => location.id)),
-    [sessionLocations],
-  );
   // One request for the complete pass, not a product-list page or a request per
   // expected row. Unknown's holding tray is deliberately outside this set.
   const sessionProductIds = useMemo(
     () => [
-      ...new Set(
-        (inventoryQuery.data ?? [])
-          .filter((item) => sessionLocationIds.has(item.location.id))
-          .map((item) => item.product.id),
-      ),
+      ...new Set((inventoryQuery.data ?? []).map((item) => item.product.id)),
     ],
-    [inventoryQuery.data, sessionLocationIds],
+    [inventoryQuery.data],
   );
   const quantitySummariesQuery = useQuery({
     ...product.quantitySummaries.queryOptions({ ids: sessionProductIds }),
@@ -311,6 +325,7 @@ export function InventorySessionWorkbench({
       },
       onError: (error) => {
         void inventoryQuery.refetch();
+        void trayInventoryQuery.refetch();
         void currentSnapshotQuery.refetch();
         showErrorToast(error);
       },
@@ -575,10 +590,13 @@ export function InventorySessionWorkbench({
       parent={parent}
       locations={sessionLocations}
       initialParentShortcode={initialParentShortcode}
-      inventoryError={inventoryQuery.isError ? inventoryQuery.error : null}
-      inventoryFailed={inventoryQuery.isError}
+      inventoryError={inventoryQuery.error ?? trayInventoryQuery.error}
+      inventoryFailed={inventoryQuery.isError || trayInventoryQuery.isError}
       inventoryLoading={inventoryQuery.isLoading}
-      onRetryInventory={() => void inventoryQuery.refetch()}
+      onRetryInventory={() => {
+        void inventoryQuery.refetch();
+        void trayInventoryQuery.refetch();
+      }}
       resumeCandidate={resumeCandidate}
       startedAt={startedAt}
       passComplete={passComplete}

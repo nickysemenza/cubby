@@ -1,4 +1,4 @@
-import { seedProductPrerequisite } from "./e2e-fixtures";
+import { seedConcurrently, seedProductPrerequisite } from "./e2e-fixtures";
 import { expectViewportBounded, gotoAuthenticatedPage } from "./e2e-helpers";
 import { expect, test } from "./e2e-test";
 
@@ -6,9 +6,9 @@ test("phone cards and compact tiles remain navigable within the viewport", async
   page,
 }, testInfo) => {
   const name = `Phone cards ${Date.now()}`;
-  for (let index = 0; index < 3; index++) {
-    await seedProductPrerequisite(page, { name: `${name} ${index}` });
-  }
+  await seedConcurrently([0, 1, 2], (index) =>
+    seedProductPrerequisite(page, { name: `${name} ${index}` }),
+  );
   await gotoAuthenticatedPage(
     page,
     `/products?view=shelf&name=${encodeURIComponent(name)}`,

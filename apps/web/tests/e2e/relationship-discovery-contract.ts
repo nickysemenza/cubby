@@ -4,7 +4,12 @@ import {
   seedPlacementReviewPrerequisite,
   seedRelationshipReviewPrerequisite,
 } from "./e2e-fixtures";
-import { expectViewportBounded, waitForAppHydration } from "./e2e-helpers";
+import {
+  escapeRegExp,
+  expectViewportBounded,
+  gotoAuthenticatedPage,
+  readExpense,
+} from "./e2e-helpers";
 import { expect, test } from "./e2e-test";
 
 const projectAssignment = z.object({ projectId: z.string().nullable() });
@@ -15,15 +20,10 @@ export function relationshipDiscoveryContract() {
   }) => {
     const name = `e2e relationship review ${Date.now()}`;
     const fixture = await seedRelationshipReviewPrerequisite(page, name);
-    await page.goto(`/expenses/${fixture.expense.id}`);
-    await waitForAppHydration(page);
-    const assignment = async () => {
-      const response = await page.request.get(
-        `/api/v1/expenses/${fixture.expense.id}`,
-      );
-      expect(response.ok()).toBe(true);
-      return projectAssignment.parse(await response.json()).projectId;
-    };
+    await gotoAuthenticatedPage(page, `/expenses/${fixture.expense.id}`);
+    const assignment = async () =>
+      (await readExpense(page, fixture.expense.id, projectAssignment))
+        .projectId;
     const alternative = page
       .getByRole("button", { name: `${name} suggested`, exact: true })
       .first();
@@ -39,29 +39,41 @@ export function relationshipDiscoveryContract() {
       .click();
     await expect.poll(assignment).toBe(fixture.target.id);
 
-    await page.goto(
+    await gotoAuthenticatedPage(
+      page,
       `/entities?tab=explore&entity=expense&root=${fixture.expense.id}`,
     );
-    await waitForAppHydration(page);
     await expect(page).toHaveURL((url) => url.pathname === "/graph");
     await page
       .getByRole("button", { name: "Show record list", exact: true })
       .click();
     const records = page.getByLabel("Map records", { exact: true });
     await records
-      .getByRole("button", { name: new RegExp(`^${name} switch`) })
+      .getByRole("button", {
+        name: new RegExp(`^${escapeRegExp(name)} switch`),
+      })
       .click();
     await page
       .getByRole("button", { name: "Expand connections", exact: true })
       .click();
+    // Below md the inspector is a bottom sheet (titled "Graph inspector") that
+    // selecting a record opens; at desktop width it is a permanent aside.
     const inspectorHeading = page.getByRole("heading", {
       name: "Graph inspector",
       exact: true,
     });
-    if (await inspectorHeading.isVisible()) {
+    const inspectorAside = page.getByRole("complementary", {
+      name: "Graph inspector",
+      exact: true,
+    });
+    const closeInspectorSheet = async () => {
+      await expect(inspectorHeading).toBeVisible();
       await page.getByRole("button", { name: "Close", exact: true }).click();
       await expect(inspectorHeading).toBeHidden();
-    }
+    };
+    const startedOnPhone = (page.viewportSize()?.width ?? 0) < 768;
+    if (startedOnPhone) await closeInspectorSheet();
+    else await expect(inspectorAside).toBeVisible();
     await expect(
       page.getByRole("group", {
         name: `Inspect ${name} supporting expense`,
@@ -71,23 +83,19 @@ export function relationshipDiscoveryContract() {
     await expect(
       page.getByLabel("Relationship graph", { exact: true }),
     ).toBeVisible();
-    const hadDesktopInspector = await page
-      .getByRole("complementary", { name: "Graph inspector", exact: true })
-      .isVisible();
     await page.setViewportSize({ width: 390, height: 844 });
-    // The media-query update mounts the selected record's mobile sheet after
-    // setViewportSize resolves. Wait for it before deciding whether to close it.
-    if (hadDesktopInspector) await expect(inspectorHeading).toBeVisible();
-    if (await inspectorHeading.isVisible()) {
-      await page.getByRole("button", { name: "Close", exact: true }).click();
-      await expect(inspectorHeading).toBeHidden();
-    }
+    // Crossing below md mounts the selected record's sheet (after
+    // setViewportSize resolves); a phone already closed its sheet above.
+    if (startedOnPhone) await expect(inspectorHeading).toBeHidden();
+    else await closeInspectorSheet();
     await expectViewportBounded(page);
     await page
       .getByRole("button", { name: "Show record list", exact: true })
       .click();
     await records
-      .getByRole("button", { name: new RegExp(`^${name} suggested`) })
+      .getByRole("button", {
+        name: new RegExp(`^${escapeRegExp(name)} suggested`),
+      })
       .click();
     await expect(
       page.getByRole("link", { name: "Open record", exact: true }),
@@ -98,8 +106,7 @@ export function relationshipDiscoveryContract() {
   }) => {
     const name = `e2e full relationship ${Date.now()}`;
     const fixture = await seedRelationshipReviewPrerequisite(page, name);
-    await page.goto(`/expenses/${fixture.expense.id}`);
-    await waitForAppHydration(page);
+    await gotoAuthenticatedPage(page, `/expenses/${fixture.expense.id}`);
     await page.getByRole("tab", { name: "Relations", exact: true }).click();
     await page
       .getByRole("button", {
@@ -108,11 +115,8 @@ export function relationshipDiscoveryContract() {
       })
       .click();
     const assignment = async () =>
-      projectAssignment.parse(
-        await (
-          await page.request.get(`/api/v1/expenses/${fixture.expense.id}`)
-        ).json(),
-      ).projectId;
+      (await readExpense(page, fixture.expense.id, projectAssignment))
+        .projectId;
     expect(await assignment()).toBe(fixture.current.id);
     await page
       .getByRole("button", { name: "Apply change", exact: true })
@@ -125,8 +129,7 @@ export function relationshipDiscoveryContract() {
   }) => {
     const name = `e2e placement ${Date.now()}`;
     const fixture = await seedPlacementReviewPrerequisite(page, name);
-    await page.goto(`/inventory/${fixture.source.id}`);
-    await waitForAppHydration(page);
+    await gotoAuthenticatedPage(page, `/inventory/${fixture.source.id}`);
     await page.getByRole("tab", { name: "Relations", exact: true }).click();
     await page
       .getByRole("button", {

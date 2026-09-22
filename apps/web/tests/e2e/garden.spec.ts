@@ -6,7 +6,11 @@ import {
   seedLocationPrerequisite,
   seedPlantingPrerequisite,
 } from "./e2e-fixtures";
-import { selectComboboxItem, waitForAppHydration } from "./e2e-helpers";
+import {
+  selectComboboxItem,
+  waitForAppHydration,
+  gotoAuthenticatedPage,
+} from "./e2e-helpers";
 import { expect, test } from "./e2e-test";
 
 const createdItemSchema = z.object({ item: z.object({ id: z.string() }) });
@@ -14,7 +18,6 @@ const createdItemSchema = z.object({ item: z.object({ id: z.string() }) });
 test("a planting's generic pages: create, edit status, log a journal entry, and a location's relation sections", async ({
   page,
 }) => {
-  test.setTimeout(60_000);
   const suffix = Date.now();
   const cropName = `e2e garden crop ${suffix}`;
   const growingBedName = `e2e growing bed ${suffix}`;
@@ -45,15 +48,13 @@ test("a planting's generic pages: create, edit status, log a journal entry, and 
   // `hideWhenEmpty` hides through the `hidden` attribute rather than an
   // unmount (`detail-page.tsx`), so the section stays in the DOM but is not
   // visible — not merely absent.
-  await page.goto(`/locations/${emptyShelf.id}`);
-  await waitForAppHydration(page);
+  await gotoAuthenticatedPage(page, `/locations/${emptyShelf.id}`);
   await expect(plantingsSection).not.toBeVisible();
   await expect(gardenEntriesSection).not.toBeVisible();
 
   // The growing bed already has one planting, so its Plantings section is
   // visible; its Garden entries section is still empty and hidden.
-  await page.goto(`/locations/${growingBed.id}`);
-  await waitForAppHydration(page);
+  await gotoAuthenticatedPage(page, `/locations/${growingBed.id}`);
   await expect(plantingsSection).toBeVisible();
   await expect(gardenEntriesSection).not.toBeVisible();
 
@@ -73,8 +74,7 @@ test("a planting's generic pages: create, edit status, log a journal entry, and 
 
   // Both plantings for this location now show on `/plantings`, the generic
   // entry point (Decision #8 — `/garden` is gone).
-  await page.goto(`/plantings?locationId=${growingBed.id}`);
-  await waitForAppHydration(page);
+  await gotoAuthenticatedPage(page, `/plantings?locationId=${growingBed.id}`);
   const plantingRows = page.locator('a[href^="/plantings/"]', {
     hasText: cropName,
   });
@@ -86,8 +86,7 @@ test("a planting's generic pages: create, edit status, log a journal entry, and 
 
   // Edit `status` on the seeded planting through the generic edit dialog —
   // it is an ordinary editable field now, not a lifecycle verb.
-  await page.goto(`/plantings/${existingPlanting.id}`);
-  await waitForAppHydration(page);
+  await gotoAuthenticatedPage(page, `/plantings/${existingPlanting.id}`);
   await page
     .getByRole("button", { name: "Edit Planting", exact: true })
     .click();
@@ -138,8 +137,7 @@ test("a planting's generic pages: create, edit status, log a journal entry, and 
   // The entry it just logged (`locationId: growingBed`) is a garden entry
   // for the bed too, so the bed's Garden entries section now shows it —
   // `hideWhenEmpty` flips back once its first page is non-empty.
-  await page.goto(`/locations/${growingBed.id}`);
-  await waitForAppHydration(page);
+  await gotoAuthenticatedPage(page, `/locations/${growingBed.id}`);
   await expect(gardenEntriesSection).toBeVisible();
   const gardenEntries = page.getByRole("table", { name: "Garden entries" });
   await expect(gardenEntries).toBeVisible();
@@ -153,7 +151,6 @@ test("a planting's generic pages: create, edit status, log a journal entry, and 
 test("a bought seedling (transplantedOn only, no sowedOn) gets an inferred interval on the plantings Lifecycles timeline", async ({
   page,
 }) => {
-  test.setTimeout(60_000);
   const suffix = Date.now();
   const cropName = `e2e seedling crop ${suffix}`;
   const bedName = `e2e seedling bed ${suffix}`;
@@ -169,8 +166,7 @@ test("a bought seedling (transplantedOn only, no sowedOn) gets an inferred inter
     locationId: bed.id,
   });
 
-  await page.goto(`/locations/${bed.id}`);
-  await waitForAppHydration(page);
+  await gotoAuthenticatedPage(page, `/locations/${bed.id}`);
   await page.getByRole("button", { name: "New planting", exact: true }).click();
   const dialog = page.getByRole("dialog");
   await expect(dialog.getByText("New Planting")).toBeVisible();
@@ -185,10 +181,10 @@ test("a bought seedling (transplantedOn only, no sowedOn) gets an inferred inter
   await dialog.getByRole("button", { name: "Create", exact: true }).click();
   await expect(dialog).not.toBeVisible();
 
-  await page.goto(
+  await gotoAuthenticatedPage(
+    page,
     `/plantings?locationId=${bed.id}&view=timeline&timelineMode=lifecycles`,
   );
-  await waitForAppHydration(page);
   const row = page
     .getByRole("link", { name: cropName, exact: true })
     .locator("xpath=ancestor::div[contains(@class,'grid-cols-[14rem_1fr]')]")
@@ -205,7 +201,6 @@ test("a planting's list row shows a thumbnail once a journal entry with a photo 
   page,
   baseURL,
 }) => {
-  test.setTimeout(60_000);
   const suffix = Date.now();
   const cropName = `e2e photo crop ${suffix}`;
   const bedName = `e2e photo bed ${suffix}`;
@@ -242,8 +237,7 @@ test("a planting's list row shows a thumbnail once a journal entry with a photo 
   expect(created.status(), await created.text()).toBe(201);
   createdItemSchema.parse(await created.json());
 
-  await page.goto(`/plantings?locationId=${bed.id}`);
-  await waitForAppHydration(page);
+  await gotoAuthenticatedPage(page, `/plantings?locationId=${bed.id}`);
   const plantingLink = page.getByRole("link", { name: cropName, exact: true });
   const row = page.getByRole("row").filter({ has: plantingLink });
   await expect(

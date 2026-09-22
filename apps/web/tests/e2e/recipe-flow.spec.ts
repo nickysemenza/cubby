@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { Pool } from "pg";
 import "./build-constants";
 import { RECIPE_FLOW_PRIMARY_FEATURE } from "../../src/server/ai/features";
-import { fillInput, waitForFormHydration } from "./e2e-helpers";
+import { SHORTCODE, fillInput, waitForFormHydration } from "./e2e-helpers";
 import { expect, test } from "./e2e-test";
 
 const MODEL = RECIPE_FLOW_PRIMARY_FEATURE.model;
@@ -21,10 +21,9 @@ test.describe("Recipe Flow", () => {
       .getByRole("textbox", { name: "Step" })
       .fill("Mix in two tablespoons of water, then knead until smooth.");
     await page.getByRole("button", { name: /^Create$/i }).click();
-    await expect(page).toHaveURL(
-      /\/recipes\/RCP-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}/,
-      { timeout: 15000 },
-    );
+    await expect(page).toHaveURL(new RegExp(`/recipes/RCP-${SHORTCODE}`), {
+      timeout: 15000,
+    });
 
     const recipeShortcode = page
       .url()

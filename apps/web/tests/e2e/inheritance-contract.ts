@@ -1,7 +1,12 @@
 import { z } from "zod";
 
 import { seedInheritancePrerequisite } from "./e2e-fixtures";
-import { expectViewportBounded, waitForAppHydration } from "./e2e-helpers";
+import {
+  expectStableLayoutWhile,
+  expectViewportBounded,
+  gotoAuthenticatedPage,
+  readExpense,
+} from "./e2e-helpers";
 import { expect, test } from "./e2e-test";
 
 const assignment = z.object({
@@ -17,23 +22,34 @@ export function inheritanceContract() {
       page,
       `Inheritance ${Date.now()}`,
     );
-    await page.goto(`/expenses/${fixture.expense.id}`);
-    await waitForAppHydration(page);
+    const useInherited = page
+      .getByRole("button", { name: "Use inherited value", exact: true })
+      .first();
+    const open = () =>
+      gotoAuthenticatedPage(page, `/expenses/${fixture.expense.id}`);
+    // Regression (phone): settling Jev field suggestions grew each suggestible
+    // field by an outcome glyph and an inline proposal, shifting this control
+    // so a tap landed on empty space and the project stayed explicit. Below md
+    // reviews now fold into the glyph's popover. At desktop width an inline
+    // review still mounts (+24px), which a pointer click tolerates, so the
+    // stability contract is the phone layout's.
+    if ((page.viewportSize()?.width ?? 0) < 768) {
+      await expectStableLayoutWhile(page, "**/_serverFn/**", useInherited, {
+        during: open,
+        match: (route) =>
+          (route.request().headers()["x-cubby-operation"] ?? "").includes(
+            "suggestFields",
+          ),
+      });
+    } else {
+      await open();
+    }
     await expect(
       page.getByText("Matches inherited value", { exact: true }).first(),
     ).toBeVisible();
-    await page
-      .getByRole("button", { name: "Use inherited value", exact: true })
-      .first()
-      .click();
+    await useInherited.click();
     await expect
-      .poll(async () => {
-        const response = await page.request.get(
-          `/api/v1/expenses/${fixture.expense.id}`,
-        );
-        expect(response.ok()).toBe(true);
-        return assignment.parse(await response.json());
-      })
+      .poll(() => readExpense(page, fixture.expense.id, assignment))
       .toMatchObject({
         projectId: fixture.project.id,
         fieldResolutions: { projectId: { mode: "inherit" } },
@@ -42,8 +58,7 @@ export function inheritanceContract() {
       page.getByText("purchase default", { exact: true }).first(),
     ).toBeVisible();
     await expectViewportBounded(page);
-    await page.goto(`/expenses/${fixture.charge.id}`);
-    await waitForAppHydration(page);
+    await gotoAuthenticatedPage(page, `/expenses/${fixture.charge.id}`);
     await expect(page.getByText(/purchase allocation/i).first()).toBeVisible();
     await expect(
       page.locator(`a[href="/projects/${fixture.project.id}"]`).first(),
@@ -64,8 +79,7 @@ export function inheritanceContract() {
     ).toHaveCount(0);
     await expectViewportBounded(page);
     if (test.info().project.name === "Authenticated tests") {
-      await page.goto(`/purchases/${fixture.purchase.id}`);
-      await waitForAppHydration(page);
+      await gotoAuthenticatedPage(page, `/purchases/${fixture.purchase.id}`);
       const projectCell = page
         .locator('[data-cell-col="project"]')
         .filter({ has: page.getByText("purchase default", { exact: true }) })
