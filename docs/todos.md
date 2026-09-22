@@ -582,6 +582,23 @@ history is the archive. Permanent product constraints live in the
   [docs/agents/xcode-mcp.md](agents/xcode-mcp.md) without Storybook's weight.
   Promote when agents keep reproducing edge states against real data; decide
   how it stays out of the production bundle (`mock-schema.ts` imports faker).
+  The data half is now covered: `pnpm db:dev:up/push/seed` plus `pnpm
+  dev:local` (`apps/web/tooling/scenarios/corpus.ts`) gives a persistent
+  local database with named, non-empty entities in every state the corpus
+  covers, so `dev:local` no longer needs the shared prod `DATABASE_URL` for
+  this. What remains is the route/component-preview half — driving one
+  component into an arbitrary state (loading/error/edge) without navigating
+  the full app to reach it.
+
+- **E2E against the dev server.** `pnpm --filter @cubby/web test:e2e:watch`
+  runs Playwright against a `vite build --watch` Worker bundle plus warm
+  PostgreSQL/IntegreSQL containers, not the Node `vite dev` server — Node
+  `vite dev` is not workerd, so tests that depend on Worker-only behavior
+  (bindings, Durable Objects, the entity-kernel routes as actually deployed)
+  would not exercise the real runtime there. Investigate whether a
+  `dev:local`-backed lane is worth adding as a faster iteration path for
+  UI-only specs; it could never become the CI merge gate (`docs/ci.md`
+  requires the workerd-backed harness), only an optional local shortcut.
 
 - **Declarative "many, clamped to one" cardinality.** The image-provenance
   work chose a many-row `ImageSighting` entity plus derived declared-`one`
@@ -1337,13 +1354,15 @@ Deferred from the 2026-09 manifest-rendering PRs; unordered.
   due-dated Tasks, and planned Plantings by following the skill's playbook.
 
 - **Extend photo-inventory-import past the manual pilot.** Follow-ups
-  deferred from the wardrobe-import planning pass: surface "unclaimed
-  Products" candidates server-side inside `prepare_purchase_import` itself
-  (today the agent runs a separate `dataGap: product_unpurchased` lookup);
-  give `ImportRun` structured location-by-time segments instead of free-text
-  `notes`; add Flue dispatch for `photo_inventory` runs (a coordinator
-  prompt, `claim_next_import_work` support for image targets, and an
-  analysis-text-only vision path so Flue never needs to view raw bytes); lift
-  image bytes directly from the uploading device instead of round-tripping
-  through R2; and migrate the purchase run's hand-written detail page onto
-  the generic entity-detail slots now that `importRun` is a manifest entity.
+  deferred from the wardrobe-import planning pass: build the editable photo
+  grouping proposal (`propose_photo_groups` plus a web review page — group
+  edit, a per-photo original/cutout/description table, 3s polling) so a
+  human approves groups before commit instead of the agent presenting a
+  manifest in chat; then add the Flue `photo_inventory` coordinator and its
+  SSE progress channel (a coordinator prompt, `claim_next_import_work`
+  support for image targets, and an analysis-text-only vision path so Flue
+  never needs to view raw bytes); give `ImportRun` structured
+  location-by-time segments instead of free-text `notes`; lift image bytes
+  directly from the uploading device instead of round-tripping through R2;
+  and migrate the purchase run's hand-written detail page onto the generic
+  entity-detail slots now that `importRun` is a manifest entity.

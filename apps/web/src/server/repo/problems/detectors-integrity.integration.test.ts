@@ -45,6 +45,7 @@ import {
   orderMailAttachment,
   productComponent,
   productConversionCoverage,
+  productMatchCandidate,
   productExternalId,
   productImage,
   productUnitMappings,
@@ -148,6 +149,19 @@ const mkProduct = (db: Database) =>
     name: uniq("Product"),
     manufacturer: "Test Mfr",
   });
+
+/** The pair table stores `productAId < productBId`; mint until the uuid lands on the requested side. */
+const mkProductOrderedAgainst = async (
+  db: Database,
+  target: string,
+  side: "before" | "after",
+) => {
+  for (;;) {
+    const candidate = await mkProduct(db);
+    if (side === "after" ? candidate.id > target : candidate.id < target)
+      return candidate;
+  }
+};
 
 const mkLocation = (db: Database) =>
   insertWithShortcode(db, "location", {
@@ -1368,6 +1382,28 @@ const SOURCE_FACTORIES = {
     return { id: targetId };
   },
 
+  "ProductMatchCandidate.productAId": async (db, targetId) => {
+    const target = parseEntityId("product", targetId);
+    const other = await mkProductOrderedAgainst(db, target, "after");
+    return insertAndReturn(db, productMatchCandidate, {
+      productAId: target,
+      productBId: other.id,
+      source: "agent",
+      state: "open",
+    });
+  },
+
+  "ProductMatchCandidate.productBId": async (db, targetId) => {
+    const target = parseEntityId("product", targetId);
+    const other = await mkProductOrderedAgainst(db, target, "before");
+    return insertAndReturn(db, productMatchCandidate, {
+      productAId: other.id,
+      productBId: target,
+      source: "agent",
+      state: "open",
+    });
+  },
+
   "Purchase.importRunId": async (db, targetId) => {
     const vendor = await mkVendor(db);
     return insertWithShortcode(db, "purchase", {
@@ -1588,6 +1624,7 @@ const HARD_DELETE_ONLY_SOURCE_TABLES = new Set([
   "OrderMailAttachment",
   "ProjectDependency",
   "ProductConversionCoverage",
+  "ProductMatchCandidate",
   "PurchasePaymentEvidence",
   "TaskDependency",
 ]);
@@ -1628,11 +1665,11 @@ const derivedMustTargetLiveEdges = deriveMustTargetLiveEdges();
 describe("findReferentialLivenessViolations", () => {
   const ctx = withTestDb();
 
-  it("derives 134 must-target-live edges from INCOMING_EDGES × ENTITY_EDGE_SEMANTICS", () => {
+  it("derives 136 must-target-live edges from INCOMING_EDGES × ENTITY_EDGE_SEMANTICS", () => {
     // Mirrors EXPECTED_EDGE_COUNT in detectors-integrity.ts — an independent
     // spot check computed from the same two source-of-truth maps, not from the
     // detector's own (unexported) derivation.
-    expect(derivedMustTargetLiveEdges).toHaveLength(134);
+    expect(derivedMustTargetLiveEdges).toHaveLength(136);
   });
 
   it("the hand-written fixture map covers exactly the derived edges (a new edge fails here, not silently)", () => {

@@ -133,6 +133,7 @@ import {
   categoryFeatureSql,
 } from "~/server/repo/product-category-sql";
 import { categoryDescendantsSql } from "~/server/repo/product-category-sql";
+import { deleteProductMatchCandidatesTx } from "~/server/repo/product-match-candidate";
 import {
   relatedSortExpression,
   relatedWhereConditions,
@@ -2515,6 +2516,7 @@ export const deleteProducts = async (
     await tx
       .delete(productConversionCoverage)
       .where(inArray(productConversionCoverage.productId, ids));
+    await deleteProductMatchCandidatesTx(tx, ids);
 
     const removal = await removeEntity(tx, {
       entity: "product",

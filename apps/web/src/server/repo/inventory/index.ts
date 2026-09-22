@@ -31,7 +31,10 @@ export {
   confirmInventoryOwnership,
   setInventoryOwnership,
 } from "./ownership-mutations";
-export { loadEffectiveInventoryOwnershipById } from "./ownership";
+export {
+  loadEffectiveInventoryOwnershipById,
+  loadInheritedProductOwners,
+} from "./ownership";
 export {
   createInventoryEntry,
   deleteInventoryEntries,

@@ -140,3 +140,131 @@ describe("RecommendationWorkbench product relationships", () => {
     expect(screen.getAllByRole("button", { name: /Dismiss/ })).toHaveLength(2);
   });
 });
+
+describe("RecommendationWorkbench product matches", () => {
+  const keeperId = testShortcode("product", "PRD-KEEP");
+  const photoId = testShortcode("product", "PRD-PHTO");
+  const side = (
+    id: typeof keeperId,
+    name: string,
+    role: "photo" | "purchase",
+  ) => ({
+    id,
+    name,
+    role,
+    category: "Apparel",
+    inventoryCount: role === "photo" ? 1 : 1,
+    owner: null,
+    purchase:
+      role === "purchase"
+        ? {
+            id: testShortcode("purchase", "PUR-2ABC"),
+            date: "2026-09-01",
+            vendor: "Synthetic outfitter",
+            line: "Crew tee, grey, M",
+          }
+        : null,
+    gtins: [],
+    sources: [],
+  });
+  const queue = {
+    semanticRanking: false,
+    items: [
+      {
+        source: "agent" as const,
+        keeper: side(keeperId, "Crew tee, grey", "purchase"),
+        other: side(photoId, "Gray crew t-shirt — M", "photo"),
+        evidence: "Vendor photo shows the same pocket seam",
+        sourceUrls: ["https://vendor.example/p/crew-tee"],
+        signals: [],
+        warnings: ["Both products have stock. Merging sums their quantities."],
+      },
+    ],
+  };
+
+  it("shows both covers with evidence, and dismisses the exact pair", async () => {
+    const dismissed: unknown[] = [];
+    const operations = {
+      ...productionRecommendationWorkbenchOperations,
+      productMatches: recommendations.productMatches.withTransport(
+        async () => queue,
+      ),
+      dismissProductMatch: recommendations.dismissProductMatch.withTransport(
+        async ({ input }) => {
+          dismissed.push(input);
+          return { ok: true as const };
+        },
+      ),
+      displayImages: entityMedia.displayImages.withTransport(async () => ({
+        [`product:${keeperId}`]: { url: "https://images.example/vendor.jpg" },
+        [`product:${photoId}`]: { url: "https://images.example/photo.jpg" },
+      })).queryOptions,
+    };
+
+    render(
+      <RecommendationWorkbench kind="product-match" operations={operations} />,
+      {
+        wrapper: harness.wrapper,
+      },
+    );
+
+    expect(
+      await screen.findByText("Vendor photo shows the same pocket seam"),
+    ).toBeVisible();
+    await waitFor(() =>
+      expect(
+        screen.getAllByRole("img").map((img) => img.getAttribute("alt")),
+      ).toEqual(["Crew tee, grey", "Gray crew t-shirt — M"]),
+    );
+    expect(
+      screen.getByRole("link", { name: "https://vendor.example/p/crew-tee" }),
+    ).toHaveAttribute("href", "https://vendor.example/p/crew-tee");
+    expect(screen.getByText(/Merging sums their quantities/)).toBeVisible();
+    expect(screen.getByText("Keep · From a purchase")).toBeVisible();
+
+    fireEvent.click(screen.getByRole("button", { name: /Not the same/ }));
+    await waitFor(() =>
+      expect(dismissed).toEqual([{ productIds: [keeperId, photoId] }]),
+    );
+  });
+
+  it("moves a matched neighbour out of the relationship list and links the match queue", async () => {
+    const operations = {
+      ...productionRecommendationWorkbenchOperations,
+      product: recommendations.product.withTransport(async () => ({
+        status: "ready" as const,
+        items: [
+          {
+            entity: "product" as const,
+            shortcode: keeperId,
+            title: "Crew tee, grey",
+            score: 0.93,
+            evidence: [{ signal: "Similar meaning", detail: null, weight: 1 }],
+          },
+        ],
+      })),
+      productMatches: recommendations.productMatches.withTransport(
+        async () => queue,
+      ),
+      displayImages: entityMedia.displayImages.withTransport(async () => ({
+        [`product:${keeperId}`]: null,
+      })).queryOptions,
+    };
+
+    render(
+      <RecommendationWorkbench
+        sourceId={photoId}
+        kind="product-related"
+        operations={operations}
+      />,
+      { wrapper: harness.wrapper },
+    );
+
+    expect(
+      await screen.findByRole("link", { name: "product match queue" }),
+    ).toBeVisible();
+    expect(
+      screen.queryByRole("link", { name: "Crew tee, grey" }),
+    ).not.toBeInTheDocument();
+  });
+});

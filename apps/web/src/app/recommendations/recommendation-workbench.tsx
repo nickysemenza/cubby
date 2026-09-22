@@ -5,6 +5,7 @@ import {
 } from "@cubby/schemas/identifiers";
 import type { RecommendationKind } from "@cubby/schemas/recommendations";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
 import { X } from "lucide-react";
 import { useMemo, useState } from "react";
 
@@ -25,12 +26,17 @@ import { ripple } from "~/integrations/tanstack-query/cache-tags";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 import { recommendations } from "~/lib/recommendations.functions";
 
+import {
+  ProductMatchQueue,
+  type ProductMatchQueueOperations,
+} from "./product-match-queue";
+
 const productUpdateMutationOptions = entityMutationOptionsFactory(
   "product",
   "update",
 );
 
-export interface RecommendationWorkbenchOperations {
+export interface RecommendationWorkbenchOperations extends ProductMatchQueueOperations {
   readonly placement: typeof recommendations.placement;
   readonly tagPropagation: typeof recommendations.tagPropagation;
   readonly product: typeof recommendations.product;
@@ -52,6 +58,9 @@ export const productionRecommendationWorkbenchOperations: RecommendationWorkbenc
     dismissTagPropagation: recommendations.dismissTagPropagation,
     dismissProduct: recommendations.dismissProduct,
     dismissDuplicateProduct: recommendations.dismissDuplicateProduct,
+    productMatches: recommendations.productMatches,
+    dismissProductMatch: recommendations.dismissProductMatch,
+    mergeProductMatch: recommendations.mergeProductMatch,
     moveEntries: inventory.moveEntries,
     productUpdateMutationOptions,
     displayImages: (input) => entityMedia.displayImages.queryOptions(input),
@@ -113,6 +122,9 @@ export function RecommendationWorkbench({
         operations={operations}
       />
     ) : null;
+  }
+  if (kind === "product-match") {
+    return <ProductMatchQueue sourceId={sourceId} operations={operations} />;
   }
   if (!sourceId) return null;
   return kind === "duplicate-product" ? (
@@ -335,11 +347,30 @@ function ProductRelatednessRecommendation({
   operations: RecommendationWorkbenchOperations;
 }) {
   const relatedness = useQuery(operations.product.queryOptions({ sourceId }));
-  const dismiss = useMutation(operations.dismissProduct.mutationOptions({}));
-  const items = useMemo(
-    () => relatedness.data?.items ?? [],
-    [relatedness.data?.items],
+  const matches = useQuery(
+    operations.productMatches.queryOptions({ productId: sourceId }),
   );
+  const dismiss = useMutation(operations.dismissProduct.mutationOptions({}));
+  // A neighbour that is also an open same-item match is reviewed in the match
+  // queue, not here — one surface per pair.
+  const matched = useMemo(
+    () =>
+      new Set<string>(
+        (matches.data?.items ?? []).flatMap((item) => [
+          item.keeper.id,
+          item.other.id,
+        ]),
+      ),
+    [matches.data?.items],
+  );
+  const items = useMemo(
+    () =>
+      (relatedness.data?.items ?? []).filter(
+        (item) => !matched.has(item.shortcode),
+      ),
+    [relatedness.data?.items, matched],
+  );
+  const hiddenMatches = (relatedness.data?.items ?? []).length - items.length;
   const productRefs = useMemo(
     () =>
       items.map((item) => ({
@@ -376,6 +407,21 @@ function ProductRelatednessRecommendation({
         Review each relationship against the current catalogue. Dismissal hides
         this exact candidate for this product.
       </p>
+      {hiddenMatches > 0 && (
+        <p className="text-sm text-muted-foreground">
+          {hiddenMatches === 1
+            ? "1 neighbour looks like the same item; review it in the"
+            : `${hiddenMatches} neighbours look like the same item; review them in the`}{" "}
+          <Link
+            to="/recommendations/workbench"
+            search={{ kind: "product-match", source: sourceId }}
+            className="underline underline-offset-2"
+          >
+            product match queue
+          </Link>
+          .
+        </p>
+      )}
       {items.length === 0 ? (
         <p className="text-sm text-muted-foreground">
           No current recommendations.

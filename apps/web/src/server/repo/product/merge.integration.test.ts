@@ -237,6 +237,30 @@ describe("mergeProducts", () => {
       orderBy: [asc(productUnitMappings.createdAt)],
     });
 
+  it("fills a purchase-created survivor's empty manufacturer from the photo-created loser", async () => {
+    // Purchase import creates Products with manufacturer "", which is not null,
+    // so a null-only carry would drop the brand read off the photographed tag.
+    const keeper = await seedProduct("Everyday Crew Tee Heather Gray", {
+      manufacturer: "",
+    });
+    const loser = await seedProduct("Example Brand Crew tee — Gray, M", {
+      manufacturer: "Example Brand",
+    });
+
+    const summary = await mergeProducts(
+      ctx.db,
+      { keepId: keeper.shortcode, mergeIds: [loser.shortcode] },
+      TEST_ACTOR,
+    );
+
+    expect(summary.carriedFields).toContain("manufacturer");
+    const survivor = await getDb(ctx.db).query.product.findFirst({
+      where: eq(product.id, keeper.id),
+      columns: { manufacturer: true },
+    });
+    expect(survivor?.manufacturer).toBe("Example Brand");
+  });
+
   it("soft-deletes the losers and folds their identity into the survivor", async () => {
     const keeper = await seedProduct("Cordless Drill", {
       model: "DCD791D2",

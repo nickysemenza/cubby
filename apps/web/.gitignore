@@ -13,3 +13,4 @@ count.txt
 .vinxi
 todos.json
 coverage/
+tests/e2e/harness-services/.bundle-cache/

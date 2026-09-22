@@ -13608,6 +13608,154 @@
       },
       "isRLSEnabled": false
     },
+    "public.ProductMatchCandidate": {
+      "name": "ProductMatchCandidate",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "productAId": {
+          "name": "productAId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "productBId": {
+          "name": "productBId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "source": {
+          "name": "source",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "state": {
+          "name": "state",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "evidence": {
+          "name": "evidence",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "sourceUrls": {
+          "name": "sourceUrls",
+          "type": "text[]",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "ARRAY[]::text[]"
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updatedAt": {
+          "name": "updatedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "ProductMatchCandidate_pair_key": {
+          "name": "ProductMatchCandidate_pair_key",
+          "columns": [
+            {
+              "expression": "productAId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "productBId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "ProductMatchCandidate_productB_idx": {
+          "name": "ProductMatchCandidate_productB_idx",
+          "columns": [
+            {
+              "expression": "productBId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "ProductMatchCandidate_productAId_Product_id_fk": {
+          "name": "ProductMatchCandidate_productAId_Product_id_fk",
+          "tableFrom": "ProductMatchCandidate",
+          "tableTo": "Product",
+          "columnsFrom": [
+            "productAId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "ProductMatchCandidate_productBId_Product_id_fk": {
+          "name": "ProductMatchCandidate_productBId_Product_id_fk",
+          "tableFrom": "ProductMatchCandidate",
+          "tableTo": "Product",
+          "columnsFrom": [
+            "productBId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "ProductMatchCandidate_canonical_pair_check": {
+          "name": "ProductMatchCandidate_canonical_pair_check",
+          "value": "\"ProductMatchCandidate\".\"productAId\" < \"ProductMatchCandidate\".\"productBId\""
+        },
+        "ProductMatchCandidate_source_check": {
+          "name": "ProductMatchCandidate_source_check",
+          "value": "\"ProductMatchCandidate\".\"source\" IN ('agent', 'detector')"
+        },
+        "ProductMatchCandidate_state_check": {
+          "name": "ProductMatchCandidate_state_check",
+          "value": "\"ProductMatchCandidate\".\"state\" IN ('open', 'dismissed')"
+        }
+      },
+      "isRLSEnabled": false
+    },
     "public.ProductUnitMappings": {
       "name": "ProductUnitMappings",
       "schema": "",

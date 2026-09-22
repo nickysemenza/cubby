@@ -1,5 +1,10 @@
 import type { ActorContext } from "@cubby/schemas/context";
 import {
+  GTIN_KIND,
+  GTIN_SOURCE,
+  normalizeGtin,
+} from "@cubby/schemas/external-id";
+import {
   type LedgerPartyId,
   parseEntityId,
   type VendorId,
@@ -146,6 +151,14 @@ async function productCandidates(
   const exactIds = [
     ...new Set([line.sku, asin].filter((id): id is string => Boolean(id))),
   ];
+  // A barcode read off a photographed tag is stored under the vendor-neutral
+  // GTIN source, so a numeric line SKU must also be tried as a GTIN or a
+  // photo-first Product never becomes an exact match for its later order line.
+  const gtins = [
+    ...new Set(
+      exactIds.map(normalizeGtin).filter((id): id is string => Boolean(id)),
+    ),
+  ];
   const exact = exactIds.length
     ? await database
         .select({
@@ -162,10 +175,21 @@ async function productCandidates(
         )
         .where(
           and(
-            eq(productExternalId.source, source),
-            inArray(productExternalId.kind, ["retailer_sku", "asin"]),
-            inArray(productExternalId.externalId, exactIds),
             notDeleted(productExternalId),
+            or(
+              and(
+                eq(productExternalId.source, source),
+                inArray(productExternalId.kind, ["retailer_sku", "asin"]),
+                inArray(productExternalId.externalId, exactIds),
+              ),
+              gtins.length
+                ? and(
+                    eq(productExternalId.source, GTIN_SOURCE),
+                    eq(productExternalId.kind, GTIN_KIND),
+                    inArray(productExternalId.externalId, gtins),
+                  )
+                : undefined,
+            ),
           ),
         )
         .limit(1)

@@ -8,6 +8,10 @@ import {
   productResolveNamesInput,
 } from "@cubby/schemas/product";
 import { productComponentsInput } from "@cubby/schemas/product-components";
+import {
+  proposeProductMatchInput,
+  proposeProductMatchOut,
+} from "@cubby/schemas/recommendations";
 import { upc } from "@cubby/usda-schemas";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
@@ -193,6 +197,17 @@ export function registerProductTools(server: McpServer) {
     call: async (caller, params) => ({
       results: await caller.product.resolveNames({ names: params.names }),
     }),
+  });
+
+  registerRouterTool(server, {
+    name: "propose_product_match",
+    description:
+      'Propose that two Products are the same real item, for a person to review and merge in the product match queue (Recommendations workbench). Use it when you hold evidence the automatic detector cannot see — typically a photo-created Product (e.g. "Gray crew t-shirt — M", stocked, never bought) and a purchase-created Product for the same item, confirmed against the vendor\'s product page. This never merges anything: it records the pair with your evidence, ranked above detector suggestions. Re-proposing the same pair (either order) replaces the evidence and sources; a pair the person already dismissed stays dismissed and comes back with state "dismissed".',
+    inputSchema: proposeProductMatchInput,
+    outputSchema: proposeProductMatchOut,
+    annotations: WRITE_CLOSED,
+    call: async (caller, params) =>
+      caller.recommendations.proposeProductMatch(params),
   });
 
   registerRouterTool(server, {
