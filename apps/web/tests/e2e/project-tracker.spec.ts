@@ -1,5 +1,5 @@
 import { seedTaskPrerequisite } from "./e2e-fixtures";
-import { openCommandPalette, waitForAppHydration } from "./e2e-helpers";
+import { openCommandPalette, gotoAuthenticatedPage } from "./e2e-helpers";
 import { expect, test } from "./e2e-test";
 
 test("command palette search deep-links a task straight to its detail page", async ({
@@ -7,8 +7,7 @@ test("command palette search deep-links a task straight to its detail page", asy
 }) => {
   const name = `e2e palette task ${Date.now()}`;
   const task = await seedTaskPrerequisite(page, { name });
-  await page.goto("/tasks");
-  await waitForAppHydration(page);
+  await gotoAuthenticatedPage(page, "/tasks");
 
   const palette = await openCommandPalette(page);
   await palette
@@ -28,8 +27,7 @@ test("mobile expense quick-add renders as a bottom sheet and still submits", asy
 }) => {
   await page.setViewportSize({ width: 375, height: 812 });
   const name = `e2e mobile expense ${Date.now()}`;
-  await page.goto("/expenses");
-  await waitForAppHydration(page);
+  await gotoAuthenticatedPage(page, "/expenses");
   await page.getByRole("button", { name: "New", exact: true }).click();
 
   const sheet = page.locator('[data-slot="sheet-content"][data-side="bottom"]');
@@ -42,15 +40,14 @@ test("mobile expense quick-add renders as a bottom sheet and still submits", asy
   await page.getByRole("option", { name: "Other", exact: true }).click();
   await sheet.getByRole("button", { name: /^Create$/ }).click();
   await expect(sheet).not.toBeVisible();
-  await expect(page.getByText(name).first()).toBeVisible();
+  await expect(page.getByText(name, { exact: true })).toBeVisible();
 });
 
 test("task quick-add requires a deliberate trade and saves assignment modes", async ({
   page,
 }) => {
   const name = `e2e classified task ${Date.now()}`;
-  await page.goto("/tasks");
-  await waitForAppHydration(page);
+  await gotoAuthenticatedPage(page, "/tasks");
   await page.getByRole("button", { name: "New", exact: true }).click();
   const dialog = page.getByRole("dialog");
   await dialog.getByLabel("Name", { exact: true }).fill(name);
@@ -61,5 +58,5 @@ test("task quick-add requires a deliberate trade and saves assignment modes", as
     .click();
   await dialog.getByRole("button", { name: /^Create$/ }).click();
   await expect(dialog).not.toBeVisible();
-  await expect(page.getByText(name).first()).toBeVisible();
+  await expect(page.getByText(name, { exact: true })).toBeVisible();
 });

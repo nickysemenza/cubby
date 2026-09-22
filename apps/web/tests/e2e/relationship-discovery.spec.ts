@@ -4,7 +4,7 @@ import {
   seedPlantingPrerequisite,
   seedTaskPrerequisite,
 } from "./e2e-fixtures";
-import { waitForAppHydration } from "./e2e-helpers";
+import { escapeRegExp, gotoAuthenticatedPage } from "./e2e-helpers";
 import { expect, test } from "./e2e-test";
 
 relationshipDiscoveryContract();
@@ -27,8 +27,7 @@ test("a large planting branch shows its first page without an expansion click", 
     ),
   );
 
-  await page.goto(`/tasks/${task.id}#relationships`);
-  await waitForAppHydration(page);
+  await gotoAuthenticatedPage(page, `/tasks/${task.id}#relationships`);
   await page.getByRole("button", { name: "Graph view", exact: true }).click();
 
   await expect(page.getByText("12 of 13", { exact: true })).toBeVisible();
@@ -37,7 +36,7 @@ test("a large planting branch shows its first page without an expansion click", 
     .click();
   await expect(
     page.getByLabel("Map records").getByRole("button", {
-      name: new RegExp(`^${cropName}`),
+      name: new RegExp(`^${escapeRegExp(cropName)}`),
     }),
   ).toHaveCount(12);
 });
