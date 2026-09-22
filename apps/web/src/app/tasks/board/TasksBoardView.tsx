@@ -6,12 +6,23 @@ import type {
 import { useDebouncedValue } from "@tanstack/react-pacer";
 import { useQuery } from "@tanstack/react-query";
 import { getRouteApi } from "@tanstack/react-router";
+import { ListTodo } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { z } from "zod";
 
 import { Row, Stack } from "~/components/layout";
+import { Button } from "~/components/ui/button";
+import {
+  Empty,
+  EmptyActions,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyIcon,
+  EmptyTitle,
+} from "~/components/ui/empty";
 import { Skeleton } from "~/components/ui/skeleton";
 import { useHydratedLoading } from "~/hooks/useHydrated";
+import { getErrorMessage } from "~/lib/error-utils";
 
 import { task } from "../task.functions";
 import type { BoardColsMode, BoardLaneMode } from "./board-model";
@@ -97,9 +108,13 @@ export function TasksBoardView({ filters }: { filters: TaskFilters }) {
     () => ({ ...filters, search: debouncedSearch || undefined }),
     [filters, debouncedSearch],
   );
-  const { data: board = NO_BOARD, isLoading: queryLoading } = useQuery(
-    task.board.queryOptions(boardInput),
-  );
+  const {
+    data: board = NO_BOARD,
+    isLoading: queryLoading,
+    isError,
+    error,
+    refetch,
+  } = useQuery(task.board.queryOptions(boardInput));
   const isLoading = useHydratedLoading(queryLoading);
   const tasks = useMemo(() => [...board.active, ...board.recentDone], [board]);
   // The IDENTICAL `boardInput` this surface passed to `board.queryOptions`
@@ -146,7 +161,22 @@ export function TasksBoardView({ filters }: { filters: TaskFilters }) {
         </a>
         .
       </p>
-      {isLoading ? (
+      {isError && board === NO_BOARD ? (
+        // A failed read is not an empty board: "No tasks to show" here once
+        // hid a 500 behind what looked like lost data.
+        <Empty>
+          <EmptyHeader>
+            <EmptyIcon icon={ListTodo} />
+            <EmptyTitle>Couldn't load tasks</EmptyTitle>
+            <EmptyDescription>{getErrorMessage(error)}</EmptyDescription>
+          </EmptyHeader>
+          <EmptyActions>
+            <Button type="button" variant="outline" onClick={() => refetch()}>
+              Retry
+            </Button>
+          </EmptyActions>
+        </Empty>
+      ) : isLoading ? (
         <BoardSkeleton />
       ) : (
         <TaskBoard
