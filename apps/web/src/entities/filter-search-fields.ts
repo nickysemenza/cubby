@@ -66,6 +66,7 @@ export const problemFilterSemantics = {
     { columnId: "ownershipReconciliation", kind: "select" },
     { columnId: "conversionCoverage", kind: "select" },
     { columnId: "conversionTopology", kind: "select" },
+    { columnId: "dataGaps", field: "dataGap", kind: "multiselect" },
   ],
   ingredient: [
     {
@@ -79,6 +80,7 @@ export const problemFilterSemantics = {
       kind: "presence",
     },
     { columnId: "product", field: "productPresenceFilter", kind: "presence" },
+    { columnId: "dataGaps", field: "dataGap", kind: "multiselect" },
   ],
   location: [
     { columnId: "image", field: "imagePresenceFilter", kind: "presence" },
@@ -104,6 +106,7 @@ export const problemFilterSemantics = {
             : {},
     },
     { columnId: "children", field: "childPresenceFilter", kind: "presence" },
+    { columnId: "dataGaps", field: "dataGap", kind: "multiselect" },
   ],
   recipe: [
     {
@@ -140,6 +143,7 @@ export const problemFilterSemantics = {
     { columnId: "locationRole", kind: "select" },
     { columnId: "placement", field: "placementFilter", kind: "select" },
     { columnId: "valuationStatus", kind: "select" },
+    { columnId: "dataGaps", field: "dataGap", kind: "multiselect" },
   ],
   expense: [
     { columnId: "future", kind: "boolean" },
@@ -189,6 +193,7 @@ export const problemFilterSemantics = {
       expand: (value) => ({ purchaseCountMin: Number(value) }),
     },
     { columnId: "logo", field: "logoPresenceFilter", kind: "presence" },
+    { columnId: "dataGaps", field: "dataGap", kind: "multiselect" },
   ],
   task: [
     { columnId: "dueRelative", kind: "select" },

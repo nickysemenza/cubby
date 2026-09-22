@@ -7,10 +7,10 @@ import { defineEntityChecks } from "../registry";
 
 type Cookbook = typeof cookbook;
 
-// Mirrors `findPartiallyImportedCookbooks` (repo/problems/detectors-cookbook.ts)
-// per-row instead of via its GROUP BY/HAVING: sourceRecipeCount is the source
-// EPUB's own recipe count, so more source recipes than live imported ones is a
-// stalled or partial import.
+// `findPartiallyImportedCookbooks` (repo/problems/detectors-cookbook.ts) uses
+// this check's `gapCondition` as its own HAVING predicate rather than
+// re-deriving it: sourceRecipeCount is the source EPUB's own recipe count, so
+// more source recipes than live imported ones is a stalled or partial import.
 const hasFewerLiveRecipesThanSource = (
   t: Cookbook,
 ) => sql`(${t.sourceRecipeCount} > (
