@@ -343,6 +343,11 @@ inventory recount own their separate progress contracts.
 
 ### Tables and inspectors
 
+The generic detail and list pages are built against the
+[generic-page design canvas](https://claude.ai/artifact/A45j5qz24RjRK6KzKmKLWL):
+hero plate, section kinds, workbench band, and journal variant. Check a
+generic-page change against it.
+
 A list's workbench is one 44px band: identity, declared views, search, one
 chip per declared filter, More, Clear, Actions, create.
 
