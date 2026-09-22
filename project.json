@@ -21,24 +21,12 @@
     "lint": {
       "command": "oxlint .",
       "cache": true,
-      "inputs": [
-        "repo",
-        "!{workspaceRoot}/**/*.mdx",
-        "!{workspaceRoot}/**/*.rs",
-        "!{workspaceRoot}/**/*.toml",
-        "!{workspaceRoot}/**/*.lock"
-      ]
+      "inputs": ["lintable"]
     },
     "format": {
       "command": "oxfmt --check .",
       "cache": true,
-      "inputs": [
-        "repo",
-        "!{workspaceRoot}/**/*.mdx",
-        "!{workspaceRoot}/**/*.rs",
-        "!{workspaceRoot}/**/*.toml",
-        "!{workspaceRoot}/**/*.lock"
-      ]
+      "inputs": ["lintable"]
     },
     "knip": {
       "command": "knip --no-config-hints",
