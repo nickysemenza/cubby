@@ -266,6 +266,12 @@ const compileFieldModel = (
       throw new EntityDeclarationError(
         `${fieldContext} cannot declare provenance for a reference field.`,
       );
+    // The humanised-key fallback reads "Location Id" for a reference; the
+    // editor and facts grid need the target's sentence-case name.
+    if (field.reference !== null && field.label === undefined)
+      throw new EntityDeclarationError(
+        `${fieldContext} is a reference field and must declare a sentence-case label.`,
+      );
     const provenance = compileFieldProvenance(field, fieldContext, relations);
     return {
       key,
