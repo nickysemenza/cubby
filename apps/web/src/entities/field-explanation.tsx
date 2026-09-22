@@ -126,7 +126,7 @@ const explanationSourceKey = (source: ExplanationSource): string =>
     source.entity?.entityId ?? JSON.stringify(source.value),
   ].join(":");
 
-export /** The resolution row already names its source record, so a bare
+/** The resolution row already names its source record, so a bare
  * link-only source pointing at the same record adds nothing. */
 function visibleSources(data: FieldExplanationOutput) {
   const named = data.resolution?.sourceEntity;
