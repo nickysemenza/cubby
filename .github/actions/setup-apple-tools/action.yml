@@ -15,6 +15,9 @@ outputs:
   spm-clones-cache-hit:
     description: "true when the SPM clone cache matched exactly"
     value: ${{ steps.spm-cache.outputs.cache-hit }}
+  spm-clones-cache-matched-key:
+    description: "Key the SPM clones were restored from (exact or prefix); empty on a full miss"
+    value: ${{ steps.spm-cache.outputs.cache-matched-key }}
   spm-clones-cache-key:
     description: "Key to save the SPM clones under"
     value: ${{ steps.spm-cache.outputs.cache-primary-key }}

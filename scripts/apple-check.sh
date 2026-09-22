@@ -31,6 +31,13 @@ fi
 
 apps/apple/scripts/prepare-project.sh
 
+# Hosted CI restores a cached DerivedData (ci.yaml); after xcodegen has
+# rewritten its outputs, give tracked sources blob-hash mtimes so unchanged
+# files match that build instead of recompiling (scripts/stamp-source-mtimes.ts).
+if [ "$mode" = "ci" ]; then
+  node scripts/stamp-source-mtimes.ts apps/apple
+fi
+
 # @State/@StateObject must never be seeded from an init parameter: a re-presented
 # `.sheet(item:)` can then show the previous item's stale state (apps/apple/AGENTS.md,
 # "Traps that cost real time"). Tag a deliberate exception `// state-init-ok: <reason>`

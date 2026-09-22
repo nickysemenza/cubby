@@ -450,8 +450,42 @@ jobs:
           targets: sim
       - uses: ./.github/actions/setup-apple-tools
         id: apple-tools
+      # DerivedData is cached like CubbyKit's .build above: apple-check.sh's
+      # ci mode stamps tracked sources with blob-hash mtimes after xcodegen,
+      # and XCBuild is told to ignore the device/inode changes every cache
+      # restore introduces, so only changed sources recompile.
+      - name: Compute Xcode version hash
+        id: xcode-version
+        run: |
+          echo "hash=$(xcodebuild -version | shasum -a 256 | awk '{print $1}')" >> "$GITHUB_OUTPUT"
+          defaults write com.apple.dt.XCBuild IgnoreFileSystemDeviceInodeChanges -bool YES
+      - name: Restore cached DerivedData
+        id: derived-data
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        with:
+          # Must list exactly the save step's paths: the cache version hashes them.
+          path: |
+            apps/apple/DerivedData
+            !apps/apple/DerivedData/Logs
+          key: xcode-dd-v1-${{ runner.os }}-${{ steps.xcode-version.outputs.hash }}-${{ hashFiles('apps/apple/project.yml', 'apps/apple/CubbyKit/Package.resolved') }}-${{ hashFiles('apps/apple/App/**', 'apps/apple/CubbyKit/**') }}
+          restore-keys: |
+            xcode-dd-v1-${{ runner.os }}-${{ steps.xcode-version.outputs.hash }}-${{ hashFiles('apps/apple/project.yml', 'apps/apple/CubbyKit/Package.resolved') }}-
+            xcode-dd-v1-${{ runner.os }}-${{ steps.xcode-version.outputs.hash }}-
       - name: Run iOS app checks
         run: sh scripts/apple-check.sh ci
+      # Same policy as the SwiftPM build cache: PRs save only when no prefix
+      # exists, otherwise only main saves.
+      - name: Save DerivedData cache
+        if: >-
+          always() && steps.derived-data.outputs.cache-hit != 'true' &&
+          (github.event_name == 'push' || steps.derived-data.outputs.cache-matched-key == '')
+        continue-on-error: true
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        with:
+          path: |
+            apps/apple/DerivedData
+            !apps/apple/DerivedData/Logs
+          key: ${{ steps.derived-data.outputs.cache-primary-key }}
       # Saved here rather than by actions/cache's post step so a red build
       # still keeps the generator build and SPM clones for the next attempt.
       # A concurrent job may have saved the same key first; that 409 is
@@ -469,8 +503,12 @@ jobs:
         with:
           path: ${{ env.CUBBY_OPENAPI_GENERATOR_BIN_DIR }}
           key: ${{ steps.apple-tools.outputs.openapi-generator-cache-key }}
+      # ~1.1 GB per entry, and a PR's copy is private to its ref: seven of
+      # them were 8.3 GB of the repo's 10 GB cache on 2026-09-22.
       - name: Save SPM clone cache
-        if: always() && steps.apple-tools.outputs.spm-clones-cache-hit != 'true'
+        if: >-
+          always() && steps.apple-tools.outputs.spm-clones-cache-hit != 'true' &&
+          (github.event_name == 'push' || steps.apple-tools.outputs.spm-clones-cache-matched-key == '')
         continue-on-error: true
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
