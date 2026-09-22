@@ -307,7 +307,15 @@ private struct PhotoLibraryBrowser: View {
             library.deactivate(session); loading?.cancel()
         }
         .onChange(of: scenePhase) { _, phase in
-            if phase == .active { Task { await library.refresh(matches: matches, client: appModel.client) } }
+            guard phase == .active else { return }
+            // The PhotoKit change observer (`photoLibraryDidChange`) already keeps the library
+            // current as edits happen, and macOS fires `.active` on every app/window activation —
+            // not only after a real library change — so only force a refresh here when Photos
+            // access itself changed underneath us (e.g. in System Settings) or nothing has loaded
+            // yet (`library.count == 0` covers both "never activated" and "denied access").
+            let currentAuthorization = PHPhotoLibrary.authorizationStatus(for: .readWrite)
+            guard currentAuthorization != library.authorization || library.count == 0 else { return }
+            Task { await library.refresh(matches: matches, client: appModel.client) }
         }
         .photoSweepLifecycle(
             active: !picker, sweep: sweep, scenePhase: scenePhase,

@@ -98,3 +98,95 @@ struct PhotoLibraryStatusTests {
         #expect(status.detail.contains("Checked 100 Cubby images"))
     }
 }
+
+/// `PhotoLibraryStages.derive`'s ordering/waiting/done/off precedence (`PhotoLibraryHeader.swift`),
+/// exercised the same way `PhotoLibraryStatus.derive` is above — plain `Inputs`, no live stores.
+@Suite("PhotoLibraryStages")
+struct PhotoLibraryStagesTests {
+    private func inputs(
+        loadedAssetCount: Int = 100,
+        totalAssetCount: Int? = 100,
+        isLoadingLibrary: Bool = false,
+        indexIsLoading: Bool = false,
+        indexHasIndex: Bool = true,
+        indexTotalCount: Int = 100,
+        indexRemainingCount: Int = 0,
+        indexError: String? = nil,
+        isParticipating: Bool = true,
+        isScanning: Bool = false,
+        scannedCount: Int = 100,
+        checkedCount: Int = 100,
+        libraryCount: Int = 100,
+        categories: PhotoLibraryStages.CategoriesInput? = PhotoLibraryStages.CategoriesInput(
+            isRunning: false, analysedCount: 100, totalCount: 100)
+    ) -> PhotoLibraryStages.Inputs {
+        PhotoLibraryStages.Inputs(
+            loadedAssetCount: loadedAssetCount, totalAssetCount: totalAssetCount,
+            isLoadingLibrary: isLoadingLibrary, indexIsLoading: indexIsLoading, indexHasIndex: indexHasIndex,
+            indexTotalCount: indexTotalCount, indexRemainingCount: indexRemainingCount,
+            indexError: indexError, isParticipating: isParticipating, isScanning: isScanning,
+            scannedCount: scannedCount, checkedCount: checkedCount, libraryCount: libraryCount,
+            categories: categories)
+    }
+
+    private func stage(_ stages: [PhotoLibraryStages.Stage], _ id: String) -> PhotoLibraryStages.Stage {
+        stages.first { $0.id == id }!
+    }
+
+    @Test func localReadInProgressLeavesTheLaterStagesWaiting() {
+        let stages = PhotoLibraryStages.derive(
+            inputs(
+                loadedAssetCount: 4_000, totalAssetCount: 90_000, isLoadingLibrary: true,
+                indexHasIndex: false, indexTotalCount: 0, checkedCount: 0, libraryCount: 4_000))
+        #expect(stage(stages, "local").state == .running(value: 4_000, total: 90_000))
+        #expect(stage(stages, "index").state == .waiting)
+        #expect(stage(stages, "match").state == .waiting)
+        #expect(stage(stages, "categories").state == .waiting)
+    }
+
+    @Test func indexErrorFailsWhileLocalStaysDone() {
+        let stages = PhotoLibraryStages.derive(inputs(indexError: "Server error"))
+        #expect(stage(stages, "local").state == .done)
+        #expect(stage(stages, "index").state == .failed("Server error"))
+    }
+
+    @Test func matchingOffTurnsOffMatchAndCategories() {
+        let stages = PhotoLibraryStages.derive(inputs(isParticipating: false))
+        #expect(stage(stages, "match").state == .off("Automatic matching is off"))
+        #expect(stage(stages, "categories").state == .off("Automatic matching is off"))
+        // Local read and the remote index are device/network state, not the participation
+        // switch — they keep reporting normally.
+        #expect(stage(stages, "local").state == .done)
+        #expect(stage(stages, "index").state == .done)
+    }
+
+    @Test func everyStageDoneCollapsesTheWholePanel() {
+        let stages = PhotoLibraryStages.derive(inputs())
+        for stage in stages { #expect(stage.state == .done) }
+    }
+
+    @Test func finishedScanWithUncheckedCloudPhotosIsDone() {
+        let stages = PhotoLibraryStages.derive(inputs(checkedCount: 80))
+        #expect(stage(stages, "match").state == .done)
+        #expect(stage(stages, "match").caption == "80 of 100 photos")
+    }
+
+    @Test func matchingOffWithNoIndexSettlesTheIndexStage() {
+        let stages = PhotoLibraryStages.derive(
+            inputs(indexHasIndex: false, indexTotalCount: 0, isParticipating: false))
+        #expect(stage(stages, "index").state == .off("Automatic matching is off"))
+    }
+
+    @Test func idleIncompleteSweepSettlesInsteadOfWaiting() {
+        let stages = PhotoLibraryStages.derive(
+            inputs(
+                categories: PhotoLibraryStages.CategoriesInput(
+                    isRunning: false, analysedCount: 40, totalCount: 100)))
+        #expect(stage(stages, "categories").state == .off("Not running"))
+    }
+
+    @Test func noClassificationSweepShowsCategoriesOffRatherThanCrashing() {
+        let stages = PhotoLibraryStages.derive(inputs(categories: nil))
+        #expect(stage(stages, "categories").state == .off("Categories are unavailable"))
+    }
+}
