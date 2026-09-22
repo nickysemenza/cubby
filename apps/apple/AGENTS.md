@@ -89,7 +89,8 @@ generate --spec apps/apple/project.yml --use-cache`. If a build fails with the l
   (their `@Parameter` stored properties cannot be nonisolated) and mark sync statics such as
   `parameterSummary` `nonisolated`. App Shortcut phrases may only embed AppEntity/AppEnum
   parameters, never strings.
-- Every SwiftUI view gets a `#Preview`, fed by `PreviewFixtures` where practical.
+- Every SwiftUI view gets a `#Preview`, fed by `PreviewFixtures` where practical; API-typed
+  fixtures are generated (see Generated files).
 - Screen density (inline titles, system spacing, toolbar-placed actions, hero sizing): see
   `apps/apple/DESIGN.md` § Density.
 - `#Playground` blocks (`import Playgrounds`) only under `#if DEBUG`. They are exploration
@@ -118,6 +119,11 @@ generate --spec apps/apple/project.yml --use-cache`. If a build fails with the l
   with `pnpm generate`; `pnpm check` fails when stale.
   That same script also (re)writes `openapi/openapi-generator-config.yaml` from those flags, so
   it is generated too even though nothing above reads it directly.
+- `App/Shared/Previews/PreviewFixtures+Generated.swift` — wire JSON for `PreviewFixtures`'
+  API-typed fixtures, built from the zod schemas by
+  `apps/web/scripts/generate-apple-preview-fixtures.ts`. To change what a preview shows, edit
+  that script's overrides and run `pnpm --dir apps/web run gen:apple-preview-fixtures`; the
+  `preview-fixtures` target in `pnpm check:all` fails when stale.
 
 Hand-editing any of these fails its generator's staleness gate. If one is missing (its
 owning agent hasn't landed yet), a stub at the same path is expected — do not fabricate the real
@@ -138,6 +144,10 @@ generated shape.
   `pnpm verify:local(:full)` runs the `apple` target locally when a full native
   diagnostic is needed. GitHub Actions runs `pnpm apple check` on macOS for
   every PR and `main` push.
+- **Visual and interaction checks:** the Xcode MCP renders `#Preview`s headlessly and drives a
+  simulator (tap, swipe, type, capture) — setup, loops, and failure fixes in
+  [docs/agents/xcode-mcp.md](../../docs/agents/xcode-mcp.md). Preferred over launching the app
+  to look at one screen.
 
 ### Universal links
 
@@ -167,6 +177,9 @@ Test on the simulator with `xcrun simctl openurl booted https://cubby.nickysemen
   stream it through `script` under an `alarm` and demangle the last `Function:` line.
   `xcodebuild archive` is not incremental — compare with `xcodebuild build -configuration Release`
   and a `-derivedDataPath`.
+- `Cubby.xcodeproj` is generated and gitignored; the checkout hook regenerates it, but a rebase
+  runs that hook before replaying your commits, so Swift files they add are missing from the
+  project ("Cannot find … in scope"). Run `pnpm apple gen`.
 - Running `knip --cache` before `packages/wasm` exists poisons `node_modules/.cache/knip`
   ("Unresolved imports …recipebridge_bg.js" on every later pre-commit); `rm -rf` that cache.
 - Symptom: a re-presented `.sheet(item:)` shows the previous item's state even though the item's

@@ -546,6 +546,17 @@ history is the archive. Permanent product constraints live in the
 
 ### Needs a decision or investigation
 
+- **Fixture-backed web preview route.** Web has no `#Preview` equivalent:
+  seeing a component's empty, loading, error, or edge state means driving the
+  full app against the dev server's `DATABASE_URL`, which is the shared prod
+  database (real records in screenshots, writes land in prod). A dev-only
+  route rendering components from `mock()` fixtures
+  (`apps/web/src/lib/test/mock-schema.ts`) in named states, read through the
+  browser pane with HMR, would mirror the Apple loop in
+  [docs/agents/xcode-mcp.md](agents/xcode-mcp.md) without Storybook's weight.
+  Promote when agents keep reproducing edge states against real data; decide
+  how it stays out of the production bundle (`mock-schema.ts` imports faker).
+
 - **Declarative "many, clamped to one" cardinality.** The image-provenance
   work chose a many-row `ImageSighting` entity plus derived declared-`one`
   Image fields over turning scalar relations into arrays with a runtime
