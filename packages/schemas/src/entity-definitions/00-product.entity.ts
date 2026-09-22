@@ -447,6 +447,7 @@ export default defineEntity({
           listOrder: 0,
           detailOrder: 5,
           width: "md",
+          renderer: { detail: "product-category" },
           mobile: { slot: "subtitle", priority: 30 },
         },
         validation: {

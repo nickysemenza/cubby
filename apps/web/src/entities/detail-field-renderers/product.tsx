@@ -10,6 +10,7 @@ import {
   useEntityDisplayImages,
 } from "~/app/_components/entity-media/entity-display-images";
 import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
+import { CategoryLabel } from "~/app/_components/products/CategoryLabel";
 import { Row } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
 import { EntityFilterLink } from "~/components/ui/entity-filter-link";
@@ -44,6 +45,20 @@ function ProductIngredientLink({
 export const productDetailFields = {
   "product-id": (product) => ({
     value: <span className="font-mono text-xs">{product.id}</span>,
+  }),
+  // The full path ("Apparel / Clothes / Pants"), as the list column and the
+  // picker show it — the reference link's bare leaf name loses the hierarchy
+  // that is the whole point of the classification. `filterAction` is left
+  // to the generic "Show all products with classification …" link.
+  "product-category": (product) => ({
+    value: product.category ? (
+      <Link
+        to="/product-categories/$shortcode"
+        params={{ shortcode: product.category.id }}
+      >
+        <CategoryLabel category={product.category} />
+      </Link>
+    ) : undefined,
   }),
   // Rendered as the printed encoding, not the stored GTIN-14 — the operator
   // is comparing this against the barcode on the package, and the USDA page
