@@ -41,6 +41,13 @@
       "command": "pnpm --filter @cubby/usda-api generate:openapi:check",
       "cache": false
     },
+    // Apple `#Preview` fixtures generated from the zod schemas; runs here, not in
+    // apple-check.sh, because the macOS Apple CI job has no Node toolchain.
+    "preview-fixtures": {
+      "command": "pnpm --dir apps/web run gen:apple-preview-fixtures:check",
+      "cache": true,
+      "inputs": ["repo"]
+    },
     "script-tests": {
       "command": "pnpm test:scripts",
       "cache": false
