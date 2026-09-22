@@ -21,7 +21,7 @@
       }
     ]
   },
-  "effortLevel": "high",
+  "effortLevel": "medium",
   "enabledPlugins": {
     "axiom@axiom-marketplace": true
   }
