@@ -57,10 +57,15 @@ test("core entity list, detail, and mutation ride named Start operations", async
   page.on("response", (response) => {
     if (!response.url().includes("/_serverFn/")) return;
     requestIdReads.push(
-      response.allHeaders().then((headers) => {
-        const requestId = headers["x-request-id"];
-        if (requestId) requestIds.push(requestId);
-      }),
+      response
+        .allHeaders()
+        .then((headers) => {
+          const requestId = headers["x-request-id"];
+          if (requestId) requestIds.push(requestId);
+        })
+        // A response landing after the final read below is still being read
+        // when the page closes; that rejection must not fail the finished test.
+        .catch(() => undefined),
     );
   });
 
@@ -147,8 +152,13 @@ test("core entity list, detail, and mutation ride named Start operations", async
     );
   }
 
-  const detail = detailRequests[0];
-  if (!detail) throw new Error("Expected a compiled detail request");
+  // The list may fetch another row's detail before the click (the first row,
+  // from a sibling spec's fixture), so replay this product's own request.
+  const shortcode = new URL(page.url()).pathname.split("/").at(-1)!;
+  const detail = detailRequests.find((request) =>
+    request.body.includes(shortcode),
+  );
+  if (!detail) throw new Error(`Expected a detail request for ${shortcode}`);
   const legacy = new URL(detail.url);
   legacy.pathname =
     "/_serverFn/server-functions-start-operation-dispatch-dispatch-start-operation-server-function";
