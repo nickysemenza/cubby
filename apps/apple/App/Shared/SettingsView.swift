@@ -96,6 +96,10 @@ struct SettingsView: View {
             }
 
             if model.phase == .signedIn {
+                DeviceParticipationSection(showPauseAnalysis: photosReady)
+            }
+
+            if model.phase == .signedIn {
                 Section("Utilities") {
                     Button("Developer tools", systemImage: "wrench.and.screwdriver") {
                         #if os(iOS)
@@ -332,8 +336,6 @@ struct SettingsView: View {
             }
             LabeledContent("Analysed") { Text(photoAnalysisSummaryText) }
                 .frame(minHeight: PorcelainTokens.touchTarget - 12)
-            Toggle("Pause analysis", isOn: $photoAnalysisPaused)
-                .frame(minHeight: PorcelainTokens.touchTarget - 12)
         } header: {
             Eyebrow("Photos")
         } footer: {
@@ -497,6 +499,116 @@ extension AppModel {
         case nil: "None"
         }
     }
+}
+
+/// The master "Automatic work on this device" switch and what it controls, plus (when photos are
+/// ready) the existing temporary "Pause analysis" toggle. Split out of `SettingsView.body` to keep
+/// its expression under the 200ms type-check budget (apps/apple/AGENTS.md, "Language and style").
+private struct DeviceParticipationSection: View {
+    let showPauseAnalysis: Bool
+    @Environment(AppModel.self) private var model
+    @AppStorage("photoAnalysisPaused") private var photoAnalysisPaused = false
+
+    var body: some View {
+        Section {
+            Toggle("Automatic work on this device", isOn: automaticWorkBinding)
+                .frame(minHeight: PorcelainTokens.touchTarget - 12)
+                .accessibilityIdentifier("settings.device.automaticWork")
+            if model.companionImageActivity.remotePaused {
+                LabeledContent("Status") {
+                    Text("Paused from the web")
+                        .foregroundStyle(PorcelainTokens.destructive)
+                }
+                .frame(minHeight: PorcelainTokens.touchTarget - 12)
+            }
+            if showPauseAnalysis {
+                Toggle("Pause analysis", isOn: $photoAnalysisPaused)
+                    .frame(minHeight: PorcelainTokens.touchTarget - 12)
+            }
+        } header: {
+            Eyebrow("This device")
+        } footer: {
+            Text(
+                "Controls companion image jobs, library matching, and background analysis on this device. Explicit photo imports always work, on or off."
+            )
+            .font(.porcelainLabel)
+            .foregroundStyle(PorcelainTokens.graphiteSecondary)
+        }
+    }
+
+    private var automaticWorkBinding: Binding<Bool> {
+        Binding(
+            get: { model.participation.automaticWork },
+            set: { model.setParticipation(automaticWork: $0) })
+    }
+}
+
+#Preview("This device — on", traits: .modifier(SignedInPreview())) {
+    Form { DeviceParticipationSection(showPauseAnalysis: true) }
+        .formStyle(.grouped)
+        .environment(PreviewFixtures.signedInModel())
+}
+
+#Preview("This device — paused from the web") {
+    let model = PreviewFixtures.signedInModel()
+    model.setParticipation(automaticWork: true)
+    return Form { DeviceParticipationSection(showPauseAnalysis: false) }
+        .formStyle(.grouped)
+        .environment(model)
+}
+
+/// The one-time "Help process photos on this device?" prompt: shown once per install right after
+/// sign-in, while `participation.answeredAt == nil` (`RootView`'s `.signedIn` case). Until it is
+/// answered the master switch stays off (`DeviceParticipation`'s default), so a fresh install is a
+/// plain viewer until the person opts in.
+struct DeviceParticipationOnboardingSheet: View {
+    @Environment(AppModel.self) private var model
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: PorcelainTokens.Space.lg) {
+                Spacer()
+                Image(systemName: "photo.on.rectangle.angled")
+                    .font(.system(size: 44))
+                    .foregroundStyle(PorcelainTokens.cobalt)
+                Text("Help process photos on this device?")
+                    .font(.porcelainTitle)
+                    .multilineTextAlignment(.center)
+                Text(
+                    "This device can process companion image jobs, match your photo library against Cubby, and run background photo analysis. You can change this anytime in Settings."
+                )
+                .font(.porcelainBody)
+                .foregroundStyle(PorcelainTokens.graphiteSecondary)
+                .multilineTextAlignment(.center)
+                Spacer()
+                Button("Help process photos") {
+                    model.setParticipation(automaticWork: true)
+                    dismiss()
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.large)
+                .accessibilityIdentifier("settings.participation.optIn")
+                Button("Just browse") {
+                    model.setParticipation(automaticWork: false)
+                    dismiss()
+                }
+                .accessibilityIdentifier("settings.participation.optOut")
+            }
+            .padding(PorcelainTokens.Space.lg)
+            .navigationTitle("This device")
+            #if os(iOS)
+                .navigationBarTitleDisplayMode(.inline)
+            #endif
+        }
+        .nativeSheet(.adjustment)
+        .interactiveDismissDisabled()
+    }
+}
+
+#Preview("First sign-in — unanswered", traits: .modifier(SignedInPreview())) {
+    Color.clear
+        .sheet(isPresented: .constant(true)) { DeviceParticipationOnboardingSheet() }
 }
 
 #Preview(traits: .modifier(SignedInPreview())) {

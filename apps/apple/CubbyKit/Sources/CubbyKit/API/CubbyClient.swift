@@ -16,13 +16,15 @@ public actor CubbyClient {
     private let api: Client
 
     public init(
-        baseURL: URL, credentials: CredentialProvider, session: URLSession = .cubbyShared,
+        baseURL: URL, credentials: CredentialProvider, identity: ClientIdentity = .unknown,
+        session: URLSession = .cubbyShared,
         requestObserver: (any RequestObserver)? = nil
     ) {
         self.baseURL = baseURL
         self.credentials = credentials
         let transport = URLSessionTransport(configuration: .init(session: session))
-        let auth = CubbyAuthMiddleware(credentials: credentials, observer: requestObserver)
+        let auth = CubbyAuthMiddleware(
+            credentials: credentials, identity: identity, observer: requestObserver)
         // The spec's `servers` entry is "/", so the base URL must always be supplied here.
         // `PatchNullMiddleware` is inert unless `update(_:id:patch:)` scopes cleared keys around
         // a call, so every other request through `api` keeps its omitted-field semantics.

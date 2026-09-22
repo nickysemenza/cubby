@@ -25,6 +25,9 @@ final class AppModel {
     private(set) var client: CubbyClient
     private(set) var auth: AuthFlow
     private(set) var credentials: CredentialProvider
+    /// This device's master "Automatic work on this device" switch, mirrored to its `Device` row.
+    /// Loaded once at init; every change goes through `setParticipation(automaticWork:)`.
+    private(set) var participation: DeviceParticipation
     let navigator = Navigator()
     let browseCounts = BrowseCountsModel()
     let spotlight = SpotlightIndexer()
@@ -82,7 +85,8 @@ final class AppModel {
     private func makePhotoClassificationSweep() -> PhotoClassificationSweep {
         let sweep = PhotoClassificationSweep(
             analysisStore: storedPhotoAnalysisStore!, library: photoLibrary,
-            window: Self.persistedAnalysisWindow, paused: Self.persistedAnalysisPaused)
+            window: Self.persistedAnalysisWindow, paused: Self.persistedAnalysisPaused,
+            isParticipating: participation.automaticWork)
         let matches = photoMatches
         sweep.onClassified = { id, snapshot in matches.markAnalysis([id: snapshot]) }
         Task { try? await storedPhotoAnalysisStore?.migrateLegacyHashCacheIfNeeded() }
@@ -130,13 +134,22 @@ final class AppModel {
         self.baseURL = url
         let credentials = CredentialProvider(host: CubbyBaseURL.host(of: url), store: store)
         self.credentials = credentials
-        self.client = CubbyClient(baseURL: url, credentials: credentials, requestObserver: requestTrace)
-        self.auth = AuthFlow(baseURL: url, credentials: credentials)
+        self.participation = DeviceParticipation.load(from: .standard)
+        self.client = CubbyClient(
+            baseURL: url, credentials: credentials, identity: Self.identity, requestObserver: requestTrace)
+        self.auth = AuthFlow(baseURL: url, credentials: credentials, identity: Self.identity)
         #if os(macOS)
             configureBrowserBridge()
         #endif
         configureCompanionImageWorker()
         configureBackgroundActivitySources()
+        applyParticipationToGates()
+    }
+
+    /// This install's identity, sent as `User-Agent`/`X-Cubby-Device` on every REST request
+    /// (`CubbyAuthMiddleware`).
+    private static var identity: ClientIdentity {
+        ClientIdentity.currentApp(product: "cubby-apple", installationID: AppInstallationID.current)
     }
 
     /// Registers this model's long-lived activity sources once. `photoLibrary`/`photoMatches`/
@@ -186,8 +199,8 @@ final class AppModel {
         if signedIn { try? store.save(credential, for: CubbyBaseURL.host(of: baseURL)) }
         let model = AppModel(store: store, baseURL: baseURL)
         model.client = CubbyClient(
-            baseURL: baseURL, credentials: model.credentials, session: PreviewURLProtocol.session(),
-            requestObserver: model.requestTrace)
+            baseURL: baseURL, credentials: model.credentials, identity: Self.identity,
+            session: PreviewURLProtocol.session(), requestObserver: model.requestTrace)
         #if os(macOS)
             model.configureBrowserBridge()
         #endif
@@ -210,8 +223,9 @@ final class AppModel {
             warmBrowseCounts()
             await companionImageWorker?.start()
             #if os(macOS)
-                await browserBridge.connectConfigured()
+                if participation.automaticWork { await browserBridge.connectConfigured() }
             #endif
+            await syncDeviceParticipation()
         }
     }
 
@@ -258,8 +272,9 @@ final class AppModel {
         warmBrowseCounts()
         await companionImageWorker?.start()
         #if os(macOS)
-            await browserBridge.connectConfigured()
+            if participation.automaticWork { await browserBridge.connectConfigured() }
         #endif
+        await syncDeviceParticipation()
     }
 
     func signOut() async {
@@ -340,17 +355,68 @@ final class AppModel {
         }
     }
 
+    /// The master switch: persists, answers the first-sign-in question if it hasn't been answered
+    /// yet, fans out to every gate (companion socket, library matching, background analysis, the
+    /// macOS browser bridge autoconnect), and mirrors the change onto this install's `Device` row.
+    /// `photoAnalysisPaused` (Settings' "Pause analysis" toggle) is a separate, temporary pause
+    /// within library processing — this never touches it.
+    func setParticipation(automaticWork: Bool) {
+        var next = participation
+        next.automaticWork = automaticWork
+        if next.answeredAt == nil { next.answeredAt = .now }
+        participation = next
+        participation.save(to: .standard)
+        applyParticipationToGates()
+        Task { await syncDeviceParticipation() }
+    }
+
+    /// Applies `participation.automaticWork` to every gate it controls. Called once at init/rebind
+    /// (so a freshly loaded value takes effect immediately) and again from `setParticipation`.
+    private func applyParticipationToGates() {
+        let automaticWork = participation.automaticWork
+        backgroundActivity.participationEnabled = automaticWork
+        photoLibrary.setParticipating(automaticWork)
+        photoMatches.allowsRepair = automaticWork
+        storedPhotoClassificationSweep?.setParticipating(automaticWork)
+        let worker = companionImageWorker
+        Task { await worker?.setParticipating(automaticWork) }
+    }
+
+    /// Mirrors this install's participation onto its `Device` row through the generic generated
+    /// client. Never blocks the UI: a failure is reported and otherwise ignored.
+    private func syncDeviceParticipation() async {
+        do {
+            try await DeviceRegistration.sync(
+                .init(
+                    installationID: AppInstallationID.current,
+                    name: ProcessInfo.processInfo.hostName,
+                    platform: DevicePlatform.current,
+                    appVersion: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString")
+                        as? String,
+                    osVersion: ProcessInfo.processInfo.operatingSystemVersionString,
+                    automaticWork: participation.automaticWork
+                ),
+                client: client
+            )
+        } catch {
+            Diagnostics.report(error, context: "device.participation.sync")
+        }
+    }
+
     private func rebindClients() {
         photoMatches.reset()
         photoLibrary.reset()
         let credentials = CredentialProvider(host: host, store: store)
         self.credentials = credentials
-        client = CubbyClient(baseURL: baseURL, credentials: credentials, requestObserver: requestTrace)
-        auth = AuthFlow(baseURL: baseURL, credentials: credentials)
+        client = CubbyClient(
+            baseURL: baseURL, credentials: credentials, identity: Self.identity,
+            requestObserver: requestTrace)
+        auth = AuthFlow(baseURL: baseURL, credentials: credentials, identity: Self.identity)
         #if os(macOS)
             configureBrowserBridge()
         #endif
         configureCompanionImageWorker()
+        applyParticipationToGates()
     }
 
     func setCompanionSceneActive(_ active: Bool) {
@@ -371,6 +437,7 @@ final class AppModel {
                 credentials: credentials,
                 deviceID: AppInstallationID.current,
                 foreground: companionSceneActive,
+                isParticipating: participation.automaticWork,
                 outbox: outbox,
                 failureObserver: { error in
                     Diagnostics.report(error, context: "imageProcessing.socket")

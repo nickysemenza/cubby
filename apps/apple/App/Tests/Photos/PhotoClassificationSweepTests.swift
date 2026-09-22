@@ -125,6 +125,60 @@ struct PhotoClassificationSweepTests {
                 isLowPowerModeEnabled: false))
     }
 
+    // MARK: - Master "Automatic work on this device" switch
+
+    @Test func participationOffPausesTheSweepLikeAnyOtherGate() {
+        #expect(
+            PhotoClassificationSweep.shouldRun(
+                isTabActive: true, isSceneActive: true, isPaused: false, isParticipating: true,
+                thermalState: .nominal, isLowPowerModeEnabled: false))
+        #expect(
+            !PhotoClassificationSweep.shouldRun(
+                isTabActive: true, isSceneActive: true, isPaused: false, isParticipating: false,
+                thermalState: .nominal, isLowPowerModeEnabled: false))
+    }
+
+    /// `isParticipating` defaults to `true` when omitted, so every pre-participation call site
+    /// (and every other `shouldRun` test above) keeps its prior behavior unchanged.
+    @Test func participationDefaultsToTrueWhenOmitted() {
+        #expect(
+            PhotoClassificationSweep.shouldRun(
+                isTabActive: true, isSceneActive: true, isPaused: false, thermalState: .nominal,
+                isLowPowerModeEnabled: false)
+                == PhotoClassificationSweep.shouldRun(
+                    isTabActive: true, isSceneActive: true, isPaused: false, isParticipating: true,
+                    thermalState: .nominal, isLowPowerModeEnabled: false))
+    }
+
+    @Test func setParticipatingOffStopsARunningSweepAndOnRestartsIt() async throws {
+        let store = try PhotoAnalysisStore.make(inMemory: true)
+        let candidates = (0..<4).map { candidate("asset-\($0)", day: $0) }
+        let sweep = PhotoClassificationSweep(
+            analysisStore: store, window: .all,
+            thermal: StubThermalSource(state: .nominal), power: StubPowerSource(lowPower: false),
+            candidateProvider: { candidates },
+            classify: { _ in
+                PhotoClassificationSweep.Outcome(categories: ["home"], topLabels: [], classifyMs: 1)
+            })
+        sweep.setActive(true)
+        sweep.setParticipating(false)
+        #expect(!sweep.isRunning)
+        // Give any in-flight classification a chance to land before asserting nothing progressed.
+        try? await Task.sleep(for: .milliseconds(50))
+        let classifiedWhileOff = try await store.classifiedCount(
+            newerThan: PhotoClassificationSweep.classifyVersion)
+
+        sweep.setParticipating(true)
+        for _ in 0..<200 {
+            if try await store.classifiedCount(newerThan: PhotoClassificationSweep.classifyVersion) == 4 {
+                break
+            }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        #expect(try await store.classifiedCount(newerThan: PhotoClassificationSweep.classifyVersion) == 4)
+        #expect(classifiedWhileOff < 4)
+    }
+
     // MARK: - End-to-end: the running sweep actually records outcomes and honors pause
 
     @Test func runningSweepClassifiesEveryCandidateAndPauseStopsFurtherWork() async throws {

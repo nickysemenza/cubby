@@ -11,6 +11,10 @@ final class PhotoLibraryStore: NSObject, PHPhotoLibraryChangeObserver {
         let assets: [PHAsset]
     }
     private(set) var authorization = PHPhotoLibrary.authorizationStatus(for: .readWrite)
+    /// The master "Automatic work on this device" switch, set by `AppModel`. `false` keeps the
+    /// grid enumerating the local library but skips the remote matches refresh and the background
+    /// hash-scan; per-cell hashing (`thumbnail(_:matches:degraded:)`) returns the image only.
+    private(set) var isParticipating = true
     private(set) var months: [Month] = []
     /// Bumped every time `months` is replaced (a fresh load, an authorization change, or a
     /// PhotoKit library-change refresh). `PhotoClassificationSweep`'s candidate provider reads
@@ -45,12 +49,26 @@ final class PhotoLibraryStore: NSObject, PHPhotoLibraryChangeObserver {
     var hasFullAccess: Bool { authorization == .authorized }
 
     var scanStatus: String {
+        if !isParticipating { return "Automatic matching is off" }
         if isLoadingLibrary { return "Loading your photo library…" }
         if isScanning { return "Checking photo \(min(scannedCount + 1, count)) of \(count)…" }
         let unchecked = count - checked.count
         return unchecked > 0
             ? "\(checked.count) of \(count) library photos checked · \(unchecked) unchecked"
             : "\(count) library photos checked"
+    }
+
+    /// The master "Automatic work on this device" switch. Turning it off cancels the in-flight
+    /// background hash-scan immediately (library enumeration itself is untouched); turning it back
+    /// on takes effect on the next `refresh(...)`.
+    func setParticipating(_ participating: Bool) {
+        guard isParticipating != participating else { return }
+        isParticipating = participating
+        guard !participating else { return }
+        scanTask?.cancel()
+        scanTask = nil
+        isScanning = false
+        scannedCount = 0
     }
 
     /// Kept in the normal Photos screen while it is loading so a field freeze has enough state to
@@ -133,7 +151,11 @@ final class PhotoLibraryStore: NSObject, PHPhotoLibraryChangeObserver {
         loadingStartedAt = .now
         loadingStep = "Opening photo library"
         completedLoadingSteps = ["Refresh started", "Photos access checked"]
-        async let matchRefresh: Void = matches.refresh(client: client)
+        let isParticipating = isParticipating
+        async let matchRefresh: Void = {
+            guard isParticipating else { return }
+            await matches.refresh(client: client)
+        }()
         guard generation == token, !Task.isCancelled else { return }
         guard hasFullAccess else {
             months = []; monthsRevision += 1
@@ -176,9 +198,12 @@ final class PhotoLibraryStore: NSObject, PHPhotoLibraryChangeObserver {
         }
         guard generation == token, !Task.isCancelled else { return }
         completedLoadingSteps.append("PhotoKit enumeration complete")
-        guard let analysisStore else {
+        guard isParticipating, let analysisStore else {
             selectedIDs.removeAll { assetsByID[$0] == nil }
-            loadingStep = "Local photos ready; Cubby analysis unavailable"
+            loadingStep =
+                isParticipating
+                ? "Local photos ready; Cubby analysis unavailable"
+                : "Local photos ready; automatic matching is off"
             return
         }
         loadingStep = "Reconciling on-device analysis"
@@ -272,6 +297,14 @@ final class PhotoLibraryStore: NSObject, PHPhotoLibraryChangeObserver {
     ) async throws -> CGImage {
         let token = generation
         let id = asset.localIdentifier
+        guard isParticipating else {
+            let image = try await loadImage(asset, degraded: degraded)
+            if generation == token {
+                thumbnails.setObject(
+                    ImageBox(image), forKey: id as NSString, cost: image.bytesPerRow * image.height)
+            }
+            return image
+        }
         if !matches.hasKnownResult(for: id) { matches.markChecking(for: id) }
         do {
             let image = try await loadImage(asset, degraded: degraded)
