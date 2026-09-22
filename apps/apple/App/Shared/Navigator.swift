@@ -140,6 +140,8 @@ final class Navigator {
             paths[.search] = []
         case .dev:
             openDev()
+        case .activity(let run):
+            openActivity(run.map { .serverRun($0) })
         }
     }
 
@@ -153,6 +155,26 @@ final class Navigator {
             section = .dev
             paths[.dev] = []
         #endif
+    }
+
+    /// Opens a `BackgroundActivity`'s destination: a server run deep-links into Activity's list, a
+    /// device-local activity opens its own detail, and `.photos` moves to the Photos tab. `nil` —
+    /// no specific activity, or several running at once with no single target — lands on the
+    /// Activity list itself, same as `.serverRun`/`.localActivity` with an empty path.
+    func openActivity(_ link: BackgroundActivity.Link?) {
+        switch link {
+        case .serverRun(let id):
+            section = .activity
+            paths[.activity] = [.activityDetail(id)]
+        case .localActivity(let id):
+            section = .activity
+            paths[.activity] = [.localActivity(id)]
+        case .photos:
+            section = .photos
+        case nil:
+            section = .activity
+            paths[.activity] = []
+        }
     }
 
     /// Opens Identify as part of Capture's navigation stack. Keeping the parent route in Capture

@@ -63,18 +63,25 @@ struct RootSplitView: View {
                         .tag(SidebarDestination.section(section))
                 }
             }
-            if let label = model.localExecutionLabel {
+            let workingActivities = model.backgroundActivity.visibleActivities
+            if !workingActivities.isEmpty {
                 Section("Working") {
-                    Button {
-                        model.navigator.section = .activity
-                    } label: {
-                        HStack(spacing: 8) {
-                            ProgressView().controlSize(.small)
-                            Text(label)
+                    ForEach(workingActivities) { activity in
+                        Button {
+                            model.navigator.openActivity(activity.link)
+                        } label: {
+                            HStack(spacing: 8) {
+                                if let progress = activity.progress {
+                                    ProgressView(value: progress).controlSize(.small)
+                                } else {
+                                    ProgressView().controlSize(.small)
+                                }
+                                Text(activity.title)
+                            }
                         }
+                        .buttonStyle(.plain)
+                        .accessibilityHint("Opens Activity")
                     }
-                    .buttonStyle(.plain)
-                    .accessibilityHint("Opens Activity")
                 }
             }
             ForEach(AppDomain.allCases) { domain in

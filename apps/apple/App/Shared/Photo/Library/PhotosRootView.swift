@@ -20,7 +20,9 @@ struct PhotosRootView: View {
             // "Traps that cost real time"), which previously showed the prior batch's manifest.
             destination = PhotoSelectionBatch(
                 items: items,
-                manifest: PhotoImportManifest(items: items, analysisStore: analysisStore))
+                manifest: PhotoImportManifest(
+                    items: items, analysisStore: analysisStore,
+                    activityCenter: appModel.backgroundActivity))
         }
         .sheet(item: $destination) { batch in
             PhotoDestinationSheet(manifest: batch.manifest) { committedIDs in
