@@ -103,6 +103,7 @@ export default defineEntity({
           kind: "specialized",
           renderer: "entity-select",
           section: "details",
+          suggest: { basis: ["displayLabel", "vendorId", "notes"] },
         },
         display: { detail: true },
         validation: {
@@ -135,7 +136,11 @@ export default defineEntity({
         kind: "identifier",
         label: "Vendor",
         reference: { entity: "vendor" },
-        control: { kind: "specialized", renderer: "entity-select" },
+        control: {
+          kind: "specialized",
+          renderer: "entity-select",
+          suggest: { basis: ["displayLabel", "orderId", "notes"] },
+        },
         display: {
           list: true,
           detail: true,

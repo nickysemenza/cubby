@@ -11,6 +11,7 @@
  * method.
  */
 import type { CostType } from "@cubby/schemas/expense-fields";
+import type { ExpenseLineKind } from "@cubby/schemas/expense-line-kind";
 import type { ExternalIdKind } from "@cubby/schemas/external-id";
 import type { LocationType } from "@cubby/schemas/location";
 import type { MealKind, MealType } from "@cubby/schemas/meal-classification";
@@ -95,6 +96,27 @@ Rules:
 1. A consumed or installed physical good is "materials".
 2. Equipment that outlives the job and isn't consumed by it is "tools".
 3. Paid labor, delivery fees, permits, and other non-material charges are "services".`;
+
+export const LINE_KIND_DESCRIPTIONS = {
+  principal: "The main item or service purchased",
+  tax: "Sales tax or other tax charges",
+  shipping: "Shipping, delivery, or freight charges",
+  discount: "Discounts, coupons, or promotional reductions",
+  fee: "Processing, handling, or service fees",
+  tip: "Tips or gratuity",
+  other_adjustment: "Other receipt adjustments that don't fit above",
+} satisfies Record<ExpenseLineKind, string>;
+
+export const LINE_KIND_RULES = `You are a receipt-line classifier. Given an expense's name, cost, and notes, determine the receipt role.
+
+Rules:
+1. Names containing "tax", "sales tax", "estimated tax" → tax
+2. Names containing "shipping", "delivery", "freight" → shipping
+3. Names containing "discount", "coupon", "credit", "promo", or a negative cost with that wording → discount
+4. Names containing "fee", "processing", "handling" → fee
+5. Names containing "tip", "gratuity" → tip
+6. An explicit receipt adjustment none of the above covers (rounding, price adjustment) → other_adjustment
+7. Otherwise → principal (the main purchased item/service)`;
 
 export const PROJECT_KIND_DESCRIPTIONS = {
   furniture: "Building or restoring a piece of furniture",
