@@ -195,6 +195,31 @@ struct PhotoAnalysisStoreTests {
                 modificationDate: date)))
     }
 
+    @Test func storageSummaryReportsFileSizeAndRowCounts() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let fileURL = directory.appendingPathComponent("PhotoAnalysis.sqlite")
+
+        let store = try PhotoAnalysisStore.make(fileURL: fileURL)
+        try await store.upsertHash(
+            localIdentifier: "asset-1", modificationDate: nil, perceptualHash: PerceptualHash64(value: 1))
+        try await store.upsertClassification(
+            localIdentifier: "asset-1", categories: ["plants"], topLabels: [], classifyVersion: 1,
+            classifyMs: 5)
+        try await store.markLibrarySightingSent(
+            host: "cubby.example", localIdentifier: "asset-1", imageId: "IMG-1", version: 1,
+            modificationDate: nil, cloudIdentifier: nil)
+
+        let summary = try await store.storageSummary(classifyVersion: 1)
+        #expect(summary.url == fileURL)
+        #expect(summary.rowCount == 1)
+        #expect(summary.hashedCount == 1)
+        #expect(summary.classifiedCount == 1)
+        #expect(summary.syncedSightingCount == 1)
+        #expect(summary.bytesOnDisk > 0)
+    }
+
     @Test func markingTwiceUpsertsRatherThanAccumulatingRows() async throws {
         let store = try makeStore()
         let firstDate = Date(timeIntervalSince1970: 1000)
