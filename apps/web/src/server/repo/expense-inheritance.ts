@@ -252,6 +252,7 @@ const draftTradeResolution = (
   draft: ExpenseFieldDraft,
   row: DraftResolutionRow,
   trade: Trade | null,
+  lineKind: ExpenseLineKind,
 ): FieldResolution => {
   const purchaseRef = draft.purchaseId
     ? { entityType: "purchase" as const, entityId: draft.purchaseId }
@@ -282,7 +283,12 @@ const draftTradeResolution = (
           ? projectRef
           : null,
     matchesFallback: row.effectiveTrade === row.fallbackTrade,
-    canReset: trade !== null,
+    // A principal line must keep a trade from somewhere (Expense, Purchase, or
+    // effective Project) — offering reset with no fallback would only send the
+    // write into validateExpenseInheritance's "requires a trade" error.
+    canReset:
+      trade !== null &&
+      (lineKind !== "principal" || row.fallbackTrade !== null),
   };
 };
 
@@ -358,7 +364,7 @@ export async function resolveDraftExpenseFields(
 
   return {
     projectId: draftProjectResolution(draft, row, lineKind, projectExplicit),
-    trade: draftTradeResolution(draft, row, trade),
+    trade: draftTradeResolution(draft, row, trade, lineKind),
   };
 }
 

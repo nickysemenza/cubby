@@ -240,6 +240,79 @@ describe("purchase inheritance lifecycle", () => {
     });
   });
 
+  it("refuses to offer trade reset on a principal expense with no fallback trade", async () => {
+    const vendor = await insertWithShortcode(ctx.db, "vendor", {
+      name: "No fallback trade fixture vendor",
+    });
+    const source = await insertWithShortcode(ctx.db, "purchase", {
+      vendorId: vendor.id,
+      date: fixtureDate,
+    });
+    const item = await insertWithShortcode(ctx.db, "expense", {
+      name: "No fallback trade item",
+      date: fixtureDate,
+      cost: 10,
+      costType: "materials",
+      lineKind: "principal",
+      trade: "electrical",
+      purchaseId: source.id,
+    });
+    const expenseCode = parseShortcodeFor("expense", item.shortcode);
+
+    expect(await getExpenseByShortcode(ctx.db, expenseCode)).toMatchObject({
+      fieldResolutions: {
+        trade: {
+          storedValue: "electrical",
+          fallbackValue: null,
+          canReset: false,
+        },
+      },
+    });
+    expect(
+      await resolveDraftExpenseFields(ctx.db, {
+        purchaseId: source.shortcode,
+        trade: "electrical",
+      }),
+    ).toMatchObject({
+      trade: {
+        storedValue: "electrical",
+        fallbackValue: null,
+        canReset: false,
+      },
+    });
+  });
+
+  it("offers trade reset on a principal expense whose purchase supplies a default trade", async () => {
+    const vendor = await insertWithShortcode(ctx.db, "vendor", {
+      name: "Purchase default trade fixture vendor",
+    });
+    const source = await insertWithShortcode(ctx.db, "purchase", {
+      vendorId: vendor.id,
+      date: fixtureDate,
+      defaultTrade: "plumbing",
+    });
+    const item = await insertWithShortcode(ctx.db, "expense", {
+      name: "Purchase default trade item",
+      date: fixtureDate,
+      cost: 10,
+      costType: "materials",
+      lineKind: "principal",
+      trade: "electrical",
+      purchaseId: source.id,
+    });
+    const expenseCode = parseShortcodeFor("expense", item.shortcode);
+
+    expect(await getExpenseByShortcode(ctx.db, expenseCode)).toMatchObject({
+      fieldResolutions: {
+        trade: {
+          storedValue: "electrical",
+          fallbackValue: "plumbing",
+          canReset: true,
+        },
+      },
+    });
+  });
+
   it("preserves source item attribution through a merge and keeps the keeper default", async () => {
     const { first, second, source, keeper, item } = await fixture();
     await mergePurchases(
