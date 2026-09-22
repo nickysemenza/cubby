@@ -103,14 +103,20 @@ export const productMatchState = z.enum(["open", "dismissed"]);
  */
 export const productMatchSideRole = z.enum(["photo", "purchase", "other"]);
 
+export const productMatchOwner = z.object({
+  id: ledgerPartyShortcode,
+  name: z.string(),
+});
+
+export const productMatchSourceUrls = z.array(z.url()).max(10);
+
 export const productMatchSide = z.object({
   id: productShortcode,
   name: z.string(),
   role: productMatchSideRole,
   category: z.string().nullable(),
   inventoryCount: z.number().int().nonnegative(),
-  owner: z
-    .object({ id: ledgerPartyShortcode, name: z.string() })
+  owner: productMatchOwner
     .nullable()
     .describe(
       "Explicit stock owner for a photo product; purchase-inherited owner for a purchase product; null when undeterminable",
@@ -173,9 +179,7 @@ export const proposeProductMatchInput = z.object({
     .describe(
       "Why these are one item — what you compared (photo vs vendor page, size, colour, order line). Shown verbatim to the reviewer.",
     ),
-  sourceUrls: z
-    .array(z.url())
-    .max(10)
+  sourceUrls: productMatchSourceUrls
     .optional()
     .describe("Pages the evidence came from, e.g. the vendor product page"),
 });

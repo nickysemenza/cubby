@@ -34200,7 +34200,7 @@
             "$ref": "#/components/schemas/DisplayImagesField"
           },
           "attachments": {
-            "$ref": "#/components/schemas/output_schema477"
+            "$ref": "#/components/schemas/output_schema476"
           }
         },
         "required": [
@@ -37536,7 +37536,7 @@
             "$ref": "#/components/schemas/DisplayImagesField"
           },
           "attachments": {
-            "$ref": "#/components/schemas/output_schema477"
+            "$ref": "#/components/schemas/output_schema476"
           }
         },
         "required": [
@@ -39327,7 +39327,7 @@
             "$ref": "#/components/schemas/DisplayImagesField"
           },
           "attachments": {
-            "$ref": "#/components/schemas/output_schema477"
+            "$ref": "#/components/schemas/output_schema476"
           }
         },
         "required": [
@@ -40278,7 +40278,7 @@
             "$ref": "#/components/schemas/DisplayImagesField"
           },
           "attachments": {
-            "$ref": "#/components/schemas/output_schema477"
+            "$ref": "#/components/schemas/output_schema476"
           }
         },
         "required": [
@@ -40948,7 +40948,7 @@
             "$ref": "#/components/schemas/DisplayImagesField"
           },
           "attachments": {
-            "$ref": "#/components/schemas/output_schema477"
+            "$ref": "#/components/schemas/output_schema476"
           }
         },
         "required": [
@@ -45101,7 +45101,7 @@
             "$ref": "#/components/schemas/DisplayImagesField"
           },
           "attachments": {
-            "$ref": "#/components/schemas/output_schema477"
+            "$ref": "#/components/schemas/output_schema476"
           }
         },
         "required": [
@@ -46852,7 +46852,7 @@
             "$ref": "#/components/schemas/DisplayImagesField"
           },
           "attachments": {
-            "$ref": "#/components/schemas/output_schema477"
+            "$ref": "#/components/schemas/output_schema476"
           }
         },
         "required": [
@@ -48175,14 +48175,6 @@
         }
       },
       "input_schema211": {
-        "maxItems": 10,
-        "type": "array",
-        "items": {
-          "type": "string",
-          "format": "uri"
-        }
-      },
-      "input_schema212": {
         "type": "object",
         "properties": {
           "kind": {
@@ -48198,7 +48190,7 @@
           "value"
         ]
       },
-      "input_schema216": {
+      "input_schema215": {
         "type": "object",
         "properties": {
           "orderBy": {
@@ -48222,7 +48214,7 @@
           }
         }
       },
-      "input_schema217": {
+      "input_schema216": {
         "type": "object",
         "properties": {
           "orderBy": {
@@ -48878,7 +48870,7 @@
             "$ref": "#/components/schemas/DisplayImagesField"
           },
           "attachments": {
-            "$ref": "#/components/schemas/output_schema477"
+            "$ref": "#/components/schemas/output_schema476"
           }
         },
         "required": [
@@ -49975,7 +49967,7 @@
             "$ref": "#/components/schemas/DisplayImagesField"
           },
           "attachments": {
-            "$ref": "#/components/schemas/output_schema477"
+            "$ref": "#/components/schemas/output_schema476"
           }
         },
         "required": [
@@ -50533,7 +50525,7 @@
             "$ref": "#/components/schemas/DisplayImagesField"
           },
           "attachments": {
-            "$ref": "#/components/schemas/output_schema477"
+            "$ref": "#/components/schemas/output_schema476"
           }
         },
         "required": [
@@ -50924,14 +50916,14 @@
             },
             "anyOf": [
               {
-                "$ref": "#/components/schemas/input_schema216"
+                "$ref": "#/components/schemas/input_schema215"
               },
               {
                 "minItems": 1,
                 "maxItems": 3,
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/input_schema216"
+                  "$ref": "#/components/schemas/input_schema215"
                 }
               }
             ]
@@ -51134,7 +51126,7 @@
             "$ref": "#/components/schemas/DisplayImagesField"
           },
           "attachments": {
-            "$ref": "#/components/schemas/output_schema477"
+            "$ref": "#/components/schemas/output_schema476"
           }
         },
         "required": [
@@ -52282,16 +52274,16 @@
                   "type": "string"
                 },
                 "inputSchema": {
-                  "$ref": "#/components/schemas/output_schema442"
+                  "$ref": "#/components/schemas/output_schema441"
                 },
                 "outputSchema": {
-                  "$ref": "#/components/schemas/output_schema442"
+                  "$ref": "#/components/schemas/output_schema441"
                 },
                 "annotations": {
-                  "$ref": "#/components/schemas/output_schema444"
+                  "$ref": "#/components/schemas/output_schema443"
                 },
                 "_meta": {
-                  "$ref": "#/components/schemas/output_schema442"
+                  "$ref": "#/components/schemas/output_schema441"
                 }
               },
               "required": [
@@ -52360,10 +52352,10 @@
                   "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
                 },
                 "user": {
-                  "$ref": "#/components/schemas/output_schema445"
+                  "$ref": "#/components/schemas/output_schema444"
                 },
                 "client": {
-                  "$ref": "#/components/schemas/output_schema446"
+                  "$ref": "#/components/schemas/output_schema445"
                 }
               },
               "required": [
@@ -52461,7 +52453,7 @@
           "daily": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/output_schema447"
+              "$ref": "#/components/schemas/output_schema446"
             }
           },
           "tools": {
@@ -52485,13 +52477,13 @@
                   ]
                 },
                 "inputSchema": {
-                  "$ref": "#/components/schemas/output_schema442"
+                  "$ref": "#/components/schemas/output_schema441"
                 },
                 "outputSchema": {
-                  "$ref": "#/components/schemas/output_schema442"
+                  "$ref": "#/components/schemas/output_schema441"
                 },
                 "annotations": {
-                  "$ref": "#/components/schemas/output_schema444"
+                  "$ref": "#/components/schemas/output_schema443"
                 },
                 "status": {
                   "$ref": "#/components/schemas/McpToolUsageStatus"
@@ -52544,19 +52536,19 @@
                 "daily": {
                   "type": "array",
                   "items": {
-                    "$ref": "#/components/schemas/output_schema447"
+                    "$ref": "#/components/schemas/output_schema446"
                   }
                 },
                 "users": {
                   "type": "array",
                   "items": {
-                    "$ref": "#/components/schemas/output_schema445"
+                    "$ref": "#/components/schemas/output_schema444"
                   }
                 },
                 "clients": {
                   "type": "array",
                   "items": {
-                    "$ref": "#/components/schemas/output_schema446"
+                    "$ref": "#/components/schemas/output_schema445"
                   }
                 }
               },
@@ -52582,25 +52574,25 @@
           "users": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/output_schema448"
+              "$ref": "#/components/schemas/output_schema447"
             }
           },
           "clients": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/output_schema448"
+              "$ref": "#/components/schemas/output_schema447"
             }
           },
           "surfaces": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/output_schema448"
+              "$ref": "#/components/schemas/output_schema447"
             }
           },
           "entities": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/output_schema448"
+              "$ref": "#/components/schemas/output_schema447"
             }
           }
         },
@@ -52777,7 +52769,7 @@
             "$ref": "#/components/schemas/DisplayImagesField"
           },
           "attachments": {
-            "$ref": "#/components/schemas/output_schema477"
+            "$ref": "#/components/schemas/output_schema476"
           }
         },
         "required": [
@@ -55636,22 +55628,7 @@
           }
         ]
       },
-      "output_schema437": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "$ref": "#/components/schemas/LedgerPartyShortcode"
-          },
-          "name": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "id",
-          "name"
-        ]
-      },
-      "output_schema442": {
+      "output_schema441": {
         "type": "object",
         "propertyNames": {
           "type": "string"
@@ -55660,7 +55637,7 @@
           "$ref": "#/components/schemas/JsonValue"
         }
       },
-      "output_schema444": {
+      "output_schema443": {
         "type": "object",
         "properties": {
           "readOnlyHint": {
@@ -55677,7 +55654,7 @@
           }
         }
       },
-      "output_schema445": {
+      "output_schema444": {
         "type": "object",
         "properties": {
           "id": {
@@ -55699,7 +55676,7 @@
           "email"
         ]
       },
-      "output_schema446": {
+      "output_schema445": {
         "type": "object",
         "properties": {
           "id": {
@@ -55720,7 +55697,7 @@
           "name"
         ]
       },
-      "output_schema447": {
+      "output_schema446": {
         "type": "object",
         "properties": {
           "day": {
@@ -55749,7 +55726,7 @@
           "total"
         ]
       },
-      "output_schema448": {
+      "output_schema447": {
         "type": "object",
         "properties": {
           "key": {
@@ -55770,13 +55747,13 @@
           "count"
         ]
       },
-      "output_schema471": {
+      "output_schema470": {
         "type": "array",
         "items": {
           "$ref": "#/components/schemas/WishCandidateOut"
         }
       },
-      "output_schema477": {
+      "output_schema476": {
         "type": "array",
         "items": {
           "$ref": "#/components/schemas/EntityAttachmentRead"
@@ -56951,7 +56928,7 @@
             "$ref": "#/components/schemas/DisplayImagesField"
           },
           "attachments": {
-            "$ref": "#/components/schemas/output_schema477"
+            "$ref": "#/components/schemas/output_schema476"
           }
         },
         "required": [
@@ -58216,7 +58193,7 @@
             "$ref": "#/components/schemas/DisplayImagesField"
           },
           "attachments": {
-            "$ref": "#/components/schemas/output_schema477"
+            "$ref": "#/components/schemas/output_schema476"
           }
         },
         "required": [
@@ -58938,7 +58915,7 @@
             "$ref": "#/components/schemas/DisplayImagesField"
           },
           "attachments": {
-            "$ref": "#/components/schemas/output_schema477"
+            "$ref": "#/components/schemas/output_schema476"
           }
         },
         "required": [
@@ -60594,6 +60571,21 @@
           "warnings"
         ]
       },
+      "ProductMatchOwner": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/LedgerPartyShortcode"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ]
+      },
       "ProductMatchPair": {
         "minItems": 2,
         "maxItems": 2,
@@ -60644,7 +60636,7 @@
             "maximum": 9007199254740991
           },
           "owner": {
-            "$ref": "#/components/schemas/output_schema437",
+            "$ref": "#/components/schemas/ProductMatchOwner",
             "description": "Explicit stock owner for a photo product; purchase-inherited owner for a purchase product; null when undeterminable"
           },
           "purchase": {
@@ -60717,6 +60709,14 @@
           "agent",
           "detector"
         ]
+      },
+      "ProductMatchSourceUrls": {
+        "maxItems": 10,
+        "type": "array",
+        "items": {
+          "type": "string",
+          "format": "uri"
+        }
       },
       "ProductMatchState": {
         "type": "string",
@@ -63751,7 +63751,7 @@
             "$ref": "#/components/schemas/DisplayImagesField"
           },
           "attachments": {
-            "$ref": "#/components/schemas/output_schema477"
+            "$ref": "#/components/schemas/output_schema476"
           }
         },
         "required": [
@@ -65802,7 +65802,7 @@
           },
           "sourceUrls": {
             "description": "Pages the evidence came from, e.g. the vendor product page",
-            "$ref": "#/components/schemas/input_schema211"
+            "$ref": "#/components/schemas/ProductMatchSourceUrls"
           }
         },
         "required": [
@@ -66026,7 +66026,7 @@
             "$ref": "#/components/schemas/DisplayImagesField"
           },
           "attachments": {
-            "$ref": "#/components/schemas/output_schema477"
+            "$ref": "#/components/schemas/output_schema476"
           }
         },
         "required": [
@@ -67096,7 +67096,7 @@
             "$ref": "#/components/schemas/DisplayImagesField"
           },
           "attachments": {
-            "$ref": "#/components/schemas/output_schema477"
+            "$ref": "#/components/schemas/output_schema476"
           }
         },
         "required": [
@@ -70788,7 +70788,7 @@
                 "$ref": "#/components/schemas/ProductFindOrCreateByCodeInput"
               },
               {
-                "$ref": "#/components/schemas/input_schema212"
+                "$ref": "#/components/schemas/input_schema211"
               }
             ],
             "description": "The scanned code."
@@ -73181,7 +73181,7 @@
             "$ref": "#/components/schemas/DisplayImagesField"
           },
           "attachments": {
-            "$ref": "#/components/schemas/output_schema477"
+            "$ref": "#/components/schemas/output_schema476"
           }
         },
         "required": [
@@ -75121,14 +75121,14 @@
             },
             "anyOf": [
               {
-                "$ref": "#/components/schemas/input_schema217"
+                "$ref": "#/components/schemas/input_schema216"
               },
               {
                 "minItems": 1,
                 "maxItems": 3,
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/input_schema217"
+                  "$ref": "#/components/schemas/input_schema216"
                 }
               }
             ]
@@ -75321,7 +75321,7 @@
             "$ref": "#/components/schemas/DisplayImagesField"
           },
           "attachments": {
-            "$ref": "#/components/schemas/output_schema477"
+            "$ref": "#/components/schemas/output_schema476"
           }
         },
         "required": [
@@ -75781,7 +75781,7 @@
             "$ref": "#/components/schemas/DisplayImagesField"
           },
           "attachments": {
-            "$ref": "#/components/schemas/output_schema477"
+            "$ref": "#/components/schemas/output_schema476"
           }
         },
         "required": [
@@ -76341,7 +76341,7 @@
             "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
           },
           "candidates": {
-            "$ref": "#/components/schemas/output_schema471"
+            "$ref": "#/components/schemas/output_schema470"
           },
           "candidateCount": {
             "type": "integer",
@@ -76368,7 +76368,7 @@
             "$ref": "#/components/schemas/DisplayImagesField"
           },
           "attachments": {
-            "$ref": "#/components/schemas/output_schema477"
+            "$ref": "#/components/schemas/output_schema476"
           }
         },
         "required": [
@@ -76411,7 +76411,7 @@
             "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
           },
           "candidates": {
-            "$ref": "#/components/schemas/output_schema471"
+            "$ref": "#/components/schemas/output_schema470"
           },
           "candidateCount": {
             "type": "integer",
@@ -76495,7 +76495,7 @@
             "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
           },
           "candidates": {
-            "$ref": "#/components/schemas/output_schema471"
+            "$ref": "#/components/schemas/output_schema470"
           },
           "candidateCount": {
             "type": "integer",

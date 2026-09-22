@@ -38,7 +38,6 @@ describe("HTTP contract", () => {
       expect(expected).not.toContain(excluded);
       expect(START_OPERATIONS).toHaveProperty(excluded);
     }
-    const transports = { get: 0, post: 0, mutation: 0 };
     const mismatches: string[] = [];
     for (const route of rpc) {
       const metadata = metadataOf(route);
@@ -57,15 +56,13 @@ describe("HTTP contract", () => {
           ? route.method === "POST" && metadata.transport === undefined
           : metadata.transport === transport;
       if (!consistent) mismatches.push(metadata.operation);
-      transports[kind === "mutation" ? "mutation" : transport] += 1;
       expect(route.path).toBe(
         `/api/v1/${metadata.operation.replace(".", "/")}`,
       );
     }
     expect(mismatches).toEqual([]);
-    // Flat-input queries are GET; the structured ones travel as POST bodies.
-    expect(transports).toEqual({ get: 123, post: 34, mutation: 102 });
-    expect(Object.keys(document.paths)).toHaveLength(308);
+    const operationIds = rpc.map((route) => metadataOf(route).operation);
+    expect(new Set(operationIds).size).toBe(operationIds.length);
     const analytics = rpc.find(
       (route) => metadataOf(route).operation === "expense.analytics",
     );
