@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { access, mkdir, readFile, rename } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import * as esbuild from "esbuild";
@@ -8,8 +8,9 @@ import * as esbuild from "esbuild";
  * Pre-bundle the tiny E2E harness service Workers (usda-empty, upc-empty,
  * purchase-agent-empty, queue-sink) once with esbuild, instead of letting
  * every Playwright worker's `createTestHarness()` re-bundle them from source
- * on every `listen()`/`reset()`. Output is cached by a hash of the sources so
- * a change to any of them (or their shared deps) invalidates the cache.
+ * on every `listen()`/`reset()`. Output is cached by a hash of the entry
+ * sources and the esbuild version; the only dependency, zod, is not hashed,
+ * so delete `.bundle-cache` after a zod upgrade.
  *
  * `createHarness()` in e2e-worker-runtime.ts points each service's `main` at
  * the bundled file and sets `no_bundle: true`, so Miniflare loads it as-is.
@@ -41,10 +42,14 @@ async function sourceHash(): Promise<string> {
   return hash.digest("hex").slice(0, 16);
 }
 
+/** Playwright workers are separate processes that bundle concurrently, so
+ * each writes a private temp file and renames it into place: the output
+ * path only ever holds a complete bundle. */
 async function bundleOne(entry: string, outfile: string): Promise<void> {
+  const temp = `${outfile}.${process.pid}.tmp`;
   await esbuild.build({
     entryPoints: [path.join(__dirname, entry)],
-    outfile,
+    outfile: temp,
     bundle: true,
     format: "esm",
     platform: "neutral",
@@ -53,6 +58,7 @@ async function bundleOne(entry: string, outfile: string): Promise<void> {
     target: "es2022",
     conditions: ["worker", "browser"],
   });
+  await rename(temp, outfile);
 }
 
 /**
@@ -76,12 +82,10 @@ export function ensureHarnessServiceBundles(): Promise<HarnessServiceBundles> {
       (Object.entries(services) as [HarnessServiceName, string][]).map(
         async ([name, entry]) => {
           const outfile = path.join(dir, `${name}.js`);
-          const marker = `${outfile}.done`;
           try {
-            await readFile(marker);
+            await access(outfile);
           } catch {
             await bundleOne(entry, outfile);
-            await writeFile(marker, "");
           }
           bundles[name] = outfile;
         },

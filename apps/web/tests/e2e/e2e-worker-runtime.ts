@@ -37,7 +37,7 @@ export interface E2EWorkerRuntime {
   close(): Promise<void>;
 }
 
-/** Exported for scripts/dev-db-seed.ts, which needs this before its own `createHarness` call too. */
+/** Exported for tooling/dev-db-seed.ts, which needs this before its own `createHarness` call too. */
 export function installDatabaseEnvironment(databaseUrl: string) {
   const previous = new Map<EnvironmentKey, string | undefined>();
   for (const key of e2eEnvironmentKeys) previous.set(key, process.env[key]);
@@ -54,7 +54,7 @@ export function installDatabaseEnvironment(databaseUrl: string) {
   };
 }
 
-/** Exported for scripts/dev-db-seed.ts, which points this at the persistent dev database. */
+/** Exported for tooling/dev-db-seed.ts, which points this at the persistent dev database. */
 export function createHarness(
   databaseUrl: string,
   objectStorageUrl: string,
