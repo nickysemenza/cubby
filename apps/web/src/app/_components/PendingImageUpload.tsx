@@ -126,7 +126,11 @@ export function PendingImageUpload({
   );
 
   const [imageUrl, setImageUrl] = useState("");
-  const [source, setSource] = useState<"own" | "catalog" | "unknown">("own");
+  // "screenshot" is derived from photo-library sighting subtypes, never
+  // manually chosen — the picker below only ever sets one of these three.
+  const [source, setSource] = useState<
+    "own" | "catalog" | "unknown" | "screenshot"
+  >("own");
   const [purpose, setPurpose] = useState<"item" | "label">("item");
   const [importing, setImporting] = useState(false);
 

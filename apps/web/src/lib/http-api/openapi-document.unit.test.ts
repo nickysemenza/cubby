@@ -184,9 +184,10 @@ describe("generated HTTP OpenAPI document", () => {
     // (see the fold-bug regression test below): the old replacer-array
     // allowlist erased distinct nested shapes down to `{}`, so it had been
     // incorrectly folding distinct positionals together and undercounting.
-    // 75: the image list gained the importRunId / targetState filters, which
-    // use the same positional entity-filter unions as every other entity.
-    expect(positional.length).toBeLessThanOrEqual(75);
+    // 76: the image list's importRunId / targetState filters and the image
+    // sighting's filters use the same positional entity-filter unions as
+    // every other entity.
+    expect(positional.length).toBeLessThanOrEqual(76);
     expect(schemas).toHaveProperty("ProductTopLevelOut");
     expect(schemas).toHaveProperty("LocationShortcode");
     expect(schemas).toHaveProperty("VendorCreateInput");
@@ -316,7 +317,7 @@ describe("generated HTTP OpenAPI document", () => {
         "ApiError",
       );
     }
-    expect(operations).toHaveLength(368);
+    expect(operations).toHaveLength(373);
   });
 
   it("carries query parameters as plain form values", () => {
@@ -374,7 +375,7 @@ describe("generated HTTP OpenAPI document", () => {
     for (const entry of operations)
       methods[z.enum(["get", "post", "patch", "delete"]).parse(entry.method)] +=
         1;
-    expect(methods).toEqual({ get: 169, post: 155, patch: 22, delete: 22 });
+    expect(methods).toEqual({ get: 171, post: 156, patch: 23, delete: 23 });
     for (const path of POST_QUERIES) {
       const posted = paths[path]?.post;
       expect(posted).toBeDefined();
@@ -457,7 +458,7 @@ describe("generated HTTP OpenAPI document", () => {
     const pages = Object.entries(schemas).filter(([name]) =>
       name.endsWith("ListPage"),
     );
-    expect(pages).toHaveLength(21);
+    expect(pages).toHaveLength(22);
     for (const [, page] of pages)
       expect(schemaNode.parse(page.properties?.meta).$ref).toBe(
         `${COMPONENT}ListPageMeta`,

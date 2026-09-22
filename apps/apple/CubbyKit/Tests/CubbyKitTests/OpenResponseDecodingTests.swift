@@ -22,6 +22,7 @@ struct OpenResponseDecodingTests {
               "status": "UPLOADED",
               "source": "unknown",
               "useOriginal": false,
+              "captureAttribution": "none",
               "createdAt": "2026-09-21T00:00:00.000Z",
               "updatedAt": "2026-09-21T00:00:00.000Z",
               "fieldFromAFutureServer": {"nested": true}

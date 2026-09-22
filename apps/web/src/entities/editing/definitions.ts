@@ -977,6 +977,9 @@ export const entityEditRegistry: EntityEditRegistry = {
   device: buildDefinition("device", (f) => ({
     fields: f.fieldsFrom(["full"]),
   })),
+  imageSighting: buildDefinition("imageSighting", (f) => ({
+    fields: f.fieldsFrom(["full"]),
+  })),
   product: buildDefinition("product", (f) => ({
     // `quickDetails` is a strict subset of `full`'s field roster.
     fields: f.fieldsFrom(["full"], {

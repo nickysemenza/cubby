@@ -15,6 +15,7 @@ public typealias Expense = Components.Schemas.ExpenseOut
 public typealias FinancialAccount = Components.Schemas.FinancialAccountOut
 public typealias FinancialTransaction = Components.Schemas.FinancialTransactionOut
 public typealias GardenEntry = Components.Schemas.GardenEntryOut
+public typealias ImageSighting = Components.Schemas.ImageSightingOut
 public typealias Ingredient = Components.Schemas.IngredientOut
 public typealias Inventory = Components.Schemas.InventoryEntryOut
 public typealias LedgerParty = Components.Schemas.LedgerPartyOut
@@ -235,6 +236,7 @@ public typealias GeneratedEntityMutationCreateResultExpense = Components.Schemas
 public typealias GeneratedEntityMutationCreateResultFinancialAccount = Components.Schemas.GeneratedEntityMutationCreateResultFinancialAccount
 public typealias GeneratedEntityMutationCreateResultFinancialTransaction = Components.Schemas.GeneratedEntityMutationCreateResultFinancialTransaction
 public typealias GeneratedEntityMutationCreateResultGardenEntry = Components.Schemas.GeneratedEntityMutationCreateResultGardenEntry
+public typealias GeneratedEntityMutationCreateResultImageSighting = Components.Schemas.GeneratedEntityMutationCreateResultImageSighting
 public typealias GeneratedEntityMutationCreateResultIngredient = Components.Schemas.GeneratedEntityMutationCreateResultIngredient
 public typealias GeneratedEntityMutationCreateResultInventory = Components.Schemas.GeneratedEntityMutationCreateResultInventory
 public typealias GeneratedEntityMutationCreateResultLedgerParty = Components.Schemas.GeneratedEntityMutationCreateResultLedgerParty
@@ -257,6 +259,7 @@ public typealias GeneratedEntityMutationUpdateResultFinancialAccount = Component
 public typealias GeneratedEntityMutationUpdateResultFinancialTransaction = Components.Schemas.GeneratedEntityMutationUpdateResultFinancialTransaction
 public typealias GeneratedEntityMutationUpdateResultGardenEntry = Components.Schemas.GeneratedEntityMutationUpdateResultGardenEntry
 public typealias GeneratedEntityMutationUpdateResultImage = Components.Schemas.GeneratedEntityMutationUpdateResultImage
+public typealias GeneratedEntityMutationUpdateResultImageSighting = Components.Schemas.GeneratedEntityMutationUpdateResultImageSighting
 public typealias GeneratedEntityMutationUpdateResultIngredient = Components.Schemas.GeneratedEntityMutationUpdateResultIngredient
 public typealias GeneratedEntityMutationUpdateResultInventory = Components.Schemas.GeneratedEntityMutationUpdateResultInventory
 public typealias GeneratedEntityMutationUpdateResultLedgerParty = Components.Schemas.GeneratedEntityMutationUpdateResultLedgerParty
@@ -285,6 +288,8 @@ public typealias ImageAssociationEntity = Components.Schemas.ImageAssociationEnt
 public typealias ImageAssociationRole = Components.Schemas.ImageAssociationRole
 public typealias ImageBrowserListInput = Components.Schemas.ImageBrowserListInput
 public typealias ImageBrowserListOut = Components.Schemas.ImageBrowserListOut
+public typealias ImageCaptureAttribution = Components.Schemas.ImageCaptureAttribution
+public typealias ImageCaptureLocation = Components.Schemas.ImageCaptureLocation
 public typealias ImageCutoutEligibility = Components.Schemas.ImageCutoutEligibility
 public typealias ImageDerivativeStatus = Components.Schemas.ImageDerivativeStatus
 public typealias ImageDescriptionAnalysis = Components.Schemas.ImageDescriptionAnalysis
@@ -325,11 +330,26 @@ public typealias ImageProcessingSkippedOutcome = Components.Schemas.ImageProcess
 public typealias ImageProcessingSource = Components.Schemas.ImageProcessingSource
 public typealias ImageProcessingStatus = Components.Schemas.ImageProcessingStatus
 public typealias ImageProcessingStatusOutput = Components.Schemas.ImageProcessingStatusOutput
+public typealias ImageProvenanceEvidence = Components.Schemas.ImageProvenanceEvidence
 public typealias ImageRecordAnalysisInput = Components.Schemas.ImageRecordAnalysisInput
 public typealias ImageRecordAnalysisOutput = Components.Schemas.ImageRecordAnalysisOutput
 public typealias ImageRenderStatus = Components.Schemas.ImageRenderStatus
 public typealias ImageRepresentations = Components.Schemas.ImageRepresentations
 public typealias ImageShortcode = Components.Schemas.ImageShortcode
+public typealias ImageSightingCamera = Components.Schemas.ImageSightingCamera
+public typealias ImageSightingCameraInput = Components.Schemas.ImageSightingCameraInput
+public typealias ImageSightingCreateInput = Components.Schemas.ImageSightingCreateInput
+public typealias ImageSightingDetail = Components.Schemas.ImageSightingDetail
+public typealias ImageSightingListItem = Components.Schemas.ImageSightingListItem
+public typealias ImageSightingListPage = Components.Schemas.ImageSightingListPage
+public typealias ImageSightingLocation = Components.Schemas.ImageSightingLocation
+public typealias ImageSightingLocationInput = Components.Schemas.ImageSightingLocationInput
+public typealias ImageSightingMatchKind = Components.Schemas.ImageSightingMatchKind
+public typealias ImageSightingOut = Components.Schemas.ImageSightingOut
+public typealias ImageSightingReportFields = Components.Schemas.ImageSightingReportFields
+public typealias ImageSightingShortcode = Components.Schemas.ImageSightingShortcode
+public typealias ImageSightingSourceType = Components.Schemas.ImageSightingSourceType
+public typealias ImageSightingUpdateData = Components.Schemas.ImageSightingUpdateData
 public typealias ImageSourceFingerprint = Components.Schemas.ImageSourceFingerprint
 public typealias ImageSourceFingerprintInput = Components.Schemas.ImageSourceFingerprintInput
 public typealias ImageStatus = Components.Schemas.ImageStatus
@@ -767,6 +787,9 @@ extension Components.Schemas.ImageDescriptionCorrectionInput: Identifiable {}
 extension Components.Schemas.ImageHashIndexItem: Identifiable {}
 extension Components.Schemas.ImageOut: Identifiable {}
 extension Components.Schemas.ImageRecordAnalysisInput: Identifiable {}
+extension Components.Schemas.ImageSightingDetail: Identifiable {}
+extension Components.Schemas.ImageSightingListItem: Identifiable {}
+extension Components.Schemas.ImageSightingOut: Identifiable {}
 extension Components.Schemas.ImageWithEntity: Identifiable {}
 extension Components.Schemas.InfLocation: Identifiable {}
 extension Components.Schemas.IngredientDetail: Identifiable {}

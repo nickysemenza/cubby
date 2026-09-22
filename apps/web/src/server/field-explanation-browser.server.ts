@@ -10,6 +10,7 @@ import {
   type FieldResolution,
 } from "@cubby/schemas/field-resolution";
 import { cookbookShortcode } from "@cubby/schemas/identifiers";
+import { imageProvenanceEvidence } from "@cubby/schemas/image-capture-fields";
 import { effectiveInventoryOwnership } from "@cubby/schemas/inventory-ownership";
 import { parseShortcode } from "@cubby/shared";
 import { z } from "zod";
@@ -45,6 +46,7 @@ const explanationMetadata = z.object({
     "inventoryOwnership",
     "productValuation",
     "imageRepresentation",
+    "imageCapture",
     "productQuantity",
     "recipeTotals",
     "locationValuation",
@@ -67,6 +69,21 @@ const explanationMetadata = z.object({
 });
 type Explanation = z.infer<typeof explanationMetadata>;
 type Surface = "list" | "detail" | "summary";
+
+/** Labels the `imageCapture` resolver's source list by `provenanceEvidence.basis`
+ * — the precedence `deriveImageCapture` enforces (manual > sighting >
+ * import-url > exif > analysis > filename), spelled out for the reader. */
+const IMAGE_CAPTURE_BASIS_LABELS = {
+  manual: "Manual",
+  sighting: "Photo library sightings",
+  "import-url": "Import source URL",
+  exif: "Embedded EXIF",
+  analysis: "Analysis",
+  filename: "Filename heuristic",
+} as const satisfies Record<
+  z.infer<typeof imageProvenanceEvidence>["basis"],
+  string
+>;
 
 const asJsonRecord = <Projection extends object>(
   value: Projection,
@@ -387,6 +404,26 @@ export function explainProjectionSources(
           value: readExplanationPath(projection, "pricing").value,
         },
       ];
+    case "imageCapture": {
+      const evidence = imageProvenanceEvidence
+        .nullable()
+        .parse(readExplanationPath(projection, "provenanceEvidence").value);
+      const sources: Source[] = [
+        {
+          label: "Capture attribution",
+          entity: null,
+          value: readExplanationPath(projection, "captureAttribution").value,
+        },
+      ];
+      if (evidence) {
+        sources.push({
+          label: IMAGE_CAPTURE_BASIS_LABELS[evidence.basis],
+          entity: null,
+          value: evidence,
+        });
+      }
+      return sources;
+    }
     case "field":
     case "imageRepresentation":
     case "inventoryOwnership":

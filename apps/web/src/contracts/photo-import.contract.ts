@@ -1,6 +1,7 @@
 import { shortcodeEntities } from "@cubby/schemas/entity-manifest";
 import { imageShortcode, importRunShortcode } from "@cubby/schemas/identifiers";
 import { ImageStatus, imageAssociationSchema } from "@cubby/schemas/image";
+import { imageSightingReportFields } from "@cubby/schemas/image-sighting";
 import {
   photoImportCreateRunInput,
   photoImportCreateRunOutput,
@@ -144,6 +145,11 @@ const photoImportSourceSchema = z.object({
 
 const photoImportCommitInputSchema = z.object({
   idempotencyKey: z.string().min(8).max(200),
+  // Installation id (`Device.installationId`, NOT a `DEV-` shortcode — the
+  // native app always knows the former, and may not yet have registered for
+  // the latter). Resolved to a Device row server-side; when absent or
+  // unresolvable, no sighting is recorded (`photo-import-commit.service.ts`).
+  deviceId: z.string().min(1).max(255).optional(),
   images: z
     .array(
       z.object({
@@ -158,6 +164,12 @@ const photoImportCommitInputSchema = z.object({
         duplicateDecision: z.enum(["reuse", "keepBoth", "replace"]),
         replaceConfirmed: z.boolean().default(false),
         analysis: localPhotoAnalysisSchema,
+        // A sibling of `analysis`, not nested inside it: `analysesMatch` in
+        // `photo-import-commit.service.ts` compares `analysis` by JSON
+        // equality across every item that resolves to one image, and
+        // per-asset library data (this device's own library identifiers)
+        // must not participate in that comparison.
+        library: imageSightingReportFields.optional(),
       }),
     )
     .min(1)

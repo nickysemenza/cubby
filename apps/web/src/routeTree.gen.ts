@@ -58,6 +58,8 @@ import { Route as AuthenticatedFinancialTransactionsIndexRouteImport } from './r
 import { Route as AuthenticatedFinancialTransactionsShortcodeRouteImport } from './routes/_authenticated/financial-transactions.$shortcode'
 import { Route as AuthenticatedGardenEntriesIndexRouteImport } from './routes/_authenticated/garden-entries.index'
 import { Route as AuthenticatedGardenEntriesShortcodeRouteImport } from './routes/_authenticated/garden-entries.$shortcode'
+import { Route as AuthenticatedImageSightingsIndexRouteImport } from './routes/_authenticated/image-sightings.index'
+import { Route as AuthenticatedImageSightingsShortcodeRouteImport } from './routes/_authenticated/image-sightings.$shortcode'
 import { Route as AuthenticatedImagesIndexRouteImport } from './routes/_authenticated/images.index'
 import { Route as AuthenticatedImagesShortcodeRouteImport } from './routes/_authenticated/images.$shortcode'
 import { Route as AuthenticatedIngredientsIndexRouteImport } from './routes/_authenticated/ingredients.index'
@@ -410,6 +412,18 @@ const AuthenticatedGardenEntriesShortcodeRoute =
   AuthenticatedGardenEntriesShortcodeRouteImport.update({
     id: '/garden-entries/$shortcode',
     path: '/garden-entries/$shortcode',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedImageSightingsIndexRoute =
+  AuthenticatedImageSightingsIndexRouteImport.update({
+    id: '/image-sightings/',
+    path: '/image-sightings/',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedImageSightingsShortcodeRoute =
+  AuthenticatedImageSightingsShortcodeRouteImport.update({
+    id: '/image-sightings/$shortcode',
+    path: '/image-sightings/$shortcode',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
 const AuthenticatedImagesIndexRoute =
@@ -944,6 +958,7 @@ export interface FileRoutesByFullPath {
   '/financial-accounts/$shortcode': typeof AuthenticatedFinancialAccountsShortcodeRoute
   '/financial-transactions/$shortcode': typeof AuthenticatedFinancialTransactionsShortcodeRoute
   '/garden-entries/$shortcode': typeof AuthenticatedGardenEntriesShortcodeRoute
+  '/image-sightings/$shortcode': typeof AuthenticatedImageSightingsShortcodeRoute
   '/images/$shortcode': typeof AuthenticatedImagesShortcodeRoute
   '/ingredients/$shortcode': typeof AuthenticatedIngredientsShortcodeRoute
   '/ingredients/equivalences': typeof AuthenticatedIngredientsEquivalencesRoute
@@ -996,6 +1011,7 @@ export interface FileRoutesByFullPath {
   '/financial-accounts/': typeof AuthenticatedFinancialAccountsIndexRoute
   '/financial-transactions/': typeof AuthenticatedFinancialTransactionsIndexRoute
   '/garden-entries/': typeof AuthenticatedGardenEntriesIndexRoute
+  '/image-sightings/': typeof AuthenticatedImageSightingsIndexRoute
   '/images/': typeof AuthenticatedImagesIndexRoute
   '/ingredients/': typeof AuthenticatedIngredientsIndexRoute
   '/inventory/': typeof AuthenticatedInventoryIndexRoute
@@ -1078,6 +1094,7 @@ export interface FileRoutesByTo {
   '/financial-accounts/$shortcode': typeof AuthenticatedFinancialAccountsShortcodeRoute
   '/financial-transactions/$shortcode': typeof AuthenticatedFinancialTransactionsShortcodeRoute
   '/garden-entries/$shortcode': typeof AuthenticatedGardenEntriesShortcodeRoute
+  '/image-sightings/$shortcode': typeof AuthenticatedImageSightingsShortcodeRoute
   '/images/$shortcode': typeof AuthenticatedImagesShortcodeRoute
   '/ingredients/$shortcode': typeof AuthenticatedIngredientsShortcodeRoute
   '/ingredients/equivalences': typeof AuthenticatedIngredientsEquivalencesRoute
@@ -1130,6 +1147,7 @@ export interface FileRoutesByTo {
   '/financial-accounts': typeof AuthenticatedFinancialAccountsIndexRoute
   '/financial-transactions': typeof AuthenticatedFinancialTransactionsIndexRoute
   '/garden-entries': typeof AuthenticatedGardenEntriesIndexRoute
+  '/image-sightings': typeof AuthenticatedImageSightingsIndexRoute
   '/images': typeof AuthenticatedImagesIndexRoute
   '/ingredients': typeof AuthenticatedIngredientsIndexRoute
   '/inventory': typeof AuthenticatedInventoryIndexRoute
@@ -1215,6 +1233,7 @@ export interface FileRoutesById {
   '/_authenticated/financial-accounts/$shortcode': typeof AuthenticatedFinancialAccountsShortcodeRoute
   '/_authenticated/financial-transactions/$shortcode': typeof AuthenticatedFinancialTransactionsShortcodeRoute
   '/_authenticated/garden-entries/$shortcode': typeof AuthenticatedGardenEntriesShortcodeRoute
+  '/_authenticated/image-sightings/$shortcode': typeof AuthenticatedImageSightingsShortcodeRoute
   '/_authenticated/images/$shortcode': typeof AuthenticatedImagesShortcodeRoute
   '/_authenticated/ingredients/$shortcode': typeof AuthenticatedIngredientsShortcodeRoute
   '/_authenticated/ingredients/equivalences': typeof AuthenticatedIngredientsEquivalencesRoute
@@ -1267,6 +1286,7 @@ export interface FileRoutesById {
   '/_authenticated/financial-accounts/': typeof AuthenticatedFinancialAccountsIndexRoute
   '/_authenticated/financial-transactions/': typeof AuthenticatedFinancialTransactionsIndexRoute
   '/_authenticated/garden-entries/': typeof AuthenticatedGardenEntriesIndexRoute
+  '/_authenticated/image-sightings/': typeof AuthenticatedImageSightingsIndexRoute
   '/_authenticated/images/': typeof AuthenticatedImagesIndexRoute
   '/_authenticated/ingredients/': typeof AuthenticatedIngredientsIndexRoute
   '/_authenticated/inventory/': typeof AuthenticatedInventoryIndexRoute
@@ -1352,6 +1372,7 @@ export interface FileRouteTypes {
     | '/financial-accounts/$shortcode'
     | '/financial-transactions/$shortcode'
     | '/garden-entries/$shortcode'
+    | '/image-sightings/$shortcode'
     | '/images/$shortcode'
     | '/ingredients/$shortcode'
     | '/ingredients/equivalences'
@@ -1404,6 +1425,7 @@ export interface FileRouteTypes {
     | '/financial-accounts/'
     | '/financial-transactions/'
     | '/garden-entries/'
+    | '/image-sightings/'
     | '/images/'
     | '/ingredients/'
     | '/inventory/'
@@ -1486,6 +1508,7 @@ export interface FileRouteTypes {
     | '/financial-accounts/$shortcode'
     | '/financial-transactions/$shortcode'
     | '/garden-entries/$shortcode'
+    | '/image-sightings/$shortcode'
     | '/images/$shortcode'
     | '/ingredients/$shortcode'
     | '/ingredients/equivalences'
@@ -1538,6 +1561,7 @@ export interface FileRouteTypes {
     | '/financial-accounts'
     | '/financial-transactions'
     | '/garden-entries'
+    | '/image-sightings'
     | '/images'
     | '/ingredients'
     | '/inventory'
@@ -1622,6 +1646,7 @@ export interface FileRouteTypes {
     | '/_authenticated/financial-accounts/$shortcode'
     | '/_authenticated/financial-transactions/$shortcode'
     | '/_authenticated/garden-entries/$shortcode'
+    | '/_authenticated/image-sightings/$shortcode'
     | '/_authenticated/images/$shortcode'
     | '/_authenticated/ingredients/$shortcode'
     | '/_authenticated/ingredients/equivalences'
@@ -1674,6 +1699,7 @@ export interface FileRouteTypes {
     | '/_authenticated/financial-accounts/'
     | '/_authenticated/financial-transactions/'
     | '/_authenticated/garden-entries/'
+    | '/_authenticated/image-sightings/'
     | '/_authenticated/images/'
     | '/_authenticated/ingredients/'
     | '/_authenticated/inventory/'
@@ -2092,6 +2118,20 @@ declare module '@tanstack/react-router' {
       path: '/garden-entries/$shortcode'
       fullPath: '/garden-entries/$shortcode'
       preLoaderRoute: typeof AuthenticatedGardenEntriesShortcodeRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/image-sightings/': {
+      id: '/_authenticated/image-sightings/'
+      path: '/image-sightings'
+      fullPath: '/image-sightings/'
+      preLoaderRoute: typeof AuthenticatedImageSightingsIndexRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/image-sightings/$shortcode': {
+      id: '/_authenticated/image-sightings/$shortcode'
+      path: '/image-sightings/$shortcode'
+      fullPath: '/image-sightings/$shortcode'
+      preLoaderRoute: typeof AuthenticatedImageSightingsShortcodeRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
     '/_authenticated/images/': {
@@ -2722,6 +2762,7 @@ interface AuthenticatedRouteChildren {
   AuthenticatedFinancialAccountsShortcodeRoute: typeof AuthenticatedFinancialAccountsShortcodeRoute
   AuthenticatedFinancialTransactionsShortcodeRoute: typeof AuthenticatedFinancialTransactionsShortcodeRoute
   AuthenticatedGardenEntriesShortcodeRoute: typeof AuthenticatedGardenEntriesShortcodeRoute
+  AuthenticatedImageSightingsShortcodeRoute: typeof AuthenticatedImageSightingsShortcodeRoute
   AuthenticatedImagesShortcodeRoute: typeof AuthenticatedImagesShortcodeRoute
   AuthenticatedIngredientsShortcodeRoute: typeof AuthenticatedIngredientsShortcodeRoute
   AuthenticatedIngredientsEquivalencesRoute: typeof AuthenticatedIngredientsEquivalencesRoute
@@ -2763,6 +2804,7 @@ interface AuthenticatedRouteChildren {
   AuthenticatedFinancialAccountsIndexRoute: typeof AuthenticatedFinancialAccountsIndexRoute
   AuthenticatedFinancialTransactionsIndexRoute: typeof AuthenticatedFinancialTransactionsIndexRoute
   AuthenticatedGardenEntriesIndexRoute: typeof AuthenticatedGardenEntriesIndexRoute
+  AuthenticatedImageSightingsIndexRoute: typeof AuthenticatedImageSightingsIndexRoute
   AuthenticatedImagesIndexRoute: typeof AuthenticatedImagesIndexRoute
   AuthenticatedIngredientsIndexRoute: typeof AuthenticatedIngredientsIndexRoute
   AuthenticatedInventoryIndexRoute: typeof AuthenticatedInventoryIndexRoute
@@ -2828,6 +2870,8 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
     AuthenticatedFinancialTransactionsShortcodeRoute,
   AuthenticatedGardenEntriesShortcodeRoute:
     AuthenticatedGardenEntriesShortcodeRoute,
+  AuthenticatedImageSightingsShortcodeRoute:
+    AuthenticatedImageSightingsShortcodeRoute,
   AuthenticatedImagesShortcodeRoute: AuthenticatedImagesShortcodeRoute,
   AuthenticatedIngredientsShortcodeRoute:
     AuthenticatedIngredientsShortcodeRoute,
@@ -2880,6 +2924,7 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedFinancialTransactionsIndexRoute:
     AuthenticatedFinancialTransactionsIndexRoute,
   AuthenticatedGardenEntriesIndexRoute: AuthenticatedGardenEntriesIndexRoute,
+  AuthenticatedImageSightingsIndexRoute: AuthenticatedImageSightingsIndexRoute,
   AuthenticatedImagesIndexRoute: AuthenticatedImagesIndexRoute,
   AuthenticatedIngredientsIndexRoute: AuthenticatedIngredientsIndexRoute,
   AuthenticatedInventoryIndexRoute: AuthenticatedInventoryIndexRoute,

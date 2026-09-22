@@ -29,6 +29,7 @@ import type { Database, DrizzleTransaction } from "~/server/db";
 import {
   financialTransaction,
   gardenEntry,
+  imageSighting,
   importRun,
   inventoryEntry,
   location,
@@ -296,6 +297,11 @@ export const LABEL_COLUMN_OVERRIDES = {
     column: purchase.displayLabel,
     reason:
       "titleField (displayName) is computed via purchaseLabel(...) with no single storage column; displayLabel is the raw nullable label column purchaseLabel is itself built from, so it's the best-effort audit-label fallback",
+  },
+  imageSighting: {
+    column: imageSighting.assetKey,
+    reason:
+      "titleField (displayName) is computed as '<owner> · <device> · <date>' with no single storage column; assetKey is the always-present, short-enough audit-label fallback",
   },
   ledgerTransfer: {
     column: null,

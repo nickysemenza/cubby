@@ -266,6 +266,14 @@ const vendorColumns = {
     sourcePageUrl: image.sourcePageUrl,
     sourceAssetUrl: image.sourceAssetUrl,
     sourceName: image.sourceName,
+    capturedAt: image.capturedAt,
+    capturedAtOffsetMinutes: image.capturedAtOffsetMinutes,
+    captureLocation: image.captureLocation,
+    capturePlaceName: image.capturePlaceName,
+    captureDeviceLabel: image.captureDeviceLabel,
+    capturedByPartyId: image.capturedByPartyId,
+    captureAttribution: image.captureAttribution,
+    provenanceEvidence: image.provenanceEvidence,
     createdAt: image.createdAt,
     updatedAt: image.updatedAt,
   },
@@ -308,10 +316,33 @@ type VendorRow = {
       | null;
     useOriginal: boolean;
     verifiedAt: Date | null;
-    source: "own" | "catalog" | "unknown" | null;
+    source: "own" | "catalog" | "unknown" | "screenshot" | null;
     sourcePageUrl: string | null;
     sourceAssetUrl: string | null;
     sourceName: string | null;
+    capturedAt: Date | null;
+    capturedAtOffsetMinutes: number | null;
+    captureLocation: {
+      lat: number;
+      lng: number;
+      altitude?: number;
+      horizontalAccuracy?: number;
+    } | null;
+    capturePlaceName: string | null;
+    captureDeviceLabel: string | null;
+    capturedByPartyId: string | null;
+    captureAttribution: "none" | "derived" | "ambiguous" | "confirmed" | null;
+    provenanceEvidence: {
+      basis:
+        | "manual"
+        | "sighting"
+        | "import-url"
+        | "exif"
+        | "analysis"
+        | "filename";
+      ruleId?: string;
+      detail?: string;
+    } | null;
     createdAt: Date;
     updatedAt: Date;
   } | null;
@@ -339,6 +370,11 @@ const dbVendorToAPI = (
     source: row.logo.source ?? "unknown",
     id: parseShortcodeFor("image", row.logo.id),
     url: getR2PublicUrl(row.logo.key),
+    // Not resolved here: this select has no join to LedgerParty for a
+    // shortcode or a name — a vendor logo is never a member's own photo.
+    capturedByPartyId: null,
+    capturedByName: null,
+    captureAttribution: row.logo.captureAttribution ?? "none",
   },
   dataQuality,
   createdAt: row.createdAt,

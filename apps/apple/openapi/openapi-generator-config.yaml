@@ -114,6 +114,10 @@ filter:
     - resources.gardenEntry.timeline
     - resources.gardenEntry.update
     - resources.image.update
+    - resources.imageSighting.create
+    - resources.imageSighting.get
+    - resources.imageSighting.list
+    - resources.imageSighting.update
     - resources.ingredient.create
     - resources.ingredient.get
     - resources.ingredient.list

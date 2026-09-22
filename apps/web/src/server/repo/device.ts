@@ -17,12 +17,17 @@ import type {
 } from "@cubby/schemas/identifiers";
 import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { uniq } from "es-toolkit";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
-import { device, ledgerParty, product } from "~/server/db/schema";
+import {
+  device,
+  imageSighting,
+  ledgerParty,
+  product,
+} from "~/server/db/schema";
 import { logAuditEntry } from "~/server/repo/audit-log";
 import { loadDataQualities } from "~/server/repo/data-quality";
 import {
@@ -43,11 +48,19 @@ import {
   resolveOrThrow,
 } from "~/server/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
+import { deriveAndStoreImageCapture } from "~/server/services/image-capture-derivation";
 
-/** No incoming edges point at a device yet — this PR's kernel delete has
- * nothing to disposition. */
-export const DEVICE_DELETE_EDGE_POLICY =
-  {} as const satisfies IncomingEdgePolicy<"device", OperationDisposition>;
+/** `ImageSighting.deviceId` cascades: a sighting reported by a device is
+ * meaningless once that device is gone. Every other incoming edge to Device
+ * is empty. */
+export const DEVICE_DELETE_EDGE_POLICY = {
+  "ImageSighting.deviceId": {
+    code: "cascade-sightings",
+    effect: "hard-delete",
+    description:
+      "A device's reported sightings are removed with it; affected images are re-derived in the same transaction.",
+  },
+} as const satisfies IncomingEdgePolicy<"device", OperationDisposition>;
 
 const columns = {
   id: device.id,
@@ -289,6 +302,24 @@ export async function deleteDevices(
 ) {
   const ids = uniq(await resolveAllOrThrow(db, "device", shortcodes));
   return withTransaction(db, async (tx) => {
+    // "ImageSighting.deviceId" is a "hard-delete" (cascade) disposition: a
+    // sighting reported by this device has no meaning once the device is
+    // gone. Every affected image is re-derived in this same transaction so
+    // its capture fields never reflect a sighting that no longer exists.
+    const cascadedSightings = await tx
+      .select({ imageId: imageSighting.imageId })
+      .from(imageSighting)
+      .where(
+        and(inArray(imageSighting.deviceId, ids), notDeleted(imageSighting)),
+      );
+    if (cascadedSightings.length > 0) {
+      await tx
+        .delete(imageSighting)
+        .where(inArray(imageSighting.deviceId, ids));
+      for (const imageId of uniq(cascadedSightings.map((row) => row.imageId))) {
+        await deriveAndStoreImageCapture(tx, parseEntityId("image", imageId));
+      }
+    }
     await removeEntity(tx, {
       entity: "device",
       ids,

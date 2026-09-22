@@ -1,11 +1,21 @@
+import type { ActorContext } from "@cubby/schemas/context";
+import type { ImageId, UserId } from "@cubby/schemas/identifiers";
+import { parseEntityId } from "@cubby/schemas/identifiers";
+import type { ImageSightingReportFields } from "@cubby/schemas/image-sighting";
+
 import type {
   PhotoImportCommitInput,
   PhotoImportCommitResult,
 } from "~/contracts/photo-import.contract";
 import { deferPublications } from "~/server/background-tasks/publish";
-import type { Database } from "~/server/db";
+import type { Database, DrizzleTransaction } from "~/server/db";
 import type { EntityKernelContext } from "~/server/entity-kernel";
 import { createAppError } from "~/server/errors/app-error";
+import {
+  resolveImportSightingContext,
+  setImageOwnDeviceSource,
+  upsertImageSightingInTransaction,
+} from "~/server/repo/image-sighting";
 import {
   activateImportImages,
   getImportImageRows,
@@ -38,7 +48,23 @@ export interface VerifiedStagedImage {
 
 interface VerifiedImportImage extends VerifiedStagedImage {
   analysis: PhotoImportCommitInput["images"][number]["analysis"] | null;
+  /** `library` blocks from every item resolving to this image — usually 0 or
+   * 1, but never assumed unique (see `photoImportCommitInputSchema`'s
+   * `library` field comment). */
+  sightings: ImageSightingReportFields[];
+  /** True when any item resolving to this image attests `photoLibrary` or
+   * `camera` provenance — computed from the original items, not `analysis`
+   * above, which is nulled out for a reused UPLOADED row. */
+  ownDeviceProvenance: boolean;
 }
+
+/** True when a commit item's local analysis attests the photo came from this
+ * device's own camera or library — the two `provenance.source` values that
+ * mean "we took or already had this", as opposed to `files` (picked from
+ * somewhere else) or `serverLazy` (server-side, no local device at all). */
+const isOwnDeviceProvenance = (
+  source: PhotoImportCommitInput["images"][number]["analysis"]["provenance"]["source"],
+): boolean => source === "photoLibrary" || source === "camera";
 
 export interface PhotoImportRouteCommitResult {
   createdDestinations: PhotoImportCommitResult["createdDestinations"];
@@ -73,6 +99,10 @@ export interface PhotoImportCommitPorts {
   withTransaction: typeof withPhotoImportTransaction;
   refreshProjection: typeof refreshProjectionsForEvent;
   runSideEffects: typeof runMutationSideEffectsForEntities;
+  /** Injectable so a unit test can stub the DB writes `applyImportProvenance`
+   * makes directly (outside every other port's mediation) without a real
+   * transaction-bound Drizzle client. */
+  applyProvenance: typeof applyImportProvenance;
 }
 
 export const productionPhotoImportCommitPorts: PhotoImportCommitPorts = {
@@ -84,6 +114,7 @@ export const productionPhotoImportCommitPorts: PhotoImportCommitPorts = {
   persistAnalysis: persistLocalImageAnalysis,
   withTransaction: withPhotoImportTransaction,
   refreshProjection: refreshProjectionsForEvent,
+  applyProvenance: applyImportProvenance,
   runSideEffects: runMutationSideEffectsForEntities,
 };
 
@@ -304,8 +335,17 @@ async function verifyCommitImages(
         );
       }
       // A reused active image is already durable. It receives associations only;
-      // local analysis belongs to newly staged rows in this commit.
-      return { row, integrity, analysis: null };
+      // local analysis belongs to newly staged rows in this commit — but every
+      // library block still becomes a sighting (the partner-copy case).
+      return {
+        row,
+        integrity,
+        analysis: null,
+        sightings: candidates.flatMap((c) => (c.library ? [c.library] : [])),
+        ownDeviceProvenance: candidates.some((c) =>
+          isOwnDeviceProvenance(c.analysis.provenance.source),
+        ),
+      };
     }
     const item = candidates[0];
     if (!item) {
@@ -321,8 +361,87 @@ async function verifyCommitImages(
         `Staged image ${row.shortcode} has conflicting local analysis`,
       );
     }
-    return { row, integrity, analysis: item.analysis };
+    return {
+      row,
+      integrity,
+      analysis: item.analysis,
+      sightings: candidates.flatMap((c) => (c.library ? [c.library] : [])),
+      ownDeviceProvenance: candidates.some((c) =>
+        isOwnDeviceProvenance(c.analysis.provenance.source),
+      ),
+    };
   });
+}
+
+/**
+ * Two independent, best-effort provenance writes per verified image, both
+ * inside the commit's own transaction:
+ *
+ * 1. When any item attests `photoLibrary`/`camera` provenance, the image is
+ *    the member's own — `source: "own"`, `provenanceEvidence: { basis:
+ *    "sighting" }`, guarded so a prior manual confirmation is never
+ *    overwritten (mirrors `deriveImageCapture`'s "confirmed is sticky" rule).
+ * 2. Every `library` block reported for the image is upserted as an
+ *    `ImageSighting` with `matchKind: "import"`, which also re-derives the
+ *    image's capture fields (`upsertImageSightingInTransaction` calls
+ *    `deriveAndStoreImageCapture`).
+ *
+ * Both DB-touching steps live in `repo/image-sighting.ts` — this service may
+ * not import `~/server/db/schema` or `~/server/repo/database-helpers`
+ * directly (`no-restricted-imports`).
+ */
+async function applyImportProvenance(
+  tx: Database | DrizzleTransaction,
+  actorUserId: UserId,
+  installationId: string | undefined,
+  verified: readonly VerifiedImportImage[],
+  actor: ActorContext,
+): Promise<void> {
+  for (const staged of verified) {
+    if (staged.ownDeviceProvenance) {
+      await setImageOwnDeviceSource(tx, parseEntityId("image", staged.row.id));
+    }
+  }
+  if (verified.every((staged) => staged.sightings.length === 0)) return;
+  const context = await resolveImportSightingContext(
+    tx,
+    installationId,
+    actorUserId,
+  );
+  if (!context) return;
+  for (const staged of verified) {
+    const imageId: ImageId = parseEntityId("image", staged.row.id);
+    for (const sighting of staged.sightings) {
+      await upsertImageSightingInTransaction(
+        tx,
+        {
+          imageId,
+          ledgerPartyId: context.ledgerPartyId,
+          deviceId: context.deviceId,
+          assetKey: sighting.assetKey,
+          cloudIdentifier: sighting.cloudIdentifier,
+          localIdentifier: sighting.localIdentifier,
+          sourceType: sighting.sourceType,
+          mediaSubtypes: sighting.mediaSubtypes,
+          originalFilename: sighting.originalFilename,
+          pixelWidth: sighting.pixelWidth,
+          pixelHeight: sighting.pixelHeight,
+          hasAdjustments: sighting.hasAdjustments,
+          capturedAt: sighting.capturedAt,
+          capturedAtOffsetMinutes: sighting.capturedAtOffsetMinutes,
+          addedAt: sighting.addedAt,
+          location: sighting.location,
+          placeName: sighting.placeName,
+          camera: sighting.camera,
+          matchKind: "import",
+          hashDistance: sighting.hashDistance,
+          aspectGate: sighting.aspectGate,
+          observedAt: sighting.observedAt,
+        },
+        actor,
+      );
+    }
+  }
 }
 
 export async function commitPhotoImport(
@@ -387,6 +506,13 @@ export async function commitPhotoImport(
         imagesByCode,
       );
       sideEffectEvents = applied.sideEffectEvents;
+      await ports.applyProvenance(
+        transactionDb,
+        transactionContext.actorContext.userId,
+        input.deviceId,
+        lockedVerified,
+        transactionContext.actorContext,
+      );
       for (const event of sideEffectEvents) {
         await ports.refreshProjection(transactionDb, event);
       }

@@ -693,15 +693,31 @@ precedence over model text. Taxonomy contents participate in the proposal
 basis, so changing vocabulary invalidates old proposals without rerunning
 vision or introducing an inference cache.
 
-An Image has provenance (`own`, `catalog`, or `unknown`, plus optional supplying
-source name/page/asset URLs). Its Product attachment has nullable purpose
-(`item` or `label`). Unset legacy purposes keep their existing gallery behavior;
-labels are supporting evidence and cannot supply direct or borrowed covers.
-Product reads retain separate item and label arrays with attachment purposes.
-MCP detail exposes all attachments, while `imageCount` counts every attachment
-for upload preconditions and item/label image counts count displayable images.
-A cutout is a rendition of one Image: original bytes remain the analysis source
-and fallback, and the original can be selected explicitly.
+An Image has provenance (`own`, `catalog`, `unknown`, or `screenshot`, plus
+optional supplying source name/page/asset URLs). Its Product attachment has
+nullable purpose (`item` or `label`). Unset legacy purposes keep their
+existing gallery behavior; labels are supporting evidence and cannot supply
+direct or borrowed covers. Product reads retain separate item and label
+arrays with attachment purposes. MCP detail exposes all attachments, while
+`imageCount` counts every attachment for upload preconditions and item/label
+image counts count displayable images. A cutout is a rendition of one Image:
+original bytes remain the analysis source and fallback, and the original can
+be selected explicitly.
+
+An Image's *who took this and when* is derived, never entered directly.
+`ImageSighting` records each report that a stored Image appears in one Ledger
+Party member's photo library or cloud asset store, from one reporting
+`Device` — unique per `(imageId, ledgerPartyId, assetKey)`, so a member's
+second device reporting the same synced asset updates the existing sighting
+rather than creating another one. `deriveImageCapture` reduces an image's
+live sightings, and failing those its embedded EXIF, to Image's own
+`capturedAt`, `captureLocation`, `capturePlaceName`, `captureDeviceLabel`, and
+`capturedByPartyId` fields, recording how confidently in
+`captureAttribution` (`none`, `derived`, `ambiguous` when several members'
+evidence ties, or `confirmed` once a member sets it by hand — confirmed is
+never recomputed). Every sighting create, update, or delete re-runs this
+derivation for its image in the same transaction. See ADR 0005 for the full
+precedence rule.
 
 ## Adding an entity
 

@@ -83,9 +83,11 @@ import {
   financialTransactionAllocation,
   gardenEntry,
   gardenEntryImage,
+  image,
   imageDerivative,
   imageDescriptionCorrection,
   imageProcessingJob,
+  imageSighting,
   gardenEntryPlanting,
   importFinding,
   importHunt,
@@ -340,6 +342,14 @@ export const ENTITY_EDGES = {
       description: "A before/after or reference photo attached to a task.",
       liveness: { kind: "must-target-live" },
     },
+    "ImageSighting.imageId": {
+      column: imageSighting.imageId,
+      role: "owned-child",
+      label: "sightings",
+      description:
+        "A report of this image appearing in a member's photo library or cloud asset; meaningless without the original image.",
+      liveness: { kind: "must-target-live" },
+    },
   }),
   recipe: edges({
     "RecipeSection.recipeId": {
@@ -581,6 +591,22 @@ export const ENTITY_EDGES = {
       role: "reference",
       label: "devices",
       description: "A native companion install owned by this member.",
+      liveness: { kind: "must-target-live" },
+    },
+    "ImageSighting.ledgerPartyId": {
+      column: imageSighting.ledgerPartyId,
+      role: "reference",
+      label: "image sightings",
+      description:
+        "The member whose photo library or cloud account a sighting was reported from.",
+      liveness: { kind: "must-target-live" },
+    },
+    "Image.capturedByPartyId": {
+      column: image.capturedByPartyId,
+      role: "reference",
+      label: "captured images",
+      description:
+        "The member an image's capture is derived (or manually confirmed) as belonging to.",
       liveness: { kind: "must-target-live" },
     },
   }),
@@ -1270,5 +1296,15 @@ export const ENTITY_EDGES = {
     },
   }),
   "usda-food": edges({}),
-  device: edges({}),
+  device: edges({
+    "ImageSighting.deviceId": {
+      column: imageSighting.deviceId,
+      role: "owned-child",
+      label: "image sightings",
+      description:
+        "A sighting reported by this device; meaningless without the reporting install.",
+      liveness: { kind: "must-target-live" },
+    },
+  }),
+  imageSighting: edges({}),
 } as const satisfies Record<Entity, Record<string, EntityEdge>>;

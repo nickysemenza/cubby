@@ -201,7 +201,7 @@ const initiatePendingUpload = async <TDatabase>(
     sourceFingerprint?: { hash: string; aspectRatio: number };
     width?: number;
     height?: number;
-    source?: "own" | "catalog" | "unknown";
+    source?: "own" | "catalog" | "unknown" | "screenshot";
     sourcePageUrl?: string | null;
     sourceAssetUrl?: string | null;
     sourceName?: string | null;
@@ -767,11 +767,19 @@ const attachFileToEntityWithPorts = async <TDatabase>(
 
   // Register the object before writing it so a process interruption between
   // R2 and association remains discoverable by the existing PENDING sweep.
+  // A URL-fetched file defaults to "catalog" (it came from somewhere else on
+  // the web), never "unknown" — the caller only falls back to "unknown" when
+  // there is truly no signal at all.
+  const defaultSource = input.url ? "catalog" : "unknown";
   const pending = await ports.repository.createPendingImageRecord(db, {
     key,
     filename,
     contentType,
     size: source.bytes.length,
+    source: input.source ?? defaultSource,
+    sourcePageUrl: input.sourcePageUrl ?? null,
+    sourceAssetUrl: input.sourceAssetUrl ?? input.url ?? null,
+    sourceName: input.sourceName ?? null,
   });
   const pendingImageId = parseEntityId("image", pending.id);
   try {
@@ -804,10 +812,11 @@ const attachFileToEntityWithPorts = async <TDatabase>(
         idempotencyKey: input.idempotencyKey,
         expectedImageCount: input.expectedImageCount,
         purpose: input.purpose,
-        source: input.source ?? "unknown",
+        source: input.source ?? defaultSource,
         sourcePageUrl: input.sourcePageUrl ?? null,
-        sourceAssetUrl: input.sourceAssetUrl ?? null,
+        sourceAssetUrl: input.sourceAssetUrl ?? input.url ?? null,
         sourceName: input.sourceName ?? null,
+        provenanceEvidence: input.url ? { basis: "import-url" } : null,
       },
       entity,
       input.documentKind,

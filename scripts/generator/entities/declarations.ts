@@ -166,6 +166,7 @@ export type EntityField = Readonly<{
       | "inventoryOwnership"
       | "productValuation"
       | "imageRepresentation"
+      | "imageCapture"
       | "productQuantity"
       | "recipeTotals"
       | "locationValuation"

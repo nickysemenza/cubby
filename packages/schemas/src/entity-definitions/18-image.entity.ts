@@ -1,6 +1,11 @@
+import {
+  imageCaptureAttribution,
+  imageCaptureLocation,
+  imageProvenanceEvidence,
+} from "../image-capture-fields.js";
 import { optionalImageRepresentations } from "../image-summary.js";
 import { defineEntity } from "./definition.js";
-import { imageShortcode } from "../identifier-fields.js";
+import { imageShortcode, ledgerPartyShortcode } from "../identifier-fields.js";
 import { z } from "zod";
 export const generatedImageStatusValues = [
   "PENDING",
@@ -18,7 +23,12 @@ export const generatedImageStorageStatusValues = [
   "missing",
   "metadata_mismatch",
 ] as const;
-export const imageSourceValues = ["own", "catalog", "unknown"] as const;
+export const imageSourceValues = [
+  "own",
+  "catalog",
+  "unknown",
+  "screenshot",
+] as const;
 export default defineEntity({
   key: "image",
   names: { singular: "Image", plural: "Images" },
@@ -72,6 +82,14 @@ export default defineEntity({
             "sourceAssetUrl",
             "sourceName",
             "verifiedAt",
+            "capturedAt",
+            "capturedAtOffsetMinutes",
+            "captureLocation",
+            "capturePlaceName",
+            "captureDeviceLabel",
+            "capturedByPartyId",
+            "captureAttribution",
+            "provenanceEvidence",
             "createdAt",
             "updatedAt",
           ],
@@ -351,6 +369,143 @@ export default defineEntity({
         },
       },
       {
+        key: "capturedAt",
+        kind: "timestamp",
+        nullable: true,
+        label: "Captured at",
+        display: { list: true, detail: true, format: "timestamp" },
+        validation: {
+          read: z.date().nullable(),
+          create: null,
+          update: z.coerce.date().nullable().optional(),
+        },
+      },
+      {
+        key: "capturedAtOffsetMinutes",
+        kind: "number",
+        nullable: true,
+        label: "Captured at offset (minutes)",
+        display: { detail: true },
+        validation: {
+          read: z.number().int().nullable(),
+          create: null,
+          update: null,
+        },
+      },
+      {
+        key: "captureLocation",
+        kind: "json",
+        nullable: true,
+        label: "Capture location",
+        // Detail-only by design (no `list: true`) — GPS coordinates never
+        // belong in a list column.
+        display: {
+          detail: true,
+          renderer: { detail: "image-capture-location" },
+        },
+        validation: {
+          read: imageCaptureLocation.nullable(),
+          create: null,
+          update: null,
+        },
+      },
+      {
+        key: "capturePlaceName",
+        kind: "text",
+        nullable: true,
+        label: "Capture place",
+        display: { detail: true },
+        validation: {
+          read: z.string().nullable(),
+          create: null,
+          update: null,
+        },
+      },
+      {
+        key: "captureDeviceLabel",
+        kind: "text",
+        nullable: true,
+        label: "Capture device",
+        display: { detail: true },
+        validation: {
+          read: z.string().nullable(),
+          create: null,
+          update: null,
+        },
+      },
+      {
+        key: "capturedByPartyId",
+        kind: "identifier",
+        nullable: true,
+        label: "Captured by",
+        reference: { entity: "ledgerParty" },
+        control: { kind: "specialized", renderer: "entity-select" },
+        display: { list: true, detail: true, columnId: "capturedByName" },
+        explanation: {
+          ruleId: "image.capturedBy",
+          description:
+            "The capturing member is derived by scoring the image's photo-library sightings, falling back to embedded EXIF evidence when there are none, and can always be set manually.",
+          resolver: "imageCapture",
+          readPath: "capturedByPartyId",
+        },
+        validation: {
+          read: ledgerPartyShortcode.nullable(),
+          create: null,
+          update: ledgerPartyShortcode.nullable().optional(),
+        },
+      },
+      {
+        key: "capturedByName",
+        kind: "text",
+        nullable: true,
+        provenance: {
+          kind: "derived",
+          sources: [
+            { label: "Photo library sightings" },
+            { label: "Embedded EXIF" },
+            { label: "Manual" },
+          ],
+        },
+        explanation: {
+          ruleId: "image.capturedByName",
+          description:
+            "The current name of the derived capturing member, if set.",
+        },
+        validation: { read: z.string().nullable(), create: null, update: null },
+      },
+      {
+        key: "captureAttribution",
+        kind: "enum",
+        label: "Capture attribution",
+        display: { list: true, detail: true, width: "sm" },
+        validation: {
+          read: imageCaptureAttribution,
+          create: null,
+          update: null,
+        },
+      },
+      {
+        key: "provenanceEvidence",
+        kind: "json",
+        nullable: true,
+        label: "Provenance evidence",
+        display: {
+          detail: true,
+          renderer: { detail: "image-provenance-evidence" },
+        },
+        validation: {
+          read: imageProvenanceEvidence.nullable(),
+          create: null,
+          update: null,
+        },
+      },
+      {
+        key: "metadataRevision",
+        kind: "number",
+        nullable: true,
+        readKey: null,
+      },
+      {
         key: "createdAt",
         kind: "timestamp",
         display: { detail: true },
@@ -414,6 +569,23 @@ export default defineEntity({
       "sourceName",
       { key: "useOriginal", default: "literal", defaultValue: false },
       "verifiedAt",
+      "capturedAt",
+      "capturedAtOffsetMinutes",
+      { key: "captureLocation", specialized: "json:captureLocation" },
+      "capturePlaceName",
+      "captureDeviceLabel",
+      { key: "capturedByPartyId", reference: "ledgerParty" },
+      {
+        key: "captureAttribution",
+        specialized: "enum:captureAttribution",
+        default: "literal",
+        defaultValue: "none",
+      },
+      {
+        key: "provenanceEvidence",
+        specialized: "json:provenanceEvidence",
+      },
+      "metadataRevision",
       { key: "targetType", specialized: "enum:targetType" },
       "targetId",
       "idempotencyKey",
@@ -429,6 +601,8 @@ export default defineEntity({
       "sourceAssetUrl",
       "sourceName",
       "useOriginal",
+      "capturedByPartyId",
+      "capturedAt",
     ],
     bulk: [],
     audit: [],
@@ -457,6 +631,15 @@ export default defineEntity({
       "sourceName",
       "useOriginal",
       "verifiedAt",
+      "capturedAt",
+      "capturedAtOffsetMinutes",
+      "captureLocation",
+      "capturePlaceName",
+      "captureDeviceLabel",
+      "capturedByPartyId",
+      "capturedByName",
+      "captureAttribution",
+      "provenanceEvidence",
       "createdAt",
       "updatedAt",
     ],
@@ -592,9 +775,85 @@ export default defineEntity({
           },
         ],
       },
+      {
+        columnId: "source",
+        kind: "multiselect",
+        placeholder: "Filter by source...",
+        deriveSchema: true,
+        stored: true,
+        schemaFromRead: true,
+        options: [
+          { value: "own", label: "Own" },
+          { value: "catalog", label: "Catalog" },
+          { value: "unknown", label: "Unknown" },
+          { value: "screenshot", label: "Screenshot" },
+        ],
+      },
+      {
+        columnId: "captureAttribution",
+        kind: "multiselect",
+        placeholder: "Filter by capture attribution...",
+        deriveSchema: true,
+        stored: true,
+        schemaFromRead: true,
+        options: [
+          { value: "none", label: "None" },
+          { value: "derived", label: "Derived" },
+          { value: "ambiguous", label: "Ambiguous" },
+          { value: "confirmed", label: "Confirmed" },
+        ],
+      },
+      {
+        columnId: "capturedAt",
+        kind: "range",
+        placeholder: "Filter by captured date...",
+        deriveSchema: true,
+        stored: true,
+        range: { kind: "date" },
+        options: [
+          { value: "30d", label: "Last 30 days" },
+          { value: "90d", label: "Last 90 days" },
+          { value: "ytd", label: "Year to date" },
+          { value: "1y", label: "Last 12 months" },
+        ],
+      },
+      {
+        columnId: "capturedByPartyId",
+        kind: "idMulti",
+        placeholder: "Filter by captured by...",
+        brandRef: { entity: "ledgerParty" },
+        urlOnly: true,
+      },
     ],
   },
-  relations: [],
+  relations: [
+    {
+      key: "captured-by",
+      label: "Captured by",
+      target: "ledgerParty",
+      cardinality: "one",
+      provenance: {
+        kind: "local-path",
+        steps: [{ edge: "Image.capturedByPartyId", direction: "outgoing" }],
+      },
+      inverse: {
+        steps: [{ edge: "Image.capturedByPartyId", direction: "incoming" }],
+      },
+    },
+    {
+      key: "sightings",
+      label: "Sightings",
+      target: "imageSighting",
+      cardinality: "many",
+      provenance: {
+        kind: "local-path",
+        steps: [{ edge: "ImageSighting.imageId", direction: "incoming" }],
+      },
+      inverse: {
+        steps: [{ edge: "ImageSighting.imageId", direction: "outgoing" }],
+      },
+    },
+  ],
   // Image filenames and the current preferred description/correction are
   // searchable. The shared search document loader adds only direct owners.
   search: { enabled: true },

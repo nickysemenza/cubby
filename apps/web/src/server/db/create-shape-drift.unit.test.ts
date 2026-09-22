@@ -104,7 +104,12 @@ const VIRTUAL_CREATE_INPUTS: EntityFieldNotes = {
  * required by its create schema, so a new one has to be either required or
  * justified here.
  */
-const UNSUPPLIED_REQUIRED_COLUMNS: EntityFieldNotes = {};
+const UNSUPPLIED_REQUIRED_COLUMNS: EntityFieldNotes = {
+  imageSighting: {
+    ledgerPartyId:
+      "resolved server-side from the acting login's linked member party (repo/member-login.ts) when omitted — see repo/image-sighting.ts's resolveSightingOwnerParty",
+  },
+};
 
 type BoundEntity = {
   entity: Entity;

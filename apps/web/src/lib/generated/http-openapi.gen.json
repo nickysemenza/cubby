@@ -769,7 +769,8 @@
                 "gardenEntry",
                 "vendorAccount",
                 "productCategory",
-                "device"
+                "device",
+                "imageSighting"
               ]
             },
             "style": "form",
@@ -780,7 +781,7 @@
             "in": "query",
             "schema": {
               "type": "string",
-              "pattern": "^(?:PRD-|RCP-|ING-|CKB-|LOC-|INV-|MEL-|LPY-|LTR-|PRJ-|TSK-|VEN-|PUR-|FAC-|FTX-|WSH-|EXP-|PLT-|GDE-|VACCT-|CAT-|DEV-)[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$"
+              "pattern": "^(?:PRD-|RCP-|ING-|CKB-|LOC-|INV-|MEL-|LPY-|LTR-|PRJ-|TSK-|VEN-|PUR-|FAC-|FTX-|WSH-|EXP-|PLT-|GDE-|VACCT-|CAT-|DEV-|IMS-)[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$"
             },
             "style": "form",
             "explode": true
@@ -3754,7 +3755,8 @@
                 "vendorAccount",
                 "productCategory",
                 "importRun",
-                "device"
+                "device",
+                "imageSighting"
               ]
             },
             "style": "form",
@@ -5924,6 +5926,421 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ProjectContributionOut"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/image-sightings": {
+      "get": {
+        "description": "Use page=1&pageSize=20&sort=name,-createdAt. Filters are individual query parameters: text is literal, numbers and booleans are plain, and a list repeats its key (tag=a&tag=b). Response pagination metadata remains zero-based. Resource methods depend on entity capabilities.",
+        "tags": [
+          "imageSighting"
+        ],
+        "parameters": [
+          {
+            "name": "createdFrom",
+            "in": "query",
+            "description": "Calendar day as \"YYYY-MM-DD\"",
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "createdTo",
+            "in": "query",
+            "description": "Calendar day as \"YYYY-MM-DD\"",
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "updatedFrom",
+            "in": "query",
+            "description": "Calendar day as \"YYYY-MM-DD\"",
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "updatedTo",
+            "in": "query",
+            "description": "Calendar day as \"YYYY-MM-DD\"",
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "sourceType",
+            "in": "query",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "userLibrary",
+                  "cloudShared",
+                  "iTunesSynced"
+                ]
+              }
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "matchKind",
+            "in": "query",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "import",
+                  "libraryMatch"
+                ]
+              }
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "imageId",
+            "in": "query",
+            "schema": {
+              "type": "array",
+              "items": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "pattern": "^IMG-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
+                    "description": "image shortcode, e.g. IMG-4K7M"
+                  },
+                  {
+                    "type": "string",
+                    "const": "__unresolvable_entity_filter__"
+                  }
+                ],
+                "type": "string",
+                "pattern": "^IMG-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
+                "description": "image shortcode, e.g. IMG-4K7M"
+              }
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "ledgerPartyId",
+            "in": "query",
+            "schema": {
+              "type": "array",
+              "items": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "pattern": "^LPY-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
+                    "description": "ledgerParty shortcode, e.g. LPY-4K7M"
+                  },
+                  {
+                    "type": "string",
+                    "const": "__unresolvable_entity_filter__"
+                  }
+                ],
+                "type": "string",
+                "pattern": "^LPY-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
+                "description": "ledgerParty shortcode, e.g. LPY-4K7M"
+              }
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "deviceId",
+            "in": "query",
+            "schema": {
+              "type": "array",
+              "items": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "pattern": "^DEV-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
+                    "description": "device shortcode, e.g. DEV-4K7M"
+                  },
+                  {
+                    "type": "string",
+                    "const": "__unresolvable_entity_filter__"
+                  }
+                ],
+                "type": "string",
+                "pattern": "^DEV-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
+                "description": "device shortcode, e.g. DEV-4K7M"
+              }
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "description": "Page number, starting at 1 (default 1)",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "description": "Items per page (default 10, maximum 500)",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 500
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "description": "Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: observedAt, capturedAt, createdAt, updatedAt. Default: -observedAt",
+            "schema": {
+              "type": "string",
+              "pattern": "^-?[^,\\s-][^,\\s]*(,-?[^,\\s-][^,\\s]*){0,2}$"
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "groupBy",
+            "in": "query",
+            "description": "Group rows by one field. One of: observedAt, capturedAt, createdAt, updatedAt",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "observedAt",
+                "capturedAt",
+                "createdAt",
+                "updatedAt"
+              ]
+            },
+            "style": "form",
+            "explode": true
+          }
+        ],
+        "operationId": "resources.imageSighting.list",
+        "responses": {
+          "200": {
+            "description": "200",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImageSightingListPage"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "imageSighting"
+        ],
+        "parameters": [],
+        "operationId": "resources.imageSighting.create",
+        "requestBody": {
+          "description": "Body",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImageSightingCreateInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "201",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GeneratedEntityMutationCreateResultImageSighting"
+                }
+              }
+            },
+            "headers": {
+              "Location": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Created resource URL"
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/image-sightings/{id}": {
+      "delete": {
+        "tags": [
+          "imageSighting"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "imageSighting shortcode, e.g. IMS-4K7M",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^IMS-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$"
+            }
+          }
+        ],
+        "operationId": "resources.imageSighting.delete",
+        "responses": {
+          "200": {
+            "description": "200",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EntityDeleteResult"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "imageSighting"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "imageSighting shortcode, e.g. IMS-4K7M",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^IMS-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$"
+            }
+          }
+        ],
+        "operationId": "resources.imageSighting.get",
+        "responses": {
+          "200": {
+            "description": "200",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImageSightingDetail"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "imageSighting"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "imageSighting shortcode, e.g. IMS-4K7M",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^IMS-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$"
+            }
+          }
+        ],
+        "operationId": "resources.imageSighting.update",
+        "requestBody": {
+          "description": "Body",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImageSightingUpdateData"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "200",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GeneratedEntityMutationUpdateResultImageSighting"
                 }
               }
             }
@@ -11062,7 +11479,8 @@
                 "vendorAccount",
                 "productCategory",
                 "importRun",
-                "device"
+                "device",
+                "imageSighting"
               ]
             },
             "style": "form",
@@ -22177,7 +22595,8 @@
                 "vendorAccount",
                 "productCategory",
                 "importRun",
-                "device"
+                "device",
+                "imageSighting"
               ]
             },
             "style": "form",
@@ -22626,7 +23045,8 @@
                 "vendorAccount",
                 "productCategory",
                 "importRun",
-                "device"
+                "device",
+                "imageSighting"
               ]
             },
             "style": "form",
@@ -26898,10 +27318,10 @@
             ]
           },
           "blockedByIds": {
-            "$ref": "#/components/schemas/output_schema324"
+            "$ref": "#/components/schemas/output_schema350"
           },
           "blockingIds": {
-            "$ref": "#/components/schemas/output_schema324"
+            "$ref": "#/components/schemas/output_schema350"
           },
           "subtaskCount": {
             "type": "integer",
@@ -26914,7 +27334,7 @@
             "maximum": 9007199254740991
           },
           "images": {
-            "$ref": "#/components/schemas/output_schema146"
+            "$ref": "#/components/schemas/output_schema154"
           },
           "createdAt": {
             "type": "string",
@@ -28121,7 +28541,8 @@
           "gardenEntry",
           "vendorAccount",
           "productCategory",
-          "device"
+          "device",
+          "imageSighting"
         ]
       },
       "AuditLogEntryOut": {
@@ -28138,7 +28559,7 @@
               "string",
               "null"
             ],
-            "pattern": "^(?:PRD-|RCP-|ING-|CKB-|LOC-|INV-|MEL-|LPY-|LTR-|PRJ-|TSK-|VEN-|PUR-|FAC-|FTX-|WSH-|EXP-|PLT-|GDE-|VACCT-|CAT-|DEV-)[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$"
+            "pattern": "^(?:PRD-|RCP-|ING-|CKB-|LOC-|INV-|MEL-|LPY-|LTR-|PRJ-|TSK-|VEN-|PUR-|FAC-|FTX-|WSH-|EXP-|PLT-|GDE-|VACCT-|CAT-|DEV-|IMS-)[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$"
           },
           "entityName": {
             "type": [
@@ -28712,7 +29133,7 @@
             "const": "capture"
           },
           "allowedHosts": {
-            "$ref": "#/components/schemas/input_schema176"
+            "$ref": "#/components/schemas/input_schema195"
           },
           "enhancedEvidence": {
             "type": "boolean"
@@ -28758,7 +29179,7 @@
             "maxLength": 200
           },
           "allowedHosts": {
-            "$ref": "#/components/schemas/input_schema176"
+            "$ref": "#/components/schemas/input_schema195"
           }
         },
         "required": [
@@ -28779,7 +29200,7 @@
             "format": "uri"
           },
           "allowedHosts": {
-            "$ref": "#/components/schemas/input_schema176"
+            "$ref": "#/components/schemas/input_schema195"
           }
         },
         "required": [
@@ -29653,13 +30074,13 @@
             "type": "object",
             "properties": {
               "meals": {
-                "$ref": "#/components/schemas/output_schema71"
+                "$ref": "#/components/schemas/output_schema79"
               },
               "tasks": {
-                "$ref": "#/components/schemas/output_schema71"
+                "$ref": "#/components/schemas/output_schema79"
               },
               "all": {
-                "$ref": "#/components/schemas/output_schema71"
+                "$ref": "#/components/schemas/output_schema79"
               }
             },
             "required": []
@@ -32745,6 +33166,11 @@
             "minimum": -9007199254740991,
             "maximum": 9007199254740991
           },
+          "imageSighting": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
           "usdaFoods": {
             "type": "integer",
             "minimum": -9007199254740991,
@@ -32771,6 +33197,7 @@
           "planting",
           "gardenEntry",
           "importRun",
+          "imageSighting",
           "usdaFoods"
         ]
       },
@@ -33275,7 +33702,7 @@
             "$ref": "#/components/schemas/DisplayImagesField"
           },
           "attachments": {
-            "$ref": "#/components/schemas/output_schema450"
+            "$ref": "#/components/schemas/output_schema476"
           }
         },
         "required": [
@@ -34162,10 +34589,10 @@
             "description": "Ingredient name"
           },
           "aliases": {
-            "$ref": "#/components/schemas/input_schema60"
+            "$ref": "#/components/schemas/input_schema79"
           },
           "naKinds": {
-            "$ref": "#/components/schemas/output_schema157"
+            "$ref": "#/components/schemas/output_schema183"
           },
           "usuallyOnHand": {
             "type": "boolean"
@@ -34383,7 +34810,8 @@
           "vendorAccount",
           "productCategory",
           "importRun",
-          "device"
+          "device",
+          "imageSighting"
         ]
       },
       "EntityAttachmentRead": {
@@ -34455,7 +34883,8 @@
             "enum": [
               "own",
               "catalog",
-              "unknown"
+              "unknown",
+              "screenshot"
             ]
           },
           "sourcePageUrl": {
@@ -34488,6 +34917,52 @@
             ],
             "format": "date-time",
             "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "capturedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "capturedAtOffsetMinutes": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "captureLocation": {
+            "$ref": "#/components/schemas/ImageCaptureLocation"
+          },
+          "capturePlaceName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "captureDeviceLabel": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "capturedByPartyId": {
+            "$ref": "#/components/schemas/LedgerPartyShortcode"
+          },
+          "capturedByName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "captureAttribution": {
+            "$ref": "#/components/schemas/ImageCaptureAttribution"
+          },
+          "provenanceEvidence": {
+            "$ref": "#/components/schemas/ImageProvenanceEvidence"
           },
           "createdAt": {
             "type": "string",
@@ -34526,6 +35001,12 @@
           "sourceName",
           "useOriginal",
           "verifiedAt",
+          "capturedAt",
+          "capturedAtOffsetMinutes",
+          "capturePlaceName",
+          "captureDeviceLabel",
+          "capturedByName",
+          "captureAttribution",
           "createdAt",
           "updatedAt",
           "role",
@@ -34572,7 +35053,8 @@
               "vendorAccount",
               "productCategory",
               "importRun",
-              "device"
+              "device",
+              "imageSighting"
             ]
           },
           "deletedReferences": {
@@ -34605,7 +35087,8 @@
                     "vendorAccount",
                     "productCategory",
                     "importRun",
-                    "device"
+                    "device",
+                    "imageSighting"
                   ]
                 },
                 "id": {
@@ -35165,7 +35648,7 @@
           },
           "entityId": {
             "type": "string",
-            "pattern": "^(?:PRD-|RCP-|ING-|CKB-|LOC-|INV-|MEL-|LPY-|LTR-|PRJ-|TSK-|VEN-|PUR-|FAC-|FTX-|WSH-|EXP-|IMG-|PLT-|GDE-|VACCT-|CAT-|RUN-|DEV-)[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$"
+            "pattern": "^(?:PRD-|RCP-|ING-|CKB-|LOC-|INV-|MEL-|LPY-|LTR-|PRJ-|TSK-|VEN-|PUR-|FAC-|FTX-|WSH-|EXP-|IMG-|PLT-|GDE-|VACCT-|CAT-|RUN-|DEV-|IMS-)[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$"
           }
         },
         "required": [
@@ -35398,10 +35881,10 @@
                 "minLength": 1
               },
               "itemSchema": {
-                "$ref": "#/components/schemas/output_schema109"
+                "$ref": "#/components/schemas/output_schema117"
               },
               "adapter": {
-                "$ref": "#/components/schemas/output_schema109"
+                "$ref": "#/components/schemas/output_schema117"
               },
               "audiences": {
                 "minItems": 1,
@@ -36066,10 +36549,10 @@
             "type": "object",
             "properties": {
               "scope": {
-                "$ref": "#/components/schemas/output_schema351"
+                "$ref": "#/components/schemas/output_schema377"
               },
               "grid": {
-                "$ref": "#/components/schemas/output_schema351"
+                "$ref": "#/components/schemas/output_schema377"
               }
             },
             "required": [
@@ -36081,19 +36564,19 @@
             "type": "object",
             "properties": {
               "tail": {
-                "$ref": "#/components/schemas/output_schema351"
+                "$ref": "#/components/schemas/output_schema377"
               },
               "causes": {
                 "type": "object",
                 "properties": {
                   "adjustments": {
-                    "$ref": "#/components/schemas/output_schema351"
+                    "$ref": "#/components/schemas/output_schema377"
                   },
                   "unattributedProject": {
-                    "$ref": "#/components/schemas/output_schema351"
+                    "$ref": "#/components/schemas/output_schema377"
                   },
                   "unattributedVendor": {
-                    "$ref": "#/components/schemas/output_schema351"
+                    "$ref": "#/components/schemas/output_schema377"
                   }
                 },
                 "required": [
@@ -36404,10 +36887,10 @@
             "$ref": "#/components/schemas/PlainDate"
           },
           "lineKind": {
-            "$ref": "#/components/schemas/output_schema355"
+            "$ref": "#/components/schemas/output_schema381"
           },
           "lineBasis": {
-            "$ref": "#/components/schemas/output_schema356"
+            "$ref": "#/components/schemas/output_schema382"
           },
           "costType": {
             "$ref": "#/components/schemas/CostType"
@@ -36515,7 +36998,7 @@
             "$ref": "#/components/schemas/DisplayImagesField"
           },
           "attachments": {
-            "$ref": "#/components/schemas/output_schema450"
+            "$ref": "#/components/schemas/output_schema476"
           }
         },
         "required": [
@@ -36797,12 +37280,12 @@
           "projectId": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/input_schema140"
+                "$ref": "#/components/schemas/input_schema159"
               },
               {
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/input_schema140"
+                  "$ref": "#/components/schemas/input_schema159"
                 }
               }
             ]
@@ -36833,12 +37316,12 @@
           "vendorId": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/input_schema143"
+                "$ref": "#/components/schemas/input_schema162"
               },
               {
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/input_schema143"
+                  "$ref": "#/components/schemas/input_schema162"
                 }
               }
             ]
@@ -36897,12 +37380,12 @@
           "purchaseId": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/input_schema147"
+                "$ref": "#/components/schemas/input_schema166"
               },
               {
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/input_schema147"
+                  "$ref": "#/components/schemas/input_schema166"
                 }
               }
             ]
@@ -36977,10 +37460,10 @@
             "$ref": "#/components/schemas/PlainDate"
           },
           "lineKind": {
-            "$ref": "#/components/schemas/output_schema355"
+            "$ref": "#/components/schemas/output_schema381"
           },
           "lineBasis": {
-            "$ref": "#/components/schemas/output_schema356"
+            "$ref": "#/components/schemas/output_schema382"
           },
           "costType": {
             "$ref": "#/components/schemas/CostType"
@@ -37194,10 +37677,10 @@
             "$ref": "#/components/schemas/PlainDate"
           },
           "lineKind": {
-            "$ref": "#/components/schemas/output_schema355"
+            "$ref": "#/components/schemas/output_schema381"
           },
           "lineBasis": {
-            "$ref": "#/components/schemas/output_schema356"
+            "$ref": "#/components/schemas/output_schema382"
           },
           "costType": {
             "$ref": "#/components/schemas/CostType"
@@ -38306,7 +38789,7 @@
             "$ref": "#/components/schemas/DisplayImagesField"
           },
           "attachments": {
-            "$ref": "#/components/schemas/output_schema450"
+            "$ref": "#/components/schemas/output_schema476"
           }
         },
         "required": [
@@ -39257,7 +39740,7 @@
             "$ref": "#/components/schemas/DisplayImagesField"
           },
           "attachments": {
-            "$ref": "#/components/schemas/output_schema450"
+            "$ref": "#/components/schemas/output_schema476"
           }
         },
         "required": [
@@ -39876,7 +40359,7 @@
             "$ref": "#/components/schemas/LocationShortcode"
           },
           "plantingIds": {
-            "$ref": "#/components/schemas/output_schema144"
+            "$ref": "#/components/schemas/output_schema152"
           },
           "kind": {
             "$ref": "#/components/schemas/GardenEntryKind"
@@ -39899,7 +40382,7 @@
             "minLength": 1
           },
           "images": {
-            "$ref": "#/components/schemas/output_schema146"
+            "$ref": "#/components/schemas/output_schema154"
           },
           "displayName": {
             "type": "string"
@@ -39908,7 +40391,7 @@
             "type": "string"
           },
           "plantings": {
-            "$ref": "#/components/schemas/output_schema149"
+            "$ref": "#/components/schemas/output_schema157"
           },
           "createdAt": {
             "type": "string",
@@ -39927,7 +40410,7 @@
             "$ref": "#/components/schemas/DisplayImagesField"
           },
           "attachments": {
-            "$ref": "#/components/schemas/output_schema450"
+            "$ref": "#/components/schemas/output_schema476"
           }
         },
         "required": [
@@ -39966,7 +40449,7 @@
             "$ref": "#/components/schemas/LocationShortcode"
           },
           "plantingIds": {
-            "$ref": "#/components/schemas/output_schema144"
+            "$ref": "#/components/schemas/output_schema152"
           },
           "kind": {
             "$ref": "#/components/schemas/GardenEntryKind"
@@ -39989,7 +40472,7 @@
             "minLength": 1
           },
           "images": {
-            "$ref": "#/components/schemas/output_schema146"
+            "$ref": "#/components/schemas/output_schema154"
           },
           "displayName": {
             "type": "string"
@@ -39998,7 +40481,7 @@
             "type": "string"
           },
           "plantings": {
-            "$ref": "#/components/schemas/output_schema149"
+            "$ref": "#/components/schemas/output_schema157"
           },
           "createdAt": {
             "type": "string",
@@ -40063,7 +40546,7 @@
             "$ref": "#/components/schemas/LocationShortcode"
           },
           "plantingIds": {
-            "$ref": "#/components/schemas/output_schema144"
+            "$ref": "#/components/schemas/output_schema152"
           },
           "kind": {
             "$ref": "#/components/schemas/GardenEntryKind"
@@ -40086,7 +40569,7 @@
             "minLength": 1
           },
           "images": {
-            "$ref": "#/components/schemas/output_schema146"
+            "$ref": "#/components/schemas/output_schema154"
           },
           "displayName": {
             "type": "string"
@@ -40095,7 +40578,7 @@
             "type": "string"
           },
           "plantings": {
-            "$ref": "#/components/schemas/output_schema149"
+            "$ref": "#/components/schemas/output_schema157"
           },
           "createdAt": {
             "type": "string",
@@ -40369,6 +40852,31 @@
           },
           "item": {
             "$ref": "#/components/schemas/GardenEntryOut"
+          },
+          "sideEffects": {
+            "$ref": "#/components/schemas/MutationSideEffects"
+          }
+        },
+        "required": [
+          "action",
+          "entity",
+          "item",
+          "sideEffects"
+        ]
+      },
+      "GeneratedEntityMutationCreateResultImageSighting": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string",
+            "const": "create"
+          },
+          "entity": {
+            "type": "string",
+            "const": "imageSighting"
+          },
+          "item": {
+            "$ref": "#/components/schemas/ImageSightingOut"
           },
           "sideEffects": {
             "$ref": "#/components/schemas/MutationSideEffects"
@@ -40931,6 +41439,31 @@
           "sideEffects"
         ]
       },
+      "GeneratedEntityMutationUpdateResultImageSighting": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string",
+            "const": "update"
+          },
+          "entity": {
+            "type": "string",
+            "const": "imageSighting"
+          },
+          "item": {
+            "$ref": "#/components/schemas/ImageSightingOut"
+          },
+          "sideEffects": {
+            "$ref": "#/components/schemas/MutationSideEffects"
+          }
+        },
+        "required": [
+          "action",
+          "entity",
+          "item",
+          "sideEffects"
+        ]
+      },
       "GeneratedEntityMutationUpdateResultIngredient": {
         "type": "object",
         "properties": {
@@ -41358,10 +41891,10 @@
             "type": "object",
             "properties": {
               "confirmed": {
-                "$ref": "#/components/schemas/output_schema240"
+                "$ref": "#/components/schemas/output_schema266"
               },
               "projected": {
-                "$ref": "#/components/schemas/output_schema240"
+                "$ref": "#/components/schemas/output_schema266"
               }
             },
             "required": [
@@ -41923,14 +42456,14 @@
             },
             "anyOf": [
               {
-                "$ref": "#/components/schemas/input_schema47"
+                "$ref": "#/components/schemas/input_schema49"
               },
               {
                 "minItems": 1,
                 "maxItems": 3,
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/input_schema47"
+                  "$ref": "#/components/schemas/input_schema49"
                 }
               }
             ]
@@ -41940,7 +42473,7 @@
               "pageIndex": 0,
               "pageSize": 10
             },
-            "$ref": "#/components/schemas/input_schema48"
+            "$ref": "#/components/schemas/input_schema50"
           },
           "groupBy": {
             "type": "string",
@@ -41988,6 +42521,36 @@
         "required": [
           "id",
           "data"
+        ]
+      },
+      "ImageCaptureAttribution": {
+        "type": "string",
+        "enum": [
+          "none",
+          "derived",
+          "ambiguous",
+          "confirmed"
+        ]
+      },
+      "ImageCaptureLocation": {
+        "type": "object",
+        "properties": {
+          "lat": {
+            "type": "number"
+          },
+          "lng": {
+            "type": "number"
+          },
+          "altitude": {
+            "type": "number"
+          },
+          "horizontalAccuracy": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "lat",
+          "lng"
         ]
       },
       "ImageCutoutEligibility": {
@@ -42317,6 +42880,50 @@
             "description": "Filter by upload status",
             "$ref": "#/components/schemas/input_schema40"
           },
+          "source": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "own",
+                  "catalog",
+                  "unknown",
+                  "screenshot"
+                ]
+              },
+              {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "own",
+                    "catalog",
+                    "unknown",
+                    "screenshot"
+                  ]
+                }
+              }
+            ]
+          },
+          "captureAttribution": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ImageCaptureAttribution"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/ImageCaptureAttribution"
+                }
+              }
+            ]
+          },
+          "capturedAtFrom": {
+            "$ref": "#/components/schemas/input_schema37"
+          },
+          "capturedAtTo": {
+            "$ref": "#/components/schemas/input_schema37"
+          },
           "processingIssue": {
             "$ref": "#/components/schemas/ImageProcessingIssueFilter"
           },
@@ -42336,11 +42943,11 @@
           },
           "importRunId": {
             "description": "Only images that are a target of one of these import runs. Sets list order to the run's picker position (see importTarget.position) instead of the default sort.",
-            "$ref": "#/components/schemas/input_schema43"
+            "$ref": "#/components/schemas/input_schema45"
           },
           "targetState": {
             "description": "Only images whose import-run target is in one of these states.",
-            "$ref": "#/components/schemas/input_schema46"
+            "$ref": "#/components/schemas/input_schema48"
           }
         }
       },
@@ -42413,7 +43020,8 @@
             "enum": [
               "own",
               "catalog",
-              "unknown"
+              "unknown",
+              "screenshot"
             ]
           },
           "sourcePageUrl": {
@@ -42447,6 +43055,52 @@
             "format": "date-time",
             "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
           },
+          "capturedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "capturedAtOffsetMinutes": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "captureLocation": {
+            "$ref": "#/components/schemas/ImageCaptureLocation"
+          },
+          "capturePlaceName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "captureDeviceLabel": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "capturedByPartyId": {
+            "$ref": "#/components/schemas/LedgerPartyShortcode"
+          },
+          "capturedByName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "captureAttribution": {
+            "$ref": "#/components/schemas/ImageCaptureAttribution"
+          },
+          "provenanceEvidence": {
+            "$ref": "#/components/schemas/ImageProvenanceEvidence"
+          },
           "createdAt": {
             "type": "string",
             "format": "date-time",
@@ -42476,6 +43130,12 @@
           "sourceName",
           "useOriginal",
           "verifiedAt",
+          "capturedAt",
+          "capturedAtOffsetMinutes",
+          "capturePlaceName",
+          "captureDeviceLabel",
+          "capturedByName",
+          "captureAttribution",
           "createdAt",
           "updatedAt"
         ]
@@ -42954,7 +43614,7 @@
       },
       "ImageProcessingIssueFilter": {
         "description": "Filter to images whose current processing failed or needs eligibility review.",
-        "$ref": "#/components/schemas/input_schema41"
+        "$ref": "#/components/schemas/input_schema43"
       },
       "ImageProcessingJobKind": {
         "type": "string",
@@ -43327,6 +43987,31 @@
           "analyses"
         ]
       },
+      "ImageProvenanceEvidence": {
+        "type": "object",
+        "properties": {
+          "basis": {
+            "type": "string",
+            "enum": [
+              "manual",
+              "sighting",
+              "import-url",
+              "exif",
+              "analysis",
+              "filename"
+            ]
+          },
+          "ruleId": {
+            "type": "string"
+          },
+          "detail": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "basis"
+        ]
+      },
       "ImageRecordAnalysisInput": {
         "type": "object",
         "properties": {
@@ -43533,6 +44218,839 @@
         "pattern": "^IMG-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
         "description": "image shortcode, e.g. IMG-4K7M"
       },
+      "ImageSightingCamera": {
+        "type": "object",
+        "properties": {
+          "make": {
+            "type": "string"
+          },
+          "model": {
+            "type": "string"
+          },
+          "lens": {
+            "type": "string"
+          },
+          "software": {
+            "type": "string"
+          }
+        }
+      },
+      "ImageSightingCameraInput": {
+        "type": "object",
+        "properties": {
+          "make": {
+            "type": "string"
+          },
+          "model": {
+            "type": "string"
+          },
+          "lens": {
+            "type": "string"
+          },
+          "software": {
+            "type": "string"
+          }
+        }
+      },
+      "ImageSightingCreateInput": {
+        "type": "object",
+        "properties": {
+          "imageId": {
+            "$ref": "#/components/schemas/ImageShortcode"
+          },
+          "ledgerPartyId": {
+            "$ref": "#/components/schemas/LedgerPartyShortcode"
+          },
+          "deviceId": {
+            "$ref": "#/components/schemas/DeviceShortcode"
+          },
+          "assetKey": {
+            "type": "string",
+            "minLength": 1
+          },
+          "cloudIdentifier": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "minLength": 1
+          },
+          "localIdentifier": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "minLength": 1
+          },
+          "sourceType": {
+            "$ref": "#/components/schemas/ImageSightingSourceType"
+          },
+          "mediaSubtypes": {
+            "$ref": "#/components/schemas/input_schema62"
+          },
+          "originalFilename": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "minLength": 1
+          },
+          "pixelWidth": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
+          "pixelHeight": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
+          "hasAdjustments": {
+            "default": false,
+            "type": "boolean"
+          },
+          "capturedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "capturedAtOffsetMinutes": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "addedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "location": {
+            "$ref": "#/components/schemas/ImageSightingLocationInput"
+          },
+          "placeName": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "minLength": 1
+          },
+          "camera": {
+            "$ref": "#/components/schemas/ImageSightingCameraInput"
+          },
+          "matchKind": {
+            "$ref": "#/components/schemas/ImageSightingMatchKind"
+          },
+          "hashDistance": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "aspectGate": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "observedAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          }
+        },
+        "required": [
+          "imageId",
+          "deviceId",
+          "assetKey",
+          "sourceType",
+          "matchKind",
+          "observedAt"
+        ]
+      },
+      "ImageSightingDetail": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/ImageSightingShortcode"
+          },
+          "imageId": {
+            "$ref": "#/components/schemas/ImageShortcode"
+          },
+          "ledgerPartyId": {
+            "$ref": "#/components/schemas/LedgerPartyShortcode"
+          },
+          "deviceId": {
+            "$ref": "#/components/schemas/DeviceShortcode"
+          },
+          "assetKey": {
+            "type": "string"
+          },
+          "sourceType": {
+            "$ref": "#/components/schemas/ImageSightingSourceType"
+          },
+          "mediaSubtypes": {
+            "$ref": "#/components/schemas/input_schema79"
+          },
+          "originalFilename": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "pixelWidth": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
+          "pixelHeight": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
+          "hasAdjustments": {
+            "type": "boolean"
+          },
+          "capturedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "capturedAtOffsetMinutes": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "addedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "location": {
+            "$ref": "#/components/schemas/ImageSightingLocation"
+          },
+          "placeName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "camera": {
+            "$ref": "#/components/schemas/ImageSightingCamera"
+          },
+          "matchKind": {
+            "$ref": "#/components/schemas/ImageSightingMatchKind"
+          },
+          "hashDistance": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "aspectGate": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "observedAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "displayImages": {
+            "$ref": "#/components/schemas/DisplayImagesField"
+          },
+          "attachments": {
+            "$ref": "#/components/schemas/output_schema476"
+          }
+        },
+        "required": [
+          "id",
+          "imageId",
+          "ledgerPartyId",
+          "deviceId",
+          "assetKey",
+          "sourceType",
+          "mediaSubtypes",
+          "originalFilename",
+          "pixelWidth",
+          "pixelHeight",
+          "hasAdjustments",
+          "capturedAt",
+          "capturedAtOffsetMinutes",
+          "addedAt",
+          "placeName",
+          "matchKind",
+          "hashDistance",
+          "aspectGate",
+          "observedAt",
+          "displayName",
+          "createdAt",
+          "updatedAt",
+          "displayImages",
+          "attachments"
+        ]
+      },
+      "ImageSightingListItem": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/ImageSightingShortcode"
+          },
+          "imageId": {
+            "$ref": "#/components/schemas/ImageShortcode"
+          },
+          "ledgerPartyId": {
+            "$ref": "#/components/schemas/LedgerPartyShortcode"
+          },
+          "deviceId": {
+            "$ref": "#/components/schemas/DeviceShortcode"
+          },
+          "assetKey": {
+            "type": "string"
+          },
+          "sourceType": {
+            "$ref": "#/components/schemas/ImageSightingSourceType"
+          },
+          "mediaSubtypes": {
+            "$ref": "#/components/schemas/input_schema79"
+          },
+          "originalFilename": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "pixelWidth": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
+          "pixelHeight": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
+          "hasAdjustments": {
+            "type": "boolean"
+          },
+          "capturedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "capturedAtOffsetMinutes": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "addedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "location": {
+            "$ref": "#/components/schemas/ImageSightingLocation"
+          },
+          "placeName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "camera": {
+            "$ref": "#/components/schemas/ImageSightingCamera"
+          },
+          "matchKind": {
+            "$ref": "#/components/schemas/ImageSightingMatchKind"
+          },
+          "hashDistance": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "aspectGate": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "observedAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "displayImages": {
+            "$ref": "#/components/schemas/DisplayImagesField"
+          }
+        },
+        "required": [
+          "id",
+          "imageId",
+          "ledgerPartyId",
+          "deviceId",
+          "assetKey",
+          "sourceType",
+          "mediaSubtypes",
+          "originalFilename",
+          "pixelWidth",
+          "pixelHeight",
+          "hasAdjustments",
+          "capturedAt",
+          "capturedAtOffsetMinutes",
+          "addedAt",
+          "placeName",
+          "matchKind",
+          "hashDistance",
+          "aspectGate",
+          "observedAt",
+          "displayName",
+          "createdAt",
+          "updatedAt",
+          "displayImages"
+        ]
+      },
+      "ImageSightingListPage": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ImageSightingListItem"
+            }
+          },
+          "meta": {
+            "$ref": "#/components/schemas/ListPageMeta"
+          }
+        },
+        "required": [
+          "items",
+          "meta"
+        ]
+      },
+      "ImageSightingLocation": {
+        "type": "object",
+        "properties": {
+          "lat": {
+            "type": "number"
+          },
+          "lng": {
+            "type": "number"
+          },
+          "altitude": {
+            "type": "number"
+          },
+          "horizontalAccuracy": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "lat",
+          "lng"
+        ]
+      },
+      "ImageSightingLocationInput": {
+        "type": "object",
+        "properties": {
+          "lat": {
+            "type": "number"
+          },
+          "lng": {
+            "type": "number"
+          },
+          "altitude": {
+            "type": "number"
+          },
+          "horizontalAccuracy": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "lat",
+          "lng"
+        ]
+      },
+      "ImageSightingMatchKind": {
+        "type": "string",
+        "enum": [
+          "import",
+          "libraryMatch"
+        ]
+      },
+      "ImageSightingOut": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/ImageSightingShortcode"
+          },
+          "imageId": {
+            "$ref": "#/components/schemas/ImageShortcode"
+          },
+          "ledgerPartyId": {
+            "$ref": "#/components/schemas/LedgerPartyShortcode"
+          },
+          "deviceId": {
+            "$ref": "#/components/schemas/DeviceShortcode"
+          },
+          "assetKey": {
+            "type": "string"
+          },
+          "sourceType": {
+            "$ref": "#/components/schemas/ImageSightingSourceType"
+          },
+          "mediaSubtypes": {
+            "$ref": "#/components/schemas/input_schema79"
+          },
+          "originalFilename": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "pixelWidth": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
+          "pixelHeight": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
+          "hasAdjustments": {
+            "type": "boolean"
+          },
+          "capturedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "capturedAtOffsetMinutes": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "addedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "location": {
+            "$ref": "#/components/schemas/ImageSightingLocation"
+          },
+          "placeName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "camera": {
+            "$ref": "#/components/schemas/ImageSightingCamera"
+          },
+          "matchKind": {
+            "$ref": "#/components/schemas/ImageSightingMatchKind"
+          },
+          "hashDistance": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "aspectGate": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "observedAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          }
+        },
+        "required": [
+          "id",
+          "imageId",
+          "ledgerPartyId",
+          "deviceId",
+          "assetKey",
+          "sourceType",
+          "mediaSubtypes",
+          "originalFilename",
+          "pixelWidth",
+          "pixelHeight",
+          "hasAdjustments",
+          "capturedAt",
+          "capturedAtOffsetMinutes",
+          "addedAt",
+          "placeName",
+          "matchKind",
+          "hashDistance",
+          "aspectGate",
+          "observedAt",
+          "displayName",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "ImageSightingReportFields": {
+        "type": "object",
+        "properties": {
+          "assetKey": {
+            "type": "string",
+            "minLength": 1
+          },
+          "cloudIdentifier": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "minLength": 1
+          },
+          "localIdentifier": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "minLength": 1
+          },
+          "sourceType": {
+            "$ref": "#/components/schemas/ImageSightingSourceType"
+          },
+          "mediaSubtypes": {
+            "$ref": "#/components/schemas/input_schema62"
+          },
+          "originalFilename": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "minLength": 1
+          },
+          "pixelWidth": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
+          "pixelHeight": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
+          "hasAdjustments": {
+            "default": false,
+            "type": "boolean"
+          },
+          "capturedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "capturedAtOffsetMinutes": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "addedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "location": {
+            "$ref": "#/components/schemas/ImageSightingLocationInput"
+          },
+          "placeName": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "minLength": 1
+          },
+          "camera": {
+            "$ref": "#/components/schemas/ImageSightingCameraInput"
+          },
+          "hashDistance": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "aspectGate": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "observedAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          }
+        },
+        "required": [
+          "assetKey",
+          "sourceType",
+          "observedAt"
+        ]
+      },
+      "ImageSightingShortcode": {
+        "type": "string",
+        "pattern": "^IMS-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
+        "description": "imageSighting shortcode, e.g. IMS-4K7M"
+      },
+      "ImageSightingSourceType": {
+        "type": "string",
+        "enum": [
+          "userLibrary",
+          "cloudShared",
+          "iTunesSynced"
+        ]
+      },
+      "ImageSightingUpdateData": {
+        "type": "object",
+        "properties": {
+          "placeName": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "minLength": 1
+          },
+          "capturedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          }
+        }
+      },
       "ImageSourceFingerprint": {
         "type": "object",
         "properties": {
@@ -43595,7 +45113,8 @@
             "enum": [
               "own",
               "catalog",
-              "unknown"
+              "unknown",
+              "screenshot"
             ]
           },
           "sourcePageUrl": {
@@ -43622,6 +45141,17 @@
           },
           "useOriginal": {
             "type": "boolean"
+          },
+          "capturedByPartyId": {
+            "$ref": "#/components/schemas/LedgerPartyShortcode"
+          },
+          "capturedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
           }
         },
         "required": [
@@ -43709,7 +45239,8 @@
             "enum": [
               "own",
               "catalog",
-              "unknown"
+              "unknown",
+              "screenshot"
             ]
           },
           "sourcePageUrl": {
@@ -43745,6 +45276,52 @@
             ],
             "format": "date-time",
             "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "capturedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "capturedAtOffsetMinutes": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "captureLocation": {
+            "$ref": "#/components/schemas/ImageCaptureLocation"
+          },
+          "capturePlaceName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "captureDeviceLabel": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "capturedByPartyId": {
+            "$ref": "#/components/schemas/LedgerPartyShortcode"
+          },
+          "capturedByName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "captureAttribution": {
+            "$ref": "#/components/schemas/ImageCaptureAttribution"
+          },
+          "provenanceEvidence": {
+            "$ref": "#/components/schemas/ImageProvenanceEvidence"
           },
           "createdAt": {
             "type": "string",
@@ -43802,6 +45379,12 @@
           "sourceName",
           "useOriginal",
           "verifiedAt",
+          "capturedAt",
+          "capturedAtOffsetMinutes",
+          "capturePlaceName",
+          "captureDeviceLabel",
+          "capturedByName",
+          "captureAttribution",
           "createdAt",
           "updatedAt",
           "entityName",
@@ -44243,10 +45826,10 @@
             "description": "name of location"
           },
           "aliases": {
-            "$ref": "#/components/schemas/input_schema60"
+            "$ref": "#/components/schemas/input_schema79"
           },
           "tags": {
-            "$ref": "#/components/schemas/output_schema190"
+            "$ref": "#/components/schemas/output_schema216"
           },
           "type": {
             "$ref": "#/components/schemas/LocationType"
@@ -44275,7 +45858,7 @@
             ]
           },
           "images": {
-            "$ref": "#/components/schemas/output_schema146"
+            "$ref": "#/components/schemas/output_schema154"
           },
           "valuation": {
             "$ref": "#/components/schemas/LocationValuation"
@@ -44294,10 +45877,10 @@
             "$ref": "#/components/schemas/DataQuality"
           },
           "children": {
-            "$ref": "#/components/schemas/output_schema215"
+            "$ref": "#/components/schemas/output_schema241"
           },
           "parent": {
-            "$ref": "#/components/schemas/output_schema216"
+            "$ref": "#/components/schemas/output_schema242"
           },
           "childCount": {
             "type": "integer",
@@ -44315,7 +45898,7 @@
             "maximum": 9007199254740991
           },
           "inventoryItems": {
-            "$ref": "#/components/schemas/output_schema220"
+            "$ref": "#/components/schemas/output_schema246"
           }
         },
         "required": [
@@ -44578,10 +46161,10 @@
             "description": "Ingredient name"
           },
           "aliases": {
-            "$ref": "#/components/schemas/input_schema60"
+            "$ref": "#/components/schemas/input_schema79"
           },
           "naKinds": {
-            "$ref": "#/components/schemas/output_schema157"
+            "$ref": "#/components/schemas/output_schema183"
           },
           "usuallyOnHand": {
             "type": "boolean"
@@ -44661,19 +46244,19 @@
             "$ref": "#/components/schemas/RecipeTopLevel"
           },
           "recipeUsages": {
-            "$ref": "#/components/schemas/output_schema176"
+            "$ref": "#/components/schemas/output_schema202"
           },
           "appearsInRecipes": {
-            "$ref": "#/components/schemas/output_schema177"
+            "$ref": "#/components/schemas/output_schema203"
           },
           "product": {
-            "$ref": "#/components/schemas/output_schema178"
+            "$ref": "#/components/schemas/output_schema204"
           },
           "displayImages": {
             "$ref": "#/components/schemas/DisplayImagesField"
           },
           "attachments": {
-            "$ref": "#/components/schemas/output_schema450"
+            "$ref": "#/components/schemas/output_schema476"
           }
         },
         "required": [
@@ -44714,10 +46297,10 @@
             "description": "Ingredient name"
           },
           "aliases": {
-            "$ref": "#/components/schemas/input_schema60"
+            "$ref": "#/components/schemas/input_schema79"
           },
           "naKinds": {
-            "$ref": "#/components/schemas/output_schema157"
+            "$ref": "#/components/schemas/output_schema183"
           },
           "usuallyOnHand": {
             "type": "boolean"
@@ -44986,10 +46569,10 @@
             "description": "Ingredient name"
           },
           "aliases": {
-            "$ref": "#/components/schemas/input_schema60"
+            "$ref": "#/components/schemas/input_schema79"
           },
           "naKinds": {
-            "$ref": "#/components/schemas/output_schema157"
+            "$ref": "#/components/schemas/output_schema183"
           },
           "usuallyOnHand": {
             "type": "boolean"
@@ -45211,7 +46794,7 @@
           },
           "aliases": {
             "description": "New aliases (replaces existing list)",
-            "$ref": "#/components/schemas/input_schema60"
+            "$ref": "#/components/schemas/input_schema79"
           }
         }
       },
@@ -45266,10 +46849,10 @@
             "description": "Ingredient name"
           },
           "aliases": {
-            "$ref": "#/components/schemas/input_schema60"
+            "$ref": "#/components/schemas/input_schema79"
           },
           "naKinds": {
-            "$ref": "#/components/schemas/output_schema157"
+            "$ref": "#/components/schemas/output_schema183"
           },
           "usuallyOnHand": {
             "type": "boolean"
@@ -45377,10 +46960,10 @@
             "description": "Ingredient name"
           },
           "aliases": {
-            "$ref": "#/components/schemas/input_schema60"
+            "$ref": "#/components/schemas/input_schema79"
           },
           "naKinds": {
-            "$ref": "#/components/schemas/output_schema157"
+            "$ref": "#/components/schemas/output_schema183"
           },
           "usuallyOnHand": {
             "type": "boolean"
@@ -45460,13 +47043,13 @@
             "$ref": "#/components/schemas/RecipeTopLevel"
           },
           "recipeUsages": {
-            "$ref": "#/components/schemas/output_schema176"
+            "$ref": "#/components/schemas/output_schema202"
           },
           "appearsInRecipes": {
-            "$ref": "#/components/schemas/output_schema177"
+            "$ref": "#/components/schemas/output_schema203"
           },
           "product": {
-            "$ref": "#/components/schemas/output_schema178"
+            "$ref": "#/components/schemas/output_schema204"
           }
         },
         "required": [
@@ -45520,10 +47103,10 @@
             "type": "object",
             "properties": {
               "covered": {
-                "$ref": "#/components/schemas/output_schema157"
+                "$ref": "#/components/schemas/output_schema183"
               },
               "applicable": {
-                "$ref": "#/components/schemas/output_schema157"
+                "$ref": "#/components/schemas/output_schema183"
               }
             },
             "required": [
@@ -45567,14 +47150,15 @@
             "maximum": 52428800
           },
           "entityType": {
-            "$ref": "#/components/schemas/input_schema55"
+            "$ref": "#/components/schemas/input_schema57"
           },
           "source": {
             "type": "string",
             "enum": [
               "own",
               "catalog",
-              "unknown"
+              "unknown",
+              "screenshot"
             ]
           },
           "sourcePageUrl": {
@@ -45717,14 +47301,15 @@
             "maximum": 52428800
           },
           "entityType": {
-            "$ref": "#/components/schemas/input_schema55"
+            "$ref": "#/components/schemas/input_schema57"
           },
           "source": {
             "type": "string",
             "enum": [
               "own",
               "catalog",
-              "unknown"
+              "unknown",
+              "screenshot"
             ]
           },
           "sourcePageUrl": {
@@ -45813,6 +47398,9 @@
         ]
       },
       "input_schema108": {
+        "$ref": "#/components/schemas/MealFoodEntryId"
+      },
+      "input_schema127": {
         "anyOf": [
           {
             "type": "string"
@@ -45825,7 +47413,7 @@
           }
         ]
       },
-      "input_schema119": {
+      "input_schema138": {
         "anyOf": [
           {
             "$ref": "#/components/schemas/IngredientShortcode"
@@ -45839,7 +47427,7 @@
         "pattern": "^ING-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
         "description": "ingredient shortcode, e.g. ING-4K7M"
       },
-      "input_schema128": {
+      "input_schema147": {
         "type": "object",
         "properties": {
           "orderBy": {
@@ -45879,7 +47467,7 @@
           }
         }
       },
-      "input_schema140": {
+      "input_schema159": {
         "anyOf": [
           {
             "$ref": "#/components/schemas/ProjectShortcode"
@@ -45893,7 +47481,7 @@
         "pattern": "^PRJ-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
         "description": "project shortcode, e.g. PRJ-4K7M"
       },
-      "input_schema143": {
+      "input_schema162": {
         "anyOf": [
           {
             "$ref": "#/components/schemas/VendorShortcode"
@@ -45907,7 +47495,7 @@
         "pattern": "^VEN-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
         "description": "vendor shortcode, e.g. VEN-4K7M"
       },
-      "input_schema147": {
+      "input_schema166": {
         "anyOf": [
           {
             "$ref": "#/components/schemas/PurchaseShortcode"
@@ -45921,7 +47509,7 @@
         "pattern": "^PUR-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
         "description": "purchase shortcode, e.g. PUR-4K7M"
       },
-      "input_schema162": {
+      "input_schema181": {
         "type": "object",
         "properties": {
           "orderBy": {
@@ -45938,7 +47526,7 @@
           }
         }
       },
-      "input_schema164": {
+      "input_schema183": {
         "anyOf": [
           {
             "$ref": "#/components/schemas/TaskShortcode"
@@ -45952,7 +47540,7 @@
         "pattern": "^TSK-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
         "description": "task shortcode, e.g. TSK-4K7M"
       },
-      "input_schema176": {
+      "input_schema195": {
         "minItems": 1,
         "maxItems": 20,
         "type": "array",
@@ -45962,7 +47550,7 @@
           "maxLength": 253
         }
       },
-      "input_schema187": {
+      "input_schema206": {
         "type": "object",
         "properties": {
           "kind": {
@@ -45978,7 +47566,7 @@
           "value"
         ]
       },
-      "input_schema191": {
+      "input_schema210": {
         "type": "object",
         "properties": {
           "orderBy": {
@@ -46002,7 +47590,7 @@
           }
         }
       },
-      "input_schema192": {
+      "input_schema211": {
         "type": "object",
         "properties": {
           "orderBy": {
@@ -46051,7 +47639,7 @@
           }
         ]
       },
-      "input_schema41": {
+      "input_schema43": {
         "anyOf": [
           {
             "$ref": "#/components/schemas/ImageProcessingIssue"
@@ -46064,20 +47652,20 @@
           }
         ]
       },
-      "input_schema43": {
+      "input_schema45": {
         "anyOf": [
           {
-            "$ref": "#/components/schemas/input_schema44"
+            "$ref": "#/components/schemas/input_schema46"
           },
           {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/input_schema44"
+              "$ref": "#/components/schemas/input_schema46"
             }
           }
         ]
       },
-      "input_schema44": {
+      "input_schema46": {
         "anyOf": [
           {
             "$ref": "#/components/schemas/ImportRunShortcode"
@@ -46091,7 +47679,7 @@
         "pattern": "^RUN-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
         "description": "importRun shortcode, e.g. RUN-4K7M"
       },
-      "input_schema46": {
+      "input_schema48": {
         "anyOf": [
           {
             "$ref": "#/components/schemas/ImportRunTargetState"
@@ -46104,7 +47692,7 @@
           }
         ]
       },
-      "input_schema47": {
+      "input_schema49": {
         "type": "object",
         "properties": {
           "orderBy": {
@@ -46128,7 +47716,7 @@
           }
         }
       },
-      "input_schema48": {
+      "input_schema50": {
         "type": "object",
         "properties": {
           "pageIndex": {
@@ -46145,22 +47733,29 @@
           }
         }
       },
-      "input_schema55": {
+      "input_schema57": {
         "$ref": "#/components/schemas/EntityImage"
       },
-      "input_schema60": {
+      "input_schema62": {
+        "default": [],
         "type": "array",
         "items": {
           "type": "string"
         }
       },
-      "input_schema70": {
+      "input_schema79": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "input_schema89": {
         "type": "array",
         "items": {
           "$ref": "#/components/schemas/ImageShortcode"
         }
       },
-      "input_schema76": {
+      "input_schema95": {
         "anyOf": [
           {
             "$ref": "#/components/schemas/ProductShortcode"
@@ -46174,7 +47769,7 @@
         "pattern": "^PRD-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
         "description": "product shortcode, e.g. PRD-4K7M"
       },
-      "input_schema78": {
+      "input_schema97": {
         "anyOf": [
           {
             "$ref": "#/components/schemas/LocationShortcode"
@@ -46187,9 +47782,6 @@
         "type": "string",
         "pattern": "^LOC-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
         "description": "location shortcode, e.g. LOC-4K7M"
-      },
-      "input_schema89": {
-        "$ref": "#/components/schemas/MealFoodEntryId"
       },
       "IntegrityCatalog": {
         "type": "object",
@@ -46602,7 +48194,7 @@
             "$ref": "#/components/schemas/InventoryShortcode"
           },
           "amount": {
-            "$ref": "#/components/schemas/output_schema179"
+            "$ref": "#/components/schemas/output_schema205"
           },
           "valuation": {
             "$ref": "#/components/schemas/Money",
@@ -46617,7 +48209,7 @@
             "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
           },
           "placement": {
-            "$ref": "#/components/schemas/output_schema183"
+            "$ref": "#/components/schemas/output_schema209"
           },
           "ownershipMode": {
             "$ref": "#/components/schemas/InventoryOwnershipMode"
@@ -46654,7 +48246,7 @@
             "$ref": "#/components/schemas/DisplayImagesField"
           },
           "attachments": {
-            "$ref": "#/components/schemas/output_schema450"
+            "$ref": "#/components/schemas/output_schema476"
           }
         },
         "required": [
@@ -46781,7 +48373,7 @@
             "$ref": "#/components/schemas/InventoryShortcode"
           },
           "amount": {
-            "$ref": "#/components/schemas/output_schema179"
+            "$ref": "#/components/schemas/output_schema205"
           },
           "valuation": {
             "$ref": "#/components/schemas/Money",
@@ -46796,7 +48388,7 @@
             "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
           },
           "placement": {
-            "$ref": "#/components/schemas/output_schema183"
+            "$ref": "#/components/schemas/output_schema209"
           },
           "ownershipMode": {
             "$ref": "#/components/schemas/InventoryOwnershipMode"
@@ -46840,7 +48432,7 @@
             "$ref": "#/components/schemas/InventoryShortcode"
           },
           "amount": {
-            "$ref": "#/components/schemas/output_schema179"
+            "$ref": "#/components/schemas/output_schema205"
           },
           "valuation": {
             "$ref": "#/components/schemas/Money",
@@ -46855,7 +48447,7 @@
             "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
           },
           "placement": {
-            "$ref": "#/components/schemas/output_schema183"
+            "$ref": "#/components/schemas/output_schema209"
           },
           "ownershipMode": {
             "$ref": "#/components/schemas/InventoryOwnershipMode"
@@ -47345,7 +48937,7 @@
             "$ref": "#/components/schemas/InventoryShortcode"
           },
           "amount": {
-            "$ref": "#/components/schemas/output_schema179"
+            "$ref": "#/components/schemas/output_schema205"
           },
           "valuation": {
             "$ref": "#/components/schemas/Money",
@@ -47360,7 +48952,7 @@
             "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
           },
           "placement": {
-            "$ref": "#/components/schemas/output_schema183"
+            "$ref": "#/components/schemas/output_schema209"
           },
           "ownershipMode": {
             "$ref": "#/components/schemas/InventoryOwnershipMode"
@@ -47751,7 +49343,7 @@
             "$ref": "#/components/schemas/DisplayImagesField"
           },
           "attachments": {
-            "$ref": "#/components/schemas/output_schema450"
+            "$ref": "#/components/schemas/output_schema476"
           }
         },
         "required": [
@@ -48290,7 +49882,7 @@
             "$ref": "#/components/schemas/LedgerSourceClaimsOut"
           },
           "evidenceTransactionIds": {
-            "$ref": "#/components/schemas/output_schema212"
+            "$ref": "#/components/schemas/output_schema238"
           },
           "createdAt": {
             "type": "string",
@@ -48309,7 +49901,7 @@
             "$ref": "#/components/schemas/DisplayImagesField"
           },
           "attachments": {
-            "$ref": "#/components/schemas/output_schema450"
+            "$ref": "#/components/schemas/output_schema476"
           }
         },
         "required": [
@@ -48375,7 +49967,7 @@
             "$ref": "#/components/schemas/LedgerSourceClaimsOut"
           },
           "evidenceTransactionIds": {
-            "$ref": "#/components/schemas/output_schema212"
+            "$ref": "#/components/schemas/output_schema238"
           },
           "createdAt": {
             "type": "string",
@@ -48467,7 +50059,7 @@
             "$ref": "#/components/schemas/LedgerSourceClaimsOut"
           },
           "evidenceTransactionIds": {
-            "$ref": "#/components/schemas/output_schema212"
+            "$ref": "#/components/schemas/output_schema238"
           },
           "createdAt": {
             "type": "string",
@@ -48700,14 +50292,14 @@
             },
             "anyOf": [
               {
-                "$ref": "#/components/schemas/input_schema191"
+                "$ref": "#/components/schemas/input_schema210"
               },
               {
                 "minItems": 1,
                 "maxItems": 3,
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/input_schema191"
+                  "$ref": "#/components/schemas/input_schema210"
                 }
               }
             ]
@@ -48717,7 +50309,7 @@
               "pageIndex": 0,
               "pageSize": 10
             },
-            "$ref": "#/components/schemas/input_schema48"
+            "$ref": "#/components/schemas/input_schema50"
           },
           "groupBy": {
             "type": "string",
@@ -48792,10 +50384,10 @@
           "aliases": {
             "default": [],
             "description": "Alternate names for this location — searched alongside the name. Replaces the existing list when provided.",
-            "$ref": "#/components/schemas/input_schema60"
+            "$ref": "#/components/schemas/input_schema79"
           },
           "tags": {
-            "$ref": "#/components/schemas/input_schema60"
+            "$ref": "#/components/schemas/input_schema79"
           },
           "type": {
             "$ref": "#/components/schemas/LocationType"
@@ -48814,7 +50406,7 @@
             "$ref": "#/components/schemas/LocationShortcode"
           },
           "pendingImageIds": {
-            "$ref": "#/components/schemas/input_schema70"
+            "$ref": "#/components/schemas/input_schema89"
           }
         },
         "required": [
@@ -48832,10 +50424,10 @@
             "description": "name of location"
           },
           "aliases": {
-            "$ref": "#/components/schemas/input_schema60"
+            "$ref": "#/components/schemas/input_schema79"
           },
           "tags": {
-            "$ref": "#/components/schemas/output_schema190"
+            "$ref": "#/components/schemas/output_schema216"
           },
           "type": {
             "$ref": "#/components/schemas/LocationType"
@@ -48864,7 +50456,7 @@
             ]
           },
           "images": {
-            "$ref": "#/components/schemas/output_schema146"
+            "$ref": "#/components/schemas/output_schema154"
           },
           "valuation": {
             "$ref": "#/components/schemas/LocationValuation"
@@ -48883,10 +50475,10 @@
             "$ref": "#/components/schemas/DataQuality"
           },
           "children": {
-            "$ref": "#/components/schemas/output_schema215"
+            "$ref": "#/components/schemas/output_schema241"
           },
           "parent": {
-            "$ref": "#/components/schemas/output_schema216"
+            "$ref": "#/components/schemas/output_schema242"
           },
           "childCount": {
             "type": "integer",
@@ -48904,13 +50496,13 @@
             "maximum": 9007199254740991
           },
           "inventoryItems": {
-            "$ref": "#/components/schemas/output_schema220"
+            "$ref": "#/components/schemas/output_schema246"
           },
           "displayImages": {
             "$ref": "#/components/schemas/DisplayImagesField"
           },
           "attachments": {
-            "$ref": "#/components/schemas/output_schema450"
+            "$ref": "#/components/schemas/output_schema476"
           }
         },
         "required": [
@@ -49043,12 +50635,12 @@
           "productId": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/input_schema76"
+                "$ref": "#/components/schemas/input_schema95"
               },
               {
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/input_schema76"
+                  "$ref": "#/components/schemas/input_schema95"
                 }
               }
             ]
@@ -49064,12 +50656,12 @@
           "parentId": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/input_schema78"
+                "$ref": "#/components/schemas/input_schema97"
               },
               {
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/input_schema78"
+                  "$ref": "#/components/schemas/input_schema97"
                 }
               }
             ]
@@ -49208,10 +50800,10 @@
             "description": "name of location"
           },
           "aliases": {
-            "$ref": "#/components/schemas/input_schema60"
+            "$ref": "#/components/schemas/input_schema79"
           },
           "tags": {
-            "$ref": "#/components/schemas/output_schema190"
+            "$ref": "#/components/schemas/output_schema216"
           },
           "type": {
             "$ref": "#/components/schemas/LocationType"
@@ -49240,7 +50832,7 @@
             ]
           },
           "images": {
-            "$ref": "#/components/schemas/output_schema146"
+            "$ref": "#/components/schemas/output_schema154"
           },
           "valuation": {
             "$ref": "#/components/schemas/LocationValuation"
@@ -49441,10 +51033,10 @@
             "description": "name of location"
           },
           "aliases": {
-            "$ref": "#/components/schemas/input_schema60"
+            "$ref": "#/components/schemas/input_schema79"
           },
           "tags": {
-            "$ref": "#/components/schemas/output_schema190"
+            "$ref": "#/components/schemas/output_schema216"
           },
           "type": {
             "$ref": "#/components/schemas/LocationType"
@@ -49473,7 +51065,7 @@
             ]
           },
           "images": {
-            "$ref": "#/components/schemas/output_schema146"
+            "$ref": "#/components/schemas/output_schema154"
           },
           "valuation": {
             "$ref": "#/components/schemas/LocationValuation"
@@ -49671,10 +51263,10 @@
             "description": "name of location"
           },
           "aliases": {
-            "$ref": "#/components/schemas/input_schema60"
+            "$ref": "#/components/schemas/input_schema79"
           },
           "tags": {
-            "$ref": "#/components/schemas/input_schema60"
+            "$ref": "#/components/schemas/input_schema79"
           },
           "type": {
             "$ref": "#/components/schemas/LocationType"
@@ -49693,15 +51285,15 @@
             "$ref": "#/components/schemas/LocationShortcode"
           },
           "pendingImageIds": {
-            "$ref": "#/components/schemas/input_schema70"
+            "$ref": "#/components/schemas/input_schema89"
           },
           "removeImageIds": {
             "description": "Image ids to detach. Detaching DELETES the stored file when nothing else references it — there is no restore, and the id will not resolve again.",
-            "$ref": "#/components/schemas/input_schema70"
+            "$ref": "#/components/schemas/input_schema89"
           },
           "imageOrder": {
             "description": "existing image ids in display order; first = cover",
-            "$ref": "#/components/schemas/input_schema70"
+            "$ref": "#/components/schemas/input_schema89"
           }
         }
       },
@@ -49725,10 +51317,10 @@
             "maximum": 9007199254740991
           },
           "direct": {
-            "$ref": "#/components/schemas/output_schema199"
+            "$ref": "#/components/schemas/output_schema225"
           },
           "total": {
-            "$ref": "#/components/schemas/output_schema199"
+            "$ref": "#/components/schemas/output_schema225"
           },
           "installed": {
             "type": "object",
@@ -49865,10 +51457,10 @@
             "description": "name of location"
           },
           "aliases": {
-            "$ref": "#/components/schemas/input_schema60"
+            "$ref": "#/components/schemas/input_schema79"
           },
           "tags": {
-            "$ref": "#/components/schemas/output_schema190"
+            "$ref": "#/components/schemas/output_schema216"
           },
           "type": {
             "$ref": "#/components/schemas/LocationType"
@@ -49897,7 +51489,7 @@
             ]
           },
           "images": {
-            "$ref": "#/components/schemas/output_schema146"
+            "$ref": "#/components/schemas/output_schema154"
           },
           "valuation": {
             "$ref": "#/components/schemas/LocationValuation"
@@ -50058,16 +51650,16 @@
                   "type": "string"
                 },
                 "inputSchema": {
-                  "$ref": "#/components/schemas/output_schema415"
+                  "$ref": "#/components/schemas/output_schema441"
                 },
                 "outputSchema": {
-                  "$ref": "#/components/schemas/output_schema415"
+                  "$ref": "#/components/schemas/output_schema441"
                 },
                 "annotations": {
-                  "$ref": "#/components/schemas/output_schema417"
+                  "$ref": "#/components/schemas/output_schema443"
                 },
                 "_meta": {
-                  "$ref": "#/components/schemas/output_schema415"
+                  "$ref": "#/components/schemas/output_schema441"
                 }
               },
               "required": [
@@ -50136,10 +51728,10 @@
                   "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
                 },
                 "user": {
-                  "$ref": "#/components/schemas/output_schema418"
+                  "$ref": "#/components/schemas/output_schema444"
                 },
                 "client": {
-                  "$ref": "#/components/schemas/output_schema419"
+                  "$ref": "#/components/schemas/output_schema445"
                 }
               },
               "required": [
@@ -50237,7 +51829,7 @@
           "daily": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/output_schema420"
+              "$ref": "#/components/schemas/output_schema446"
             }
           },
           "tools": {
@@ -50261,13 +51853,13 @@
                   ]
                 },
                 "inputSchema": {
-                  "$ref": "#/components/schemas/output_schema415"
+                  "$ref": "#/components/schemas/output_schema441"
                 },
                 "outputSchema": {
-                  "$ref": "#/components/schemas/output_schema415"
+                  "$ref": "#/components/schemas/output_schema441"
                 },
                 "annotations": {
-                  "$ref": "#/components/schemas/output_schema417"
+                  "$ref": "#/components/schemas/output_schema443"
                 },
                 "status": {
                   "$ref": "#/components/schemas/McpToolUsageStatus"
@@ -50320,19 +51912,19 @@
                 "daily": {
                   "type": "array",
                   "items": {
-                    "$ref": "#/components/schemas/output_schema420"
+                    "$ref": "#/components/schemas/output_schema446"
                   }
                 },
                 "users": {
                   "type": "array",
                   "items": {
-                    "$ref": "#/components/schemas/output_schema418"
+                    "$ref": "#/components/schemas/output_schema444"
                   }
                 },
                 "clients": {
                   "type": "array",
                   "items": {
-                    "$ref": "#/components/schemas/output_schema419"
+                    "$ref": "#/components/schemas/output_schema445"
                   }
                 }
               },
@@ -50358,25 +51950,25 @@
           "users": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/output_schema421"
+              "$ref": "#/components/schemas/output_schema447"
             }
           },
           "clients": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/output_schema421"
+              "$ref": "#/components/schemas/output_schema447"
             }
           },
           "surfaces": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/output_schema421"
+              "$ref": "#/components/schemas/output_schema447"
             }
           },
           "entities": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/output_schema421"
+              "$ref": "#/components/schemas/output_schema447"
             }
           }
         },
@@ -50522,19 +52114,19 @@
             "$ref": "#/components/schemas/MealKind"
           },
           "recipes": {
-            "$ref": "#/components/schemas/output_schema244"
+            "$ref": "#/components/schemas/output_schema270"
           },
           "totals": {
             "$ref": "#/components/schemas/MealTotals"
           },
           "images": {
-            "$ref": "#/components/schemas/output_schema146"
+            "$ref": "#/components/schemas/output_schema154"
           },
           "displayName": {
             "type": "string"
           },
           "recipeNames": {
-            "$ref": "#/components/schemas/input_schema60"
+            "$ref": "#/components/schemas/input_schema79"
           },
           "createdAt": {
             "type": "string",
@@ -50553,7 +52145,7 @@
             "$ref": "#/components/schemas/DisplayImagesField"
           },
           "attachments": {
-            "$ref": "#/components/schemas/output_schema450"
+            "$ref": "#/components/schemas/output_schema476"
           }
         },
         "required": [
@@ -50689,19 +52281,19 @@
             "$ref": "#/components/schemas/MealKind"
           },
           "recipes": {
-            "$ref": "#/components/schemas/output_schema244"
+            "$ref": "#/components/schemas/output_schema270"
           },
           "totals": {
             "$ref": "#/components/schemas/MealTotals"
           },
           "images": {
-            "$ref": "#/components/schemas/output_schema146"
+            "$ref": "#/components/schemas/output_schema154"
           },
           "displayName": {
             "type": "string"
           },
           "recipeNames": {
-            "$ref": "#/components/schemas/input_schema60"
+            "$ref": "#/components/schemas/input_schema79"
           },
           "createdAt": {
             "type": "string",
@@ -51126,19 +52718,19 @@
             "$ref": "#/components/schemas/MealKind"
           },
           "recipes": {
-            "$ref": "#/components/schemas/output_schema244"
+            "$ref": "#/components/schemas/output_schema270"
           },
           "totals": {
             "$ref": "#/components/schemas/MealTotals"
           },
           "images": {
-            "$ref": "#/components/schemas/output_schema146"
+            "$ref": "#/components/schemas/output_schema154"
           },
           "displayName": {
             "type": "string"
           },
           "recipeNames": {
-            "$ref": "#/components/schemas/input_schema60"
+            "$ref": "#/components/schemas/input_schema79"
           },
           "createdAt": {
             "type": "string",
@@ -51809,7 +53401,7 @@
             "minimum": 0
           },
           "coverage": {
-            "$ref": "#/components/schemas/output_schema68"
+            "$ref": "#/components/schemas/output_schema76"
           }
         },
         "required": [
@@ -51838,7 +53430,7 @@
             "minimum": 0
           },
           "coverage": {
-            "$ref": "#/components/schemas/output_schema68"
+            "$ref": "#/components/schemas/output_schema76"
           }
         },
         "required": [
@@ -51884,7 +53476,7 @@
             ]
           },
           "coverage": {
-            "$ref": "#/components/schemas/output_schema68"
+            "$ref": "#/components/schemas/output_schema76"
           }
         },
         "required": [
@@ -52645,7 +54237,7 @@
           "createdAt"
         ]
       },
-      "output_schema109": {
+      "output_schema117": {
         "type": "object",
         "properties": {
           "module": {
@@ -52662,19 +54254,19 @@
           "export"
         ]
       },
-      "output_schema144": {
+      "output_schema152": {
         "type": "array",
         "items": {
           "$ref": "#/components/schemas/PlantingShortcode"
         }
       },
-      "output_schema146": {
+      "output_schema154": {
         "type": "array",
         "items": {
           "$ref": "#/components/schemas/ImageOut"
         }
       },
-      "output_schema149": {
+      "output_schema157": {
         "type": "array",
         "items": {
           "type": "object",
@@ -52691,51 +54283,6 @@
             "name"
           ]
         }
-      },
-      "output_schema157": {
-        "type": "array",
-        "items": {
-          "$ref": "#/components/schemas/BaseKind"
-        }
-      },
-      "output_schema176": {
-        "type": "array",
-        "items": {
-          "$ref": "#/components/schemas/RecipeUsageOut"
-        }
-      },
-      "output_schema177": {
-        "type": "array",
-        "items": {
-          "$ref": "#/components/schemas/RecipeTopLevel"
-        }
-      },
-      "output_schema178": {
-        "type": "array",
-        "items": {
-          "$ref": "#/components/schemas/ProductWithMappingsAndFoodOut"
-        }
-      },
-      "output_schema179": {
-        "type": "object",
-        "properties": {
-          "value": {
-            "type": "number"
-          },
-          "unit": {
-            "type": "string",
-            "minLength": 1
-          },
-          "upperValue": {
-            "type": "number",
-            "exclusiveMinimum": 0
-          }
-        },
-        "required": [
-          "value",
-          "unit"
-        ],
-        "description": "Quantity on hand"
       },
       "output_schema18": {
         "oneOf": [
@@ -52759,14 +54306,59 @@
         }
       },
       "output_schema183": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/BaseKind"
+        }
+      },
+      "output_schema202": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/RecipeUsageOut"
+        }
+      },
+      "output_schema203": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/RecipeTopLevel"
+        }
+      },
+      "output_schema204": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/ProductWithMappingsAndFoodOut"
+        }
+      },
+      "output_schema205": {
+        "type": "object",
+        "properties": {
+          "value": {
+            "type": "number"
+          },
+          "unit": {
+            "type": "string",
+            "minLength": 1
+          },
+          "upperValue": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          }
+        },
+        "required": [
+          "value",
+          "unit"
+        ],
+        "description": "Quantity on hand"
+      },
+      "output_schema209": {
         "description": "'stock' = movable stock; 'installed' = a fixed installation, kept as a record but excluded from browsing, counting and audits",
         "$ref": "#/components/schemas/InventoryPlacement"
       },
-      "output_schema190": {
+      "output_schema216": {
         "description": "Namespaced Collection tags assigned directly to this location",
-        "$ref": "#/components/schemas/input_schema60"
+        "$ref": "#/components/schemas/input_schema79"
       },
-      "output_schema199": {
+      "output_schema225": {
         "type": "object",
         "properties": {
           "priced": {
@@ -52791,22 +54383,22 @@
           "miscNoPrice"
         ]
       },
-      "output_schema212": {
+      "output_schema238": {
         "type": "array",
         "items": {
           "$ref": "#/components/schemas/FinancialTransactionShortcode"
         }
       },
-      "output_schema215": {
+      "output_schema241": {
         "type": "array",
         "items": {
           "$ref": "#/components/schemas/InfLocation"
         }
       },
-      "output_schema216": {
+      "output_schema242": {
         "$ref": "#/components/schemas/InfLocation"
       },
-      "output_schema220": {
+      "output_schema246": {
         "type": "array",
         "items": {
           "type": "object",
@@ -52832,13 +54424,13 @@
           ]
         }
       },
-      "output_schema232": {
+      "output_schema258": {
         "type": "array",
         "items": {
           "$ref": "#/components/schemas/Amount"
         }
       },
-      "output_schema240": {
+      "output_schema266": {
         "type": "object",
         "properties": {
           "portionCount": {
@@ -52855,63 +54447,10 @@
           "totals"
         ]
       },
-      "output_schema244": {
+      "output_schema270": {
         "type": "array",
         "items": {
           "$ref": "#/components/schemas/MealRecipeOut"
-        }
-      },
-      "output_schema286": {
-        "type": "array",
-        "items": {
-          "$ref": "#/components/schemas/UnitMappingOut"
-        }
-      },
-      "output_schema293": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "$ref": "#/components/schemas/IngredientShortcode"
-          },
-          "name": {
-            "type": "string"
-          },
-          "aliases": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "naKinds": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/BaseKind"
-            }
-          },
-          "createdAt": {
-            "type": "string",
-            "format": "date-time",
-            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
-          },
-          "updatedAt": {
-            "type": "string",
-            "format": "date-time",
-            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
-          }
-        },
-        "required": [
-          "id",
-          "name",
-          "aliases",
-          "naKinds",
-          "createdAt",
-          "updatedAt"
-        ]
-      },
-      "output_schema294": {
-        "type": "array",
-        "items": {
-          "$ref": "#/components/schemas/ProductListInventoryEntryOut"
         }
       },
       "output_schema30": {
@@ -52919,184 +54458,6 @@
         "items": {
           "$ref": "#/components/schemas/output_schema31"
         }
-      },
-      "output_schema300": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "$ref": "#/components/schemas/InventoryShortcode"
-          },
-          "amount": {
-            "$ref": "#/components/schemas/Amount"
-          },
-          "valuation": {
-            "$ref": "#/components/schemas/Money"
-          },
-          "verifiedAt": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "format": "date-time",
-            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
-          },
-          "placement": {
-            "type": "string",
-            "enum": [
-              "stock",
-              "installed"
-            ]
-          },
-          "createdAt": {
-            "type": "string",
-            "format": "date-time",
-            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
-          },
-          "updatedAt": {
-            "type": "string",
-            "format": "date-time",
-            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
-          },
-          "location": {
-            "type": "object",
-            "properties": {
-              "id": {
-                "$ref": "#/components/schemas/LocationShortcode"
-              },
-              "name": {
-                "type": "string",
-                "description": "name of location"
-              },
-              "aliases": {
-                "$ref": "#/components/schemas/input_schema60"
-              },
-              "tags": {
-                "$ref": "#/components/schemas/output_schema190"
-              },
-              "type": {
-                "$ref": "#/components/schemas/LocationType"
-              },
-              "notes": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "product": {
-                "$ref": "#/components/schemas/LocationIdentityProductOut"
-              },
-              "lastBulkInventory": {
-                "type": [
-                  "string",
-                  "null"
-                ],
-                "format": "date-time",
-                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
-              },
-              "aiDescription": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "images": {
-                "$ref": "#/components/schemas/output_schema146"
-              },
-              "valuation": {
-                "$ref": "#/components/schemas/LocationValuation"
-              },
-              "createdAt": {
-                "type": "string",
-                "format": "date-time",
-                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
-              },
-              "updatedAt": {
-                "type": "string",
-                "format": "date-time",
-                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
-              },
-              "displayImage": {
-                "$ref": "#/components/schemas/ImageUrlSummary"
-              },
-              "ancestors": {
-                "type": "array",
-                "items": {
-                  "$ref": "#/components/schemas/output_schema301"
-                }
-              }
-            },
-            "required": [
-              "id",
-              "name",
-              "aliases",
-              "notes",
-              "lastBulkInventory",
-              "aiDescription",
-              "images",
-              "createdAt",
-              "updatedAt",
-              "ancestors"
-            ]
-          }
-        },
-        "required": [
-          "id",
-          "amount",
-          "verifiedAt",
-          "placement",
-          "createdAt",
-          "updatedAt",
-          "location"
-        ]
-      },
-      "output_schema301": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "$ref": "#/components/schemas/LocationShortcode"
-          },
-          "name": {
-            "type": "string"
-          },
-          "type": {
-            "$ref": "#/components/schemas/LocationType"
-          },
-          "displayImage": {
-            "$ref": "#/components/schemas/ImageUrlSummary"
-          }
-        },
-        "required": [
-          "id",
-          "name"
-        ]
-      },
-      "output_schema302": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "$ref": "#/components/schemas/LocationShortcode"
-          },
-          "name": {
-            "type": "string"
-          },
-          "type": {
-            "$ref": "#/components/schemas/LocationType"
-          },
-          "displayImage": {
-            "$ref": "#/components/schemas/ImageUrlSummary"
-          },
-          "ancestors": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/output_schema301"
-            }
-          }
-        },
-        "required": [
-          "id",
-          "name",
-          "ancestors"
-        ]
       },
       "output_schema31": {
         "type": "object",
@@ -53167,7 +54528,8 @@
             "enum": [
               "own",
               "catalog",
-              "unknown"
+              "unknown",
+              "screenshot"
             ]
           },
           "sourcePageUrl": {
@@ -53200,6 +54562,52 @@
             ],
             "format": "date-time",
             "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "capturedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "capturedAtOffsetMinutes": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "captureLocation": {
+            "$ref": "#/components/schemas/ImageCaptureLocation"
+          },
+          "capturePlaceName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "captureDeviceLabel": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "capturedByPartyId": {
+            "$ref": "#/components/schemas/LedgerPartyShortcode"
+          },
+          "capturedByName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "captureAttribution": {
+            "$ref": "#/components/schemas/ImageCaptureAttribution"
+          },
+          "provenanceEvidence": {
+            "$ref": "#/components/schemas/ImageProvenanceEvidence"
           },
           "createdAt": {
             "type": "string",
@@ -53240,11 +54648,248 @@
           "sourceName",
           "useOriginal",
           "verifiedAt",
+          "capturedAt",
+          "capturedAtOffsetMinutes",
+          "capturePlaceName",
+          "captureDeviceLabel",
+          "capturedByName",
+          "captureAttribution",
           "createdAt",
           "updatedAt"
         ]
       },
-      "output_schema310": {
+      "output_schema312": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/UnitMappingOut"
+        }
+      },
+      "output_schema319": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/IngredientShortcode"
+          },
+          "name": {
+            "type": "string"
+          },
+          "aliases": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "naKinds": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BaseKind"
+            }
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "aliases",
+          "naKinds",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "output_schema320": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/ProductListInventoryEntryOut"
+        }
+      },
+      "output_schema326": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/InventoryShortcode"
+          },
+          "amount": {
+            "$ref": "#/components/schemas/Amount"
+          },
+          "valuation": {
+            "$ref": "#/components/schemas/Money"
+          },
+          "verifiedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "placement": {
+            "type": "string",
+            "enum": [
+              "stock",
+              "installed"
+            ]
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "location": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "$ref": "#/components/schemas/LocationShortcode"
+              },
+              "name": {
+                "type": "string",
+                "description": "name of location"
+              },
+              "aliases": {
+                "$ref": "#/components/schemas/input_schema79"
+              },
+              "tags": {
+                "$ref": "#/components/schemas/output_schema216"
+              },
+              "type": {
+                "$ref": "#/components/schemas/LocationType"
+              },
+              "notes": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "product": {
+                "$ref": "#/components/schemas/LocationIdentityProductOut"
+              },
+              "lastBulkInventory": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+              },
+              "aiDescription": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "images": {
+                "$ref": "#/components/schemas/output_schema154"
+              },
+              "valuation": {
+                "$ref": "#/components/schemas/LocationValuation"
+              },
+              "createdAt": {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+              },
+              "updatedAt": {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+              },
+              "displayImage": {
+                "$ref": "#/components/schemas/ImageUrlSummary"
+              },
+              "ancestors": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/output_schema327"
+                }
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "aliases",
+              "notes",
+              "lastBulkInventory",
+              "aiDescription",
+              "images",
+              "createdAt",
+              "updatedAt",
+              "ancestors"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "amount",
+          "verifiedAt",
+          "placement",
+          "createdAt",
+          "updatedAt",
+          "location"
+        ]
+      },
+      "output_schema327": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/LocationShortcode"
+          },
+          "name": {
+            "type": "string"
+          },
+          "type": {
+            "$ref": "#/components/schemas/LocationType"
+          },
+          "displayImage": {
+            "$ref": "#/components/schemas/ImageUrlSummary"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ]
+      },
+      "output_schema328": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/LocationShortcode"
+          },
+          "name": {
+            "type": "string"
+          },
+          "type": {
+            "$ref": "#/components/schemas/LocationType"
+          },
+          "displayImage": {
+            "$ref": "#/components/schemas/ImageUrlSummary"
+          },
+          "ancestors": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/output_schema327"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "ancestors"
+        ]
+      },
+      "output_schema336": {
         "minItems": 1,
         "maxItems": 3,
         "type": "array",
@@ -53265,19 +54910,19 @@
           ]
         }
       },
-      "output_schema324": {
+      "output_schema350": {
         "type": "array",
         "items": {
           "$ref": "#/components/schemas/TaskShortcode"
         }
       },
-      "output_schema345": {
+      "output_schema371": {
         "type": "array",
         "items": {
           "$ref": "#/components/schemas/ProjectShortcode"
         }
       },
-      "output_schema351": {
+      "output_schema377": {
         "type": "object",
         "properties": {
           "current": {
@@ -53291,15 +54936,15 @@
           "current"
         ]
       },
-      "output_schema355": {
+      "output_schema381": {
         "description": "Receipt role. Principal lines are the purchased item/service; every other value is a purchase-level adjustment.",
         "$ref": "#/components/schemas/ExpenseLineKind"
       },
-      "output_schema356": {
+      "output_schema382": {
         "description": "Whether this row is a line item or a slice of a total that was never itemized. 'allocation' means the money was cut by payment schedule (a deposit and a balance on one order) or by an estimated materials/labor split of a lump-sum contract — such a row can never carry a productId, and its costType may be an estimate rather than a vendor-stated fact.",
         "$ref": "#/components/schemas/ExpenseLineBasis"
       },
-      "output_schema404": {
+      "output_schema430": {
         "oneOf": [
           {
             "$ref": "#/components/schemas/RowDiagnosticOwnFull"
@@ -53328,7 +54973,7 @@
           }
         }
       },
-      "output_schema405": {
+      "output_schema431": {
         "oneOf": [
           {
             "$ref": "#/components/schemas/RowDiagnosticTrue"
@@ -53338,7 +54983,7 @@
           }
         ]
       },
-      "output_schema415": {
+      "output_schema441": {
         "type": "object",
         "propertyNames": {
           "type": "string"
@@ -53347,7 +54992,7 @@
           "$ref": "#/components/schemas/JsonValue"
         }
       },
-      "output_schema417": {
+      "output_schema443": {
         "type": "object",
         "properties": {
           "readOnlyHint": {
@@ -53364,7 +55009,7 @@
           }
         }
       },
-      "output_schema418": {
+      "output_schema444": {
         "type": "object",
         "properties": {
           "id": {
@@ -53386,7 +55031,7 @@
           "email"
         ]
       },
-      "output_schema419": {
+      "output_schema445": {
         "type": "object",
         "properties": {
           "id": {
@@ -53407,7 +55052,7 @@
           "name"
         ]
       },
-      "output_schema420": {
+      "output_schema446": {
         "type": "object",
         "properties": {
           "day": {
@@ -53436,7 +55081,7 @@
           "total"
         ]
       },
-      "output_schema421": {
+      "output_schema447": {
         "type": "object",
         "properties": {
           "key": {
@@ -53457,25 +55102,25 @@
           "count"
         ]
       },
-      "output_schema444": {
+      "output_schema470": {
         "type": "array",
         "items": {
           "$ref": "#/components/schemas/WishCandidateOut"
         }
       },
-      "output_schema450": {
+      "output_schema476": {
         "type": "array",
         "items": {
           "$ref": "#/components/schemas/EntityAttachmentRead"
         }
       },
-      "output_schema51": {
+      "output_schema59": {
         "type": "array",
         "items": {
           "$ref": "#/components/schemas/ExternalIdOut"
         }
       },
-      "output_schema68": {
+      "output_schema76": {
         "type": "object",
         "properties": {
           "covered": {
@@ -53494,7 +55139,7 @@
           "total"
         ]
       },
-      "output_schema71": {
+      "output_schema79": {
         "type": "object",
         "properties": {
           "etag": {
@@ -53715,6 +55360,11 @@
             "minLength": 8,
             "maxLength": 200
           },
+          "deviceId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 255
+          },
           "images": {
             "minItems": 1,
             "maxItems": 100,
@@ -53763,7 +55413,8 @@
                         "vendorAccount",
                         "productCategory",
                         "importRun",
-                        "device"
+                        "device",
+                        "imageSighting"
                       ]
                     },
                     "id": {
@@ -53963,6 +55614,9 @@
                     "featurePrint",
                     "provenance"
                   ]
+                },
+                "library": {
+                  "$ref": "#/components/schemas/ImageSightingReportFields"
                 }
               },
               "required": [
@@ -54629,7 +56283,7 @@
             "$ref": "#/components/schemas/DisplayImagesField"
           },
           "attachments": {
-            "$ref": "#/components/schemas/output_schema450"
+            "$ref": "#/components/schemas/output_schema476"
           }
         },
         "required": [
@@ -55849,7 +57503,7 @@
             "minLength": 1
           },
           "aliases": {
-            "$ref": "#/components/schemas/input_schema60"
+            "$ref": "#/components/schemas/input_schema79"
           },
           "description": {
             "type": [
@@ -55875,7 +57529,7 @@
             ]
           },
           "path": {
-            "$ref": "#/components/schemas/output_schema310"
+            "$ref": "#/components/schemas/output_schema336"
           },
           "createdAt": {
             "type": "string",
@@ -55894,7 +57548,7 @@
             "$ref": "#/components/schemas/DisplayImagesField"
           },
           "attachments": {
-            "$ref": "#/components/schemas/output_schema450"
+            "$ref": "#/components/schemas/output_schema476"
           }
         },
         "required": [
@@ -55984,7 +57638,7 @@
             "minLength": 1
           },
           "aliases": {
-            "$ref": "#/components/schemas/input_schema60"
+            "$ref": "#/components/schemas/input_schema79"
           },
           "description": {
             "type": [
@@ -56010,7 +57664,7 @@
             ]
           },
           "path": {
-            "$ref": "#/components/schemas/output_schema310"
+            "$ref": "#/components/schemas/output_schema336"
           },
           "createdAt": {
             "type": "string",
@@ -56072,7 +57726,7 @@
             "minLength": 1
           },
           "aliases": {
-            "$ref": "#/components/schemas/input_schema60"
+            "$ref": "#/components/schemas/input_schema79"
           },
           "description": {
             "type": [
@@ -56098,7 +57752,7 @@
             ]
           },
           "path": {
-            "$ref": "#/components/schemas/output_schema310"
+            "$ref": "#/components/schemas/output_schema336"
           },
           "createdAt": {
             "type": "string",
@@ -56322,7 +57976,7 @@
           "tags": {
             "default": [],
             "description": "Compatibility or ecosystem tokens only — battery platform, mount, thread, size standard. Never the manufacturer, a classification word, or a path node; those belong in manufacturer/categoryId. `collection:*` entries are managed by Collections. Leave empty when nothing fits.",
-            "$ref": "#/components/schemas/input_schema60"
+            "$ref": "#/components/schemas/input_schema79"
           },
           "upc": {
             "$ref": "#/components/schemas/GtinInput"
@@ -56451,10 +58105,10 @@
             "description": "Product name"
           },
           "aliases": {
-            "$ref": "#/components/schemas/input_schema60"
+            "$ref": "#/components/schemas/input_schema79"
           },
           "tags": {
-            "$ref": "#/components/schemas/input_schema60"
+            "$ref": "#/components/schemas/input_schema79"
           },
           "primaryGtin": {
             "$ref": "#/components/schemas/Gtin"
@@ -56493,7 +58147,7 @@
             "$ref": "#/components/schemas/output_schema30"
           },
           "externalIds": {
-            "$ref": "#/components/schemas/output_schema51"
+            "$ref": "#/components/schemas/output_schema59"
           },
           "price": {
             "$ref": "#/components/schemas/Money",
@@ -56557,7 +58211,7 @@
             "format": "uri"
           },
           "ingredient": {
-            "$ref": "#/components/schemas/output_schema293"
+            "$ref": "#/components/schemas/output_schema319"
           },
           "unitMappings": {
             "type": "array",
@@ -56568,13 +58222,13 @@
           "inventoryEntry": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/output_schema300"
+              "$ref": "#/components/schemas/output_schema326"
             }
           },
           "servingAsLocations": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/output_schema302"
+              "$ref": "#/components/schemas/output_schema328"
             }
           },
           "componentCount": {
@@ -56616,7 +58270,7 @@
             "$ref": "#/components/schemas/DisplayImagesField"
           },
           "attachments": {
-            "$ref": "#/components/schemas/output_schema450"
+            "$ref": "#/components/schemas/output_schema476"
           }
         },
         "required": [
@@ -57062,7 +58716,7 @@
           },
           "tagFilters": {
             "description": "Match products carrying any of these tags",
-            "$ref": "#/components/schemas/input_schema108"
+            "$ref": "#/components/schemas/input_schema127"
           },
           "dataStatus": {
             "anyOf": [
@@ -57203,12 +58857,12 @@
           "locationIdFilter": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/input_schema78"
+                "$ref": "#/components/schemas/input_schema97"
               },
               {
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/input_schema78"
+                  "$ref": "#/components/schemas/input_schema97"
                 }
               }
             ]
@@ -57219,12 +58873,12 @@
           "ingredientIdFilter": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/input_schema119"
+                "$ref": "#/components/schemas/input_schema138"
               },
               {
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/input_schema119"
+                  "$ref": "#/components/schemas/input_schema138"
                 }
               }
             ]
@@ -57232,12 +58886,12 @@
           "growsIngredientIdFilter": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/input_schema119"
+                "$ref": "#/components/schemas/input_schema138"
               },
               {
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/input_schema119"
+                  "$ref": "#/components/schemas/input_schema138"
                 }
               }
             ]
@@ -57704,10 +59358,10 @@
             "description": "Product name"
           },
           "aliases": {
-            "$ref": "#/components/schemas/input_schema60"
+            "$ref": "#/components/schemas/input_schema79"
           },
           "tags": {
-            "$ref": "#/components/schemas/input_schema60"
+            "$ref": "#/components/schemas/input_schema79"
           },
           "primaryGtin": {
             "$ref": "#/components/schemas/Gtin"
@@ -57746,7 +59400,7 @@
             "$ref": "#/components/schemas/output_schema30"
           },
           "externalIds": {
-            "$ref": "#/components/schemas/output_schema51"
+            "$ref": "#/components/schemas/output_schema59"
           },
           "price": {
             "$ref": "#/components/schemas/Money",
@@ -57806,7 +59460,7 @@
             "$ref": "#/components/schemas/DisplayImagesField"
           },
           "unitMappings": {
-            "$ref": "#/components/schemas/output_schema286"
+            "$ref": "#/components/schemas/output_schema312"
           },
           "unitPriceMappings": {
             "$ref": "#/components/schemas/ProductUnitPriceMappings"
@@ -57863,10 +59517,10 @@
             "$ref": "#/components/schemas/ProductDataGaps"
           },
           "ingredient": {
-            "$ref": "#/components/schemas/output_schema293"
+            "$ref": "#/components/schemas/output_schema319"
           },
           "inventoryEntry": {
-            "$ref": "#/components/schemas/output_schema294"
+            "$ref": "#/components/schemas/output_schema320"
           },
           "expenseCount": {
             "type": "integer",
@@ -57949,10 +59603,10 @@
             "description": "Product name"
           },
           "aliases": {
-            "$ref": "#/components/schemas/input_schema60"
+            "$ref": "#/components/schemas/input_schema79"
           },
           "tags": {
-            "$ref": "#/components/schemas/input_schema60"
+            "$ref": "#/components/schemas/input_schema79"
           },
           "primaryGtin": {
             "$ref": "#/components/schemas/Gtin"
@@ -57991,7 +59645,7 @@
             "$ref": "#/components/schemas/output_schema30"
           },
           "externalIds": {
-            "$ref": "#/components/schemas/output_schema51"
+            "$ref": "#/components/schemas/output_schema59"
           },
           "price": {
             "$ref": "#/components/schemas/Money",
@@ -58051,7 +59705,7 @@
             "$ref": "#/components/schemas/DisplayImagesField"
           },
           "unitMappings": {
-            "$ref": "#/components/schemas/output_schema286"
+            "$ref": "#/components/schemas/output_schema312"
           },
           "unitPriceMappings": {
             "$ref": "#/components/schemas/ProductUnitPriceMappings"
@@ -58108,10 +59762,10 @@
             "$ref": "#/components/schemas/ProductDataGaps"
           },
           "ingredient": {
-            "$ref": "#/components/schemas/output_schema293"
+            "$ref": "#/components/schemas/output_schema319"
           },
           "inventoryEntry": {
-            "$ref": "#/components/schemas/output_schema294"
+            "$ref": "#/components/schemas/output_schema320"
           },
           "expenseCount": {
             "type": "integer",
@@ -58949,14 +60603,14 @@
             },
             "anyOf": [
               {
-                "$ref": "#/components/schemas/input_schema128"
+                "$ref": "#/components/schemas/input_schema147"
               },
               {
                 "minItems": 1,
                 "maxItems": 3,
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/input_schema128"
+                  "$ref": "#/components/schemas/input_schema147"
                 }
               }
             ]
@@ -58966,7 +60620,7 @@
               "pageIndex": 0,
               "pageSize": 10
             },
-            "$ref": "#/components/schemas/input_schema48"
+            "$ref": "#/components/schemas/input_schema50"
           },
           "groupBy": {
             "type": "string",
@@ -59073,10 +60727,10 @@
             "description": "Product name"
           },
           "aliases": {
-            "$ref": "#/components/schemas/input_schema60"
+            "$ref": "#/components/schemas/input_schema79"
           },
           "tags": {
-            "$ref": "#/components/schemas/input_schema60"
+            "$ref": "#/components/schemas/input_schema79"
           },
           "primaryGtin": {
             "$ref": "#/components/schemas/Gtin"
@@ -59115,7 +60769,7 @@
             "$ref": "#/components/schemas/output_schema30"
           },
           "externalIds": {
-            "$ref": "#/components/schemas/output_schema51"
+            "$ref": "#/components/schemas/output_schema59"
           },
           "price": {
             "$ref": "#/components/schemas/Money",
@@ -59237,7 +60891,7 @@
           },
           "tags": {
             "description": "Compatibility or ecosystem tokens only — battery platform, mount, thread, size standard. Never the manufacturer, a classification word, or a path node; those belong in manufacturer/categoryId. `collection:*` entries are managed by Collections. Leave empty when nothing fits.",
-            "$ref": "#/components/schemas/input_schema60"
+            "$ref": "#/components/schemas/input_schema79"
           },
           "upc": {
             "$ref": "#/components/schemas/GtinInput"
@@ -59400,10 +61054,10 @@
             "description": "Product name"
           },
           "aliases": {
-            "$ref": "#/components/schemas/input_schema60"
+            "$ref": "#/components/schemas/input_schema79"
           },
           "tags": {
-            "$ref": "#/components/schemas/input_schema60"
+            "$ref": "#/components/schemas/input_schema79"
           },
           "primaryGtin": {
             "$ref": "#/components/schemas/Gtin"
@@ -59442,7 +61096,7 @@
             "$ref": "#/components/schemas/output_schema30"
           },
           "externalIds": {
-            "$ref": "#/components/schemas/output_schema51"
+            "$ref": "#/components/schemas/output_schema59"
           },
           "price": {
             "$ref": "#/components/schemas/Money",
@@ -59506,7 +61160,7 @@
             "format": "uri"
           },
           "ingredient": {
-            "$ref": "#/components/schemas/output_schema293"
+            "$ref": "#/components/schemas/output_schema319"
           },
           "unitMappings": {
             "type": "array",
@@ -59517,13 +61171,13 @@
           "inventoryEntry": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/output_schema300"
+              "$ref": "#/components/schemas/output_schema326"
             }
           },
           "servingAsLocations": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/output_schema302"
+              "$ref": "#/components/schemas/output_schema328"
             }
           },
           "food": {
@@ -59626,10 +61280,10 @@
             "type": "object",
             "properties": {
               "covered": {
-                "$ref": "#/components/schemas/output_schema157"
+                "$ref": "#/components/schemas/output_schema183"
               },
               "applicable": {
-                "$ref": "#/components/schemas/output_schema157"
+                "$ref": "#/components/schemas/output_schema183"
               }
             },
             "required": [
@@ -59658,10 +61312,10 @@
             "description": "Product name"
           },
           "aliases": {
-            "$ref": "#/components/schemas/input_schema60"
+            "$ref": "#/components/schemas/input_schema79"
           },
           "tags": {
-            "$ref": "#/components/schemas/input_schema60"
+            "$ref": "#/components/schemas/input_schema79"
           },
           "primaryGtin": {
             "$ref": "#/components/schemas/Gtin"
@@ -59700,7 +61354,7 @@
             "$ref": "#/components/schemas/output_schema30"
           },
           "externalIds": {
-            "$ref": "#/components/schemas/output_schema51"
+            "$ref": "#/components/schemas/output_schema59"
           },
           "price": {
             "$ref": "#/components/schemas/Money",
@@ -59809,10 +61463,10 @@
             "description": "Product name"
           },
           "aliases": {
-            "$ref": "#/components/schemas/input_schema60"
+            "$ref": "#/components/schemas/input_schema79"
           },
           "tags": {
-            "$ref": "#/components/schemas/input_schema60"
+            "$ref": "#/components/schemas/input_schema79"
           },
           "primaryGtin": {
             "$ref": "#/components/schemas/Gtin"
@@ -59851,7 +61505,7 @@
             "$ref": "#/components/schemas/output_schema30"
           },
           "externalIds": {
-            "$ref": "#/components/schemas/output_schema51"
+            "$ref": "#/components/schemas/output_schema59"
           },
           "price": {
             "$ref": "#/components/schemas/Money",
@@ -61161,7 +62815,7 @@
             "$ref": "#/components/schemas/ProjectKind"
           },
           "locations": {
-            "$ref": "#/components/schemas/input_schema60"
+            "$ref": "#/components/schemas/input_schema79"
           },
           "defaultTrade": {
             "$ref": "#/components/schemas/Trade"
@@ -61216,13 +62870,13 @@
             ]
           },
           "childProjectIds": {
-            "$ref": "#/components/schemas/output_schema345"
+            "$ref": "#/components/schemas/output_schema371"
           },
           "blockedByIds": {
-            "$ref": "#/components/schemas/output_schema345"
+            "$ref": "#/components/schemas/output_schema371"
           },
           "blockingIds": {
-            "$ref": "#/components/schemas/output_schema345"
+            "$ref": "#/components/schemas/output_schema371"
           },
           "createdAt": {
             "type": "string",
@@ -61247,7 +62901,7 @@
             "$ref": "#/components/schemas/DisplayImagesField"
           },
           "attachments": {
-            "$ref": "#/components/schemas/output_schema450"
+            "$ref": "#/components/schemas/output_schema476"
           }
         },
         "required": [
@@ -61512,7 +63166,7 @@
           },
           "location": {
             "description": "Any exact match against locations[]",
-            "$ref": "#/components/schemas/input_schema108"
+            "$ref": "#/components/schemas/input_schema127"
           },
           "dataStatus": {
             "anyOf": [
@@ -61585,12 +63239,12 @@
           "parentProjectId": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/input_schema140"
+                "$ref": "#/components/schemas/input_schema159"
               },
               {
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/input_schema140"
+                  "$ref": "#/components/schemas/input_schema159"
                 }
               }
             ]
@@ -61690,7 +63344,7 @@
             "$ref": "#/components/schemas/ProjectKind"
           },
           "locations": {
-            "$ref": "#/components/schemas/input_schema60"
+            "$ref": "#/components/schemas/input_schema79"
           },
           "defaultTrade": {
             "$ref": "#/components/schemas/Trade"
@@ -61745,13 +63399,13 @@
             ]
           },
           "childProjectIds": {
-            "$ref": "#/components/schemas/output_schema345"
+            "$ref": "#/components/schemas/output_schema371"
           },
           "blockedByIds": {
-            "$ref": "#/components/schemas/output_schema345"
+            "$ref": "#/components/schemas/output_schema371"
           },
           "blockingIds": {
-            "$ref": "#/components/schemas/output_schema345"
+            "$ref": "#/components/schemas/output_schema371"
           },
           "createdAt": {
             "type": "string",
@@ -61815,7 +63469,7 @@
             "$ref": "#/components/schemas/ProjectKind"
           },
           "locations": {
-            "$ref": "#/components/schemas/input_schema60"
+            "$ref": "#/components/schemas/input_schema79"
           },
           "defaultTrade": {
             "$ref": "#/components/schemas/Trade"
@@ -61870,13 +63524,13 @@
             ]
           },
           "childProjectIds": {
-            "$ref": "#/components/schemas/output_schema345"
+            "$ref": "#/components/schemas/output_schema371"
           },
           "blockedByIds": {
-            "$ref": "#/components/schemas/output_schema345"
+            "$ref": "#/components/schemas/output_schema371"
           },
           "blockingIds": {
-            "$ref": "#/components/schemas/output_schema345"
+            "$ref": "#/components/schemas/output_schema371"
           },
           "createdAt": {
             "type": "string",
@@ -61992,7 +63646,7 @@
             "$ref": "#/components/schemas/ProjectKind"
           },
           "locations": {
-            "$ref": "#/components/schemas/input_schema60"
+            "$ref": "#/components/schemas/input_schema79"
           },
           "defaultTrade": {
             "$ref": "#/components/schemas/Trade"
@@ -62047,13 +63701,13 @@
             ]
           },
           "childProjectIds": {
-            "$ref": "#/components/schemas/output_schema345"
+            "$ref": "#/components/schemas/output_schema371"
           },
           "blockedByIds": {
-            "$ref": "#/components/schemas/output_schema345"
+            "$ref": "#/components/schemas/output_schema371"
           },
           "blockingIds": {
-            "$ref": "#/components/schemas/output_schema345"
+            "$ref": "#/components/schemas/output_schema371"
           },
           "createdAt": {
             "type": "string",
@@ -63037,14 +64691,14 @@
             },
             "anyOf": [
               {
-                "$ref": "#/components/schemas/input_schema162"
+                "$ref": "#/components/schemas/input_schema181"
               },
               {
                 "minItems": 1,
                 "maxItems": 3,
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/input_schema162"
+                  "$ref": "#/components/schemas/input_schema181"
                 }
               }
             ]
@@ -63054,7 +64708,7 @@
               "pageIndex": 0,
               "pageSize": 10
             },
-            "$ref": "#/components/schemas/input_schema48"
+            "$ref": "#/components/schemas/input_schema50"
           },
           "groupBy": {
             "type": "string"
@@ -63454,7 +65108,7 @@
             "$ref": "#/components/schemas/DisplayImagesField"
           },
           "attachments": {
-            "$ref": "#/components/schemas/output_schema450"
+            "$ref": "#/components/schemas/output_schema476"
           }
         },
         "required": [
@@ -64107,11 +65761,11 @@
           },
           "removeImageIds": {
             "description": "Document ids to detach. Detaching DELETES the stored file when nothing else references it — there is no restore, and the id will not resolve again.",
-            "$ref": "#/components/schemas/input_schema70"
+            "$ref": "#/components/schemas/input_schema89"
           },
           "imageOrder": {
             "description": "existing document ids in display order",
-            "$ref": "#/components/schemas/input_schema70"
+            "$ref": "#/components/schemas/input_schema89"
           }
         }
       },
@@ -64506,7 +66160,7 @@
             "$ref": "#/components/schemas/MealTotals"
           },
           "images": {
-            "$ref": "#/components/schemas/output_schema146"
+            "$ref": "#/components/schemas/output_schema154"
           },
           "forkedFromRecipeId": {
             "$ref": "#/components/schemas/RecipeShortcode"
@@ -64524,7 +66178,7 @@
             "$ref": "#/components/schemas/DisplayImagesField"
           },
           "attachments": {
-            "$ref": "#/components/schemas/output_schema450"
+            "$ref": "#/components/schemas/output_schema476"
           }
         },
         "required": [
@@ -64618,7 +66272,7 @@
             "$ref": "#/components/schemas/MealTotals"
           },
           "images": {
-            "$ref": "#/components/schemas/output_schema146"
+            "$ref": "#/components/schemas/output_schema154"
           },
           "forkedFromRecipeId": {
             "$ref": "#/components/schemas/RecipeShortcode"
@@ -65749,7 +67403,7 @@
             "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
           },
           "amounts": {
-            "$ref": "#/components/schemas/output_schema232"
+            "$ref": "#/components/schemas/output_schema258"
           },
           "rawLine": {
             "type": [
@@ -65830,7 +67484,7 @@
             "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
           },
           "amounts": {
-            "$ref": "#/components/schemas/output_schema232"
+            "$ref": "#/components/schemas/output_schema258"
           },
           "rawLine": {
             "type": [
@@ -66511,7 +68165,7 @@
             "$ref": "#/components/schemas/MealTotals"
           },
           "images": {
-            "$ref": "#/components/schemas/output_schema146"
+            "$ref": "#/components/schemas/output_schema154"
           },
           "forkedFromRecipeId": {
             "$ref": "#/components/schemas/RecipeShortcode"
@@ -67747,13 +69401,13 @@
             "type": "object",
             "properties": {
               "cost": {
-                "$ref": "#/components/schemas/output_schema404"
+                "$ref": "#/components/schemas/output_schema430"
               },
               "weight": {
-                "$ref": "#/components/schemas/output_schema404"
+                "$ref": "#/components/schemas/output_schema430"
               },
               "nutrients": {
-                "$ref": "#/components/schemas/output_schema404"
+                "$ref": "#/components/schemas/output_schema430"
               }
             },
             "required": [
@@ -67769,10 +69423,10 @@
             ]
           },
           "price": {
-            "$ref": "#/components/schemas/output_schema405"
+            "$ref": "#/components/schemas/output_schema431"
           },
           "gram": {
-            "$ref": "#/components/schemas/output_schema405"
+            "$ref": "#/components/schemas/output_schema431"
           },
           "nutrient": {
             "oneOf": [
@@ -68042,7 +69696,7 @@
         "type": "object",
         "properties": {
           "id": {
-            "$ref": "#/components/schemas/input_schema89"
+            "$ref": "#/components/schemas/input_schema108"
           },
           "mealId": {
             "$ref": "#/components/schemas/MealShortcode"
@@ -68079,7 +69733,7 @@
         "type": "object",
         "properties": {
           "id": {
-            "$ref": "#/components/schemas/input_schema89"
+            "$ref": "#/components/schemas/input_schema108"
           },
           "mealId": {
             "$ref": "#/components/schemas/MealShortcode"
@@ -68122,7 +69776,7 @@
         "type": "object",
         "properties": {
           "id": {
-            "$ref": "#/components/schemas/input_schema89"
+            "$ref": "#/components/schemas/input_schema108"
           },
           "mealId": {
             "$ref": "#/components/schemas/MealShortcode"
@@ -68216,7 +69870,7 @@
                 "$ref": "#/components/schemas/ProductFindOrCreateByCodeInput"
               },
               {
-                "$ref": "#/components/schemas/input_schema187"
+                "$ref": "#/components/schemas/input_schema206"
               }
             ],
             "description": "The scanned code."
@@ -68729,7 +70383,7 @@
             "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
           },
           "amounts": {
-            "$ref": "#/components/schemas/output_schema232"
+            "$ref": "#/components/schemas/output_schema258"
           },
           "rawLine": {
             "type": [
@@ -68810,7 +70464,7 @@
             "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
           },
           "amounts": {
-            "$ref": "#/components/schemas/output_schema232"
+            "$ref": "#/components/schemas/output_schema258"
           },
           "rawLine": {
             "type": [
@@ -70568,10 +72222,10 @@
             ]
           },
           "blockedByIds": {
-            "$ref": "#/components/schemas/output_schema324"
+            "$ref": "#/components/schemas/output_schema350"
           },
           "blockingIds": {
-            "$ref": "#/components/schemas/output_schema324"
+            "$ref": "#/components/schemas/output_schema350"
           },
           "subtaskCount": {
             "type": "integer",
@@ -70584,7 +72238,7 @@
             "maximum": 9007199254740991
           },
           "images": {
-            "$ref": "#/components/schemas/output_schema146"
+            "$ref": "#/components/schemas/output_schema154"
           },
           "createdAt": {
             "type": "string",
@@ -70603,7 +72257,7 @@
             "$ref": "#/components/schemas/DisplayImagesField"
           },
           "attachments": {
-            "$ref": "#/components/schemas/output_schema450"
+            "$ref": "#/components/schemas/output_schema476"
           }
         },
         "required": [
@@ -70668,12 +72322,12 @@
           "parentTaskId": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/input_schema164"
+                "$ref": "#/components/schemas/input_schema183"
               },
               {
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/input_schema164"
+                  "$ref": "#/components/schemas/input_schema183"
                 }
               }
             ]
@@ -70760,12 +72414,12 @@
           "projectId": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/input_schema140"
+                "$ref": "#/components/schemas/input_schema159"
               },
               {
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/input_schema140"
+                  "$ref": "#/components/schemas/input_schema159"
                 }
               }
             ]
@@ -70773,12 +72427,12 @@
           "subjectProductId": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/input_schema76"
+                "$ref": "#/components/schemas/input_schema95"
               },
               {
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/input_schema76"
+                  "$ref": "#/components/schemas/input_schema95"
                 }
               }
             ]
@@ -70887,10 +72541,10 @@
             ]
           },
           "blockedByIds": {
-            "$ref": "#/components/schemas/output_schema324"
+            "$ref": "#/components/schemas/output_schema350"
           },
           "blockingIds": {
-            "$ref": "#/components/schemas/output_schema324"
+            "$ref": "#/components/schemas/output_schema350"
           },
           "subtaskCount": {
             "type": "integer",
@@ -70903,7 +72557,7 @@
             "maximum": 9007199254740991
           },
           "images": {
-            "$ref": "#/components/schemas/output_schema146"
+            "$ref": "#/components/schemas/output_schema154"
           },
           "createdAt": {
             "type": "string",
@@ -71020,10 +72674,10 @@
             ]
           },
           "blockedByIds": {
-            "$ref": "#/components/schemas/output_schema324"
+            "$ref": "#/components/schemas/output_schema350"
           },
           "blockingIds": {
-            "$ref": "#/components/schemas/output_schema324"
+            "$ref": "#/components/schemas/output_schema350"
           },
           "subtaskCount": {
             "type": "integer",
@@ -71036,7 +72690,7 @@
             "maximum": 9007199254740991
           },
           "images": {
-            "$ref": "#/components/schemas/output_schema146"
+            "$ref": "#/components/schemas/output_schema154"
           },
           "createdAt": {
             "type": "string",
@@ -72543,14 +74197,14 @@
             },
             "anyOf": [
               {
-                "$ref": "#/components/schemas/input_schema192"
+                "$ref": "#/components/schemas/input_schema211"
               },
               {
                 "minItems": 1,
                 "maxItems": 3,
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/input_schema192"
+                  "$ref": "#/components/schemas/input_schema211"
                 }
               }
             ]
@@ -72560,7 +74214,7 @@
               "pageIndex": 0,
               "pageSize": 10
             },
-            "$ref": "#/components/schemas/input_schema48"
+            "$ref": "#/components/schemas/input_schema50"
           },
           "groupBy": {
             "type": "string",
@@ -72743,7 +74397,7 @@
             "$ref": "#/components/schemas/DisplayImagesField"
           },
           "attachments": {
-            "$ref": "#/components/schemas/output_schema450"
+            "$ref": "#/components/schemas/output_schema476"
           }
         },
         "required": [
@@ -73203,7 +74857,7 @@
             "$ref": "#/components/schemas/DisplayImagesField"
           },
           "attachments": {
-            "$ref": "#/components/schemas/output_schema450"
+            "$ref": "#/components/schemas/output_schema476"
           }
         },
         "required": [
@@ -73763,7 +75417,7 @@
             "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
           },
           "candidates": {
-            "$ref": "#/components/schemas/output_schema444"
+            "$ref": "#/components/schemas/output_schema470"
           },
           "candidateCount": {
             "type": "integer",
@@ -73790,7 +75444,7 @@
             "$ref": "#/components/schemas/DisplayImagesField"
           },
           "attachments": {
-            "$ref": "#/components/schemas/output_schema450"
+            "$ref": "#/components/schemas/output_schema476"
           }
         },
         "required": [
@@ -73833,7 +75487,7 @@
             "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
           },
           "candidates": {
-            "$ref": "#/components/schemas/output_schema444"
+            "$ref": "#/components/schemas/output_schema470"
           },
           "candidateCount": {
             "type": "integer",
@@ -73917,7 +75571,7 @@
             "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
           },
           "candidates": {
-            "$ref": "#/components/schemas/output_schema444"
+            "$ref": "#/components/schemas/output_schema470"
           },
           "candidateCount": {
             "type": "integer",

@@ -104,6 +104,7 @@ const portsFor = (
     withTransaction: async (_db, operation) => operation(database),
     refreshProjection: vi.fn(async () => undefined),
     runSideEffects: vi.fn(async () => undefined),
+    applyProvenance: vi.fn(async () => undefined),
     ...overrides,
   };
 };
@@ -198,5 +199,44 @@ describe("photo import atomic commit", () => {
     ).rejects.toThrow("was not approved for reuse");
     expect(adapter.validate).not.toHaveBeenCalled();
     expect(adapter.apply).not.toHaveBeenCalled();
+  });
+
+  it("forwards a reported library sighting to applyProvenance for a reused UPLOADED row", async () => {
+    const withLibrary = input();
+    withLibrary.deviceId = "installation-1";
+    withLibrary.images[0] = {
+      ...withLibrary.images[0]!,
+      library: {
+        assetKey: "cloud-asset-1",
+        cloudIdentifier: "cloud-asset-1",
+        localIdentifier: null,
+        sourceType: "userLibrary",
+        mediaSubtypes: [],
+        originalFilename: "photo.heic",
+        pixelWidth: 12,
+        pixelHeight: 8,
+        hasAdjustments: false,
+        capturedAt: new Date("2026-09-16T12:00:00.000Z"),
+        capturedAtOffsetMinutes: -420,
+        addedAt: new Date("2026-09-16T12:05:00.000Z"),
+        location: null,
+        placeName: null,
+        camera: null,
+        hashDistance: null,
+        aspectGate: null,
+        observedAt: new Date("2026-09-17T12:00:00.000Z"),
+      },
+    };
+    const ports = portsFor("UPLOADED");
+
+    await commitPhotoImport(context, withLibrary, adapter, ports);
+
+    expect(ports.applyProvenance).toHaveBeenCalledTimes(1);
+    const [, , installationId, verified] = vi.mocked(ports.applyProvenance).mock
+      .calls[0]!;
+    expect(installationId).toBe("installation-1");
+    expect(verified).toHaveLength(1);
+    expect(verified[0]?.sightings).toEqual([withLibrary.images[0]!.library]);
+    expect(verified[0]?.ownDeviceProvenance).toBe(true);
   });
 });
