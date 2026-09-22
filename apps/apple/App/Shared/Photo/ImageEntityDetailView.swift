@@ -1,4 +1,6 @@
+import CoreLocation
 import CubbyKit
+import MapKit
 import SwiftUI
 
 /// Images use image.detail; they do not have the generic resources.image.get route.
@@ -14,6 +16,7 @@ struct ImageEntityDetailView: View {
     @State private var diagnostics = ImageDiagnosticsCompareModel()
     @State private var processing = ImageProcessingHistoryModel()
     @State private var jobs = ImageJobHistoryModel()
+    @State private var sightings = ImageSightingsModel()
     @State private var showingAllAnalyses = false
     @State private var showingAllJobs = false
 
@@ -32,6 +35,7 @@ struct ImageEntityDetailView: View {
                         preferredAnalysis: processing.preferred,
                         history: processing.entries,
                         totalAnalyses: processing.total, jobs: jobs.runs, totalJobs: jobs.total,
+                        sightings: sightings.rows,
                         showingAllAnalyses: $showingAllAnalyses, showingAllJobs: $showingAllJobs)
                     if developerOverlays {
                         Section("Developer overlays") {
@@ -115,9 +119,11 @@ struct ImageEntityDetailView: View {
             async let detail = appModel.client.imageDetail(id)
             async let analyses = processing.load(id: id, client: appModel.client)
             async let jobLoad = jobs.load(id: id, client: appModel.client)
+            async let sightingsLoad = sightings.load(id: id, client: appModel.client)
             self.detail = try await detail
             await analyses
             await jobLoad
+            await sightingsLoad
         } catch {
             self.error = error.localizedDescription
             Diagnostics.report(error, context: "photos.imageDetail")
@@ -133,6 +139,7 @@ private struct PhotoTab: View {
     let totalAnalyses: Int
     let jobs: [ActivityRun]
     let totalJobs: Int
+    let sightings: [EntityRow]
     @Binding var showingAllAnalyses: Bool
     @Binding var showingAllJobs: Bool
 
@@ -190,6 +197,23 @@ private struct PhotoTab: View {
                 }
                 if totalJobs > 10 {
                     Button("View all \(totalJobs)") { showingAllJobs = true }
+                }
+            }
+        }
+        Section("Provenance") {
+            ProvenanceRows(detail: detail)
+        }
+        if !sightings.isEmpty {
+            Section("In libraries") {
+                ForEach(sightings) { row in
+                    NavigationLink(value: Route.entityDetail(.imageSighting, id: row.id)) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(row.title)
+                            if let subtitle = row.subtitle {
+                                Text(subtitle).font(.caption).foregroundStyle(.secondary)
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -459,6 +483,139 @@ private struct ImageDetailDiagnostics: Encodable {
     let deviceSha256: String?
     let serverPerceptualHash: String?
     let devicePerceptualHash: String?
+}
+
+/// The "Provenance" section's rows: capture date/place/attribution, plus a small non-interactive
+/// map when a location is known. Detail-only data (`ImageWithEntity`, not the list projection).
+private struct ProvenanceRows: View {
+    let detail: ImageWithEntity
+
+    var body: some View {
+        if let capturedAt = detail.capturedAt {
+            LabeledContent(
+                "Captured",
+                value: Self.captureDateText(capturedAt, offsetMinutes: detail.capturedAtOffsetMinutes))
+        }
+        if let placeName = detail.capturePlaceName {
+            LabeledContent("Place", value: placeName)
+        }
+        if let capturedByName = detail.capturedByName {
+            LabeledContent("Captured by", value: capturedByName)
+        }
+        if let captureDeviceLabel = detail.captureDeviceLabel {
+            LabeledContent("Device", value: captureDeviceLabel)
+        }
+        LabeledContent("Source") {
+            HStack(spacing: PorcelainTokens.Space.xs) {
+                ProvenanceBadge(text: Self.sourceLabel(detail.source))
+                ProvenanceBadge(text: Self.attributionLabel(detail.captureAttribution))
+            }
+        }
+        if let location = detail.captureLocation {
+            ProvenanceMapRow(location: location)
+                .listRowInsets(EdgeInsets())
+        }
+    }
+
+    private static func captureDateText(_ date: Date, offsetMinutes: Int?) -> String {
+        let base = date.formatted(date: .abbreviated, time: .shortened)
+        guard let offsetMinutes else { return base }
+        let sign = offsetMinutes < 0 ? "-" : "+"
+        let magnitude = abs(offsetMinutes)
+        let offset = String(format: "%@%02d:%02d", sign, magnitude / 60, magnitude % 60)
+        return "\(base) (\(offset))"
+    }
+
+    private static func sourceLabel(_ source: ImageWithEntity.SourcePayload) -> String {
+        switch source {
+        case .own: "Own"
+        case .catalog: "Catalog"
+        case .unknown: "Unknown"
+        case .screenshot: "Screenshot"
+        }
+    }
+
+    private static func attributionLabel(_ attribution: ImageCaptureAttribution) -> String {
+        switch attribution {
+        case .none: "No attribution"
+        case .derived: "Derived"
+        case .ambiguous: "Ambiguous"
+        case .confirmed: "Confirmed"
+        }
+    }
+}
+
+/// A small pill label for the Provenance section's source/attribution badges.
+private struct ProvenanceBadge: View {
+    let text: String
+
+    var body: some View {
+        Text(text)
+            .font(.porcelainLabel)
+            .padding(.horizontal, PorcelainTokens.Space.sm)
+            .padding(.vertical, 2)
+            .background(
+                RoundedRectangle(cornerRadius: PorcelainTokens.radiusChip)
+                    .fill(PorcelainTokens.inset)
+            )
+            .foregroundStyle(PorcelainTokens.graphiteSecondary)
+    }
+}
+
+/// A capped-height, non-interactive map so it never fights the surrounding List's scroll gesture
+/// — a tap opens the location in Maps instead. Detail output only (`ImageCaptureLocation` never
+/// appears on a list projection).
+private struct ProvenanceMapRow: View {
+    let location: ImageCaptureLocation
+    @Environment(\.openURL) private var openURL
+
+    private var coordinate: CLLocationCoordinate2D {
+        CLLocationCoordinate2D(latitude: location.lat, longitude: location.lng)
+    }
+
+    var body: some View {
+        ZStack {
+            Map(initialPosition: .region(region)) {
+                Marker("", coordinate: coordinate)
+            }
+            .allowsHitTesting(false)
+            Color.clear.contentShape(.rect)
+        }
+        .frame(height: 110)
+        .clipShape(RoundedRectangle(cornerRadius: PorcelainTokens.radiusPanel))
+        .padding(.horizontal, PorcelainTokens.Space.md)
+        .onTapGesture { openInMaps() }
+        .accessibilityLabel("Capture location")
+        .accessibilityAddTraits(.isButton)
+    }
+
+    private var region: MKCoordinateRegion {
+        MKCoordinateRegion(center: coordinate, latitudinalMeters: 800, longitudinalMeters: 800)
+    }
+
+    private func openInMaps() {
+        guard let url = URL(string: "https://maps.apple.com/?ll=\(location.lat),\(location.lng)")
+        else { return }
+        openURL(url)
+    }
+}
+
+@Observable
+@MainActor
+private final class ImageSightingsModel {
+    private(set) var rows: [EntityRow] = []
+
+    func load(id: ImageCode, client: CubbyClient) async {
+        do {
+            var filters = EntityFilterState()
+            filters.set(.single(id.rawValue), for: "imageId")
+            let page = try await client.list(
+                EntityCatalog[.imageSighting], page: 1, pageSize: 25, filters: filters)
+            rows = page.items
+        } catch {
+            Diagnostics.report(error, context: "photos.imageSightings")
+        }
+    }
 }
 
 #Preview(traits: .modifier(SignedInPreview())) {

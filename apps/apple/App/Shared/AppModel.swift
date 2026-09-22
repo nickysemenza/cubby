@@ -54,10 +54,12 @@ final class AppModel {
     /// available. Local photo browsing never waits for it.
     @ObservationIgnored private var storedPhotoAnalysisStore: PhotoAnalysisStore?
     @ObservationIgnored private var storedPhotoClassificationSweep: PhotoClassificationSweep?
+    @ObservationIgnored private var storedLibraryMetadataSync: LibraryMetadataSync?
     @ObservationIgnored private var photoSubsystemTask: Task<Void, Never>?
 
     var photoAnalysisStore: PhotoAnalysisStore? { storedPhotoAnalysisStore }
     var photoClassificationSweep: PhotoClassificationSweep? { storedPhotoClassificationSweep }
+    var libraryMetadataSync: LibraryMetadataSync? { storedLibraryMetadataSync }
 
     /// Opens the persisted SQLite index in the background after local browsing has started.
     func preparePhotoSubsystem() async {
@@ -75,6 +77,7 @@ final class AppModel {
             let sweep = makePhotoClassificationSweep()
             storedPhotoClassificationSweep = sweep
             backgroundActivity.register(sweep)
+            storedLibraryMetadataSync = makeLibraryMetadataSync(analysisStore: analysisStore)
             photoLibrary.install(analysisStore: analysisStore)
             photoSubsystemTask = nil
         }
@@ -91,6 +94,20 @@ final class AppModel {
         sweep.onClassified = { id, snapshot in matches.markAnalysis([id: snapshot]) }
         Task { try? await storedPhotoAnalysisStore?.migrateLegacyHashCacheIfNeeded() }
         return sweep
+    }
+
+    /// Registered once here (not rebuilt in `rebindClients()`) — `LibraryMetadataSyncActivitySource`
+    /// below reads `storedLibraryMetadataSync` fresh on every access, so replacing the instance on
+    /// a host change (`rebindClients()`) never leaves a stale registration behind.
+    private func makeLibraryMetadataSync(analysisStore: PhotoAnalysisStore) -> LibraryMetadataSync {
+        let sync = LibraryMetadataSync(
+            analysisStore: analysisStore, library: photoLibrary, matches: photoMatches, client: client,
+            host: host, installationID: AppInstallationID.current.uuidString.lowercased(),
+            isParticipating: participation.automaticWork, isSignedIn: phase == .signedIn)
+        // Unlike the sweep, there is no "Photos tab appeared" hook driving this — kick it once so
+        // any strong matches computed before this instance existed are not missed.
+        sync.reconcile()
+        return sync
     }
     /// Developer overlays layer 6: installed on every `CubbyClient` this model builds, so the
     /// request-timing strip reflects requests made through any of them (the base client and, after
@@ -165,6 +182,13 @@ final class AppModel {
             CompanionActivitySource { [weak self] in
                 self?.companionImageActivity ?? .init(phase: .stopped)
             })
+        backgroundActivity.register(
+            LibraryMetadataSyncActivitySource { [weak self] in
+                self?.storedLibraryMetadataSync?.currentActivities ?? []
+            })
+        backgroundActivity.register(
+            cancel: { [weak self] in self?.storedLibraryMetadataSync?.cancel() },
+            for: "library-metadata-sync")
         #if os(macOS)
             backgroundActivity.register(browserBridge)
         #endif
@@ -226,6 +250,7 @@ final class AppModel {
                 if participation.automaticWork { await browserBridge.connectConfigured() }
             #endif
             await syncDeviceParticipation()
+            storedLibraryMetadataSync?.setSignedIn(true)
         }
     }
 
@@ -275,9 +300,11 @@ final class AppModel {
             if participation.automaticWork { await browserBridge.connectConfigured() }
         #endif
         await syncDeviceParticipation()
+        storedLibraryMetadataSync?.setSignedIn(true)
     }
 
     func signOut() async {
+        storedLibraryMetadataSync?.setSignedIn(false)
         do {
             try await companionImageWorker?.stopAndDiscardPendingResults()
         } catch {
@@ -312,6 +339,7 @@ final class AppModel {
         if let apiError = error as? CubbyAPIError {
             lastError = apiError.detail?.message ?? "HTTP \(apiError.status)"
             if apiError.isUnauthorized {
+                storedLibraryMetadataSync?.setSignedIn(false)
                 photoMatches.reset()
                 photoLibrary.reset()
                 credential = nil
@@ -378,6 +406,7 @@ final class AppModel {
         photoLibrary.setParticipating(automaticWork)
         photoMatches.allowsRepair = automaticWork
         storedPhotoClassificationSweep?.setParticipating(automaticWork)
+        storedLibraryMetadataSync?.setParticipating(automaticWork)
         let worker = companionImageWorker
         Task { await worker?.setParticipating(automaticWork) }
     }
@@ -404,6 +433,7 @@ final class AppModel {
     }
 
     private func rebindClients() {
+        storedLibraryMetadataSync?.cancel()
         photoMatches.reset()
         photoLibrary.reset()
         let credentials = CredentialProvider(host: host, store: store)
@@ -416,6 +446,13 @@ final class AppModel {
             configureBrowserBridge()
         #endif
         configureCompanionImageWorker()
+        // A new host means a new `CubbyClient`/`host` pair — rebuild rather than reuse, same as
+        // `configureCompanionImageWorker()` above. Only when the photo subsystem has already
+        // opened (`storedPhotoAnalysisStore != nil`): before that, `preparePhotoSubsystem()` will
+        // build the first instance against whatever host is current by then.
+        if let analysisStore = storedPhotoAnalysisStore {
+            storedLibraryMetadataSync = makeLibraryMetadataSync(analysisStore: analysisStore)
+        }
         applyParticipationToGates()
     }
 

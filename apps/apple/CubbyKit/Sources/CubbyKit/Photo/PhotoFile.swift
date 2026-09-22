@@ -22,6 +22,15 @@ public struct PhotoFile: Sendable, Hashable {
     public let width: Int
     public let height: Int
     public let capturedAt: Date?
+    /// EXIF `OffsetTimeOriginal`, converted to minutes — read at the same site as `capturedAt`
+    /// (`captureDate(from:)`), so it is only ever known when `capturedAt` came from EXIF too.
+    public let captureTimeZoneOffsetMinutes: Int?
+    /// TIFF/EXIF camera fields (`Make`, `Model`, `LensModel`, `Software`) — only ever populated
+    /// where full-resolution bytes are already on disk (`inspect(_:)` always reads real bytes;
+    /// there is no separate thumbnail-only path here), matching every `PhotoFile` construction site.
+    public let camera: LibraryAssetMetadata.Camera?
+    /// EXIF GPS dictionary — same materialize-only caveat as `camera`.
+    public let gpsLocation: LibraryAssetMetadata.Location?
     private let temporaryFileLease: TemporaryFileLease?
 
     public var dimensions: CGSize { CGSize(width: width, height: height) }
@@ -38,7 +47,8 @@ public struct PhotoFile: Sendable, Hashable {
     ) throws {
         try self.init(
             url: url, filename: filename, contentType: contentType, size: size,
-            width: width, height: height, capturedAt: capturedAt, temporaryFileLease: nil)
+            width: width, height: height, capturedAt: capturedAt, captureTimeZoneOffsetMinutes: nil,
+            camera: nil, gpsLocation: nil, temporaryFileLease: nil)
     }
 
     private init(
@@ -49,6 +59,9 @@ public struct PhotoFile: Sendable, Hashable {
         width: Int,
         height: Int,
         capturedAt: Date?,
+        captureTimeZoneOffsetMinutes: Int?,
+        camera: LibraryAssetMetadata.Camera?,
+        gpsLocation: LibraryAssetMetadata.Location?,
         temporaryFileLease: TemporaryFileLease?
     ) throws {
         guard size <= Self.maximumByteCount else {
@@ -65,6 +78,9 @@ public struct PhotoFile: Sendable, Hashable {
         self.width = width
         self.height = height
         self.capturedAt = capturedAt
+        self.captureTimeZoneOffsetMinutes = captureTimeZoneOffsetMinutes
+        self.camera = (camera?.isEmpty == true) ? nil : camera
+        self.gpsLocation = gpsLocation
         self.temporaryFileLease = temporaryFileLease
     }
 
@@ -224,7 +240,61 @@ public struct PhotoFile: Sendable, Hashable {
             width: swapsDimensions ? rawHeight : rawWidth,
             height: swapsDimensions ? rawWidth : rawHeight,
             capturedAt: date,
+            captureTimeZoneOffsetMinutes: captureTimeZoneOffsetMinutes(from: properties),
+            camera: cameraMetadata(from: properties),
+            gpsLocation: gpsLocation(from: properties),
             temporaryFileLease: ownsTemporaryFile ? TemporaryFileLease(url: url) : nil)
+    }
+
+    /// EXIF `OffsetTimeOriginal` (`±HH:MM`, possibly unpunctuated), in minutes east of UTC. Reads
+    /// the same field `captureDate(from:)` already validates for its own parse, so the two never
+    /// disagree about whether an offset was present.
+    private static func captureTimeZoneOffsetMinutes(from properties: [CFString: Any]) -> Int? {
+        let exif = properties[kCGImagePropertyExifDictionary] as? [CFString: Any]
+        guard let offset = exif?[kCGImagePropertyExifOffsetTimeOriginal] as? String,
+            let match = offset.range(of: #"^([+-])(\d{2}):?(\d{2})$"#, options: .regularExpression)
+        else { return nil }
+        let digits = offset[match].dropFirst()
+        let sign = offset.hasPrefix("-") ? -1 : 1
+        let hours = Int(digits.prefix(2)) ?? 0
+        let minutes = Int(digits.suffix(2)) ?? 0
+        return sign * (hours * 60 + minutes)
+    }
+
+    /// TIFF `Make`/`Model`/`Software` plus EXIF `LensModel` — `nil` when every field is absent
+    /// (most screenshots, most non-camera sources).
+    private static func cameraMetadata(from properties: [CFString: Any]) -> LibraryAssetMetadata.Camera? {
+        let tiff = properties[kCGImagePropertyTIFFDictionary] as? [CFString: Any]
+        let exif = properties[kCGImagePropertyExifDictionary] as? [CFString: Any]
+        let camera = LibraryAssetMetadata.Camera(
+            make: tiff?[kCGImagePropertyTIFFMake] as? String,
+            model: tiff?[kCGImagePropertyTIFFModel] as? String,
+            lens: exif?[kCGImagePropertyExifLensModel] as? String,
+            software: tiff?[kCGImagePropertyTIFFSoftware] as? String)
+        return camera.isEmpty ? nil : camera
+    }
+
+    /// EXIF GPS dictionary. `kCGImagePropertyGPSLatitude`/`Longitude` are unsigned magnitudes;
+    /// `LatitudeRef`/`LongitudeRef` (`"N"`/`"S"`, `"E"`/`"W"`) carry the sign.
+    /// `kCGImagePropertyGPSAltitudeRef` of `1` means below sea level.
+    private static func gpsLocation(from properties: [CFString: Any]) -> LibraryAssetMetadata.Location? {
+        guard let gps = properties[kCGImagePropertyGPSDictionary] as? [CFString: Any],
+            let rawLatitude = gps[kCGImagePropertyGPSLatitude] as? NSNumber,
+            let rawLongitude = gps[kCGImagePropertyGPSLongitude] as? NSNumber
+        else { return nil }
+        let latitudeSign = (gps[kCGImagePropertyGPSLatitudeRef] as? String) == "S" ? -1.0 : 1.0
+        let longitudeSign = (gps[kCGImagePropertyGPSLongitudeRef] as? String) == "W" ? -1.0 : 1.0
+        var altitude = (gps[kCGImagePropertyGPSAltitude] as? NSNumber)?.doubleValue
+        if let ref = gps[kCGImagePropertyGPSAltitudeRef] as? NSNumber, ref.intValue == 1,
+            let value = altitude
+        {
+            altitude = -value
+        }
+        return LibraryAssetMetadata.Location(
+            latitude: latitudeSign * rawLatitude.doubleValue,
+            longitude: longitudeSign * rawLongitude.doubleValue,
+            altitude: altitude,
+            horizontalAccuracy: (gps[kCGImagePropertyGPSHPositioningError] as? NSNumber)?.doubleValue)
     }
 
     private static func captureDate(from properties: [CFString: Any]) -> Date? {

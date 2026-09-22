@@ -71,7 +71,11 @@ enum NativePresentationCoverage {
             .generic
         case .recipeSource:
             .implemented
-        case .effectiveOwnership:
+        case .effectiveOwnership, .imageCaptureLocation:
+            // `imageCaptureLocation` is `ImageEntityDetailView`'s own Provenance map row, not a
+            // generic renderer — Image never uses the generic detail view (`image.detail`, not
+            // `resources.image.get`; see this file's own doc comment), so this case can only be
+            // reached defensively, but the dedicated screen already covers it.
             .ownedElsewhere
         case .productCategoryPath,
             .financialAccountIdentity,
@@ -86,10 +90,9 @@ enum NativePresentationCoverage {
             .vendorAgentHints,
             .wishCandidates,
             .recipeYield,
-            .imageCaptureLocation,
-            .imageProvenanceEvidence,
+            .imageSightingLocation,
             .imageSightingCamera,
-            .imageSightingLocation:
+            .imageProvenanceEvidence:
             .unsupported("This structured detail is available on web.")
         }
     }

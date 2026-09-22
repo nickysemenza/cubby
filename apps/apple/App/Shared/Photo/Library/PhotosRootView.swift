@@ -294,6 +294,17 @@ private struct PhotoLibraryBrowser: View {
             guard !picker, let sweep else { return }
             sweep.reconcile()
         }
+        .onChange(of: matches.revision) { _, _ in
+            // A fresh batch of strong matches (`PhotoMatchStore.candidates`) is exactly what
+            // `LibraryMetadataSync`'s candidate provider reads — re-plan the same way the sweep
+            // re-plans on `library.monthsRevision` above.
+            guard !picker else { return }
+            appModel.libraryMetadataSync?.reconcile(force: true)
+        }
+        .onChange(of: scenePhase) { _, phase in
+            guard !picker else { return }
+            appModel.libraryMetadataSync?.setSceneActive(phase == .active)
+        }
         .photoPreviewPresentation(item: $preview) { selected in
             PhotoLibraryPreview(asset: selected.asset) {
                 toggle(selected.asset.localIdentifier)

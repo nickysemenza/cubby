@@ -309,4 +309,102 @@ struct PhotoImportStagerTests {
         #expect(commitImages.count == 1)
         #expect(commitImages[0]["source"] == nil)
     }
+
+    // MARK: - PR 5: library metadata + deviceId
+
+    /// The commit request's `deviceId` comes from the transaction's own `deviceID`, not from
+    /// anything per-item — set once for the whole batch.
+    @Test func commitInputCarriesTheTransactionsDeviceID() async throws {
+        defer { PhotoImportStagerStub.handler.withLock { $0 = nil } }
+        let script = RequestScript()
+        PhotoImportStagerStub.handler.withLock { $0 = script.handler }
+
+        let transaction = PhotoImportTransaction(
+            client: try makeClient(), deviceID: "installation-abc", put: { _, _, _ in })
+        script.push(status: 200, json: stageUploadResponse(clientID: "c1", imageID: "IMG-1"))
+        script.push(status: 200, json: commitSuccessResponse(imageID: "IMG-1"))
+
+        _ = try await transaction.commit([try item()])
+
+        let commitFields = try #require(script.seen.withLock { $0 }.last?.fields)
+        #expect(commitFields["deviceId"]?.stringValue == "installation-abc")
+    }
+
+    /// A `nil` `deviceID` (the transaction's default) omits `deviceId` from the wire body entirely
+    /// rather than sending an empty string — older/CLI callers that never pass one stay unchanged.
+    @Test func aNilDeviceIDOmitsTheFieldRatherThanSendingEmptyString() async throws {
+        defer { PhotoImportStagerStub.handler.withLock { $0 = nil } }
+        let script = RequestScript()
+        PhotoImportStagerStub.handler.withLock { $0 = script.handler }
+
+        let transaction = PhotoImportTransaction(client: try makeClient(), put: { _, _, _ in })
+        script.push(status: 200, json: stageUploadResponse(clientID: "c1", imageID: "IMG-1"))
+        script.push(status: 200, json: commitSuccessResponse(imageID: "IMG-1"))
+
+        _ = try await transaction.commit([try item()])
+
+        let commitFields = try #require(script.seen.withLock { $0 }.last?.fields)
+        #expect(commitFields["deviceId"] == nil)
+    }
+
+    /// The commit item's `library` sibling of `analysis` is built from `analysis.library` — never
+    /// itself part of `analysis`, since the server compares `analysis` by JSON equality across
+    /// every item resolving to one image (`apps/web/src/lib/photo-import-commit.service.ts`).
+    @Test func libraryMetadataBecomesTheCommitItemsLibrarySibling() async throws {
+        defer { PhotoImportStagerStub.handler.withLock { $0 = nil } }
+        let script = RequestScript()
+        PhotoImportStagerStub.handler.withLock { $0 = script.handler }
+
+        let transaction = PhotoImportTransaction(
+            client: try makeClient(), deviceID: "installation-abc", put: { _, _, _ in })
+        script.push(status: 200, json: stageUploadResponse(clientID: "c1", imageID: "IMG-1"))
+        script.push(status: 200, json: commitSuccessResponse(imageID: "IMG-1"))
+
+        let file = try PhotoFile.materialize(
+            try ImageEncoding.encode(TestImages.canvas(width: 32, height: 24, subject: false), as: .jpeg),
+            filename: "c1.jpg")
+        let library = LibraryAssetMetadata(
+            localIdentifier: "asset-1", cloudIdentifier: "cloud-1", sourceType: .userLibrary,
+            pixelWidth: 3024, pixelHeight: 4032)
+        let analysis = PhotoLocalAnalysis(
+            id: "c1", analyzedAt: Date(timeIntervalSince1970: 0), sha256: "sha-c1",
+            capturedAt: nil, contentType: "image/jpeg", width: 32, height: 24,
+            classifications: [], recognizedText: [],
+            featurePrint: PhotoFeaturePrint(revision: "1", data: Data()),
+            provenance: PhotoAnalysisProvenance(source: .files, filename: "c1.jpg"), library: library)
+        let libraryItem = PhotoImportBatchItem(
+            clientID: "c1", file: file, analysis: analysis, routeID: "product-self",
+            sourceEntity: .product, sourceID: "PRD-0001", candidateID: "PRD-0001")
+        #expect(libraryItem.library?.cloudIdentifier == "cloud-1")
+
+        _ = try await transaction.commit([libraryItem])
+
+        let commitImages = try #require(
+            script.seen.withLock { $0 }.last?.fields["images"]?.arrayValue)
+        let sentLibrary = try #require(commitImages.first?["library"])
+        #expect(sentLibrary["assetKey"]?.stringValue == "cloud-1")
+        #expect(sentLibrary["cloudIdentifier"]?.stringValue == "cloud-1")
+        #expect(sentLibrary["sourceType"]?.stringValue == "userLibrary")
+        // `hashDistance`/`aspectGate` are never sent from the import path — only a library-scan
+        // match (`LibrarySightingBuilder.createInput`, used by `LibraryMetadataSync`) carries them.
+        #expect(sentLibrary["hashDistance"] == nil)
+        #expect(sentLibrary["aspectGate"] == nil)
+    }
+
+    /// No library metadata (a file/camera import, not a library asset) omits `library` entirely.
+    @Test func aFileImportWithNoLibraryMetadataOmitsTheLibraryField() async throws {
+        defer { PhotoImportStagerStub.handler.withLock { $0 = nil } }
+        let script = RequestScript()
+        PhotoImportStagerStub.handler.withLock { $0 = script.handler }
+
+        let transaction = PhotoImportTransaction(client: try makeClient(), put: { _, _, _ in })
+        script.push(status: 200, json: stageUploadResponse(clientID: "c1", imageID: "IMG-1"))
+        script.push(status: 200, json: commitSuccessResponse(imageID: "IMG-1"))
+
+        _ = try await transaction.commit([try item()])
+
+        let commitImages = try #require(
+            script.seen.withLock { $0 }.last?.fields["images"]?.arrayValue)
+        #expect(commitImages.first?["library"] == nil)
+    }
 }

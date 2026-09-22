@@ -1,6 +1,7 @@
 import CubbyKit
 import Foundation
 import Observation
+import Photos
 
 @MainActor
 @Observable
@@ -48,6 +49,11 @@ final class PhotoImportManifest {
     private var transaction: PhotoImportTransaction?
     private var analysisTask: Task<Void, Never>?
     private var nextAnalysisLogID = 0
+    /// One `cloudIdentifierMappings` result per local identifier, resolved at most once per
+    /// manifest lifetime (`libraryMetadata(for:files:)`) — PhotoKit documents the lookup as
+    /// expensive, so this is never repeated per item or per `prepareIfNeeded` pass. An empty
+    /// string marks "looked up, no cloud identifier" so a miss is not retried.
+    private var cloudIdentifierCache: [String: String] = [:]
     private let analysisStore: PhotoAnalysisStore
     private let activityCenter: BackgroundActivityCenter?
     /// Stable for the manifest's lifetime so a retry (`checkCommitStatus`) after a review-required
@@ -874,7 +880,10 @@ final class PhotoImportManifest {
         do {
             try await prepareIfNeeded()
             let batch = try makeBatch()
-            let transaction = transaction ?? PhotoImportTransaction(client: client)
+            let transaction =
+                transaction
+                ?? PhotoImportTransaction(
+                    client: client, deviceID: AppInstallationID.current.uuidString.lowercased())
             self.transaction = transaction
             let committedClientIDs = try await transaction.commit(batch) { [weak self] state in
                 Task { @MainActor in self?.updateProgress(state) }
@@ -971,6 +980,7 @@ final class PhotoImportManifest {
             files.append(try await item.materialize())
         }
         progress = "Analyzing on device…"
+        let libraryMetadata = await libraryMetadata(for: missing, files: files)
         let analyses = try await LocalPhotoAnalyzer().analyze(
             zip(missing, files).map { item, file in
                 PhotoAnalysisInput(
@@ -978,7 +988,8 @@ final class PhotoImportManifest {
                     provenance: PhotoAnalysisProvenance(
                         source: item.provenanceSource,
                         localIdentifier: item.localIdentifier,
-                        filename: file.filename))
+                        filename: file.filename),
+                    library: libraryMetadata[item.id])
             }
         ) { [weak self] completed, total in
             Task { @MainActor in
@@ -991,6 +1002,62 @@ final class PhotoImportManifest {
             prepared[item.id] = (file, analysis)
             await persistFullAnalysis(analysis, for: item.id)
         }
+    }
+
+    /// One `cloudIdentifierMappings` call for every library-sourced item in `items` (never one per
+    /// item), off the main actor — PhotoKit documents the lookup as expensive. Combines each
+    /// asset's PhotoKit facts with its materialized file's EXIF read (`mergingFileEXIF`), since a
+    /// `PHAsset` alone carries no camera metadata.
+    private func libraryMetadata(
+        for items: [PhotoSelectionItem], files: [PhotoFile]
+    ) async -> [String: LibraryAssetMetadata] {
+        let libraryItems: [(item: PhotoSelectionItem, asset: PHAsset)] = items.compactMap { item in
+            guard case .library(let asset) = item.source else { return nil }
+            return (item, asset)
+        }
+        guard !libraryItems.isEmpty else { return [:] }
+        let uncachedIDs = libraryItems.map { $0.item.id }.filter { cloudIdentifierCache[$0] == nil }
+        if !uncachedIDs.isEmpty {
+            let resolved = await Self.cloudIdentifiers(forLocalIdentifiers: uncachedIDs)
+            for id in uncachedIDs { cloudIdentifierCache[id] = resolved[id] ?? "" }
+        }
+        let filesByID = Dictionary(uniqueKeysWithValues: zip(items.map(\.id), files))
+        return Dictionary(
+            uniqueKeysWithValues: libraryItems.map { item, asset in
+                let cloudIdentifier = cloudIdentifierCache[item.id].flatMap { $0.isEmpty ? nil : $0 }
+                let facts = PHAssetLibraryFacts(asset: asset)
+                let base = LibrarySightingBuilder.metadata(from: facts, cloudIdentifier: cloudIdentifier)
+                let file = filesByID[item.id]
+                let merged = base.mergingFileEXIF(
+                    camera: file?.camera, gpsLocation: file?.gpsLocation,
+                    captureTimeZoneOffsetMinutes: file?.captureTimeZoneOffsetMinutes)
+                return (item.id, merged)
+            })
+    }
+
+    /// Batched in groups of ≤200 local identifiers, off the main actor. Failed/missing lookups are
+    /// simply absent from the result — the caller (`libraryMetadata(for:files:)`) treats a miss as
+    /// "no cloud identifier yet", which is exactly what `LibrarySightingBuilder` expects.
+    private static func cloudIdentifiers(forLocalIdentifiers localIdentifiers: [String]) async -> [String:
+        String]
+    {
+        await Task.detached(priority: .utility) {
+            var result: [String: String] = [:]
+            var start = 0
+            while start < localIdentifiers.count {
+                let end = min(start + 200, localIdentifiers.count)
+                let batch = Array(localIdentifiers[start..<end])
+                let mappings = PHPhotoLibrary.shared().cloudIdentifierMappings(
+                    forLocalIdentifiers: batch)
+                for (localID, mapping) in mappings {
+                    if case .success(let cloudID) = mapping {
+                        result[localID] = cloudID.archivalStringValue
+                    }
+                }
+                start = end
+            }
+            return result
+        }.value
     }
 
     /// Writes the full analysis (hash + classify + OCR + feature print) into the on-device store
