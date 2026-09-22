@@ -1,6 +1,8 @@
 import { execSync } from "node:child_process";
 import { join } from "node:path";
+import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
+import { playwright } from "@vitest/browser-playwright";
 import type { HookHandler, Plugin } from "vite";
 import topLevelAwait from "vite-plugin-top-level-await";
 import wasm from "vite-plugin-wasm";
@@ -64,6 +66,20 @@ function isPluginLoadHook(load: Plugin["load"]): load is PluginLoadHook {
 function wantsIntegrationTier(): boolean {
   if (process.env.CUBBY_TEST_INTEGRATION === "1") return true;
   return explicitlySelectsProject("integration");
+}
+
+/**
+ * The browser-mode `preview` project launches a real (Playwright) Chromium
+ * instance, which is slower to start than the jsdom `ui` project and would
+ * slow the fast tier noticeably if it ran by default. Keep it opt-in the same
+ * way `integration` is — but ALSO opt in for a direct `.preview.test.tsx`
+ * file argument (`pnpm test:file src/....preview.test.tsx`), matching the
+ * other projects' `include` globs, which vitest still resolves by path even
+ * when this project is otherwise filtered out.
+ */
+function wantsPreviewTier(): boolean {
+  if (explicitlySelectsProject("preview")) return true;
+  return process.argv.some((arg) => arg.includes(".preview.test.tsx"));
 }
 
 function explicitlySelectsProject(name: string): boolean {
@@ -234,6 +250,59 @@ export default defineConfig({
           },
         },
         {
+          // Real Chromium via the Playwright provider — not jsdom. Renders
+          // components at real device widths and reads real layout (bounding
+          // boxes, `getComputedStyle`, whether a rerender changed an
+          // element's height) that jsdom cannot: jsdom has no layout engine,
+          // so every box is 0x0 and CSS media queries never match a width.
+          extends: true,
+          // Tailwind (unlike `unit`/`ui`, which never render real layout)
+          // has to actually generate the utility classes the components use
+          // — a real browser's layout engine reads them for real, so a
+          // width invariant is only meaningful if `min-h-11`, `md:min-w-0`,
+          // etc. actually apply. `preview-test-setup.ts` imports the app's
+          // real `styles.css` entry point to feed it.
+          plugins: [react(), tailwindcss()],
+          // Vite's default dependency scanner (no `index.html` here) falls
+          // back to crawling the whole `src` tree for an entry, which reaches
+          // `#tanstack-start-entry`/`#tanstack-router-entry` — virtual
+          // specifiers only `@tanstack/react-start`'s own Vite plugin
+          // resolves (that plugin isn't loaded here; the real app's
+          // `vite.config.ts` is a separate config this one never imports).
+          // Unlike the `ui`/`unit` projects, browser mode can't fall back to
+          // skipping a failed scan (it needs a real prebundle to serve to
+          // the browser), so a scan failure is fatal here. Pointing the
+          // scanner's entries at only the preview test files keeps the crawl
+          // out of server-only modules it was never going to test, while
+          // still discovering (and properly CJS-interop-converting) every
+          // dependency those files actually reach.
+          optimizeDeps: {
+            entries: [join(import.meta.dirname, "src/**/*.preview.test.tsx")],
+            exclude: [
+              "@tanstack/react-start",
+              "@tanstack/react-start-server",
+              "@tanstack/start-server-core",
+            ],
+          },
+          test: {
+            name: "preview",
+            include: ["**/*.preview.test.tsx"],
+            setupFiles: ["./tooling/preview-test-setup.ts"],
+            browser: {
+              enabled: true,
+              headless: true,
+              provider: playwright(),
+              instances: [{ browser: "chromium" }],
+            },
+            // Chromium launch + page navigation per file is slower than a
+            // shared jsdom graph; give it real room instead of flaking on
+            // the fast tiers' 5s/10s budget.
+            testTimeout: 20_000,
+            isolate: false,
+            sequence: { groupOrder: 2 },
+          },
+        },
+        {
           // won't inherit any options from this config
           // this is the default behaviour
           extends: true,
@@ -272,6 +341,7 @@ export default defineConfig({
       ] satisfies TestProjectConfiguration[]
     ).filter((project) => {
       if (project.test.name === "integration") return wantsIntegrationTier();
+      if (project.test.name === "preview") return wantsPreviewTier();
       return true;
     }),
 
