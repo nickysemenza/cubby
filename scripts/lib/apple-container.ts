@@ -53,7 +53,7 @@ export function containerCli(
   });
 }
 
-export async function listContainers(): Promise<ContainerListEntry[]> {
+async function listContainers(): Promise<ContainerListEntry[]> {
   const raw = JSON.parse(
     await containerCli(["list", "--all", "--format", "json"]),
   );
