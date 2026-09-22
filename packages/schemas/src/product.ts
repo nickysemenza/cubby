@@ -29,6 +29,7 @@ import {
 } from "./identifiers";
 import {
   imageOut,
+  imageAnalysisSummarySchema,
   ImageRenderStatus,
   ImageStatus,
   ImageStorageStatus,
@@ -1053,6 +1054,9 @@ export const productMcpImageOut = z.object({
   updatedAt: z.date(),
   displayPosition: z.number().int().positive().nullable(),
   isCover: z.boolean(),
+  // Populated only on a Product detail/get read, not list, to keep list cost
+  // flat — see `dbProductToAPI`/`splitProductImages`.
+  analysisSummary: imageAnalysisSummarySchema.nullable().optional(),
 });
 
 export const productMcpDetailOut = z.object({

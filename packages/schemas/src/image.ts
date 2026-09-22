@@ -1,4 +1,7 @@
-import { imageOut } from "./entity-definitions/field-primitives";
+import {
+  imageOut,
+  imageAnalysisSummarySchema,
+} from "./entity-definitions/field-primitives";
 import { z } from "zod";
 import { generatedEntitySort } from "./generated/entity-sort.gen";
 import type { GeneratedEntitySortField } from "./generated/entity-sort.gen";
@@ -7,11 +10,13 @@ import { mutationSideEffectsSchema } from "./background-jobs";
 import {
   createPaginatedResponseSchemaWithContext,
   createSortPaginationFields,
+  entityFilterList,
   oneOrMany,
   presenceFilter,
 } from "./pagination";
 import { auditDateFilterFields } from "./base-entity";
 import { purchaseDocumentKind } from "./purchase";
+import { importRunTargetState } from "./purchase-import";
 import {
   coverEntities,
   galleryEntities,
@@ -26,6 +31,7 @@ import { entityImage } from "./entity";
 import {
   id,
   imageShortcode,
+  importRunShortcode,
   productShortcode,
   projectShortcode,
 } from "./identifiers";
@@ -231,6 +237,14 @@ export const imageFilterFields = {
     .max(24 * 365 * 10)
     .optional()
     .describe("Only images uploaded more than this many hours ago."),
+  importRunId: entityFilterList(importRunShortcode)
+    .optional()
+    .describe(
+      "Only images that are a target of one of these import runs. Sets list order to the run's picker position (see importTarget.position) instead of the default sort.",
+    ),
+  targetState: oneOrMany(importRunTargetState)
+    .optional()
+    .describe("Only images whose import-run target is in one of these states."),
 };
 
 export const imageListFiltersSchema = z.object(imageFilterFields);
@@ -465,7 +479,11 @@ export const cullPendingImagesSchema = z.object({
   olderThanHours: z.int().positive().default(CULL_PENDING_IMAGES_DEFAULT_HOURS),
 });
 
-export { imageOut } from "./entity-definitions/field-primitives";
+export {
+  imageOut,
+  imageAnalysisSummarySchema,
+  type ImageAnalysisSummary,
+} from "./entity-definitions/field-primitives";
 
 export type ImageOut = z.infer<typeof imageOut>;
 
@@ -543,6 +561,14 @@ export const initiateUploadWithoutEntityResponseSchema = z.object({
   url: z.url(),
 });
 
+/** An Image's current row in a photo-inventory (or other) import run's picker. */
+export const importTargetSummarySchema = z.object({
+  runId: importRunShortcode,
+  state: importRunTargetState,
+  position: z.number().int().nullable(),
+});
+export type ImportTargetSummary = z.infer<typeof importTargetSummarySchema>;
+
 export const imageWithEntitySchema = z.object({
   id: imageShortcode,
   url: z.url(),
@@ -571,6 +597,8 @@ export const imageWithEntitySchema = z.object({
   entityName: z.string().nullable(),
   associations: z.array(imageAssociationSchema),
   processingIssue: imageProcessingIssue.nullable().optional(),
+  importTarget: importTargetSummarySchema.nullable().optional(),
+  analysisSummary: imageAnalysisSummarySchema.nullable().optional(),
 });
 
 export type ImageWithEntity = z.infer<typeof imageWithEntitySchema>;

@@ -24,7 +24,13 @@ import {
   type PhotoImportCommitInput,
 } from "~/contracts/photo-import.contract";
 import type { Database } from "~/server/db";
-import { aiAnalysis, cookbook, image, vendor } from "~/server/db/schema";
+import {
+  aiAnalysis,
+  cookbook,
+  image,
+  importRunTarget,
+  vendor,
+} from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
 import {
   associatePendingImages,
@@ -60,28 +66,64 @@ export interface ImportImageRow {
     | null;
 }
 
+/**
+ * Exact-hash reuse candidates for staging. `runId` (a raw import run id, not
+ * a shortcode) scopes a photo-inventory run: a hash already targeted by that
+ * run resolves to that same target image first, so re-selecting the same
+ * photo within one run always reuses the same row instead of racing the
+ * "newest globally uploaded match" pick into a second Image with identical
+ * bytes — which `ImportRunTarget`'s one-target-per-image constraint would
+ * then see as a distinct target, not the no-op re-selection it is.
+ */
 export async function findReusableImagesBySha256(
   db: Database,
   hashes: readonly string[],
+  runId?: string,
 ): Promise<Map<string, { shortcode: string }>> {
   if (hashes.length === 0) return new Map();
-  const rows = await getDb(db)
-    .select({ shortcode: image.shortcode, sha256: image.sha256 })
-    .from(image)
-    .where(
-      and(
-        inArray(image.sha256, [...new Set(hashes)]),
-        eq(image.status, "UPLOADED"),
-        eq(image.renderStatus, "verified"),
-        eq(image.storageStatus, "available"),
-        notDeleted(image),
-      ),
-    )
-    .orderBy(desc(image.createdAt), desc(image.id));
+  const uniqueHashes = [...new Set(hashes)];
   const reusable = new Map<string, { shortcode: string }>();
-  for (const row of rows) {
-    if (row.sha256 && !reusable.has(row.sha256)) {
-      reusable.set(row.sha256, { shortcode: row.shortcode });
+
+  if (runId) {
+    const targeted = await getDb(db)
+      .select({ shortcode: image.shortcode, sha256: image.sha256 })
+      .from(importRunTarget)
+      .innerJoin(
+        image,
+        and(eq(image.id, importRunTarget.imageId), notDeleted(image)),
+      )
+      .where(
+        and(
+          eq(importRunTarget.runId, runId),
+          inArray(image.sha256, uniqueHashes),
+        ),
+      );
+    for (const row of targeted) {
+      if (row.sha256 && !reusable.has(row.sha256)) {
+        reusable.set(row.sha256, { shortcode: row.shortcode });
+      }
+    }
+  }
+
+  const remaining = uniqueHashes.filter((hash) => !reusable.has(hash));
+  if (remaining.length > 0) {
+    const rows = await getDb(db)
+      .select({ shortcode: image.shortcode, sha256: image.sha256 })
+      .from(image)
+      .where(
+        and(
+          inArray(image.sha256, remaining),
+          eq(image.status, "UPLOADED"),
+          eq(image.renderStatus, "verified"),
+          eq(image.storageStatus, "available"),
+          notDeleted(image),
+        ),
+      )
+      .orderBy(desc(image.createdAt), desc(image.id));
+    for (const row of rows) {
+      if (row.sha256 && !reusable.has(row.sha256)) {
+        reusable.set(row.sha256, { shortcode: row.shortcode });
+      }
     }
   }
   return reusable;

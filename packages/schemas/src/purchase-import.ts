@@ -992,14 +992,14 @@ export const overwriteProductEnrichmentOut = z.object({
   changedField: z.enum(["manufacturer", "categoryId", "model"]),
 });
 
-export const purchaseImportOperationStatusInput = z.object({
+export const importOperationStatusInput = z.object({
   _runExecution: purchaseImportRunExecution,
 });
-export type PurchaseImportOperationStatusInput = z.infer<
-  typeof purchaseImportOperationStatusInput
+export type ImportOperationStatusInput = z.infer<
+  typeof importOperationStatusInput
 >;
 
-export const purchaseImportOperationStatusOut = z.object({
+export const importOperationStatusOut = z.object({
   runId: importRunShortcode,
   operationId: importOperationId,
   kind: z.string(),

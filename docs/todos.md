@@ -1261,3 +1261,15 @@ Deferred from the 2026-09 manifest-rendering PRs; unordered.
 - **Ingest a seasonal garden plan with `garden-plan-import`.** Turn a
   written seasonal plan into Locations, one season Project,
   due-dated Tasks, and planned Plantings by following the skill's playbook.
+
+- **Extend photo-inventory-import past the manual pilot.** Follow-ups
+  deferred from the wardrobe-import planning pass: surface "unclaimed
+  Products" candidates server-side inside `prepare_purchase_import` itself
+  (today the agent runs a separate `dataGap: product_unpurchased` lookup);
+  give `ImportRun` structured location-by-time segments instead of free-text
+  `notes`; add Flue dispatch for `photo_inventory` runs (a coordinator
+  prompt, `claim_next_import_work` support for image targets, and an
+  analysis-text-only vision path so Flue never needs to view raw bytes); lift
+  image bytes directly from the uploading device instead of round-tripping
+  through R2; and migrate the purchase run's hand-written detail page onto
+  the generic entity-detail slots now that `importRun` is a manifest entity.

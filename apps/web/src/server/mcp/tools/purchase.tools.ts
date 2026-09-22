@@ -40,8 +40,8 @@ import {
   confirmMerchantVendorRuleOut,
   preparePurchaseImportInput,
   preparePurchaseImportOut,
-  purchaseImportOperationStatusInput,
-  purchaseImportOperationStatusOut,
+  importOperationStatusInput,
+  importOperationStatusOut,
   validatePurchaseImportInput,
   validatePurchaseImportOut,
 } from "@cubby/schemas/purchase-import";
@@ -200,11 +200,11 @@ export function registerPurchaseTools(server: McpServer) {
   });
 
   registerMcpTool(server, {
-    name: "purchase_import_operation_status",
+    name: "import_operation_status",
     description:
       "Read the durable status and original result of one stable purchase-import operation id. Use this after interruption instead of inventing a new id or blindly repeating a write.",
-    inputSchema: purchaseImportOperationStatusInput,
-    outputSchema: purchaseImportOperationStatusOut,
+    inputSchema: importOperationStatusInput,
+    outputSchema: importOperationStatusOut,
     annotations: READ_ONLY_CLOSED,
     handler: (params, extra) => {
       const context = getEntityKernelContext(extra);

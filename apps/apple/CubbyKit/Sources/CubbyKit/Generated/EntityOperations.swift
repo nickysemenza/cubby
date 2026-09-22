@@ -1080,7 +1080,7 @@ extension EntityDescriptor {
                 case "notesPresenceFilter": ["has", "none"]
                 case "stockTrackedPresenceFilter": ["has", "none"]
                 case "dataStatus": ["complete", "needs_data", "defect"]
-                case "dataGap": ["product_manufacturer", "product_external_id", "product_category", "product_model", "product_price", "product_image", "amazon_asin", "duplicate_external_id"]
+                case "dataGap": ["product_manufacturer", "product_external_id", "product_category", "product_model", "product_price", "product_image", "amazon_asin", "product_unpurchased", "duplicate_external_id"]
                 case "upcPresenceFilter": ["has", "none"]
                 case "externalIdPresenceFilter": ["has", "none"]
                 case "inventoryPresenceFilter": ["has", "none"]
@@ -1137,7 +1137,7 @@ extension EntityDescriptor {
             switch wireKey {
                 case "statedTotalPresenceFilter": ["has", "none"]
                 case "dataStatus": ["complete", "needs_data", "defect"]
-                case "dataGap": ["purchase_date", "order_id", "stated_total", "primary_document", "empty_expenses", "unpriced_expense", "paperwork_mismatch", "settlement_reference", "settlement_mismatch", "product_manufacturer", "product_external_id", "product_category", "product_model", "product_price", "product_image", "amazon_asin", "duplicate_external_id"]
+                case "dataGap": ["purchase_date", "order_id", "stated_total", "primary_document", "empty_expenses", "unpriced_expense", "paperwork_mismatch", "settlement_reference", "settlement_mismatch", "product_manufacturer", "product_external_id", "product_category", "product_model", "product_price", "product_image", "amazon_asin", "product_unpurchased", "duplicate_external_id"]
                 case "expensePresenceFilter": ["has", "none"]
                 case "financialTransactionPresenceFilter": ["has", "none"]
                 case "productPresenceFilter": ["has", "none"]

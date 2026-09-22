@@ -1,79 +1,99 @@
 ---
 name: photo-inventory-import
-description: Import user-requested household belongings or wardrobe photos into Cubby through a local manifest, preserving evidence, ownership, locations, and duplicate decisions.
+description: Import household belongings or wardrobe photos into Cubby from a photo_inventory ImportRun, preserving evidence, ownership, locations, and duplicate decisions.
 ---
 
 # Photo inventory import
 
-Use this skill for a user-requested photo batch of owned belongings or clothes.
-Read [the import guide](../../../docs/agents/photo-inventory-import.md) before
-writing. Keep the manifest outside the repository. It records originals and
-their SHA-256/capture order, groups and roles, duplicate decisions, intended
-Product/inventory fields, and the append-only write ledger.
+A member uploads photos from the native app into a `photo_inventory`
+`ImportRun` (`RUN-…`): `ledgerPartyId` names whose belongings the batch is,
+and free-text `notes` gives context such as a location by time window (e.g.
+"9:15–9:40am: primary closet"). Work exactly one run per invocation.
 
-## Group and describe
+## Read the run
 
-Group from adjacency plus visible and label evidence. Preserve originals and
-order. Keep `dupefile`, `additionalview`, and `physicalcopy` distinct: only the
-last represents another owned instance. Flag unsupported videos separately; never treat a skipped video as imported.
-Keep original label text as evidence;
-image analysis describes visible content and must not guess fabric or replace a
-Product name. Put size in the name. Tags are compatibility/ecosystem tokens
-only (battery platform, mount, thread, size standard) — never the manufacturer,
-a classification word, or a path node; a tag agents write that restates
-`manufacturer`/`categoryId` gets flagged for removal by `redundantTokens`
-(`@cubby/shared/redundant-tokens`) the next time the record is viewed.
+`entity get importRun { id }` for `ledgerPartyId` and `notes`. Then
+`entity list image { filters: { importRunId, targetState: ["pending"] } }` —
+the list is already ordered by the run's picker `position`, which reflects
+capture order. Each image carries `importTarget` (`state`, `position`) and
+`analysisSummary` (`description`, `classifications`, `recognizedText` —
+on-device Vision plus the cloud description, when either has run). Read
+`analysisSummary` and `position` adjacency first; open an image (`representations`)
+only when the summary leaves the item, its label text, or a group boundary
+genuinely unclear — most groups resolve from the summary alone.
 
-Create descriptive Products for clear items in the requested batch, even when
-brand or model is unknown. Route uncertain groups to exception review. Verified identical variants may share a Product. Count each physical copy once;
-copies with the same owner and location may share an inventory quantity.
-Use one existing root/group/type reference; never create taxonomy choices during
-import without an explicit user decision. The initial Apparel choices are
-Shoes (sandals, sneakers, heels, boots), Clothes (shirts, shorts, pants,
-jackets, skirts, sweaters, dresses), and Accessories (purses, belts, hats).
+## Group and identify
 
-## Commit safely
+Group adjacent-position images into one physical item using position order,
+OCR text, and description together — a run of positions with consistent OCR
+(a size tag, a care label) or matching description is one item; a jump in
+subject is a new item. Distinguish `dupefile` (the same shot again),
+`additionalview` (another angle of the same physical thing), and
+`physicalcopy` (a distinct owned instance) — only `physicalcopy` changes
+inventory quantity; `dupefile` and `additionalview` attach as extra `item`
+images on the same group, never as a second Product or a quantity increase.
+Flag an unsupported video as a skip; never treat it as imported.
 
-Persist intended payloads before writes and returned shortcodes/readback after.
-For local folders, use `create_file_uploads({items})` (up to 50) and retain
-each indexed outcome. PUT bytes for each successful presigned URL, then call
-`attach_files({items})` with the corresponding `uploadId`, target Product, and
-purpose. Its outcomes are also independent and indexed: keep successes, then
-retry only failed items after reconciling their persisted intent and fresh
-read-back. Never send local bytes or base64 through MCP.
+Name and match per [product identity](../product-enrichment/references/product-identity.md):
+`Brand Model — Color, Size`, one Product per exact variant. Before creating,
+check for an existing match — `resolve_products` for name/alias hits,
+`find_similar_entities` for a visual/embedding candidate, and
+`entity list product { filters: { dataGap: "product_unpurchased" } }` scoped
+to this owner/category for a Product a prior photo batch already created but
+never received inventory for. Also check existing purchase-created Products
+in the same category lacking inventory — a receipt-only Product this batch's
+photo now stocks. Never create a Product merely because the match was
+inconclusive; when uncertain, prefer `existingId` and let a human correct it
+later over minting a near-duplicate.
 
-For a Product, read it immediately before attachment and set a deterministic
-idempotency key plus its complete `expectedImageCount`, which includes labels
-and PDFs as well as displayable item images. Attachments to that same Product
-are dependent count changes: apply them in order with a fresh count for each,
-or stop and reconcile before retrying a failed index.
-Create or match the Product before attaching its photos. Receive inventory
-through existing operations once the Product and required ownership/location
-are confirmed; image-processing completion is not a prerequisite.
-The native `photoImport` pipeline requires authentic native analysis; do not
-fabricate Vision feature prints or native payloads to use it. When available, schedule and inspect image work with
-`schedule_image_processing` and `get_image_processing`; use
-`correct_image_description` for user-confirmed corrections to retained analysis.
+For apparel specifically, load
+[the Apparel taxonomy](references/apparel.md) before naming or classifying —
+it lists the current root/group/type choices and the tag-transcription rules.
 
-Use fresh Product reads for CRUD and image writes. Inventory requires a real
-physical location and the confirmed existing ownership mode or owner. Ask when
-ownership or location is unknown; do not create imaginary holding locations. A lost response becomes an
-`uncertain` manifest entry: reconcile the exact images, Products, and inventory
-entries before any retry, especially an additive inventory write.
+## Commit the group
 
-## Images and boundaries
+Write each group with `commit_photo_group`: `product` is
+`{ kind: "existing", existingId }` or `{ kind: "create", create: {...} }`;
+`images` lists every attached image with `purpose: "item"` or `"label"`;
+`skip` lists every rejected image (duplicate file, unusable frame, video)
+with a reason — every image in the group must appear in exactly one of
+`images` or `skip`. Add `inventory` once ownership and location are settled:
+`ownershipMode: "person"` with the owner (default the run's own
+`ledgerPartyId` unless the photo says otherwise) and a real location — resolve
+one from the run's `notes` (location-by-time-window) or ask; never invent a
+holding location. Omit `inventory` and ask, or leave the group `skip`-only,
+when ownership or location is genuinely unresolved — a group is not forced
+into a guess to stay unblocked.
 
-Own photos and confirmed catalog assets can coexist. Record Image `source`
-as `own`, `catalog`, or `unknown`, catalog `sourcePageUrl`, `sourceAssetUrl`,
-and `sourceName`, plus Product purpose `item` or `label`. Only verified exact-product catalog overview images qualify as enrichment
-covers. Source alone is not identity verification. Preserve original files,
-label photos, and manual ordering unless explicitly choosing a replacement
-cover. A transparent cutout is a rendition of its original Image, not another
-attachment; schedule suitable item views, skip labels and already-transparent
-assets, preserve complete pairs, and allow failed processing to fall back to
-the original without blocking import.
+`commit_photo_group` is idempotent per `(runId, groupKey)`: after a lost
+response, retry the identical call (same `groupKey`, same payload) rather
+than re-sending a changed one — it replays the prior result instead of
+writing again. Use a stable `groupKey` per physical item so a retry is
+recognizable; never reuse a `groupKey` for a different group. A `conflict`
+outcome means an exact case-insensitive name/alias collision: read the
+returned colliding Product ids, then resend with that `existingId` or a
+distinctly different name — never resend the identical `create` expecting a
+different result.
 
-Do only the user-requested import. Do not infer prices, receipts, purchases,
-vendors, composition, or purchase relationships. A later receipt is handled
-through purchase import: it matches an existing Product, uses Monarch settlement
-evidence only, and creates no inventory.
+Set the Product's `imageOrder` (own item cutout first, verified catalog image
+second, labels last) only when a catalog image is added after the own photo
+already exists — see the cover-order note in
+[product identity](../product-enrichment/references/product-identity.md). A
+group with only its own photos needs no reordering.
+
+## Finish
+
+The run is done once `entity list image { filters: { importRunId,
+targetState: ["pending"] } }` returns nothing — `commit_photo_group` marks the
+run `completed` on the same transition automatically. Report items
+committed, images skipped (with reasons), Products matched vs. created,
+inventory received, and every open question (ambiguous ownership, unresolved
+location, an unresolved `conflict`). Then check
+`dataGap: product_unpurchased` — a photo-created Product left there is a
+handoff to purchase-import, not a task this run repeats.
+
+Do only the requested import: never infer prices, receipts, purchases,
+vendors, or purchase relationships from a photo. A later receipt is handled
+by `purchase-import`, which matches this same Product (see `dataGap:
+product_unpurchased`) using settlement evidence only and creates no new
+inventory.

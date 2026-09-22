@@ -71,6 +71,15 @@ const hasAmazonId = (t: Product) => sql`EXISTS (
     AND dq_asin."kind" = 'asin'
 )`;
 
+// A photo-inventory-created Product is stocked (has inventory) but was never
+// claimed by a purchase: no acquiring Expense, and no explicit PurchaseProduct
+// link (the enrichment path a purchase import takes when it later matches
+// this same Product — see `product-identity.md`).
+const hasPurchaseProductLink = (t: Product) => sql`EXISTS (
+  SELECT 1 FROM "PurchaseProduct" dq_pp
+  WHERE dq_pp."productId" = ${t.id} AND dq_pp."deletedAt" IS NULL
+)`;
+
 const hasExternalId = (t: Product) => sql`EXISTS (
   SELECT 1 FROM "ProductExternalId" dq_xid
   WHERE dq_xid."productId" = ${t.id} AND dq_xid."deletedAt" IS NULL
@@ -157,6 +166,12 @@ export const productChecks = defineEntityChecks({
       expected: inScope,
       missing: hasExternalIdCollision,
       fingerprint: (t) => [hasExternalIdCollision(t)],
+    },
+    product_unpurchased: {
+      expected: hasInventory,
+      missing: (t) =>
+        sql`NOT (${hasExpenses(t)} OR ${hasPurchaseProductLink(t)})`,
+      fingerprint: (t) => [hasExpenses(t), hasPurchaseProductLink(t)],
     },
   },
 });

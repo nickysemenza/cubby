@@ -67,7 +67,10 @@ and `sourceName`; retain own photos as `source: own`, and use `unknown` only
 when the provenance is unavailable. On Product attachments, set `purpose` to
 `item` or `label`. Attach once with a fresh product read, `expectedImageCount`,
 and a deterministic per-product key. Explicitly select the verified exact-product
-catalog overview as the cover while preserving our photos and labels. Later
+catalog overview as the cover only when the Product has no own item image;
+otherwise append the catalog image after the own item image (see
+[product identity](references/product-identity.md) on belongings cover order)
+and preserve our photos and labels. Later
 manual order remains authoritative until another explicit replacement. Schedule
 original analysis and useful item cutouts through `schedule_image_processing`;
 skip label cutouts and already-transparent assets, preserve pairs, and let

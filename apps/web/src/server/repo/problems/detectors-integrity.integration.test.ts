@@ -321,7 +321,7 @@ const mkImportRunTarget = async (
   values: Partial<
     Pick<
       typeof importRunTarget.$inferInsert,
-      "purchaseId" | "productId" | "vendorAccountId" | "runId"
+      "purchaseId" | "productId" | "imageId" | "vendorAccountId" | "runId"
     >
   >,
 ) => {
@@ -330,6 +330,7 @@ const mkImportRunTarget = async (
     runId: run.id,
     purchaseId: values.purchaseId,
     productId: values.productId,
+    imageId: values.imageId,
     vendorAccountId: values.vendorAccountId,
     targetFingerprint: uniq("target-fingerprint"),
   });
@@ -487,6 +488,8 @@ const SOURCE_FACTORIES = {
     mkImportPreparedOrder(db, { primaryDocumentImageId: targetId }),
   "ImportPreparedOrder.screenshotImageId": (db, targetId) =>
     mkImportPreparedOrder(db, { screenshotImageId: targetId }),
+  "ImportRunTarget.imageId": (db, targetId) =>
+    mkImportRunTarget(db, { imageId: parseEntityId("image", targetId) }),
   "ImportHunt.receiptImageId": (db, targetId) =>
     mkImportHunt(db, { receiptImageId: targetId }),
   "OrderMailAttachment.imageId": async (db, targetId) => {
@@ -1566,11 +1569,11 @@ const derivedMustTargetLiveEdges = deriveMustTargetLiveEdges();
 describe("findReferentialLivenessViolations", () => {
   const ctx = withTestDb();
 
-  it("derives 127 must-target-live edges from INCOMING_EDGES × ENTITY_EDGE_SEMANTICS", () => {
+  it("derives 128 must-target-live edges from INCOMING_EDGES × ENTITY_EDGE_SEMANTICS", () => {
     // Mirrors EXPECTED_EDGE_COUNT in detectors-integrity.ts — an independent
     // spot check computed from the same two source-of-truth maps, not from the
     // detector's own (unexported) derivation.
-    expect(derivedMustTargetLiveEdges).toHaveLength(127);
+    expect(derivedMustTargetLiveEdges).toHaveLength(128);
   });
 
   it("the hand-written fixture map covers exactly the derived edges (a new edge fails here, not silently)", () => {

@@ -1,6 +1,8 @@
 import { buildActorContext, type ActorContext } from "@cubby/schemas/context";
 import {
   parseEntityId,
+  imageId,
+  imageShortcode,
   ledgerPartyId,
   productId,
   purchaseId,
@@ -9,6 +11,7 @@ import {
   vendorAccountId,
   type LedgerPartyId,
   type ImportRunId,
+  type UserId,
   type VendorAccountId,
   type VendorId,
 } from "@cubby/schemas/identifiers";
@@ -38,16 +41,22 @@ import {
   isNotNull,
   isNull,
   lt,
+  ne,
   or,
   sql,
 } from "drizzle-orm";
 import { z } from "zod";
 
+import type {
+  PhotoImportFinalizeInput,
+  PhotoImportFinalizeOutput,
+} from "~/contracts/photo-import.contract";
 import type { Database } from "~/server/db";
 import {
   financialTransaction,
   financialTransactionAllocation,
   aiUsage,
+  image,
   importFinding,
   importHunt,
   importRun,
@@ -78,6 +87,16 @@ import {
   notDeleted,
   withTransaction,
 } from "~/server/repo/database-helpers";
+import { createImageProcessingSubmission } from "~/server/repo/image-processing-history";
+import { persistImageProcessingSubmission } from "~/server/repo/image-processing-submission";
+import { withPhotoImportTransaction } from "~/server/repo/photo-import";
+import { publishImageProcessingWakeups } from "~/server/services/image-processing.service";
+import {
+  productionPhotoImportCommitPorts,
+  verifyStagedImages,
+  type PhotoImportCommitPorts,
+} from "~/server/services/photo-import-commit.service";
+import { finalizeImportedImages } from "~/server/services/photo-import-finalize.service";
 import { getR2PublicUrl } from "~/server/utils/r2-public-url";
 
 import type { PurchaseImportDurableObjectRpc } from "./contracts";
@@ -529,6 +548,96 @@ export async function startTargetedImportRun(
   });
 }
 
+export type StartPhotoInventoryRunInput = {
+  /** The household member the photos belong to; defaults to the creator's own party. */
+  ledgerPartyId?: LedgerPartyId;
+  actorUserId: UserId;
+  notes?: string;
+};
+
+/**
+ * A photo-inventory run has no vendor and no upfront targets: the native app
+ * bulk-uploads photos into it via `stage`/`finalize`, an agent works the
+ * queue afterward. Unlike `startTargetedImportRun`, the owning `ledgerParty`
+ * and the creating actor can differ (a member photographing a shared or
+ * another member's belongings), so the actor snapshot is always the
+ * *creator's* own identity, resolved independently of the chosen owner.
+ */
+export async function startPhotoInventoryRun(
+  db: Database,
+  input: StartPhotoInventoryRunInput,
+) {
+  return withTransaction(db, async (tx) => {
+    const [actor] = await tx
+      .select({
+        actorUserId: ledgerParty.userId,
+        actorName: user.name,
+        actorEmail: user.email,
+        actorLedgerPartyId: ledgerParty.id,
+        actorLedgerPartyShortcode: ledgerParty.shortcode,
+        actorLedgerPartyName: ledgerParty.name,
+        actorLedgerPartyKind: ledgerParty.kind,
+      })
+      .from(user)
+      .innerJoin(
+        ledgerParty,
+        and(
+          eq(ledgerParty.userId, user.id),
+          eq(ledgerParty.kind, "member"),
+          notDeleted(ledgerParty),
+        ),
+      )
+      .where(eq(user.id, input.actorUserId))
+      .limit(1);
+    if (!actor?.actorUserId)
+      throw new Error("Photo inventory actor is not available");
+
+    let ownerLedgerPartyId = actor.actorLedgerPartyId;
+    if (
+      input.ledgerPartyId &&
+      input.ledgerPartyId !== actor.actorLedgerPartyId
+    ) {
+      const [owner] = await tx
+        .select({ id: ledgerParty.id })
+        .from(ledgerParty)
+        .where(
+          and(eq(ledgerParty.id, input.ledgerPartyId), notDeleted(ledgerParty)),
+        )
+        .limit(1);
+      if (!owner)
+        throw new Error("Photo inventory owner party is not available");
+      ownerLedgerPartyId = owner.id;
+    }
+
+    const id = importRunId.parse(crypto.randomUUID());
+    const [run] = await tx
+      .insert(importRun)
+      .values({
+        id,
+        shortcode: generateShortcode("importRun"),
+        ledgerPartyId: ownerLedgerPartyId,
+        actorUserId: actor.actorUserId,
+        actorName: actor.actorName,
+        actorEmail: actor.actorEmail,
+        actorLedgerPartyShortcode: actor.actorLedgerPartyShortcode,
+        actorLedgerPartyName: actor.actorLedgerPartyName,
+        actorLedgerPartyKind: actor.actorLedgerPartyKind,
+        vendorId: null,
+        vendorAccountId: null,
+        purpose: importRunPurpose.enum.photo_inventory,
+        trigger: importRunTrigger.enum.manual,
+        notes: input.notes ?? null,
+        agentSessionId: `photo-inventory:${id}`,
+      })
+      .returning({
+        id: importRun.id,
+        publicId: importRun.shortcode,
+      });
+    if (!run) throw new Error("Photo inventory run was not created");
+    return run;
+  });
+}
+
 /** Consumer-side fence: only the active event generation may admit Flue. */
 export async function acknowledgeImportRunCoordinator(
   db: Database,
@@ -665,6 +774,147 @@ export async function loadRunScopeByShortcode(db: Database, publicId: string) {
     .limit(1);
   if (!row) throw new Error("Purchase import run was not found");
   return loadRunScope(db, row.id);
+}
+
+/**
+ * Finalize a chunk of bulk-uploaded photos into a photo-inventory run: turn
+ * each `stage`d image into an `ImportRunTarget` and activate it, then queue
+ * describe/lift processing. Unlike the vendor-scoped run flows this is not
+ * owner-fenced (`assertOwnedRun`) — any household member may finalize into a
+ * shared photo-inventory run, so `actor` is accepted for parity with sibling
+ * mutations but not consulted for authorization.
+ */
+export async function finalizePhotoImportRun(
+  db: Database,
+  input: PhotoImportFinalizeInput,
+  _actor: ActorContext,
+  // Testability seam only: production always uses the default (R2 + real
+  // image inspection), the same ports `commitPhotoImport` accepts.
+  ports: PhotoImportCommitPorts = productionPhotoImportCommitPorts,
+): Promise<PhotoImportFinalizeOutput> {
+  const scope = await loadRunScopeByShortcode(db, input.runId);
+  if (scope.public.purpose !== "photo_inventory") {
+    throw new Error("Import run is not a photo-inventory run");
+  }
+  if (scope.public.status !== "running") {
+    throw new Error(`Import run is fenced in status ${scope.public.status}`);
+  }
+
+  const detailByShortcode = new Map(
+    input.images.map((item) => [
+      // SAFETY: widening the branded ImageShortcode to plain string so this
+      // map can be looked up by ImportImageRow.shortcode (unbranded) below.
+      item.imageId as string,
+      { position: item.position, sha256: item.sha256 },
+    ]),
+  );
+
+  // Same preflight seam `commitPhotoImport` uses: bytes/dimensions are
+  // verified outside the transaction so R2 failures never hold locks.
+  // `stage` already decided reuse for an exact-hash match, so finalize
+  // always allows it.
+  const staged = await verifyStagedImages(
+    db,
+    input.images.map((item) => ({
+      imageId: item.imageId,
+      sha256: item.sha256,
+      width: item.width,
+      height: item.height,
+    })),
+    { reuseAllowed: true },
+    ports,
+  );
+
+  const { finalizedIds, alreadyFinalizedIds } =
+    await withPhotoImportTransaction(db, async (transactionDb) => {
+      const imageCodes = staged.map((entry) => entry.row.shortcode);
+      const lockedRows = await ports.lockImages(transactionDb, imageCodes);
+      const lockedByCode = new Map(
+        lockedRows.map((row) => [row.shortcode, row] as const),
+      );
+      if (lockedByCode.size !== imageCodes.length) {
+        throw new Error(
+          "One or more staged images disappeared before finalize",
+        );
+      }
+      const lockedStaged = staged.map((entry) => {
+        const locked = lockedByCode.get(entry.row.shortcode);
+        if (!locked || locked.status !== entry.row.status) {
+          throw new Error(
+            `Staged image ${entry.row.shortcode} changed while it was ` +
+              "being finalized",
+          );
+        }
+        return { ...entry, row: locked };
+      });
+
+      const inserted = await getDb(transactionDb)
+        .insert(importRunTarget)
+        .values(
+          lockedStaged.map((entry) => {
+            const detail = detailByShortcode.get(entry.row.shortcode);
+            return {
+              runId: scope.public.runId,
+              imageId: imageId.parse(entry.row.id),
+              position: detail?.position ?? 0,
+              state: importRunTargetState.enum.pending,
+              targetFingerprint: detail?.sha256 ?? entry.integrity.sha256,
+            };
+          }),
+        )
+        // Conflicts land on the partial `(runId, imageId)` unique index — a
+        // retried chunk re-selecting an already-targeted image is a no-op,
+        // not a failure. The bare form matches every constraint on the
+        // table, same as `persistLocalImageAnalysis`'s idempotent upsert.
+        .onConflictDoNothing()
+        .returning({ imageId: importRunTarget.imageId });
+      // SAFETY: widening the branded ImageId to plain string so this set can
+      // be probed with ImportImageRow.id (unbranded) below.
+      const insertedIds = new Set(inserted.map((row) => row.imageId as string));
+
+      await finalizeImportedImages(transactionDb, {
+        pending: lockedStaged.map(({ row, integrity }) => ({
+          row,
+          integrity,
+        })),
+        analyses: [],
+      });
+
+      const allIds = lockedStaged.map((entry) => entry.row.id);
+      await getDb(transactionDb)
+        .update(image)
+        .set({ source: "own" })
+        .where(and(inArray(image.id, allIds), eq(image.source, "unknown")));
+
+      return {
+        finalizedIds: lockedStaged
+          .filter((entry) => insertedIds.has(entry.row.id))
+          .map((entry) => entry.row.shortcode),
+        alreadyFinalizedIds: lockedStaged
+          .filter((entry) => !insertedIds.has(entry.row.id))
+          .map((entry) => entry.row.shortcode),
+      };
+    });
+
+  const submission = await createImageProcessingSubmission(db);
+  const jobIds: string[] = [];
+  for (const shortcode of finalizedIds) {
+    const scheduled = await persistImageProcessingSubmission(db, {
+      id: shortcode,
+      kinds: ["describe_image", "subject_lift"],
+      submission: { id: submission.id, publicId: submission.publicId },
+    });
+    jobIds.push(...scheduled.jobIds);
+  }
+  await publishImageProcessingWakeups(db, jobIds);
+
+  return {
+    finalized: finalizedIds.map((code) => imageShortcode.parse(code)),
+    alreadyFinalized: alreadyFinalizedIds.map((code) =>
+      imageShortcode.parse(code),
+    ),
+    submissionId: submission.publicId,
+  };
 }
 
 const agentProgressInput = z.object({
@@ -901,6 +1151,10 @@ export async function expireStaleImportRuns(
       and(
         eq(importRun.status, "running"),
         lt(importRun.updatedAt, cutoff),
+        // A photo-inventory run has no coordinator polling it, so idle time
+        // alone is not staleness: it may sit untouched for days between
+        // native-app upload sessions.
+        ne(importRun.purpose, importRunPurpose.enum.photo_inventory),
         sql`NOT EXISTS (SELECT 1 FROM ${importRunOperation} WHERE ${importRunOperation.runId} = ${importRun.id} AND ${importRunOperation.startedAt} >= ${cutoff})`,
         sql`NOT EXISTS (SELECT 1 FROM ${importRunProgress} WHERE ${importRunProgress.runId} = ${importRun.id} AND ${importRunProgress.createdAt} >= ${cutoff})`,
       ),
@@ -1121,6 +1375,10 @@ export async function claimNextImportWork(
       hasBrowserAccount: Boolean(scope.public.vendorAccountId),
     };
   }
+  // A photo-inventory run is vendor-less by construction; it must never fall
+  // through to the account-sync branch below.
+  if (scope.public.purpose === "photo_inventory")
+    throw new Error("Photo inventory runs have no dispatchable work");
   if (!scope.public.vendorAccountId || !scope.vendorId)
     return { kind: "none" as const };
   const [hunt] = await getDb(db)

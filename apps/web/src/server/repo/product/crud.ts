@@ -112,6 +112,7 @@ import {
   productExpenseTotalFilterSql,
   productExpenseTotalSql,
 } from "~/server/repo/expense-aggregate-sql";
+import { loadImageAnalysisSummaries } from "~/server/repo/image-analysis-summary";
 import { displayableImageWhere } from "~/server/repo/image-displayability";
 import { syncInventoryValuationsForProduct } from "~/server/repo/inventory/crud";
 import { resolveEstablishedManufacturer } from "~/server/repo/label-canonical";
@@ -164,6 +165,7 @@ import {
   dbProductToListAPI,
   dbProductToPickerItemAPI,
   dbProductToTopLevelAPI,
+  productImageShortcodesOf,
 } from "./mappers";
 import { ownershipExitExpensePredicate } from "./ownership";
 import {
@@ -399,15 +401,17 @@ const productReader = createEntityReader({
   entity: "product",
   fetchById: fetchProductById,
   fromDB: async (db, row: ProductDeepDB) => {
-    const [qualities, coverImageUrls] = await Promise.all([
+    const [qualities, coverImageUrls, analysisSummaries] = await Promise.all([
       observeOperationPhase(PRODUCT_DETAIL_OPERATION, "quality", () =>
         loadProductDataQualities(db, [row.id]),
       ),
       getProductCoverImageUrlsByProductIds(db, [row.id]),
+      loadImageAnalysisSummaries(db, productImageShortcodesOf(row.images)),
     ]);
     return dbProductToAPI(
       { ...row, coverImageUrl: coverImageUrls.get(row.id) ?? null },
       qualities.get(row.id)!,
+      analysisSummaries,
     );
   },
 });
@@ -487,7 +491,7 @@ export const getProductsByShortcodes = async (
     where: and(inArray(product.shortcode, uppercased), notDeleted(product)),
     ...relations.product.full,
   });
-  const [qualities, coverImageUrls] = await Promise.all([
+  const [qualities, coverImageUrls, analysisSummaries] = await Promise.all([
     loadProductDataQualities(
       db,
       results.map((row) => row.id),
@@ -495,6 +499,10 @@ export const getProductsByShortcodes = async (
     getProductCoverImageUrlsByProductIds(
       db,
       results.map((row) => row.id),
+    ),
+    loadImageAnalysisSummaries(
+      db,
+      results.flatMap((row) => productImageShortcodesOf(row.images)),
     ),
   ]);
   const priced = await enrichProductRowsWithPricing(db, results);
@@ -506,6 +514,7 @@ export const getProductsByShortcodes = async (
     dbProductToAPI(
       { ...row, coverImageUrl: coverImageUrls.get(row.id) ?? null },
       qualities.get(row.id)!,
+      analysisSummaries,
     ),
   );
 };

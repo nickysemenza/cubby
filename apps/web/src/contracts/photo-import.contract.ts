@@ -1,6 +1,12 @@
 import { shortcodeEntities } from "@cubby/schemas/entity-manifest";
-import { imageShortcode } from "@cubby/schemas/identifiers";
+import { imageShortcode, importRunShortcode } from "@cubby/schemas/identifiers";
 import { ImageStatus, imageAssociationSchema } from "@cubby/schemas/image";
+import {
+  photoImportCreateRunInput,
+  photoImportCreateRunOutput,
+  photoImportFinalizeInput,
+  photoImportFinalizeOutput,
+} from "@cubby/schemas/photo-import-run";
 import { z } from "zod";
 
 import { defineContract, mutation } from "~/contracts/define";
@@ -35,6 +41,11 @@ const stagedPhotoSchema = z.object({
 
 const photoImportStageInputSchema = z.object({
   items: z.array(stagedPhotoSchema).min(1).max(100),
+  // Scopes exact-hash reuse detection to one photo-inventory run: re-selecting
+  // the same photo within the same run is a no-op rather than a duplicate
+  // target, without suppressing reuse detection against images already
+  // active from outside the run.
+  importRunId: importRunShortcode.optional(),
 });
 
 // Keep these as ordinary unions on the native HTTP surface. The OpenAPI pass
@@ -180,6 +191,11 @@ const photoImportCommitResultSchema = z.object({
   committedAt: z.iso.datetime(),
 });
 
+const photoImportCreateRunInputSchema = photoImportCreateRunInput;
+const photoImportCreateRunOutputSchema = photoImportCreateRunOutput;
+const photoImportFinalizeInputSchema = photoImportFinalizeInput;
+const photoImportFinalizeOutputSchema = photoImportFinalizeOutput;
+
 export type LocalPhotoAnalysis = z.output<typeof localPhotoAnalysisSchema>;
 export type PhotoImportStageInput = z.output<
   typeof photoImportStageInputSchema
@@ -199,6 +215,12 @@ export type PhotoImportReconcileInput = z.output<
 export type PhotoImportReconcileOutput = z.output<
   typeof photoImportReconcileOutputSchema
 >;
+export type PhotoImportFinalizeInput = z.output<
+  typeof photoImportFinalizeInputSchema
+>;
+export type PhotoImportFinalizeOutput = z.output<
+  typeof photoImportFinalizeOutputSchema
+>;
 
 export const photoImportContract = defineContract("photoImport", {
   stage: mutation({
@@ -210,6 +232,16 @@ export const photoImportContract = defineContract("photoImport", {
     native: "Atomic manifest photo import commit",
     input: photoImportCommitInputSchema,
     output: photoImportCommitResultSchema,
+  }),
+  createRun: mutation({
+    native: "Start a photo-inventory import run",
+    input: photoImportCreateRunInputSchema,
+    output: photoImportCreateRunOutputSchema,
+  }),
+  finalize: mutation({
+    native: "Finalize bulk-uploaded photos into a photo-inventory run",
+    input: photoImportFinalizeInputSchema,
+    output: photoImportFinalizeOutputSchema,
   }),
   reconcile: mutation({
     native: "Lock-aware photo import reconciliation",

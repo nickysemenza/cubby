@@ -6,6 +6,7 @@ import {
 } from "@cubby/schemas/external-id";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { isDisplayableImageFile } from "@cubby/schemas/image";
+import type { ImageAnalysisSummary } from "@cubby/schemas/image";
 import type {
   InventoryListProductOut,
   ProductInventoryEmbedOut,
@@ -58,24 +59,54 @@ type ProductImageRow =
 const productImagePurposeOf = (row: ProductImageRow): "item" | "label" =>
   "image" in row && row.purpose === "label" ? "label" : "item";
 
-const mapProductImages = (rows: ProductImageRow[]) =>
+const productImageShortcodeOf = (row: ProductImageRow): string =>
+  ("image" in row ? row.image : row).shortcode;
+
+/**
+ * Every image shortcode attached to a Product's joined image rows (item and
+ * label alike). A caller loading `analysisSummaries` for `dbProductToAPI`
+ * batches `loadImageAnalysisSummaries` over exactly this set.
+ */
+export const productImageShortcodesOf = (
+  rows: ProductDeepDB["images"] | null | undefined,
+): string[] => (rows ?? []).map(productImageShortcodeOf);
+
+const mapProductImages = (
+  rows: ProductImageRow[],
+  analysisSummaries?: Map<string, ImageAnalysisSummary>,
+) =>
   rows.flatMap((row) =>
     mapImages([row]).map((image) => ({
       ...image,
       // The absence of a role on an older join is evidence in its own right;
       // do not rewrite it to the item default used only for grouping/covers.
       purpose: "image" in row ? (row.purpose ?? null) : null,
+      // Populated only when the caller (a Product detail/get read) loaded
+      // `analysisSummaries` — absent on a list read, which passes none, to
+      // keep list cost flat.
+      analysisSummary: analysisSummaries?.get(image.id) ?? null,
     })),
   );
 
-const splitProductImages = (rows: ProductImageRow[] | null | undefined) => {
+/**
+ * Split a Product's joined image rows into item/label galleries.
+ *
+ * `analysisSummaries`, when supplied, is a pre-loaded batch (see
+ * `dbProductToAPI`) keyed by image shortcode — never loaded here, so a list
+ * read that never passes it stays a single query regardless of image count.
+ */
+const splitProductImages = (
+  rows: ProductImageRow[] | null | undefined,
+  analysisSummaries?: Map<string, ImageAnalysisSummary>,
+) => {
   const itemRows = (rows ?? []).filter(
     (row) => productImagePurposeOf(row) === "item",
   );
   const labelRows = (rows ?? []).filter(
     (row) => productImagePurposeOf(row) === "label",
   );
-  const filesOf = (items: ProductImageRow[]) => mapProductImages(items);
+  const filesOf = (items: ProductImageRow[]) =>
+    mapProductImages(items, analysisSummaries);
   const itemImages = filesOf(itemRows);
   const labelImages = filesOf(labelRows);
   return {
@@ -451,13 +482,20 @@ export const dbProductToListAPI = (
 /**
  * Transform a deeply nested product DB record to API format.
  * Handles shortcode branding, image extraction, and nested transforms.
+ *
+ * `analysisSummaries`, like `dataQuality`, is pre-loaded by the caller (a
+ * batched `loadImageAnalysisSummaries` keyed by image shortcode) rather than
+ * fetched in here — this mapper stays a synchronous, DB-free transform, and a
+ * caller that never loads it (a list read) gets `analysisSummary: null`
+ * throughout at no extra query cost.
  */
 export const dbProductToAPI = (
   productData: ProductDeepDB,
   dataQuality: ProductTopLevelOut["dataQuality"],
+  analysisSummaries?: Map<string, ImageAnalysisSummary>,
 ): z.infer<typeof productWithIngredientAndInventoryAndMappingsOut> => {
   const { ingredient, unitMappings, inventoryEntry, images } = productData;
-  const imageGroups = splitProductImages(images);
+  const imageGroups = splitProductImages(images, analysisSummaries);
 
   // `isNotDeleted(entry.location)` matches `dbProductToListAPI` and
   // `onHandUnitsSql`, which inner-joins live locations. Without it a detail

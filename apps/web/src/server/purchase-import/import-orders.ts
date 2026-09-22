@@ -18,8 +18,8 @@ import {
   validatePurchaseImportOut,
   preparePurchaseImportInput,
   preparePurchaseImportOut,
-  purchaseImportOperationStatusInput,
-  purchaseImportOperationStatusOut,
+  importOperationStatusInput,
+  importOperationStatusOut,
   overwriteProductEnrichmentInput,
   overwriteProductEnrichmentOut,
   type CommitPurchaseImportInput,
@@ -1557,10 +1557,10 @@ export async function overwriteProductEnrichment(
 
 export async function purchaseImportOperationStatus(
   db: Database,
-  rawInput: z.input<typeof purchaseImportOperationStatusInput>,
+  rawInput: z.input<typeof importOperationStatusInput>,
   actor: ActorContext,
 ) {
-  const input = purchaseImportOperationStatusInput.parse(rawInput);
+  const input = importOperationStatusInput.parse(rawInput);
   const scope = await assertOwnedRun(db, actor, input._runExecution.runId);
   const [operation] = await getDb(db)
     .select({
@@ -1580,7 +1580,7 @@ export async function purchaseImportOperationStatus(
     )
     .limit(1);
   if (!operation) throw new Error("Purchase import operation was not found");
-  return purchaseImportOperationStatusOut.parse({
+  return importOperationStatusOut.parse({
     runId: scope.public.shortcode,
     operationId: input._runExecution.operationId,
     ...operation,

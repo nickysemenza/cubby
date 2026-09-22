@@ -555,6 +555,43 @@ export default defineEntity({
           export: "resolveUpdatedDate",
         },
       },
+      {
+        columnId: "importRunId",
+        kind: "idMulti",
+        placeholder: "Filter by import run...",
+        brandRef: { entity: "importRun" },
+        urlOnly: true,
+      },
+      {
+        columnId: "targetState",
+        kind: "multiselect",
+        placeholder: "Filter by import-run target state...",
+        options: [
+          { value: "pending", label: "Pending", color: "var(--slate)" },
+          { value: "prepared", label: "Prepared", color: "var(--info)" },
+          {
+            value: "completed",
+            label: "Completed",
+            color: "var(--positive)",
+          },
+          { value: "skipped", label: "Skipped", color: "var(--slate)" },
+          {
+            value: "unresolved",
+            label: "Unresolved",
+            color: "var(--warning)",
+          },
+          {
+            value: "needs_evidence",
+            label: "Needs evidence",
+            color: "var(--warning)",
+          },
+          {
+            value: "unavailable",
+            label: "Unavailable",
+            color: "var(--destructive)",
+          },
+        ],
+      },
     ],
   },
   relations: [],

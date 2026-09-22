@@ -81,6 +81,8 @@ filter:
     - location.makeTree
     - meal.getNutrition
     - photoImport.commit
+    - photoImport.createRun
+    - photoImport.finalize
     - photoImport.reconcile
     - photoImport.stage
     - problems.getCounts
