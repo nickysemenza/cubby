@@ -22,8 +22,12 @@ import type {
   ImageUpdateInput,
   ImageWithEntity,
   ProductImagePurpose,
+  StoredImageEmbeddedMetadata,
 } from "@cubby/schemas/image";
-import { attachableImageEntityId } from "@cubby/schemas/image";
+import {
+  attachableImageEntityId,
+  IMAGE_METADATA_REVISION,
+} from "@cubby/schemas/image";
 import type { PurchaseDocumentKind } from "@cubby/schemas/purchase";
 import { importRunTargetState } from "@cubby/schemas/purchase-import";
 import type { SearchableEntityRef } from "@cubby/schemas/search";
@@ -38,6 +42,7 @@ import {
   inArray,
   isNotNull,
   isNull,
+  like,
   lt,
   not,
   or,
@@ -699,6 +704,20 @@ export async function setImageCaptureState(
   result: ImageCaptureStateRow,
 ): Promise<void> {
   await unwrapDb(db).update(image).set(result).where(eq(image.id, imageId));
+}
+
+/** The stored EXIF, for `deriveAndStoreImageCapture`'s fallback read —
+ * `null` covers both "no row" and "row has no embedded metadata yet", which
+ * that caller already treats identically. */
+export async function getImageEmbeddedMetadataForCapture(
+  db: Database | DrizzleTransaction,
+  imageId: ImageId,
+): Promise<StoredImageEmbeddedMetadata | null> {
+  const row = await unwrapDb(db).query.image.findFirst({
+    where: eq(image.id, imageId),
+    columns: { embeddedMetadata: true },
+  });
+  return row?.embeddedMetadata ?? null;
 }
 
 export async function getLiveSightingsForCapture(
@@ -3063,6 +3082,72 @@ export const countImagesMissingDimensions = async (
     );
   return row?.count ?? 0;
 };
+
+/** `Image.metadataRevision IS DISTINCT FROM IMAGE_METADATA_REVISION` is the
+ * `image-metadata.extract` stale marker: `NULL` (never extracted) and any
+ * older revision number are both candidates, and `IS DISTINCT FROM` (not
+ * `<>`) is what makes `NULL` compare as distinct rather than unknown. */
+const metadataExtractionCandidateWhere = and(
+  eq(image.status, "UPLOADED"),
+  notDeleted(image),
+  like(image.contentType, "image/%"),
+  sql`${image.metadataRevision} IS DISTINCT FROM ${IMAGE_METADATA_REVISION}`,
+);
+
+export interface ImageMetadataExtractionRow {
+  id: ImageId;
+  key: string;
+  contentType: string;
+}
+
+export async function selectImagesForMetadataExtraction(
+  db: Database,
+  limit: number,
+): Promise<ImageMetadataExtractionRow[]> {
+  const rows = await getDb(db)
+    .select({ id: image.id, key: image.key, contentType: image.contentType })
+    .from(image)
+    .where(metadataExtractionCandidateWhere)
+    .orderBy(asc(image.createdAt), asc(image.id))
+    .limit(limit);
+  return rows.map((row) => ({ ...row, id: parseEntityId("image", row.id) }));
+}
+
+export async function countImagesStaleMetadata(db: Database): Promise<number> {
+  const [row] = await getDb(db)
+    .select({ count: count() })
+    .from(image)
+    .where(metadataExtractionCandidateWhere);
+  return row?.count ?? 0;
+}
+
+/** A single row's extraction inputs — the background task's freshness check
+ * re-reads this by id rather than trusting the queue message's own age. */
+export async function getImageMetadataExtractionRow(
+  db: Database,
+  imageId: ImageId,
+): Promise<ImageMetadataExtractionRow | undefined> {
+  const row = await unwrapDb(db).query.image.findFirst({
+    where: and(eq(image.id, imageId), metadataExtractionCandidateWhere),
+    columns: { id: true, key: true, contentType: true },
+  });
+  return row ? { ...row, id: parseEntityId("image", row.id) } : undefined;
+}
+
+/** Writes the extracted EXIF (or `null`, when none was found) and advances
+ * the stale marker in one statement, inside the caller's transaction —
+ * `deriveAndStoreImageCapture` is always called against the same `tx`
+ * immediately after, so the two writes are atomic together. */
+export async function setImageEmbeddedMetadata(
+  tx: Database | DrizzleTransaction,
+  imageId: ImageId,
+  embeddedMetadata: StoredImageEmbeddedMetadata | null,
+): Promise<void> {
+  await unwrapDb(tx)
+    .update(image)
+    .set({ embeddedMetadata, metadataRevision: IMAGE_METADATA_REVISION })
+    .where(eq(image.id, imageId));
+}
 
 const lockAttachableEntity = async (
   tx: DrizzleTransaction,

@@ -26,6 +26,10 @@ import {
 } from "~/server/repo/photo-import";
 import { inspectImageFile } from "~/server/services/image-integrity";
 import {
+  buildImageMetadataExtractionTasks,
+  isImageContentType,
+} from "~/server/services/image-metadata-extraction.service";
+import {
   refreshProjectionsForEvent,
   runMutationSideEffectsForEntities,
   type MutationSideEffectEvent,
@@ -538,6 +542,23 @@ export async function commitPhotoImport(
           persistAnalysis: ports.persistAnalysis,
         },
       });
+      // Only freshly-staged rows (an `analysis` block; a reused UPLOADED row
+      // was already extracted the first time it was committed) need the
+      // wakeup — same "new row, new task" rule as every other finalize seam.
+      const freshlyUploaded = lockedVerified.filter(
+        ({ analysis }) => analysis !== null,
+      );
+      if (freshlyUploaded.length > 0) {
+        await deferred.publish(
+          transactionDb,
+          buildImageMetadataExtractionTasks(
+            freshlyUploaded
+              .filter(({ row }) => isImageContentType(row.contentType))
+              .map(({ row }) => parseEntityId("image", row.id)),
+          ),
+          { source: "photo-import.commit" },
+        );
+      }
       return {
         committedPhotoIds: imageCodes,
         createdDestinations: applied.createdDestinations,

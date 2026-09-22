@@ -17,7 +17,11 @@ import type {
 
 import { publishBackgroundTasks } from "~/server/background-tasks/publish";
 import type { Database } from "~/server/db";
-import { countCullablePendingImages } from "~/server/repo/image";
+import {
+  countCullablePendingImages,
+  countImagesStaleMetadata,
+  selectImagesForMetadataExtraction,
+} from "~/server/repo/image";
 import {
   countStaleRecipeTotals,
   selectAllStaleRecipeIds,
@@ -28,8 +32,14 @@ import {
 } from "~/server/repo/search-document";
 import { getSemanticEmbeddingConfig } from "~/server/semantic/config";
 import { semanticEmbeddingsConfigured } from "~/server/semantic/embeddings";
+import { buildImageMetadataExtractionTasks } from "~/server/services/image-metadata-extraction.service";
 
 import { cullPendingImageStorage } from "./image-storage.service";
+
+/** One page is plenty for a repair republish — "Settle now" only needs to
+ * repair a LOST wakeup, not drive the whole backlog; `backfillImageMetadata`
+ * maintenance is the bounded loop for a larger one. */
+const SETTLE_IMAGE_METADATA_BATCH_SIZE = 100;
 
 /** Uploads abandoned after presign; the same threshold the presign cull uses. */
 const PENDING_UPLOAD_HOURS = 24;
@@ -44,16 +54,22 @@ const countUnembeddedEntities = async (db: Database) =>
     : 0;
 
 export async function countAwaitingWork(db: Database): Promise<AwaitingWork> {
-  const [staleRecipeTotals, unembeddedEntities, pendingUploads] =
-    await Promise.all([
-      countStaleRecipeTotals(db),
-      countUnembeddedEntities(db),
-      countCullablePendingImages(db, PENDING_UPLOAD_HOURS),
-    ]);
+  const [
+    staleRecipeTotals,
+    unembeddedEntities,
+    pendingUploads,
+    staleImageMetadata,
+  ] = await Promise.all([
+    countStaleRecipeTotals(db),
+    countUnembeddedEntities(db),
+    countCullablePendingImages(db, PENDING_UPLOAD_HOURS),
+    countImagesStaleMetadata(db),
+  ]);
   return {
     staleRecipeTotals,
     unembeddedEntities,
     pendingUploads,
+    staleImageMetadata,
     computedAt: new Date().toISOString(),
   };
 }
@@ -101,10 +117,26 @@ export async function settleAwaitingWork(
 
   const culled = await cullPendingImageStorage(db, PENDING_UPLOAD_HOURS);
 
+  const staleImages = await selectImagesForMetadataExtraction(
+    db,
+    SETTLE_IMAGE_METADATA_BATCH_SIZE,
+  );
+  let publishedImageMetadataTasks = 0;
+  if (staleImages.length > 0) {
+    const receipt = await publishBackgroundTasks(
+      db,
+      buildImageMetadataExtractionTasks(staleImages.map((row) => row.id)),
+      { source: "maintenance.settle-awaiting-work" },
+    );
+    publishedImageMetadataTasks = receipt.count;
+    transport = receipt.transport;
+  }
+
   return {
     publishedRecipeTasks: recipes.enqueued,
     publishedEmbeddingTasks,
     culledUploads: culled.count,
+    publishedImageMetadataTasks,
     transport,
   };
 }

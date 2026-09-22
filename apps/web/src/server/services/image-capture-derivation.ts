@@ -27,6 +27,7 @@ import type {
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
   getImageCaptureState,
+  getImageEmbeddedMetadataForCapture,
   getLiveSightingsForCapture,
   setImageCaptureState,
 } from "~/server/repo/image";
@@ -381,12 +382,19 @@ export async function deriveAndStoreImageCapture(
   if (!currentRow) return;
 
   const sightingRows = await getLiveSightingsForCapture(tx, imageId);
+  const storedMetadata = await getImageEmbeddedMetadataForCapture(tx, imageId);
 
   const result = deriveImageCapture({
     image: currentRow,
     sightings: sightingRows,
-    // EXIF extraction is PR6 (server background task); no rows carry it yet.
-    exif: null,
+    exif: storedMetadata && {
+      capturedAt: storedMetadata.capturedAt
+        ? new Date(storedMetadata.capturedAt)
+        : null,
+      capturedAtOffsetMinutes: storedMetadata.capturedAtOffsetMinutes,
+      location: storedMetadata.location,
+      camera: storedMetadata.camera,
+    },
   });
 
   await setImageCaptureState(tx, imageId, result);

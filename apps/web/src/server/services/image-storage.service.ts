@@ -47,6 +47,7 @@ import {
   filenameForContentType,
   inspectImageFile,
 } from "~/server/services/image-integrity";
+import { publishImageMetadataExtraction } from "~/server/services/image-metadata-extraction.service";
 import {
   extractKeyFromUrl,
   getR2PublicUrl,
@@ -104,7 +105,7 @@ export interface ImageStoragePorts<TDatabase> {
     createUploadedImageRecord: (
       database: TDatabase,
       ...args: WithoutDatabase<typeof createUploadedImageRecord>
-    ) => Promise<{ shortcode: string }>;
+    ) => Promise<{ id: string; shortcode: string }>;
     cullPendingImages: (
       database: TDatabase,
       ...args: WithoutDatabase<typeof cullPendingImages>
@@ -151,6 +152,12 @@ export interface ImageStoragePorts<TDatabase> {
       ...args: WithoutDatabase<typeof resolveLiveShortcode>
     ) => Promise<string | null>;
   };
+  backgroundTasks: {
+    publishImageMetadataExtraction: (
+      database: TDatabase,
+      ...args: WithoutDatabase<typeof publishImageMetadataExtraction>
+    ) => Promise<void>;
+  };
 }
 
 export const productionImageStoragePorts = {
@@ -187,6 +194,9 @@ export const productionImageStoragePorts = {
   shortcode: {
     resolveLive: (database, code, entity) =>
       resolveLiveShortcode(database, code, entity),
+  },
+  backgroundTasks: {
+    publishImageMetadataExtraction,
   },
 } satisfies ImageStoragePorts<Database>;
 
@@ -341,6 +351,9 @@ const importImageFromUrlWithPorts = async <TDatabase>(
         };
       }
 
+      // `contentType` is a placeholder here — the key is reused from our own
+      // bucket with no re-fetch, so there are no bytes to extract metadata
+      // from; never `image/*`, so no extraction task is worth publishing.
       const createdImage = await ports.repository.createUploadedImageRecord(
         db,
         {
@@ -369,7 +382,7 @@ const importImageFromUrlWithPorts = async <TDatabase>(
     return null;
   }
 
-  let createdImage: { shortcode: string };
+  let createdImage: { id: string; shortcode: string };
   try {
     createdImage = await ports.repository.createUploadedImageRecord(db, {
       key: stored.key,
@@ -388,6 +401,13 @@ const importImageFromUrlWithPorts = async <TDatabase>(
     });
     throw error;
   }
+
+  await ports.backgroundTasks.publishImageMetadataExtraction(
+    db,
+    parseEntityId("image", createdImage.id),
+    stored.contentType,
+    "image.importFromUrl",
+  );
 
   return {
     imageId: parseShortcodeFor("image", createdImage.shortcode),
@@ -833,6 +853,17 @@ const attachFileToEntityWithPorts = async <TDatabase>(
       );
     }
     throw error;
+  }
+
+  // A reused row (idempotency-key dedupe) was already extracted the first
+  // time it was uploaded; only a genuinely new row needs the wakeup.
+  if (!created.reused && !isDocument) {
+    await ports.backgroundTasks.publishImageMetadataExtraction(
+      db,
+      pendingImageId,
+      contentType,
+      "image.attachFile",
+    );
   }
 
   let cleanupWarning: string | undefined;

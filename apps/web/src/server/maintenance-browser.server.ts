@@ -10,6 +10,7 @@ import {
   settleAwaitingWork,
 } from "~/server/services/awaiting-work.service";
 import { repairImageDimensions } from "~/server/services/image-dimension-repair.service";
+import { backfillImageMetadata } from "~/server/services/image-metadata-backfill.service";
 import { classifyImageProvenance } from "~/server/services/image-provenance-classify.service";
 
 /** Counts read the authoritative handle: this is the truth the badge and the cron agree on. */
@@ -27,5 +28,7 @@ export const maintenanceHandlers = implementOperationDomain(
       repairImageDimensions(context.db, input),
     classifyImageProvenance: (context, input) =>
       classifyImageProvenance(context.db, input),
+    backfillImageMetadata: (context, input) =>
+      backfillImageMetadata(context.db, input),
   },
 );

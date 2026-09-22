@@ -31,6 +31,7 @@ describe("image workflow commit ownership", () => {
       { type: "call", name: "resolveImage" },
       { type: "committedCall", name: "markUploaded" },
       { type: "committedCall", name: "scheduleImageProcessing" },
+      { type: "committedCall", name: "scheduleImageMetadataExtraction" },
     ]);
   });
 });

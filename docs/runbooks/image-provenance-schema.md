@@ -193,9 +193,35 @@ references a sighting by id), so there is nothing else to clean up first;
 `Image.capturedByPartyId` is the only new FK *from* this PR's columns, and it
 is nullable, so dropping it does not require detaching anything first either.
 
+## Part 3 — `Image.embeddedMetadata`
+
+One new nullable column, read only by the `image-metadata.extract`
+background task and `deriveAndStoreImageCapture`'s EXIF fallback. No backfill
+required for deploy compatibility — a row with no `embeddedMetadata` yet
+simply has no EXIF evidence, same as before this part. Idempotent SQL:
+
+```sql
+ALTER TABLE "Image" ADD COLUMN IF NOT EXISTS "embeddedMetadata" jsonb;
+```
+
+Expand-before-deploy order:
+
+1. Apply the SQL above against production.
+2. Read the table definition back and confirm `Image.embeddedMetadata` exists
+   and is nullable with no default.
+3. Deploy the code that reads/writes it (PR6): the `image-metadata.extract`
+   background task, `deriveAndStoreImageCapture`'s EXIF read, and
+   `backfillImageMetadata` maintenance. `Image.metadataRevision` (added in
+   Part 2, always nullable) is the stale marker this part's background task
+   advances to `IMAGE_METADATA_REVISION`; a row with `metadataRevision IS
+   NULL` or below the current revision is a candidate for extraction.
+
+No rollback concern beyond the usual: dropping the column is safe as long as
+no deployed code still references it — nothing else stores an incoming
+reference to it.
+
 ## Later parts
 
-PR 3b's `imageList` move onto `listScaffold`, Image data quality, and
-`classifyImageProvenance` heuristics land entirely in application code — no
-schema change of their own — and PR 6's server-side EXIF extraction only
-writes to columns this part already created.
+None outstanding. PR 3b's `imageList` move onto `listScaffold`, Image data
+quality, and `classifyImageProvenance` heuristics landed entirely in
+application code — no schema change of their own.

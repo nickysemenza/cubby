@@ -15,6 +15,8 @@ import {
   presenceFilter,
 } from "./pagination";
 import { auditDateFilterFields } from "./base-entity";
+import { imageCaptureLocation } from "./image-capture-fields";
+import { imageSightingCamera } from "./image-sighting-fields";
 import { purchaseDocumentKind } from "./purchase";
 import { importRunTargetState } from "./purchase-import";
 import {
@@ -89,6 +91,34 @@ export const imageSourceFingerprintSchema = z.object({
 });
 export type ImageSourceFingerprint = z.infer<
   typeof imageSourceFingerprintSchema
+>;
+
+/**
+ * Bumps to invalidate every stored `Image.embeddedMetadata` row and the
+ * `metadataRevision` stale marker that guards it, forcing the
+ * `image-metadata.extract` background task to re-read and re-parse every
+ * image's bytes (see `image-metadata-revision.service.ts` and
+ * `docs/plans/image-provenance-and-devices.md`'s PR6 entry).
+ */
+export const IMAGE_METADATA_REVISION = 1;
+
+/**
+ * The storage/wire shape of embedded EXIF/GPS metadata cached on
+ * `Image.embeddedMetadata`. `capturedAt` is an ISO string — jsonb has no
+ * native Date type, so the background task (`image-metadata.ts`'s parser
+ * returns a `Date`) converts at the storage boundary, and
+ * `image-capture-derivation.ts` converts back when it reads this column as
+ * `DeriveImageCaptureExif`.
+ */
+export const storedImageEmbeddedMetadataSchema = z.object({
+  capturedAt: z.iso.datetime().nullable(),
+  capturedAtOffsetMinutes: z.number().int().nullable(),
+  location: imageCaptureLocation.nullable(),
+  camera: imageSightingCamera.nullable(),
+  orientation: z.number().int().nullable(),
+});
+export type StoredImageEmbeddedMetadata = z.infer<
+  typeof storedImageEmbeddedMetadataSchema
 >;
 
 // Documents (PDF manuals) reuse the Image table + joins; a "document" is

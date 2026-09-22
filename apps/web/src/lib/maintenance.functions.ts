@@ -10,4 +10,5 @@ export const maintenance = defineOperationDomain(maintenanceContract, {
   settleAwaitingWork: { invalidates: ripple.maintenance },
   repairImageDimensions: { invalidates: ripple.maintenance },
   classifyImageProvenance: { invalidates: ripple.image },
+  backfillImageMetadata: { invalidates: ripple.image },
 });
