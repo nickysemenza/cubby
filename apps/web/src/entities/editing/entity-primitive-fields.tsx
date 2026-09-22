@@ -39,6 +39,10 @@ import { EntityMultiValueField } from "~/app/_components/form-utils/entity-multi
 import { EntityValueField } from "~/app/_components/form-utils/entity-value-field";
 import { VendorField } from "~/app/_components/form-utils/vendor-field";
 import { FormFieldGroup } from "~/app/_components/forms/form-field-group";
+import {
+  SourceAliasesField,
+  SourceRefsField,
+} from "~/app/finance/financial-form-fields";
 import { AliasesField } from "~/components/forms/aliases-field";
 import { FormSection } from "~/components/forms/form-section";
 import { Row } from "~/components/layout";
@@ -601,6 +605,14 @@ export const controlRendererCoverage = {
   "upc-lookup": implemented(ProductUpcField),
   "usda-food": implemented(ProductUsdaFoodField),
   "product-tags": implemented(ProductTagsField),
+  // `SourceAliasesField`/`SourceRefsField` (`financial-form-fields.tsx`)
+  // already hardcode their own `name` (`sourceAliases`/`sourceRefs`), the
+  // only field key either renderer is ever declared against — no need to
+  // thread `field.key` through.
+  "source-aliases": implemented(({ form }) => (
+    <SourceAliasesField form={form} />
+  )),
+  "source-refs": implemented(({ form }) => <SourceRefsField form={form} />),
 } satisfies Readonly<
   Record<
     ControlRendererId,
@@ -632,14 +644,39 @@ function referenceEntitySearch(
   return sharedReferenceEntitySearch(referenceEntity);
 }
 
+/** Looks up one named field on `entity`'s model — the lookup `renderIntentField`
+ * callers outside this module need before they can pass a `PrimitiveFieldModel`
+ * to it. Throws rather than returning `undefined` so the field's presence is a
+ * load-time invariant, not a per-render null check: the generator would have
+ * already failed (`pnpm generate:check`) had the manifest dropped this key. */
+export function requiredFieldModel(
+  entity: Entity,
+  key: string,
+): PrimitiveFieldModel {
+  const field = entityFieldModels[entity].fields.find(
+    (candidate) => candidate.key === key,
+  );
+  if (!field) {
+    throw new Error(`Field ${entity}.${key} is not declared in the model`);
+  }
+  return field;
+}
+
 /** One rendered intent field, in `EntityIntentFields`' own dispatch order: a
  * singular reference gets the search-backed picker, a `control.kind:
  * "specialized"` field dispatches to `controlRendererCoverage`, and
  * everything else falls through to `renderPrimitiveField` — the exact
  * per-kind switch `EntityPrimitiveFields` uses. Extracted so the section
  * grammar below can lay these nodes out into `FormSection`s without
- * duplicating the dispatch. */
-function renderIntentField({
+ * duplicating the dispatch, and exported (with `requiredFieldModel` above) so
+ * a bespoke, section-composed form (`FinancialAccountFields`/
+ * `FinancialTransactionFormFields`) can embed one named specialized field
+ * through the same coverage-driven dispatch without adopting
+ * `EntityIntentFields`' whole roster — those two forms already render their
+ * singular references (`accountId`, `purchaseId`) through richer,
+ * entity-specific search providers `EntityIntentFields`'s generic picker
+ * can't reproduce. */
+export function renderIntentField({
   entity,
   field,
   form,

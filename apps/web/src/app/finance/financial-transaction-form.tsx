@@ -5,7 +5,7 @@ import {
 } from "@cubby/schemas/financial-transaction";
 import { useDebouncedValue } from "@tanstack/react-pacer";
 import { useQuery } from "@tanstack/react-query";
-import { useState } from "react";
+import { useId, useState } from "react";
 import { FormProvider, type UseFormReturn, useWatch } from "react-hook-form";
 import { z } from "zod";
 
@@ -13,17 +13,25 @@ import { EntityValueField } from "~/app/_components/form-utils/entity-value-fiel
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import type { EditMode } from "~/entities/editing/entity-field-presentation";
-import { EntityPrimitiveFields } from "~/entities/editing/entity-primitive-fields";
+import {
+  EntityPrimitiveFields,
+  renderIntentField,
+  requiredFieldModel,
+} from "~/entities/editing/entity-primitive-fields";
 import { entities, entityDetailParams } from "~/entities/entities";
 
 import { TableLink } from "../_components/table/TableLink";
 import { financialTransaction } from "./finance.functions";
-import { SourceRefsField } from "./financial-form-fields";
 import {
   WithFinancialAccountSearch,
   WithPurchaseSearch,
   PurchaseVendorScope,
 } from "./financial-selectors";
+
+const financialTransactionSourceRefsField = requiredFieldModel(
+  "financialTransaction",
+  "sourceRefs",
+);
 
 export const financialTransactionFormSchema = z
   .object({
@@ -101,6 +109,7 @@ export function FinancialTransactionFormFields({
   mode?: EditMode;
   loadVendorInference?: (merchant: string) => Promise<MerchantVendorInference>;
 }) {
+  const idPrefix = useId();
   const merchant = useWatch({ control: form.control, name: "merchant" }) ?? "";
   const [debouncedMerchant] = useDebouncedValue(merchant, { wait: 350 });
   const [allPurchasesVendorId, setAllPurchasesVendorId] = useState<
@@ -190,7 +199,21 @@ export function FinancialTransactionFormFields({
         mode={mode}
         section="details"
       />
-      <SourceRefsField form={form} />
+      {renderIntentField({
+        entity: "financialTransaction",
+        field: financialTransactionSourceRefsField,
+        // SAFETY: `renderIntentField` is shared across every entity's form
+        // and so takes the broad `UseFormReturn<FieldValues>` RHF uses
+        // internally; this form's own values (`FinancialTransactionFormValues`)
+        // are a `FieldValues`-compatible shape, just not the literal generic
+        // parameter RHF's invariant-ish method signatures expect here — the
+        // same single-assertion escape `financial-form-fields.tsx`'s own
+        // `TextField`/`SelectField` use for a caller-owned dynamic path.
+        form: form as never,
+        idPrefix,
+        mode,
+        scopedValueRecord: {},
+      })}
       <EntityPrimitiveFields
         entity="financialTransaction"
         mode={mode}

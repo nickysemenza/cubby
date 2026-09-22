@@ -22,7 +22,6 @@ import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import type { PendingImage } from "~/app/_components/PendingImageUpload";
 import {
   SelectField as FinanceSelectField,
-  SourceAliasesField,
   TextField,
 } from "~/app/finance/financial-form-fields";
 import {
@@ -42,6 +41,8 @@ import { purchaseLabel } from "~/lib/purchase-label";
 import {
   EntityIntentFields,
   EntityPrimitiveFields,
+  renderIntentField,
+  requiredFieldModel,
 } from "./entity-primitive-fields";
 import type { EntityEditResultFor } from "./intent-types";
 import { productMedia } from "./product-editor-fields";
@@ -300,9 +301,15 @@ function ProductFields({ record }: EntityEditorFieldsProps) {
   );
 }
 
+const financialAccountSourceAliasesField = requiredFieldModel(
+  "financialAccount",
+  "sourceAliases",
+);
+
 function FinancialAccountFields({ form, record }: EntityEditorFieldsProps) {
   const kind = form.watch("kind");
   const creating = !record;
+  const idPrefix = useId();
   return (
     <>
       <EntityPrimitiveFields
@@ -361,7 +368,15 @@ function FinancialAccountFields({ form, record }: EntityEditorFieldsProps) {
           ) : null}
         </>
       ) : null}
-      <SourceAliasesField form={form} />
+      {renderIntentField({
+        entity: "financialAccount",
+        field: financialAccountSourceAliasesField,
+        form,
+        idPrefix,
+        mode: creating ? "create" : "edit",
+        record,
+        scopedValueRecord: {},
+      })}
     </>
   );
 }
