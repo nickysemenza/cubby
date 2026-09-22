@@ -52,6 +52,15 @@ Deletes and merges have no live preview — attempt the mutation and read its
 structured refusal. Attach/detach previews stay advisory, and mutations
 re-check transactionally regardless.
 
+`Product.tags` (and any future `control.suggest.mode: "prune"` text-array) is
+compatibility/ecosystem tokens only — never the manufacturer, a classification
+word, or a path node, which belong in `manufacturer`/`categoryId`; a tag that
+merely restates one of those is flagged for removal, not silently dropped. The
+shared rule lives in `redundantTokens` (`@cubby/shared/redundant-tokens`) —
+both the browser form's deterministic chip marking and the server's
+`ArrayPruneSuggestSpec` entries (`apps/web/src/server/ai/field-suggest/registry.ts`)
+call it, so a new prune target never re-derives the redundancy check.
+
 ## IDs and runtime traps
 
 Use branded identifier schemas and parse strings once at genuine ingress seams

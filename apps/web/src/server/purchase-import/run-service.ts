@@ -846,18 +846,31 @@ const STALE_RUN_MS = 2 * 60 * 60_000;
 export async function reconcileSettledImportRun(
   db: Database,
   namespace: PurchaseImportNamespace,
-  input: { runId: string; operationId: string; detail?: string },
+  input: {
+    runId: string;
+    operationId: string;
+    detail?: string;
+    /** Cancel bridge commands nobody answered before this instant. */
+    abandonCommandsBefore?: Date;
+  },
 ) {
   const scope = await loadRunScope(db, input.runId);
   if (scope.public.status !== "running")
     return { reconciled: false as const, status: scope.public.status };
-  if (
-    scope.public.vendorAccountId &&
-    (await namespace
-      .getByName(scope.public.vendorAccountId)
-      .hasPendingCommands(scope.public.runId))
-  )
-    return { reconciled: false as const, status: "running" as const };
+  if (scope.public.vendorAccountId) {
+    const broker = namespace.getByName(scope.public.vendorAccountId);
+    const pending = await broker.pendingCommands(scope.public.runId);
+    const cutoff = input.abandonCommandsBefore?.getTime();
+    const live = pending.filter(
+      (command) => cutoff === undefined || command.createdAt >= cutoff,
+    );
+    if (live.length > 0)
+      return { reconciled: false as const, status: "running" as const };
+    // A command the Mac never answered within the stale window is not work
+    // in flight; it is the reason the run stalled. Its 25-hour deadline is
+    // the bridge's replay bound, not a promise anyone is still keeping.
+    for (const command of pending) await broker.cancel(command.requestId);
+  }
   await stopImportRunForReview(db, {
     runId: input.runId,
     operationId: input.operationId,
@@ -901,6 +914,7 @@ export async function expireStaleImportRuns(
         runId: run.id,
         operationId: `stale-run:${now.toISOString()}`,
         detail: "No coordinator activity for two hours",
+        abandonCommandsBefore: cutoff,
       });
       if (outcome.reconciled) expired += 1;
     } catch (error) {

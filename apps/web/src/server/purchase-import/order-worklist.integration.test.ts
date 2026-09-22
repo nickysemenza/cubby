@@ -47,7 +47,7 @@ function fakeBroker() {
         : null,
     cancel: async () => undefined,
     connected: async () => true,
-    hasPendingCommands: async () => false,
+    pendingCommands: async () => [],
     notifyRunCompleted: async () => undefined,
     requestAuthentication: async () => undefined,
   };

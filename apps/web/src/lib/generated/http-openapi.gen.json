@@ -28242,7 +28242,7 @@
             "const": "capture"
           },
           "allowedHosts": {
-            "$ref": "#/components/schemas/input_schema170"
+            "$ref": "#/components/schemas/input_schema172"
           },
           "enhancedEvidence": {
             "type": "boolean"
@@ -28290,7 +28290,7 @@
             "maxLength": 200
           },
           "allowedHosts": {
-            "$ref": "#/components/schemas/input_schema170"
+            "$ref": "#/components/schemas/input_schema172"
           }
         },
         "required": [
@@ -28312,7 +28312,7 @@
             "format": "uri"
           },
           "allowedHosts": {
-            "$ref": "#/components/schemas/input_schema170"
+            "$ref": "#/components/schemas/input_schema172"
           }
         },
         "required": [
@@ -36063,12 +36063,12 @@
           "projectId": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/input_schema134"
+                "$ref": "#/components/schemas/input_schema136"
               },
               {
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/input_schema134"
+                  "$ref": "#/components/schemas/input_schema136"
                 }
               }
             ]
@@ -36099,12 +36099,12 @@
           "vendorId": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/input_schema137"
+                "$ref": "#/components/schemas/input_schema139"
               },
               {
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/input_schema137"
+                  "$ref": "#/components/schemas/input_schema139"
                 }
               }
             ]
@@ -36163,12 +36163,12 @@
           "purchaseId": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/input_schema141"
+                "$ref": "#/components/schemas/input_schema143"
               },
               {
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/input_schema141"
+                  "$ref": "#/components/schemas/input_schema143"
                 }
               }
             ]
@@ -45077,7 +45077,7 @@
         ],
         "additionalProperties": false
       },
-      "input_schema103": {
+      "input_schema104": {
         "anyOf": [
           {
             "type": "string"
@@ -45090,7 +45090,7 @@
           }
         ]
       },
-      "input_schema114": {
+      "input_schema115": {
         "anyOf": [
           {
             "$ref": "#/components/schemas/IngredientShortcode"
@@ -45104,7 +45104,7 @@
         "pattern": "^ING-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
         "description": "ingredient shortcode, e.g. ING-4K7M"
       },
-      "input_schema122": {
+      "input_schema124": {
         "type": "object",
         "properties": {
           "orderBy": {
@@ -45144,7 +45144,7 @@
           }
         }
       },
-      "input_schema134": {
+      "input_schema136": {
         "anyOf": [
           {
             "$ref": "#/components/schemas/ProjectShortcode"
@@ -45158,7 +45158,7 @@
         "pattern": "^PRJ-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
         "description": "project shortcode, e.g. PRJ-4K7M"
       },
-      "input_schema137": {
+      "input_schema139": {
         "anyOf": [
           {
             "$ref": "#/components/schemas/VendorShortcode"
@@ -45172,7 +45172,7 @@
         "pattern": "^VEN-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
         "description": "vendor shortcode, e.g. VEN-4K7M"
       },
-      "input_schema141": {
+      "input_schema143": {
         "anyOf": [
           {
             "$ref": "#/components/schemas/PurchaseShortcode"
@@ -45186,7 +45186,7 @@
         "pattern": "^PUR-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
         "description": "purchase shortcode, e.g. PUR-4K7M"
       },
-      "input_schema156": {
+      "input_schema158": {
         "type": "object",
         "properties": {
           "orderBy": {
@@ -45203,7 +45203,7 @@
           }
         }
       },
-      "input_schema158": {
+      "input_schema160": {
         "anyOf": [
           {
             "$ref": "#/components/schemas/TaskShortcode"
@@ -45217,7 +45217,7 @@
         "pattern": "^TSK-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
         "description": "task shortcode, e.g. TSK-4K7M"
       },
-      "input_schema170": {
+      "input_schema172": {
         "minItems": 1,
         "maxItems": 20,
         "type": "array",
@@ -45227,7 +45227,7 @@
           "maxLength": 253
         }
       },
-      "input_schema181": {
+      "input_schema183": {
         "type": "object",
         "properties": {
           "kind": {
@@ -45243,7 +45243,7 @@
           "value"
         ]
       },
-      "input_schema185": {
+      "input_schema187": {
         "type": "object",
         "properties": {
           "orderBy": {
@@ -45267,7 +45267,7 @@
           }
         }
       },
-      "input_schema186": {
+      "input_schema188": {
         "type": "object",
         "properties": {
           "orderBy": {
@@ -47976,14 +47976,14 @@
             },
             "anyOf": [
               {
-                "$ref": "#/components/schemas/input_schema185"
+                "$ref": "#/components/schemas/input_schema187"
               },
               {
                 "minItems": 1,
                 "maxItems": 3,
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/input_schema185"
+                  "$ref": "#/components/schemas/input_schema187"
                 }
               }
             ]
@@ -55627,10 +55627,8 @@
           },
           "tags": {
             "default": [],
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
+            "description": "Compatibility or ecosystem tokens only — battery platform, mount, thread, size standard. Never the manufacturer, a classification word, or a path node; those belong in manufacturer/categoryId. `collection:*` entries are managed by Collections. Leave empty when nothing fits.",
+            "$ref": "#/components/schemas/input_schema56"
           },
           "upc": {
             "$ref": "#/components/schemas/GtinInput"
@@ -56373,7 +56371,7 @@
           },
           "tagFilters": {
             "description": "Match products carrying any of these tags",
-            "$ref": "#/components/schemas/input_schema103"
+            "$ref": "#/components/schemas/input_schema104"
           },
           "dataStatus": {
             "anyOf": [
@@ -56528,12 +56526,12 @@
           "ingredientIdFilter": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/input_schema114"
+                "$ref": "#/components/schemas/input_schema115"
               },
               {
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/input_schema114"
+                  "$ref": "#/components/schemas/input_schema115"
                 }
               }
             ]
@@ -56541,12 +56539,12 @@
           "growsIngredientIdFilter": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/input_schema114"
+                "$ref": "#/components/schemas/input_schema115"
               },
               {
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/input_schema114"
+                  "$ref": "#/components/schemas/input_schema115"
                 }
               }
             ]
@@ -58290,14 +58288,14 @@
             },
             "anyOf": [
               {
-                "$ref": "#/components/schemas/input_schema122"
+                "$ref": "#/components/schemas/input_schema124"
               },
               {
                 "minItems": 1,
                 "maxItems": 3,
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/input_schema122"
+                  "$ref": "#/components/schemas/input_schema124"
                 }
               }
             ]
@@ -58581,10 +58579,8 @@
             }
           },
           "tags": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
+            "description": "Compatibility or ecosystem tokens only — battery platform, mount, thread, size standard. Never the manufacturer, a classification word, or a path node; those belong in manufacturer/categoryId. `collection:*` entries are managed by Collections. Leave empty when nothing fits.",
+            "$ref": "#/components/schemas/input_schema56"
           },
           "upc": {
             "$ref": "#/components/schemas/GtinInput"
@@ -60899,7 +60895,7 @@
           },
           "location": {
             "description": "Any exact match against locations[]",
-            "$ref": "#/components/schemas/input_schema103"
+            "$ref": "#/components/schemas/input_schema104"
           },
           "dataStatus": {
             "anyOf": [
@@ -60972,12 +60968,12 @@
           "parentProjectId": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/input_schema134"
+                "$ref": "#/components/schemas/input_schema136"
               },
               {
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/input_schema134"
+                  "$ref": "#/components/schemas/input_schema136"
                 }
               }
             ]
@@ -62457,14 +62453,14 @@
             },
             "anyOf": [
               {
-                "$ref": "#/components/schemas/input_schema156"
+                "$ref": "#/components/schemas/input_schema158"
               },
               {
                 "minItems": 1,
                 "maxItems": 3,
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/input_schema156"
+                  "$ref": "#/components/schemas/input_schema158"
                 }
               }
             ]
@@ -67756,7 +67752,7 @@
                 "$ref": "#/components/schemas/ProductFindOrCreateByCodeInput"
               },
               {
-                "$ref": "#/components/schemas/input_schema181"
+                "$ref": "#/components/schemas/input_schema183"
               }
             ],
             "description": "The scanned code."
@@ -70250,12 +70246,12 @@
           "parentTaskId": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/input_schema158"
+                "$ref": "#/components/schemas/input_schema160"
               },
               {
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/input_schema158"
+                  "$ref": "#/components/schemas/input_schema160"
                 }
               }
             ]
@@ -70342,12 +70338,12 @@
           "projectId": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/input_schema134"
+                "$ref": "#/components/schemas/input_schema136"
               },
               {
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/input_schema134"
+                  "$ref": "#/components/schemas/input_schema136"
                 }
               }
             ]
@@ -72164,14 +72160,14 @@
             },
             "anyOf": [
               {
-                "$ref": "#/components/schemas/input_schema186"
+                "$ref": "#/components/schemas/input_schema188"
               },
               {
                 "minItems": 1,
                 "maxItems": 3,
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/input_schema186"
+                  "$ref": "#/components/schemas/input_schema188"
                 }
               }
             ]

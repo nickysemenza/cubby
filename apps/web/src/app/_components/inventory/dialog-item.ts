@@ -1,6 +1,7 @@
 import {
   inventoryShortcode,
   locationShortcode,
+  productShortcode,
 } from "@cubby/schemas/identifiers";
 import { z } from "zod";
 
@@ -21,7 +22,11 @@ export const inventoryDialogItemSchema = z.object({
   amount: z.object({ value: z.number(), unit: z.string() }),
   /** `name` renders the `current → target` projection, not just the row. */
   location: z.object({ id: locationShortcode, name: z.string() }),
-  /** Names the row in the delete confirmation. */
-  product: z.object({ name: z.string() }),
+  /** Names the row in the delete confirmation; `id`, when the surface has
+   * it, lets bulk discard pick a trade-suggestion basis once a staged
+   * selection shares one product. Optional because not every inventory
+   * surface fetches it (see above) — requiring it made the move action's
+   * parse fail on those rows and the dialog silently never open. */
+  product: z.object({ id: productShortcode.optional(), name: z.string() }),
 });
 export type InventoryDialogItem = z.infer<typeof inventoryDialogItemSchema>;

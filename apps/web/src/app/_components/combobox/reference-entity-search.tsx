@@ -1,6 +1,6 @@
 import { productCategoryShortcode } from "@cubby/schemas/identifiers";
 import type { ReactNode } from "react";
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 
 import { useProductCategories } from "~/app/_components/hooks/useProductCategories";
 import {
@@ -8,12 +8,70 @@ import {
   WithPurchaseSearch,
 } from "~/app/finance/financial-selectors";
 
-import type { PickerEntity } from "./combobox-types";
+import type { ComboboxItem, PickerEntity } from "./combobox-types";
+import { treePickerItems } from "./tree-items";
 import {
   WithEntitySearch,
   type WithEntitySearchProps,
 } from "./with-search-hook";
 import { WithVendorShortcodeSearch } from "./with-vendor-search";
+
+/** `useProductCategories()`'s own list row shape — just what the tree/search
+ * projections below read off it. */
+export interface ProductCategoryRow {
+  id: string;
+  name: string;
+  parentId: string | null;
+  aliases: readonly string[];
+  description: string | null;
+  path: ReadonlyArray<{ id: string; name: string }>;
+}
+
+/**
+ * The pure "categories + query -> picker items" projection, split out from
+ * `WithProductCategorySearch` so it is directly unit-testable — no query
+ * client, no React tree. A blank query renders the grouped-list +
+ * breadcrumb tree (the whole taxonomy read as a tree rather than 29+
+ * same-looking rows); a typed query keeps today's flat full-path search
+ * rows, matched against name/aliases/description/path.
+ */
+export function productCategorySearchItems(
+  categories: readonly ProductCategoryRow[],
+  query: string,
+): ComboboxItem[] {
+  if (query.trim() === "") {
+    return treePickerItems(categories, {
+      idOf: (category) => category.id,
+      parentIdOf: (category) => category.parentId,
+      labelOf: (category) => category.name,
+    });
+  }
+  const needle = query.toLowerCase();
+  return categories
+    .filter((category) =>
+      [
+        category.name,
+        ...category.aliases,
+        category.description,
+        category.path.map((node) => node.name).join(" / "),
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase()
+        .includes(needle),
+    )
+    .flatMap((category) => {
+      const parsedId = productCategoryShortcode.safeParse(category.id);
+      if (!parsedId.success) return [];
+      return [
+        {
+          id: parsedId.data,
+          name: category.path.map((node) => node.name).join(" / "),
+          detail: category.description ?? undefined,
+        },
+      ];
+    });
+}
 
 function WithProductCategorySearch({
   children,
@@ -21,31 +79,19 @@ function WithProductCategorySearch({
   const [query, setQuery] = useState("");
   const { categories, isLoading } = useProductCategories();
   const onSearchChange = useCallback((next: string) => setQuery(next), []);
+
+  const items = useMemo<ComboboxItem[]>(
+    () =>
+      // SAFETY: `entityListFor("productCategory")` rows always carry these
+      // manifest fields (`id`, `name`, `parentId`, `aliases`, `description`,
+      // `path`) — narrowed here rather than imported because the generated
+      // list-row type is a wide cross-entity union `Map.get` can't index by.
+      productCategorySearchItems(categories as ProductCategoryRow[], query),
+    [categories, query],
+  );
+
   return children({
-    items: categories
-      .filter((category) =>
-        [
-          category.name,
-          ...category.aliases,
-          category.description,
-          category.path.map((node) => node.name).join(" / "),
-        ]
-          .filter(Boolean)
-          .join(" ")
-          .toLowerCase()
-          .includes(query.toLowerCase()),
-      )
-      .flatMap((category) => {
-        const parsedId = productCategoryShortcode.safeParse(category.id);
-        if (!parsedId.success) return [];
-        return [
-          {
-            id: parsedId.data,
-            name: category.path.map((node) => node.name).join(" / "),
-            detail: category.description ?? undefined,
-          },
-        ];
-      }),
+    items,
     onSearchChange,
     isLoading,
     onOpenChange: () => {},

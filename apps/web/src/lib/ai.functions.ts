@@ -14,6 +14,10 @@ export const ai = defineOperationDomain(aiContract, {
   suggestUsdaFoodBatch: { invalidates: ripple.ingredient },
   suggestIngredientMergeBatch: { invalidates: ripple.ingredient },
   suggestFields: { tags: [["ai", "suggestFields"]], cache: "stable" },
+  suggestExternalIdKind: {
+    tags: [["ai", "suggestExternalIdKind"]],
+    cache: "stable",
+  },
   usageRecent: { tags: [["ai", "usage"]] },
   usageSummary: { tags: [["ai", "usage"]] },
 });

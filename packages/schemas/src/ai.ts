@@ -341,6 +341,32 @@ export type FieldSuggestionsInput = z.infer<typeof fieldSuggestionsInput>;
  * `null` means no suggestion could be made — an unusable basis or an empty
  * roster — not an error.
  */
+/**
+ * A runner-up from Jev's calibrated distribution over every choice, so a
+ * picker can pin the top few candidates instead of only the winner. Empty on
+ * the roster-overflow path (a chat-tier pick has no distribution).
+ */
+export const fieldSuggestionAlternativeSchema = z.object({
+  value: z.string(),
+  label: z.string(),
+  detail: z.string().nullable().default(null),
+  probability: z.number().min(0).max(1),
+});
+export type FieldSuggestionAlternative = z.infer<
+  typeof fieldSuggestionAlternativeSchema
+>;
+
+/** One entry a `remove` suggestion proposes dropping from a text-array target. */
+export const fieldSuggestionRemovalSchema = z.object({
+  value: z.string(),
+  probability: z.number().min(0).max(1),
+  /** Why it is redundant, e.g. "restates manufacturer". */
+  reason: z.string(),
+});
+export type FieldSuggestionRemoval = z.infer<
+  typeof fieldSuggestionRemovalSchema
+>;
+
 export const fieldSuggestionSchema = z.object({
   value: z.string().nullable(),
   label: z.string().nullable(),
@@ -349,8 +375,36 @@ export const fieldSuggestionSchema = z.object({
   /** Calibrated Jev probability; null for non-Jev/absent suggestions. */
   probability: z.number().min(0).max(1).nullable().default(null),
   reasoning: z.string(),
+  alternatives: z.array(fieldSuggestionAlternativeSchema).default([]),
+  /**
+   * `set` writes `value` to the target; `remove` subtracts `removals[].value`
+   * from a text-array target (a `mode: "prune"` suggest field). For `remove`,
+   * `value` is the sorted removed entries joined by ", " so review surfaces
+   * can dedupe and diff it like any other suggestion, `label` is the human
+   * proposal, and `probability` is the weakest included removal.
+   */
+  operation: z.enum(["set", "remove"]).default("set"),
+  removals: z.array(fieldSuggestionRemovalSchema).default([]),
 });
 export type FieldSuggestion = z.infer<typeof fieldSuggestionSchema>;
+
+/** Input for classifying one external identifier's `kind` from its shape and source. */
+export const externalIdKindSuggestionInput = z.object({
+  source: z.string().trim().min(1),
+  identifier: z.string().trim().min(2),
+  url: z.string().nullable().default(null),
+  productName: z.string().nullable().default(null),
+  manufacturer: z.string().nullable().default(null),
+});
+/** A `FieldSuggestion` over the six non-legacy `ExternalIdKind` values, so
+ * the existing hint UI (`FieldSuggestionHint`) consumes it unchanged. `null`
+ * only when the identifier carries no usable signal at all. */
+export const suggestExternalIdKindOut = fieldSuggestionSchema.nullable();
+export type SuggestExternalIdKindOut = z.infer<typeof suggestExternalIdKindOut>;
+
+export type ExternalIdKindSuggestionInput = z.infer<
+  typeof externalIdKindSuggestionInput
+>;
 
 export const fieldSuggestionsOut = z.object({
   suggestions: z.record(z.string(), fieldSuggestionSchema.nullable()),

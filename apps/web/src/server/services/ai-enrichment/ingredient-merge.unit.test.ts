@@ -51,6 +51,7 @@ describe("suggestIngredientMerge", () => {
           confidence: "high",
           probability: 0.99,
           reasoning: "synonym",
+          alternatives: [],
         };
       },
     };
@@ -72,6 +73,7 @@ describe("suggestIngredientMerge", () => {
         confidence: "low",
         probability: 0.1,
         reasoning: "hallucinated an id",
+        alternatives: [],
       }),
     };
 
@@ -94,6 +96,7 @@ describe("suggestIngredientMerge", () => {
           confidence: "low",
           probability: 0.1,
           reasoning: "n/a",
+          alternatives: [],
         };
       },
     };
@@ -114,6 +117,7 @@ describe("suggestIngredientMerge", () => {
           confidence: "low",
           probability: 0.1,
           reasoning: "n/a",
+          alternatives: [],
         };
       },
     };

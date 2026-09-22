@@ -283,7 +283,13 @@ export default defineEntity({
         kind: "enum",
         nullable: true,
         label: "Default trade",
-        control: { kind: "select" },
+        control: {
+          kind: "select",
+          // Project has no vendor field, unlike `expense.trade`/
+          // `purchase.defaultTrade` — `name`/`notes`/`kind` are the only
+          // signal available.
+          suggest: { basis: ["name", "notes", "kind"] },
+        },
         display: { detail: true, detailOrder: 95 },
         resolution: {
           reset: { defaultTrade: null },

@@ -361,7 +361,7 @@ describe("purchase import run admission", () => {
       result: async () => null,
       cancel: async () => undefined,
       connected: async () => true,
-      hasPendingCommands: async () => false,
+      pendingCommands: async () => [],
       notifyRunCompleted: async () => undefined,
       requestAuthentication: async () => undefined,
     };
@@ -397,7 +397,7 @@ describe("purchase import run admission", () => {
       result: async () => null,
       cancel: async () => undefined,
       connected: async () => true,
-      hasPendingCommands: async () => false,
+      pendingCommands: async () => [],
       notifyRunCompleted: async () => undefined,
       requestAuthentication: async () => undefined,
     };
@@ -434,7 +434,7 @@ describe("purchase import run admission", () => {
       result: async () => null,
       cancel: async () => undefined,
       connected: async () => true,
-      hasPendingCommands: async () => false,
+      pendingCommands: async () => [],
       notifyRunCompleted: async ({ runID }: { runID: string }) => {
         notifications.push(runID);
       },
@@ -499,7 +499,10 @@ describe("purchase import run admission", () => {
       result: async () => null,
       cancel: async () => undefined,
       connected: async () => true,
-      hasPendingCommands: async () => pending,
+      pendingCommands: async () =>
+        pending
+          ? [{ requestId: crypto.randomUUID(), createdAt: Date.now() }]
+          : [],
       notifyRunCompleted: async () => undefined,
       requestAuthentication: async () => undefined,
     };
@@ -579,7 +582,7 @@ describe("purchase import run admission", () => {
       result: async () => null,
       cancel: async () => undefined,
       connected: async () => true,
-      hasPendingCommands: async () => false,
+      pendingCommands: async () => [],
       notifyRunCompleted: async () => undefined,
       requestAuthentication: async () => undefined,
     };
@@ -630,7 +633,7 @@ describe("purchase import run admission", () => {
       }),
       cancel: async () => undefined,
       connected: async () => true,
-      hasPendingCommands: async () => false,
+      pendingCommands: async () => [],
       notifyRunCompleted: async () => undefined,
       requestAuthentication: async () => undefined,
     };
@@ -670,5 +673,52 @@ describe("purchase import run admission", () => {
       state: "failed",
       error: "disallowed_url: Navigation left the vendor allowlist",
     });
+  });
+  it("abandons a browser command nobody answered within the stale window", async () => {
+    const party = await createMember();
+    const account = await createVendorAccount(party.id);
+    const run = await startOrResumeImportRun(ctx.db, {
+      ledgerPartyId: party.id,
+      vendorAccountId: account.id,
+      trigger: "manual",
+    });
+    const { importRun } = await import("~/server/db/schema");
+    const { eq } = await import("drizzle-orm");
+    const { getDb } = await import("~/server/repo/database-helpers");
+    const now = new Date("2026-09-21T12:00:00.000Z");
+    await getDb(ctx.db)
+      .update(importRun)
+      .set({ updatedAt: new Date(now.getTime() - 3 * 60 * 60_000) })
+      .where(eq(importRun.id, run.id));
+    const cancelled: string[] = [];
+    const stale = {
+      requestId: crypto.randomUUID(),
+      createdAt: now.getTime() - 19 * 60 * 60_000,
+    };
+    const broker = {
+      enqueue: async () => undefined,
+      result: async () => null,
+      cancel: async (requestId: string) => {
+        cancelled.push(requestId);
+      },
+      connected: async () => true,
+      pendingCommands: async () => [stale],
+      notifyRunCompleted: async () => undefined,
+      requestAuthentication: async () => undefined,
+    };
+
+    const outcome = await expireStaleImportRuns(
+      ctx.db,
+      { getByName: () => broker },
+      now,
+    );
+
+    expect(outcome).toEqual({ expired: 1, failures: [] });
+    expect(cancelled).toEqual([stale.requestId]);
+    const [stored] = await getDb(ctx.db)
+      .select({ status: importRun.status })
+      .from(importRun)
+      .where(eq(importRun.id, run.id));
+    expect(stored?.status).toBe("needs_review");
   });
 });

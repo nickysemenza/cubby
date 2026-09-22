@@ -85,6 +85,9 @@ describe("runAiSelection", () => {
       confidence: "high",
       probability: 0.9,
       reasoning: "",
+      alternatives: [
+        { candidate: { id: "b", label: "blue" }, probability: 0.05 },
+      ],
     });
   });
 
@@ -112,6 +115,7 @@ describe("runAiSelection", () => {
     expect(jev).not.toHaveBeenCalled();
     expect(outcome.selected).toBeNull();
     expect(outcome.confidence).toBe("low");
+    expect(outcome.alternatives).toEqual([]);
   });
 
   it("truncates candidates to maxCandidates before choosing", async () => {
@@ -178,6 +182,7 @@ describe("runAiSelection overflow", () => {
       confidence: "medium",
       probability: null,
       reasoning: "closer match",
+      alternatives: [],
     });
   });
 
@@ -200,6 +205,7 @@ describe("runAiSelection overflow", () => {
       confidence: "low",
       probability: null,
       reasoning: "hallucinated an id",
+      alternatives: [],
     });
   });
 });
