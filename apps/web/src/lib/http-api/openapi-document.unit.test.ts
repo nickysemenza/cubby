@@ -184,10 +184,10 @@ describe("generated HTTP OpenAPI document", () => {
     // (see the fold-bug regression test below): the old replacer-array
     // allowlist erased distinct nested shapes down to `{}`, so it had been
     // incorrectly folding distinct positionals together and undercounting.
-    // 76: the image list's importRunId / targetState filters and the image
-    // sighting's filters use the same positional entity-filter unions as
-    // every other entity.
-    expect(positional.length).toBeLessThanOrEqual(76);
+    // 78: the image list's importRunId / targetState / capturedByPartyId
+    // filters and the image sighting's filters use the same positional
+    // entity-filter unions as every other entity.
+    expect(positional.length).toBeLessThanOrEqual(78);
     expect(schemas).toHaveProperty("ProductTopLevelOut");
     expect(schemas).toHaveProperty("LocationShortcode");
     expect(schemas).toHaveProperty("VendorCreateInput");
@@ -317,7 +317,7 @@ describe("generated HTTP OpenAPI document", () => {
         "ApiError",
       );
     }
-    expect(operations).toHaveLength(373);
+    expect(operations).toHaveLength(374);
   });
 
   it("carries query parameters as plain form values", () => {
@@ -375,7 +375,7 @@ describe("generated HTTP OpenAPI document", () => {
     for (const entry of operations)
       methods[z.enum(["get", "post", "patch", "delete"]).parse(entry.method)] +=
         1;
-    expect(methods).toEqual({ get: 171, post: 156, patch: 23, delete: 23 });
+    expect(methods).toEqual({ get: 171, post: 157, patch: 23, delete: 23 });
     for (const path of POST_QUERIES) {
       const posted = paths[path]?.post;
       expect(posted).toBeDefined();

@@ -2,7 +2,13 @@ import { NoneValue } from "~/components/ui/none-value";
 
 import type { EntityDetailFieldRenderers } from "./index";
 
-/** Shared shape between `Image.captureLocation` and `ImageSighting.location`. */
+/**
+ * Shared shape for any `captureLocation`-kind json field — today
+ * `Image.captureLocation` and `ImageSighting.location`, and reusable by any
+ * future coordinate field without a new renderer: this one function renders
+ * "lat, lng · Open in Maps" (plus optional elevation/accuracy) for any of
+ * them.
+ */
 interface CaptureCoordinates {
   lat: number;
   lng: number;
@@ -17,7 +23,20 @@ function renderCoordinates(location: CaptureCoordinates | null) {
     parts.push(`${location.altitude.toFixed(0)} m elevation`);
   if (location.horizontalAccuracy !== undefined)
     parts.push(`±${location.horizontalAccuracy.toFixed(0)} m`);
-  return <span className="font-mono text-xs">{parts.join(" · ")}</span>;
+  return (
+    <span className="font-mono text-xs">
+      {parts.join(" · ")} ·{" "}
+      <a
+        className="font-sans underline"
+        href={`https://maps.apple.com/?ll=${location.lat},${location.lng}`}
+        target="_blank"
+        rel="noreferrer"
+        onClick={(event) => event.stopPropagation()}
+      >
+        Open in Maps
+      </a>
+    </span>
+  );
 }
 
 /** Shared shape between `Image.provenanceEvidence` and nothing else yet, but

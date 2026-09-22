@@ -256,6 +256,8 @@ const INTENTIONAL_RESPELLINGS = {
   "image::createFileUploadInput::size": IMAGE_NO_GENERATED_CREATE,
   "image::imageWithEntitySchema::contentType": IMAGE_READ_FIELD_HAND_COPY,
   "image::imageWithEntitySchema::createdAt": IMAGE_READ_FIELD_HAND_COPY,
+  "image::imageWithEntitySchema::dataQuality":
+    "wraps the generated dataQuality field in .optional(): imageWithRelationsToAPI builds the base row without it, and every real producer (imageList/getImageById/getImagesByShortcodes) merges in the batch-loaded score afterward, the same postprocessed-field pattern imageWithEntitySchema already uses for representations/processingIssue/importTarget/analysisSummary",
   "image::imageWithEntitySchema::detectedContentType":
     IMAGE_READ_FIELD_HAND_COPY,
   "image::imageWithEntitySchema::filename": IMAGE_READ_FIELD_HAND_COPY,
@@ -269,6 +271,8 @@ const INTENTIONAL_RESPELLINGS = {
   "image::imageWithEntitySchema::verifiedAt": IMAGE_READ_FIELD_HAND_COPY,
   "image::imageWithEntitySchema::width": IMAGE_READ_FIELD_HAND_COPY,
   "image::imageWithEntitySchema::sha256": IMAGE_READ_FIELD_HAND_COPY,
+  "image::imageListFiltersSchema::capturedByPartyId":
+    "shortcode-list filter (entityFilterList(ledgerPartyShortcode)) over the derived capturedByPartyId column — declared idMulti/urlOnly in the manifest (no stored descriptor, needs shortcode resolution), same as the existing hand-added importRunId filter above it",
   "image::importImageFromUrlResponseSchema::filename":
     IMAGE_READ_FIELD_HAND_COPY,
   "image::importImageFromUrlResponseSchema::key": IMAGE_READ_FIELD_HAND_COPY,

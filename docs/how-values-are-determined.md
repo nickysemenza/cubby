@@ -1096,6 +1096,24 @@ The current name of the derived capturing member, if set.
 - Rule: `image.capturedByName`, version 1
 - Resolver: Declared field projection
 
+### Data quality (`dataQuality`)
+
+Data-quality gaps and the 0–100 completeness score are evaluated from the checks this entity declares.
+
+- Rule: `image.data-quality`, version 1
+- Resolver: Declared field projection
+- Value paths: List `dataQuality.status`; Summary `dataQuality.status`
+- Source dependencies: Detected gaps (`dataQuality.gaps`)
+
+### Data gaps (`dataGaps`)
+
+Data gaps are the current checks reported by this entity's data-quality evaluation.
+
+- Rule: `image.data-gaps`, version 1
+- Resolver: Declared field projection
+- Value paths: List `dataQuality.gaps`; Summary `dataQuality.gaps`
+- Source dependencies: Detected gaps (`dataQuality.gaps`)
+
 ## Plantings (`planting`)
 
 ### Guide sow window (`guideSowWindow`)

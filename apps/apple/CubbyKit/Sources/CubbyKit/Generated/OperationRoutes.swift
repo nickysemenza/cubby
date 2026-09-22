@@ -119,6 +119,7 @@ extension OperationRoute {
         OperationRoute(operationID: "location.valuationSummary", method: .get, path: "/api/v1/location/valuationSummary", pathParameters: [], queryParameters: [], hasBody: false),
         OperationRoute(operationID: "maintenance.awaitingWork", method: .get, path: "/api/v1/maintenance/awaitingWork", pathParameters: [], queryParameters: [], hasBody: false),
         OperationRoute(operationID: "maintenance.backfillImageProcessing", method: .post, path: "/api/v1/maintenance/backfillImageProcessing", pathParameters: [], queryParameters: [], hasBody: true),
+        OperationRoute(operationID: "maintenance.classifyImageProvenance", method: .post, path: "/api/v1/maintenance/classifyImageProvenance", pathParameters: [], queryParameters: [], hasBody: true),
         OperationRoute(operationID: "maintenance.configureImageProcessing", method: .post, path: "/api/v1/maintenance/configureImageProcessing", pathParameters: [], queryParameters: [], hasBody: true),
         OperationRoute(operationID: "maintenance.imageProcessing", method: .get, path: "/api/v1/maintenance/imageProcessing", pathParameters: [], queryParameters: [], hasBody: false),
         OperationRoute(operationID: "maintenance.repairImageDimensions", method: .post, path: "/api/v1/maintenance/repairImageDimensions", pathParameters: [], queryParameters: [], hasBody: true),

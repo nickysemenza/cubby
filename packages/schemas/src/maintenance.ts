@@ -47,6 +47,36 @@ export type RepairImageDimensionsOut = z.infer<
 >;
 
 /**
+ * Filename/dimension heuristics + on-device analysis `capturedAt` seeding for
+ * images still `source = unknown` or last classified by a filename rule
+ * (`image-provenance-heuristics.ts`). `dryRun` runs the same selection and
+ * classification and reports what WOULD change, writing nothing.
+ */
+export const classifyImageProvenanceInputSchema = z.object({
+  dryRun: z.boolean().default(false),
+  batchSize: z.number().int().positive().max(100).default(25),
+  maxBatches: z.number().int().positive().max(100).default(20),
+});
+export const classifyImageProvenanceOutSchema = z.object({
+  dryRun: z.boolean(),
+  batches: z.number().int().nonnegative(),
+  scanned: z.number().int().nonnegative(),
+  classified: z.number().int().nonnegative(),
+  capturedAtSeeded: z.number().int().nonnegative(),
+  // Per filename-rule-id match counts (`filenameProvenanceRuleIds`), e.g.
+  // `{ "legacy-uploader-photo-jpeg": 3, "catalog-source-asset-url": 12 }`.
+  byRule: z.record(z.string(), z.number().int().nonnegative()),
+  remaining: z.number().int().nonnegative(),
+  stopped: z.enum(["complete", "limit", "no_progress"]),
+});
+export type ClassifyImageProvenanceInput = z.infer<
+  typeof classifyImageProvenanceInputSchema
+>;
+export type ClassifyImageProvenanceOut = z.infer<
+  typeof classifyImageProvenanceOutSchema
+>;
+
+/**
  * Counters for one search-index repair run. These describe what that run
  * found and did — findings and outcomes — not a live assertion that the index
  * is healthy now. `published` is embedding work handed to the queue, which
