@@ -29,3 +29,8 @@ with an inventory quantity of 2, not two Products.
 
 Shoes are pairs: a pair of shoes is quantity 1, never 2 — the left and right
 shoe are not separate units, and a photo of both shoes is one item, not two.
+
+A missing or illegible tag does not block naming: describe what the photo
+shows instead — `Gray crew-neck t-shirt — M` still carries color and size
+even with no brand line to transcribe. Never fall back to a vaguer
+placeholder than the evidence supports.

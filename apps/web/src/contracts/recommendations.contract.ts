@@ -6,10 +6,16 @@ import { productShortcode } from "@cubby/schemas/identifiers";
 import {
   dismissDuplicateProductRecommendationInput,
   dismissProductRecommendationInput,
+  dismissProductMatchInput,
   dismissTagPropagationInput,
   duplicateProductRecommendationInput,
   duplicateProductRecommendationOut,
+  mergeProductMatchInput,
   placementRecommendationInput,
+  productMatchQueueInput,
+  productMatchQueueOut,
+  proposeProductMatchInput,
+  proposeProductMatchOut,
   placementRecommendationOut,
   recommendationOkSchema,
   recommendationWorkbenchInput,
@@ -60,6 +66,22 @@ export const recommendationsContract = defineContract("recommendations", {
   }),
   dismissProduct: mutation({
     input: dismissProductRecommendationInput,
+    output: recommendationOkSchema,
+  }),
+  productMatches: query({
+    input: productMatchQueueInput,
+    output: productMatchQueueOut,
+  }),
+  proposeProductMatch: mutation({
+    input: proposeProductMatchInput,
+    output: proposeProductMatchOut,
+  }),
+  dismissProductMatch: mutation({
+    input: dismissProductMatchInput,
+    output: recommendationOkSchema,
+  }),
+  mergeProductMatch: mutation({
+    input: mergeProductMatchInput,
     output: recommendationOkSchema,
   }),
 });

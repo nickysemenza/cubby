@@ -120,6 +120,7 @@ import {
   productCategory,
   productComponent,
   productConversionCoverage,
+  productMatchCandidate,
   productExternalId,
   productImage,
   productUnitMappings,
@@ -737,6 +738,22 @@ export const ENTITY_EDGES = {
       label: "conversion coverage projections",
       description:
         "A rebuildable conversion-graph projection owned by this product.",
+      liveness: { kind: "must-target-live" },
+    },
+    "ProductMatchCandidate.productAId": {
+      column: productMatchCandidate.productAId,
+      role: "metadata",
+      label: "product match reviews",
+      description:
+        'One side of a reviewed or agent-proposed "same real item" pair; review metadata that dies with either Product.',
+      liveness: { kind: "must-target-live" },
+    },
+    "ProductMatchCandidate.productBId": {
+      column: productMatchCandidate.productBId,
+      role: "metadata",
+      label: "product match reviews",
+      description:
+        'The other side of a reviewed or agent-proposed "same real item" pair; review metadata that dies with either Product.',
       liveness: { kind: "must-target-live" },
     },
     "Planting.sourceProductId": {

@@ -583,6 +583,22 @@ async function loadInheritedCandidates(
   return unresolved;
 }
 
+/**
+ * The owner each product's single recorded acquisition would hand an
+ * `inherit`-mode stock row (beneficiary, then vendor-account, then payment
+ * default), or null when that is undeterminable. Same resolution as
+ * `loadEffectiveInventoryOwnership`, without needing a stock row to exist.
+ */
+export async function loadInheritedProductOwners(
+  db: Database | DrizzleTransaction,
+  productIds: ProductId[],
+): Promise<Map<ProductId, IndividualParty | null>> {
+  const candidates = await loadInheritedCandidates(db, productIds);
+  return new Map(
+    [...candidates].map(([id, candidate]) => [id, candidate.owner] as const),
+  );
+}
+
 const publicOwner = (party: IndividualParty | null) =>
   party
     ? {

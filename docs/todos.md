@@ -1311,13 +1311,15 @@ Deferred from the 2026-09 manifest-rendering PRs; unordered.
   due-dated Tasks, and planned Plantings by following the skill's playbook.
 
 - **Extend photo-inventory-import past the manual pilot.** Follow-ups
-  deferred from the wardrobe-import planning pass: surface "unclaimed
-  Products" candidates server-side inside `prepare_purchase_import` itself
-  (today the agent runs a separate `dataGap: product_unpurchased` lookup);
-  give `ImportRun` structured location-by-time segments instead of free-text
-  `notes`; add Flue dispatch for `photo_inventory` runs (a coordinator
-  prompt, `claim_next_import_work` support for image targets, and an
-  analysis-text-only vision path so Flue never needs to view raw bytes); lift
-  image bytes directly from the uploading device instead of round-tripping
-  through R2; and migrate the purchase run's hand-written detail page onto
-  the generic entity-detail slots now that `importRun` is a manifest entity.
+  deferred from the wardrobe-import planning pass: build the editable photo
+  grouping proposal (`propose_photo_groups` plus a web review page — group
+  edit, a per-photo original/cutout/description table, 3s polling) so a
+  human approves groups before commit instead of the agent presenting a
+  manifest in chat; then add the Flue `photo_inventory` coordinator and its
+  SSE progress channel (a coordinator prompt, `claim_next_import_work`
+  support for image targets, and an analysis-text-only vision path so Flue
+  never needs to view raw bytes); give `ImportRun` structured
+  location-by-time segments instead of free-text `notes`; lift image bytes
+  directly from the uploading device instead of round-tripping through R2;
+  and migrate the purchase run's hand-written detail page onto the generic
+  entity-detail slots now that `importRun` is a manifest entity.

@@ -256,6 +256,18 @@ export const PRODUCT_DELETE_EDGE_POLICY = {
     description:
       "The rebuildable conversion coverage projection is deleted with the product.",
   },
+  "ProductMatchCandidate.productAId": {
+    code: "hard-delete-match-review",
+    effect: "hard-delete",
+    description:
+      "Match-queue reviews naming the product are discarded with it.",
+  },
+  "ProductMatchCandidate.productBId": {
+    code: "hard-delete-match-review",
+    effect: "hard-delete",
+    description:
+      "Match-queue reviews naming the product are discarded with it.",
+  },
   "Planting.sourceProductId": {
     code: "block-garden-source",
     effect: "block",

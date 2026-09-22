@@ -74,6 +74,7 @@ import {
   getCategoryFeature,
   resolveProductCategory,
 } from "~/server/repo/product-category";
+import { deleteProductMatchCandidatesTx } from "~/server/repo/product-match-candidate";
 import { cascadeRemoval } from "~/server/repo/removal";
 
 import { validateLiveEffectiveTrades } from "../inheritance-validation";
@@ -176,6 +177,18 @@ export const PRODUCT_MERGE_EDGE_POLICY = {
     description:
       "Absorbed products' conversion projections are discarded; the survivor is marked stale and rebuilt from the merged graph.",
   },
+  "ProductMatchCandidate.productAId": {
+    code: "discard-match-review",
+    effect: "hard-delete",
+    description:
+      "Match-queue reviews naming a merged-away product are discarded, so the merged pair itself cannot survive as a self-pair.",
+  },
+  "ProductMatchCandidate.productBId": {
+    code: "discard-match-review",
+    effect: "hard-delete",
+    description:
+      "Match-queue reviews naming a merged-away product are discarded, so the merged pair itself cannot survive as a self-pair.",
+  },
   "Planting.sourceProductId": {
     code: "preserve-garden-source",
     effect: "preserve",
@@ -202,6 +215,9 @@ export const PRODUCT_MERGE_EDGE_POLICY = {
  * where the loser's `gtin` row survives as a demoted secondary.
  */
 const CARRIED_COLUMNS = [
+  // NOT NULL with "" as its empty value: a purchase-created Product starts
+  // with no manufacturer, so a photo-created loser's brand must fill it.
+  "manufacturer",
   "fdc_id",
   "model",
   "price",
@@ -217,6 +233,7 @@ const CARRIED_COLUMNS = [
 type CarriedColumn = (typeof CARRIED_COLUMNS)[number];
 
 const CARRIED_FIELD_LABELS = {
+  manufacturer: "manufacturer",
   fdc_id: "USDA food identity",
   model: "model",
   price: "price",
@@ -743,6 +760,7 @@ async function buildProductMergePlan(
         name: true,
         aliases: true,
         tags: true,
+        manufacturer: true,
         fdc_id: true,
         model: true,
         price: true,
@@ -985,9 +1003,11 @@ async function buildProductMergePlan(
   const existingAliases = new Set(keeper.aliases);
   const carried: ProductCarriedValues = {};
   const carriedFields: CarriedColumn[] = [];
+  const isEmpty = (value: ProductMergeRow[CarriedColumn]): boolean =>
+    value == null || value === "";
   const carryColumn = <K extends CarriedColumn>(column: K): void => {
-    if (keeper[column] != null) return;
-    const donor = losers.find((row) => row[column] != null);
+    if (!isEmpty(keeper[column])) return;
+    const donor = losers.find((row) => !isEmpty(row[column]));
     if (donor) {
       carried[column] = donor[column];
       carriedFields.push(column);
@@ -1698,6 +1718,8 @@ export const mergeProducts = async (
         ...buildPartialUpdateValues(carried),
       })
       .where(eq(product.id, keepId));
+
+    await deleteProductMatchCandidatesTx(tx, plan.loserIds);
 
     if (plan.conversionCoverage.length > 0) {
       await tx.delete(productConversionCoverage).where(

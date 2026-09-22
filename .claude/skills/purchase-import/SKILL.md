@@ -34,11 +34,15 @@ through Cubby's prepare/commit writer rather than generic entity mutation.
 4. Resolve every principal line. Prefer exact retailer SKU, ASIN, UPC/GTIN, or
    manufacturer model; then inspect Product aliases, names, and details. Before
    choosing `new`, check inventory-first Products (`dataGap: product_unpurchased`,
-   same category/owner) and claim one when variant evidence agrees — see
+   same category/owner) — see the either-side-first contract in
    [product identity](../product-enrichment/references/product-identity.md).
-   Choose an existing Product shortcode, explicitly choose `new`, or leave the
-   line `unresolved`. Never create a Product merely because search was
-   inconclusive.
+   An exact identifier match resolves the line straight to that Product
+   (`existingId`); a descriptive-only match does not — choose `new` for this
+   line's own vendor Product instead, then call `propose_product_match` with
+   the candidate pair and evidence for human review. Otherwise choose an
+   existing Product shortcode, explicitly choose `new`, or leave the line
+   `unresolved`. Never create a Product merely because search was
+   inconclusive, and never claim a descriptive-only candidate directly.
 5. Call `commit_purchase_import` with the preparation revision and every line
    resolution. Do not use generic entity creation for imported Products or
    Expenses.

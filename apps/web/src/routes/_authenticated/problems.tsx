@@ -1,8 +1,10 @@
 import {
   createFileRoute,
+  Link,
   redirect,
   stripSearchParams,
 } from "@tanstack/react-router";
+import { GitMerge } from "lucide-react";
 import { lazy, Suspense } from "react";
 import { z } from "zod";
 
@@ -11,6 +13,7 @@ import { Stack } from "~/components/layout";
 import { RouteErrorComponent } from "~/components/lazy-route-error";
 import { Page } from "~/components/page/Page";
 import { RoutePending } from "~/components/route-pending";
+import { Button } from "~/components/ui/button";
 import { pageTitle } from "~/lib/page-title";
 import { problems } from "~/lib/problems.functions";
 import { urlStringParam } from "~/lib/search-params";
@@ -63,7 +66,28 @@ export const Route = createFileRoute("/_authenticated/problems")({
 
 function ProblemsPage() {
   return (
-    <Page variant="list" title="Data Problems">
+    <Page
+      variant="list"
+      title="Data Problems"
+      actions={
+        // The product match queue is a review surface, not a Problems lane:
+        // its detector needs vector lookups the DB-only fast lane forbids.
+        <Button
+          size="sm"
+          variant="outline"
+          render={
+            <Link
+              to="/recommendations/workbench"
+              search={{ kind: "product-match" }}
+            />
+          }
+          nativeButton={false}
+        >
+          <GitMerge className="size-3.5" />
+          Product matches
+        </Button>
+      }
+    >
       <Stack gap="lg">
         <ProblemsContent />
       </Stack>

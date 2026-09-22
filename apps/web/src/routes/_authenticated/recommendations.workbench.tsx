@@ -19,6 +19,8 @@ function RecommendationWorkbenchPage() {
     <Page variant="list" title="Recommendations Workbench" layout="full">
       {kind === "placement" && inventory ? (
         <RecommendationWorkbench inventoryId={inventory} kind={kind} />
+      ) : kind === "product-match" ? (
+        <RecommendationWorkbench sourceId={source} kind={kind} />
       ) : kind && source ? (
         <RecommendationWorkbench sourceId={source} kind={kind} />
       ) : (
