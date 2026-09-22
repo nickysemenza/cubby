@@ -433,7 +433,7 @@ history is the archive. Permanent product constraints live in the
   see "Generic durable data exceptions" below); the per-check weights shipped
   are a first cut and may need tuning once worklists are used in anger;
   `projectsMissingBudget` remains a Problems tracker rule, not a `dataQuality`
-  check, since Project is not a scored entity.
+  check, because its subtree spend rollup is not a per-row predicate.
 
 - **Incremental import cursors and paced backfill.** The account cursor declares
   newest-date/order-ID and backfill bounds, but imports do not advance them;
