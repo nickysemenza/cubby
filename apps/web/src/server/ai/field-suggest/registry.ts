@@ -12,6 +12,10 @@ import {
   type GeneratedSuggestFieldKey,
 } from "@cubby/schemas/entity-fields";
 import { type CostType, costTypeValues } from "@cubby/schemas/expense-fields";
+import {
+  type ExpenseLineKind,
+  expenseLineKindValues,
+} from "@cubby/schemas/expense-line-kind";
 import { gardenEntryKind, plantingStatus } from "@cubby/schemas/garden-fields";
 import type { ProductId } from "@cubby/schemas/identifiers";
 import { type LocationType, locationType } from "@cubby/schemas/location";
@@ -47,6 +51,8 @@ import { z } from "zod";
 import {
   COST_TYPE_DESCRIPTIONS,
   COST_TYPE_RULES,
+  LINE_KIND_DESCRIPTIONS,
+  LINE_KIND_RULES,
   LOCATION_TYPE_DESCRIPTIONS,
   LOCATION_TYPE_RULES,
   MEAL_KIND_DESCRIPTIONS,
@@ -532,6 +538,13 @@ export const FIELD_SUGGEST_REGISTRY = {
     rules: COST_TYPE_RULES,
     subject: (basis) => renderSubject("expense", basis),
   } satisfies EnumSuggestSpec<CostType>,
+  "expense.lineKind": {
+    kind: "enum",
+    values: expenseLineKindValues,
+    describe: (v) => LINE_KIND_DESCRIPTIONS[v],
+    rules: LINE_KIND_RULES,
+    subject: (basis) => renderSubject("expense", basis),
+  } satisfies EnumSuggestSpec<ExpenseLineKind>,
   "expense.trade": {
     kind: "enum",
     values: tradeValues,
@@ -588,6 +601,37 @@ export const FIELD_SUGGEST_REGISTRY = {
     rules: TRADE_RULES,
     subject: (basis) => renderSubject("purchase", basis),
   } satisfies EnumSuggestSpec<Trade>,
+  "purchase.vendorId": {
+    kind: "reference",
+    entity: "vendor",
+    rules:
+      "You are a vendor-matching assistant. Given a purchase's display label, order id, and notes, choose the ONE existing vendor it was bought from, or none if no listed vendor fits.",
+    maxCandidates: VENDOR_ROSTER_CAP,
+    roster: async (db) => {
+      const vendors = await vendorOptions(db);
+      return vendors.slice(0, VENDOR_ROSTER_CAP).map((v) => ({
+        id: v.id,
+        name: v.name,
+      }));
+    },
+    idOf: (c) => c.id,
+    labelOf: (c) => c.name,
+    renderLine: (c) => `${c.id} | ${c.name}`,
+    subject: (basis) => renderSubject("purchase", basis),
+  } satisfies ReferenceSuggestSpec<{ id: string; name: string }>,
+  "purchase.defaultProjectId": {
+    kind: "reference",
+    entity: "project",
+    rules:
+      "You are a project-linking assistant. Given a purchase's display label, vendor, and notes, choose the ONE project it belongs to, or none if it isn't tied to a project.",
+    maxCandidates: REFERENCE_ROSTER_CAP,
+    roster: (db) => projectNameOptions(db),
+    idOf: (c) => c.id,
+    labelOf: (c) => c.name,
+    detailOf: projectOptionDetail,
+    renderLine: renderProjectOption,
+    subject: (basis) => renderSubject("purchase", basis),
+  } satisfies ReferenceSuggestSpec<ProjectOptionsOut>,
   "productCategory.feature": {
     kind: "enum",
     values: productCategoryFeatureValues,

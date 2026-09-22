@@ -58,34 +58,20 @@ history is the archive. Permanent product constraints live in the
   - The canvas's NEXT SESSION note still describes this pass; retire it on
     the next canvas edit.
 
-- **Give the browser test harness a rejecting default transport.** UI tests
-  that mount slots (relatedness rail, product image summaries) reach the real
-  Start transport with no server, so `generic-entity-detail.unit.test.tsx`
-  needs a console spy and a 1.5 s settle to keep failures from landing after
-  teardown. `createBrowserTestHarness` should install a transport that
-  rejects synchronously (or the slot registry should take an operations
-  seam) so a UI test can never leak a network call.
-
-- **`SelectField` names its picker with the lowercased label.** The generic
-  editor's selects read `aria-label="kind"` with placeholder "Select kind"
-  while the visible label is "Kind" (`form-utils.tsx` `SelectField` →
-  `StaticPicker label={label.toLowerCase()}`). Pass the label as written.
-
-- **Reserve the date field's clear-button width.** `DatePickerInput` mounts
-  "Clear date" only once a value exists, so committing a typed date shifts
-  everything below it by the button's width; clicks aimed at the next field
-  land on whatever moved under them.
-
-- **Require a `label` on reference fields.** A reference field without one
-  renders its key humanised ("Location Id") in the editor and facts grid
-  (gardenEntry's two were fixed by hand in #1067). Add the compiler check in
-  `scripts/generator/entities/compile.ts` beside `validateTitleField`.
-
 - **Declare `control.options` on enum fields that lack them.** Product
-  `category`, inventory `placement` and the other option-less enum controls
-  make the native editor fall back to the same-named list filter's enum
-  values (`filterValues(for:)` in `EntityOperations.swift`); declaring the
-  options on the control removes the heuristic on both platforms.
+  `category` and inventory `placement` now declare theirs. Thirteen select
+  controls still do not: `location.type`, `meal.mealType`/`mealKind`,
+  `ledgerParty.kind`, `project.status`/`kind`/`defaultTrade`,
+  `task.status`/`trade`, `purchase.defaultTrade`, and
+  `expense.lineKind`/`lineBasis`/`costType`/`trade`. Their labels live only
+  in web option modules (`ENTITY_SELECT_OPTIONS` in
+  `apps/web/src/entities/editing/select-options.ts`, built from
+  `capitalize`, `PROJECT_STATUS_LABELS`, `ledgerPartyLabel`, and similar), so
+  the native editor falls back to the list filter's bare enum values
+  (`filterValues(for:)` in `EntityOperations.swift`). Move each value→label
+  table into `packages/schemas`, declare it on the manifest control, add a
+  compiler check that fails an option-less `select` enum, then drop the
+  Swift fallback. The web rich options (icons, colors) stay layered on top.
 
 - **Photo-flow leftovers from #1084/#1086.** Small, independent:
   - `PhotoRelatedCreateEditor.renders(_:)` hides `pendingImageIds`,
@@ -115,11 +101,6 @@ history is the archive. Permanent product constraints live in the
     `createInput` (the generator runs before that file exists); if the two
     ever disagree the route fails at commit time with `CONSTRAINT_VIOLATION`
     instead of at generation.
-
-- **Link the generic-page design canvas from `apps/web/DESIGN.md`.**
-  <https://claude.ai/artifact/A45j5qz24RjRK6KzKmKLWL> is the spec the
-  generic detail/list pages were built against (hero plate, section kinds,
-  workbench band, journal variant) and is referenced only from #1067.
 
 - **Classification list filter has no tree grouping.** The `idMulti`
   `productCategory` column filter renders through `MultiselectEditor`, not
@@ -151,6 +132,15 @@ history is the archive. Permanent product constraints live in the
 ---
 
 ## Ready projects
+
+- **Batch the image-sighting backfill.** `LibraryMetadataSync` writes one
+  `resources.imageSighting.create` per sighting at four concurrent requests, and
+  the generated routes expose only create/get/list/update/delete for the entity,
+  so a first backfill on a large member library is thousands of round trips. A
+  bulk create route would cut that to one request per page; the adapter already
+  upserts on the unique key, so batch semantics match the single write. The
+  client side is ready — the sync plans a whole pass before sending, so it has
+  the full pending list in hand.
 
 - **Post-import shelf triage.** After a vendor purchase import every new
   product lands in the `unlocated` saved view (`entities/view-manifest.ts`:
@@ -419,6 +409,21 @@ history is the archive. Permanent product constraints live in the
 ---
 
 ## Requires thought or evidence
+
+- **Jev suggestion for `product.ingredientId`.** The manifest and registry
+  already support it (`readKey: null` reference targets work in
+  `scripts/generator/entities/compile.ts` and `readReferenceField` in
+  `entities/entity-references.ts`); the open question is the roster.
+  `findLexicalSearchCandidates` ANDs every prefix term (`buildPrefixTsQuery` in
+  `repo/search-lexical.ts`), so a full product name never matches a short
+  ingredient, and per-word fan-out still misses abbreviations and synonyms.
+  Decide between semantic candidates (`services/semantic-search.service.ts`),
+  the whole ingredient list if it stays small, or lexical fan-out plus aliases.
+  Basis `name, manufacturer, categoryId, notes` — the category lets Jev return
+  none for non-food. Pairs with the `resolve_ingredients` product-link entry.
+  Other fields without `suggest` (`location.parentId`,
+  `productCategory.parentId`, `recipe.cookbookId`, `ledgerParty.kind`,
+  `product.growsIngredientId`) stay manual: rare, deliberate edits.
 
 - **Completeness scores for every entity — exceptions still to come.** Every
   scored household entity now declares `capabilities.dataQuality` in its

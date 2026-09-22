@@ -68,6 +68,7 @@ jobs:
               - 'scripts/ensure-apple-ffi.ts'
               - 'scripts/rust-fingerprint.ts'
               - 'scripts/apple-check.sh'
+              - 'scripts/stamp-source-mtimes.ts'
               - 'apps/web/src/lib/generated/http-openapi.gen.json'
               - '.github/workflows/ci.yaml'
               - '.github/actions/setup-apple-ffi/**'
@@ -85,8 +86,8 @@ jobs:
       - uses: ./.github/actions/setup-node-with-deps
         with:
           wasm: "restore"
-      # Validation rebuilds the package to verify generated WASM is current;
-      # restoring its output alone does not provide the wasm-pack executable.
+      # The Nx `wasm` target's runtime input (ensure-wasm.ts --fingerprint)
+      # runs `wasm-pack --version`, which a restored package does not provide.
       - name: Install wasm-pack for validation
         uses: taiki-e/install-action@2ca9b94c269419b7b0c711c09d0b21c4e1d51145 # v2
         with:
@@ -394,32 +395,47 @@ jobs:
       - uses: ./.github/actions/setup-apple-ffi
         with:
           targets: mac
-      # SPM fetch+resolve was 53s of this job's ~5 minutes; CubbyKit's
-      # Package.resolved pins exact versions, so an exact-key cache of the
-      # checkouts and git-object cache is safe to reuse unchanged.
-      - name: Restore cached SPM checkouts
-        id: spm-checkouts
+      # The whole SwiftPM build directory is cached, not just the checkouts:
+      # 367 tests run in ~3s, the other 2.5-4 minutes was a cold build.
+      # stamp-source-mtimes.ts gives each tracked source an mtime derived
+      # from its blob hash, so unchanged files match the restored build and
+      # only changed ones recompile (measured locally: 76s cold, 41s restored
+      # with fresh-checkout mtimes, 3s restored and stamped, 8s with one
+      # CubbyKit file changed). The key ends in a hash of CubbyKit so main
+      # saves once per Swift change; PRs restore main's newest by prefix.
+      - name: Compute Swift toolchain hash
+        id: swift-version
+        run: echo "hash=$(swift --version 2>&1 | shasum -a 256 | awk '{print $1}')" >> "$GITHUB_OUTPUT"
+      - name: Restore cached SwiftPM build
+        id: spm-build
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
-          path: |
-            apps/apple/CubbyKit/.build/checkouts
-            apps/apple/CubbyKit/.build/repositories
-          key: spm-checkouts-v1-${{ runner.os }}-${{ hashFiles('apps/apple/CubbyKit/Package.resolved') }}
+          path: apps/apple/CubbyKit/.build
+          key: spm-build-v1-${{ runner.os }}-${{ steps.swift-version.outputs.hash }}-${{ hashFiles('apps/apple/CubbyKit/Package.resolved') }}-${{ hashFiles('apps/apple/CubbyKit/**') }}
+          restore-keys: |
+            spm-build-v1-${{ runner.os }}-${{ steps.swift-version.outputs.hash }}-${{ hashFiles('apps/apple/CubbyKit/Package.resolved') }}-
+            spm-build-v1-${{ runner.os }}-${{ steps.swift-version.outputs.hash }}-
+      - name: Stamp source mtimes from content
+        run: node scripts/stamp-source-mtimes.ts apps/apple/CubbyKit
+      # --disable-index-store: nothing reads the index on CI, and it would
+      # otherwise be rebuilt and cached with every module.
       - name: Run CubbyKit Swift tests
-        run: swift test --package-path apps/apple/CubbyKit --force-resolved-versions
+        run: swift test --package-path apps/apple/CubbyKit --force-resolved-versions --disable-index-store
       # Saved here rather than by actions/cache's post step so a red test run
-      # still keeps the checkouts for the next attempt. A concurrent job may
-      # have saved the same key first; that 409 is harmless and must never
-      # fail the check.
-      - name: Save SPM checkouts cache
-        if: always() && steps.spm-checkouts.outputs.cache-hit != 'true'
+      # still keeps the build for the next attempt. Only main saves once a
+      # prefix exists: a PR's cache is private to its ref and a ~1 GB copy
+      # per PR evicts everyone else's caches (the repo sat at 13.4 GB of
+      # 10 GB on 2026-09-22). A concurrent job may have saved the same key
+      # first; that 409 is harmless and must never fail the check.
+      - name: Save SwiftPM build cache
+        if: >-
+          always() && steps.spm-build.outputs.cache-hit != 'true' &&
+          (github.event_name == 'push' || steps.spm-build.outputs.cache-matched-key == '')
         continue-on-error: true
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
-          path: |
-            apps/apple/CubbyKit/.build/checkouts
-            apps/apple/CubbyKit/.build/repositories
-          key: spm-checkouts-v1-${{ runner.os }}-${{ hashFiles('apps/apple/CubbyKit/Package.resolved') }}
+          path: apps/apple/CubbyKit/.build
+          key: ${{ steps.spm-build.outputs.cache-primary-key }}
 
   test-apple:
     name: Apple checks
@@ -434,21 +450,65 @@ jobs:
           targets: sim
       - uses: ./.github/actions/setup-apple-tools
         id: apple-tools
+      # DerivedData is cached like CubbyKit's .build above: apple-check.sh's
+      # ci mode stamps tracked sources with blob-hash mtimes after xcodegen,
+      # and XCBuild is told to ignore the device/inode changes every cache
+      # restore introduces, so only changed sources recompile.
+      - name: Compute Xcode version hash
+        id: xcode-version
+        run: |
+          echo "hash=$(xcodebuild -version | shasum -a 256 | awk '{print $1}')" >> "$GITHUB_OUTPUT"
+          defaults write com.apple.dt.XCBuild IgnoreFileSystemDeviceInodeChanges -bool YES
+      - name: Restore cached DerivedData
+        id: derived-data
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        with:
+          # Must list exactly the save step's paths: the cache version hashes them.
+          path: |
+            apps/apple/DerivedData
+            !apps/apple/DerivedData/Logs
+          key: xcode-dd-v1-${{ runner.os }}-${{ steps.xcode-version.outputs.hash }}-${{ hashFiles('apps/apple/project.yml', 'apps/apple/CubbyKit/Package.resolved') }}-${{ hashFiles('apps/apple/App/**', 'apps/apple/CubbyKit/**') }}
+          restore-keys: |
+            xcode-dd-v1-${{ runner.os }}-${{ steps.xcode-version.outputs.hash }}-${{ hashFiles('apps/apple/project.yml', 'apps/apple/CubbyKit/Package.resolved') }}-
+            xcode-dd-v1-${{ runner.os }}-${{ steps.xcode-version.outputs.hash }}-
       - name: Run iOS app checks
         run: sh scripts/apple-check.sh ci
+      # Same policy as the SwiftPM build cache: PRs save only when no prefix
+      # exists, otherwise only main saves.
+      - name: Save DerivedData cache
+        if: >-
+          always() && steps.derived-data.outputs.cache-hit != 'true' &&
+          (github.event_name == 'push' || steps.derived-data.outputs.cache-matched-key == '')
+        continue-on-error: true
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        with:
+          path: |
+            apps/apple/DerivedData
+            !apps/apple/DerivedData/Logs
+          key: ${{ steps.derived-data.outputs.cache-primary-key }}
       # Saved here rather than by actions/cache's post step so a red build
       # still keeps the generator build and SPM clones for the next attempt.
       # A concurrent job may have saved the same key first; that 409 is
       # harmless and must never fail the check.
-      - name: Save OpenAPI generator cache
+      # Never save an empty generator directory: a run that fails before the
+      # generator is built would otherwise poison the exact key for good.
+      - name: Check OpenAPI generator binary
+        id: generator-built
         if: always() && steps.apple-tools.outputs.openapi-generator-cache-hit != 'true'
+        run: test -x "$CUBBY_OPENAPI_GENERATOR_BIN" && echo "present=true" >> "$GITHUB_OUTPUT" || true
+      - name: Save OpenAPI generator cache
+        if: always() && steps.generator-built.outputs.present == 'true'
         continue-on-error: true
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: ${{ env.CUBBY_OPENAPI_GENERATOR_BIN_DIR }}
           key: ${{ steps.apple-tools.outputs.openapi-generator-cache-key }}
+      # ~1.1 GB per entry, and a PR's copy is private to its ref: seven of
+      # them were 8.3 GB of the repo's 10 GB cache on 2026-09-22.
       - name: Save SPM clone cache
-        if: always() && steps.apple-tools.outputs.spm-clones-cache-hit != 'true'
+        if: >-
+          always() && steps.apple-tools.outputs.spm-clones-cache-hit != 'true' &&
+          (github.event_name == 'push' || steps.apple-tools.outputs.spm-clones-cache-matched-key == '')
         continue-on-error: true
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:

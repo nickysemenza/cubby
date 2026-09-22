@@ -1,5 +1,7 @@
 import CubbyKit
 import Foundation
+import Observation
+import Synchronization
 import Testing
 
 @testable import Cubby
@@ -9,10 +11,10 @@ import Testing
 struct BackgroundActivityCenterTests {
     private func activity(
         id: String, title: String = "Work", progress: Double? = nil,
-        startedAt: Date = .now, isUserInitiated: Bool = false
+        startedAt: Date = .now, isUserInitiated: Bool = false, kind: BackgroundActivity.Kind = .libraryScan
     ) -> BackgroundActivity {
         BackgroundActivity(
-            id: id, kind: .libraryScan, title: title, phase: .running, progress: progress,
+            id: id, kind: kind, title: title, phase: .running, progress: progress,
             detail: nil, startedAt: startedAt, link: .localActivity(id),
             isUserInitiated: isUserInitiated, isCancellable: false)
     }
@@ -119,6 +121,49 @@ struct BackgroundActivityCenterTests {
 
         center.cancel(id: "job")
         #expect(cancelled)
+    }
+
+    /// A4's regression test: `sources` must not be `@ObservationIgnored`, or a source registered
+    /// after a view's body last read `activities` (a late-registering `PhotoClassificationSweep`
+    /// racing `preparePhotoSubsystem()`) never invalidates that reader and so never appears.
+    @Test func registeringASourceInvalidatesActivitiesReaders() {
+        let center = BackgroundActivityCenter()
+        let fired = Mutex(false)
+        withObservationTracking {
+            _ = center.activities
+        } onChange: {
+            fired.withLock { $0 = true }
+        }
+
+        center.register(StubActivitySource(activities: [activity(id: "late-registration")]))
+
+        #expect(fired.withLock { $0 })
+    }
+
+    /// B1's regression test: a kind-scoped `Slice` must filter to just those kinds, and its
+    /// `primary`/`aggregateProgress`/`summary` must read exactly like a center holding only that
+    /// filtered activity list — a Photos-screen strip can never phrase things differently from the
+    /// iOS bar or the macOS sidebar looking at the same underlying activities unscoped.
+    @Test func sliceFiltersByKindAndSharesSummaryWording() {
+        let center = BackgroundActivityCenter()
+        let scan = activity(id: "scan", title: "Scanning library", progress: 0.4, kind: .libraryScan)
+        let job = activity(id: "job", title: "Describing image", kind: .companionJob)
+        let source = StubActivitySource(activities: [scan, job])
+        center.register(source)
+
+        let slice = center.slice(BackgroundActivity.Kind.photoLibrary)
+        #expect(slice.activities.map(\.id) == ["scan"])
+        #expect(!slice.isEmpty)
+        #expect(slice.primary?.id == "scan")
+
+        let unscopedCenter = BackgroundActivityCenter()
+        let unscopedSource = StubActivitySource(activities: [scan])
+        unscopedCenter.register(unscopedSource)
+        #expect(slice.summary == unscopedCenter.summary)
+        #expect(slice.aggregateProgress == unscopedCenter.aggregateProgress)
+
+        #expect(center.slice([.companionJob]).activities.map(\.id) == ["job"])
+        #expect(center.slice([.hashRepair]).isEmpty)
     }
 }
 

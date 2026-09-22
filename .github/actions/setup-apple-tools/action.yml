@@ -7,14 +7,17 @@ description: >-
 
 outputs:
   openapi-generator-cache-hit:
-    description: "true when the generator binary cache matched exactly"
-    value: ${{ steps.generator-cache.outputs.cache-hit }}
+    description: "true when the generator binary cache matched exactly and restored an executable binary"
+    value: ${{ steps.generator-usable.outputs.usable }}
   openapi-generator-cache-key:
     description: "Key to save the generator binary under (see ci.yaml's explicit save steps)"
     value: ${{ steps.generator-cache.outputs.cache-primary-key }}
   spm-clones-cache-hit:
     description: "true when the SPM clone cache matched exactly"
     value: ${{ steps.spm-cache.outputs.cache-hit }}
+  spm-clones-cache-matched-key:
+    description: "Key the SPM clones were restored from (exact or prefix); empty on a full miss"
+    value: ${{ steps.spm-cache.outputs.cache-matched-key }}
   spm-clones-cache-key:
     description: "Key to save the SPM clones under"
     value: ${{ steps.spm-cache.outputs.cache-primary-key }}
@@ -76,7 +79,22 @@ runs:
       uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
       with:
         path: ${{ env.CUBBY_OPENAPI_GENERATOR_BIN_DIR }}
-        key: openapi-gen-v1-${{ runner.os }}-${{ hashFiles('apps/apple/.generator/Package.swift', 'apps/apple/.generator/Package.resolved') }}-${{ steps.swift-version.outputs.hash }}
+        key: openapi-gen-v2-${{ runner.os }}-${{ hashFiles('apps/apple/.generator/Package.swift', 'apps/apple/.generator/Package.resolved') }}-${{ steps.swift-version.outputs.hash }}
+
+    # An exact-key hit is not proof of a binary: v1 was saved empty (204 B)
+    # by a run that failed before generate-openapi.sh built the generator,
+    # and every later run "hit" it, rebuilt the generator (~3 min), and
+    # skipped the save because the key already existed. Callers must also
+    # save only when the binary exists (ci.yaml, apple-testflight.yaml).
+    - name: Check restored OpenAPI generator binary
+      id: generator-usable
+      shell: bash
+      run: |
+        if [ -x "$CUBBY_OPENAPI_GENERATOR_BIN" ]; then
+          echo "usable=true" >> "$GITHUB_OUTPUT"
+        else
+          echo "usable=false" >> "$GITHUB_OUTPUT"
+        fi
 
     # The app's own Package.resolved lives inside the gitignored xcodeproj,
     # so Sentry/Nuke float within their `from:` ranges here; a slightly stale

@@ -5,17 +5,7 @@ import { cookbookSummary } from "@cubby/schemas/recipe";
 import { testShortcode } from "@cubby/schemas/testing";
 import { TIER1_NUTRIENT_KEYS } from "@cubby/usda-schemas";
 import { render, screen, waitFor, within } from "@testing-library/react";
-import {
-  afterAll,
-  afterEach,
-  beforeAll,
-  beforeEach,
-  describe,
-  expect,
-  it,
-  vi,
-} from "vitest";
-import { z } from "zod";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { entityList } from "~/entities/entity-list.functions";
 import { entityTimeline } from "~/entities/entity-timeline.functions";
@@ -114,26 +104,6 @@ const operations = {
 
 describe("GenericEntityDetail", () => {
   let harness: ReturnType<typeof createBrowserTestHarness>;
-  // Slots (relatedness, product summaries) read through the Start transport,
-  // which has no server here. Those reads reject ~1s later and the recorder
-  // logs a `<< op` failure line; one landing after the worker tears down
-  // fails the run. Drop only that line, and give the last reads time to
-  // settle before the file ends.
-  let errorSpy: ReturnType<typeof vi.spyOn> | undefined;
-  beforeAll(() => {
-    const original = console.error.bind(console);
-    errorSpy = vi
-      .spyOn(console, "error")
-      .mockImplementation((...args: unknown[]) => {
-        const line = z.string().safeParse(args[0]);
-        if (line.success && line.data.startsWith("<< op-")) return;
-        original(...args);
-      });
-  });
-  afterAll(async () => {
-    await new Promise((resolve) => setTimeout(resolve, 1500));
-    errorSpy?.mockRestore();
-  });
   beforeEach(() => {
     harness = createBrowserTestHarness();
   });
