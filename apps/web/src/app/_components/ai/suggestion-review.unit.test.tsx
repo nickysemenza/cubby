@@ -5,6 +5,9 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   actionableSuggestion,
+  ALTERNATIVE_THRESHOLD,
+  FILL_THRESHOLD,
+  reviewThreshold,
   SuggestionReview,
   SuggestionVisitProvider,
 } from "./suggestion-review";
@@ -192,5 +195,70 @@ describe("inline suggestion review", () => {
     view.unmount();
     render(content("first"));
     expect(screen.getByText("Suggested: Tools")).toBeInTheDocument();
+  });
+});
+
+describe("reviewThreshold", () => {
+  it.each([
+    ["", false, FILL_THRESHOLD],
+    [null, false, FILL_THRESHOLD],
+    ["materials", false, ALTERNATIVE_THRESHOLD],
+    [null, true, ALTERNATIVE_THRESHOLD],
+    ["materials", true, ALTERNATIVE_THRESHOLD],
+  ] as const)(
+    "set, current=%s alternative=%s → %s",
+    (current, alternative, expected) => {
+      expect(reviewThreshold(suggestion, current, alternative)).toBe(expected);
+    },
+  );
+
+  it.each([
+    [null, false],
+    ["apparel", false],
+    [null, true],
+  ] as const)(
+    "a remove proposal always gates at the fill threshold, current=%s alternative=%s",
+    (current, alternative) => {
+      expect(
+        reviewThreshold(
+          { ...suggestion, operation: "remove" },
+          current,
+          alternative,
+        ),
+      ).toBe(FILL_THRESHOLD);
+    },
+  );
+});
+
+describe("cell surface", () => {
+  it("keeps children flat and folds the whole review into the mark's popover", async () => {
+    const save = vi.fn().mockResolvedValue(undefined);
+    render(
+      <SuggestionReview
+        suggestion={suggestion}
+        currentValue="materials"
+        currentLabel="Materials"
+        questionKey="cell"
+        onApply={save}
+        surface="cell"
+      >
+        <span>Materials</span>
+      </SuggestionReview>,
+    );
+    // No inline "Suggested: Tools" text and no visible buttons — the review
+    // lives inside the (closed) popover, not the cell's own flow.
+    expect(screen.getByText("Materials")).toBeInTheDocument();
+    expect(screen.queryByText("Suggested: Tools")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Use suggestion" }),
+    ).not.toBeInTheDocument();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Suggested Tools · 97%" }),
+    );
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Use suggestion" }),
+    );
+    expect(save).toHaveBeenCalledOnce();
   });
 });

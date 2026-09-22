@@ -73,6 +73,7 @@ const meals: MealOut[] = [tuesdayDinner, cornerDeli];
 const testOperations: AddToMealOperations = {
   suggestFields: ai.suggestFields.withTransport(async () => ({
     suggestions: {},
+    outcomes: {},
   })),
   existingMeals: meal.getByDateRange.withTransport(async () => {
     mealRequests += 1;

@@ -338,8 +338,7 @@ export type FieldSuggestionsInput = z.infer<typeof fieldSuggestionsInput>;
  * reference target, the enum member for an enum target, the chosen string
  * for a text-roster target), `label` is display text, and `detail` is
  * secondary context (e.g. a location's ancestor path) when the spec has one.
- * `null` means no suggestion could be made — an unusable basis or an empty
- * roster — not an error.
+ * `null` means no suggestion could be made — see `outcomes` for why.
  */
 /**
  * A runner-up from Jev's calibrated distribution over every choice, so a
@@ -388,6 +387,35 @@ export const fieldSuggestionSchema = z.object({
 });
 export type FieldSuggestion = z.infer<typeof fieldSuggestionSchema>;
 
+/**
+ * What happened to one requested target, whether or not `suggestions[target]`
+ * carries a proposal. `skipped` means the decision tier was never asked:
+ * `no_signal` (an unusable basis), `no_candidates` (an empty roster), or
+ * `resolved` (inheritance already answers the field — see
+ * `fieldResolutions`). `evaluated` means it answered: `pick` chose a
+ * candidate (the proposal is in `suggestions`), `none` declined every
+ * candidate (a fill target) or kept every entry (a prune target).
+ */
+export const fieldSuggestionOutcomeSchema = z.discriminatedUnion("kind", [
+  z.object({
+    kind: z.literal("skipped"),
+    reason: z.enum(["no_signal", "no_candidates", "resolved"]),
+  }),
+  z.object({
+    kind: z.literal("evaluated"),
+    answer: z.enum(["pick", "none"]),
+    confidence,
+    /** Calibrated probability of `answer` — the winner's for a pick, `none`'s
+     * for a decline. Null only on the roster-overflow chat tier. */
+    probability: z.number().min(0).max(1).nullable(),
+    /** Ranked runners-up; for a decline, the closest calls. */
+    alternatives: z.array(fieldSuggestionAlternativeSchema).default([]),
+  }),
+]);
+export type FieldSuggestionOutcome = z.infer<
+  typeof fieldSuggestionOutcomeSchema
+>;
+
 /** Input for classifying one external identifier's `kind` from its shape and source. */
 export const externalIdKindSuggestionInput = z.object({
   source: z.string().trim().min(1),
@@ -412,6 +440,9 @@ export const fieldSuggestionsOut = z.object({
   fieldResolutions: fieldResolutionsSchema.optional(),
   /** Requested targets the server allowed Jev to evaluate. */
   eligibleTargets: z.array(z.string()).optional(),
+  /** One entry per requested target; why `suggestions[target]` is or isn't a
+   * proposal. */
+  outcomes: z.record(z.string(), fieldSuggestionOutcomeSchema).optional(),
 });
 export type FieldSuggestionsOut = z.infer<typeof fieldSuggestionsOut>;
 

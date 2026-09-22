@@ -1,4 +1,7 @@
-import type { FieldSuggestion } from "@cubby/schemas/ai";
+import type {
+  FieldSuggestion,
+  FieldSuggestionOutcome,
+} from "@cubby/schemas/ai";
 import type { Entity } from "@cubby/schemas/entity";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
@@ -10,6 +13,7 @@ import {
   useContext,
   useRef,
   useState,
+  type ContextType,
   type ReactNode,
 } from "react";
 import { z } from "zod";
@@ -49,6 +53,10 @@ import {
   useSuggestionVisit,
 } from "./suggestion-review";
 import { createSuggestionScheduler } from "./suggestion-scheduler";
+import {
+  SuggestionStatus,
+  type SuggestionStatusField,
+} from "./suggestion-status";
 
 const SuggestionSchedulerContext = createContext<ReturnType<
   typeof createSuggestionScheduler
@@ -63,6 +71,7 @@ type SuggestionRow = {
   record: SuggestionRecord;
   sourceByField: ReadonlyMap<string, FieldSuggestionSource>;
   suggestions: Record<string, FieldSuggestion | null>;
+  outcomes: Record<string, FieldSuggestionOutcome>;
   pending: boolean;
 };
 const RecordSuggestionsContext = createContext<{
@@ -343,14 +352,16 @@ export function RecordSuggestionsProvider({
   );
 }
 
-function requestsForRecords(
+/** The suggest targets a roster of visible field keys makes reachable —
+ * shared by request-building and the "never asked" status line, so both
+ * agree on what "this entity's suggestable fields" means for a given view. */
+function visibleSuggestTargets(
   entity: StandardEntity,
-  records: readonly unknown[],
   fieldKeys: readonly string[],
 ) {
   const visible = new Set(fieldKeys);
   const updateFields: readonly string[] = entityFieldModels[entity].update;
-  const targets = suggestTargetsFor(
+  return suggestTargetsFor(
     entity,
     entityFieldModels[entity].fields
       .filter(
@@ -363,6 +374,30 @@ function requestsForRecords(
       .map((field) => field.key)
       .filter((key) => updateFields.includes(key)),
   );
+}
+
+/** The label of the first non-reference basis field a suggest target
+ * declares — what the "Not checked — add a `name` first" status line names
+ * as the thing to fill in before Jev has anything to evaluate. */
+function firstBasisFieldLabel(
+  entity: StandardEntity,
+  targets: SuggestTargets,
+): string | null {
+  for (const key of targets.basisKeys) {
+    if (key.startsWith("__")) continue;
+    const field = entityFieldModels[entity].fields.find(
+      (candidate) => candidate.key === key,
+    );
+    if (field && !field.reference) return field.label.toLowerCase();
+  }
+  return null;
+}
+
+function requestsForRecords(
+  entity: StandardEntity,
+  records: readonly unknown[],
+  targets: SuggestTargets,
+) {
   return records.flatMap((raw) => {
     const parsed = recordSchema.safeParse(raw);
     if (
@@ -406,24 +441,33 @@ function actionableRowSuggestionCount(
   return count;
 }
 
-function SuggestionQueryStatus({
-  requested,
-  checking,
-  count,
-  failures,
-}: {
-  requested: boolean;
-  checking: boolean;
-  count: number;
-  failures: number;
-}) {
-  if (!requested) return null;
-  return (
-    <Description size="xs" as="output">
-      {checking ? "Checking suggestions…" : `${count} suggestions`}
-      {failures > 0 ? " · Some suggestions unavailable" : ""}
-    </Description>
-  );
+/** One row per requested (row, field) pair whose outcome has settled — what
+ * `SuggestionStatus` lists or aggregates. A field whose query hasn't
+ * returned yet (no `outcomes[field]` entry) is left out; `checking` already
+ * covers that state. */
+function statusFieldsForRows(
+  entity: StandardEntity,
+  rows: ReadonlyMap<string, SuggestionRow>,
+): SuggestionStatusField[] {
+  const fields: SuggestionStatusField[] = [];
+  for (const row of rows.values()) {
+    for (const field of row.sourceByField.keys()) {
+      const outcome = row.outcomes[field];
+      if (!outcome) continue;
+      const model = entityFieldModels[entity].fields.find(
+        (candidate) => candidate.key === field,
+      );
+      const value = recordValue(entity, row.record, field);
+      fields.push({
+        label: model?.label ?? field,
+        outcome,
+        suggestion: row.suggestions[field] ?? null,
+        currentValue: value.value,
+        currentLabel: value.label,
+      });
+    }
+  }
+  return fields;
 }
 
 function BoundRecordSuggestions({
@@ -454,7 +498,8 @@ function BoundRecordSuggestions({
   const update = useEntityCommands(entity, { mutationPort });
   const [correctionRecord, setCorrectionRecord] =
     useState<SuggestionRecord | null>(null);
-  const requests = requestsForRecords(entity, records, fieldKeys);
+  const targets = visibleSuggestTargets(entity, fieldKeys);
+  const requests = requestsForRecords(entity, records, targets);
   // Identical records can share one query, while each row retains its own review state.
   const sources = [
     ...new Map(
@@ -491,6 +536,13 @@ function BoundRecordSuggestions({
       suggestions: {
         ...previous?.suggestions,
         ...query.data?.suggestions,
+      },
+      // The suggested/provided/prune request groups target disjoint field
+      // keys (a target belongs to exactly one group), so this merge never
+      // collides — each field's outcome comes from exactly one group's response.
+      outcomes: {
+        ...previous?.outcomes,
+        ...query.data?.outcomes,
       },
       pending:
         (previous?.pending ?? false) || query.isFetching || query.isPending,
@@ -561,14 +613,22 @@ function BoundRecordSuggestions({
   const count = actionableRowSuggestionCount(entity, rows, visit?.dismissed);
   const checking = queries.some((query) => query.isFetching || query.isPending);
   const failures = queries.filter((query) => query.isError).length;
+  // The client never asked at all — every requestable target's basis fell
+  // short of `isBasisSufficient`, not that Jev declined once asked. Name the
+  // first basis field that would unblock a request, e.g. "name".
+  const unasked =
+    requests.length === 0 && records.length > 0 && targets.targets.length > 0
+      ? firstBasisFieldLabel(entity, targets)
+      : null;
   return (
     <SuggestionSchedulerContext value={scheduler}>
       <RecordSuggestionsContext value={context}>
-        <SuggestionQueryStatus
-          requested={requests.length > 0}
+        <SuggestionStatus
           checking={checking}
-          count={count}
           failures={failures}
+          count={count}
+          fields={statusFieldsForRows(entity, rows)}
+          unasked={unasked}
         />
         {children}
         {correctionRecord ? (
@@ -612,31 +672,74 @@ export function RecordSuggestionBoundary({
 }
 
 /** Wraps existing cells without changing their accessor, sorting, clipboard, or normal editor. */
-export function RecordFieldSuggestion({
-  record,
-  field: column,
+function findEntityField(entity: StandardEntity, column: string) {
+  return entityFieldModels[entity].fields.find(
+    (candidate) =>
+      candidate.key === column ||
+      candidate.display.columnId === column ||
+      (candidate.reference != null &&
+        candidate.key.replace(/Id$/u, "") === column),
+  );
+}
+
+/** Re-checked at apply time against the row snapshot the closure captured —
+ * true when anything the acceptance depends on (the row identity, the
+ * field's source, its current value, or the suggestion itself) has moved
+ * since render, so a stale click can't silently write the wrong patch. */
+function suggestionWentStale(
+  entity: StandardEntity,
+  latest: { row: SuggestionRow | undefined; field: string | undefined },
+  expected: {
+    recordId: string;
+    field: string;
+    source: FieldSuggestionSource;
+    currentValue: string | null;
+    suggestionValue: string | undefined;
+  },
+): boolean {
+  const row = latest.row;
+  if (!row || row.record.id !== expected.recordId) return true;
+  if (latest.field !== expected.field) return true;
+  if (
+    JSON.stringify(row.sourceByField.get(expected.field)) !==
+    JSON.stringify(expected.source)
+  )
+    return true;
+  if (
+    recordValue(entity, row.record, expected.field).value !==
+    expected.currentValue
+  )
+    return true;
+  return row.suggestions[expected.field]?.value !== expected.suggestionValue;
+}
+
+type RecordSuggestionsCtx = NonNullable<
+  ContextType<typeof RecordSuggestionsContext>
+>;
+
+/** The part of `RecordFieldSuggestion` that only runs once every lookup
+ * (context, row, field, source) has resolved — split out so the "nothing to
+ * wrap yet" early-return branches in `RecordFieldSuggestion` don't share a
+ * complexity budget with the review wiring below. */
+function ResolvedFieldSuggestion({
+  context,
+  row,
+  field,
+  source,
+  prune,
+  surface,
   children,
 }: {
-  record: unknown;
+  context: RecordSuggestionsCtx;
+  row: SuggestionRow;
   field: string;
+  source: FieldSuggestionSource;
+  prune: boolean;
+  surface: "inline" | "cell";
   children: ReactNode;
 }) {
-  const context = useContext(RecordSuggestionsContext);
-  const parsed = recordSchema.safeParse(record);
-  const row = parsed.success ? context?.rows.get(parsed.data.id) : undefined;
-  const field = context
-    ? entityFieldModels[context.entity].fields.find(
-        (candidate) =>
-          candidate.key === column ||
-          candidate.display.columnId === column ||
-          (candidate.reference != null &&
-            candidate.key.replace(/Id$/u, "") === column),
-      )?.key
-    : undefined;
   const snapshot = useRef({ row, field });
   snapshot.current = { row, field };
-  const source = field ? row?.sourceByField.get(field) : undefined;
-  if (!context || !row || !field || !source) return children;
   const current = recordValue(context.entity, row.record, field);
   const suggestion = row.suggestions[field] ?? null;
   const questionKey = JSON.stringify([
@@ -654,17 +757,15 @@ export function RecordFieldSuggestion({
     resolutionPolicy?.redundancy === "eligible" &&
     resolution.fallbackValue === suggestion?.value;
   const apply = async () => {
-    const latest = snapshot.current.row;
     if (
-      !latest ||
-      latest.record.id !== row.record.id ||
-      snapshot.current.field !== field ||
-      JSON.stringify(latest.sourceByField.get(field)) !==
-        JSON.stringify(source) ||
-      recordValue(context.entity, latest.record, field).value !==
-        current.value ||
-      latest.suggestions[field]?.value !== suggestion?.value ||
-      !suggestion?.value
+      !suggestion?.value ||
+      suggestionWentStale(context.entity, snapshot.current, {
+        recordId: row.record.id,
+        field,
+        source,
+        currentValue: current.value,
+        suggestionValue: suggestion?.value,
+      })
     )
       throw new Error("Suggestion inputs changed");
     await context.save(row.record.id, field, suggestion, source, current.value);
@@ -680,10 +781,50 @@ export function RecordFieldSuggestion({
         onApply={apply}
         applyLabel={usesInheritedValue ? "Use inherited value" : undefined}
         alternative={source.basisMode === "provided"}
+        outcome={row.outcomes[field]}
+        surface={surface}
+        prune={prune}
       >
         {children}
       </SuggestionReview>
     </RecordSuggestionScope>
+  );
+}
+
+export function RecordFieldSuggestion({
+  record,
+  field: column,
+  children,
+  surface = "inline",
+}: {
+  record: unknown;
+  field: string;
+  children: ReactNode;
+  /** `"cell"` folds the review into the outcome mark's popover for a dense
+   * 28px table row; `"inline"` (detail facts, phone cards) renders it directly. */
+  surface?: "inline" | "cell";
+}) {
+  const context = useContext(RecordSuggestionsContext);
+  const parsed = recordSchema.safeParse(record);
+  const row = parsed.success ? context?.rows.get(parsed.data.id) : undefined;
+  const fieldModel = context
+    ? findEntityField(context.entity, column)
+    : undefined;
+  const field = fieldModel?.key;
+  if (!context || !row || !field) return children;
+  const source = row.sourceByField.get(field);
+  if (!source) return children;
+  return (
+    <ResolvedFieldSuggestion
+      context={context}
+      row={row}
+      field={field}
+      source={source}
+      prune={fieldModel?.control?.suggest?.mode === "prune"}
+      surface={surface}
+    >
+      {children}
+    </ResolvedFieldSuggestion>
   );
 }
 

@@ -1,4 +1,7 @@
-import type { FieldSuggestion } from "@cubby/schemas/ai";
+import type {
+  FieldSuggestion,
+  FieldSuggestionOutcome,
+} from "@cubby/schemas/ai";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
 import { useQuery } from "@tanstack/react-query";
@@ -228,6 +231,26 @@ export const productionEntitySuggestionsOperations: EntitySuggestionsOperations 
  * equal across renders when there is nothing to show (web-ui hook-default rule). */
 const EMPTY_SUGGESTIONS: Record<string, FieldSuggestion | null> = {};
 const EMPTY_FIELD_RESOLUTIONS = {};
+const EMPTY_OUTCOMES: Record<string, FieldSuggestionOutcome> = {};
+
+/** Floors rather than rounds so a value just under a review threshold never
+ * prints the same percent as the threshold itself (0.949 reads "94%", not
+ * "95%", beside copy that says "needs 95%"). */
+export function formatProbability(probability: number): string {
+  return `${Math.floor(probability * 100)}%`;
+}
+
+const stringLabelSchema = z.string();
+
+/** Every real `currentLabel` caller passes a plain string (see the call
+ * sites); the prop stays typed `ReactNode` for the inline review's own JSX
+ * fallback, so the outcome mark (which needs a string for its headline
+ * sentence) parses down to that domain value here rather than branching on
+ * `typeof` at the render site. */
+export function stringLabelOf(value: unknown): string | null {
+  const parsed = stringLabelSchema.safeParse(value);
+  return parsed.success ? parsed.data : null;
+}
 
 /** A schema-valid placeholder input used only while `source` is null, so
  * `queryOptions()` (which parses its input unconditionally, even while the
@@ -273,6 +296,8 @@ export function useEntitySuggestionsQuery({
     suggestions: query.data?.suggestions ?? EMPTY_SUGGESTIONS,
     fieldResolutions: query.data?.fieldResolutions ?? EMPTY_FIELD_RESOLUTIONS,
     eligibleTargets: query.data?.eligibleTargets ?? [],
+    outcomes: query.data?.outcomes ?? EMPTY_OUTCOMES,
     isFetching: query.isFetching,
+    isError: query.isError,
   };
 }
