@@ -6,7 +6,7 @@ import Testing
 
 /// Backstop for `PreviewFixtures+Generated.swift`: `PreviewFixtures.decode(_:)` `fatalError`s on a
 /// fixture that no longer decodes, which crashes a `#Preview` instead of failing a test. The
-/// generator's `--check` in `pnpm apple check` catches schema drift first; this catches a decode
+/// generator's `--check` (the `preview-fixtures` target in `pnpm check:all`) catches schema drift first; this catches a decode
 /// regression even when that step was skipped.
 @Suite struct PreviewFixturesDecodingTests {
     nonisolated enum Fixture: CaseIterable, Sendable {

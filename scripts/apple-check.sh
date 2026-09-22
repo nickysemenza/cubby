@@ -76,11 +76,6 @@ fi
 # Fails when the committed CubbyAPI client no longer matches the OpenAPI document.
 apps/apple/scripts/generate-openapi.sh --check
 
-# Fails when the committed preview fixtures no longer match what their zod schemas
-# (apps/web/scripts/generate-apple-preview-fixtures.ts) would generate — schema drift
-# fails here instead of crashing a `#Preview` at runtime.
-pnpm --dir apps/web run gen:apple-preview-fixtures:check
-
 # Same DerivedData as `pnpm apple`, so this build is incremental over the dev
 # loop's instead of a second full compile of CubbyKit.
 #
