@@ -42,7 +42,12 @@
     "prepare": "husky && sh scripts/install-merge-driver.sh",
     "trace": "node scripts/test-services.ts --trace",
     "test:services:down": "node scripts/test-services.ts --down",
-    "test:e2e:watch": "pnpm --filter @cubby/web test:e2e:watch"
+    "test:e2e:watch": "pnpm --filter @cubby/web test:e2e:watch",
+    "db:dev:up": "node scripts/dev-db.ts up",
+    "db:dev:push": "node scripts/dev-db.ts push",
+    "db:dev:seed": "node scripts/dev-db.ts seed",
+    "db:dev:down": "node scripts/dev-db.ts down",
+    "dev:local": "pnpm --filter @cubby/web dev:local"
   },
   "devDependencies": {
     "@oxlint/plugins": "1.82.0",
