@@ -58,6 +58,7 @@ enum NativePresentationCoverage {
         case .expenseProject,
             .ownerLedgerPartyId,
             .ownershipMode,
+            .productCategory,
             .productFdcId,
             .productExternalIds,
             .productId,
