@@ -24,14 +24,37 @@ jobs:
     outputs:
       apple: ${{ github.event_name != 'pull_request' || steps.filter.outputs.apple == 'true' }}
     steps:
+      # Only pull requests have outward text to check or a diff to filter
+      # on; a push or workflow_dispatch skips every step here.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        if: github.event_name == 'pull_request'
+        with:
+          sparse-checkout: |
+            .nvmrc
+            scripts/check-outward-text.ts
+            packages/shared/src/generated/shortcode-registry.gen.ts
+          sparse-checkout-cone-mode: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        if: github.event_name == 'pull_request'
+        with:
+          node-version-file: .nvmrc
+      # The commit-msg hook gates commit messages; the PR title and body are
+      # the other outward text AGENTS.md keeps free of live entity codes.
+      - name: PR text names no live entity codes
+        if: github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          gh pr view "$PR" --repo "$GITHUB_REPOSITORY" --json title,body \
+            --jq '.title + "\n" + .body' | node scripts/check-outward-text.ts --stdin
       # The Apple lane is path-filtered because it's by far the slowest
       # (macOS runners, xcodebuild) — everything else always runs. On a push
       # or workflow_dispatch (no PR to diff against) the Apple lane always
       # runs too. `.github/` is narrowed to the files those jobs actually
       # use, rather than the whole directory, so unrelated workflow/action
-      # edits don't force a macOS run.
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-        if: github.event_name == 'pull_request'
+      # edits don't force a macOS run. paths-filter reads the PR's file list
+      # from the API, so the sparse checkout above is enough.
       - id: filter
         if: github.event_name == 'pull_request'
         uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3

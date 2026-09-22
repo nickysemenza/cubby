@@ -73,7 +73,7 @@ const operationLogEntry = (
     state: operation.state,
     ...emptyMetadata,
     operationId: operation.operationId,
-    error: operation.error ? "Operation failed" : null,
+    error: operation.error?.slice(0, 300) ?? null,
   };
 };
 

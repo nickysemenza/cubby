@@ -1,13 +1,22 @@
-import type { BrowserBridgeRequest } from "@cubby/schemas/purchase-import";
+import type {
+  BrowserBridgeRequest,
+  BrowserBridgeResult,
+} from "@cubby/schemas/purchase-import";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import {
+  dispatchImportRunEvent,
+  recordImportRunDispatchAttempt,
+} from "./dispatch";
+import {
   controlImportRun,
+  expireStaleImportRuns,
   finishImportRun,
   issueBrowserCommand,
   loadImportRunByPublicId,
-  recordImportRunDispatchAttempt,
+  readBrowserCommandResult,
+  reconcileSettledImportRun,
   resumeAuthorizedImportRuns,
   runImportOperation,
   startOrResumeImportRun,
@@ -352,6 +361,7 @@ describe("purchase import run admission", () => {
       result: async () => null,
       cancel: async () => undefined,
       connected: async () => true,
+      hasPendingCommands: async () => false,
       notifyRunCompleted: async () => undefined,
       requestAuthentication: async () => undefined,
     };
@@ -387,6 +397,7 @@ describe("purchase import run admission", () => {
       result: async () => null,
       cancel: async () => undefined,
       connected: async () => true,
+      hasPendingCommands: async () => false,
       notifyRunCompleted: async () => undefined,
       requestAuthentication: async () => undefined,
     };
@@ -423,6 +434,7 @@ describe("purchase import run admission", () => {
       result: async () => null,
       cancel: async () => undefined,
       connected: async () => true,
+      hasPendingCommands: async () => false,
       notifyRunCompleted: async ({ runID }: { runID: string }) => {
         notifications.push(runID);
       },
@@ -436,5 +448,227 @@ describe("purchase import run admission", () => {
 
     expect(replay).toEqual(first);
     expect(notifications).toEqual([run.id, run.id]);
+  });
+  it("counts the initial dispatch as an attempt, not only retries", async () => {
+    const party = await createMember();
+    const account = await createVendorAccount(party.id);
+    const run = await startOrResumeImportRun(ctx.db, {
+      ledgerPartyId: party.id,
+      vendorAccountId: account.id,
+      trigger: "manual",
+    });
+    const { importRun } = await import("~/server/db/schema");
+    const { eq } = await import("drizzle-orm");
+    const { getDb } = await import("~/server/repo/database-helpers");
+    const sent: string[] = [];
+
+    await dispatchImportRunEvent(
+      ctx.db,
+      {
+        send: async (event) => {
+          sent.push(event.type);
+        },
+      },
+      {
+        version: 1,
+        runId: run.id,
+        eventId: run.dispatchEventId!,
+        type: "start_or_resume",
+      },
+    );
+
+    const [stored] = await getDb(ctx.db)
+      .select({ attempts: importRun.dispatchAttempts })
+      .from(importRun)
+      .where(eq(importRun.id, run.id));
+    expect(sent).toEqual(["start_or_resume"]);
+    expect(stored?.attempts).toBe(1);
+  });
+
+  it("moves a run whose coordinator settled without finishing to review, unless a browser command is in flight", async () => {
+    const party = await createMember();
+    const account = await createVendorAccount(party.id);
+    const run = await startOrResumeImportRun(ctx.db, {
+      ledgerPartyId: party.id,
+      vendorAccountId: account.id,
+      trigger: "manual",
+    });
+    let pending = true;
+    const broker = {
+      enqueue: async () => undefined,
+      result: async () => null,
+      cancel: async () => undefined,
+      connected: async () => true,
+      hasPendingCommands: async () => pending,
+      notifyRunCompleted: async () => undefined,
+      requestAuthentication: async () => undefined,
+    };
+    const namespace = { getByName: () => broker };
+
+    await expect(
+      reconcileSettledImportRun(ctx.db, namespace, {
+        runId: run.id,
+        operationId: "settled:1",
+      }),
+    ).resolves.toEqual({ reconciled: false, status: "running" });
+
+    pending = false;
+    await expect(
+      reconcileSettledImportRun(ctx.db, namespace, {
+        runId: run.id,
+        operationId: "settled:2",
+      }),
+    ).resolves.toEqual({ reconciled: true, status: "needs_review" });
+    const { importFinding, importRun } = await import("~/server/db/schema");
+    const { eq } = await import("drizzle-orm");
+    const { getDb } = await import("~/server/repo/database-helpers");
+    const [stored] = await getDb(ctx.db)
+      .select({ status: importRun.status })
+      .from(importRun)
+      .where(eq(importRun.id, run.id));
+    expect(stored?.status).toBe("needs_review");
+    const findings = await getDb(ctx.db)
+      .select({ kind: importFinding.kind, summary: importFinding.summary })
+      .from(importFinding)
+      .where(eq(importFinding.importRunId, run.id));
+    expect(findings).toEqual([
+      expect.objectContaining({
+        kind: "other",
+        summary: "Coordinator ended without finishing the run",
+      }),
+    ]);
+  });
+
+  it("expires only runs with no coordinator activity for two hours", async () => {
+    const party = await createMember();
+    const staleAccount = await createVendorAccount(party.id);
+    const liveAccount = await createVendorAccount(party.id);
+    const stale = await startOrResumeImportRun(ctx.db, {
+      ledgerPartyId: party.id,
+      vendorAccountId: staleAccount.id,
+      trigger: "manual",
+    });
+    const live = await startOrResumeImportRun(ctx.db, {
+      ledgerPartyId: party.id,
+      vendorAccountId: liveAccount.id,
+      trigger: "manual",
+    });
+    const { importRun } = await import("~/server/db/schema");
+    const { inArray } = await import("drizzle-orm");
+    const { getDb } = await import("~/server/repo/database-helpers");
+    const now = new Date("2026-09-21T12:00:00.000Z");
+    const threeHoursAgo = new Date(now.getTime() - 3 * 60 * 60_000);
+    await getDb(ctx.db)
+      .update(importRun)
+      .set({ updatedAt: threeHoursAgo })
+      .where(inArray(importRun.id, [stale.id, live.id]));
+    // A progress report inside the window is activity even when the run row
+    // itself was not touched.
+    await runImportOperation(
+      ctx.db,
+      {
+        runId: live.id,
+        operationId: "live:op",
+        kind: "claim_next_work",
+        payload: {},
+      },
+      async () => ({ ok: true }),
+    );
+    const broker = {
+      enqueue: async () => undefined,
+      result: async () => null,
+      cancel: async () => undefined,
+      connected: async () => true,
+      hasPendingCommands: async () => false,
+      notifyRunCompleted: async () => undefined,
+      requestAuthentication: async () => undefined,
+    };
+
+    const outcome = await expireStaleImportRuns(
+      ctx.db,
+      { getByName: () => broker },
+      now,
+    );
+
+    expect(outcome).toEqual({ expired: 1 });
+    const rows = await getDb(ctx.db)
+      .select({ id: importRun.id, status: importRun.status })
+      .from(importRun)
+      .where(inArray(importRun.id, [stale.id, live.id]));
+    expect(Object.fromEntries(rows.map((row) => [row.id, row.status]))).toEqual(
+      {
+        [stale.id]: "needs_review",
+        [live.id]: "running",
+      },
+    );
+  });
+  it("records a terminal browser failure on the operation row instead of only returning it", async () => {
+    const party = await createMember();
+    const account = await createVendorAccount(party.id);
+    const run = await startOrResumeImportRun(ctx.db, {
+      ledgerPartyId: party.id,
+      vendorAccountId: account.id,
+      trigger: "manual",
+    });
+    let issued: BrowserBridgeRequest | undefined;
+    const broker = {
+      enqueue: async (command: BrowserBridgeRequest) => {
+        issued = command;
+      },
+      result: async (): Promise<BrowserBridgeResult> => ({
+        protocolVersion: 2,
+        commandID: issued!.id,
+        operationID: issued!.operationId,
+        runID: run.id,
+        completedAt: new Date().toISOString(),
+        outcome: {
+          status: "failed",
+          code: "disallowed_url",
+          message: "Navigation left the vendor allowlist",
+          retryable: false,
+        },
+      }),
+      cancel: async () => undefined,
+      connected: async () => true,
+      hasPendingCommands: async () => false,
+      notifyRunCompleted: async () => undefined,
+      requestAuthentication: async () => undefined,
+    };
+    const namespace = { getByName: () => broker };
+    await issueBrowserCommand(ctx.db, namespace, {
+      runId: run.id,
+      operationId: "browser:bad-link",
+      operation: {
+        type: "navigate",
+        url: "https://shop.example.test/orders",
+        allowedHosts: ["shop.example.test"],
+      },
+    });
+
+    const read = await readBrowserCommandResult(ctx.db, namespace, {
+      runId: run.id,
+      operationId: "browser:bad-link",
+    });
+
+    expect(read.state).toBe("completed");
+    const { importRunOperation } = await import("~/server/db/schema");
+    const { and, eq } = await import("drizzle-orm");
+    const { getDb } = await import("~/server/repo/database-helpers");
+    const [operation] = await getDb(ctx.db)
+      .select({
+        state: importRunOperation.state,
+        error: importRunOperation.error,
+      })
+      .from(importRunOperation)
+      .where(
+        and(
+          eq(importRunOperation.runId, run.id),
+          eq(importRunOperation.operationId, "browser:bad-link"),
+        ),
+      );
+    expect(operation).toEqual({
+      state: "failed",
+      error: "disallowed_url: Navigation left the vendor allowlist",
+    });
   });
 });

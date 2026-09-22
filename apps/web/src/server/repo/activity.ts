@@ -416,7 +416,9 @@ export async function activityEvents(
           NULL::int AS attempt,
           CASE WHEN kind = '__debug_event' THEN result::text
             ELSE jsonb_build_object(
-              'state', state, 'error', CASE WHEN error IS NOT NULL THEN 'Operation failed' END,
+              -- Runs are already owner-scoped by resolveActivity; the first
+              -- 300 characters are the diagnosis, the transcript has the rest.
+              'state', state, 'error', left(error, 300),
               'operationId', "operationId", 'executor', executor
             )::text
           END AS "detailsJson"

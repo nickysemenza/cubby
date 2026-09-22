@@ -182,6 +182,16 @@ export class PurchaseImportSqlStore {
       : null;
   }
 
+  hasPendingCommands(runId: string): boolean {
+    const row = this.storage.sql
+      .exec<{ count: number }>(
+        "SELECT count(*) AS count FROM broker_command WHERE run_id = ? AND state IN ('pending','sent')",
+        runId,
+      )
+      .toArray()[0];
+    return (row?.count ?? 0) > 0;
+  }
+
   cancel(requestId: string): void {
     this.storage.sql.exec(
       "UPDATE broker_command SET state = 'cancelled', updated_at = ? WHERE request_id = ? AND state IN ('pending','sent')",

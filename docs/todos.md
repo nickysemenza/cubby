@@ -158,15 +158,6 @@ history is the archive. Permanent product constraints live in the
   prefer the project whose other expenses share the line's trade. Feed the
   affinity cells into `renderLine` and re-evaluate on `/ai-usage`.
 
-- **Settle-expense is the last bespoke expense dialog.** Everything it edits
-  is an expense field, so it should be a `settle` update intent through the
-  generic editor with `future: false` fixed in `buildData`. Blocker:
-  `use-entity-commands.ts` skips the network call when no rendered field is
-  dirty, so a no-touch "Mark purchased" (same-day settling, the common case)
-  would silently no-op. Add an "always submit" intent flag to the editing
-  registry, then delete `settle-expense-dialog.tsx` (its selects already
-  bind to the suggest registry via `suggestField`).
-
 - **Product edit still opens `ProductForm` in a dialog** instead of the
   generic editor's `structured-field` renderers, because `unitMappings` and
   `labelNutrition` have no generic port yet. Port them (see

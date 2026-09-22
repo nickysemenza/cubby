@@ -22,6 +22,7 @@ import type { PurchaseAgentQueueProducer } from "~/server/purchase-agent-queue-t
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 
+import { dispatchImportRunEvent } from "./dispatch";
 import { startOrResumeImportRun } from "./run-service";
 
 const normalizeMerchant = (value: string) =>
@@ -199,7 +200,7 @@ export async function dispatchImportHunts(
         trigger: "discovery",
       });
       runsByAccount.set(hunt.vendorAccountId, run);
-      await queue.send({
+      await dispatchImportRunEvent(db, queue, {
         version: 1,
         runId: run.id,
         publicId: run.publicId,

@@ -180,6 +180,19 @@ export function purchaseImportTools(
             detail: data.detail,
           }),
         );
+        // A `review` report ends the submission, so it must also move the run:
+        // a progress row alone left runs `running` with no coordinator behind
+        // them. The same server transition `stop_import_run_for_review` takes.
+        if (data.phase === "review") {
+          await step.do(`agent-progress-review:${data.operationId}`, () =>
+            serviceForRun().stopForReview({
+              runId,
+              operationId: `agent-progress-review:${data.operationId}`,
+              reason: "other",
+              detail: data.detail,
+            }),
+          );
+        }
         return {
           output: { recorded: true, phase: data.phase },
           terminate:

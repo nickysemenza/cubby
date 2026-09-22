@@ -559,249 +559,290 @@ export async function commitPurchaseImport(
   const vendorId = scope.vendorId;
   const args = operationArgs(input);
   const argsFingerprint = await sha256(JSON.stringify(args));
-  const transactionResult = await withTransactionDatabase(
-    db,
-    // eslint-disable-next-line complexity
-    async (transactionDb) => {
-      const database = getDb(transactionDb);
-      const [operation] = await database
-        .select({
-          state: importRunOperation.state,
-          inputFingerprint: importRunOperation.inputFingerprint,
-          result: importRunOperation.result,
-        })
-        .from(importRunOperation)
-        .where(
-          and(
-            eq(importRunOperation.runId, scope.public.runId),
-            eq(importRunOperation.operationId, input._runExecution.operationId),
-          ),
-        )
-        .limit(1)
-        .for("update");
-      if (operation) {
-        if (operation.inputFingerprint !== argsFingerprint)
-          throw new Error("Operation id was replayed with different input");
-        if (operation.state === "completed") {
-          const metadata = z
-            .object({ requiresReview: z.boolean() })
-            .catch({ requiresReview: false })
-            .parse(operation.result);
-          return {
-            result: commitPurchaseImportOut.parse(operation.result),
-            requiresReview: metadata.requiresReview,
-          };
-        }
-        throw new Error(
-          "Commit outcome is uncertain; inspect operation status",
-        );
-      }
-      if (scope.public.status !== "running")
-        throw new Error(
-          `Purchase import run is fenced in ${scope.public.status}`,
-        );
-      const prepared = await loadPreparation(
-        transactionDb,
-        scope.public.runId,
-        input.prepareOperationId,
-      );
-      const defaultProjectId = input.defaultProjectId
-        ? await resolveOrThrow(transactionDb, "project", input.defaultProjectId)
-        : null;
-      const hasPrincipalLine = prepared.some(({ lines }) =>
-        lines.some(
-          (line) =>
-            extractedPurchaseLine.parse(line.line).lineKind === "principal",
-        ),
-      );
-      if (hasPrincipalLine) {
-        await validateExpenseInheritance(transactionDb, {
-          lineKind: "principal",
-          projectId: defaultProjectId,
-          productId: null,
-          purchaseId: null,
-          trade: input.defaultTrade ?? null,
-        });
-      }
-      await database.insert(importRunOperation).values({
-        runId: scope.public.runId,
-        operationId: input._runExecution.operationId,
-        kind: "commit_purchase_import",
-        inputFingerprint: argsFingerprint,
-        state: "started",
-      });
-      for (const { order } of prepared) {
-        const extraction = importExtractionOutcome.parse(order.extraction);
-        const targetFingerprint = await computeTargetFingerprint(
-          transactionDb,
-          {
-            ledgerPartyId: scope.ledgerPartyId,
-            vendorId,
-            sourceKind: importSourceKind.parse(order.sourceKind),
-            sourceExternalKey: order.sourceExternalKey,
-            orderId: extraction.candidate?.orderId ?? null,
-          },
-        );
-        const evidenceFingerprint = await computeEvidenceFingerprint({
-          source: {
-            kind: importSourceKind.parse(order.sourceKind),
-            externalKey: order.sourceExternalKey,
-            checksum: order.sourceChecksum,
-          },
-          evidenceChecksum: order.evidenceChecksum,
-          extractionRevision: order.extractionRevision,
-          extraction,
-          primaryDocumentImageId: order.primaryDocumentImageId,
-          screenshotImageId: order.screenshotImageId,
-        });
-        if (
-          targetFingerprint !== order.targetFingerprint ||
-          evidenceFingerprint !== order.evidenceFingerprint
-        ) {
-          throw new Error("Prepared target or evidence changed before commit");
-        }
-      }
-      const resolutionMap = new Map(
-        input.resolutions.map((resolution) => [
-          `${resolution.stableOrderId}:${resolution.stableLineId}`,
-          resolution.resolution,
-        ]),
-      );
-      if (resolutionMap.size !== input.resolutions.length)
-        throw new Error("Product resolutions contain duplicate line ids");
-      const items = [];
-      let requiresReview = false;
-      for (const { order, lines } of prepared) {
-        const extraction = importExtractionOutcome.parse(order.extraction);
-        const productResolutions = [];
-        for (const line of lines) {
-          const parsedLine = extractedPurchaseLine.parse(line.line);
-          const resolution = resolutionMap.get(
-            `${order.stableOrderId}:${line.stableLineId}`,
-          );
-          if (!resolution) {
-            if (parsedLine.lineKind === "principal")
-              throw new Error(
-                `Missing product resolution for ${order.stableOrderId}/${line.stableLineId}`,
-              );
-            continue;
-          }
-          if (resolution.kind === "existing") {
-            productResolutions.push({
-              kind: "existing" as const,
-              lineIndex: line.position,
-              productId: await resolveOrThrow(
-                transactionDb,
-                "product",
-                resolution.productId,
+  let transactionResult: {
+    result: z.infer<typeof commitPurchaseImportOut>;
+    requiresReview: boolean;
+  };
+  try {
+    transactionResult = await withTransactionDatabase(
+      db,
+      // eslint-disable-next-line complexity
+      async (transactionDb) => {
+        const database = getDb(transactionDb);
+        const [operation] = await database
+          .select({
+            state: importRunOperation.state,
+            inputFingerprint: importRunOperation.inputFingerprint,
+            result: importRunOperation.result,
+          })
+          .from(importRunOperation)
+          .where(
+            and(
+              eq(importRunOperation.runId, scope.public.runId),
+              eq(
+                importRunOperation.operationId,
+                input._runExecution.operationId,
               ),
-            });
-          } else if (resolution.kind === "new") {
-            productResolutions.push({
-              kind: "new" as const,
-              lineIndex: line.position,
-            });
-          } else {
-            requiresReview ||= parsedLine.lineKind === "principal";
-            productResolutions.push({
-              kind: "unresolved" as const,
-              lineIndex: line.position,
-              reason: resolution.reason,
-            });
+            ),
+          )
+          .limit(1)
+          .for("update");
+        if (operation) {
+          if (operation.inputFingerprint !== argsFingerprint)
+            throw new Error("Operation id was replayed with different input");
+          if (operation.state === "completed") {
+            const metadata = z
+              .object({ requiresReview: z.boolean() })
+              .catch({ requiresReview: false })
+              .parse(operation.result);
+            return {
+              result: commitPurchaseImportOut.parse(operation.result),
+              requiresReview: metadata.requiresReview,
+            };
           }
+          throw new Error(
+            "Commit outcome is uncertain; inspect operation status",
+          );
         }
-        const result = await importVendorOrder(
+        if (scope.public.status !== "running")
+          throw new Error(
+            `Purchase import run is fenced in ${scope.public.status}`,
+          );
+        const prepared = await loadPreparation(
           transactionDb,
-          {
-            defaultTrade: input.defaultTrade,
-            defaultProjectId: defaultProjectId ?? undefined,
-            runId: scope.public.runId,
-            ledgerPartyId: scope.ledgerPartyId,
-            vendorId,
-            vendorAccountId: scope.public.vendorAccountId,
+          scope.public.runId,
+          input.prepareOperationId,
+        );
+        const defaultProjectId = input.defaultProjectId
+          ? await resolveOrThrow(
+              transactionDb,
+              "project",
+              input.defaultProjectId,
+            )
+          : null;
+        const hasPrincipalLine = prepared.some(({ lines }) =>
+          lines.some(
+            (line) =>
+              extractedPurchaseLine.parse(line.line).lineKind === "principal",
+          ),
+        );
+        if (hasPrincipalLine) {
+          await validateExpenseInheritance(transactionDb, {
+            lineKind: "principal",
+            projectId: defaultProjectId,
+            productId: null,
+            purchaseId: null,
+            trade: input.defaultTrade ?? null,
+          });
+        }
+        await database.insert(importRunOperation).values({
+          runId: scope.public.runId,
+          operationId: input._runExecution.operationId,
+          kind: "commit_purchase_import",
+          inputFingerprint: argsFingerprint,
+          state: "started",
+        });
+        for (const { order } of prepared) {
+          const extraction = importExtractionOutcome.parse(order.extraction);
+          const targetFingerprint = await computeTargetFingerprint(
+            transactionDb,
+            {
+              ledgerPartyId: scope.ledgerPartyId,
+              vendorId,
+              sourceKind: importSourceKind.parse(order.sourceKind),
+              sourceExternalKey: order.sourceExternalKey,
+              orderId: extraction.candidate?.orderId ?? null,
+            },
+          );
+          const evidenceFingerprint = await computeEvidenceFingerprint({
             source: {
               kind: importSourceKind.parse(order.sourceKind),
               externalKey: order.sourceExternalKey,
               checksum: order.sourceChecksum,
             },
+            evidenceChecksum: order.evidenceChecksum,
+            extractionRevision: order.extractionRevision,
             extraction,
             primaryDocumentImageId: order.primaryDocumentImageId,
             screenshotImageId: order.screenshotImageId,
-            productResolutions,
-          },
-          actor.userId,
-        );
-        if (order.sourceKind === "receipt_photo") {
-          const huntId = order.sourceExternalKey.startsWith("hunt:")
-            ? order.sourceExternalKey.slice("hunt:".length)
-            : null;
-          if (huntId) {
-            await database
-              .update(importHunt)
-              .set({ state: "resolved", error: null, updatedAt: new Date() })
-              .where(
-                and(
-                  eq(importHunt.id, huntId),
-                  eq(importHunt.receiptRunId, scope.public.runId),
-                  eq(importHunt.state, "processing_receipt"),
-                ),
-              );
+          });
+          if (
+            targetFingerprint !== order.targetFingerprint ||
+            evidenceFingerprint !== order.evidenceFingerprint
+          ) {
+            throw new Error(
+              "Prepared target or evidence changed before commit",
+            );
           }
         }
-        const [written] = result.purchaseId
-          ? await database
-              .select({ shortcode: purchase.shortcode })
-              .from(purchase)
-              .where(
-                eq(purchase.id, parseEntityId("purchase", result.purchaseId)),
-              )
-              .limit(1)
-          : [];
-        if (written && extraction.candidate?.orderId) {
-          await attachPendingOrderMailEvidence(transactionDb, {
-            vendorId,
-            orderId: extraction.candidate.orderId,
-            purchaseShortcode: written.shortcode,
-            ledgerPartyId: scope.ledgerPartyId,
+        const resolutionMap = new Map(
+          input.resolutions.map((resolution) => [
+            `${resolution.stableOrderId}:${resolution.stableLineId}`,
+            resolution.resolution,
+          ]),
+        );
+        if (resolutionMap.size !== input.resolutions.length)
+          throw new Error("Product resolutions contain duplicate line ids");
+        const items = [];
+        let requiresReview = false;
+        // Adjustment lines (tax/shipping/discount/etc.) never carry a
+        // Product, so the caller's resolution roster is keyed to principal
+        // lines only — track which entries a real line actually consumed
+        // instead of requiring one resolution per line below.
+        const consumedResolutionIds = new Set<string>();
+        for (const { order, lines } of prepared) {
+          const extraction = importExtractionOutcome.parse(order.extraction);
+          const productResolutions = [];
+          for (const line of lines) {
+            const parsedLine = extractedPurchaseLine.parse(line.line);
+            const resolutionId = `${order.stableOrderId}:${line.stableLineId}`;
+            const resolution = resolutionMap.get(resolutionId);
+            if (!resolution) {
+              if (parsedLine.lineKind === "principal")
+                throw new Error(
+                  `Missing product resolution for ${order.stableOrderId}/${line.stableLineId}`,
+                );
+              continue;
+            }
+            consumedResolutionIds.add(resolutionId);
+            if (resolution.kind === "existing") {
+              productResolutions.push({
+                kind: "existing" as const,
+                lineIndex: line.position,
+                productId: await resolveOrThrow(
+                  transactionDb,
+                  "product",
+                  resolution.productId,
+                ),
+              });
+            } else if (resolution.kind === "new") {
+              productResolutions.push({
+                kind: "new" as const,
+                lineIndex: line.position,
+              });
+            } else {
+              requiresReview ||= parsedLine.lineKind === "principal";
+              productResolutions.push({
+                kind: "unresolved" as const,
+                lineIndex: line.position,
+                reason: resolution.reason,
+              });
+            }
+          }
+          const result = await importVendorOrder(
+            transactionDb,
+            {
+              defaultTrade: input.defaultTrade,
+              defaultProjectId: defaultProjectId ?? undefined,
+              runId: scope.public.runId,
+              ledgerPartyId: scope.ledgerPartyId,
+              vendorId,
+              vendorAccountId: scope.public.vendorAccountId,
+              source: {
+                kind: importSourceKind.parse(order.sourceKind),
+                externalKey: order.sourceExternalKey,
+                checksum: order.sourceChecksum,
+              },
+              extraction,
+              primaryDocumentImageId: order.primaryDocumentImageId,
+              screenshotImageId: order.screenshotImageId,
+              productResolutions,
+            },
+            actor.userId,
+          );
+          if (order.sourceKind === "receipt_photo") {
+            const huntId = order.sourceExternalKey.startsWith("hunt:")
+              ? order.sourceExternalKey.slice("hunt:".length)
+              : null;
+            if (huntId) {
+              await database
+                .update(importHunt)
+                .set({ state: "resolved", error: null, updatedAt: new Date() })
+                .where(
+                  and(
+                    eq(importHunt.id, huntId),
+                    eq(importHunt.receiptRunId, scope.public.runId),
+                    eq(importHunt.state, "processing_receipt"),
+                  ),
+                );
+            }
+          }
+          const [written] = result.purchaseId
+            ? await database
+                .select({ shortcode: purchase.shortcode })
+                .from(purchase)
+                .where(
+                  eq(purchase.id, parseEntityId("purchase", result.purchaseId)),
+                )
+                .limit(1)
+            : [];
+          if (written && extraction.candidate?.orderId) {
+            await attachPendingOrderMailEvidence(transactionDb, {
+              vendorId,
+              orderId: extraction.candidate.orderId,
+              purchaseShortcode: written.shortcode,
+              ledgerPartyId: scope.ledgerPartyId,
+            });
+          }
+          items.push({
+            stableOrderId: order.stableOrderId,
+            outcome: result.outcome,
+            purchaseId: written?.shortcode ?? null,
+            findingCount: result.findingIds.length,
           });
         }
-        items.push({
-          stableOrderId: order.stableOrderId,
-          outcome: result.outcome,
-          purchaseId: written?.shortcode ?? null,
-          findingCount: result.findingIds.length,
+        if (resolutionMap.size !== consumedResolutionIds.size)
+          throw new Error("Product resolutions include unknown line ids");
+        const publicResult = commitPurchaseImportOut.parse({
+          runPublicId: scope.public.publicId,
+          operationId: input._runExecution.operationId,
+          status: requiresReview ? "needs_review" : "running",
+          items,
         });
-      }
-      if (resolutionMap.size !== prepared.flatMap(({ lines }) => lines).length)
-        throw new Error("Product resolutions include unknown line ids");
-      const publicResult = commitPurchaseImportOut.parse({
-        runPublicId: scope.public.publicId,
+        await database
+          .update(importRunOperation)
+          .set({
+            state: "completed",
+            result: { ...publicResult, requiresReview },
+            error: null,
+            completedAt: new Date(),
+            updatedAt: new Date(),
+          })
+          .where(
+            and(
+              eq(importRunOperation.runId, scope.public.runId),
+              eq(
+                importRunOperation.operationId,
+                input._runExecution.operationId,
+              ),
+            ),
+          );
+        await database
+          .update(importRun)
+          .set({ status: "running", failureCode: null, updatedAt: new Date() })
+          .where(eq(importRun.id, scope.public.runId));
+        return { result: publicResult, requiresReview };
+      },
+    );
+  } catch (error) {
+    // The rolled-back transaction takes its own operation row with it, so the
+    // failure is recorded here on a fresh connection (as `runImportOperation`
+    // does). Never an upsert: an existing row belongs to another attempt whose
+    // outcome must not be overwritten by this one.
+    await getDb(db)
+      .insert(importRunOperation)
+      .values({
+        runId: scope.public.runId,
         operationId: input._runExecution.operationId,
-        status: requiresReview ? "needs_review" : "running",
-        items,
-      });
-      await database
-        .update(importRunOperation)
-        .set({
-          state: "completed",
-          result: { ...publicResult, requiresReview },
-          error: null,
-          completedAt: new Date(),
-          updatedAt: new Date(),
-        })
-        .where(
-          and(
-            eq(importRunOperation.runId, scope.public.runId),
-            eq(importRunOperation.operationId, input._runExecution.operationId),
-          ),
-        );
-      await database
-        .update(importRun)
-        .set({ status: "running", failureCode: null, updatedAt: new Date() })
-        .where(eq(importRun.id, scope.public.runId));
-      return { result: publicResult, requiresReview };
-    },
-  );
+        kind: "commit_purchase_import",
+        inputFingerprint: argsFingerprint,
+        state: "failed",
+        error:
+          error instanceof Error ? error.message.slice(0, 2_000) : "unknown",
+      })
+      .onConflictDoNothing();
+    throw error;
+  }
   if (transactionResult.requiresReview) {
     await finalizeReviewRun(
       db,

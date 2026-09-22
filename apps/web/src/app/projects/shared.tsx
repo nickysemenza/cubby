@@ -67,7 +67,7 @@ export {
   PROJECT_STATUS_LABELS,
   TRADE_LABELS,
 } from "./project-formatting";
-export { TradeBadge, TradeIcon, tradeOptions } from "./trade-options";
+export { TradeBadge, TradeIcon } from "./trade-options";
 
 export function StatusIcon({ status }: { status: ProjectStatus | TaskStatus }) {
   const { icon: Icon, className } = getStatusBadgeProps("project", status);
