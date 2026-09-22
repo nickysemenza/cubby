@@ -6,20 +6,9 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
-    inputs:
-      mode:
-        description: "Full verification or full instrumented coverage (neither deploys)"
-        type: choice
-        options: [verify, coverage]
-        default: verify
-      check_processes:
-        description: "Internal validation process-cap benchmark"
-        type: choice
-        options: ["2", "4"]
-        default: "2"
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}-${{ inputs.mode }}
+  group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 permissions:
@@ -33,86 +22,41 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
-      coverage: ${{ steps.scope.outputs.coverage }}
-      verify: ${{ steps.scope.outputs.verify }}
-      apple: ${{ steps.apple.outputs.apple }}
-      release: ${{ steps.apple.outputs.release }}
+      apple: ${{ github.event_name != 'pull_request' || steps.filter.outputs.apple == 'true' }}
     steps:
-      - id: scope
-        env:
-          MODE: ${{ inputs.mode || 'verify' }}
-        run: |
-          if [[ "$MODE" == "coverage" ]]; then
-            echo 'coverage=true' >> "$GITHUB_OUTPUT"
-            echo 'verify=false' >> "$GITHUB_OUTPUT"
-          else
-            echo 'coverage=false' >> "$GITHUB_OUTPUT"
-            echo 'verify=true' >> "$GITHUB_OUTPUT"
-          fi
-
-      # The Apple job is the slowest lane by far (macOS runners, xcodebuild),
-      # so it alone is path-filtered: everything else always runs. On a push
-      # or workflow_dispatch (no PR to diff against) it always runs too.
-      # `release` reuses the same PR file listing to decide whether to run
-      # release-dry-run below: narrower than `apple` (only files that change
-      # what a TestFlight release actually builds/signs) and, unlike `apple`,
-      # false on push/workflow_dispatch — main pushes never need a release
-      # dry run, and a real release is always an explicit dispatch of
-      # apple-testflight.yaml itself.
-      - id: apple
-        env:
-          GH_TOKEN: ${{ github.token }}
-          PR: ${{ github.event.pull_request.number }}
-          EVENT_NAME: ${{ github.event_name }}
-        run: |
-          # Prefix match for directories (a changed file anywhere under
-          # them), exact match for individual files that affect the Apple
-          # build outside apps/apple/ itself.
-          apple_pattern='^(apps/apple/|cubby-ffi/|recipebridge/|\.github/|rust-toolchain\.toml$|scripts/ensure-apple-ffi\.ts$|scripts/rust-fingerprint\.ts$|scripts/apple-check\.sh$|apps/web/src/lib/generated/http-openapi\.gen\.json$)'
-          release_pattern='^(\.github/workflows/apple-testflight\.yaml$|\.github/workflows/apple-release\.yaml$|\.github/actions/(prepare-apple-release-project|import-apple-signing|download-apple-profile)/|apps/apple/scripts/testflight\.sh$|apps/apple/project\.yml$|apps/apple/App/.*(Info\.plist|\.entitlements)$|apps/apple/scripts/build-rust\.sh$)'
-
-          if [[ "$EVENT_NAME" == "pull_request" ]]; then
-            files="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR}/files" --paginate --jq '.[].filename')"
-            matched="$(printf '%s\n' "$files" | grep -E "$apple_pattern" || true)"
-            if [[ -n "$matched" ]]; then apple=true; else apple=false; fi
-            release_matched="$(printf '%s\n' "$files" | grep -E "$release_pattern" || true)"
-            if [[ -n "$release_matched" ]]; then release=true; else release=false; fi
-          else
-            matched=""
-            release_matched=""
-            apple=true
-            release=false
-          fi
-
-          echo "apple=$apple" >> "$GITHUB_OUTPUT"
-          echo "release=$release" >> "$GITHUB_OUTPUT"
-          {
-            echo "### Apple job scope"
-            echo "apple=$apple ($EVENT_NAME)"
-            if [[ -n "$matched" ]]; then
-              echo
-              echo "Matching changed files:"
-              printf '%s\n' "$matched" | sed 's/^/- /'
-            fi
-            echo
-            echo "### Release dry-run scope"
-            echo "release=$release ($EVENT_NAME)"
-            if [[ -n "$release_matched" ]]; then
-              echo
-              echo "Matching changed files:"
-              printf '%s\n' "$release_matched" | sed 's/^/- /'
-            fi
-          } >> "$GITHUB_STEP_SUMMARY"
+      # The Apple lane is path-filtered because it's by far the slowest
+      # (macOS runners, xcodebuild) — everything else always runs. On a push
+      # or workflow_dispatch (no PR to diff against) the Apple lane always
+      # runs too. `.github/` is narrowed to the files those jobs actually
+      # use, rather than the whole directory, so unrelated workflow/action
+      # edits don't force a macOS run.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        if: github.event_name == 'pull_request'
+      - id: filter
+        if: github.event_name == 'pull_request'
+        uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
+        with:
+          filters: |
+            apple:
+              - 'apps/apple/**'
+              - 'cubby-ffi/**'
+              - 'recipebridge/**'
+              - 'rust-toolchain.toml'
+              - 'scripts/ensure-apple-ffi.ts'
+              - 'scripts/rust-fingerprint.ts'
+              - 'scripts/apple-check.sh'
+              - 'apps/web/src/lib/generated/http-openapi.gen.json'
+              - '.github/workflows/ci.yaml'
+              - '.github/actions/setup-apple-ffi/**'
+              - '.github/actions/setup-apple-tools/**'
 
   validation:
     name: Validation
-    needs: scope
-    if: needs.scope.outputs.verify == 'true' || needs.scope.outputs.coverage == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
       NODE_OPTIONS: "--max-old-space-size=4096"
-      NX_PARALLEL: ${{ github.event_name == 'workflow_dispatch' && inputs.check_processes || '2' }}
+      NX_PARALLEL: "2"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: ./.github/actions/setup-node-with-deps
@@ -124,30 +68,11 @@ jobs:
         uses: taiki-e/install-action@2ca9b94c269419b7b0c711c09d0b21c4e1d51145 # v2
         with:
           tool: wasm-pack
-      - name: Run repository validation
-        shell: bash
-        run: |
-          pnpm check:all &
-          pids=("$!")
-          names=("complete repository validation")
-
-          pnpm dedupe:check &
-          pids+=("$!")
-          names+=("dependency deduplication")
-
-          result_code=0
-          for index in "${!pids[@]}"; do
-            if ! wait "${pids[$index]}"; then
-              echo "::error::${names[$index]} failed"
-              result_code=1
-            fi
-          done
-          exit "$result_code"
+      - run: pnpm check:all
+      - run: pnpm dedupe:check
 
   test-aux:
     name: Auxiliary tests and builds
-    needs: scope
-    if: needs.scope.outputs.verify == 'true' || needs.scope.outputs.coverage == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -156,33 +81,12 @@ jobs:
         with:
           wasm: "false"
       - name: Run auxiliary package tests
-        shell: bash
-        env:
-          COVERAGE: ${{ needs.scope.outputs.coverage }}
-        run: |
-          args=(-r --no-sort --workspace-concurrency=2 --no-bail --filter '!@cubby/web' --if-present run test --maxWorkers=1 --reporter=default --reporter=github-actions)
-          if [[ "$COVERAGE" == "true" ]]; then args+=(--coverage); fi
-          pnpm "${args[@]}"
-      - if: needs.scope.outputs.verify == 'true'
-        run: pnpm --filter @cubby/usda-api run build
-      - if: needs.scope.outputs.verify == 'true'
-        run: pnpm --filter @cubby/upc-lookup run build
-      - if: needs.scope.outputs.coverage == 'true'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
-        with:
-          name: coverage-aux
-          path: |
-            apps/mcp-apps/coverage/coverage-final.json
-            apps/upc-lookup/coverage/coverage-final.json
-            apps/usda-api/coverage/coverage-final.json
-            packages/*/coverage/coverage-final.json
-          if-no-files-found: error
-          retention-days: 1
+        run: pnpm -r --no-sort --workspace-concurrency=2 --no-bail --filter '!@cubby/web' --if-present run test --maxWorkers=1
+      - run: pnpm --filter @cubby/usda-api run build
+      - run: pnpm --filter @cubby/upc-lookup run build
 
   test-rust:
     name: Rust - recipebridge
-    needs: scope
-    if: needs.scope.outputs.verify == 'true' || needs.scope.outputs.coverage == 'true'
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 25
     steps:
@@ -190,31 +94,13 @@ jobs:
       - uses: actions-rust-lang/setup-rust-toolchain@ecabd13d1c56bd1345c230e542e9144811ad706f # v2
         with:
           cache: true
-          components: ${{ needs.scope.outputs.coverage == 'true' && 'llvm-tools-preview' || '' }}
           cache-workspaces: "recipebridge -> target"
-      - name: Install cargo-llvm-cov
-        if: needs.scope.outputs.coverage == 'true'
-        uses: taiki-e/install-action@2ca9b94c269419b7b0c711c09d0b21c4e1d51145 # v2
-        with:
-          tool: cargo-llvm-cov
       - run: cargo fmt --manifest-path recipebridge/Cargo.toml --check
       - run: cargo clippy --manifest-path recipebridge/Cargo.toml --all-targets -- -D warnings
-      - if: needs.scope.outputs.coverage != 'true'
-        run: cargo test --manifest-path recipebridge/Cargo.toml
-      - if: needs.scope.outputs.coverage == 'true'
-        run: cargo llvm-cov --manifest-path recipebridge/Cargo.toml --lcov --output-path recipebridge/lcov.info
-      - if: needs.scope.outputs.coverage == 'true'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
-        with:
-          name: coverage-rust
-          path: recipebridge/lcov.info
-          if-no-files-found: error
-          retention-days: 1
+      - run: cargo test --manifest-path recipebridge/Cargo.toml
 
   test-web:
     name: Tests - web (${{ matrix.tier }})
-    needs: scope
-    if: needs.scope.outputs.verify == 'true' || needs.scope.outputs.coverage == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
@@ -234,15 +120,14 @@ jobs:
         with:
           wasm: "restore"
           workspace-filter: "@cubby/web..."
-          web-env: "true"
       - name: Build web Cloudflare bundle
-        if: matrix.tier == 'node' && needs.scope.outputs.verify == 'true'
+        if: matrix.tier == 'node'
         env:
           CUBBY_SOURCE_COMMIT: ${{ github.sha }}
           CUBBY_SOURCE_BRANCH: ${{ github.ref_name }}
         run: pnpm --filter @cubby/web run build:cf
       - name: Save recipebridge WASM
-        if: matrix.tier == 'node' && needs.scope.outputs.verify == 'true'
+        if: matrix.tier == 'node'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: recipebridge-wasm
@@ -250,7 +135,7 @@ jobs:
           if-no-files-found: error
           retention-days: 1
       - name: Save Cloudflare bundle
-        if: matrix.tier == 'node' && needs.scope.outputs.verify == 'true'
+        if: matrix.tier == 'node'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: cf-build
@@ -258,28 +143,10 @@ jobs:
           if-no-files-found: error
           retention-days: 1
       - name: Run ${{ matrix.tier }} tests
-        shell: bash
-        env:
-          COVERAGE: ${{ needs.scope.outputs.coverage }}
-          VITEST_PROJECT_ARGS: ${{ matrix.args }}
-        run: |
-          read -r -a selected <<< "$VITEST_PROJECT_ARGS"
-          args=("${selected[@]}" --testTimeout=10000 --reporter=default --reporter=github-actions --reporter=./tooling/test-run-contract-reporter.ts)
-          if [[ "$COVERAGE" == "true" ]]; then args+=(--coverage); fi
-          pnpm --dir apps/web exec vitest run "${args[@]}"
-      - name: Save web ${{ matrix.tier }} coverage
-        if: needs.scope.outputs.coverage == 'true'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
-        with:
-          name: coverage-web-${{ matrix.tier }}
-          path: apps/web/coverage/coverage-final.json
-          if-no-files-found: error
-          retention-days: 1
+        run: pnpm --dir apps/web exec vitest run ${{ matrix.args }}
 
   test-postgres:
     name: PostgreSQL integration tests
-    needs: scope
-    if: needs.scope.outputs.verify == 'true' || needs.scope.outputs.coverage == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     services:
@@ -309,7 +176,6 @@ jobs:
         with:
           wasm: "restore"
           workspace-filter: "@cubby/web... @cubby/purchase-agent..."
-          web-env: "true"
       - name: Build coupled workerd Workers
         env:
           CUBBY_SOURCE_COMMIT: ${{ github.sha }}
@@ -318,27 +184,12 @@ jobs:
           pnpm --filter @cubby/purchase-agent run build
           pnpm --filter @cubby/web run build:cf
       - name: Run PostgreSQL integration tests
-        shell: bash
         env:
-          COVERAGE: ${{ needs.scope.outputs.coverage }}
           CUBBY_TEST_INTEGRATION: "1"
-        run: |
-          args=(--project integration --reporter=default --reporter=github-actions --reporter=./tooling/test-run-contract-reporter.ts)
-          if [[ "$COVERAGE" == "true" ]]; then args+=(--coverage); fi
-          pnpm --dir apps/web exec vitest run "${args[@]}"
-      - name: Save web PostgreSQL coverage
-        if: needs.scope.outputs.coverage == 'true'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
-        with:
-          name: coverage-web-postgres
-          path: apps/web/coverage/coverage-final.json
-          if-no-files-found: error
-          retention-days: 1
+        run: pnpm --dir apps/web exec vitest run --project integration
 
   test-e2e:
     name: E2E tests (${{ matrix.lane }})
-    needs: scope
-    if: needs.scope.outputs.verify == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     strategy:
@@ -368,11 +219,9 @@ jobs:
             shard: "1/1"
     env:
       NODE_OPTIONS: "--max-old-space-size=4096"
-      PLAYWRIGHT_VERSION: "1.63.0"
       E2E_TEST_USER_EMAIL: nicky@test.com
       E2E_TEST_USER_PASSWORD: password1234
       BETTER_AUTH_SECRET: ci-secret-TbGFDRAbhlR8e3RaXsfHR9CQ7r4nIc9
-      CUBBY_E2E_DATABASE: postgres
     # Deliberately duplicated from test-postgres above: GitHub Actions YAML
     # has no anchors and no reusable "services" construct that fits a
     # per-job block like this.
@@ -403,13 +252,18 @@ jobs:
         with:
           wasm: "false"
           workspace-filter: "@cubby/web..."
-          web-env: "true"
+      - name: Resolve installed Playwright version
+        id: playwright
+        working-directory: apps/web
+        run: echo "version=$(node -p "require('@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
       - name: Restore exact Playwright browser
         id: browser-cache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-${{ env.PLAYWRIGHT_VERSION }}-${{ matrix.browser }}
+          key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}-${{ matrix.browser }}
+      # 2026-09: coupled to the ubuntu-latest image's apt layout; expect to
+      # revisit when the image changes.
       - name: Bound Ubuntu package mirror retries
         if: matrix.browser == 'webkit'
         shell: bash
@@ -434,7 +288,7 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: /var/cache/apt/archives/*.deb
-          key: playwright-system-deps-${{ runner.os }}-${{ runner.arch }}-${{ env.PLAYWRIGHT_VERSION }}-webkit-v1
+          key: playwright-system-deps-${{ runner.os }}-${{ runner.arch }}-${{ steps.playwright.outputs.version }}-webkit-v1
       - name: Install Playwright browser dependencies
         if: matrix.browser == 'webkit'
         timeout-minutes: 5
@@ -447,7 +301,7 @@ jobs:
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-${{ env.PLAYWRIGHT_VERSION }}-${{ matrix.browser }}
+          key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}-${{ matrix.browser }}
       - name: Wait for the tested Cloudflare bundle
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         with:
@@ -464,6 +318,8 @@ jobs:
                 github.rest.actions.listJobsForWorkflowRun,
                 { ...context.repo, run_id: context.runId, per_page: 100 },
               );
+              // Matches the job's display name literally: renaming test-web
+              // silently turns a build failure into a 20-minute timeout here.
               const build = jobs.find(
                 ({ name }) => name === "Tests - web (node)",
               );
@@ -507,7 +363,7 @@ jobs:
   test-apple-package:
     name: Apple package tests
     needs: scope
-    if: needs.scope.outputs.verify == 'true' && needs.scope.outputs.apple == 'true'
+    if: needs.scope.outputs.apple == 'true'
     runs-on: macos-26
     timeout-minutes: 25
     steps:
@@ -545,7 +401,7 @@ jobs:
   test-apple:
     name: Apple checks
     needs: scope
-    if: needs.scope.outputs.verify == 'true' && needs.scope.outputs.apple == 'true'
+    if: needs.scope.outputs.apple == 'true'
     runs-on: macos-26
     timeout-minutes: 40
     steps:
@@ -598,53 +454,3 @@ jobs:
           targets: ${{ matrix.targets }}
           profile: dist
 
-  # Exercises apple-release.yaml's identical signed archive/export path
-  # (publish: false, so nothing uploads or gets tagged) on a PR that touches
-  # release-affecting files, to catch a v1.0.1-v1.0.3-style config error
-  # (bad provisioning profile match, missing signing identity, missing
-  # Info.plist key) on the PR that introduces it instead of burning a real
-  # version tag at release time. Costs about 12 minutes of macOS runner time,
-  # only on matching PRs. Not a required check: a red run here surfaces the
-  # problem but does not block merging. Calls apple-release.yaml directly
-  # (not the apple-testflight.yaml dispatch wrapper): a pull_request-triggered
-  # job is never granted contents: write, and apple-release.yaml has no `tag`
-  # job to need it.
-  release-dry-run:
-    name: Release dry run
-    needs: scope
-    if: needs.scope.outputs.verify == 'true' && needs.scope.outputs.release == 'true'
-    uses: ./.github/workflows/apple-release.yaml
-    with:
-      version: "0.0.0"
-      publish: false
-    secrets: inherit
-
-  report-coverage:
-    name: Report scheduled coverage
-    needs: [scope, validation, test-rust, test-web, test-postgres, test-aux]
-    if: needs.scope.outputs.coverage == 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
-        with:
-          pattern: coverage-*
-          path: coverage-reports
-      - name: Collect coverage report paths
-        id: reports
-        shell: bash
-        run: |
-          files="$(find coverage-reports -type f \
-            \( -name lcov.info -o -name coverage-final.json \) \
-            -print | sort | paste -sd, -)"
-          [[ -n "$files" ]] || { echo "::error::No coverage reports were downloaded"; exit 1; }
-          echo "files=$files" >> "$GITHUB_OUTPUT"
-      - uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          slug: nickysemenza/cubby
-          files: ${{ steps.reports.outputs.files }}
-          disable_search: true
-          flags: complete
-          name: scheduled-coverage

@@ -47,7 +47,7 @@ working tree or refreshed base ref. The [validation policy](agents/validation.md
 controls local feedback and handoff; GitHub checks on the final PR head remain
 the merge gate.
 
-Node 24, pnpm 12.3.4, Rust/wasm-pack, Apple `container` on macOS (external PostgreSQL/IntegreSQL on Linux) and Playwright
+Node 24, pnpm 12.4.1, Rust/wasm-pack, Apple `container` on macOS (external PostgreSQL/IntegreSQL on Linux) and Playwright
 browsers must be available. Follow [validation guidance](agents/validation.md) for database setup.
 PostgreSQL remains the authoritative integration tier; Playwright retains a
 single worker and no retries. Both tiers reject an empty selection or an
@@ -91,12 +91,14 @@ contracts (`SubjectLift`, `FeaturePrintIndex`) when running on the Simulator,
 for whichever caller — local or hosted — ends up running that scheme there.
 
 Two hosted macOS jobs cover the Apple surface, both gated on the `scope`
-job's `apple` output (a prefix match on `apps/apple/`, `cubby-ffi/`,
-`recipebridge/`, or `.github/`, or an exact match on `rust-toolchain.toml`,
-`scripts/ensure-apple-ffi.ts`, `scripts/rust-fingerprint.ts`,
-`scripts/apple-check.sh`, or
-`apps/web/src/lib/generated/http-openapi.gen.json`; always `true` on a `push`
-or `workflow_dispatch`, where there is no PR diff to check). A skipped job
+job's `apple` output. On a pull request `dorny/paths-filter` computes it from
+the PR's changed files: anything under `apps/apple/`, `cubby-ffi/`, or
+`recipebridge/`, plus `rust-toolchain.toml`, `scripts/ensure-apple-ffi.ts`,
+`scripts/rust-fingerprint.ts`, `scripts/apple-check.sh`,
+`apps/web/src/lib/generated/http-openapi.gen.json`, `ci.yaml` itself, and the
+two composites the Apple jobs use (`setup-apple-ffi`, `setup-apple-tools`).
+On a `push` or `workflow_dispatch` there is no PR diff to check and it is
+always `true`. A skipped job
 still satisfies its required status check (GitHub treats a skipped required
 job as passing). `Apple package tests` runs `swift test --package-path
 apps/apple/CubbyKit --force-resolved-versions` on the macOS host — no
@@ -131,28 +133,34 @@ separate jobs. The browser lanes test the exact bundle produced by the node
 test lane and retain the discovery and no-skip guard; chromium runs as two
 Playwright shards (`--shard=1/2`/`--shard=2/2`, one worker each — two workers
 on a single runner flaked, see `apps/web/tooling/e2e-workers.ts`) and webkit
-runs unsharded. Coverage remains a manual `workflow_dispatch` option
-(`mode=coverage`); it does not deploy. `test-postgres` and `test-e2e` each
+runs unsharded. There is no coverage mode. `test-postgres` and `test-e2e` each
 declare their own `postgres`/`integresql` `services:` block — GitHub Actions
 YAML has no anchors and no reusable construct that fits here, so the
-duplication is accepted rather than worked around. The separate Markdown link
-workflow, previews, and opt-in Claude workflows remain manual.
+duplication is accepted rather than worked around. Every test job starts
+immediately; only the two Apple jobs wait on `scope`. The separate Markdown
+link workflow and the `@claude` mention workflow (`claude.yml`) remain
+manual; `claude-code-review.yml` reviews each non-Renovate, non-fork PR once,
+on `opened`/`ready_for_review`/`reopened` (never on `synchronize`, so a push
+does not trigger a re-review), using Sonnet 5. Preview deploys were removed;
+production is the only deployed environment.
 
 ## Apple TestFlight release
 
-The archive/export/upload path lives in `.github/workflows/apple-release.yaml`,
-a `workflow_call`-only reusable workflow, kept deliberately read-only
-(top-level `permissions: contents: read`, no `tag` job) because a called
-workflow's jobs are capped by the caller's permissions — a
-pull_request-triggered call is never granted `contents: write`. It takes
-`version` (`MAJOR.MINOR.PATCH`) and `publish` (default `false`) inputs and
-exposes `version`/`build`/`tag`/`mode` outputs. A `coordinates` job validates
-the inputs, computes `build` (`<commit count>.<run_attempt>`), resolves `mode`
-(`upload` when `publish` is true, otherwise `validate`), confirms the commit
-is still current main before publishing, and — before any macOS runner
-starts — rejects a `version` whose tag already exists via `git ls-remote
---tags`. An `archive` matrix job then runs the iOS and macOS archives in
-parallel (`macos-26`, `fail-fast: false`), each restoring only its own
+Pushing a `vMAJOR.MINOR.PATCH` tag at a `main` commit is the release:
+`.github/workflows/apple-testflight.yaml` runs on `push: tags: ["v*"]`, needs
+only `contents: read`, and always uploads — there is no dry-run mode, no
+`workflow_dispatch`, and no `tag` job (the tag already exists by definition).
+A `coordinates` job on `ubuntu-latest` fails fast before any macOS runner
+starts: it derives `version` from the tag name and rejects anything that is
+not exactly `MAJOR.MINOR.PATCH` (so a `v1.0.6-rc1` tag matches the trigger
+but fails in seconds), computes `build` as `<commit count>.<run_attempt>`,
+and requires the tagged commit to be an ancestor of `origin/main`. A failed
+release leaves its tag in place: `gh run rerun --failed` reuses the tag and
+produces build `<count>.2`, and a release that needs a code fix simply moves
+on to the next version — a dead tag is accepted rather than guarded against.
+
+An `archive` matrix job then runs the iOS and macOS archives in parallel
+(`macos-26`, `fail-fast: false`), each restoring only its own
 `setup-apple-ffi` target (`device`/`mac`, `profile: dist`) instead of `all`,
 roughly halving the Rust work any one archive job pays for on a cold cache.
 Each leg tars its signed `.xcarchive` (including dSYMs) before uploading it as
@@ -165,43 +173,27 @@ re-imports the signing identities and profiles (`xcodebuild -exportArchive`
 re-signs, so it needs them even though `archive` already verified them), and
 runs `apps/apple/scripts/testflight.sh export ios` and `export macos`.
 Because `upload` `needs` both matrix legs, neither platform exports — let
-alone uploads — unless both archived successfully, preserving the original
-neither-platform-uploads-alone invariant. `apps/apple/scripts/testflight.sh`
-now has two subcommands, `archive <ios|macos>` and `export <ios|macos>`,
-instead of one script that always did both platforms serially; the macOS
-`archive` verification additionally asserts the archived Info.plist has a
-non-empty `LSApplicationCategoryType` (the v1.0.3 failure), and the Mac
-Installer Distribution identity check (the v1.0.2 failure) now runs in both
-the macOS `archive` leg and the `upload` job, each behind its own signing
-import.
+alone uploads — unless both archived successfully, preserving the
+neither-platform-uploads-alone invariant. `testflight.sh` has two
+subcommands, `archive <ios|macos>` and `export <ios|macos>`; the macOS
+`archive` verification asserts the archived Info.plist has a non-empty
+`LSApplicationCategoryType` (the v1.0.3 failure), and the Mac Installer
+Distribution identity check (the v1.0.2 failure) runs in both the macOS
+`archive` leg and the `upload` job, each behind its own signing import.
 
-`.github/workflows/apple-testflight.yaml` is the `workflow_dispatch`-only
-wrapper around `apple-release.yaml` — there is no tag-push trigger. Its
-`release` job calls `apple-release.yaml` (`secrets: inherit`) with the
-dispatch inputs, and a `tag` job (`needs: release`, `if: inputs.publish ==
-true`, `permissions: contents: write` — only this job, not the workflow's
-top-level `contents: read`) creates the annotated tag at the released commit
-from `apple-release.yaml`'s outputs and pushes it, so the release tag is only
-ever created after a successful upload, and a tag can never be pushed
-manually to start a second run.
-
-`ci.yaml`'s `release-dry-run` job calls `apple-release.yaml` directly (not
-the `apple-testflight.yaml` wrapper, which would need a `tag` job's
-`contents: write` that a pull_request-triggered call can never have), gated
-on a `release` scope output computed the same way as `apple`'s, from the same
-PR file listing, but narrower — only files that change what a release
-actually builds or signs — and always `false` on `push`/`workflow_dispatch`.
-`release-dry-run` passes `version: "0.0.0"` and `publish: false`, exercising
-the identical signed archive/export path with nothing uploaded or tagged, so
-a config error like the v1.0.1–v1.0.3 failures surfaces on the PR that
-introduces it instead of at release time. It is not a required check.
-Separately, a `warm-apple-ffi` job in `ci.yaml` runs on every `main` push (not
-gated on `scope`, since there is no PR path filter to apply to a push) and
+A `warm-apple-ffi` job in `ci.yaml` runs on every `main` push (not gated on
+`scope`, since there is no PR path filter to apply to a push) and
 restores/builds the `device`/`dist` and `mac`/`dist` `setup-apple-ffi`
-caches, so both a real release and `release-dry-run` normally hit a warm
-cache instead of the cold ~7-minute Rust build those two cache keys
-previously only ever saw during a release itself. Neither `warm-apple-ffi`
-nor `release-dry-run` is a required check.
+caches, so a release normally hits a warm cache instead of the cold
+~7-minute Rust build those two cache keys previously only ever saw during a
+release itself. It is not a required check.
+
+To validate a change to the release workflow without uploading anything,
+push a deliberately invalid tag such as `v0.0.0-smoke`: it matches `v*`,
+runs only the ubuntu `coordinates` job, and fails the version regex in
+seconds, which proves the trigger, permissions, and checkout path. Delete it
+afterwards (`git push --delete origin v0.0.0-smoke`). Never push a throwaway
+numeric tag — it would upload a real build to App Store Connect.
 
 ## Deployment
 
@@ -218,16 +210,16 @@ required.
 All three jobs call the shared `.github/actions/deploy-worker` composite
 (`check-current-main` → `setup-node-with-deps` → an optional build command →
 `check-current-main` again → the deploy command), differing only in package,
-workspace filter, whether WASM/the web env file are needed, and the build/
-deploy commands; `concurrency`, `environment`, and `timeout-minutes` stay on
-each job because a composite action cannot own them. Web keeps
-`cloudflare/wrangler-action` for its deploy step (behind the composite's
-`wrangler-action` input) rather than running `apps/web`'s `deploy:cf` script
-directly: `deploy:cf` is `build:cf && wrangler deploy --config
-dist/server/wrangler.json`, so calling it as the deploy command would rerun
-`build:cf` a second time after the composite's own build step already ran
-it. The auxiliary Workers and purchase-agent instead pass their package's own
-`deploy` script as a plain `deploy-command`, unchanged from before.
+workspace filter, whether WASM is needed, and the build/deploy commands;
+`concurrency`, `environment`, and `timeout-minutes` stay on each job because
+a composite action cannot own them. Every deploy is a plain shell command
+with `CLOUDFLARE_API_TOKEN`/`CLOUDFLARE_ACCOUNT_ID` in the environment: the
+auxiliary Workers and purchase-agent run their package's own `deploy`
+script, and web runs `wrangler deploy --config dist/server/wrangler.json`
+directly rather than its `deploy:cf` script (`build:cf && wrangler deploy`),
+which would rerun `build:cf` a second time after the composite's own build
+step already ran it. The second `check-current-main` is what stops a manual
+re-run of an old Deploy run from rolling production back to a stale commit.
 
 ## Branch protection and measurement
 

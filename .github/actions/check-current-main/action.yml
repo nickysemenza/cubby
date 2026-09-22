@@ -5,9 +5,6 @@ outputs:
   current:
     description: "true when GITHUB_SHA is still refs/heads/main"
     value: ${{ steps.check.outputs.current }}
-  sha:
-    description: "The commit SHA represented by GITHUB_SHA (peels annotated tags)"
-    value: ${{ steps.check.outputs.sha }}
 
 runs:
   using: "composite"
@@ -21,7 +18,6 @@ runs:
           echo "::error::Could not resolve $GITHUB_SHA to a commit"
           exit 1
         fi
-        echo "sha=$workflow_sha" >> "$GITHUB_OUTPUT"
         if ! current_sha="$(git ls-remote origin refs/heads/main | cut -f1)"; then
           echo "::error::Could not resolve refs/heads/main"
           exit 1

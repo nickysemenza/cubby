@@ -4,29 +4,14 @@ inputs:
   wasm:
     description: >-
       How to obtain packages/wasm. "restore" restores it from the shared cache
-      and builds it in-place on a miss (needs a compiler toolchain — do NOT use
-      it in the Playwright container, which has none). "false" skips it.
+      and builds it in-place on a miss (needs a compiler toolchain). "false"
+      skips it.
     required: false
     default: "false"
   workspace-filter:
     description: "Optional space-separated pnpm workspace filters for a narrower install"
     required: false
     default: ""
-  cache-pnpm-store:
-    description: "Whether actions/setup-node should restore and save the pnpm store"
-    required: false
-    default: "true"
-  web-env:
-    description: >-
-      Copy apps/web/.env.example to apps/web/.env for jobs that build or test
-      the web app.
-    required: false
-    default: "false"
-
-outputs:
-  pnpm-store-cache:
-    description: "pnpm-store cache state: hit, miss, or disabled"
-    value: ${{ steps.pnpm-store-cache.outputs.state }}
 
 runs:
   using: "composite"
@@ -41,25 +26,7 @@ runs:
       uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
       with:
         node-version: "24"
-        # An empty cache input avoids registering setup-node's post-job cache
-        # save hook. This matters for container jobs, where compressing the pnpm
-        # store can take longer than the filtered install it is meant to save.
-        cache: ${{ inputs.cache-pnpm-store == 'true' && 'pnpm' || '' }}
-
-    - name: Report pnpm store cache
-      id: pnpm-store-cache
-      shell: bash
-      env:
-        CACHE_MODE: ${{ inputs.cache-pnpm-store }}
-        CACHE_HIT: ${{ steps.node.outputs.cache-hit }}
-      run: |
-        if [[ "$CACHE_MODE" == "true" ]]; then
-          cache_state="${CACHE_HIT:-miss}"
-        else
-          cache_state="disabled"
-        fi
-        printf 'pnpm-store cache: mode=%s state=%s\n' "$CACHE_MODE" "$cache_state" >> "$GITHUB_STEP_SUMMARY"
-        echo "state=$cache_state" >> "$GITHUB_OUTPUT"
+        cache: pnpm
 
     # WASM is restored independently so consumers can start in parallel. See
     # docs/ci.md for the measured producer-job and cache tradeoffs.
@@ -128,9 +95,3 @@ runs:
           pnpm install --frozen-lockfile --prefer-offline
         fi
       shell: bash
-
-    - name: Setup web environment variables
-      if: inputs.web-env == 'true'
-      shell: bash
-      run: |
-        cp apps/web/.env.example apps/web/.env

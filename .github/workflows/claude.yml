@@ -31,6 +31,9 @@ jobs:
 
       - name: Run Claude Code
         id: claude
+        # This floating @v1 is the deliberate exception to the repo's
+        # SHA-pinning: Renovate has digest/patch updates disabled and this
+        # action ships patch releases daily, so a SHA pin would freeze it.
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
