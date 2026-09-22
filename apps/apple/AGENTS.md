@@ -41,6 +41,12 @@ generate --spec apps/apple/project.yml --use-cache`. If a build fails with the l
   branded codes (`ProductCode`, `LocationCode`, `InventoryEntryCode`, `ImageCode`), `PlainDate`,
   and `EntityKey` live in `CubbyKit/Sources/CubbyAPISupport/` and are the generated client's own
   types for those schemas (`typeOverrides` in `openapi/openapi-generator-config.yaml`).
+- Response bodies are open: the OpenAPI emitter strips `additionalProperties: false` from
+  every output schema (`scripts/generator/http-api/openapi.ts`, guarded by
+  `openapi-document.unit.test.ts`), so the generated `init(from:)` ignores a field it does
+  not know and an installed build survives a server deploy that adds one. Request bodies
+  stay closed. Never hand-add `additionalProperties: false` to an output, and never rely on
+  the client to reject an unknown response key.
 - Always pass `serverURL` explicitly when constructing a generated `Client`. The spec's `servers`
   entry is `"/"`, which is not a usable absolute URL on its own.
 
