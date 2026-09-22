@@ -29,4 +29,10 @@ export const recommendations = defineOperationDomain(recommendationsContract, {
   dismissDuplicateProduct: { invalidates: ripple.recommendations },
   dismissTagPropagation: { invalidates: ripple.recommendations },
   dismissProduct: { invalidates: ripple.recommendations },
+  productMatches: {
+    tags: [["recommendations", "productMatches"], ["product"]],
+  },
+  proposeProductMatch: { invalidates: ripple.recommendations },
+  dismissProductMatch: { invalidates: ripple.recommendations },
+  mergeProductMatch: { invalidates: ripple.productMerge },
 });

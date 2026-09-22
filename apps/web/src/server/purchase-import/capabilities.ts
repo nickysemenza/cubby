@@ -20,7 +20,9 @@ type Capability =
   | "browser"
   | "finalize"
   | "enrichment_commit"
-  | "photo_commit";
+  | "photo_commit"
+  /** Review-queue metadata only: never changes household records. */
+  | "match_proposal";
 
 const capabilityMatrix = {
   account_sync: new Set([
@@ -33,20 +35,29 @@ const capabilityMatrix = {
     "evidence",
     "browser",
     "finalize",
+    "match_proposal",
   ]),
-  purchase_validation: new Set(["prepare", "evidence", "browser", "finalize"]),
+  purchase_validation: new Set([
+    "prepare",
+    "evidence",
+    "browser",
+    "finalize",
+    "match_proposal",
+  ]),
   product_enrichment: new Set([
     "prepare",
     "evidence",
     "browser",
     "finalize",
     "enrichment_commit",
+    "match_proposal",
   ]),
   photo_inventory: new Set([
     "photo_commit",
     "attachment",
     "generic_mutation",
     "finalize",
+    "match_proposal",
   ]),
 } satisfies Record<ImportRunPurpose, ReadonlySet<Capability>>;
 
@@ -61,6 +72,7 @@ export function capabilityForPurchaseAgentTool(
   if (toolName === "overwrite_product_enrichment") return "enrichment_commit";
   if (toolName === "commit_purchase_import") return "commit_purchase_import";
   if (toolName === "commit_photo_group") return "photo_commit";
+  if (toolName === "propose_product_match") return "match_proposal";
   if (toolName.includes("audit") || toolName.includes("repair"))
     return "audit_repair";
   if (toolName.includes("attach") || toolName.includes("image"))

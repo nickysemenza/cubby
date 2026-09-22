@@ -117,6 +117,7 @@ const unavailableCaller = {
     update: unavailableCallerMethod,
     delete: unavailableCallerMethod,
   },
+  recommendations: { proposeProductMatch: unavailableCallerMethod },
   suggestions: { getMakeable: unavailableCallerMethod },
   task: {
     listActionable: unavailableCallerMethod,
@@ -169,6 +170,10 @@ export function createCallerWithOverrides(
     statementRow: {
       ...unavailableCaller.statementRow,
       ...caller.statementRow,
+    },
+    recommendations: {
+      ...unavailableCaller.recommendations,
+      ...caller.recommendations,
     },
     suggestions: { ...unavailableCaller.suggestions, ...caller.suggestions },
     task: { ...unavailableCaller.task, ...caller.task },

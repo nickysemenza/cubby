@@ -10,6 +10,7 @@ import {
   type productFindOrCreateByUPCInput,
   type productResolveNamesInput,
 } from "@cubby/schemas/product";
+import type { proposeProductMatchInput } from "@cubby/schemas/recommendations";
 import type { z } from "zod";
 
 import {
@@ -28,6 +29,7 @@ import { bindShortcodeResolver } from "~/server/repo/shortcode-resolver";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 import { scheduleImageProcessingJobs } from "~/server/services/image-processing.service";
 import { verifyProductImages } from "~/server/services/image-verification.service";
+import { proposeProductMatch } from "~/server/services/product-match.service";
 import { lookupUPC } from "~/server/services/product-orchestration.service";
 import { getProductWithFood } from "~/server/services/product.service";
 import type { AuthenticatedStartOperationContext } from "~/server/start-operation.server";
@@ -450,6 +452,12 @@ const callerDomains = {
       (context: CallerContext) =>
       (input: Parameters<typeof deleteStatementRowsWorkflow>[2]) =>
         deleteStatementRowsWorkflow(context.db, context.actorContext, input),
+  },
+  recommendations: {
+    proposeProductMatch:
+      (context: CallerContext) =>
+      (input: z.output<typeof proposeProductMatchInput>) =>
+        proposeProductMatch(context.db, input),
   },
   suggestions: {
     getMakeable:

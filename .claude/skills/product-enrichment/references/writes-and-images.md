@@ -12,6 +12,16 @@ on update. Check the established spelling before a manual correction. Create a
 missing researched Product once with all proven metadata; creation does not
 receive inventory.
 
+Before writing, check for a merge candidate: a photo-created Product with a
+matching vendor identity, or a purchase-created Product covering the same
+item, means this Product should converge with the other side rather than be
+enriched as if it stood alone. Confirm through `dataGap:
+product_unpurchased`/`resolve_products` or the server's automatic detector,
+then call `propose_product_match` with evidence (matched identifier,
+description, source page) for human review — see [product
+identity](product-identity.md) for the exact-id-vs-descriptive rule.
+Enrichment itself never merges without that human confirmation.
+
 For identifier-only work, `patch_product_external_ids` upserts one precise
 source/kind slot and removes only an explicitly obsolete value with its exact
 `expectedExternalId`; unrelated IDs survive and a changed live slot refuses the
@@ -19,7 +29,8 @@ patch. A full `entity update product` external-ID set is a deliberate complete
 replacement: preserve every intended ID and remove MCP-only timestamps first.
 
 For settled attachments, call `attach_files({items})`; every item supplies an
-`entityId`, one `url` or `uploadId`, its idempotency key, and the freshly read
+`entityId`, one `url` or `uploadId`, its idempotency key, a `source` (`own`,
+`catalog`, or `unknown` — never omitted), and the freshly read
 `expectedImageCount` for a Product gallery. This count includes all attachments,
 including labels and PDFs. Use `itemImageCount` to find Products without item
 imagery. Multiple files for one Product are dependent count changes, so prefer

@@ -188,6 +188,102 @@ describe("shared purchase-import prepare and commit", () => {
     expect(writtenExpenses).toEqual([{ productId: existingProduct.entityId }]);
   });
 
+  it("matches a photo-recorded barcode exactly when the order line SKU is that UPC", async () => {
+    const party = await insertWithShortcode(ctx.db, "ledgerParty", {
+      name: "Barcode import member",
+      kind: "member",
+      userId: ctx.actor.userId,
+    });
+    const vendor = await insertWithShortcode(ctx.db, "vendor", {
+      name: "Barcode import vendor fixture",
+      website: "https://shop.example.com/orders",
+      browserDomains: ["shop.example.com"],
+    });
+    const account = await insertWithShortcode(ctx.db, "vendorAccount", {
+      label: "Barcode import fixture account",
+      vendorId: vendor.id,
+      ledgerPartyId: party.id,
+    });
+    // A photo-first Product whose only identifier is the barcode read off its
+    // tag, stored under the vendor-neutral GTIN source.
+    const photoProduct = await createProductFixture(
+      ctx.db,
+      makeProductInput({ name: "Gray crew t-shirt — M" }),
+      ctx.actor,
+    );
+    const [photoProductRow] = await getDb(ctx.db)
+      .select({ shortcode: product.shortcode })
+      .from(product)
+      .where(eq(product.id, photoProduct.entityId));
+    if (!photoProductRow) throw new Error("Product fixture was not created");
+    await withTransaction(ctx.db, async (tx) => {
+      await tx.insert(productExternalId).values({
+        productId: photoProduct.entityId,
+        source: "gtin",
+        kind: "gtin_14",
+        externalId: "00012345678905",
+        isPrimary: true,
+      });
+    });
+    const run = await startOrResumeImportRun(ctx.db, {
+      ledgerPartyId: party.id,
+      vendorAccountId: account.id,
+      trigger: "manual",
+    });
+
+    const prepared = await preparePurchaseImport(
+      ctx.db,
+      {
+        _runExecution: {
+          runId: run.id,
+          operationId: "prepare:barcode-order-1",
+          itemOperationIds: ["prepare-item:barcode-order-1"],
+        },
+        orders: [
+          {
+            stableOrderId: "barcode-order-1",
+            itemOperationId: "prepare-item:barcode-order-1",
+            source: {
+              kind: "browser_order" as const,
+              externalKey: "example:order:barcode-1",
+              checksum: checksum("c"),
+            },
+            evidenceChecksum: checksum("d"),
+            extractionRevision: "example@fixture-1",
+            extraction: {
+              status: "ready" as const,
+              candidate: {
+                orderId: "barcode-1",
+                orderedAt: "2026-09-20T12:00:00.000Z",
+                merchant: "Example Shop",
+                currency: "USD",
+                printedGrandTotal: 20,
+                lines: [
+                  {
+                    title: "Everyday Crew Tee Heather Gray",
+                    amount: 20,
+                    lineKind: "principal" as const,
+                    sku: "012345678905",
+                  },
+                ],
+                payments: [],
+                allShipmentsDelivered: false,
+              },
+            },
+            lineIds: ["barcode-order-1:line-1"],
+            primaryDocumentImageId: null,
+            screenshotImageId: null,
+          },
+        ],
+      },
+      ctx.actor,
+    );
+    expect(prepared.orders[0]?.lines[0]?.candidates[0]).toMatchObject({
+      productId: photoProductRow.shortcode,
+      exactIdentifierMatch: true,
+    });
+  });
+
   it("refuses foreign-currency semantic replay and distinguishes raw evidence drift", async () => {
     const party = await insertWithShortcode(ctx.db, "ledgerParty", {
       name: "Validation member",

@@ -49,6 +49,12 @@ write, collision, batch, kit, replacement, or verification.
 
 ## Write safely
 
+Before enriching, check whether this Product has a merge candidate on the
+other side (a photo Product for a purchase-created one, or vice versa) per
+[product identity](references/product-identity.md)'s either-side-first
+contract; propose it with `propose_product_match` rather than enriching two
+records that should converge into one.
+
 Use `patch_product_external_ids` for exact slot changes and preserve unrelated
 IDs; use a full `entity update product` external-ID set only when deliberately
 replacing it. Check `find_product_external_id_collisions` before each new ID.
