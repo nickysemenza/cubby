@@ -19,6 +19,8 @@ import {
 import { vi } from "vitest";
 import type { z } from "zod";
 
+import { overrideStartDispatch } from "~/integrations/tanstack-query/start-transport";
+
 class BrowserTestResizeObserver {
   constructor(readonly callback: ResizeObserverCallback) {}
 
@@ -181,6 +183,15 @@ export function createBrowserTestHarness(options?: BrowserTestHarnessOptions) {
   const restoreLayoutMetrics = installBrowserLayoutMetrics();
   const restoreScrollIntoView = installBrowserScrollIntoView();
   const restoreMatchMedia = installBrowserMatchMedia();
+  // No server runs under jsdom: an operation without an injected transport
+  // rejects now, inside the test, rather than seconds later after teardown.
+  const restoreStartDispatch = overrideStartDispatch((operation) =>
+    Promise.reject(
+      new Error(
+        `${operation} reached the Start transport in a browser test; inject one with withTransport.`,
+      ),
+    ),
+  );
   const queryClient = new QueryClient({
     defaultOptions: {
       queries: { retry: false },
@@ -255,6 +266,7 @@ export function createBrowserTestHarness(options?: BrowserTestHarnessOptions) {
       restoreLayoutMetrics();
       restoreScrollIntoView();
       restoreMatchMedia();
+      restoreStartDispatch();
       if (needsResizeObserver)
         Reflect.deleteProperty(globalThis, "ResizeObserver");
       if (options?.clock) vi.useRealTimers();
