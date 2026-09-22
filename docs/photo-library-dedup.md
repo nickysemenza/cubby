@@ -125,6 +125,19 @@ leave coverage incomplete without blocking Add. Account or host changes cancel
 the active work and discard server verdicts. Local hash-cache writes are atomic,
 retain one modification version per asset, and prune deleted assets.
 
+## Sightings
+
+A strong match (hash distance 0–2, or 3–6 inside the aspect gate) from a
+member's own library is also reported to the server as an `ImageSighting`
+(`IMS-`): one row per (image, member, cloud asset) carrying the asset's
+capture date and offset, location, camera, media subtypes and match
+evidence, written through the generic `resources.imageSighting.create` (the
+adapter upserts on the unique key) by `LibraryMetadataSync` in bounded
+batches, only while the install participates in automatic work. The server
+derives the image's capture fields and capturer from its sightings — see
+[ADR 0005](adr/0005-image-capture-provenance-from-sightings.md) and the
+[program plan](plans/image-provenance-and-devices.md).
+
 ## Uploads and Garden dates
 
 Photos is a permanent iPhone tab and Mac sidebar destination. Identify remains
