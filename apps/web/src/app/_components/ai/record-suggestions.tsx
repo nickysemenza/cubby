@@ -40,6 +40,7 @@ import {
   productionEntitySuggestionsOperations,
   type EntitySuggestionsOperations,
   type FieldSuggestionSource,
+  type SuggestTargets,
 } from "./field-suggestion";
 import {
   actionableSuggestion,
@@ -126,10 +127,15 @@ const basisFingerprint = (basis: Record<string, string | null>) =>
     Object.entries(basis).sort(([left], [right]) => left.localeCompare(right)),
   );
 
-function suggestionRequestsForRecord(
+/** The basis snapshot a suggestion request is computed against: the target
+ * set's own basis keys, its inheritance-resolver context keys, and the
+ * record's resolution fingerprint. Shared by request-building and by
+ * `save`'s re-check so both sides agree on what "the same inputs" means for
+ * a given key set. */
+function recordSuggestionBasis(
   entity: StandardEntity,
+  targets: SuggestTargets,
   record: SuggestionRecord,
-  targets: ReturnType<typeof suggestTargetsFor>,
 ) {
   const basis = fieldSuggestionBasisFromRecord(entity, targets, record);
   for (const key of suggestionContextKeys(entity, targets)) {
@@ -137,6 +143,15 @@ function suggestionRequestsForRecord(
     if (parsed.success) basis[key] = parsed.data;
   }
   basis.__resolutionContext = resolutionContext(record);
+  return basis;
+}
+
+function suggestionRequestsForRecord(
+  entity: StandardEntity,
+  record: SuggestionRecord,
+  targets: ReturnType<typeof suggestTargetsFor>,
+) {
+  const basis = recordSuggestionBasis(entity, targets, record);
   if (!isBasisSufficient(entity, targets, basis)) return [];
   const resolutions = recordFieldResolutions(record);
   const available = targets.targets.filter(
@@ -396,26 +411,26 @@ function BoundRecordSuggestions({
       source: FieldSuggestionSource,
       expectedCurrent: string | null,
     ) => {
-      // Acceptance reads the entity again without asking Jev twice. Compare
-      // the authoritative inheritance fingerprint and every scalar basis key,
-      // so a parent/default or line-kind change revokes the old proposal even
-      // when the child row timestamp did not move.
+      // Acceptance reads the entity again without asking Jev twice. Rebuild
+      // the basis over the request's own key set (`source.basis`'s keys,
+      // not every visible target's union) so a parent/default or line-kind
+      // change still revokes the proposal, while an unrelated visible
+      // target's basis does not falsely invalidate this one.
       const fresh = await readRecord(entity, id);
       if (!fresh) throw new Error("Suggestion inputs changed");
       const freshRecord = recordSchema.parse(fresh);
-      const freshTargets = suggestTargetsFor(entity, source.targets);
-      const freshBasis = fieldSuggestionBasisFromRecord(
+      const basisKeys = Object.keys(source.basis).filter(
+        (key) => !key.startsWith("__"),
+      );
+      const freshTargets: SuggestTargets = {
+        targets: suggestTargetsFor(entity, source.targets).targets,
+        basisKeys,
+      };
+      const freshBasis = recordSuggestionBasis(
         entity,
         freshTargets,
         freshRecord,
       );
-      for (const key of suggestionContextKeys(entity, freshTargets)) {
-        const currentValue = nullableBasisValueSchema.safeParse(
-          freshRecord[key],
-        );
-        if (currentValue.success) freshBasis[key] = currentValue.data;
-      }
-      freshBasis.__resolutionContext = resolutionContext(freshRecord);
       if (
         basisFingerprint(freshBasis) !== basisFingerprint(source.basis) ||
         recordValue(entity, freshRecord, field).value !== expectedCurrent

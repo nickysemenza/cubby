@@ -4,7 +4,11 @@ import {
   fieldExplanationInput,
   fieldExplanationOutput,
 } from "@cubby/schemas/field-explanation";
-import { projectAllocationsSchema } from "@cubby/schemas/field-resolution";
+import {
+  fieldResolutionSchema,
+  projectAllocationsSchema,
+  type FieldResolution,
+} from "@cubby/schemas/field-resolution";
 import { cookbookShortcode } from "@cubby/schemas/identifiers";
 import { effectiveInventoryOwnership } from "@cubby/schemas/inventory-ownership";
 import { parseShortcode } from "@cubby/shared";
@@ -257,11 +261,16 @@ function dependencySources(
 }
 
 /** Resolver-specific traces only interpret values already present in the same
- * public projection. They never rerun the underlying precedence or totals. */
+ * public projection. They never rerun the underlying precedence or totals.
+ * `hasResolution` is true when a typed `FieldResolution` was already read for
+ * this field — it carries the same source/stored/fallback facts as the
+ * declared `sourceDependencies` trio, so that trio is skipped rather than
+ * duplicated in the output. */
 export function explainProjectionSources(
   projection: JsonRecord,
   explanation: Explanation,
   value: Json,
+  hasResolution = false,
 ): Source[] {
   if (
     explanation.ruleId === "expense.effective-project" &&
@@ -316,8 +325,10 @@ export function explainProjectionSources(
       };
     });
   }
-  const declared = dependencySources(projection, explanation);
-  if (declared.length > 0) return declared;
+  if (!hasResolution) {
+    const declared = dependencySources(projection, explanation);
+    if (declared.length > 0) return declared;
+  }
   switch (explanation.resolver) {
     case "productQuantity":
       return [
@@ -564,8 +575,23 @@ export async function explainField(
     throw new Error(`Explanation projection does not expose ${path}`);
   const value = resolved.value;
   const subject = { entityType: entity, entityId: input.entityId };
+  const resolutionPath = readExplanationPath(
+    projection,
+    `fieldResolutions.${field.key}`,
+  );
+  const parsedResolution = resolutionPath.found
+    ? fieldResolutionSchema.safeParse(resolutionPath.value)
+    : null;
+  const resolution: FieldResolution | null = parsedResolution?.success
+    ? parsedResolution.data
+    : null;
   let sources = [
-    ...explainProjectionSources(projection, explanation, value),
+    ...explainProjectionSources(
+      projection,
+      explanation,
+      value,
+      resolution !== null,
+    ),
     ...(countEvidence?.sources ?? []),
   ];
   const ownership =
@@ -590,6 +616,7 @@ export async function explainField(
       description: explanation.description,
     },
     sources: boundedSources.sources,
+    resolution,
     truncated: boundedSources.truncated || (countEvidence?.truncated ?? false),
     evidenceFingerprint: ownershipEvidence?.evidenceFingerprint ?? null,
     actions,

@@ -1,6 +1,9 @@
 import { auditEntitySchema } from "@cubby/schemas/audit";
 import type { Entity } from "@cubby/schemas/entity";
-import { fieldExplanationSource } from "@cubby/schemas/field-explanation";
+import {
+  fieldExplanationSource,
+  type FieldExplanationOutput,
+} from "@cubby/schemas/field-explanation";
 import { inventoryShortcode } from "@cubby/schemas/identifiers";
 import { parseShortcode } from "@cubby/shared";
 import { useQuery } from "@tanstack/react-query";
@@ -24,9 +27,10 @@ import {
 import { formatCurrency } from "~/lib/utils";
 
 import { fieldExplanation } from "./field-explanation.functions";
+import { ResolutionExplanation } from "./field-resolution-explanation";
 
 type ExplanationSource = z.infer<typeof fieldExplanationSource>;
-type ExplanationValue = ExplanationSource["value"];
+export type ExplanationValue = ExplanationSource["value"];
 const explanationScalar = z.union([z.string(), z.number(), z.boolean()]);
 const explanationRecord = z.record(z.string(), z.json());
 
@@ -36,7 +40,7 @@ const humanizeKey = (key: string) =>
     .replaceAll("_", " ")
     .replace(/^./, (letter) => letter.toUpperCase());
 
-function ReadableExplanationValue({
+export function ReadableExplanationValue({
   value,
   depth = 0,
   property,
@@ -122,7 +126,26 @@ const explanationSourceKey = (source: ExplanationSource): string =>
     source.entity?.entityId ?? JSON.stringify(source.value),
   ].join(":");
 
-function ExplanationEntityLink({ entity, id }: { entity: Entity; id: string }) {
+export /** The resolution row already names its source record, so a bare
+ * link-only source pointing at the same record adds nothing. */
+function visibleSources(data: FieldExplanationOutput) {
+  const named = data.resolution?.sourceEntity;
+  if (!named) return data.sources;
+  return data.sources.filter(
+    (source) =>
+      source.value !== null ||
+      source.entity?.entityType !== named.entityType ||
+      source.entity.entityId !== named.entityId,
+  );
+}
+
+export function ExplanationEntityLink({
+  entity,
+  id,
+}: {
+  entity: Entity;
+  id: string;
+}) {
   const auditable = auditEntitySchema.safeParse(entity);
   return auditable.success ? (
     <EntityInlineLinkById entityType={auditable.data} entityId={id} />
@@ -195,12 +218,18 @@ export function FieldExplanation({
           ) : (
             <>
               <p className="text-sm">{result.data.rule.description}</p>
-              {result.data.value !== null ||
-              !result.data.sources.some(
-                (source) =>
-                  source.label === "Project share" ||
-                  source.label === "Unassigned share",
-              ) ? (
+              {result.data.resolution ? (
+                <ResolutionExplanation
+                  entity={entity}
+                  field={field}
+                  resolution={result.data.resolution}
+                />
+              ) : result.data.value !== null ||
+                !result.data.sources.some(
+                  (source) =>
+                    source.label === "Project share" ||
+                    source.label === "Unassigned share",
+                ) ? (
                 <div className="text-sm">
                   <span className="text-muted-foreground">Current value</span>
                   <div className="mt-1">
@@ -208,7 +237,7 @@ export function FieldExplanation({
                   </div>
                 </div>
               ) : null}
-              {result.data.sources.map((source) => (
+              {visibleSources(result.data).map((source) => (
                 <div
                   key={explanationSourceKey(source)}
                   className="grid gap-1 text-sm"
