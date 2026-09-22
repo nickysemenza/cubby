@@ -277,6 +277,10 @@ function EntityPickerPopup<TId extends string>({
       setValue(await create.onCreate(create.name));
       setQuery("");
     } catch {
+      // SILENT: every `onCreate` implementation (useEntityCommands.create's
+      // mutateAsync, or the vendor picker's local echo) already surfaces its
+      // own failure toast; this catch only reopens the combobox with the
+      // typed name so the person can retry.
       changeOpen(true);
       setQuery(create.name);
     } finally {

@@ -52,7 +52,9 @@ export async function copyText(
     await port.writeText(text);
     return true;
   } catch {
-    // Fall through to the legacy path.
+    // SILENT: the async Clipboard API needs a secure context + user gesture
+    // (iOS Safari is strict about both); a rejection falls through to the
+    // execCommand ladder below, whose own return value is what callers see.
   }
   try {
     return port.fallbackCopy(text);

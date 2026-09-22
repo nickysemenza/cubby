@@ -8,9 +8,11 @@ import {
   type ReactNode,
 } from "react";
 
+import { showErrorToast } from "~/components/feedback/error-details";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Description } from "~/components/ui/description";
+import { getAppErrorDetails } from "~/lib/error-utils";
 
 export function actionableSuggestion(
   suggestion: FieldSuggestion | null,
@@ -80,7 +82,7 @@ export function SuggestionReview({
   const visit = useSuggestionVisit();
   const [localDismissed, setLocalDismissed] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const [failed, setFailed] = useState(false);
+  const [failure, setFailure] = useState<unknown>(null);
   const active = useRef(false);
   const key = JSON.stringify([questionKey, currentValue, suggestion?.value]);
   const dismiss = () => (visit ? visit.dismiss(key) : setLocalDismissed(key));
@@ -94,12 +96,13 @@ export function SuggestionReview({
     if (active.current || pending) return;
     active.current = true;
     setSaving(true);
-    setFailed(false);
+    setFailure(null);
     try {
       await onApply();
       dismiss();
-    } catch {
-      setFailed(true);
+    } catch (error) {
+      setFailure(error);
+      showErrorToast(error);
     } finally {
       active.current = false;
       setSaving(false);
@@ -149,9 +152,9 @@ export function SuggestionReview({
           {currentValue?.trim() ? "Keep current" : "Dismiss"}
         </Button>
       </Row>
-      {failed ? (
+      {failure !== null ? (
         <Description size="xs" role="alert">
-          Could not save. Try again.
+          Could not save: {getAppErrorDetails(failure).message}
         </Description>
       ) : null}
     </Stack>

@@ -17,10 +17,10 @@ import { toast } from "sonner";
 
 import { QR_CODE_FORMATS } from "~/app/_components/inventory/persistent-scanner";
 import { ScanSheet } from "~/app/_components/inventory/scan-sheet";
+import { showErrorToast } from "~/components/feedback/error-details";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { entityDetailFor } from "~/entities/entity-detail.functions";
-import { getErrorMessage } from "~/lib/error-utils";
 import { resolveLocationScan } from "~/lib/scan-code";
 
 /**
@@ -36,9 +36,10 @@ function parseLocationIdFromInput(raw: string): LocationShortcode | null {
     const url = new URL(trimmed);
     const lastSegment = url.pathname.split("/").filter(Boolean).pop();
     if (lastSegment) candidates.push(lastSegment);
-  } catch {
-    // Plain shortcode/UUID input is expected most of the time.
   }
+  // SILENT: plain shortcode/UUID input (not a URL) is expected most of the
+  // time; the candidates list below still tries the raw trimmed value.
+  catch {}
 
   for (const candidate of candidates) {
     const parsed = locationShortcode.safeParse(candidate);
@@ -123,7 +124,7 @@ export function LocationScanButton({
       }
       finish(location.id, location.id, location.name);
     } catch (error) {
-      toast.error(`Location lookup failed: ${getErrorMessage(error)}`);
+      showErrorToast(error, "Location lookup failed");
     } finally {
       setIsResolving(false);
     }

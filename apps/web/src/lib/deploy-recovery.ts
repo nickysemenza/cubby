@@ -41,8 +41,9 @@ export function createPreloadRecovery(
         runtime.storage.removeItem(PRELOAD_RELOAD_KEY);
       }
     } catch {
-      // The document is already leaving. A stale cooldown marker is safer than
-      // risking a reload loop when session storage becomes unavailable.
+      // SILENT: the document is already leaving. A stale cooldown marker is
+      // safer than risking a reload loop when session storage becomes
+      // unavailable mid-navigation.
     }
   };
 

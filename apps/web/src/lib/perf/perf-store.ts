@@ -386,7 +386,8 @@ export function startCollectors(): void {
     });
     longTaskObserver.observe({ type: "longtask", buffered: true });
   } catch {
-    // longtask not supported (e.g. Safari) — leave the counter at 0.
+    // SILENT: longtask not supported (e.g. Safari) — leave the counter at 0;
+    // this is self-instrumentation and must never affect the page it measures.
   }
 
   // Web Vitals are page-lifetime listeners; register once, keep updating.

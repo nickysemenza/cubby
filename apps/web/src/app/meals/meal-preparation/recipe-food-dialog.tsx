@@ -6,9 +6,9 @@ import { useMutation } from "@tanstack/react-query";
 import { useEffect, useEffectEvent, useRef } from "react";
 import { toast } from "sonner";
 
+import { showErrorToast } from "~/components/feedback/error-details";
 import { SimpleLoading } from "~/components/feedback/loading-skeletons";
 import { ResponsiveDialog } from "~/components/ui/responsive-dialog";
-import { getErrorMessage } from "~/lib/error-utils";
 
 import { meal as mealOperations } from "../meal.functions";
 import { useInvalidateMeals } from "../use-meal-mutations";
@@ -64,7 +64,7 @@ export function RecipeFoodDialog({
       invalidate();
     },
     onError: (error) => {
-      toast.error(getErrorMessage(error));
+      showErrorToast(error);
       onClose();
     },
   });

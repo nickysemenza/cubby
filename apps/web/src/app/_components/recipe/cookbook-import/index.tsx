@@ -20,6 +20,7 @@ import { z } from "zod";
 
 import { useBulkStream } from "~/app/_components/hooks/useBulkStream";
 import { recipe, recipeStreams } from "~/app/recipes/recipe.functions";
+import { showErrorToast } from "~/components/feedback/error-details";
 import { Row } from "~/components/layout/row";
 import { Stack } from "~/components/layout/stack";
 import {
@@ -365,8 +366,8 @@ export function CookbookImport({
       try {
         estimate = toBookEstimate(handle.estimate(extractOptions(source)));
       } catch (error) {
-        // An estimate is advisory; a book that cannot be priced can still be
-        // extracted, and the run report will say what it actually cost.
+        // SILENT: an estimate is advisory; a book that cannot be priced can
+        // still be extracted, and the run report will say what it actually cost.
         console.warn("cookbook estimate failed", error);
       }
 
@@ -540,8 +541,8 @@ export function CookbookImport({
     let data: unknown;
     try {
       data = JSON.parse(await file.text());
-    } catch {
-      toast.error("Could not parse JSON");
+    } catch (error) {
+      showErrorToast(error, "Could not parse JSON");
       return;
     }
     const parsed = cookbookJsonFile.safeParse(data);
@@ -693,7 +694,7 @@ export function CookbookImport({
       try {
         handle = wasm.open_book(bytes, source);
       } catch (error) {
-        toast.error(`Could not read that EPUB: ${getErrorMessage(error)}`);
+        showErrorToast(error, "Could not read that EPUB");
         return;
       }
       bookHandlesRef.current.set(source, handle);
@@ -827,7 +828,7 @@ export function CookbookImport({
               `${bookName}-cover.${book.cover.mime.split("/")[1] ?? "jpg"}`,
             );
           } catch (error) {
-            console.warn("cookbook cover upload failed", error);
+            showErrorToast(error, "Cover upload failed");
           }
         }
         try {
@@ -857,7 +858,7 @@ export function CookbookImport({
             cover: undefined,
           }));
         } catch (error) {
-          toast.error(`Couldn't save cookbook: ${getErrorMessage(error)}`);
+          showErrorToast(error, "Couldn't save cookbook");
           return;
         }
       }

@@ -27,6 +27,7 @@ import {
   UnifiedTextField,
 } from "~/app/_components/form-utils";
 import { useEntityActionMutation } from "~/app/_components/hooks/useActionMutation";
+import { showErrorToast } from "~/components/feedback/error-details";
 import { Row } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Collapsible, CollapsibleContent } from "~/components/ui/collapsible";
@@ -159,7 +160,6 @@ export function QuickInventoryAdd({
 
   const addMutation = useCreateInventoryMutation({
     onSuccess: onInventoryAdded,
-    onError: (err) => toast.error(getErrorMessage(err) || "Failed to add item"),
   });
 
   const onSelectSubmit = async (values: SelectFormValues) => {
@@ -173,7 +173,7 @@ export function QuickInventoryAdd({
         await operations.createInventory(input);
         onInventoryAdded();
       } catch (error) {
-        toast.error(getErrorMessage(error) || "Failed to add item");
+        showErrorToast(error);
       }
       return;
     }
@@ -204,8 +204,15 @@ export function QuickInventoryAdd({
     operation: "create",
     mutationFn: entityMutationOptionsFactory("product", "create"),
     onSuccess: invalidateProductLookup,
+    error: "Failed to create product",
   });
-  const inventoryCreateMutation = useCreateInventoryMutation();
+  const inventoryCreateMutation = useCreateInventoryMutation({
+    // No toast here: the inner catch below already turns this mutation's
+    // failure into one `showErrorToast` with the "product was created,
+    // but..." context; a populated `onError` would additionally trigger the
+    // global toast.
+    onError: () => {},
+  });
 
   const [isCreating, setIsCreating] = useState(false);
 
@@ -253,14 +260,17 @@ export function QuickInventoryAdd({
         switchToSelectMode();
         onSuccess();
       } catch (inventoryErr) {
-        toast.error(
+        showErrorToast(
+          inventoryErr,
           `Product "${newProduct.name}" was created, but adding to inventory failed: ${getErrorMessage(inventoryErr)}. Search for it to add manually.`,
         );
         invalidateProductLookup();
         switchToSelectMode();
       }
-    } catch (productErr) {
-      toast.error(`Failed to create product: ${getErrorMessage(productErr)}`);
+    } catch {
+      // SILENT: already showErrorToast'd by productCreateMutation's own
+      // onError (useEntityActionMutation); this only stops the rejection
+      // from escaping the submit handler.
     } finally {
       setIsCreating(false);
     }

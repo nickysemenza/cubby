@@ -7,6 +7,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import { ingredient } from "~/app/ingredients/ingredient.functions";
 import { recipe } from "~/app/recipes/recipe.functions";
+import { showErrorToast } from "~/components/feedback/error-details";
 import {
   collectIngredientIds,
   collectSubRecipeIds,
@@ -118,8 +119,10 @@ export function useRecipeCostingData(recipes: RecipeOut[]) {
         setIngMap(nextIngMap);
       })
       .catch((e) => {
-        console.error("Failed to load recipe costing data:", e);
         if (cancelled) return;
+        // Callers render the empty map as a zero-cost state rather than an
+        // error UI, so the failure has to surface here.
+        showErrorToast(e, "Recipe costing data failed to load");
         setIngMap({});
         setRecipeMap({});
       })

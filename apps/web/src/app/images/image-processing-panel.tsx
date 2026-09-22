@@ -6,6 +6,7 @@ import { useState } from "react";
 import { z } from "zod";
 
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
+import { ErrorDisplay } from "~/components/feedback/error-display";
 import { Button } from "~/components/ui/button";
 import {
   Dialog,
@@ -257,7 +258,11 @@ export function ImageProcessingPanel({ image }: { image: ImageWithEntity }) {
           </section>
         </>
       ) : status.error ? (
-        <p role="alert">Unable to load processing status.</p>
+        <ErrorDisplay
+          error={status.error}
+          title="processing status"
+          onRetry={() => void status.refetch()}
+        />
       ) : (
         <p>Loading processing status…</p>
       )}

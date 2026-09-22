@@ -26,7 +26,9 @@ export const observeResponseBody = (
     try {
       observe({ outcome, durationMs: Math.max(0, now() - startedAt) });
     } catch {
-      // Observability is fail-open: body delivery owns this boundary.
+      // SILENT: observability is fail-open — a telemetry callback failure must
+      // never turn a healthy response stream into an error; body delivery
+      // owns this boundary, not this observer.
     }
   };
 

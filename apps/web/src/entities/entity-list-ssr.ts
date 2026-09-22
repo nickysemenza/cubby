@@ -62,11 +62,10 @@ export async function ensureEntityListSsr<E extends ListEntity>(options: {
   // query without holding the route transition. The mounted list consumes the
   // same cache key in either case.
   if (!import.meta.env.SSR) {
-    void preload
-      .catch(() => {
-        // TanStack Query retains the failure for the mounted list to render.
-      })
-      .finally(removeAbortListener);
+    // SILENT: TanStack Query retains the rejection in its cache keyed by
+    // `query.queryKey`; the mounted list re-subscribes to the same key and
+    // renders the retained error itself, so nothing here needs to surface it.
+    void preload.catch(() => {}).finally(removeAbortListener);
     return;
   }
   try {

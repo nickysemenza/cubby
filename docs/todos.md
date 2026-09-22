@@ -27,6 +27,17 @@ history is the archive. Permanent product constraints live in the
 
 ## Easy fixes
 
+- **Silent side-effect failures with no caller channel.** Two best-effort
+  paths swallow a failure the caller cannot see (both annotated `SILENT:` and
+  guarded by the `cubby/no-swallowed-catch` rule): the CalDAV feed dirty-mark
+  in `server/calendar/client.ts` runs after the response is committed, so a
+  failure leaves the feed stale until the next successful write; and the
+  UPC/ISBN cover-photo import in `server/services/product-orchestration.service.ts`
+  (four sites) leaves a product looking finished with no image. Give the
+  product mutation result a `sideEffects`/warnings field the web and MCP
+  surfaces render, and move the feed dirty-mark onto the write's own
+  transaction or a retried queue message.
+
 - **Canvas conformance follow-ups.** The generic pages now render the
   canvas (<https://claude.ai/artifact/A45j5qz24RjRK6KzKmKLWL>): one 44px
   workbench band with declared-filter chips and `Actions ▾`, plate verbs,
@@ -503,6 +514,22 @@ history is the archive. Permanent product constraints live in the
   an intermediate list response.
 
 ### Needs a decision or investigation
+
+- **One FROM context per entity list.** Every list repo pairs a Drizzle
+  relational `findMany` rows query (root table aliased to its lowercase name;
+  Column objects rewritten, `sql.raw` strings and nested `PgSelect` builders
+  not) with an unaliased `$count` on the same where clause, so any predicate
+  that references the outer row by raw table name or through a correlated
+  sub-select compiles on one leg and throws `invalid reference to FROM-clause
+  entry` on the other — six shipped occurrences so far (#456, #462, #481,
+  #762, #785, CUBBY-11R). The sanctioned workarounds (uncorrelated `IN`
+  sub-selects, dual-alias where builders, string alias parameters on
+  `effective*Sql` fragments) are guarded by
+  `server/entity-kernel/list-smoke.integration.test.ts`, which exercises every
+  declared filter and sort per entity. Decide the durable shape: plain-select
+  rows with explicit relation joins, one `alias(table, name)` shared by every
+  leg, or Drizzle relations v2 — each removes the string alias contract from
+  `expense-inheritance.ts`, `task/lookup.ts`, and `image.ts`.
 
 - **Evaluate Cloudflare Workflows across durable background work.** Compare
   image description/eligibility/companion processing, purchase import and

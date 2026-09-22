@@ -5,8 +5,6 @@ import { addDays, format, parseISO, subDays } from "date-fns";
 import { useState } from "react";
 import { toast } from "sonner";
 
-import { getErrorMessage } from "~/lib/error-utils";
-
 import { ledgerParty } from "../../finance/finance.functions";
 import { meal as mealOperations } from "../meal.functions";
 import type {
@@ -146,7 +144,6 @@ export function useMealPreparationController({
         toast.success("Portions saved");
         onSaved?.();
       },
-      onError: (error) => toast.error(getErrorMessage(error)),
     }),
   );
 

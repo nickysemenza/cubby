@@ -104,9 +104,11 @@ export const buildPreviewMappings = (
   if (food) {
     try {
       base.push(...unitMappingsFromFood(food));
-    } catch {
-      // ignore an un-synthesizable food preview
     }
+    // SILENT: this is a live preview built from in-progress form input; a
+    // food whose data can't synthesize a mapping just contributes nothing
+    // to the preview rather than blocking the rest of the editor.
+    catch {}
   }
   const d = parsePositive(dollars);
   if (d != null) {

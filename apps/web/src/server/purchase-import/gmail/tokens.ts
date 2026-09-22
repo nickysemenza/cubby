@@ -83,7 +83,9 @@ const parseRefreshResponse = async (
   try {
     body = googleRefreshResponse.parse(await response.json());
   } catch {
-    // Preserve the HTTP status as the useful error below.
+    // SILENT: an unparseable body leaves `body` at its `{}` default; the
+    // `!response.ok` branch below already falls back to `HTTP ${status}`
+    // when none of `body`'s fields are usable.
   }
   if (!response.ok) {
     const detail = isUsableToken(body.error_description)

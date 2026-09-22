@@ -172,9 +172,7 @@ describe("RelationshipRoutePreview", () => {
       throw new Error("Fixture failure");
     });
     renderPreview(failure.operations);
-    expect(
-      await screen.findByText("Relationships could not be loaded."),
-    ).toBeVisible();
+    expect(await screen.findByText("Fixture failure")).toBeVisible();
     fireEvent.click(screen.getByRole("button", { name: "Retry" }));
     await waitFor(() => expect(failure.requestCount()).toBe(2));
   });

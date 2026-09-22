@@ -21,10 +21,10 @@ import {
 } from "react";
 
 import { MobileCard } from "~/components/entity/mobile-card";
+import { ErrorDisplay } from "~/components/feedback/error-display";
 import { MobileCardSkeletonList } from "~/components/feedback/mobile-card-skeleton";
 import { Row, Stack } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
-import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { entities } from "~/entities/entities";
 import { enumFieldLabel } from "~/entities/enum-field-display";
@@ -311,7 +311,9 @@ function SearchResults({
     resultCount: data.length,
   });
   if (feedback)
-    return <SearchResultsFeedback state={feedback} onRetry={onRetry} />;
+    return (
+      <SearchResultsFeedback state={feedback} error={error} onRetry={onRetry} />
+    );
   return (
     <div className="border-y border-border">
       {data.map((group) =>
@@ -656,7 +658,14 @@ function MobileSearchResults({
   });
   if (feedback === "loading") return <MobileCardSkeletonList count={6} />;
   if (feedback)
-    return <SearchResultsFeedback state={feedback} onRetry={onRetry} mobile />;
+    return (
+      <SearchResultsFeedback
+        state={feedback}
+        error={error}
+        onRetry={onRetry}
+        mobile
+      />
+    );
   return (
     <div className="border-y border-border">
       {data.map((group) => {
@@ -854,10 +863,12 @@ export function getSearchResultsFeedback({
 
 export function SearchResultsFeedback({
   state,
+  error,
   onRetry,
   mobile = false,
 }: {
   state: SearchResultsFeedbackState;
+  error?: unknown;
   onRetry: () => void;
   mobile?: boolean;
 }) {
@@ -870,19 +881,14 @@ export function SearchResultsFeedback({
   }
   if (state === "error") {
     return (
-      <Stack
-        role="alert"
-        gap="sm"
+      <div
         className={cn(
-          "items-center justify-center py-8 text-sm",
-          mobile && "min-h-32",
+          "flex justify-center py-8",
+          mobile && "min-h-32 items-center",
         )}
       >
-        <p className="text-destructive">Search could not load.</p>
-        <Button type="button" variant="outline" onClick={onRetry}>
-          Try again
-        </Button>
-      </Stack>
+        <ErrorDisplay error={error} title="search results" onRetry={onRetry} />
+      </div>
     );
   }
   return (

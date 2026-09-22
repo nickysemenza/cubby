@@ -61,7 +61,8 @@ export function resolveScanCode(raw: string): ScanCodeResolution {
       error: "That QR code is a web link, not a Cubby label.",
     };
   } catch {
-    // Plain codes are the normal path.
+    // SILENT: `new URL(value)` throwing means `value` isn't a URL at all —
+    // that's the normal case, so fall through to the barcode/ISBN checks.
   }
 
   const normalizedIsbn = wasm.normalize_isbn(value);

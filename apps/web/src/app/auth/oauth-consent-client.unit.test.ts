@@ -29,7 +29,7 @@ describe("OAuth consent client verification", () => {
       canAllowConsent(
         true,
         "client-1",
-        { kind: "error", message: "Offline" },
+        { kind: "error", message: "Offline", detail: "network down" },
         false,
       ),
     ).toBe(false);
@@ -57,13 +57,15 @@ describe("OAuth consent client verification", () => {
     await expect(verifyPublicClient("client-1", lookup)).resolves.toMatchObject(
       {
         kind: "error",
+        detail: "network down",
       },
     );
 
-    lookup.mockResolvedValueOnce({ error: {} });
+    lookup.mockResolvedValueOnce({ error: { message: "upstream 503" } });
     await expect(verifyPublicClient("client-1", lookup)).resolves.toMatchObject(
       {
         kind: "error",
+        detail: "upstream 503",
       },
     );
   });

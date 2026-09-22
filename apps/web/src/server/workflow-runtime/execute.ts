@@ -77,8 +77,8 @@ const notify = <Context, Input>(
       ...event,
     });
   } catch (error) {
-    // Diagnostic subscribers cannot roll back a write or prevent required
-    // effects after a successful commit.
+    // SILENT: diagnostic subscribers cannot roll back a write or prevent
+    // required effects after a successful commit.
     console.error("Workflow observer failed", error);
   }
 };

@@ -165,6 +165,8 @@ export function FoodAmountEditor({
       onValidityChange?.(true);
       onChange({ value, unit: trimmedUnit });
     } catch {
+      // SILENT: user is still typing an amount; invalid input is expected
+      // mid-edit and is surfaced via the field's own invalid state, not a toast.
       setInvalid(true);
       onValidityChange?.(false);
       onChange(null);
@@ -176,9 +178,10 @@ export function FoodAmountEditor({
     if (!invalid && valueText.trim()) {
       try {
         setValueText(wasm.format_quantity(wasm.parse_quantity(valueText)));
-      } catch {
-        // Keep the person's text in place so they can repair it.
       }
+      // SILENT: reformatting is cosmetic; keep the person's text in place
+      // so they can repair it (the invalid state above already flagged it).
+      catch {}
     }
   };
 

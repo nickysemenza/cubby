@@ -121,9 +121,10 @@ export class USDAClient {
                 }),
               );
             } catch (error) {
-              // A cache failure must not turn a successful USDA response into
-              // an application error, but awaiting it keeps the write alive in
-              // the Worker request lifetime.
+              // SILENT: a cache-write failure must not turn a successful USDA
+              // response into an application error — the response below is
+              // already the real result; this `Cache.put` was only a
+              // best-effort warm for the next 24h.
               console.warn(
                 `[USDA] Cache write failed for ${args.path}:`,
                 error,

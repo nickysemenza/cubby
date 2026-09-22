@@ -6,11 +6,11 @@ import prettyBytes from "pretty-bytes";
 import { useCallback, useState } from "react";
 import { toast } from "sonner";
 
+import { showErrorToast } from "~/components/feedback/error-details";
 import { FileDropField } from "~/components/file-upload/FileDropField";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Label } from "~/components/ui/label";
-import { getErrorMessage } from "~/lib/error-utils";
 import { imageUpload } from "~/lib/image.functions";
 
 import type { PendingImage } from "./PendingImageUpload";
@@ -115,9 +115,10 @@ export function PendingDocumentUpload({
 
   const uploadDocumentMutation = useMutation(
     imageUpload.uploadDocument.mutationOptions({
-      onError: (error) => {
-        toast.error(`Upload initialization failed: ${getErrorMessage(error)}`);
-      },
+      // No toast here: `uploadFile`'s catch below already turns any failure in
+      // this flow (including this mutation's) into one `showErrorToast`; a
+      // populated `onError` would additionally trigger the global toast.
+      onError: () => {},
     }),
   );
 
@@ -164,7 +165,7 @@ export function PendingDocumentUpload({
         onDocumentsChange?.(updated);
         toast.success("Manual added.");
       } catch (error) {
-        toast.error(`Upload failed: ${getErrorMessage(error)}`);
+        showErrorToast(error, "Upload failed");
       } finally {
         setUploading(false);
       }

@@ -326,6 +326,9 @@ const compareEquivalences = (
             candidate.unitB,
           );
       } catch {
+        // SILENT: no conversion path between the two units is expected for a
+        // genuinely novel equivalence; `existing` stays null and the
+        // `existing == null` branch below already treats that as visible.
         /* no path is a novel equivalence */
       }
     }

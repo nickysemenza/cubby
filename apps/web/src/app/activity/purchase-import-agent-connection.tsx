@@ -12,6 +12,7 @@ import {
 } from "~/components/ui/card";
 import { StatusText } from "~/components/ui/status-text";
 import { getErrorMessage } from "~/lib/error-utils";
+import { readJsonOrThrow } from "~/lib/http-error";
 import {
   type PurchaseAgentConnectionStatus,
   purchaseImportAgentOAuthStatus,
@@ -28,10 +29,11 @@ export function PurchaseImportAgentConnection({
     queryKey: ["purchase-import", "agent-oauth"],
     queryFn: async () => {
       const response = await fetch("/api/import/agent/oauth/status");
-      const body: unknown = await response.json();
-      if (!response.ok)
-        throw new Error("Purchase import agent access could not load.");
-      return purchaseImportAgentOAuthStatus.parse(body);
+      return readJsonOrThrow(
+        response,
+        purchaseImportAgentOAuthStatus,
+        "Purchase import agent access could not load.",
+      );
     },
   });
   const disconnect = useMutation({
@@ -39,12 +41,12 @@ export function PurchaseImportAgentConnection({
       const response = await fetch("/api/import/agent/oauth/status", {
         method: "DELETE",
       });
-      const body: unknown = await response.json();
-      if (!response.ok)
-        throw new Error(
-          "Purchase import agent access could not be disconnected.",
-        );
-      return purchaseImportAgentOAuthStatus.parse(body);
+      return readJsonOrThrow(
+        response,
+        purchaseImportAgentOAuthStatus,
+        "Purchase import agent access could not be disconnected.",
+        { method: "DELETE" },
+      );
     },
     onSuccess: (data) => {
       queryClient.setQueryData(["purchase-import", "agent-oauth"], data);

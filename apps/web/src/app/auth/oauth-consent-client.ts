@@ -1,3 +1,5 @@
+import { getAppErrorDetails } from "~/lib/error-utils";
+
 interface PublicClient {
   client_id: string;
   client_name?: string;
@@ -11,7 +13,12 @@ export type PublicClientLookupState =
   | { kind: "loading" }
   | { kind: "verified"; client: PublicClient }
   | { kind: "invalid"; message: string }
-  | { kind: "error"; message: string };
+  | {
+      kind: "error";
+      message: string;
+      /** The raw transport/lookup failure — the trusted household sees this, not just the friendly line. */
+      detail: string;
+    };
 
 interface PublicClientLookupResponse {
   data?: PublicClient | null;
@@ -45,15 +52,29 @@ export async function verifyPublicClient(
     if (result.data?.client_id === clientId) {
       return { kind: "verified", client: result.data };
     }
-    if (result.data) return { kind: "error", message: LOOKUP_FAILED };
+    if (result.data) {
+      return {
+        kind: "error",
+        message: LOOKUP_FAILED,
+        detail: "The client lookup response named a different client_id.",
+      };
+    }
 
     if (result.error) {
-      return { kind: "error", message: LOOKUP_FAILED };
+      return {
+        kind: "error",
+        message: LOOKUP_FAILED,
+        detail: getAppErrorDetails(result.error).message,
+      };
     }
 
     return { kind: "invalid", message: UNKNOWN_CLIENT };
-  } catch {
-    return { kind: "error", message: LOOKUP_FAILED };
+  } catch (error) {
+    return {
+      kind: "error",
+      message: LOOKUP_FAILED,
+      detail: getAppErrorDetails(error).message,
+    };
   }
 }
 

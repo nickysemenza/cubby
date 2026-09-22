@@ -9,6 +9,7 @@ import { useState } from "react";
 import type { DetailRecordOf } from "~/app/_components/entity-detail/detail-record";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { expense } from "~/app/expenses/expense.functions";
+import { ErrorDisplay } from "~/components/feedback/error-display";
 import { Button } from "~/components/ui/button";
 import { entityListFor } from "~/entities/entity-list.functions";
 
@@ -99,7 +100,11 @@ export function InventoryExpenseActions({
         </div>
       ) : null}
       {context.error ? (
-        <p role="alert">Unable to load ownership evidence.</p>
+        <ErrorDisplay
+          error={context.error}
+          title="ownership evidence"
+          onRetry={() => void context.refetch()}
+        />
       ) : null}
     </div>
   );
