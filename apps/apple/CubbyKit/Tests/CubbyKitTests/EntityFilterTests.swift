@@ -131,7 +131,8 @@ struct EntityFilterTests {
         FilterStub.handler.withLock { handler in
             handler = { request in
                 seen.withLock { $0 = request.url }
-                let body = #"{"groups":[],"stats":[],"notes":[],"#
+                let body =
+                    #"{"groups":[],"stats":[],"notes":[],"#
                     + #""meta":{"totalCount":0,"pageIndex":0,"pageSize":200}}"#
                 return (200, Data(body.utf8))
             }
