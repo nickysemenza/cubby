@@ -301,6 +301,12 @@ public protocol APIProtocol: Sendable {
     /// - Remark: HTTP `POST /api/v1/photoImport/commit`.
     /// - Remark: Generated from `#/paths//api/v1/photoImport/commit/post(photoImport.commit)`.
     func photoImport_commit(_ input: Operations.PhotoImport_commit.Input) async throws -> Operations.PhotoImport_commit.Output
+    /// - Remark: HTTP `POST /api/v1/photoImport/createRun`.
+    /// - Remark: Generated from `#/paths//api/v1/photoImport/createRun/post(photoImport.createRun)`.
+    func photoImport_createRun(_ input: Operations.PhotoImport_createRun.Input) async throws -> Operations.PhotoImport_createRun.Output
+    /// - Remark: HTTP `POST /api/v1/photoImport/finalize`.
+    /// - Remark: Generated from `#/paths//api/v1/photoImport/finalize/post(photoImport.finalize)`.
+    func photoImport_finalize(_ input: Operations.PhotoImport_finalize.Input) async throws -> Operations.PhotoImport_finalize.Output
     /// - Remark: HTTP `POST /api/v1/photoImport/reconcile`.
     /// - Remark: Generated from `#/paths//api/v1/photoImport/reconcile/post(photoImport.reconcile)`.
     func photoImport_reconcile(_ input: Operations.PhotoImport_reconcile.Input) async throws -> Operations.PhotoImport_reconcile.Output
@@ -1487,6 +1493,28 @@ extension APIProtocol {
         body: Operations.PhotoImport_commit.Input.Body? = nil
     ) async throws -> Operations.PhotoImport_commit.Output {
         try await photoImport_commit(Operations.PhotoImport_commit.Input(
+            headers: headers,
+            body: body
+        ))
+    }
+    /// - Remark: HTTP `POST /api/v1/photoImport/createRun`.
+    /// - Remark: Generated from `#/paths//api/v1/photoImport/createRun/post(photoImport.createRun)`.
+    public func photoImport_createRun(
+        headers: Operations.PhotoImport_createRun.Input.Headers = .init(),
+        body: Operations.PhotoImport_createRun.Input.Body? = nil
+    ) async throws -> Operations.PhotoImport_createRun.Output {
+        try await photoImport_createRun(Operations.PhotoImport_createRun.Input(
+            headers: headers,
+            body: body
+        ))
+    }
+    /// - Remark: HTTP `POST /api/v1/photoImport/finalize`.
+    /// - Remark: Generated from `#/paths//api/v1/photoImport/finalize/post(photoImport.finalize)`.
+    public func photoImport_finalize(
+        headers: Operations.PhotoImport_finalize.Input.Headers = .init(),
+        body: Operations.PhotoImport_finalize.Input.Body? = nil
+    ) async throws -> Operations.PhotoImport_finalize.Output {
+        try await photoImport_finalize(Operations.PhotoImport_finalize.Input(
             headers: headers,
             body: body
         ))

@@ -1249,7 +1249,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/BrowserBridgeOperationCapture/type`.
             public var _type: Components.Schemas.BrowserBridgeOperationCapture._TypePayload
             /// - Remark: Generated from `#/components/schemas/BrowserBridgeOperationCapture/allowedHosts`.
-            public var allowedHosts: Components.Schemas.InputSchema172
+            public var allowedHosts: Components.Schemas.InputSchema176
             /// - Remark: Generated from `#/components/schemas/BrowserBridgeOperationCapture/enhancedEvidence`.
             public var enhancedEvidence: Swift.Bool
             /// - Remark: Generated from `#/components/schemas/BrowserBridgeOperationCapture/recoveryURL`.
@@ -1289,7 +1289,7 @@ extension Components {
             ///   - evidenceScope:
             public init(
                 _type: Components.Schemas.BrowserBridgeOperationCapture._TypePayload,
-                allowedHosts: Components.Schemas.InputSchema172,
+                allowedHosts: Components.Schemas.InputSchema176,
                 enhancedEvidence: Swift.Bool,
                 recoveryURL: Swift.String? = nil,
                 evidenceScope: Components.Schemas.BrowserBridgeOperationCapture.EvidenceScopePayload? = nil
@@ -1319,7 +1319,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/BrowserBridgeOperationFollowCapturedLink/linkID`.
             public var linkID: Swift.String
             /// - Remark: Generated from `#/components/schemas/BrowserBridgeOperationFollowCapturedLink/allowedHosts`.
-            public var allowedHosts: Components.Schemas.InputSchema172
+            public var allowedHosts: Components.Schemas.InputSchema176
             /// Creates a new `BrowserBridgeOperationFollowCapturedLink`.
             ///
             /// - Parameters:
@@ -1329,7 +1329,7 @@ extension Components {
             public init(
                 _type: Components.Schemas.BrowserBridgeOperationFollowCapturedLink._TypePayload,
                 linkID: Swift.String,
-                allowedHosts: Components.Schemas.InputSchema172
+                allowedHosts: Components.Schemas.InputSchema176
             ) {
                 self._type = _type
                 self.linkID = linkID
@@ -1352,7 +1352,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/BrowserBridgeOperationNavigate/url`.
             public var url: Swift.String
             /// - Remark: Generated from `#/components/schemas/BrowserBridgeOperationNavigate/allowedHosts`.
-            public var allowedHosts: Components.Schemas.InputSchema172
+            public var allowedHosts: Components.Schemas.InputSchema176
             /// Creates a new `BrowserBridgeOperationNavigate`.
             ///
             /// - Parameters:
@@ -1362,7 +1362,7 @@ extension Components {
             public init(
                 _type: Components.Schemas.BrowserBridgeOperationNavigate._TypePayload,
                 url: Swift.String,
-                allowedHosts: Components.Schemas.InputSchema172
+                allowedHosts: Components.Schemas.InputSchema176
             ) {
                 self._type = _type
                 self.url = url
@@ -11172,6 +11172,35 @@ extension Components {
                 case provenance
             }
         }
+        /// - Remark: Generated from `#/components/schemas/ImageAnalysisSummary`.
+        public struct ImageAnalysisSummary: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ImageAnalysisSummary/description`.
+            public var description: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/ImageAnalysisSummary/classifications`.
+            public var classifications: [Swift.String]
+            /// - Remark: Generated from `#/components/schemas/ImageAnalysisSummary/recognizedText`.
+            public var recognizedText: Swift.String?
+            /// Creates a new `ImageAnalysisSummary`.
+            ///
+            /// - Parameters:
+            ///   - description:
+            ///   - classifications:
+            ///   - recognizedText:
+            public init(
+                description: Swift.String? = nil,
+                classifications: [Swift.String],
+                recognizedText: Swift.String? = nil
+            ) {
+                self.description = description
+                self.classifications = classifications
+                self.recognizedText = recognizedText
+            }
+            public enum CodingKeys: String, CodingKey {
+                case description
+                case classifications
+                case recognizedText
+            }
+        }
         /// - Remark: Generated from `#/components/schemas/ImageAssociation`.
         public struct ImageAssociation: Codable, Hashable, Sendable {
             /// - Remark: Generated from `#/components/schemas/ImageAssociation/entityType`.
@@ -11233,17 +11262,17 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/ImageBrowserListInput/sort`.
             public struct SortPayload: Codable, Hashable, Sendable {
                 /// - Remark: Generated from `#/components/schemas/ImageBrowserListInput/sort/value1`.
-                public var value1: Components.Schemas.InputSchema43?
+                public var value1: Components.Schemas.InputSchema47?
                 /// - Remark: Generated from `#/components/schemas/ImageBrowserListInput/sort/value2`.
-                public var value2: [Components.Schemas.InputSchema43]?
+                public var value2: [Components.Schemas.InputSchema47]?
                 /// Creates a new `SortPayload`.
                 ///
                 /// - Parameters:
                 ///   - value1:
                 ///   - value2:
                 public init(
-                    value1: Components.Schemas.InputSchema43? = nil,
-                    value2: [Components.Schemas.InputSchema43]? = nil
+                    value1: Components.Schemas.InputSchema47? = nil,
+                    value2: [Components.Schemas.InputSchema47]? = nil
                 ) {
                     self.value1 = value1
                     self.value2 = value2
@@ -11280,7 +11309,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/ImageBrowserListInput/sort`.
             public var sort: Components.Schemas.ImageBrowserListInput.SortPayload?
             /// - Remark: Generated from `#/components/schemas/ImageBrowserListInput/pagination`.
-            public var pagination: Components.Schemas.InputSchema44?
+            public var pagination: Components.Schemas.InputSchema48?
             /// - Remark: Generated from `#/components/schemas/ImageBrowserListInput/groupBy`.
             @frozen public enum GroupByPayload: String, Codable, Hashable, Sendable, CaseIterable {
                 case createdAt = "createdAt"
@@ -11301,7 +11330,7 @@ extension Components {
             public init(
                 filters: Components.Schemas.ImageListFilters,
                 sort: Components.Schemas.ImageBrowserListInput.SortPayload? = nil,
-                pagination: Components.Schemas.InputSchema44? = nil,
+                pagination: Components.Schemas.InputSchema48? = nil,
                 groupBy: Components.Schemas.ImageBrowserListInput.GroupByPayload? = nil
             ) {
                 self.filters = filters
@@ -11765,6 +11794,14 @@ extension Components {
             ///
             /// - Remark: Generated from `#/components/schemas/ImageListFilters/uploadedAgeHoursMin`.
             public var uploadedAgeHoursMin: Swift.Double?
+            /// Only images that are a target of one of these import runs. Sets list order to the run's picker position (see importTarget.position) instead of the default sort.
+            ///
+            /// - Remark: Generated from `#/components/schemas/ImageListFilters/importRunId`.
+            public var importRunId: Components.Schemas.InputSchema43?
+            /// Only images whose import-run target is in one of these states.
+            ///
+            /// - Remark: Generated from `#/components/schemas/ImageListFilters/targetState`.
+            public var targetState: Components.Schemas.InputSchema46?
             /// Creates a new `ImageListFilters`.
             ///
             /// - Parameters:
@@ -11777,6 +11814,8 @@ extension Components {
             ///   - processingIssue:
             ///   - referencePresenceFilter: Filter to images that are or are not referenced by any owning entity.
             ///   - uploadedAgeHoursMin: Only images uploaded more than this many hours ago.
+            ///   - importRunId: Only images that are a target of one of these import runs. Sets list order to the run's picker position (see importTarget.position) instead of the default sort.
+            ///   - targetState: Only images whose import-run target is in one of these states.
             public init(
                 createdFrom: Components.Schemas.InputSchema37? = nil,
                 createdTo: Components.Schemas.InputSchema37? = nil,
@@ -11786,7 +11825,9 @@ extension Components {
                 status: Components.Schemas.InputSchema40? = nil,
                 processingIssue: Components.Schemas.ImageProcessingIssueFilter? = nil,
                 referencePresenceFilter: Components.Schemas.ImageListFilters.ReferencePresenceFilterPayload? = nil,
-                uploadedAgeHoursMin: Swift.Double? = nil
+                uploadedAgeHoursMin: Swift.Double? = nil,
+                importRunId: Components.Schemas.InputSchema43? = nil,
+                targetState: Components.Schemas.InputSchema46? = nil
             ) {
                 self.createdFrom = createdFrom
                 self.createdTo = createdTo
@@ -11797,6 +11838,8 @@ extension Components {
                 self.processingIssue = processingIssue
                 self.referencePresenceFilter = referencePresenceFilter
                 self.uploadedAgeHoursMin = uploadedAgeHoursMin
+                self.importRunId = importRunId
+                self.targetState = targetState
             }
             public enum CodingKeys: String, CodingKey {
                 case createdFrom
@@ -11808,6 +11851,8 @@ extension Components {
                 case processingIssue
                 case referencePresenceFilter
                 case uploadedAgeHoursMin
+                case importRunId
+                case targetState
             }
         }
         /// - Remark: Generated from `#/components/schemas/ImageOut`.
@@ -13551,6 +13596,10 @@ extension Components {
             public var associations: [Components.Schemas.ImageAssociation]
             /// - Remark: Generated from `#/components/schemas/ImageWithEntity/processingIssue`.
             public var processingIssue: Components.Schemas.ImageProcessingIssue?
+            /// - Remark: Generated from `#/components/schemas/ImageWithEntity/importTarget`.
+            public var importTarget: Components.Schemas.ImportTargetSummary?
+            /// - Remark: Generated from `#/components/schemas/ImageWithEntity/analysisSummary`.
+            public var analysisSummary: Components.Schemas.ImageAnalysisSummary?
             /// Creates a new `ImageWithEntity`.
             ///
             /// - Parameters:
@@ -13581,6 +13630,8 @@ extension Components {
             ///   - entityName:
             ///   - associations:
             ///   - processingIssue:
+            ///   - importTarget:
+            ///   - analysisSummary:
             public init(
                 id: Components.Schemas.ImageShortcode,
                 url: Swift.String,
@@ -13608,7 +13659,9 @@ extension Components {
                 entityId: Components.Schemas.AttachableImageEntityId? = nil,
                 entityName: Swift.String? = nil,
                 associations: [Components.Schemas.ImageAssociation],
-                processingIssue: Components.Schemas.ImageProcessingIssue? = nil
+                processingIssue: Components.Schemas.ImageProcessingIssue? = nil,
+                importTarget: Components.Schemas.ImportTargetSummary? = nil,
+                analysisSummary: Components.Schemas.ImageAnalysisSummary? = nil
             ) {
                 self.id = id
                 self.url = url
@@ -13637,6 +13690,8 @@ extension Components {
                 self.entityName = entityName
                 self.associations = associations
                 self.processingIssue = processingIssue
+                self.importTarget = importTarget
+                self.analysisSummary = analysisSummary
             }
             public enum CodingKeys: String, CodingKey {
                 case id
@@ -13666,6 +13721,8 @@ extension Components {
                 case entityName
                 case associations
                 case processingIssue
+                case importTarget
+                case analysisSummary
             }
         }
         /// - Remark: Generated from `#/components/schemas/ImpactItem`.
@@ -13745,6 +13802,10 @@ extension Components {
             case gmailAttachment = "gmail_attachment"
             case manualUpload = "manual_upload"
         }
+        /// importRun shortcode, e.g. RUN-4K7M
+        ///
+        /// - Remark: Generated from `#/components/schemas/ImportRunShortcode`.
+        public typealias ImportRunShortcode = Swift.String
         /// - Remark: Generated from `#/components/schemas/ImportRunTargetOutcome`.
         @frozen public enum ImportRunTargetOutcome: String, Codable, Hashable, Sendable, CaseIterable {
             case replayed = "replayed"
@@ -13753,6 +13814,45 @@ extension Components {
             case enriched = "enriched"
             case unavailable = "unavailable"
             case skipped = "skipped"
+        }
+        /// - Remark: Generated from `#/components/schemas/ImportRunTargetState`.
+        @frozen public enum ImportRunTargetState: String, Codable, Hashable, Sendable, CaseIterable {
+            case pending = "pending"
+            case prepared = "prepared"
+            case completed = "completed"
+            case skipped = "skipped"
+            case unresolved = "unresolved"
+            case needsEvidence = "needs_evidence"
+            case unavailable = "unavailable"
+        }
+        /// - Remark: Generated from `#/components/schemas/ImportTargetSummary`.
+        public struct ImportTargetSummary: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ImportTargetSummary/runId`.
+            public var runId: Components.Schemas.ImportRunShortcode
+            /// - Remark: Generated from `#/components/schemas/ImportTargetSummary/state`.
+            public var state: Components.Schemas.ImportRunTargetState
+            /// - Remark: Generated from `#/components/schemas/ImportTargetSummary/position`.
+            public var position: Swift.Int?
+            /// Creates a new `ImportTargetSummary`.
+            ///
+            /// - Parameters:
+            ///   - runId:
+            ///   - state:
+            ///   - position:
+            public init(
+                runId: Components.Schemas.ImportRunShortcode,
+                state: Components.Schemas.ImportRunTargetState,
+                position: Swift.Int? = nil
+            ) {
+                self.runId = runId
+                self.state = state
+                self.position = position
+            }
+            public enum CodingKeys: String, CodingKey {
+                case runId
+                case state
+                case position
+            }
         }
         /// - Remark: Generated from `#/components/schemas/InfLocation`.
         public struct InfLocation: Codable, Hashable, Sendable {
@@ -13777,7 +13877,7 @@ extension Components {
                 }
             }
             /// - Remark: Generated from `#/components/schemas/InfLocation/aliases`.
-            public var aliases: Components.Schemas.InputSchema56 {
+            public var aliases: Components.Schemas.InputSchema60 {
                 get  {
                     self.storage.value.aliases
                 }
@@ -13964,7 +14064,7 @@ extension Components {
             public init(
                 id: Components.Schemas.LocationShortcode,
                 name: Swift.String,
-                aliases: Components.Schemas.InputSchema56,
+                aliases: Components.Schemas.InputSchema60,
                 tags: Components.Schemas.OutputSchema190? = nil,
                 _type: Components.Schemas.LocationType? = nil,
                 notes: Swift.String? = nil,
@@ -14044,7 +14144,7 @@ extension Components {
                 /// - Remark: Generated from `#/components/schemas/InfLocation/name`.
                 var name: Swift.String
                 /// - Remark: Generated from `#/components/schemas/InfLocation/aliases`.
-                var aliases: Components.Schemas.InputSchema56
+                var aliases: Components.Schemas.InputSchema60
                 /// - Remark: Generated from `#/components/schemas/InfLocation/tags`.
                 var tags: Components.Schemas.OutputSchema190?
                 /// - Remark: Generated from `#/components/schemas/InfLocation/type`.
@@ -14082,7 +14182,7 @@ extension Components {
                 init(
                     id: Components.Schemas.LocationShortcode,
                     name: Swift.String,
-                    aliases: Components.Schemas.InputSchema56,
+                    aliases: Components.Schemas.InputSchema60,
                     tags: Components.Schemas.OutputSchema190? = nil,
                     _type: Components.Schemas.LocationType? = nil,
                     notes: Swift.String? = nil,
@@ -14225,7 +14325,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/IngredientDetail/name`.
             public var name: Swift.String
             /// - Remark: Generated from `#/components/schemas/IngredientDetail/aliases`.
-            public var aliases: Components.Schemas.InputSchema56
+            public var aliases: Components.Schemas.InputSchema60
             /// - Remark: Generated from `#/components/schemas/IngredientDetail/naKinds`.
             public var naKinds: Components.Schemas.OutputSchema157
             /// - Remark: Generated from `#/components/schemas/IngredientDetail/usuallyOnHand`.
@@ -14321,7 +14421,7 @@ extension Components {
             public init(
                 id: Components.Schemas.IngredientShortcode,
                 name: Swift.String,
-                aliases: Components.Schemas.InputSchema56,
+                aliases: Components.Schemas.InputSchema60,
                 naKinds: Components.Schemas.OutputSchema157,
                 usuallyOnHand: Swift.Bool,
                 gardenGuideKey: Components.Schemas.IngredientDetail.GardenGuideKeyPayload? = nil,
@@ -14384,7 +14484,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/IngredientListItem/name`.
             public var name: Swift.String
             /// - Remark: Generated from `#/components/schemas/IngredientListItem/aliases`.
-            public var aliases: Components.Schemas.InputSchema56
+            public var aliases: Components.Schemas.InputSchema60
             /// - Remark: Generated from `#/components/schemas/IngredientListItem/naKinds`.
             public var naKinds: Components.Schemas.OutputSchema157
             /// - Remark: Generated from `#/components/schemas/IngredientListItem/usuallyOnHand`.
@@ -14474,7 +14574,7 @@ extension Components {
             public init(
                 id: Components.Schemas.IngredientShortcode,
                 name: Swift.String,
-                aliases: Components.Schemas.InputSchema56,
+                aliases: Components.Schemas.InputSchema60,
                 naKinds: Components.Schemas.OutputSchema157,
                 usuallyOnHand: Swift.Bool,
                 gardenGuideKey: Components.Schemas.IngredientListItem.GardenGuideKeyPayload? = nil,
@@ -14554,7 +14654,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/IngredientOut/name`.
             public var name: Swift.String
             /// - Remark: Generated from `#/components/schemas/IngredientOut/aliases`.
-            public var aliases: Components.Schemas.InputSchema56
+            public var aliases: Components.Schemas.InputSchema60
             /// - Remark: Generated from `#/components/schemas/IngredientOut/naKinds`.
             public var naKinds: Components.Schemas.OutputSchema157
             /// - Remark: Generated from `#/components/schemas/IngredientOut/usuallyOnHand`.
@@ -14632,7 +14732,7 @@ extension Components {
             public init(
                 id: Components.Schemas.IngredientShortcode,
                 name: Swift.String,
-                aliases: Components.Schemas.InputSchema56,
+                aliases: Components.Schemas.InputSchema60,
                 naKinds: Components.Schemas.OutputSchema157,
                 usuallyOnHand: Swift.Bool,
                 gardenGuideKey: Components.Schemas.IngredientOut.GardenGuideKeyPayload? = nil,
@@ -14731,7 +14831,7 @@ extension Components {
             /// New aliases (replaces existing list)
             ///
             /// - Remark: Generated from `#/components/schemas/IngredientUpdateData/aliases`.
-            public var aliases: Components.Schemas.InputSchema56?
+            public var aliases: Components.Schemas.InputSchema60?
             /// Creates a new `IngredientUpdateData`.
             ///
             /// - Parameters:
@@ -14745,7 +14845,7 @@ extension Components {
                 usuallyOnHand: Swift.Bool? = nil,
                 gardenGuideKey: Components.Schemas.IngredientUpdateData.GardenGuideKeyPayload? = nil,
                 name: Swift.String? = nil,
-                aliases: Components.Schemas.InputSchema56? = nil
+                aliases: Components.Schemas.InputSchema60? = nil
             ) {
                 self.naKinds = naKinds
                 self.usuallyOnHand = usuallyOnHand
@@ -14768,7 +14868,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/InitiateDocumentUpload/size`.
             public var size: Swift.Int
             /// - Remark: Generated from `#/components/schemas/InitiateDocumentUpload/entityType`.
-            public var entityType: Components.Schemas.InputSchema51?
+            public var entityType: Components.Schemas.InputSchema55?
             /// - Remark: Generated from `#/components/schemas/InitiateDocumentUpload/source`.
             @frozen public enum SourcePayload: String, Codable, Hashable, Sendable, CaseIterable {
                 case own = "own"
@@ -14806,7 +14906,7 @@ extension Components {
             public init(
                 filename: Swift.String,
                 size: Swift.Int,
-                entityType: Components.Schemas.InputSchema51? = nil,
+                entityType: Components.Schemas.InputSchema55? = nil,
                 source: Components.Schemas.InitiateDocumentUpload.SourcePayload? = nil,
                 sourcePageUrl: Swift.String? = nil,
                 sourceAssetUrl: Swift.String? = nil,
@@ -14964,7 +15064,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/InitiateUploadWithoutEntity/size`.
             public var size: Swift.Int
             /// - Remark: Generated from `#/components/schemas/InitiateUploadWithoutEntity/entityType`.
-            public var entityType: Components.Schemas.InputSchema51?
+            public var entityType: Components.Schemas.InputSchema55?
             /// - Remark: Generated from `#/components/schemas/InitiateUploadWithoutEntity/source`.
             @frozen public enum SourcePayload: String, Codable, Hashable, Sendable, CaseIterable {
                 case own = "own"
@@ -15023,7 +15123,7 @@ extension Components {
             public init(
                 filename: Swift.String,
                 size: Swift.Int,
-                entityType: Components.Schemas.InputSchema51? = nil,
+                entityType: Components.Schemas.InputSchema55? = nil,
                 source: Components.Schemas.InitiateUploadWithoutEntity.SourcePayload? = nil,
                 sourcePageUrl: Swift.String? = nil,
                 sourceAssetUrl: Swift.String? = nil,
@@ -15100,25 +15200,25 @@ extension Components {
                 case url
             }
         }
-        /// - Remark: Generated from `#/components/schemas/input_schema172`.
-        public typealias InputSchema172 = [Swift.String]
-        /// - Remark: Generated from `#/components/schemas/input_schema183`.
-        public struct InputSchema183: Codable, Hashable, Sendable {
-            /// - Remark: Generated from `#/components/schemas/input_schema183/kind`.
+        /// - Remark: Generated from `#/components/schemas/input_schema176`.
+        public typealias InputSchema176 = [Swift.String]
+        /// - Remark: Generated from `#/components/schemas/input_schema187`.
+        public struct InputSchema187: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/input_schema187/kind`.
             @frozen public enum KindPayload: String, Codable, Hashable, Sendable, CaseIterable {
                 case product = "product"
             }
-            /// - Remark: Generated from `#/components/schemas/input_schema183/kind`.
-            public var kind: Components.Schemas.InputSchema183.KindPayload
-            /// - Remark: Generated from `#/components/schemas/input_schema183/value`.
+            /// - Remark: Generated from `#/components/schemas/input_schema187/kind`.
+            public var kind: Components.Schemas.InputSchema187.KindPayload
+            /// - Remark: Generated from `#/components/schemas/input_schema187/value`.
             public var value: Components.Schemas.ProductShortcode
-            /// Creates a new `InputSchema183`.
+            /// Creates a new `InputSchema187`.
             ///
             /// - Parameters:
             ///   - kind:
             ///   - value:
             public init(
-                kind: Components.Schemas.InputSchema183.KindPayload,
+                kind: Components.Schemas.InputSchema187.KindPayload,
                 value: Components.Schemas.ProductShortcode
             ) {
                 self.kind = kind
@@ -15129,9 +15229,9 @@ extension Components {
                 case value
             }
         }
-        /// - Remark: Generated from `#/components/schemas/input_schema188`.
-        public struct InputSchema188: Codable, Hashable, Sendable {
-            /// - Remark: Generated from `#/components/schemas/input_schema188/orderBy`.
+        /// - Remark: Generated from `#/components/schemas/input_schema192`.
+        public struct InputSchema192: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/input_schema192/orderBy`.
             @frozen public enum OrderByPayload: String, Codable, Hashable, Sendable, CaseIterable {
                 case fdcId = "fdc_id"
                 case description = "description"
@@ -15139,23 +15239,23 @@ extension Components {
                 case relevance = "relevance"
                 case linkedProducts = "linkedProducts"
             }
-            /// - Remark: Generated from `#/components/schemas/input_schema188/orderBy`.
-            public var orderBy: Components.Schemas.InputSchema188.OrderByPayload?
-            /// - Remark: Generated from `#/components/schemas/input_schema188/direction`.
+            /// - Remark: Generated from `#/components/schemas/input_schema192/orderBy`.
+            public var orderBy: Components.Schemas.InputSchema192.OrderByPayload?
+            /// - Remark: Generated from `#/components/schemas/input_schema192/direction`.
             @frozen public enum DirectionPayload: String, Codable, Hashable, Sendable, CaseIterable {
                 case asc = "asc"
                 case desc = "desc"
             }
-            /// - Remark: Generated from `#/components/schemas/input_schema188/direction`.
-            public var direction: Components.Schemas.InputSchema188.DirectionPayload?
-            /// Creates a new `InputSchema188`.
+            /// - Remark: Generated from `#/components/schemas/input_schema192/direction`.
+            public var direction: Components.Schemas.InputSchema192.DirectionPayload?
+            /// Creates a new `InputSchema192`.
             ///
             /// - Parameters:
             ///   - orderBy:
             ///   - direction:
             public init(
-                orderBy: Components.Schemas.InputSchema188.OrderByPayload? = nil,
-                direction: Components.Schemas.InputSchema188.DirectionPayload? = nil
+                orderBy: Components.Schemas.InputSchema192.OrderByPayload? = nil,
+                direction: Components.Schemas.InputSchema192.DirectionPayload? = nil
             ) {
                 self.orderBy = orderBy
                 self.direction = direction
@@ -15263,7 +15363,154 @@ extension Components {
         }
         /// - Remark: Generated from `#/components/schemas/input_schema43`.
         public struct InputSchema43: Codable, Hashable, Sendable {
-            /// - Remark: Generated from `#/components/schemas/input_schema43/orderBy`.
+            /// - Remark: Generated from `#/components/schemas/input_schema43/value1`.
+            public var value1: Components.Schemas.InputSchema44?
+            /// - Remark: Generated from `#/components/schemas/input_schema43/value2`.
+            public var value2: [Components.Schemas.InputSchema44]?
+            /// Creates a new `InputSchema43`.
+            ///
+            /// - Parameters:
+            ///   - value1:
+            ///   - value2:
+            public init(
+                value1: Components.Schemas.InputSchema44? = nil,
+                value2: [Components.Schemas.InputSchema44]? = nil
+            ) {
+                self.value1 = value1
+                self.value2 = value2
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                var errors: [any Swift.Error] = []
+                do {
+                    self.value1 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                do {
+                    self.value2 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                    [
+                        self.value1,
+                        self.value2
+                    ],
+                    type: Self.self,
+                    codingPath: decoder.codingPath,
+                    errors: errors
+                )
+            }
+            public func encode(to encoder: any Swift.Encoder) throws {
+                try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                    self.value1,
+                    self.value2
+                ])
+            }
+        }
+        /// importRun shortcode, e.g. RUN-4K7M
+        ///
+        /// - Remark: Generated from `#/components/schemas/input_schema44`.
+        public struct InputSchema44: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/input_schema44/value1`.
+            public var value1: Components.Schemas.ImportRunShortcode?
+            /// - Remark: Generated from `#/components/schemas/input_schema44/value2`.
+            @frozen public enum Value2Payload: String, Codable, Hashable, Sendable, CaseIterable {
+                case __unresolvableEntityFilter = "__unresolvable_entity_filter__"
+            }
+            /// - Remark: Generated from `#/components/schemas/input_schema44/value2`.
+            public var value2: Components.Schemas.InputSchema44.Value2Payload?
+            /// Creates a new `InputSchema44`.
+            ///
+            /// - Parameters:
+            ///   - value1:
+            ///   - value2:
+            public init(
+                value1: Components.Schemas.ImportRunShortcode? = nil,
+                value2: Components.Schemas.InputSchema44.Value2Payload? = nil
+            ) {
+                self.value1 = value1
+                self.value2 = value2
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                var errors: [any Swift.Error] = []
+                do {
+                    self.value1 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                do {
+                    self.value2 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                    [
+                        self.value1,
+                        self.value2
+                    ],
+                    type: Self.self,
+                    codingPath: decoder.codingPath,
+                    errors: errors
+                )
+            }
+            public func encode(to encoder: any Swift.Encoder) throws {
+                try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                    self.value1,
+                    self.value2
+                ])
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/input_schema46`.
+        public struct InputSchema46: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/input_schema46/value1`.
+            public var value1: Components.Schemas.ImportRunTargetState?
+            /// - Remark: Generated from `#/components/schemas/input_schema46/value2`.
+            public var value2: [Components.Schemas.ImportRunTargetState]?
+            /// Creates a new `InputSchema46`.
+            ///
+            /// - Parameters:
+            ///   - value1:
+            ///   - value2:
+            public init(
+                value1: Components.Schemas.ImportRunTargetState? = nil,
+                value2: [Components.Schemas.ImportRunTargetState]? = nil
+            ) {
+                self.value1 = value1
+                self.value2 = value2
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                var errors: [any Swift.Error] = []
+                do {
+                    self.value1 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                do {
+                    self.value2 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                    [
+                        self.value1,
+                        self.value2
+                    ],
+                    type: Self.self,
+                    codingPath: decoder.codingPath,
+                    errors: errors
+                )
+            }
+            public func encode(to encoder: any Swift.Encoder) throws {
+                try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                    self.value1,
+                    self.value2
+                ])
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/input_schema47`.
+        public struct InputSchema47: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/input_schema47/orderBy`.
             @frozen public enum OrderByPayload: String, Codable, Hashable, Sendable, CaseIterable {
                 case createdAt = "createdAt"
                 case updatedAt = "updatedAt"
@@ -15271,23 +15518,23 @@ extension Components {
                 case size = "size"
                 case status = "status"
             }
-            /// - Remark: Generated from `#/components/schemas/input_schema43/orderBy`.
-            public var orderBy: Components.Schemas.InputSchema43.OrderByPayload?
-            /// - Remark: Generated from `#/components/schemas/input_schema43/direction`.
+            /// - Remark: Generated from `#/components/schemas/input_schema47/orderBy`.
+            public var orderBy: Components.Schemas.InputSchema47.OrderByPayload?
+            /// - Remark: Generated from `#/components/schemas/input_schema47/direction`.
             @frozen public enum DirectionPayload: String, Codable, Hashable, Sendable, CaseIterable {
                 case asc = "asc"
                 case desc = "desc"
             }
-            /// - Remark: Generated from `#/components/schemas/input_schema43/direction`.
-            public var direction: Components.Schemas.InputSchema43.DirectionPayload?
-            /// Creates a new `InputSchema43`.
+            /// - Remark: Generated from `#/components/schemas/input_schema47/direction`.
+            public var direction: Components.Schemas.InputSchema47.DirectionPayload?
+            /// Creates a new `InputSchema47`.
             ///
             /// - Parameters:
             ///   - orderBy:
             ///   - direction:
             public init(
-                orderBy: Components.Schemas.InputSchema43.OrderByPayload? = nil,
-                direction: Components.Schemas.InputSchema43.DirectionPayload? = nil
+                orderBy: Components.Schemas.InputSchema47.OrderByPayload? = nil,
+                direction: Components.Schemas.InputSchema47.DirectionPayload? = nil
             ) {
                 self.orderBy = orderBy
                 self.direction = direction
@@ -15297,13 +15544,13 @@ extension Components {
                 case direction
             }
         }
-        /// - Remark: Generated from `#/components/schemas/input_schema44`.
-        public struct InputSchema44: Codable, Hashable, Sendable {
-            /// - Remark: Generated from `#/components/schemas/input_schema44/pageIndex`.
+        /// - Remark: Generated from `#/components/schemas/input_schema48`.
+        public struct InputSchema48: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/input_schema48/pageIndex`.
             public var pageIndex: Swift.Int?
-            /// - Remark: Generated from `#/components/schemas/input_schema44/pageSize`.
+            /// - Remark: Generated from `#/components/schemas/input_schema48/pageSize`.
             public var pageSize: Swift.Int?
-            /// Creates a new `InputSchema44`.
+            /// Creates a new `InputSchema48`.
             ///
             /// - Parameters:
             ///   - pageIndex:
@@ -15320,12 +15567,12 @@ extension Components {
                 case pageSize
             }
         }
-        /// - Remark: Generated from `#/components/schemas/input_schema51`.
-        public typealias InputSchema51 = Components.Schemas.EntityImage
-        /// - Remark: Generated from `#/components/schemas/input_schema56`.
-        public typealias InputSchema56 = [Swift.String]
-        /// - Remark: Generated from `#/components/schemas/input_schema66`.
-        public typealias InputSchema66 = [Components.Schemas.ImageShortcode]
+        /// - Remark: Generated from `#/components/schemas/input_schema55`.
+        public typealias InputSchema55 = Components.Schemas.EntityImage
+        /// - Remark: Generated from `#/components/schemas/input_schema60`.
+        public typealias InputSchema60 = [Swift.String]
+        /// - Remark: Generated from `#/components/schemas/input_schema70`.
+        public typealias InputSchema70 = [Components.Schemas.ImageShortcode]
         /// - Remark: Generated from `#/components/schemas/InventoryCreatePayloadData`.
         public struct InventoryCreatePayloadData: Codable, Hashable, Sendable {
             /// - Remark: Generated from `#/components/schemas/InventoryCreatePayloadData/productId`.
@@ -17893,9 +18140,9 @@ extension Components {
             /// Alternate names for this location — searched alongside the name. Replaces the existing list when provided.
             ///
             /// - Remark: Generated from `#/components/schemas/LocationCreateInput/aliases`.
-            public var aliases: Components.Schemas.InputSchema56?
+            public var aliases: Components.Schemas.InputSchema60?
             /// - Remark: Generated from `#/components/schemas/LocationCreateInput/tags`.
-            public var tags: Components.Schemas.InputSchema56?
+            public var tags: Components.Schemas.InputSchema60?
             /// - Remark: Generated from `#/components/schemas/LocationCreateInput/type`.
             public var _type: Components.Schemas.LocationType?
             /// - Remark: Generated from `#/components/schemas/LocationCreateInput/notes`.
@@ -17905,7 +18152,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/LocationCreateInput/parentId`.
             public var parentId: Components.Schemas.LocationShortcode?
             /// - Remark: Generated from `#/components/schemas/LocationCreateInput/pendingImageIds`.
-            public var pendingImageIds: Components.Schemas.InputSchema66?
+            public var pendingImageIds: Components.Schemas.InputSchema70?
             /// Creates a new `LocationCreateInput`.
             ///
             /// - Parameters:
@@ -17919,13 +18166,13 @@ extension Components {
             ///   - pendingImageIds:
             public init(
                 name: Swift.String,
-                aliases: Components.Schemas.InputSchema56? = nil,
-                tags: Components.Schemas.InputSchema56? = nil,
+                aliases: Components.Schemas.InputSchema60? = nil,
+                tags: Components.Schemas.InputSchema60? = nil,
                 _type: Components.Schemas.LocationType? = nil,
                 notes: Swift.String? = nil,
                 productId: Components.Schemas.ProductShortcode? = nil,
                 parentId: Components.Schemas.LocationShortcode? = nil,
-                pendingImageIds: Components.Schemas.InputSchema66? = nil
+                pendingImageIds: Components.Schemas.InputSchema70? = nil
             ) {
                 self.name = name
                 self.aliases = aliases
@@ -17956,7 +18203,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/LocationDetail/name`.
             public var name: Swift.String
             /// - Remark: Generated from `#/components/schemas/LocationDetail/aliases`.
-            public var aliases: Components.Schemas.InputSchema56
+            public var aliases: Components.Schemas.InputSchema60
             /// - Remark: Generated from `#/components/schemas/LocationDetail/tags`.
             public var tags: Components.Schemas.OutputSchema190?
             /// - Remark: Generated from `#/components/schemas/LocationDetail/type`.
@@ -18023,7 +18270,7 @@ extension Components {
             public init(
                 id: Components.Schemas.LocationShortcode,
                 name: Swift.String,
-                aliases: Components.Schemas.InputSchema56,
+                aliases: Components.Schemas.InputSchema60,
                 tags: Components.Schemas.OutputSchema190? = nil,
                 _type: Components.Schemas.LocationType? = nil,
                 notes: Swift.String? = nil,
@@ -18162,7 +18409,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/LocationListItem/name`.
             public var name: Swift.String
             /// - Remark: Generated from `#/components/schemas/LocationListItem/aliases`.
-            public var aliases: Components.Schemas.InputSchema56
+            public var aliases: Components.Schemas.InputSchema60
             /// - Remark: Generated from `#/components/schemas/LocationListItem/tags`.
             public var tags: Components.Schemas.OutputSchema190?
             /// - Remark: Generated from `#/components/schemas/LocationListItem/type`.
@@ -18355,7 +18602,7 @@ extension Components {
             public init(
                 id: Components.Schemas.LocationShortcode,
                 name: Swift.String,
-                aliases: Components.Schemas.InputSchema56,
+                aliases: Components.Schemas.InputSchema60,
                 tags: Components.Schemas.OutputSchema190? = nil,
                 _type: Components.Schemas.LocationType? = nil,
                 notes: Swift.String? = nil,
@@ -18473,7 +18720,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/LocationOut/name`.
             public var name: Swift.String
             /// - Remark: Generated from `#/components/schemas/LocationOut/aliases`.
-            public var aliases: Components.Schemas.InputSchema56
+            public var aliases: Components.Schemas.InputSchema60
             /// - Remark: Generated from `#/components/schemas/LocationOut/tags`.
             public var tags: Components.Schemas.OutputSchema190?
             /// - Remark: Generated from `#/components/schemas/LocationOut/type`.
@@ -18516,7 +18763,7 @@ extension Components {
             public init(
                 id: Components.Schemas.LocationShortcode,
                 name: Swift.String,
-                aliases: Components.Schemas.InputSchema56,
+                aliases: Components.Schemas.InputSchema60,
                 tags: Components.Schemas.OutputSchema190? = nil,
                 _type: Components.Schemas.LocationType? = nil,
                 notes: Swift.String? = nil,
@@ -18589,9 +18836,9 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/LocationUpdateData/name`.
             public var name: Swift.String?
             /// - Remark: Generated from `#/components/schemas/LocationUpdateData/aliases`.
-            public var aliases: Components.Schemas.InputSchema56?
+            public var aliases: Components.Schemas.InputSchema60?
             /// - Remark: Generated from `#/components/schemas/LocationUpdateData/tags`.
-            public var tags: Components.Schemas.InputSchema56?
+            public var tags: Components.Schemas.InputSchema60?
             /// - Remark: Generated from `#/components/schemas/LocationUpdateData/type`.
             public var _type: Components.Schemas.LocationType?
             /// - Remark: Generated from `#/components/schemas/LocationUpdateData/notes`.
@@ -18601,15 +18848,15 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/LocationUpdateData/parentId`.
             public var parentId: Components.Schemas.LocationShortcode?
             /// - Remark: Generated from `#/components/schemas/LocationUpdateData/pendingImageIds`.
-            public var pendingImageIds: Components.Schemas.InputSchema66?
+            public var pendingImageIds: Components.Schemas.InputSchema70?
             /// Image ids to detach. Detaching DELETES the stored file when nothing else references it — there is no restore, and the id will not resolve again.
             ///
             /// - Remark: Generated from `#/components/schemas/LocationUpdateData/removeImageIds`.
-            public var removeImageIds: Components.Schemas.InputSchema66?
+            public var removeImageIds: Components.Schemas.InputSchema70?
             /// existing image ids in display order; first = cover
             ///
             /// - Remark: Generated from `#/components/schemas/LocationUpdateData/imageOrder`.
-            public var imageOrder: Components.Schemas.InputSchema66?
+            public var imageOrder: Components.Schemas.InputSchema70?
             /// Creates a new `LocationUpdateData`.
             ///
             /// - Parameters:
@@ -18625,15 +18872,15 @@ extension Components {
             ///   - imageOrder: existing image ids in display order; first = cover
             public init(
                 name: Swift.String? = nil,
-                aliases: Components.Schemas.InputSchema56? = nil,
-                tags: Components.Schemas.InputSchema56? = nil,
+                aliases: Components.Schemas.InputSchema60? = nil,
+                tags: Components.Schemas.InputSchema60? = nil,
                 _type: Components.Schemas.LocationType? = nil,
                 notes: Swift.String? = nil,
                 productId: Components.Schemas.ProductShortcode? = nil,
                 parentId: Components.Schemas.LocationShortcode? = nil,
-                pendingImageIds: Components.Schemas.InputSchema66? = nil,
-                removeImageIds: Components.Schemas.InputSchema66? = nil,
-                imageOrder: Components.Schemas.InputSchema66? = nil
+                pendingImageIds: Components.Schemas.InputSchema70? = nil,
+                removeImageIds: Components.Schemas.InputSchema70? = nil,
+                imageOrder: Components.Schemas.InputSchema70? = nil
             ) {
                 self.name = name
                 self.aliases = aliases
@@ -18909,7 +19156,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/MealDetail/displayName`.
             public var displayName: Swift.String
             /// - Remark: Generated from `#/components/schemas/MealDetail/recipeNames`.
-            public var recipeNames: Components.Schemas.InputSchema56
+            public var recipeNames: Components.Schemas.InputSchema60
             /// - Remark: Generated from `#/components/schemas/MealDetail/createdAt`.
             public var createdAt: Foundation.Date
             /// - Remark: Generated from `#/components/schemas/MealDetail/updatedAt`.
@@ -18950,7 +19197,7 @@ extension Components {
                 totals: Components.Schemas.MealTotals,
                 images: Components.Schemas.OutputSchema146,
                 displayName: Swift.String,
-                recipeNames: Components.Schemas.InputSchema56,
+                recipeNames: Components.Schemas.InputSchema60,
                 createdAt: Foundation.Date,
                 updatedAt: Foundation.Date,
                 dataQuality: Components.Schemas.DataQuality,
@@ -19067,7 +19314,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/MealListItem/displayName`.
             public var displayName: Swift.String
             /// - Remark: Generated from `#/components/schemas/MealListItem/recipeNames`.
-            public var recipeNames: Components.Schemas.InputSchema56
+            public var recipeNames: Components.Schemas.InputSchema60
             /// - Remark: Generated from `#/components/schemas/MealListItem/createdAt`.
             public var createdAt: Foundation.Date
             /// - Remark: Generated from `#/components/schemas/MealListItem/updatedAt`.
@@ -19105,7 +19352,7 @@ extension Components {
                 totals: Components.Schemas.MealTotals,
                 images: Components.Schemas.OutputSchema146,
                 displayName: Swift.String,
-                recipeNames: Components.Schemas.InputSchema56,
+                recipeNames: Components.Schemas.InputSchema60,
                 createdAt: Foundation.Date,
                 updatedAt: Foundation.Date,
                 dataQuality: Components.Schemas.DataQuality,
@@ -19727,7 +19974,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/MealOut/displayName`.
             public var displayName: Swift.String
             /// - Remark: Generated from `#/components/schemas/MealOut/recipeNames`.
-            public var recipeNames: Components.Schemas.InputSchema56
+            public var recipeNames: Components.Schemas.InputSchema60
             /// - Remark: Generated from `#/components/schemas/MealOut/createdAt`.
             public var createdAt: Foundation.Date
             /// - Remark: Generated from `#/components/schemas/MealOut/updatedAt`.
@@ -19762,7 +20009,7 @@ extension Components {
                 totals: Components.Schemas.MealTotals,
                 images: Components.Schemas.OutputSchema146,
                 displayName: Swift.String,
-                recipeNames: Components.Schemas.InputSchema56,
+                recipeNames: Components.Schemas.InputSchema60,
                 createdAt: Foundation.Date,
                 updatedAt: Foundation.Date,
                 dataQuality: Components.Schemas.DataQuality
@@ -20794,7 +21041,7 @@ extension Components {
         /// Namespaced Collection tags assigned directly to this location
         ///
         /// - Remark: Generated from `#/components/schemas/output_schema190`.
-        public typealias OutputSchema190 = Components.Schemas.InputSchema56
+        public typealias OutputSchema190 = Components.Schemas.InputSchema60
         /// - Remark: Generated from `#/components/schemas/output_schema199`.
         public struct OutputSchema199: Codable, Hashable, Sendable {
             /// - Remark: Generated from `#/components/schemas/output_schema199/priced`.
@@ -20954,7 +21201,7 @@ extension Components {
                 /// - Remark: Generated from `#/components/schemas/output_schema300/location/name`.
                 public var name: Swift.String
                 /// - Remark: Generated from `#/components/schemas/output_schema300/location/aliases`.
-                public var aliases: Components.Schemas.InputSchema56
+                public var aliases: Components.Schemas.InputSchema60
                 /// - Remark: Generated from `#/components/schemas/output_schema300/location/tags`.
                 public var tags: Components.Schemas.OutputSchema190?
                 /// - Remark: Generated from `#/components/schemas/output_schema300/location/type`.
@@ -21000,7 +21247,7 @@ extension Components {
                 public init(
                     id: Components.Schemas.LocationShortcode,
                     name: Swift.String,
-                    aliases: Components.Schemas.InputSchema56,
+                    aliases: Components.Schemas.InputSchema60,
                     tags: Components.Schemas.OutputSchema190? = nil,
                     _type: Components.Schemas.LocationType? = nil,
                     notes: Swift.String? = nil,
@@ -21226,6 +21473,8 @@ extension Components {
             }
             /// - Remark: Generated from `#/components/schemas/output_schema31/purpose`.
             public var purpose: Components.Schemas.OutputSchema31.PurposePayload?
+            /// - Remark: Generated from `#/components/schemas/output_schema31/analysisSummary`.
+            public var analysisSummary: Components.Schemas.ImageAnalysisSummary?
             /// Creates a new `OutputSchema31`.
             ///
             /// - Parameters:
@@ -21252,6 +21501,7 @@ extension Components {
             ///   - createdAt:
             ///   - updatedAt:
             ///   - purpose:
+            ///   - analysisSummary:
             public init(
                 representations: Components.Schemas.OptionalImageRepresentations? = nil,
                 id: Components.Schemas.ImageShortcode,
@@ -21275,7 +21525,8 @@ extension Components {
                 verifiedAt: Foundation.Date? = nil,
                 createdAt: Foundation.Date,
                 updatedAt: Foundation.Date,
-                purpose: Components.Schemas.OutputSchema31.PurposePayload? = nil
+                purpose: Components.Schemas.OutputSchema31.PurposePayload? = nil,
+                analysisSummary: Components.Schemas.ImageAnalysisSummary? = nil
             ) {
                 self.representations = representations
                 self.id = id
@@ -21300,6 +21551,7 @@ extension Components {
                 self.createdAt = createdAt
                 self.updatedAt = updatedAt
                 self.purpose = purpose
+                self.analysisSummary = analysisSummary
             }
             public enum CodingKeys: String, CodingKey {
                 case representations
@@ -21325,6 +21577,7 @@ extension Components {
                 case createdAt
                 case updatedAt
                 case purpose
+                case analysisSummary
             }
         }
         /// - Remark: Generated from `#/components/schemas/OutputSchema310`.
@@ -21941,6 +22194,137 @@ extension Components {
                 case committedAt
             }
         }
+        /// - Remark: Generated from `#/components/schemas/PhotoImportCreateRunInput`.
+        public struct PhotoImportCreateRunInput: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/PhotoImportCreateRunInput/ledgerPartyId`.
+            public var ledgerPartyId: Components.Schemas.LedgerPartyShortcode?
+            /// - Remark: Generated from `#/components/schemas/PhotoImportCreateRunInput/notes`.
+            public var notes: Swift.String?
+            /// Creates a new `PhotoImportCreateRunInput`.
+            ///
+            /// - Parameters:
+            ///   - ledgerPartyId:
+            ///   - notes:
+            public init(
+                ledgerPartyId: Components.Schemas.LedgerPartyShortcode? = nil,
+                notes: Swift.String? = nil
+            ) {
+                self.ledgerPartyId = ledgerPartyId
+                self.notes = notes
+            }
+            public enum CodingKeys: String, CodingKey {
+                case ledgerPartyId
+                case notes
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/PhotoImportCreateRunOutput`.
+        public struct PhotoImportCreateRunOutput: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/PhotoImportCreateRunOutput/runId`.
+            public var runId: Components.Schemas.ImportRunShortcode
+            /// Creates a new `PhotoImportCreateRunOutput`.
+            ///
+            /// - Parameters:
+            ///   - runId:
+            public init(runId: Components.Schemas.ImportRunShortcode) {
+                self.runId = runId
+            }
+            public enum CodingKeys: String, CodingKey {
+                case runId
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/PhotoImportFinalizeImage`.
+        public struct PhotoImportFinalizeImage: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/PhotoImportFinalizeImage/imageId`.
+            public var imageId: Components.Schemas.ImageShortcode
+            /// - Remark: Generated from `#/components/schemas/PhotoImportFinalizeImage/position`.
+            public var position: Swift.Int
+            /// - Remark: Generated from `#/components/schemas/PhotoImportFinalizeImage/sha256`.
+            public var sha256: Swift.String
+            /// - Remark: Generated from `#/components/schemas/PhotoImportFinalizeImage/width`.
+            public var width: Swift.Int
+            /// - Remark: Generated from `#/components/schemas/PhotoImportFinalizeImage/height`.
+            public var height: Swift.Int
+            /// Creates a new `PhotoImportFinalizeImage`.
+            ///
+            /// - Parameters:
+            ///   - imageId:
+            ///   - position:
+            ///   - sha256:
+            ///   - width:
+            ///   - height:
+            public init(
+                imageId: Components.Schemas.ImageShortcode,
+                position: Swift.Int,
+                sha256: Swift.String,
+                width: Swift.Int,
+                height: Swift.Int
+            ) {
+                self.imageId = imageId
+                self.position = position
+                self.sha256 = sha256
+                self.width = width
+                self.height = height
+            }
+            public enum CodingKeys: String, CodingKey {
+                case imageId
+                case position
+                case sha256
+                case width
+                case height
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/PhotoImportFinalizeInput`.
+        public struct PhotoImportFinalizeInput: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/PhotoImportFinalizeInput/runId`.
+            public var runId: Components.Schemas.ImportRunShortcode
+            /// - Remark: Generated from `#/components/schemas/PhotoImportFinalizeInput/images`.
+            public var images: [Components.Schemas.PhotoImportFinalizeImage]
+            /// Creates a new `PhotoImportFinalizeInput`.
+            ///
+            /// - Parameters:
+            ///   - runId:
+            ///   - images:
+            public init(
+                runId: Components.Schemas.ImportRunShortcode,
+                images: [Components.Schemas.PhotoImportFinalizeImage]
+            ) {
+                self.runId = runId
+                self.images = images
+            }
+            public enum CodingKeys: String, CodingKey {
+                case runId
+                case images
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/PhotoImportFinalizeOutput`.
+        public struct PhotoImportFinalizeOutput: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/PhotoImportFinalizeOutput/finalized`.
+            public var finalized: [Components.Schemas.ImageShortcode]
+            /// - Remark: Generated from `#/components/schemas/PhotoImportFinalizeOutput/alreadyFinalized`.
+            public var alreadyFinalized: [Components.Schemas.ImageShortcode]
+            /// - Remark: Generated from `#/components/schemas/PhotoImportFinalizeOutput/submissionId`.
+            public var submissionId: Swift.String
+            /// Creates a new `PhotoImportFinalizeOutput`.
+            ///
+            /// - Parameters:
+            ///   - finalized:
+            ///   - alreadyFinalized:
+            ///   - submissionId:
+            public init(
+                finalized: [Components.Schemas.ImageShortcode],
+                alreadyFinalized: [Components.Schemas.ImageShortcode],
+                submissionId: Swift.String
+            ) {
+                self.finalized = finalized
+                self.alreadyFinalized = alreadyFinalized
+                self.submissionId = submissionId
+            }
+            public enum CodingKeys: String, CodingKey {
+                case finalized
+                case alreadyFinalized
+                case submissionId
+            }
+        }
         /// - Remark: Generated from `#/components/schemas/PhotoImportReconcileInput`.
         public struct PhotoImportReconcileInput: Codable, Hashable, Sendable {
             /// - Remark: Generated from `#/components/schemas/PhotoImportReconcileInput/imageIds`.
@@ -22119,15 +22503,23 @@ extension Components {
             public typealias ItemsPayload = [Components.Schemas.PhotoImportStageInput.ItemsPayloadPayload]
             /// - Remark: Generated from `#/components/schemas/PhotoImportStageInput/items`.
             public var items: Components.Schemas.PhotoImportStageInput.ItemsPayload
+            /// - Remark: Generated from `#/components/schemas/PhotoImportStageInput/importRunId`.
+            public var importRunId: Components.Schemas.ImportRunShortcode?
             /// Creates a new `PhotoImportStageInput`.
             ///
             /// - Parameters:
             ///   - items:
-            public init(items: Components.Schemas.PhotoImportStageInput.ItemsPayload) {
+            ///   - importRunId:
+            public init(
+                items: Components.Schemas.PhotoImportStageInput.ItemsPayload,
+                importRunId: Components.Schemas.ImportRunShortcode? = nil
+            ) {
                 self.items = items
+                self.importRunId = importRunId
             }
             public enum CodingKeys: String, CodingKey {
                 case items
+                case importRunId
             }
         }
         /// - Remark: Generated from `#/components/schemas/PhotoImportStageOutput`.
@@ -23461,7 +23853,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/ProductCategoryDetail/name`.
             public var name: Swift.String
             /// - Remark: Generated from `#/components/schemas/ProductCategoryDetail/aliases`.
-            public var aliases: Components.Schemas.InputSchema56
+            public var aliases: Components.Schemas.InputSchema60
             /// - Remark: Generated from `#/components/schemas/ProductCategoryDetail/description`.
             public var description: Swift.String?
             /// - Remark: Generated from `#/components/schemas/ProductCategoryDetail/parentId`.
@@ -23504,7 +23896,7 @@ extension Components {
             public init(
                 id: Components.Schemas.ProductCategoryShortcode,
                 name: Swift.String,
-                aliases: Components.Schemas.InputSchema56,
+                aliases: Components.Schemas.InputSchema60,
                 description: Swift.String? = nil,
                 parentId: Components.Schemas.ProductCategoryShortcode? = nil,
                 sortOrder: Swift.Int,
@@ -23571,7 +23963,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/ProductCategoryListItem/name`.
             public var name: Swift.String
             /// - Remark: Generated from `#/components/schemas/ProductCategoryListItem/aliases`.
-            public var aliases: Components.Schemas.InputSchema56
+            public var aliases: Components.Schemas.InputSchema60
             /// - Remark: Generated from `#/components/schemas/ProductCategoryListItem/description`.
             public var description: Swift.String?
             /// - Remark: Generated from `#/components/schemas/ProductCategoryListItem/parentId`.
@@ -23611,7 +24003,7 @@ extension Components {
             public init(
                 id: Components.Schemas.ProductCategoryShortcode,
                 name: Swift.String,
-                aliases: Components.Schemas.InputSchema56,
+                aliases: Components.Schemas.InputSchema60,
                 description: Swift.String? = nil,
                 parentId: Components.Schemas.ProductCategoryShortcode? = nil,
                 sortOrder: Swift.Int,
@@ -23683,7 +24075,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/ProductCategoryOut/name`.
             public var name: Swift.String
             /// - Remark: Generated from `#/components/schemas/ProductCategoryOut/aliases`.
-            public var aliases: Components.Schemas.InputSchema56
+            public var aliases: Components.Schemas.InputSchema60
             /// - Remark: Generated from `#/components/schemas/ProductCategoryOut/description`.
             public var description: Swift.String?
             /// - Remark: Generated from `#/components/schemas/ProductCategoryOut/parentId`.
@@ -23720,7 +24112,7 @@ extension Components {
             public init(
                 id: Components.Schemas.ProductCategoryShortcode,
                 name: Swift.String,
-                aliases: Components.Schemas.InputSchema56,
+                aliases: Components.Schemas.InputSchema60,
                 description: Swift.String? = nil,
                 parentId: Components.Schemas.ProductCategoryShortcode? = nil,
                 sortOrder: Swift.Int,
@@ -23908,7 +24300,7 @@ extension Components {
             /// Compatibility or ecosystem tokens only — battery platform, mount, thread, size standard. Never the manufacturer, a classification word, or a path node; those belong in manufacturer/categoryId. `collection:*` entries are managed by Collections. Leave empty when nothing fits.
             ///
             /// - Remark: Generated from `#/components/schemas/ProductCreateInput/tags`.
-            public var tags: Components.Schemas.InputSchema56?
+            public var tags: Components.Schemas.InputSchema60?
             /// - Remark: Generated from `#/components/schemas/ProductCreateInput/upc`.
             public var upc: Components.Schemas.GtinInput?
             /// - Remark: Generated from `#/components/schemas/ProductCreateInput/isbn`.
@@ -23995,7 +24387,7 @@ extension Components {
             public init(
                 name: Swift.String,
                 aliases: [Swift.String]? = nil,
-                tags: Components.Schemas.InputSchema56? = nil,
+                tags: Components.Schemas.InputSchema60? = nil,
                 upc: Components.Schemas.GtinInput? = nil,
                 isbn: Swift.String? = nil,
                 fdcId: Components.Schemas.FdcId? = nil,
@@ -24070,6 +24462,7 @@ extension Components {
             case productPrice = "product_price"
             case productImage = "product_image"
             case amazonAsin = "amazon_asin"
+            case productUnpurchased = "product_unpurchased"
             case duplicateExternalId = "duplicate_external_id"
         }
         /// - Remark: Generated from `#/components/schemas/ProductDataGaps`.
@@ -24083,9 +24476,9 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/ProductDetail/name`.
             public var name: Swift.String
             /// - Remark: Generated from `#/components/schemas/ProductDetail/aliases`.
-            public var aliases: Components.Schemas.InputSchema56
+            public var aliases: Components.Schemas.InputSchema60
             /// - Remark: Generated from `#/components/schemas/ProductDetail/tags`.
-            public var tags: Components.Schemas.InputSchema56
+            public var tags: Components.Schemas.InputSchema60
             /// - Remark: Generated from `#/components/schemas/ProductDetail/primaryGtin`.
             public var primaryGtin: Components.Schemas.Gtin?
             /// - Remark: Generated from `#/components/schemas/ProductDetail/fdc_id`.
@@ -24209,8 +24602,8 @@ extension Components {
             public init(
                 id: Components.Schemas.ProductShortcode,
                 name: Swift.String,
-                aliases: Components.Schemas.InputSchema56,
-                tags: Components.Schemas.InputSchema56,
+                aliases: Components.Schemas.InputSchema60,
+                tags: Components.Schemas.InputSchema60,
                 primaryGtin: Components.Schemas.Gtin? = nil,
                 fdcId: Components.Schemas.FdcId? = nil,
                 manufacturer: Swift.String,
@@ -24672,9 +25065,9 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/ProductListItem/name`.
             public var name: Swift.String
             /// - Remark: Generated from `#/components/schemas/ProductListItem/aliases`.
-            public var aliases: Components.Schemas.InputSchema56
+            public var aliases: Components.Schemas.InputSchema60
             /// - Remark: Generated from `#/components/schemas/ProductListItem/tags`.
-            public var tags: Components.Schemas.InputSchema56
+            public var tags: Components.Schemas.InputSchema60
             /// - Remark: Generated from `#/components/schemas/ProductListItem/primaryGtin`.
             public var primaryGtin: Components.Schemas.Gtin?
             /// - Remark: Generated from `#/components/schemas/ProductListItem/fdc_id`.
@@ -24856,8 +25249,8 @@ extension Components {
             public init(
                 id: Components.Schemas.ProductShortcode,
                 name: Swift.String,
-                aliases: Components.Schemas.InputSchema56,
-                tags: Components.Schemas.InputSchema56,
+                aliases: Components.Schemas.InputSchema60,
+                tags: Components.Schemas.InputSchema60,
                 primaryGtin: Components.Schemas.Gtin? = nil,
                 fdcId: Components.Schemas.FdcId? = nil,
                 manufacturer: Swift.String,
@@ -25198,9 +25591,9 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/ProductTopLevelOut/name`.
             public var name: Swift.String
             /// - Remark: Generated from `#/components/schemas/ProductTopLevelOut/aliases`.
-            public var aliases: Components.Schemas.InputSchema56
+            public var aliases: Components.Schemas.InputSchema60
             /// - Remark: Generated from `#/components/schemas/ProductTopLevelOut/tags`.
-            public var tags: Components.Schemas.InputSchema56
+            public var tags: Components.Schemas.InputSchema60
             /// - Remark: Generated from `#/components/schemas/ProductTopLevelOut/primaryGtin`.
             public var primaryGtin: Components.Schemas.Gtin?
             /// - Remark: Generated from `#/components/schemas/ProductTopLevelOut/fdc_id`.
@@ -25285,8 +25678,8 @@ extension Components {
             public init(
                 id: Components.Schemas.ProductShortcode,
                 name: Swift.String,
-                aliases: Components.Schemas.InputSchema56,
-                tags: Components.Schemas.InputSchema56,
+                aliases: Components.Schemas.InputSchema60,
+                tags: Components.Schemas.InputSchema60,
                 primaryGtin: Components.Schemas.Gtin? = nil,
                 fdcId: Components.Schemas.FdcId? = nil,
                 manufacturer: Swift.String,
@@ -25385,7 +25778,7 @@ extension Components {
             /// Compatibility or ecosystem tokens only — battery platform, mount, thread, size standard. Never the manufacturer, a classification word, or a path node; those belong in manufacturer/categoryId. `collection:*` entries are managed by Collections. Leave empty when nothing fits.
             ///
             /// - Remark: Generated from `#/components/schemas/ProductUpdateData/tags`.
-            public var tags: Components.Schemas.InputSchema56?
+            public var tags: Components.Schemas.InputSchema60?
             /// - Remark: Generated from `#/components/schemas/ProductUpdateData/upc`.
             public var upc: Components.Schemas.GtinInput?
             /// - Remark: Generated from `#/components/schemas/ProductUpdateData/isbn`.
@@ -25478,7 +25871,7 @@ extension Components {
             public init(
                 name: Swift.String? = nil,
                 aliases: [Swift.String]? = nil,
-                tags: Components.Schemas.InputSchema56? = nil,
+                tags: Components.Schemas.InputSchema60? = nil,
                 upc: Components.Schemas.GtinInput? = nil,
                 isbn: Swift.String? = nil,
                 fdcId: Components.Schemas.FdcId? = nil,
@@ -25559,9 +25952,9 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/ProductWithMappingsAndFoodOut/name`.
             public var name: Swift.String
             /// - Remark: Generated from `#/components/schemas/ProductWithMappingsAndFoodOut/aliases`.
-            public var aliases: Components.Schemas.InputSchema56
+            public var aliases: Components.Schemas.InputSchema60
             /// - Remark: Generated from `#/components/schemas/ProductWithMappingsAndFoodOut/tags`.
-            public var tags: Components.Schemas.InputSchema56
+            public var tags: Components.Schemas.InputSchema60
             /// - Remark: Generated from `#/components/schemas/ProductWithMappingsAndFoodOut/primaryGtin`.
             public var primaryGtin: Components.Schemas.Gtin?
             /// - Remark: Generated from `#/components/schemas/ProductWithMappingsAndFoodOut/fdc_id`.
@@ -25652,8 +26045,8 @@ extension Components {
             public init(
                 id: Components.Schemas.ProductShortcode,
                 name: Swift.String,
-                aliases: Components.Schemas.InputSchema56,
-                tags: Components.Schemas.InputSchema56,
+                aliases: Components.Schemas.InputSchema60,
+                tags: Components.Schemas.InputSchema60,
                 primaryGtin: Components.Schemas.Gtin? = nil,
                 fdcId: Components.Schemas.FdcId? = nil,
                 manufacturer: Swift.String,
@@ -25754,9 +26147,9 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/ProductWithMappingsOut/name`.
             public var name: Swift.String
             /// - Remark: Generated from `#/components/schemas/ProductWithMappingsOut/aliases`.
-            public var aliases: Components.Schemas.InputSchema56
+            public var aliases: Components.Schemas.InputSchema60
             /// - Remark: Generated from `#/components/schemas/ProductWithMappingsOut/tags`.
-            public var tags: Components.Schemas.InputSchema56
+            public var tags: Components.Schemas.InputSchema60
             /// - Remark: Generated from `#/components/schemas/ProductWithMappingsOut/primaryGtin`.
             public var primaryGtin: Components.Schemas.Gtin?
             /// - Remark: Generated from `#/components/schemas/ProductWithMappingsOut/fdc_id`.
@@ -25844,8 +26237,8 @@ extension Components {
             public init(
                 id: Components.Schemas.ProductShortcode,
                 name: Swift.String,
-                aliases: Components.Schemas.InputSchema56,
-                tags: Components.Schemas.InputSchema56,
+                aliases: Components.Schemas.InputSchema60,
+                tags: Components.Schemas.InputSchema60,
                 primaryGtin: Components.Schemas.Gtin? = nil,
                 fdcId: Components.Schemas.FdcId? = nil,
                 manufacturer: Swift.String,
@@ -26100,7 +26493,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/ProjectDetail/kind`.
             public var kind: Components.Schemas.ProjectKind?
             /// - Remark: Generated from `#/components/schemas/ProjectDetail/locations`.
-            public var locations: Components.Schemas.InputSchema56
+            public var locations: Components.Schemas.InputSchema60
             /// - Remark: Generated from `#/components/schemas/ProjectDetail/defaultTrade`.
             public var defaultTrade: Components.Schemas.Trade?
             /// Budget estimate in dollars
@@ -26190,7 +26583,7 @@ extension Components {
                 name: Swift.String,
                 status: Components.Schemas.ProjectStatus,
                 kind: Components.Schemas.ProjectKind? = nil,
-                locations: Components.Schemas.InputSchema56,
+                locations: Components.Schemas.InputSchema60,
                 defaultTrade: Components.Schemas.Trade? = nil,
                 costEstimate: Components.Schemas.PositiveMoney? = nil,
                 parentProjectId: Components.Schemas.ProjectShortcode? = nil,
@@ -26290,7 +26683,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/ProjectListItem/kind`.
             public var kind: Components.Schemas.ProjectKind?
             /// - Remark: Generated from `#/components/schemas/ProjectListItem/locations`.
-            public var locations: Components.Schemas.InputSchema56
+            public var locations: Components.Schemas.InputSchema60
             /// - Remark: Generated from `#/components/schemas/ProjectListItem/defaultTrade`.
             public var defaultTrade: Components.Schemas.Trade?
             /// Budget estimate in dollars
@@ -26377,7 +26770,7 @@ extension Components {
                 name: Swift.String,
                 status: Components.Schemas.ProjectStatus,
                 kind: Components.Schemas.ProjectKind? = nil,
-                locations: Components.Schemas.InputSchema56,
+                locations: Components.Schemas.InputSchema60,
                 defaultTrade: Components.Schemas.Trade? = nil,
                 costEstimate: Components.Schemas.PositiveMoney? = nil,
                 parentProjectId: Components.Schemas.ProjectShortcode? = nil,
@@ -26488,7 +26881,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/ProjectOut/kind`.
             public var kind: Components.Schemas.ProjectKind?
             /// - Remark: Generated from `#/components/schemas/ProjectOut/locations`.
-            public var locations: Components.Schemas.InputSchema56
+            public var locations: Components.Schemas.InputSchema60
             /// - Remark: Generated from `#/components/schemas/ProjectOut/defaultTrade`.
             public var defaultTrade: Components.Schemas.Trade?
             /// Budget estimate in dollars
@@ -26572,7 +26965,7 @@ extension Components {
                 name: Swift.String,
                 status: Components.Schemas.ProjectStatus,
                 kind: Components.Schemas.ProjectKind? = nil,
-                locations: Components.Schemas.InputSchema56,
+                locations: Components.Schemas.InputSchema60,
                 defaultTrade: Components.Schemas.Trade? = nil,
                 costEstimate: Components.Schemas.PositiveMoney? = nil,
                 parentProjectId: Components.Schemas.ProjectShortcode? = nil,
@@ -27258,10 +27651,6 @@ extension Components {
         }
         /// - Remark: Generated from `#/components/schemas/PurchaseImages`.
         public typealias PurchaseImages = [Components.Schemas.PurchaseImagesPayload]
-        /// importRun shortcode, e.g. RUN-4K7M
-        ///
-        /// - Remark: Generated from `#/components/schemas/ImportRunShortcode`.
-        public typealias ImportRunShortcode = Swift.String
         /// - Remark: Generated from `#/components/schemas/PurchaseListItem`.
         public struct PurchaseListItem: Codable, Hashable, Sendable {
             /// - Remark: Generated from `#/components/schemas/PurchaseListItem/id`.
@@ -27630,11 +28019,11 @@ extension Components {
             /// Document ids to detach. Detaching DELETES the stored file when nothing else references it — there is no restore, and the id will not resolve again.
             ///
             /// - Remark: Generated from `#/components/schemas/PurchaseUpdateData/removeImageIds`.
-            public var removeImageIds: Components.Schemas.InputSchema66?
+            public var removeImageIds: Components.Schemas.InputSchema70?
             /// existing document ids in display order
             ///
             /// - Remark: Generated from `#/components/schemas/PurchaseUpdateData/imageOrder`.
-            public var imageOrder: Components.Schemas.InputSchema66?
+            public var imageOrder: Components.Schemas.InputSchema70?
             /// Creates a new `PurchaseUpdateData`.
             ///
             /// - Parameters:
@@ -27661,8 +28050,8 @@ extension Components {
                 statedTotal: Components.Schemas.WholeCentAmount? = nil,
                 notes: Swift.String? = nil,
                 pendingImageIds: [Components.Schemas.ImageShortcode]? = nil,
-                removeImageIds: Components.Schemas.InputSchema66? = nil,
-                imageOrder: Components.Schemas.InputSchema66? = nil
+                removeImageIds: Components.Schemas.InputSchema70? = nil,
+                imageOrder: Components.Schemas.InputSchema70? = nil
             ) {
                 self.vendorId = vendorId
                 self.vendorAccountId = vendorAccountId
@@ -29625,7 +30014,7 @@ extension Components {
                 /// - Remark: Generated from `#/components/schemas/ScanAtLocationInput/code/value1`.
                 public var value1: Components.Schemas.ProductFindOrCreateByCodeInput?
                 /// - Remark: Generated from `#/components/schemas/ScanAtLocationInput/code/value2`.
-                public var value2: Components.Schemas.InputSchema183?
+                public var value2: Components.Schemas.InputSchema187?
                 /// Creates a new `CodePayload`.
                 ///
                 /// - Parameters:
@@ -29633,7 +30022,7 @@ extension Components {
                 ///   - value2:
                 public init(
                     value1: Components.Schemas.ProductFindOrCreateByCodeInput? = nil,
-                    value2: Components.Schemas.InputSchema183? = nil
+                    value2: Components.Schemas.InputSchema187? = nil
                 ) {
                     self.value1 = value1
                     self.value2 = value2
@@ -31889,17 +32278,17 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/UsdaListInput/sort`.
             public struct SortPayload: Codable, Hashable, Sendable {
                 /// - Remark: Generated from `#/components/schemas/UsdaListInput/sort/value1`.
-                public var value1: Components.Schemas.InputSchema188?
+                public var value1: Components.Schemas.InputSchema192?
                 /// - Remark: Generated from `#/components/schemas/UsdaListInput/sort/value2`.
-                public var value2: [Components.Schemas.InputSchema188]?
+                public var value2: [Components.Schemas.InputSchema192]?
                 /// Creates a new `SortPayload`.
                 ///
                 /// - Parameters:
                 ///   - value1:
                 ///   - value2:
                 public init(
-                    value1: Components.Schemas.InputSchema188? = nil,
-                    value2: [Components.Schemas.InputSchema188]? = nil
+                    value1: Components.Schemas.InputSchema192? = nil,
+                    value2: [Components.Schemas.InputSchema192]? = nil
                 ) {
                     self.value1 = value1
                     self.value2 = value2
@@ -31936,7 +32325,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/UsdaListInput/sort`.
             public var sort: Components.Schemas.UsdaListInput.SortPayload?
             /// - Remark: Generated from `#/components/schemas/UsdaListInput/pagination`.
-            public var pagination: Components.Schemas.InputSchema44?
+            public var pagination: Components.Schemas.InputSchema48?
             /// - Remark: Generated from `#/components/schemas/UsdaListInput/groupBy`.
             @frozen public enum GroupByPayload: String, Codable, Hashable, Sendable, CaseIterable {
                 case fdcId = "fdc_id"
@@ -31957,7 +32346,7 @@ extension Components {
             public init(
                 filters: Components.Schemas.UsdaListInput.FiltersPayload,
                 sort: Components.Schemas.UsdaListInput.SortPayload? = nil,
-                pagination: Components.Schemas.InputSchema44? = nil,
+                pagination: Components.Schemas.InputSchema48? = nil,
                 groupBy: Components.Schemas.UsdaListInput.GroupByPayload? = nil
             ) {
                 self.filters = filters
