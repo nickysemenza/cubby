@@ -259,7 +259,11 @@ export default defineEntity({
         nullable: true,
         label: "Parent Task",
         reference: { entity: "task" },
-        control: { kind: "specialized", renderer: "entity-select" },
+        control: {
+          kind: "specialized",
+          renderer: "entity-select",
+          suggest: { basis: ["name", "projectId"] },
+        },
         display: {
           list: true,
           detail: true,

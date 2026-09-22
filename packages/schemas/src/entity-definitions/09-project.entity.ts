@@ -350,7 +350,11 @@ export default defineEntity({
         nullable: true,
         label: "Parent project",
         reference: { entity: "project" },
-        control: { kind: "specialized", renderer: "entity-select" },
+        control: {
+          kind: "specialized",
+          renderer: "entity-select",
+          suggest: { basis: ["name", "kind", "notes"] },
+        },
         display: {
           list: true,
           detail: true,
