@@ -672,6 +672,7 @@ private extension ActivityKind {
         case .purchaseImport: "Purchase import"
         case .purchaseValidation: "Purchase validation"
         case .productEnrichment: "Product enrichment"
+        case .photoInventory: "Photo inventory"
         case .describeImage: "Image description"
         case .subjectLift: "Image cutout"
         }
@@ -681,6 +682,7 @@ private extension ActivityKind {
         switch self {
         case .purchaseImport, .purchaseValidation: "cart"
         case .productEnrichment: "sparkles"
+        case .photoInventory: "photo.on.rectangle"
         case .describeImage: "text.below.photo"
         case .subjectLift: "person.crop.rectangle"
         }

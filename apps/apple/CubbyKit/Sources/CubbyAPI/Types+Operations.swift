@@ -549,6 +549,7 @@ public enum Operations {
                     case purchaseImport = "purchase_import"
                     case purchaseValidation = "purchase_validation"
                     case productEnrichment = "product_enrichment"
+                    case photoInventory = "photo_inventory"
                     case describeImage = "describe_image"
                     case subjectLift = "subject_lift"
                 }
