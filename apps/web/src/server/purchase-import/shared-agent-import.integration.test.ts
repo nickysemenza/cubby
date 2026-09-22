@@ -2,12 +2,13 @@ import {
   commitPurchaseImportInput,
   validatePurchaseImportInput,
 } from "@cubby/schemas/purchase-import";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import {
   expense,
+  importRunOperation,
   importRunTarget,
   product,
   productExternalId,
@@ -159,8 +160,16 @@ describe("shared purchase-import prepare and commit", () => {
         .where(eq(purchase.orderId, "111-2222222-3333333")),
     ).toHaveLength(0);
 
+    // A fresh operationId for the corrected retry: the failed attempt above
+    // now leaves its own `failed` ImportRunOperation row (see the dedicated
+    // failure test below), so replaying "commit:amazon-order-1" with
+    // different args is a fenced conflict, not a retry.
     const commitInput = commitPurchaseImportInput.parse({
       ...missingDefaultsInput,
+      _runExecution: {
+        ...missingDefaultsInput._runExecution,
+        operationId: "commit:amazon-order-1-retry",
+      },
       defaultTrade: "other",
     });
     const first = await commitPurchaseImport(ctx.db, commitInput, ctx.actor);
@@ -326,5 +335,239 @@ describe("shared purchase-import prepare and commit", () => {
       targets: [{ outcome: "raw_evidence_drift", diff: null }],
     });
     expect(rawDrift.target?.warning).toContain("source evidence changed");
+  });
+
+  it("commits tax and shipping lines using only the principal line's resolution", async () => {
+    const party = await insertWithShortcode(ctx.db, "ledgerParty", {
+      name: "Adjustment lines member",
+      kind: "member",
+      userId: ctx.actor.userId,
+    });
+    const vendor = await insertWithShortcode(ctx.db, "vendor", {
+      name: `Adjustment lines vendor ${crypto.randomUUID()}`,
+      website: "https://shop.example.test",
+      browserDomains: ["shop.example.test"],
+    });
+    const account = await insertWithShortcode(ctx.db, "vendorAccount", {
+      label: "Adjustment lines account",
+      vendorId: vendor.id,
+      ledgerPartyId: party.id,
+    });
+    const existingProduct = await createProductFixture(
+      ctx.db,
+      makeProductInput({ name: "Adjustment lines widget" }),
+      ctx.actor,
+    );
+    const [productRow] = await getDb(ctx.db)
+      .select({ shortcode: product.shortcode })
+      .from(product)
+      .where(eq(product.id, existingProduct.entityId));
+    if (!productRow) throw new Error("Product fixture was not created");
+
+    const run = await startOrResumeImportRun(ctx.db, {
+      ledgerPartyId: party.id,
+      vendorAccountId: account.id,
+      trigger: "manual",
+    });
+    const prepareInput = {
+      _runExecution: {
+        runPublicId: run.publicId,
+        operationId: "prepare:adjustments-order-1",
+        itemOperationIds: ["prepare-item:adjustments-order-1"],
+      },
+      orders: [
+        {
+          stableOrderId: "adjustments-order-1",
+          itemOperationId: "prepare-item:adjustments-order-1",
+          source: {
+            kind: "browser_order" as const,
+            externalKey: "adjustments:order:1",
+            checksum: checksum("e"),
+          },
+          evidenceChecksum: checksum("f"),
+          extractionRevision: "adjustments@fixture-1",
+          extraction: {
+            status: "ready" as const,
+            candidate: {
+              orderId: "ADJUSTMENTS-ORDER-1",
+              orderedAt: "2026-09-20T12:00:00.000Z",
+              merchant: "Example",
+              currency: "USD",
+              printedGrandTotal: 25,
+              lines: [
+                {
+                  title: "Adjustment lines widget",
+                  amount: 20,
+                  lineKind: "principal" as const,
+                },
+                { title: "Sales tax", amount: 2, lineKind: "tax" as const },
+                {
+                  title: "Shipping",
+                  amount: 3,
+                  lineKind: "shipping" as const,
+                },
+              ],
+              payments: [],
+              allShipmentsDelivered: false,
+            },
+          },
+          lineIds: [
+            "adjustments-order-1:line-1",
+            "adjustments-order-1:line-2",
+            "adjustments-order-1:line-3",
+          ],
+          primaryDocumentImageId: null,
+          screenshotImageId: null,
+        },
+      ],
+    };
+    await preparePurchaseImport(ctx.db, prepareInput, ctx.actor);
+
+    // Only the principal line carries a resolution — tax and shipping are
+    // never resolvable to a Product, matching what the MCP layer sends.
+    const commitInput = commitPurchaseImportInput.parse({
+      _runExecution: {
+        runPublicId: run.publicId,
+        operationId: "commit:adjustments-order-1",
+      },
+      prepareOperationId: prepareInput._runExecution.operationId,
+      defaultTrade: "other" as const,
+      resolutions: [
+        {
+          stableOrderId: "adjustments-order-1",
+          stableLineId: "adjustments-order-1:line-1",
+          resolution: {
+            kind: "existing" as const,
+            productId: productRow.shortcode,
+          },
+        },
+      ],
+    });
+
+    const result = await commitPurchaseImport(ctx.db, commitInput, ctx.actor);
+    expect(result.status).toBe("running");
+    expect(result.items[0]?.purchaseId).not.toBeNull();
+
+    const [written] = await getDb(ctx.db)
+      .select({ id: purchase.id })
+      .from(purchase)
+      .where(eq(purchase.orderId, "ADJUSTMENTS-ORDER-1"));
+    if (!written) throw new Error("Purchase was not written");
+    const writtenExpenses = await getDb(ctx.db)
+      .select({ lineKind: expense.lineKind, productId: expense.productId })
+      .from(expense)
+      .where(eq(expense.purchaseId, written.id));
+    expect(writtenExpenses).toHaveLength(3);
+    expect(
+      writtenExpenses.find((row) => row.lineKind === "principal")?.productId,
+    ).toBe(existingProduct.entityId);
+    for (const kind of ["tax", "shipping"] as const) {
+      expect(
+        writtenExpenses.find((row) => row.lineKind === kind)?.productId,
+      ).toBeNull();
+    }
+  });
+
+  it("leaves a failed ImportRunOperation row when a resolution's product cannot be resolved", async () => {
+    const party = await insertWithShortcode(ctx.db, "ledgerParty", {
+      name: "Failed commit member",
+      kind: "member",
+      userId: ctx.actor.userId,
+    });
+    const vendor = await insertWithShortcode(ctx.db, "vendor", {
+      name: `Failed commit vendor ${crypto.randomUUID()}`,
+      website: "https://shop.example.test",
+      browserDomains: ["shop.example.test"],
+    });
+    const account = await insertWithShortcode(ctx.db, "vendorAccount", {
+      label: "Failed commit account",
+      vendorId: vendor.id,
+      ledgerPartyId: party.id,
+    });
+    const run = await startOrResumeImportRun(ctx.db, {
+      ledgerPartyId: party.id,
+      vendorAccountId: account.id,
+      trigger: "manual",
+    });
+    const prepareInput = {
+      _runExecution: {
+        runPublicId: run.publicId,
+        operationId: "prepare:failing-order-1",
+        itemOperationIds: ["prepare-item:failing-order-1"],
+      },
+      orders: [
+        {
+          stableOrderId: "failing-order-1",
+          itemOperationId: "prepare-item:failing-order-1",
+          source: {
+            kind: "browser_order" as const,
+            externalKey: "failing:order:1",
+            checksum: checksum("1"),
+          },
+          evidenceChecksum: checksum("2"),
+          extractionRevision: "failing@fixture-1",
+          extraction: {
+            status: "ready" as const,
+            candidate: {
+              orderId: "FAILING-ORDER-1",
+              orderedAt: "2026-09-20T12:00:00.000Z",
+              merchant: "Example",
+              currency: "USD",
+              printedGrandTotal: 9.99,
+              lines: [
+                {
+                  title: "Widget",
+                  amount: 9.99,
+                  lineKind: "principal" as const,
+                },
+              ],
+              payments: [],
+              allShipmentsDelivered: false,
+            },
+          },
+          lineIds: ["failing-order-1:line-1"],
+          primaryDocumentImageId: null,
+          screenshotImageId: null,
+        },
+      ],
+    };
+    await preparePurchaseImport(ctx.db, prepareInput, ctx.actor);
+
+    const operationId = "commit:failing-order-1";
+    const commitInput = commitPurchaseImportInput.parse({
+      _runExecution: { runPublicId: run.publicId, operationId },
+      prepareOperationId: prepareInput._runExecution.operationId,
+      defaultTrade: "other" as const,
+      resolutions: [
+        {
+          stableOrderId: "failing-order-1",
+          stableLineId: "failing-order-1:line-1",
+          // Well-formed shortcode for a Product that does not exist:
+          // resolveOrThrow rejects deep inside the transaction, after the
+          // ImportRunOperation "started" row has already been inserted, so
+          // that insert is rolled back along with everything else.
+          resolution: { kind: "existing" as const, productId: "PRD-9999" },
+        },
+      ],
+    });
+
+    await expect(
+      commitPurchaseImport(ctx.db, commitInput, ctx.actor),
+    ).rejects.toThrow("PRD-9999");
+
+    const [operation] = await getDb(ctx.db)
+      .select({
+        state: importRunOperation.state,
+        error: importRunOperation.error,
+      })
+      .from(importRunOperation)
+      .where(
+        and(
+          eq(importRunOperation.runId, run.id),
+          eq(importRunOperation.operationId, operationId),
+        ),
+      );
+    expect(operation?.state).toBe("failed");
+    expect(operation?.error).toContain("PRD-9999");
   });
 });

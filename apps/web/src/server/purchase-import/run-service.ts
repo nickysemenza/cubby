@@ -525,45 +525,6 @@ export async function startTargetedImportRun(
   });
 }
 
-/** Mark the producer hand-off. A delivery can be retried only with this id. */
-export async function recordImportRunDispatchAttempt(
-  db: Database,
-  input: { runId: string; eventId: string; error?: string },
-) {
-  const runId = z.uuid().parse(input.runId);
-  const [run] = await getDb(db)
-    .update(importRun)
-    .set({
-      dispatchAttempts: sql`${importRun.dispatchAttempts} + 1`,
-      dispatchError: input.error?.slice(0, 2_000) ?? null,
-      status: input.error ? "dispatch_failed" : "running",
-      failureCode: input.error ? "dispatch_failed" : null,
-      endedAt: input.error ? new Date() : null,
-      updatedAt: new Date(),
-    })
-    .where(
-      and(
-        eq(importRun.id, runId),
-        eq(importRun.dispatchEventId, input.eventId),
-        inArray(importRun.status, ["running", "dispatch_failed"]),
-      ),
-    )
-    .returning({ id: importRun.id, status: importRun.status });
-  if (run) return run;
-  const [settled] = await getDb(db)
-    .select({ id: importRun.id, status: importRun.status })
-    .from(importRun)
-    .where(
-      and(
-        eq(importRun.id, runId),
-        eq(importRun.dispatchEventId, input.eventId),
-      ),
-    )
-    .limit(1);
-  if (settled) return settled;
-  throw new Error("Import run dispatch generation is no longer active");
-}
-
 /** Consumer-side fence: only the active event generation may admit Flue. */
 export async function acknowledgeImportRunCoordinator(
   db: Database,
@@ -868,6 +829,75 @@ export async function expireOfflineImportRuns(db: Database, now = new Date()) {
     )
     .returning({ id: importRun.id });
   return { expired: expired.length };
+}
+
+const STALE_RUN_MS = 2 * 60 * 60_000;
+
+/**
+ * A run still `running` after its Flue submission settled means the
+ * coordinator stopped without a terminal tool call: a `review` progress
+ * report, a turn budget, or a model that simply ended its turn. The one
+ * legitimate way to settle while running is a browser command still in flight
+ * (its result event resumes the conversation), so that case is left alone.
+ * Approvals never reach here: they move the run to `paused_approval` first.
+ */
+export async function reconcileSettledImportRun(
+  db: Database,
+  namespace: PurchaseImportNamespace,
+  input: { runId: string; operationId: string; detail?: string },
+) {
+  const scope = await loadRunScope(db, input.runId);
+  if (scope.public.status !== "running")
+    return { reconciled: false as const, status: scope.public.status };
+  if (
+    scope.public.vendorAccountId &&
+    (await namespace
+      .getByName(scope.public.vendorAccountId)
+      .hasPendingCommands(scope.public.runId))
+  )
+    return { reconciled: false as const, status: "running" as const };
+  await stopImportRunForReview(db, {
+    runId: input.runId,
+    operationId: input.operationId,
+    kind: "other",
+    summary: input.detail ?? "Coordinator ended without finishing the run",
+  });
+  return { reconciled: true as const, status: "needs_review" as const };
+}
+
+/**
+ * Cron backstop for the reconcile above: a settled event can be lost, and a
+ * coordinator can stall inside a submission. Activity is the newest of the
+ * run row, its operations and its progress reports so a slow but live agent
+ * is not cut off.
+ */
+export async function expireStaleImportRuns(
+  db: Database,
+  namespace: PurchaseImportNamespace,
+  now = new Date(),
+) {
+  const cutoff = new Date(now.getTime() - STALE_RUN_MS);
+  const stale = await getDb(db)
+    .select({ id: importRun.id })
+    .from(importRun)
+    .where(
+      and(
+        eq(importRun.status, "running"),
+        lt(importRun.updatedAt, cutoff),
+        sql`NOT EXISTS (SELECT 1 FROM ${importRunOperation} WHERE ${importRunOperation.runId} = ${importRun.id} AND ${importRunOperation.startedAt} >= ${cutoff})`,
+        sql`NOT EXISTS (SELECT 1 FROM ${importRunProgress} WHERE ${importRunProgress.runId} = ${importRun.id} AND ${importRunProgress.createdAt} >= ${cutoff})`,
+      ),
+    );
+  let expired = 0;
+  for (const run of stale) {
+    const outcome = await reconcileSettledImportRun(db, namespace, {
+      runId: run.id,
+      operationId: `stale-run:${now.toISOString()}`,
+      detail: "No coordinator activity for two hours",
+    });
+    if (outcome.reconciled) expired += 1;
+  }
+  return { expired };
 }
 
 const assertRunActive = (status: string) => {
@@ -1361,6 +1391,26 @@ export async function readBrowserCommandResult(
         result,
       };
     }
+    // A non-pausing failure (bad link, disallowed URL, capture unavailable,
+    // upload failed) is the command's terminal outcome. The agent sees it in
+    // the tool result; the operation row is where Activity and the transcript
+    // read it from.
+    await getDb(db)
+      .update(importRunOperation)
+      .set({
+        state: "failed",
+        error: `${result.outcome.code}: ${result.outcome.message}`.slice(
+          0,
+          2_000,
+        ),
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(importRunOperation.runId, scope.public.runId),
+          eq(importRunOperation.operationId, input.operationId),
+        ),
+      );
   }
   return result
     ? { state: "completed" as const, result }

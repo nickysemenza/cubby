@@ -25,6 +25,7 @@ import {
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 import { getR2PublicUrl } from "~/server/utils/r2-public-url";
 
+import { dispatchImportRunEvent } from "./dispatch";
 import { mintImportRunPublicId } from "./run-identifiers";
 
 /**
@@ -272,7 +273,7 @@ export async function submitReceiptEvidence(
     throw new Error("Finalized receipt image is missing its checksum.");
   if (!claimed.vendorId)
     throw new Error("Classify the receipt vendor before importing it.");
-  await queue.send({
+  await dispatchImportRunEvent(db, queue, {
     version: 1,
     runId: claimed.runId,
     publicId: claimed.publicId,

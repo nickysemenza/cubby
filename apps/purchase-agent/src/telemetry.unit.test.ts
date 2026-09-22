@@ -1,7 +1,7 @@
 import type { FlueEvent } from "@flue/runtime";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
-import { usageEventForTurn } from "./telemetry";
+import { settleSubmission, usageEventForTurn } from "./telemetry";
 
 describe("purchase-agent turn telemetry", () => {
   it("records one provider/model attempt without an aggregate charge", () => {
@@ -62,5 +62,49 @@ describe("purchase-agent turn telemetry", () => {
       gatewayLogId: "gateway-log-4",
       estimatedCost: 0.000485,
     });
+  });
+
+  it("asks the server to reconcile a completed submission instead of trusting it", async () => {
+    const service = {
+      reconcileSettledRun: vi.fn(async () => ({
+        reconciled: true,
+        status: "needs_review",
+      })),
+      markRunFailed: vi.fn(async () => null),
+      updateAgentProgress: vi.fn(async () => ({ recorded: true })),
+    };
+    const base = {
+      v: 3,
+      eventIndex: 12,
+      timestamp: "2026-09-20T19:05:00.000Z",
+      instanceId: "import-run:f47ac10b-58cc-4372-a567-0e02b2c3d479",
+      submissionId: "submission-7",
+      attemptCount: 1,
+    };
+
+    // SAFETY: the fixtures carry the fields settleSubmission reads; Flue's
+    // wider event union is irrelevant here.
+    const settled = (
+      fields: Pick<Parameters<typeof settleSubmission>[2], "outcome" | "error">,
+    ) =>
+      ({ ...base, type: "submission_settled", ...fields }) as Parameters<
+        typeof settleSubmission
+      >[2];
+
+    await settleSubmission(service, "run-1", settled({ outcome: "completed" }));
+    expect(service.reconcileSettledRun).toHaveBeenCalledWith({
+      runId: "run-1",
+      operationId: "submission-settled:submission-7",
+    });
+    expect(service.markRunFailed).not.toHaveBeenCalled();
+
+    await settleSubmission(
+      service,
+      "run-1",
+      settled({ outcome: "aborted", error: { message: "operator abort" } }),
+    );
+    expect(service.markRunFailed).toHaveBeenCalledWith(
+      expect.objectContaining({ failureCode: "flue_aborted" }),
+    );
   });
 });

@@ -18,10 +18,8 @@ import {
   readCookie,
   verifyPurchaseAgentOAuthState,
 } from "~/server/purchase-import/agent-auth";
-import {
-  recordImportRunDispatchAttempt,
-  resumeAuthorizedImportRuns,
-} from "~/server/purchase-import/run-service";
+import { recordImportRunDispatchAttempt } from "~/server/purchase-import/dispatch";
+import { resumeAuthorizedImportRuns } from "~/server/purchase-import/run-service";
 import { createRequestContext, requireActor } from "~/server/request-context";
 
 const tokenResponse = z.object({
