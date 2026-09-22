@@ -61,6 +61,14 @@ import {
 } from "./entity-field-presentation";
 import { fieldClearing } from "./field-clearing";
 import { LedgerAttributionsField } from "./ledger-attributions-field";
+import {
+  ProductExternalIdsField,
+  ProductLabelNutritionField,
+  ProductTagsField,
+  ProductUnitMappingsField,
+  ProductUpcField,
+  ProductUsdaFoodField,
+} from "./product-editor-fields";
 import { referenceScopeFields, referenceScopeFor } from "./reference-scope";
 import {
   entitySelectOptionsFor,
@@ -474,7 +482,7 @@ export function EntityPrimitiveFields({
 }
 
 /** Props every specialized intent renderer receives. */
-interface SpecializedIntentRendererProps {
+export interface SpecializedIntentRendererProps {
   entity: Entity;
   field: PrimitiveFieldModel;
   form: UseFormReturn<FieldValues>;
@@ -587,6 +595,12 @@ export const controlRendererCoverage = {
   "structured-field": unsupported(
     "Structured fields require their workflow-specific editor.",
   ),
+  "unit-mappings": implemented(ProductUnitMappingsField),
+  "label-nutrition": implemented(ProductLabelNutritionField),
+  "external-ids": implemented(ProductExternalIdsField),
+  "upc-lookup": implemented(ProductUpcField),
+  "usda-food": implemented(ProductUsdaFoodField),
+  "product-tags": implemented(ProductTagsField),
 } satisfies Readonly<
   Record<
     ControlRendererId,

@@ -201,6 +201,9 @@ export function buildEntityEdit<E extends EditableEntity>(
     if (!(field.id in normalized)) continue;
     const patch = field.toPatch({
       value: normalized[field.id],
+      operation: request.operation,
+      intent: resolved.intent,
+      surface: request.surface,
       record: request.record,
       context: resolved.context,
     });

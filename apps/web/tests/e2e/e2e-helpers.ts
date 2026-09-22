@@ -401,30 +401,44 @@ export async function createLocation(
   return shortcode;
 }
 
+/**
+ * Products are created in the list's dialog (`?create=true`, see
+ * `CreateDialogAction`) — the `/products/new` page is gone. The dialog closes
+ * on success without navigating, so the new product is reached through the
+ * command palette, the same shape as `createIngredientViaForm`.
+ */
 export async function createProduct(
   page: Page,
   name: string,
   opts: { manufacturer?: string } = {},
 ) {
-  await page.goto("/products/new");
+  await page.goto("/products?create=true");
   await waitForFormHydration(page);
-  await page.getByPlaceholder("Enter product name").fill(name);
+  const dialog = page.getByRole("dialog");
+  await dialog.getByRole("textbox", { name: "Name", exact: true }).fill(name);
   if (opts.manufacturer !== undefined) {
-    await page.getByPlaceholder("Enter manufacturer").fill(opts.manufacturer);
+    await dialog
+      .getByRole("textbox", { name: "Manufacturer", exact: true })
+      .fill(opts.manufacturer);
   }
-  await page.getByRole("button", { name: /^Create$/ }).click();
+  await dialog.getByRole("button", { name: /^Create$/ }).click();
+  await expect(dialog).not.toBeVisible({ timeout: 15000 });
+  await openProductFromPalette(page, name);
+  await expect(
+    page.getByRole("heading", { name: "Basic Information" }),
+  ).toBeVisible();
+}
+
+/** Reach a product's detail page by name and assert its URL and heading. */
+export async function openProductFromPalette(page: Page, name: string) {
+  await findViaCommandPalette(page, `products:${name}`, name);
   await expect(page).toHaveURL(
     /\/products\/PRD-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}/,
-    {
-      timeout: 15000,
-    },
+    { timeout: 15000 },
   );
   await expect(page.getByRole("heading", { level: 1, name })).toBeVisible({
     timeout: 10000,
   });
-  await expect(
-    page.getByRole("heading", { name: "Basic Information" }),
-  ).toBeVisible();
 }
 
 export async function createIngredientViaForm(page: Page, name: string) {
@@ -457,42 +471,42 @@ export async function createProductWithIngredientMappings(
   page: Page,
   opts: { name: string; manufacturer: string; ingredientName: string },
 ) {
-  await page.goto("/products/new");
+  await page.goto("/products?create=true");
   await waitForFormHydration(page);
-  await fillInput(page, "Enter product name", opts.name);
-  await fillInput(page, "Enter manufacturer", opts.manufacturer);
+  const dialog = page.getByRole("dialog");
+  await dialog
+    .getByRole("textbox", { name: "Name", exact: true })
+    .fill(opts.name);
+  await dialog
+    .getByRole("textbox", { name: "Manufacturer", exact: true })
+    .fill(opts.manufacturer);
 
+  // The ingredient link lives in the collapsed Nutrition section.
+  await dialog.getByRole("button", { name: "Nutrition", exact: true }).click();
   await selectComboboxItem(
     page,
-    page.getByRole("combobox", { name: /ingredient/i }),
+    dialog.getByRole("combobox", { name: /ingredient/i }).first(),
     opts.ingredientName,
   );
 
-  await page.getByRole("button", { name: "Add conversion" }).click();
-  const firstFromUnit = page.locator('[id="unitMappings.0.a.unit"]');
+  await dialog.getByRole("button", { name: "Add conversion" }).click();
+  const firstFromUnit = dialog.locator('[id="unitMappings.0.a.unit"]');
   await expect(firstFromUnit).toBeVisible({ timeout: 10000 });
   await firstFromUnit.fill("cup");
-  await page.locator('[id="unitMappings.0.b.value"]').fill("2.50");
-  await page.locator('[id="unitMappings.0.b.unit"]').fill("dollar");
+  await dialog.locator('[id="unitMappings.0.b.value"]').fill("2.50");
+  await dialog.locator('[id="unitMappings.0.b.unit"]').fill("dollar");
 
-  await page.getByRole("button", { name: "Add conversion" }).click();
-  const secondFromValue = page.locator('[id="unitMappings.1.a.value"]');
+  await dialog.getByRole("button", { name: "Add conversion" }).click();
+  const secondFromValue = dialog.locator('[id="unitMappings.1.a.value"]');
   await expect(secondFromValue).toBeVisible({ timeout: 10000 });
   await secondFromValue.fill("100");
-  await page.locator('[id="unitMappings.1.a.unit"]').fill("grams");
-  await page.locator('[id="unitMappings.1.b.value"]').fill("1.50");
-  await page.locator('[id="unitMappings.1.b.unit"]').fill("dollar");
+  await dialog.locator('[id="unitMappings.1.a.unit"]').fill("grams");
+  await dialog.locator('[id="unitMappings.1.b.value"]').fill("1.50");
+  await dialog.locator('[id="unitMappings.1.b.unit"]').fill("dollar");
 
-  await page.getByRole("button", { name: /^Create$/ }).click();
-  await expect(page).toHaveURL(
-    /\/products\/PRD-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}/,
-    {
-      timeout: 15000,
-    },
-  );
-  await expect(
-    page.getByRole("heading", { level: 1, name: opts.name }),
-  ).toBeVisible({ timeout: 10000 });
+  await dialog.getByRole("button", { name: /^Create$/ }).click();
+  await expect(dialog).not.toBeVisible({ timeout: 15000 });
+  await openProductFromPalette(page, opts.name);
 }
 
 /**

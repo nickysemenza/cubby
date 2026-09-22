@@ -19,17 +19,32 @@ enum NativePresentationCoverage {
         }
     }
 
+    /// Control renderers with a typed native control of their own.
+    private static let implementedControls: Set<ControlRendererID> = [
+        .amount, .entityMultiSelect, .ledgerAttributions, .tagList, .vendorName,
+    ]
+    /// Control renderers drawn by the primitive control of their `controlKind`. `upcLookup`/
+    /// `usdaFood` are plain text/number fields on web too once their AI action strips away —
+    /// the native shell just draws the primitive control and skips the action.
+    private static let genericControls: Set<ControlRendererID> = [
+        .entitySelect, .money, .url, .upcLookup, .usdaFood,
+    ]
+    /// Control renderers the editor's image block owns; never a field control.
+    private static let imageBlockControls: Set<ControlRendererID> = [.imageOrder]
+
+    /// An explicit allowlist rather than an exhaustive switch: `ControlRendererID` is generated
+    /// from the manifest, so a renderer a web-only field declares (`unit-mappings`,
+    /// `label-nutrition`, …) exists here the moment it is declared, and must classify as
+    /// unsupported until a native control is written for it — not break the build or fall
+    /// through as generic.
     static func control(_ renderer: ControlRendererID) -> Status {
-        switch renderer {
-        case .amount, .entityMultiSelect, .ledgerAttributions, .tagList, .vendorName:
-            .implemented
-        case .entitySelect, .money, .url:
-            .generic
-        case .imageOrder:
-            .ownedElsewhere
-        case .structuredField:
-            .unsupported("Structured fields are available on web.")
+        if implementedControls.contains(renderer) { return .implemented }
+        if genericControls.contains(renderer) { return .generic }
+        if imageBlockControls.contains(renderer) { return .ownedElsewhere }
+        if renderer == .structuredField {
+            return .unsupported("Structured fields are available on web.")
         }
+        return .unsupported("No native control for \(renderer.rawValue); edit it on web.")
     }
 
     static func list(_ renderer: ListRendererID) -> Status {
@@ -43,6 +58,7 @@ enum NativePresentationCoverage {
         case .expenseProject,
             .ownerLedgerPartyId,
             .ownershipMode,
+            .productCategory,
             .productFdcId,
             .productExternalIds,
             .productId,

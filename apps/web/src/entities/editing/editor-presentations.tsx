@@ -5,6 +5,7 @@ import { format, parseISO } from "date-fns";
 import {
   type ComponentProps,
   type ComponentType,
+  type ReactNode,
   useEffect,
   useId,
   useMemo,
@@ -18,6 +19,7 @@ import {
   useEntityDisplayImages,
 } from "~/app/_components/entity-media/entity-display-images";
 import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
+import type { PendingImage } from "~/app/_components/PendingImageUpload";
 import {
   SelectField as FinanceSelectField,
   SourceAliasesField,
@@ -42,6 +44,7 @@ import {
   EntityPrimitiveFields,
 } from "./entity-primitive-fields";
 import type { EntityEditResultFor } from "./intent-types";
+import { productMedia } from "./product-editor-fields";
 import type {
   EntityEditContext,
   EntityEditOperation,
@@ -57,6 +60,33 @@ interface EntityEditorFieldsProps {
   record?: EntityEditRecord;
 }
 
+/**
+ * What the dialog shell's image block knows when it asks a presentation's
+ * `media` hook. A presentation types its hook as
+ * `EntityEditorPresentation<E>["media"]`.
+ */
+export interface EntityEditorMediaInput {
+  form: EntityEditorForm;
+  record?: EntityEditRecord;
+  /** Uploaded-but-unattached images of this session, in gallery order. */
+  pendingImages: readonly PendingImage[];
+  /** `record.images` — the gallery the shell already shows. */
+  existingImages: readonly PendingImage[];
+}
+
+export interface EntityEditorMediaOutput {
+  /** Rendered directly under the image block (e.g. an identify-from-photo button). */
+  actions?: ReactNode;
+  /**
+   * Further attached images that live outside `record.images` (a second
+   * image collection such as label photos), merged into the gallery's
+   * existing images and deduplicated by id.
+   */
+  extraExistingImages?: readonly PendingImage[];
+  /** Rendered after the image block (e.g. a document/manual dropzone). */
+  documents?: ReactNode;
+}
+
 export interface EntityEditorPresentation<E extends EditableEntity> {
   title(input: {
     context: EntityEditContext;
@@ -69,6 +99,15 @@ export interface EntityEditorPresentation<E extends EditableEntity> {
   submitLabel?: string;
   size?: ComponentProps<typeof ResponsiveDialog>["size"];
   Fields: ComponentType<EntityEditorFieldsProps>;
+  /**
+   * Per-entity extension of the shell's generic image block, consulted only
+   * when the intent roster mounts that block (`pendingImageIds`). Called
+   * during render from a component whose identity is fixed for the dialog's
+   * lifetime, so it may use React hooks. The shell owns the pending list and
+   * the `pendingImageIds`/`pendingImagePurposes`/`removeImageIds`/
+   * `imageOrder` form values; the hook only adds to what is drawn.
+   */
+  media?(input: EntityEditorMediaInput): EntityEditorMediaOutput;
   successMessage(result: EntityEditResultFor<E>): string;
 }
 
@@ -243,6 +282,22 @@ function VendorCaptureFields() {
 
 function PurchaseCaptureFields() {
   return <EntityIntentFields entity="purchase" intent="capture" />;
+}
+
+/**
+ * Product's rich fields are entirely generic now (`inspector.edit.sections`
+ * declares its section grammar) — the only bespoke piece left is the `media`
+ * hook below (Identify product, manuals, label images).
+ */
+function ProductFields({ record }: EntityEditorFieldsProps) {
+  return (
+    <EntityIntentFields
+      entity="product"
+      intent="full"
+      mode={record ? "edit" : "create"}
+      record={record}
+    />
+  );
 }
 
 function FinancialAccountFields({ form, record }: EntityEditorFieldsProps) {
@@ -469,6 +524,8 @@ type EntityEditorPresentationKey =
   | "project:create:capture"
   | "vendor:create:capture"
   | "purchase:create:capture"
+  | "product:create:full"
+  | "product:update:full"
   | "financialAccount:create:capture"
   | "financialAccount:update:full"
   | "financialTransaction:create:capture"
@@ -490,6 +547,8 @@ interface PresentationEntityByKey {
   "project:create:capture": "project";
   "vendor:create:capture": "vendor";
   "purchase:create:capture": "purchase";
+  "product:create:full": "product";
+  "product:update:full": "product";
   "financialAccount:create:capture": "financialAccount";
   "financialAccount:update:full": "financialAccount";
   "financialTransaction:create:capture": "financialTransaction";
@@ -564,6 +623,24 @@ const presentations = {
       "One vendor order or receipt event. Its Expenses are the categorized spend lines added afterward, and every dollar lives on them.",
     Fields: PurchaseCaptureFields,
     successMessage: (result) => `Logged "${purchaseLabel(result)}"`,
+  },
+  "product:create:full": {
+    title: () => "New product",
+    description: () =>
+      "Add the thing you own to track what you have and what it's worth. Scan a barcode or add one by hand.",
+    size: "lg",
+    Fields: ProductFields,
+    media: productMedia,
+    successMessage: (result) => `Added "${resultName(result, "product")}"`,
+  },
+  "product:update:full": {
+    title: () => "Edit product",
+    description: () => "Change this product's own fields.",
+    submitLabel: "Save changes",
+    size: "lg",
+    Fields: ProductFields,
+    media: productMedia,
+    successMessage: () => "Product updated",
   },
   "financialAccount:create:capture": {
     title: () => "New Account",

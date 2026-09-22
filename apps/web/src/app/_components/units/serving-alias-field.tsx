@@ -38,9 +38,10 @@ interface ServingAliasFieldProps {
 /**
  * Quick-add affordance for a custom unit alias on a product — "1 serving = 40
  * g", or any word the user wants to type a recipe amount in. Appends a
- * `manualUnitMapping` edge via the same `product.update` mutation the full
- * product-edit form's unit-mappings array uses (see product-form.tsx), so the
- * conversion graph immediately chains alias-unit → g → nutrients/price.
+ * `manualUnitMapping` edge via the same `product.update` mutation the
+ * generic editor's `unit-mappings` renderer uses (see
+ * `entities/editing/product-editor-fields.tsx`), so the conversion graph
+ * immediately chains alias-unit → g → nutrients/price.
  *
  * The nutrient preview is computed live from the entered grams against the
  * product's EXISTING graph (before save) — it's answering "what does X g of

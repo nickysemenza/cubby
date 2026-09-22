@@ -60,9 +60,11 @@ test("search detail Back retains query and does not reopen the input", async ({
 test("direct links fall back to the parent and directories remain reachable through More", async ({
   page,
 }) => {
-  await gotoAuthenticatedPage(page, "/products/new");
+  // `/products/new` is gone (product creates in a dialog); `/recipes/new`
+  // is the remaining child route with a parent to fall back to.
+  await gotoAuthenticatedPage(page, "/recipes/new");
   await page.getByRole("button", { name: "Back", exact: true }).click();
-  await expect(page).toHaveURL(/\/products$/);
+  await expect(page).toHaveURL(/\/recipes$/);
   await page.getByRole("button", { name: "More options" }).click();
   const more = page.getByRole("dialog", { name: "More", exact: true });
   await more.getByRole("link", { name: "Records", exact: true }).click();

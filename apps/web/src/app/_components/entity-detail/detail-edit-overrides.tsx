@@ -24,17 +24,12 @@ function RecipeEditRedirect({ onClose }: { onClose: () => void }) {
 
 /**
  * The entities whose Edit action does not open the generic `update:full`
- * dialog. Product's structured fields (`unitMappings`, `labelNutrition`)
- * keep their hand-written form until the generic dialog carries
- * `structured-field` renderers for them; recipe edits on its own route;
- * image has no kernel update contract.
+ * dialog: recipe edits on its own route; image has no kernel update
+ * contract. Product now opens the generic dialog too — its rich fields
+ * (`unitMappings`, `labelNutrition`, external IDs) have specialized
+ * renderers (`entity-primitive-fields.tsx`'s `controlRendererCoverage`).
  */
 export const detailEditOverrides = {
-  product: lazy(() =>
-    import("~/app/_components/products/product-edit-dialog").then((module) => ({
-      default: module.ProductEditDialog,
-    })),
-  ),
   recipe: RecipeEditRedirect,
   image: lazy(() =>
     import("~/app/images/image-edit-dialog").then((module) => ({
