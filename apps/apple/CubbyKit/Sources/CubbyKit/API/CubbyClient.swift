@@ -427,6 +427,28 @@ public actor CubbyClient {
         }
     }
 
+    /// Starts a native-tagged photo-inventory run (`PhotoImportRunUploader`'s bulk-upload entry
+    /// point). Distinct from the manifest-based `stage`/`commit` pair above: a run has no
+    /// per-photo destination, only ordered positions finalized in chunks.
+    public func createPhotoImportRun(_ input: PhotoImportCreateRunInput) async throws
+        -> PhotoImportCreateRunOutput
+    {
+        try await perform {
+            try await api.photoImport_createRun(body: .json(input)).ok.body.json
+        }
+    }
+
+    /// Finalizes one chunk (≤100 images) of a bulk upload into `input.runId`. Idempotent: a retry
+    /// after a transport error replays safely, since a previously finalized image comes back in
+    /// `alreadyFinalized` rather than erroring.
+    public func finalizePhotoImportRun(_ input: PhotoImportFinalizeInput) async throws
+        -> PhotoImportFinalizeOutput
+    {
+        try await perform {
+            try await api.photoImport_finalize(body: .json(input)).ok.body.json
+        }
+    }
+
     public func commitPhotoImport(_ input: PhotoImportCommitInput) async throws
         -> PhotoImportCommitOutput
     {

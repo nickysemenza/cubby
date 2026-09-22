@@ -1,4 +1,5 @@
 import CoreGraphics
+import CryptoKit
 import Foundation
 import ImageIO
 import UniformTypeIdentifiers
@@ -157,6 +158,14 @@ public struct PhotoFile: Sendable, Hashable {
             throw Failure.cannotDecode
         }
         return image
+    }
+
+    /// The full-resolution bytes' content hash, independent of any Vision analysis — a bulk import
+    /// run stages and finalizes photos before analysis runs (`PhotoImportRunUploader`), so it needs
+    /// this without paying for classification/OCR/feature-print work per photo.
+    public func sha256() throws -> String {
+        let digest = SHA256.hash(data: try Data(contentsOf: url, options: .mappedIfSafe))
+        return digest.map { String(format: "%02x", $0) }.joined()
     }
 
     /// Deliberate full-resolution edit support. Picker previews and hashing use `thumbnail` so
