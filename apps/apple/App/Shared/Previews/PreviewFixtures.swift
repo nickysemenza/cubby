@@ -60,25 +60,7 @@ enum PreviewFixtures {
 
     /// A product movement timeline for `EntityTimelineView`'s preview: one confident interval,
     /// one open unconfirmed one, a sale marker, and two date groups.
-    static let sampleTimeline: EntityTimelineOut = decode(
-        """
-        {"groups": [
-           {"key": "2026-03-02", "date": "2026-03-02", "label": "Sample Vendor order",
-            "link": {"entity": "purchase", "id": "PUR-2345"},
-            "events": [
-              {"id": "EXP-2345", "kind": "purchase", "label": "Sample Product", "amount": 12.5,
-               "link": {"entity": "product", "id": "PRD-2345"}, "detail": "1 each"},
-              {"id": "audit:1", "kind": "audit:update", "label": "Updated"}]},
-           {"key": "2026-03-09", "date": "2026-03-09",
-            "events": [{"id": "EXP-3456", "kind": "sale", "label": "Sample Product", "amount": -4}]}],
-         "rows": [{"id": "PRD-2345", "name": "Sample Product",
-                   "intervals": [{"start": "2026-03-02", "end": "2026-03-09", "confident": true},
-                                 {"start": "2026-03-09", "confident": false}],
-                   "markers": [{"date": "2026-03-09", "kind": "sale"}]}],
-         "stats": [{"key": "events", "label": "Events", "value": "3"}],
-         "notes": [], "extent": {"from": "2026-03-02", "to": "2026-03-09"},
-         "meta": {"totalCount": 1, "pageIndex": 0, "pageSize": 200}}
-        """)
+    static let sampleTimeline: EntityTimelineOut = decode(sampleTimelineJSON)
 
     /// Ranked candidates for `IdentifyResultsSection` previews; distances are illustrative only.
     static let sampleCandidates: [IdentificationCandidate] = [
@@ -108,46 +90,10 @@ enum PreviewFixtures {
     }()
 
     /// `task.todayBriefing`'s `next` rows, for `TodayView`'s preview.
-    static let sampleTodayTasks: [TaskTodayBriefingItemOut] = decode(
-        """
-        [{"id": "TSK-1001", "name": "Refill pantry staples list", "status": "in_progress",
-          "dueDate": "2026-09-11", "dueEndDate": null, "projectId": "PRJ-1001", "projectName": "Kitchen"},
-         {"id": "TSK-1002", "name": "Ship the porcelain overhaul PR", "status": "not_started",
-          "dueDate": "2026-09-12", "dueEndDate": null, "projectId": "PRJ-1002", "projectName": "Cubby app"},
-         {"id": "TSK-1003", "name": "Call the fridge repair vendor back", "status": "not_started",
-          "dueDate": null, "dueEndDate": null, "projectId": null, "projectName": null}]
-        """)
+    static let sampleTodayTasks: [TaskTodayBriefingItemOut] = decode(sampleTodayTasksJSON)
 
     /// Today's `GET /api/v1/meals` rows, for `TodayView`'s preview.
-    static let sampleTodayMeals: [MealListItem] = decode(
-        """
-        [\(meal(id: "MEA-2001", name: "Dinner", type: "dinner", kind: "cooked", recipes: ["Braised Short Ribs", "Roasted Carrots"])),
-         \(meal(id: "MEA-2002", name: "Lunch", type: "lunch", kind: "leftovers", recipes: []))]
-        """)
-
-    private static func meal(id: String, name: String, type: String, kind: String, recipes: [String])
-        -> String
-    {
-        let recipeRows = recipes.enumerated().map { index, recipe in
-            """
-            {"id": "\(id)-\(index)", "mealId": "\(id)", "recipeId": "RCP-\(index)",
-             "recipe": {"id": "RCP-\(index)", "name": "\(recipe)", "servings": null, "yield": null, "totals": null},
-             "scale": 1, "sortOrder": \(index),
-             "estimatedYieldGrams": null, "actualYieldGrams": null, "scaledTotals": \(totals),
-             "createdAt": "2026-09-14T10:00:00.000Z", "updatedAt": "2026-09-14T10:00:00.000Z"}
-            """
-        }
-        return """
-            {"id": "\(id)", "date": "2026-09-14", "name": "\(name)", "sortOrder": null, "mealType": "\(type)",
-             "mealKind": "\(kind)", "recipes": [\(recipeRows.joined(separator: ","))], "totals": \(totals),
-             "images": [], "displayName": "\(name)", "createdAt": "2026-09-14T10:00:00.000Z",
-             "updatedAt": "2026-09-14T10:00:00.000Z", "displayImages": []}
-            """
-    }
-
-    private static let totals = """
-        {"cost": {"status": "unavailable", "reason": "no_data"}, "nutrition": {}}
-        """
+    static let sampleTodayMeals: [MealListItem] = decode(sampleTodayMealsJSON)
 
     /// `PhotoDiagnosticsView`'s preview: one entity passing its routing policy, one missing, and a
     /// Foundation Models decision — enough to exercise every section without a real Vision run.
@@ -177,86 +123,13 @@ enum PreviewFixtures {
          "timings": {"analyzeMs": 102, "semanticMs": 340}}
         """)
 
-    /// `problems/getCounts`, for `TodayView`'s preview; every per-check count is zero. The list
-    /// is every check the server counts (`ProblemsCount.byType` requires each key), so a new
-    /// check fails this preview loudly instead of silently rendering a stale shape.
-    static let sampleTodayProblems: ProblemsCount = {
-        let checks = [
-            "duplicateInventory", "duplicateProductIdentities", "orphanedProducts",
-            "partiallyImportedCookbooks", "soldButStillStocked", "kitsCountedTwice",
-            "unlinkedExitExpenses", "purchaselessExitExpenses", "toolsUsedOutsideOwnership",
-            "productsWithNoImages", "entitiesMissingEmbeddings", "staleParentRecipes",
-            "understatedCostMeals", "unknownParkedItems", "inventoryWithoutPricePath",
-            "weightSoldProducts", "manufacturerSpellingVariants", "duplicateVendors",
-            "vendorsWithoutLogos", "purchasesNotReconciling",
-            "purchaseFinancialSettlementMismatches", "duplicateSpendCandidates",
-            "duplicateFinancialTransactionSourceRefs", "duplicateFinancialAccountSourceAliases",
-            "financialTransactionAllocationDefects", "invalidFinancialJson",
-            "referentialLivenessViolations", "dependencyCycles", "incompleteStatementImports",
-            "ingredientsWithPartialCoverage", "productsWithIslandedMappings",
-            "productsWithTitleDerivableSize", "productsWithBetterUpcData", "overdueTasks",
-            "stalledProjects", "projectsMissingBudget", "pastDuePlannedExpenses",
-            "unclassifiedExpenses", "blockedWorkProjects", "projectsWithDateDrift",
-            "ingredientsWithoutProduct", "staleLocations", "productsWithoutMappings",
-            "productsMissingPrice", "unvaluedBucketProducts", "neverVerifiedInventory",
-            "locationsWithoutAiDescription", "emptyLocations", "negativeExpectedQuantity",
-            "unusedIngredientsWithProduct", "unusedIngredientsWithoutProduct",
-        ]
-        let byType = checks.map { "\"\($0)\": 0" }.joined(separator: ", ")
-        return decode("{\"total\": 14, \"coverageTotal\": 3, \"byType\": {\(byType)}}")
-    }()
+    /// `problems/getCounts`, for `TodayView`'s preview; every per-check count is zero. `byType`'s
+    /// keys are read straight off the `ProblemsCount` zod schema at generation time (see
+    /// `apps/web/scripts/generate-apple-preview-fixtures.ts`), so a new check can never leave
+    /// this preview silently rendering a stale shape — a missing key fails generation instead.
+    static let sampleTodayProblems: ProblemsCount = decode(sampleTodayProblemsJSON)
 
-    static let sampleMealNutrition: MealNutritionOut = decode(
-        """
-        {"meals": [\(lunch)],
-         "people": [
-           {"eater": {"id": "LDP-1001", "name": "Alex"},
-            "totals": \(macros(642, 31.4, 78.2, 22.7, status: "partial")),
-            "meals": [{"meal": \(lunch), "totals": \(macros(642, 31.4, 78.2, 22.7, status: "partial"))}],
-            "foods": [
-              {"sourceKind": "recipe", "mealRecipeId": "meal-recipe-preview-1", "recipeId": "RCP-1001",
-               "sourceMealId": "MEL-2001", "meal": \(lunch), "name": "Tomato tart", "amount": null,
-               "grams": 245, "weight": \(complete(245)), "batchShare": \(complete(1)),
-               "totals": \(macros(512, 18.4, 62.2, 21.1))},
-              {"sourceKind": "product", "id": "meal-food-preview-1", "productId": "PRD-1001",
-               "meal": \(lunch), "name": "Greek yogurt", "amount": null, "grams": 170,
-               "weight": \(complete(170)), "batchShare": \(complete(1)),
-               "totals": \(macros(130, 13, 16, nil))}]},
-           {"eater": {"id": "LDP-1002", "name": "Sam"},
-            "totals": \(macros(488, 21.8, 59.5, 18.6)),
-            "meals": [{"meal": \(lunch), "totals": \(macros(488, 21.8, 59.5, 18.6))}],
-            "foods": [
-              {"sourceKind": "recipe", "mealRecipeId": "meal-recipe-preview-2", "recipeId": "RCP-1001",
-               "sourceMealId": "MEL-2001", "meal": \(lunch), "name": "Tomato tart", "amount": null,
-               "grams": 220, "weight": \(complete(220)), "batchShare": \(complete(1)),
-               "totals": \(macros(488, 21.8, 59.5, 18.6))}]}]}
-        """)
-
-    private static let lunch = """
-        {"id": "MEL-2001", "date": "2026-09-14", "name": "Garden lunch", "mealType": "lunch"}
-        """
-
-    private static func complete(_ value: Double) -> String {
-        "{\"status\": \"complete\", \"lower\": \(value), \"upper\": null, \"coverage\": {\"covered\": 1, \"total\": 1}}"
-    }
-
-    private static func macros(
-        _ kcal: Double, _ protein: Double, _ carbs: Double, _ fat: Double?, status: String = "complete"
-    ) -> String {
-        func estimate(_ value: Double?) -> String {
-            guard let value else { return "{\"status\": \"unavailable\", \"reason\": \"no_data\"}" }
-            return
-                "{\"status\": \"\(status)\", \"lower\": \(value), \"upper\": null, \"coverage\": {\"covered\": 1, \"total\": 1}}"
-        }
-        return """
-            {"cost": {"status": "unavailable", "reason": "no_data"},
-             "nutrition": {"kcal": \(estimate(kcal)), "protein": \(estimate(protein)),
-                           "carbs": \(estimate(carbs)), "fat": \(estimate(fat))},
-             "macros": {"calories": \(estimate(kcal)), "protein": \(estimate(protein)),
-                        "carbs": \(estimate(carbs)), "fat": \(estimate(fat)),
-                        "partial": \(status == "partial")}}
-            """
-    }
+    static let sampleMealNutrition: MealNutritionOut = decode(sampleMealNutritionJSON)
 }
 
 struct SignedInPreview: PreviewModifier {

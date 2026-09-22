@@ -8,6 +8,14 @@
   },
   "defaultBase": "origin/main",
   "namedInputs": {
+    // What oxlint and oxfmt read: the repo minus the file types neither checks.
+    "lintable": [
+      "repo",
+      "!{workspaceRoot}/**/*.mdx",
+      "!{workspaceRoot}/**/*.rs",
+      "!{workspaceRoot}/**/*.toml",
+      "!{workspaceRoot}/**/*.lock"
+    ],
     "default": ["{projectRoot}/**/*", "sharedGlobals"],
     "sharedGlobals": [
       "{workspaceRoot}/pnpm-lock.yaml",
