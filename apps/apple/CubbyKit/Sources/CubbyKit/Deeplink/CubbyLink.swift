@@ -12,6 +12,9 @@ import Foundation
 /// - `cubby://today` opens Today.
 /// - `cubby://search` opens the Search tab (home-screen quick action).
 /// - `cubby://dev` opens the Dev screen.
+/// - `cubby://activity` opens the Activity list; `cubby://activity/<IPR-…|RUN-…>` opens one run
+///   (the server `ActivityRun` id shape — `packages/schemas/src/activity.ts`'s `activityRunId` —
+///   is not a catalog entity shortcode, so it is validated here rather than through `CubbyLabel`).
 ///
 /// A Universal Link also resolves: `https://<any host>/<SHORTCODE>` or
 /// `https://<any host>/<anything>/<SHORTCODE>` (only the last path component is inspected) opens
@@ -27,6 +30,7 @@ public enum CubbyLink: Sendable, Hashable {
     case identify
     case search
     case dev
+    case activity(run: String?)
 
     public static let scheme = "cubby"
 
@@ -66,9 +70,29 @@ public enum CubbyLink: Sendable, Hashable {
             self = .search
         case ("dev", 0):
             self = .dev
+        case ("activity", 0):
+            self = .activity(run: nil)
+        case ("activity", 1):
+            guard let run = Self.activityRunID(segments[0]) else { return nil }
+            self = .activity(run: run)
         default:
             return nil
         }
+    }
+
+    /// The server `ActivityRun` id shape (`IPR-…` a purchase-import run, `RUN-…` any other run),
+    /// uppercased. Not a `CubbyLabel`/`EntityCatalog` shortcode — activity runs are not a catalog
+    /// entity — so this validates the prefix and body directly instead.
+    private static func activityRunID(_ raw: String) -> String? {
+        let value = raw.trimmingCharacters(in: .whitespaces).uppercased()
+        for prefix in ["IPR-", "RUN-"] {
+            guard value.hasPrefix(prefix) else { continue }
+            let body = value.dropFirst(prefix.count)
+            guard !body.isEmpty, body.allSatisfy({ $0.isASCII && ($0.isNumber || $0.isUppercase) })
+            else { return nil }
+            return value
+        }
+        return nil
     }
 
     public var url: URL {
@@ -94,6 +118,9 @@ public enum CubbyLink: Sendable, Hashable {
             components.host = "search"
         case .dev:
             components.host = "dev"
+        case .activity(let run):
+            components.host = "activity"
+            components.path = run.map { "/\($0)" } ?? ""
         }
         // Every component above is scheme-safe ASCII, so this cannot fail.
         return components.url!

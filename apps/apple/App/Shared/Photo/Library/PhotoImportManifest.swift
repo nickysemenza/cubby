@@ -49,6 +49,10 @@ final class PhotoImportManifest {
     private var analysisTask: Task<Void, Never>?
     private var nextAnalysisLogID = 0
     private let analysisStore: PhotoAnalysisStore
+    private let activityCenter: BackgroundActivityCenter?
+    /// Stable for the manifest's lifetime so a retry (`checkCommitStatus`) after a review-required
+    /// failure resumes the same device-local activity rather than starting a second one.
+    private let uploadActivityID = UUID().uuidString
 
     /// `analysisStore` defaults to a throwaway in-memory store: every production call site
     /// (`PhotosRootView`) passes `AppModel.photoAnalysisStore` explicitly, and so does every test
@@ -58,10 +62,12 @@ final class PhotoImportManifest {
     /// exercise assignment/commit logic and run one at a time, never concurrently.
     init(
         items: [PhotoSelectionItem],
-        analysisStore: PhotoAnalysisStore = PhotoImportManifest.ephemeralAnalysisStore()
+        analysisStore: PhotoAnalysisStore = PhotoImportManifest.ephemeralAnalysisStore(),
+        activityCenter: BackgroundActivityCenter? = nil
     ) {
         self.items = items
         self.analysisStore = analysisStore
+        self.activityCenter = activityCenter
         let focused = items.first?.id
         focusedItemID = focused
         selectedIDs = focused.map { Set([$0]) } ?? []
@@ -860,7 +866,11 @@ final class PhotoImportManifest {
         errorMessage = nil
         commitRequiresReview = false
         progress = "Adding photos…"
-        defer { isCommitting = false }
+        beginUploadActivity()
+        defer {
+            isCommitting = false
+            activityCenter?.end(id: uploadActivityID)
+        }
         do {
             try await prepareIfNeeded()
             let batch = try makeBatch()
@@ -911,6 +921,8 @@ final class PhotoImportManifest {
         // `let activeTransaction` (rather than shadowing the `transaction` property) so
         // `.stagedImagesExpired` below can still clear the property itself.
         guard commitRequiresReview, let activeTransaction = transaction else { return nil }
+        beginUploadActivity()
+        defer { activityCenter?.end(id: uploadActivityID) }
         do {
             let committedIDs = try await activeTransaction.reconcile(try makeBatch())
             hasCommitted = true
@@ -993,11 +1005,27 @@ final class PhotoImportManifest {
             classifyVersion: PhotoClassificationSweep.classifyVersion)
     }
 
+    private func beginUploadActivity() {
+        _ = activityCenter?.begin(
+            BackgroundActivity(
+                id: uploadActivityID, kind: .upload, title: "Adding photos", phase: .running,
+                progress: nil, detail: nil, startedAt: .now, link: .localActivity(uploadActivityID),
+                isUserInitiated: true, isCancellable: false))
+    }
+
     private func updateProgress(_ state: PhotoImportTransactionProgress) {
         switch state {
-        case .staging: progress = "Staging photos…"
-        case .uploading(let completed, let total): progress = "Uploading \(completed) of \(total)…"
-        case .committing: progress = "Adding photos…"
+        case .staging:
+            progress = "Staging photos…"
+            activityCenter?.update(id: uploadActivityID, detail: "Staging photos")
+        case .uploading(let completed, let total):
+            progress = "Uploading \(completed) of \(total)…"
+            let fraction = total > 0 ? Double(completed) / Double(total) : nil
+            activityCenter?.update(
+                id: uploadActivityID, progress: fraction, detail: "Uploading \(completed) of \(total)")
+        case .committing:
+            progress = "Adding photos…"
+            activityCenter?.update(id: uploadActivityID, detail: "Adding photos")
         }
     }
 
