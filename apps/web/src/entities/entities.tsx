@@ -11,6 +11,7 @@ import {
   ArrowLeftRight,
   Barcode,
   BookOpen,
+  Bot,
   CalendarDays,
   Carrot,
   ChefHat,
@@ -190,6 +191,7 @@ const LUCIDE_ICONS = {
   ArrowLeftRight,
   Barcode,
   BookOpen,
+  Bot,
   CalendarDays,
   Carrot,
   ChefHat,
@@ -385,6 +387,10 @@ const entityDefinitions = withEntityNames({
   },
   vendorAccount: {
     ...generatedBrowserRoutes.vendorAccount,
+    color: INK.slate,
+  },
+  purchaseImportRun: {
+    ...generatedBrowserRoutes.purchaseImportRun,
     color: INK.slate,
   },
   productCategory: {

@@ -40,7 +40,7 @@ export async function initiateImportRunEvidenceUpload(
     .where(
       and(
         eq(importRunTarget.id, input.targetId),
-        eq(importRun.publicId, input.runPublicId),
+        eq(importRun.shortcode, input.runId),
         eq(importRun.actorUserId, userId.parse(actorUserId)),
         inArray(importRun.status, ["running", "dispatch_failed"]),
       ),
@@ -49,7 +49,7 @@ export async function initiateImportRunEvidenceUpload(
   if (!target) throw new Error("Import evidence target is not writable");
 
   const evidenceId = crypto.randomUUID();
-  const objectKey = `${env.R2_KEY_PREFIX}/import-runs/${input.runPublicId}/${input.targetId}/${evidenceId}-${safeFilename(input.filename)}`;
+  const objectKey = `${env.R2_KEY_PREFIX}/import-runs/${input.runId}/${input.targetId}/${evidenceId}-${safeFilename(input.filename)}`;
   await database.insert(importRunEvidence).values({
     id: evidenceId,
     runId: target.runId,

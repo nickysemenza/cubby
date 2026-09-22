@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { purchaseImportRunId } from "@cubby/schemas/identifiers";
 import { and, eq } from "drizzle-orm";
 import { type TestDbContext, withTestDb } from "tooling/test-setup";
 import { afterEach, describe, expect, it } from "vitest";
@@ -15,9 +16,11 @@ import {
   financialTransaction,
   financialTransactionAllocation,
   image,
+  importFinding,
   importRun,
   importRunMutation,
   importRunOperation,
+  importRunProgress,
   importSourceClaim,
   oauthRefreshToken,
   product,
@@ -208,7 +211,7 @@ async function waitFor(predicate: () => Promise<boolean>, message: string) {
 }
 
 async function workerdDiagnostic(db: TestDbContext["db"], runId: string) {
-  const [run, operations] = await Promise.all([
+  const [run, operations, findings, progress] = await Promise.all([
     getDb(db)
       .select({
         status: importRun.status,
@@ -218,7 +221,7 @@ async function workerdDiagnostic(db: TestDbContext["db"], runId: string) {
         coordinatorStartedAt: importRun.coordinatorStartedAt,
       })
       .from(importRun)
-      .where(eq(importRun.id, runId)),
+      .where(eq(importRun.id, purchaseImportRunId.parse(runId))),
     getDb(db)
       .select({
         operationId: importRunOperation.operationId,
@@ -229,8 +232,27 @@ async function workerdDiagnostic(db: TestDbContext["db"], runId: string) {
       })
       .from(importRunOperation)
       .where(eq(importRunOperation.runId, runId)),
+    // The review reason lives on the finding and the last progress report,
+    // not on the run row.
+    getDb(db)
+      .select({ kind: importFinding.kind, summary: importFinding.summary })
+      .from(importFinding)
+      .where(eq(importFinding.importRunId, runId)),
+    getDb(db)
+      .select({
+        phase: importRunProgress.phase,
+        detail: importRunProgress.detail,
+      })
+      .from(importRunProgress)
+      .where(eq(importRunProgress.runId, runId)),
   ]);
-  return JSON.stringify({ run, operations, logs: harness?.getLogs() });
+  return JSON.stringify({
+    run,
+    operations,
+    findings,
+    progress,
+    logs: harness?.getLogs(),
+  });
 }
 
 async function protectedBusinessSnapshot(
@@ -397,7 +419,7 @@ describe("purchase-agent coupled two-Worker workerd harness", () => {
             method: "POST",
             headers: { "content-type": "application/json" },
             body: JSON.stringify({
-              runPublicId: started.run.publicId,
+              runId: started.run.id,
               productShortcode: targetProductRow.shortcode,
               sourceExternalKey,
               evidenceChecksum,
@@ -415,7 +437,6 @@ describe("purchase-agent coupled two-Worker workerd harness", () => {
         version: 1,
         type: "start_or_resume",
         runId: started.run.id,
-        publicId: started.run.publicId,
         purpose: "purchase_validation",
         eventId: started.run.dispatchEventId,
       };

@@ -29,6 +29,7 @@ import type { Database, DrizzleTransaction } from "~/server/db";
 import {
   financialTransaction,
   gardenEntry,
+  importRun,
   inventoryEntry,
   location,
   meal,
@@ -300,6 +301,11 @@ export const LABEL_COLUMN_OVERRIDES = {
     column: null,
     reason:
       "titleField (fromPartyName) is a read-only value joined from LedgerParty, not a physical LedgerTransfer column",
+  },
+  purchaseImportRun: {
+    column: importRun.purpose,
+    reason:
+      'titleField (displayName) is computed as `${vendorName ?? "Purchase agent"} · ${purpose label}` with no single storage column; purpose is the always-present best-effort audit-label fallback',
   },
 } satisfies Partial<
   Record<ShortcodeEntity, { column: PgColumn | null; reason: string }>

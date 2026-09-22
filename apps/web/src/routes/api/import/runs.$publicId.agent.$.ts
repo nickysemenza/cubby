@@ -4,7 +4,7 @@ import { getPurchaseImportNamespace } from "~/server/cf-env";
 import { proxyPurchaseAgentRequest } from "~/server/purchase-import/agent-proxy";
 import {
   controlImportRun,
-  loadRunScopeByPublicId,
+  loadRunScopeByShortcode,
 } from "~/server/purchase-import/run-service";
 import { createRequestContext, requireActor } from "~/server/request-context";
 
@@ -32,7 +32,7 @@ async function handler(input: {
       },
     );
     if (cancellation.cancelledBrowserCommandIds) {
-      const scope = await loadRunScopeByPublicId(
+      const scope = await loadRunScopeByShortcode(
         context.db,
         input.params.publicId,
       );

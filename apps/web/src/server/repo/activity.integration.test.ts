@@ -1,4 +1,5 @@
 import { parseEntityId } from "@cubby/schemas/identifiers";
+import { generateShortcode } from "@cubby/shared";
 import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
@@ -304,11 +305,11 @@ describe("activity image processing projection", () => {
       .update(imageProcessingJob)
       .set({ createdAt: at })
       .where(eq(imageProcessingJob.id, imageJob));
-    const runPublicId = `PIR-${crypto.randomUUID().replaceAll("-", "").slice(0, 10).toUpperCase()}`;
+    const runPublicId = generateShortcode("purchaseImportRun");
     const [run] = await getDb(ctx.db)
       .insert(importRun)
       .values({
-        publicId: runPublicId,
+        shortcode: runPublicId,
         ledgerPartyId: party.id,
         actorUserId: ctx.actor.userId,
         actorName: "Activity member",

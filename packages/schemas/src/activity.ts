@@ -2,7 +2,7 @@ import { z } from "zod";
 import { imageShortcode } from "./identifiers";
 import { imageDescriptionAnalysis } from "./image-processing";
 
-export const activityRunId = z.string().regex(/^(?:IPR|PIR)-[A-Z0-9]+$/u);
+export const activityRunId = z.string().regex(/^(?:IPR|RUN)-[A-Z0-9]+$/u);
 export const activitySubmissionId = z.string().regex(/^IPS-[A-Z0-9]+$/u);
 export const activityKind = z.enum([
   "purchase_import",

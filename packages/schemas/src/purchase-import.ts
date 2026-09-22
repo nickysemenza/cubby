@@ -4,11 +4,18 @@ import { productCategoryShortcode } from "./identifier-fields";
 import { externalIdKind, externalIdSource } from "./external-id";
 
 import { money } from "./money";
+import {
+  importRunPurpose,
+  importRunStatus,
+  importRunTrigger,
+} from "./purchase-import-run-fields";
 import { expenseLineKindSchema } from "./expense-line-kind";
 import {
   imageShortcode,
   productShortcode,
   projectShortcode,
+  purchaseImportRunId,
+  purchaseImportRunShortcode,
   purchaseShortcode,
   vendorShortcode,
 } from "./identifier-fields";
@@ -29,32 +36,13 @@ export const importSourceKind = z.enum([
 ]);
 export type ImportSourceKind = z.infer<typeof importSourceKind>;
 
-export const importRunTrigger = z.enum([
-  "foreground",
-  "discovery",
-  "manual",
-  "backfill",
-]);
+export {
+  importRunPurpose,
+  importRunStatus,
+  importRunTrigger,
+} from "./purchase-import-run-fields";
 export type ImportRunTrigger = z.infer<typeof importRunTrigger>;
-
-export const importRunStatus = z.enum([
-  "running",
-  "paused_auth",
-  "paused_offline",
-  "paused_approval",
-  "needs_review",
-  "completed",
-  "failed",
-  "dispatch_failed",
-]);
 export type ImportRunStatus = z.infer<typeof importRunStatus>;
-
-/** The server capability boundary is selected by the run, never by a prompt. */
-export const importRunPurpose = z.enum([
-  "account_sync",
-  "purchase_validation",
-  "product_enrichment",
-]);
 export type ImportRunPurpose = z.infer<typeof importRunPurpose>;
 
 export const importRunTargetKind = z.enum(["purchase", "product"]);
@@ -89,16 +77,15 @@ export const importRunEvidenceKind = z.enum([
 export type ImportRunEvidenceKind = z.infer<typeof importRunEvidenceKind>;
 
 /** Public, non-entity identity for one durable purchase-import run. */
-export const importRunPublicId = z
-  .string()
-  .trim()
-  .toUpperCase()
-  .regex(/^PIR-[A-Z0-9]{10}$/);
-export type ImportRunPublicId = z.infer<typeof importRunPublicId>;
+/** A run's public code, the `RUN-` shortcode every public surface uses. */
+export const importRunShortcode = purchaseImportRunShortcode;
+export type ImportRunPublicId = z.infer<typeof importRunShortcode>;
 
 /** Stage bytes for a run target only; this never creates an Image or Document. */
 export const initiateImportRunEvidenceUploadInput = z.object({
-  runPublicId: importRunPublicId,
+  // The run's public code: the browser page names runs by it and the Mac
+  // echoes the one its capture command's evidence scope carried.
+  runId: importRunShortcode,
   targetId: z.uuid(),
   kind: importRunEvidenceKind,
   contentType: z.enum([
@@ -172,14 +159,14 @@ export const targetedImportRunStartOut = z.object({
   created: z.boolean(),
   run: z
     .object({
-      publicId: importRunPublicId,
+      id: importRunShortcode,
       status: importRunStatus,
       purpose: importRunPurpose,
       dispatchEventId: z.string().uuid().nullable(),
     })
     .nullable(),
   blockingRun: z
-    .object({ publicId: importRunPublicId, status: importRunStatus })
+    .object({ id: importRunShortcode, status: importRunStatus })
     .nullable(),
 });
 
@@ -198,7 +185,9 @@ const stableImportItemId = z
  * retrying it verbatim returns the original ledger result.
  */
 export const purchaseImportRunExecution = z.object({
-  runPublicId: importRunPublicId,
+  // The private run id: it is what the delegation token and Flue instance
+  // carry, so the public code can change without touching agent state.
+  runId: z.uuid(),
   operationId: importOperationId,
   itemOperationIds: z.array(importItemOperationId).min(1).max(50).optional(),
 });
@@ -503,7 +492,7 @@ export const browserBridgeOperation = z.discriminatedUnion("type", [
     // Targeted browser evidence must retain the scope that authorizes its R2
     // upload; account-sync captures intentionally omit it.
     evidenceScope: z
-      .object({ runPublicId: importRunPublicId, targetId: z.uuid() })
+      .object({ runId: importRunShortcode, targetId: z.uuid() })
       .optional(),
   }),
 ]);
@@ -688,7 +677,6 @@ export const browserBridgeServerMessage = z.discriminatedUnion("type", [
 export const purchaseAgentEvent = z.object({
   version: z.literal(1),
   runId: z.uuid(),
-  publicId: importRunPublicId.optional(),
   purpose: importRunPurpose.optional(),
   coordinatorModel: z.enum(["gpt-5.6-terra", "gpt-5.6-sol"]).optional(),
   eventId: z.string().trim().min(1).max(256),
@@ -705,8 +693,8 @@ export const purchaseAgentEvent = z.object({
 export type PurchaseAgentEvent = z.infer<typeof purchaseAgentEvent>;
 
 export const purchaseImportRunScope = z.object({
-  runId: z.uuid(),
-  publicId: importRunPublicId,
+  runId: purchaseImportRunId,
+  shortcode: importRunShortcode,
   agentId: z.string().trim().min(1),
   trigger: importRunTrigger,
   purpose: importRunPurpose,
@@ -837,7 +825,7 @@ export const preparedProductCandidate = z.object({
 });
 
 export const preparePurchaseImportOut = z.object({
-  runPublicId: importRunPublicId,
+  runId: importRunShortcode,
   operationId: importOperationId,
   status: z.literal("running"),
   orders: z.array(
@@ -891,7 +879,7 @@ export type CommitPurchaseImportInput = z.infer<
 >;
 
 export const commitPurchaseImportOut = z.object({
-  runPublicId: importRunPublicId,
+  runId: importRunShortcode,
   operationId: importOperationId,
   status: importRunStatus,
   items: z.array(
@@ -915,7 +903,7 @@ export type ValidatePurchaseImportInput = z.infer<
 >;
 
 export const validatePurchaseImportOut = z.object({
-  runPublicId: importRunPublicId,
+  runId: importRunShortcode,
   operationId: importOperationId,
   status: z.enum(["completed", "needs_review"]),
   targets: z.array(
@@ -968,7 +956,7 @@ export type CommitProductEnrichmentInput = z.infer<
 >;
 
 export const commitProductEnrichmentOut = z.object({
-  runPublicId: importRunPublicId,
+  runId: importRunShortcode,
   operationId: importOperationId,
   productId: productShortcode,
   status: z.enum(["running", "needs_review"]),
@@ -1001,7 +989,7 @@ export type OverwriteProductEnrichmentInput = z.infer<
 >;
 
 export const overwriteProductEnrichmentOut = z.object({
-  runPublicId: importRunPublicId,
+  runId: importRunShortcode,
   productId: productShortcode,
   changedField: z.enum(["manufacturer", "categoryId", "model"]),
 });
@@ -1014,7 +1002,7 @@ export type PurchaseImportOperationStatusInput = z.infer<
 >;
 
 export const purchaseImportOperationStatusOut = z.object({
-  runPublicId: importRunPublicId,
+  runId: importRunShortcode,
   operationId: importOperationId,
   kind: z.string(),
   state: z.enum(["started", "paused_approval", "completed", "failed"]),

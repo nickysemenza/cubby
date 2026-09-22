@@ -79,7 +79,6 @@ const NON_ENTITY_FK_TARGETS = {
   // statement line by public id.
   StatementImport: "provider export bookkeeping, not a domain entity",
   StatementRow: "verbatim statement evidence, not a domain entity",
-  ImportRun: "purchase-import execution bookkeeping, not a domain entity",
   ImportRunTarget:
     "explicit operational target for a validation or enrichment import run",
   ImportRunOrderCandidate:
@@ -104,18 +103,6 @@ const NON_ENTITY_FK_TARGETS = {
  * once its edge becomes graph-visible.
  */
 const NON_GRAPH_ENTITY_FK_EXEMPTIONS = {
-  "ImportRun.ledgerPartyId": {
-    classification: "metadata",
-    reason: "scopes operational import execution to a household member",
-  },
-  "ImportRun.vendorAccountId": {
-    classification: "metadata",
-    reason: "records the vendor login used by an operational import run",
-  },
-  "ImportRun.vendorId": {
-    classification: "metadata",
-    reason: "records the vendor for accountless mail, receipt, and export runs",
-  },
   "ImportRunTarget.purchaseId": {
     classification: "metadata",
     reason: "records the Purchase a targeted validation examined",
@@ -128,6 +115,71 @@ const NON_GRAPH_ENTITY_FK_EXEMPTIONS = {
     classification: "metadata",
     reason:
       "freezes the member-owned vendor account selected for targeted evidence",
+  },
+  // purchaseImportRun's own child rows. Each source table is operational
+  // bookkeeping (see NON_ENTITY_FK_TARGETS above), not an entity, so these
+  // stay ordinary non-graph exemptions rather than needing a declared
+  // relationship. `Purchase.importRunId` and `ImportRun.predecessorRunId`
+  // are NOT exempted here on purpose: both source purchase and
+  // purchaseImportRun, which are entities, so the guard below correctly
+  // demands a real graph path for them (as it already does for
+  // `ImportRun.ledgerPartyId`/`vendorAccountId`/`vendorId`) — declaring one
+  // needs a `relations` entry on the entity definitions plus `pnpm generate`,
+  // which is out of scope here; see the failing case this leaves in
+  // "accounts for every entity-targeting FK with a graph path or classified
+  // non-entity edge".
+  "ImportRunTarget.runId": {
+    classification: "ownership",
+    reason: "a validation/enrichment target exists only as part of its run",
+  },
+  "ImportRunOrderCandidate.runId": {
+    classification: "ownership",
+    reason: "an account-sync order-history worklist row owned by its run",
+  },
+  "ImportRunEvidence.runId": {
+    classification: "ownership",
+    reason: "captured evidence filed under its run",
+  },
+  "ImportRunMutation.runId": {
+    classification: "ownership",
+    reason: "an explicit row-mutation record attributed to its run",
+  },
+  "ImportRunOperation.runId": {
+    classification: "ownership",
+    reason: "one idempotent operation owned by its run",
+  },
+  "ImportRunProgress.runId": {
+    classification: "ownership",
+    reason: "a progress checkpoint owned by its run",
+  },
+  "ImportRunControlEvent.runId": {
+    classification: "ownership",
+    reason: "a control-plane event (pause/resume/prompt/...) owned by its run",
+  },
+  "ImportRunApproval.runId": {
+    classification: "ownership",
+    reason: "an approval decision owned by its run",
+  },
+  "ImportSourceClaim.firstRunId": {
+    classification: "metadata",
+    reason: "records the run that first captured this idempotent source claim",
+  },
+  "ImportSourceClaim.lastRunId": {
+    classification: "metadata",
+    reason:
+      "records the run that most recently confirmed this idempotent source claim",
+  },
+  "ImportFinding.importRunId": {
+    classification: "metadata",
+    reason: "records the run that produced this integrity finding",
+  },
+  "ImportHunt.receiptRunId": {
+    classification: "metadata",
+    reason: "records the run that captured this hunt's receipt",
+  },
+  "ImportPreparedOrder.runId": {
+    classification: "ownership",
+    reason: "immutable prepared-order evidence owned by its run",
   },
   "ImportPreparedOrder.primaryDocumentImageId": {
     classification: "metadata",

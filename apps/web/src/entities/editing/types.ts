@@ -26,13 +26,14 @@ import type { EntityEditValue, EntityEditValueBag } from "./value-schema";
 
 /**
  * Entities with the standard create/update router contract. The editing
- * registry is deliberately narrower than `Entity`: images, cookbooks, and
- * external USDA foods have different lifecycles and must opt in explicitly if
- * they ever gain this editing surface.
+ * registry is deliberately narrower than `Entity`: images, cookbooks,
+ * external USDA foods, and read-only purchase-agent import runs have
+ * different lifecycles and must opt in explicitly if they ever gain this
+ * editing surface.
  */
 export type EditableEntity = Exclude<
   Entity,
-  "image" | "usda-food" | "cookbook"
+  "image" | "usda-food" | "cookbook" | "purchaseImportRun"
 >;
 
 type _EditableEntityMatchesTypedCatalog =

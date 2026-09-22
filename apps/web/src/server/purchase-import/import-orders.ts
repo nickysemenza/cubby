@@ -3,6 +3,7 @@ import {
   type LedgerPartyId,
   parseEntityId,
   type VendorId,
+  purchaseImportRunId,
 } from "@cubby/schemas/identifiers";
 import {
   commitPurchaseImportInput,
@@ -69,7 +70,7 @@ import {
 import { assertImportRunCapability } from "./capabilities";
 import { learnPurchaseProductExternalId } from "./external-id-learning";
 import { attachPendingOrderMailEvidence } from "./gmail/process";
-import { auditAllImportBatches, loadRunScopeByPublicId } from "./run-service";
+import { auditAllImportBatches, loadRunScope } from "./run-service";
 import { buildPurchaseImportPlan, importVendorOrder } from "./writer";
 
 const sha256 = async (value: string): Promise<string> => {
@@ -97,9 +98,9 @@ const operationArgs = (input: {
 const assertOwnedRun = async (
   db: Database,
   actor: ActorContext,
-  runPublicId: string,
+  runId: string,
 ) => {
-  const scope = await loadRunScopeByPublicId(db, runPublicId);
+  const scope = await loadRunScope(db, runId);
   if (scope.actorUserId !== actor.userId)
     throw new Error("Purchase import run is not owned by this member");
   return scope;
@@ -322,11 +323,7 @@ export async function preparePurchaseImport(
   actor: ActorContext,
 ) {
   const input = preparePurchaseImportInput.parse(rawInput);
-  const scope = await assertOwnedRun(
-    db,
-    actor,
-    input._runExecution.runPublicId,
-  );
+  const scope = await assertOwnedRun(db, actor, input._runExecution.runId);
   const [purposeRow] = await getDb(db)
     .select({ purpose: importRun.purpose })
     .from(importRun)
@@ -485,7 +482,7 @@ export async function preparePurchaseImport(
     }
 
     const result = preparePurchaseImportOut.parse({
-      runPublicId: scope.public.publicId,
+      runId: scope.public.shortcode,
       operationId: input._runExecution.operationId,
       status: "running",
       orders: outputOrders,
@@ -527,7 +524,7 @@ async function finalizeReviewRun(
     })
     .where(
       and(
-        eq(importRun.id, runId),
+        eq(importRun.id, purchaseImportRunId.parse(runId)),
         inArray(importRun.status, ["running", "paused_approval"]),
       ),
     );
@@ -541,11 +538,7 @@ export async function commitPurchaseImport(
   actor: ActorContext,
 ) {
   const input = commitPurchaseImportInput.parse(rawInput);
-  const scope = await assertOwnedRun(
-    db,
-    actor,
-    input._runExecution.runPublicId,
-  );
+  const scope = await assertOwnedRun(db, actor, input._runExecution.runId);
   const [purposeRow] = await getDb(db)
     .select({ purpose: importRun.purpose })
     .from(importRun)
@@ -794,7 +787,7 @@ export async function commitPurchaseImport(
         if (resolutionMap.size !== consumedResolutionIds.size)
           throw new Error("Product resolutions include unknown line ids");
         const publicResult = commitPurchaseImportOut.parse({
-          runPublicId: scope.public.publicId,
+          runId: scope.public.shortcode,
           operationId: input._runExecution.operationId,
           status: requiresReview ? "needs_review" : "running",
           items,
@@ -860,11 +853,7 @@ export async function validatePurchaseImport(
   actor: ActorContext,
 ) {
   const input = validatePurchaseImportInput.parse(rawInput);
-  const scope = await assertOwnedRun(
-    db,
-    actor,
-    input._runExecution.runPublicId,
-  );
+  const scope = await assertOwnedRun(db, actor, input._runExecution.runId);
   if (scope.public.purpose !== "purchase_validation")
     throw new Error(
       "validate_purchase_import requires a purchase validation run",
@@ -1060,7 +1049,7 @@ export async function validatePurchaseImport(
         ? "completed"
         : "needs_review";
       const result = validatePurchaseImportOut.parse({
-        runPublicId: scope.public.publicId,
+        runId: scope.public.shortcode,
         operationId: input._runExecution.operationId,
         status,
         targets: results,
@@ -1086,11 +1075,7 @@ export async function commitProductEnrichment(
   actor: ActorContext,
 ) {
   const input = commitProductEnrichmentInput.parse(rawInput);
-  const scope = await assertOwnedRun(
-    db,
-    actor,
-    input._runExecution.runPublicId,
-  );
+  const scope = await assertOwnedRun(db, actor, input._runExecution.runId);
   if (scope.public.purpose !== "product_enrichment")
     throw new Error(
       "Product enrichment commit requires a product enrichment run",
@@ -1396,7 +1381,7 @@ export async function commitProductEnrichment(
           })
           .where(eq(importRunTarget.id, target.id));
         const result = commitProductEnrichmentOut.parse({
-          runPublicId: scope.public.publicId,
+          runId: scope.public.shortcode,
           operationId,
           productId: input.productId,
           status: "running",
@@ -1441,7 +1426,7 @@ export async function commitProductEnrichment(
     }
   }
   return commitProductEnrichmentOut.parse({
-    runPublicId: scope.public.publicId,
+    runId: scope.public.shortcode,
     operationId,
     productId: input.productId,
     status: "running",
@@ -1456,11 +1441,7 @@ export async function overwriteProductEnrichment(
   actor: ActorContext,
 ) {
   const input = overwriteProductEnrichmentInput.parse(rawInput);
-  const scope = await assertOwnedRun(
-    db,
-    actor,
-    input._runExecution.runPublicId,
-  );
+  const scope = await assertOwnedRun(db, actor, input._runExecution.runId);
   if (scope.public.purpose !== "product_enrichment")
     throw new Error("Product overwrite requires a product enrichment run");
   const resolvedProductId = await resolveOrThrow(
@@ -1567,7 +1548,7 @@ export async function overwriteProductEnrichment(
         ),
       );
     return overwriteProductEnrichmentOut.parse({
-      runPublicId: scope.public.publicId,
+      runId: scope.public.shortcode,
       productId: input.productId,
       changedField: input.change.field,
     });
@@ -1580,11 +1561,7 @@ export async function purchaseImportOperationStatus(
   actor: ActorContext,
 ) {
   const input = purchaseImportOperationStatusInput.parse(rawInput);
-  const scope = await assertOwnedRun(
-    db,
-    actor,
-    input._runExecution.runPublicId,
-  );
+  const scope = await assertOwnedRun(db, actor, input._runExecution.runId);
   const [operation] = await getDb(db)
     .select({
       kind: importRunOperation.kind,
@@ -1604,7 +1581,7 @@ export async function purchaseImportOperationStatus(
     .limit(1);
   if (!operation) throw new Error("Purchase import operation was not found");
   return purchaseImportOperationStatusOut.parse({
-    runPublicId: scope.public.publicId,
+    runId: scope.public.shortcode,
     operationId: input._runExecution.operationId,
     ...operation,
     startedAt: operation.startedAt.toISOString(),

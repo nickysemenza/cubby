@@ -23,6 +23,7 @@ import type {
   ProductId,
   ProjectId,
   PurchaseId,
+  PurchaseImportRunId,
   RecipeId,
   TaskId,
   UserId,
@@ -98,6 +99,7 @@ import {
   generatedRecipeColumns,
   generatedTaskColumns,
   generatedVendorColumns,
+  generatedPurchaseImportRunColumns,
   generatedVendorAccountColumns,
   generatedWishColumns,
   imageRenderStatusEnum,
@@ -1429,59 +1431,34 @@ export const purchaseProduct = pgTable(
 export const importRun = pgTable(
   "ImportRun",
   {
-    id: pkUuid(),
-    publicId: text("publicId").notNull(),
-    ledgerPartyId: uuid("ledgerPartyId")
-      .notNull()
-      .$type<LedgerPartyId>()
-      .references(() => ledgerParty.id),
+    ...generatedPurchaseImportRunColumns({
+      ledgerParty: (): AnyPgColumn => ledgerParty.id,
+      vendorAccount: (): AnyPgColumn => vendorAccount.id,
+      vendor: (): AnyPgColumn => vendor.id,
+    }),
+    // The actor snapshot, the run's own lineage, dispatch fencing and the
+    // history walk are operational state outside the manifest.
     actorUserId: text("actorUserId")
       .notNull()
       .$type<UserId>()
       .references(() => user.id),
-    actorName: text("actorName").notNull(),
     actorEmail: text("actorEmail").notNull(),
     actorLedgerPartyShortcode: text("actorLedgerPartyShortcode").notNull(),
     actorLedgerPartyName: text("actorLedgerPartyName").notNull(),
     actorLedgerPartyKind: text("actorLedgerPartyKind").notNull(),
-    vendorAccountId: uuid("vendorAccountId").references(() => vendorAccount.id),
-    vendorId: uuid("vendorId")
-      .$type<VendorId>()
-      .references(() => vendor.id),
-    predecessorRunId: uuid("predecessorRunId").references(
-      (): AnyPgColumn => importRun.id,
-    ),
-    purpose: text("purpose").notNull().default("account_sync"),
-    trigger: text("trigger").notNull(),
-    status: text("status").notNull().default("running"),
-    coordinatorModel: text("coordinatorModel")
-      .notNull()
-      .default("gpt-5.6-terra"),
-    skillRevision: text("skillRevision").notNull().default("purchase-import@1"),
-    runtimeRevision: text("runtimeRevision").notNull().default("flue@1"),
-    decisionRevision: integer("decisionRevision").notNull().default(1),
-    startedAt: timestamp("startedAt", { mode: "date" }).notNull().defaultNow(),
-    endedAt: timestamp("endedAt", { mode: "date" }),
-    ordersSeen: integer("ordersSeen").notNull().default(0),
-    imported: integer("imported").notNull().default(0),
-    updated: integer("updated").notNull().default(0),
-    skipped: integer("skipped").notNull().default(0),
-    auditedAt: timestamp("auditedAt", { mode: "date" }),
-    failureCode: text("failureCode"),
+    predecessorRunId: uuid("predecessorRunId")
+      .$type<PurchaseImportRunId>()
+      .references((): AnyPgColumn => importRun.id),
     /** Stable queue generation; duplicate and late deliveries are fenced to it. */
     dispatchEventId: text("dispatchEventId"),
-    dispatchAttempts: integer("dispatchAttempts").notNull().default(0),
-    dispatchError: text("dispatchError"),
-    coordinatorStartedAt: timestamp("coordinatorStartedAt", { mode: "date" }),
     agentSessionId: text("agentSessionId"),
     /** The order-history page the walk resumes from; null before the first listing. */
     historyCursorUrl: text("historyCursorUrl"),
     /** Set when a listing had no next page or predated the account cursor. */
     historyExhaustedAt: timestamp("historyExhaustedAt", { mode: "date" }),
-    ...baseTimestamps(),
   },
   (table) => [
-    uniqueIndex("ImportRun_publicId_unique").on(table.publicId),
+    shortcodeUnique("ImportRun", table.shortcode),
     index("ImportRun_party_started_idx").on(
       table.ledgerPartyId,
       table.startedAt.desc(),

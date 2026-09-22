@@ -1,7 +1,7 @@
 import { activityExecutor } from "@cubby/schemas/activity";
 import { z } from "zod";
 
-import { importRunPublicId } from "~/lib/purchase-import-run-detail";
+import { importRunShortcode } from "~/lib/purchase-import-run-detail";
 
 const purchaseImportDebugEventName = z.enum([
   "connect.requested",
@@ -90,7 +90,7 @@ export const purchaseImportRunLogResponse = z.object({
 });
 
 export const purchaseImportRunLogRequest = z.union([
-  z.object({ publicId: importRunPublicId }),
+  z.object({ publicId: importRunShortcode }),
   // Legacy Settings entries predate public PIR addresses. New detail routes
   // use the public-id branch; this preserves older local history links.
   z.object({ runId: z.uuid() }),

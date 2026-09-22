@@ -5,16 +5,16 @@ import { Page } from "~/components/page/Page";
 import { pageTitle } from "~/lib/page-title";
 
 export const Route = createFileRoute(
-  "/_authenticated/purchase-imports/$publicId",
+  "/_authenticated/purchase-imports/$shortcode",
 )({
   head: ({ params }) => ({
-    meta: [{ title: pageTitle(`Import ${params.publicId}`) }],
+    meta: [{ title: pageTitle(`Import ${params.shortcode}`) }],
   }),
   component: PurchaseImportRunRoute,
 });
 
 function PurchaseImportRunRoute() {
-  const { publicId } = Route.useParams();
+  const { shortcode } = Route.useParams();
   return (
     <Page
       variant="list"
@@ -22,7 +22,7 @@ function PurchaseImportRunRoute() {
       bodyGutter="standard"
       decoration="none"
     >
-      <PurchaseImportRunDetailPage publicId={publicId} />
+      <PurchaseImportRunDetailPage publicId={shortcode} />
     </Page>
   );
 }

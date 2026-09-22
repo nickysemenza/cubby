@@ -1,4 +1,5 @@
 import { mcpAppResourceUriForTool } from "@cubby/mcp-apps/metadata";
+import { purchaseImportRunId } from "@cubby/schemas/identifiers";
 import { purchaseImportRunExecution } from "@cubby/schemas/purchase-import";
 import type {
   McpServer,
@@ -342,11 +343,11 @@ export function registerMcpTool<
             .parse(params)._runExecution;
           const parsedKernel = getEntityKernelContext(preparedExtra);
           const [delegatedRun] = await getDb(parsedKernel.db)
-            .select({ publicId: importRun.publicId })
+            .select({ id: importRun.id })
             .from(importRun)
-            .where(eq(importRun.id, trusted.runId))
+            .where(eq(importRun.id, purchaseImportRunId.parse(trusted.runId)))
             .limit(1);
-          if (delegatedRun?.publicId !== execution.runPublicId)
+          if (delegatedRun?.id !== execution.runId)
             throw new Error(
               "Purchase-agent run execution does not match its delegation",
             );

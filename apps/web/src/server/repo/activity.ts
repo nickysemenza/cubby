@@ -113,7 +113,7 @@ function runProjection(partyId: string | null): SQL {
 
     SELECT
       r.id AS internal_id,
-      r."publicId" AS id,
+      r.shortcode AS id,
       CASE r.purpose
         WHEN 'purchase_validation' THEN 'purchase_validation'
         WHEN 'product_enrichment' THEN 'product_enrichment'
@@ -366,7 +366,7 @@ export async function activityDetail(
   // Purchase runs expose their domain operations through activityEvents. They
   // are not execution attempts: historical browser operations lack a stable
   // attempt identity and executor attribution.
-  if (input.id.startsWith("PIR-")) {
+  if (input.id.startsWith("RUN-")) {
     return activityDetailOutput.parse({
       run,
       attempts: [],
@@ -463,7 +463,7 @@ export async function activityDevices(db: Database, partyId: string | null) {
       FROM "ImageProcessingAttempt" a JOIN runs r ON r.internal_id = a."jobId" AND r.id LIKE 'IPR-%'
       UNION ALL
       SELECT o.executor, o."startedAt" AS observed_at, o.id::text AS id
-      FROM "ImportRunOperation" o JOIN runs r ON r.internal_id = o."runId" AND r.id LIKE 'PIR-%'
+      FROM "ImportRunOperation" o JOIN runs r ON r.internal_id = o."runId" AND r.id LIKE 'RUN-%'
     )
     SELECT DISTINCT ON (executor->>'deviceId') executor FROM observations
     WHERE executor->>'kind' = 'device' AND executor->>'deviceId' IS NOT NULL

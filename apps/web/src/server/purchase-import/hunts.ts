@@ -203,7 +203,6 @@ export async function dispatchImportHunts(
       await dispatchImportRunEvent(db, queue, {
         version: 1,
         runId: run.id,
-        publicId: run.publicId,
         eventId: run.created
           ? (run.dispatchEventId ?? crypto.randomUUID())
           : crypto.randomUUID(),

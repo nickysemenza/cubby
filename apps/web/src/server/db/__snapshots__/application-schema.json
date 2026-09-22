@@ -5070,8 +5070,8 @@
           "notNull": true,
           "default": "gen_random_uuid()"
         },
-        "publicId": {
-          "name": "publicId",
+        "shortcode": {
+          "name": "shortcode",
           "type": "text",
           "primaryKey": false,
           "notNull": true
@@ -5082,38 +5082,8 @@
           "primaryKey": false,
           "notNull": true
         },
-        "actorUserId": {
-          "name": "actorUserId",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
         "actorName": {
           "name": "actorName",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "actorEmail": {
-          "name": "actorEmail",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "actorLedgerPartyShortcode": {
-          "name": "actorLedgerPartyShortcode",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "actorLedgerPartyName": {
-          "name": "actorLedgerPartyName",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "actorLedgerPartyKind": {
-          "name": "actorLedgerPartyKind",
           "type": "text",
           "primaryKey": false,
           "notNull": true
@@ -5126,12 +5096,6 @@
         },
         "vendorId": {
           "name": "vendorId",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "predecessorRunId": {
-          "name": "predecessorRunId",
           "type": "uuid",
           "primaryKey": false,
           "notNull": false
@@ -5237,12 +5201,6 @@
           "primaryKey": false,
           "notNull": false
         },
-        "dispatchEventId": {
-          "name": "dispatchEventId",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
         "dispatchAttempts": {
           "name": "dispatchAttempts",
           "type": "integer",
@@ -5259,6 +5217,68 @@
         "coordinatorStartedAt": {
           "name": "coordinatorStartedAt",
           "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updatedAt": {
+          "name": "updatedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "deletedAt": {
+          "name": "deletedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "actorUserId": {
+          "name": "actorUserId",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "actorEmail": {
+          "name": "actorEmail",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "actorLedgerPartyShortcode": {
+          "name": "actorLedgerPartyShortcode",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "actorLedgerPartyName": {
+          "name": "actorLedgerPartyName",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "actorLedgerPartyKind": {
+          "name": "actorLedgerPartyKind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "predecessorRunId": {
+          "name": "predecessorRunId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "dispatchEventId": {
+          "name": "dispatchEventId",
+          "type": "text",
           "primaryKey": false,
           "notNull": false
         },
@@ -5279,28 +5299,14 @@
           "type": "timestamp",
           "primaryKey": false,
           "notNull": false
-        },
-        "createdAt": {
-          "name": "createdAt",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updatedAt": {
-          "name": "updatedAt",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
         }
       },
       "indexes": {
-        "ImportRun_publicId_unique": {
-          "name": "ImportRun_publicId_unique",
+        "ImportRun_shortcode_unique": {
+          "name": "ImportRun_shortcode_unique",
           "columns": [
             {
-              "expression": "publicId",
+              "expression": "shortcode",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -5400,19 +5406,6 @@
           "onDelete": "no action",
           "onUpdate": "no action"
         },
-        "ImportRun_actorUserId_user_id_fk": {
-          "name": "ImportRun_actorUserId_user_id_fk",
-          "tableFrom": "ImportRun",
-          "tableTo": "user",
-          "columnsFrom": [
-            "actorUserId"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
         "ImportRun_vendorAccountId_VendorAccount_id_fk": {
           "name": "ImportRun_vendorAccountId_VendorAccount_id_fk",
           "tableFrom": "ImportRun",
@@ -5432,6 +5425,19 @@
           "tableTo": "Vendor",
           "columnsFrom": [
             "vendorId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "ImportRun_actorUserId_user_id_fk": {
+          "name": "ImportRun_actorUserId_user_id_fk",
+          "tableFrom": "ImportRun",
+          "tableTo": "user",
+          "columnsFrom": [
+            "actorUserId"
           ],
           "columnsTo": [
             "id"

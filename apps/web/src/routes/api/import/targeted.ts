@@ -100,7 +100,6 @@ async function queueStartedRun(
     await queue.send({
       version: 1,
       runId: run.id,
-      publicId: run.publicId,
       purpose: targetedImportPurpose.parse(run.purpose),
       eventId: run.dispatchEventId,
       type: "start_or_resume",

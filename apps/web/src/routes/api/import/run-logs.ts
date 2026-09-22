@@ -1,3 +1,4 @@
+import { purchaseImportRunId } from "@cubby/schemas/identifiers";
 import { createFileRoute } from "@tanstack/react-router";
 import { asc, eq } from "drizzle-orm";
 
@@ -112,8 +113,11 @@ export const Route = createFileRoute("/api/import/run-logs")({
           .from(importRun)
           .where(
             "publicId" in identifier.data
-              ? eq(importRun.publicId, identifier.data.publicId)
-              : eq(importRun.id, identifier.data.runId),
+              ? eq(importRun.shortcode, identifier.data.publicId)
+              : eq(
+                  importRun.id,
+                  purchaseImportRunId.parse(identifier.data.runId),
+                ),
           )
           .limit(1);
         if (!run) {

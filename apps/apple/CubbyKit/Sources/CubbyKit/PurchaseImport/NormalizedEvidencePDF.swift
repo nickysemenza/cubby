@@ -31,15 +31,15 @@ public struct BrowserLocalEvidence: Sendable, Hashable {
     }
 }
 
-/// The server grants this scope only for an explicit target in a targeted import run. It is
-/// intentionally distinct from the opaque broker run UUID: the public run code and target UUID
-/// are both required to stage immutable R2 evidence without creating an Image or Document.
+/// The server grants this scope only for an explicit target in a targeted import run. The run
+/// and target UUIDs are both required to stage immutable R2 evidence without creating an Image
+/// or Document; the run's public code never reaches the bridge.
 public struct BrowserEvidenceUploadScope: Sendable, Hashable {
-    public let runPublicID: String
+    public let runID: String
     public let targetID: String
 
-    public init(runPublicID: String, targetID: String) {
-        self.runPublicID = runPublicID
+    public init(runID: String, targetID: String) {
+        self.runID = runID
         self.targetID = targetID
     }
 }

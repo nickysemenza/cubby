@@ -30,7 +30,6 @@ export { cloudflare } from "./sentry";
 
 type ImportRunInitialData = {
   runId: string;
-  publicId?: string;
   coordinatorModel?: "gpt-5.6-terra" | "gpt-5.6-sol";
   purpose?: "account_sync" | "purchase_validation" | "product_enrichment";
 };
@@ -39,7 +38,6 @@ type ImportRunInitialData = {
 export function PurchaseImportRun({ id }: AgentProps) {
   const {
     runId,
-    publicId,
     coordinatorModel = "gpt-5.6-terra",
     purpose = "account_sync",
   } = useInitialData<ImportRunInitialData>();
@@ -56,11 +54,9 @@ export function PurchaseImportRun({ id }: AgentProps) {
   useSkill(purchaseImportSkill);
   useSkill(productEnrichmentSkill);
 
-  useResponseStart(() =>
-    publicId
-      ? { jobKind: "purchase_import_run", publicId }
-      : { jobKind: "purchase_import_run" },
-  );
+  // The run is named by its private id everywhere the agent speaks: the
+  // public code can change without touching durable Flue state.
+  useResponseStart(() => ({ jobKind: "purchase_import_run", runId }));
   useResponseFinish(({ response }) => ({
     usage: response.usage,
   }));
@@ -100,12 +96,12 @@ export function PurchaseImportRun({ id }: AgentProps) {
   useTool(tools[9]);
   useTool(tools[10]);
 
-  return `You coordinate exactly one ${purpose} purchase-import run${publicId ? ` (${publicId})` : ""} with the complete Cubby MCP tool catalog.
+  return `You coordinate exactly one ${purpose} purchase-import run (runId ${runId}) with the complete Cubby MCP tool catalog.
 
 Workflow:
 1. Activate the purchase-import skill before doing any import work. Activate product-enrichment whenever an order line lacks a confident existing Product match.
 2. Report the preparing phase and call claim_next_import_work. For receipt_evidence, call extract_receipt_evidence and use its immutable payload. For purchase_validation with uploaded run evidence, call extract_run_evidence and use its immutable payload; otherwise investigate the frozen source, use Gmail/read tools when no source claim exists, and use browser commands only when hasBrowserAccount is true and interactive vendor evidence is required. A pending browser command ends this submission; never poll or wait for it. A later queue event resumes this same durable conversation. After a browser result completes, call import_browser_order_evidence with its command id before using any capture metadata. Work kinds for account_sync: cursor_walk (navigate to startUrl with navigate_orders, then capture_screenshot the order-history page and import it — the server answers order_list with the orders it recorded, how many are pending, and nextPageUrl), order (capture_order at orderUrl and import it; the server marks it imported), hunt, product_enrichment, none. Never capture_order an order-history page. An order_list answer with nextPageUrl null means the history is exhausted for this run; an unreadable answer means capture again or stop for review, never prepare from it.
-3. Call mcp__cubby__prepare_purchase_import exactly once per logical batch. Every mutation must carry _runExecution with the run public id and stable operation ids. Derive them from durable source identities, keep item ids aligned with their orders, and reuse an id only to replay the identical logical effect.
+3. Call mcp__cubby__prepare_purchase_import exactly once per logical batch. Every mutation must carry _runExecution with this runId and stable operation ids. Derive them from durable source identities, keep item ids aligned with their orders, and reuse an id only to replay the identical logical effect.
 4. Report investigating. Use read-only Cubby MCP tools and the product-enrichment skill to investigate every proposed Product resolution. Prefer exact existing Products and verified identifiers; do not create duplicates merely because a title differs.
 5. Preparation itself is bounded and never requires approval. Read the run purpose from the scoped tool result before choosing a terminal action. For account_sync, report committing then call mcp__cubby__commit_purchase_import with the immutable preparation revision and an explicit evidence-backed resolution for every principal line. For purchase_validation, call mcp__cubby__validate_purchase_import instead; it is the only permitted comparison path and must never be replaced with commit_purchase_import. For product_enrichment, use mcp__cubby__commit_product_enrichment only for blank manufacturer, category, or model, proven non-colliding identifiers, and at most one exact-variant image verified by the target's retained browser evidence. Use mcp__cubby__overwrite_product_enrichment for exactly one populated manufacturer, category, model, or cover-image replacement; an image replacement must repeat the exact evidence id, URL, and dimensions and it pauses for typed human approval. Price is never writable. Treat conflicts or unresolved identity as review: call stop_import_run_for_review and do not speculate.
 6. Continue through every selected order and hunt. Persist safe same-domain navigation discoveries with save_navigation_hints. If the vendor proves older history unavailable, call mark_history_expired with the observed boundary. Only after all work is resolved or explicitly exhausted call finish_import_run; it performs the required auditor pass and is the only successful completion path. Never end a turn without one of: a pending browser command, awaiting_approval, finish_import_run, or stop_import_run_for_review — a report_agent_progress with phase review stops the run for review the same way stop_import_run_for_review does, and a run left without any of these is moved to review by the server.
@@ -117,7 +113,6 @@ The server owns member identity, run scope, approval state, idempotency, and all
 PurchaseImportRun.agentName = "purchase-import-run";
 PurchaseImportRun.initialData = v.object({
   runId: v.pipe(v.string(), v.uuid()),
-  publicId: v.optional(v.pipe(v.string(), v.regex(/^PIR-[A-Z0-9]{10}$/u))),
   coordinatorModel: v.optional(v.picklist(["gpt-5.6-terra", "gpt-5.6-sol"])),
   purpose: v.optional(
     v.picklist(["account_sync", "purchase_validation", "product_enrichment"]),

@@ -3505,6 +3505,7 @@ public enum Operations {
                     case gardenEntry = "gardenEntry"
                     case vendorAccount = "vendorAccount"
                     case productCategory = "productCategory"
+                    case purchaseImportRun = "purchaseImportRun"
                 }
                 /// - Remark: Generated from `#/paths/api/v1/fieldExplanation/explain/GET/query/entityType`.
                 public var entityType: Operations.FieldExplanation_explain.Input.Query.EntityTypePayload
@@ -27019,6 +27020,7 @@ public enum Operations {
                     case gardenEntry = "gardenEntry"
                     case vendorAccount = "vendorAccount"
                     case productCategory = "productCategory"
+                    case purchaseImportRun = "purchaseImportRun"
                 }
                 /// - Remark: Generated from `#/paths/api/v1/recommendations/forEntity/GET/query/entityType`.
                 public var entityType: Operations.Recommendations_forEntity.Input.Query.EntityTypePayload

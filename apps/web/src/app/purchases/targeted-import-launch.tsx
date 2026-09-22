@@ -102,7 +102,7 @@ export function TargetedProductBulkEnrichmentDialog({
         (entry) => entry.created && entry.run,
       )?.run;
       onFinished(true);
-      if (first) window.location.assign(purchaseImportRunHref(first.publicId));
+      if (first) window.location.assign(purchaseImportRunHref(first.id));
     },
   });
   return (
@@ -128,11 +128,11 @@ export function TargetedProductBulkEnrichmentDialog({
           .flatMap((entry) => (entry.blockingRun ? [entry.blockingRun] : []))
           .map((run) => (
             <a
-              key={run.publicId}
-              href={purchaseImportRunHref(run.publicId)}
+              key={run.id}
+              href={purchaseImportRunHref(run.id)}
               className="text-sm text-primary hover:underline"
             >
-              Open blocking run {run.publicId}
+              Open blocking run {run.id}
             </a>
           ))}
         {start.isError ? (
@@ -205,7 +205,7 @@ export function TargetedImportLaunchDialog({
     },
     onSuccess: (result) => {
       const run = result.runs.find((entry) => entry.created && entry.run)?.run;
-      if (run) window.location.assign(purchaseImportRunHref(run.publicId));
+      if (run) window.location.assign(purchaseImportRunHref(run.id));
     },
   });
 
@@ -276,11 +276,11 @@ export function TargetedImportLaunchDialog({
               )
               .map((run) => (
                 <a
-                  key={run.publicId}
+                  key={run.id}
                   className="w-fit text-primary hover:underline"
-                  href={purchaseImportRunHref(run.publicId)}
+                  href={purchaseImportRunHref(run.id)}
                 >
-                  Open {run.publicId} ({run.status})
+                  Open {run.id} ({run.status})
                 </a>
               ))}
           </div>

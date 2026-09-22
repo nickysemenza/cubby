@@ -1971,38 +1971,38 @@ extension Components {
             public var recoveryURL: Swift.String?
             /// - Remark: Generated from `#/components/schemas/BrowserBridgeOperationCapture/evidenceScope`.
             public struct EvidenceScopePayload: Codable, Hashable, Sendable {
-                /// - Remark: Generated from `#/components/schemas/BrowserBridgeOperationCapture/evidenceScope/runPublicId`.
-                public var runPublicId: Components.Schemas.ImportRunPublicId
+                /// - Remark: Generated from `#/components/schemas/BrowserBridgeOperationCapture/evidenceScope/runId`.
+                public var runId: Components.Schemas.PurchaseImportRunShortcode
                 /// - Remark: Generated from `#/components/schemas/BrowserBridgeOperationCapture/evidenceScope/targetId`.
                 public var targetId: Swift.String
                 /// Creates a new `EvidenceScopePayload`.
                 ///
                 /// - Parameters:
-                ///   - runPublicId:
+                ///   - runId:
                 ///   - targetId:
                 public init(
-                    runPublicId: Components.Schemas.ImportRunPublicId,
+                    runId: Components.Schemas.PurchaseImportRunShortcode,
                     targetId: Swift.String
                 ) {
-                    self.runPublicId = runPublicId
+                    self.runId = runId
                     self.targetId = targetId
                 }
                 public enum CodingKeys: String, CodingKey {
-                    case runPublicId
+                    case runId
                     case targetId
                 }
                 public init(from decoder: any Swift.Decoder) throws {
                     let container = try decoder.container(keyedBy: CodingKeys.self)
-                    self.runPublicId = try container.decode(
-                        Components.Schemas.ImportRunPublicId.self,
-                        forKey: .runPublicId
+                    self.runId = try container.decode(
+                        Components.Schemas.PurchaseImportRunShortcode.self,
+                        forKey: .runId
                     )
                     self.targetId = try container.decode(
                         Swift.String.self,
                         forKey: .targetId
                     )
                     try decoder.ensureNoAdditionalProperties(knownKeys: [
-                        "runPublicId",
+                        "runId",
                         "targetId"
                     ])
                 }
@@ -3936,6 +3936,8 @@ extension Components {
             public var planting: Swift.Int
             /// - Remark: Generated from `#/components/schemas/DashboardCountsOut/gardenEntry`.
             public var gardenEntry: Swift.Int
+            /// - Remark: Generated from `#/components/schemas/DashboardCountsOut/purchaseImportRun`.
+            public var purchaseImportRun: Swift.Int
             /// - Remark: Generated from `#/components/schemas/DashboardCountsOut/usdaFoods`.
             public var usdaFoods: Swift.Int
             /// Creates a new `DashboardCountsOut`.
@@ -3959,6 +3961,7 @@ extension Components {
             ///   - image:
             ///   - planting:
             ///   - gardenEntry:
+            ///   - purchaseImportRun:
             ///   - usdaFoods:
             public init(
                 product: Swift.Int,
@@ -3979,6 +3982,7 @@ extension Components {
                 image: Swift.Int,
                 planting: Swift.Int,
                 gardenEntry: Swift.Int,
+                purchaseImportRun: Swift.Int,
                 usdaFoods: Swift.Int
             ) {
                 self.product = product
@@ -3999,6 +4003,7 @@ extension Components {
                 self.image = image
                 self.planting = planting
                 self.gardenEntry = gardenEntry
+                self.purchaseImportRun = purchaseImportRun
                 self.usdaFoods = usdaFoods
             }
             public enum CodingKeys: String, CodingKey {
@@ -4020,6 +4025,7 @@ extension Components {
                 case image
                 case planting
                 case gardenEntry
+                case purchaseImportRun
                 case usdaFoods
             }
             public init(from decoder: any Swift.Decoder) throws {
@@ -4096,6 +4102,10 @@ extension Components {
                     Swift.Int.self,
                     forKey: .gardenEntry
                 )
+                self.purchaseImportRun = try container.decode(
+                    Swift.Int.self,
+                    forKey: .purchaseImportRun
+                )
                 self.usdaFoods = try container.decode(
                     Swift.Int.self,
                     forKey: .usdaFoods
@@ -4119,6 +4129,7 @@ extension Components {
                     "image",
                     "planting",
                     "gardenEntry",
+                    "purchaseImportRun",
                     "usdaFoods"
                 ])
             }
@@ -19594,8 +19605,6 @@ extension Components {
             case gmailAttachment = "gmail_attachment"
             case manualUpload = "manual_upload"
         }
-        /// - Remark: Generated from `#/components/schemas/ImportRunPublicId`.
-        public typealias ImportRunPublicId = Swift.String
         /// - Remark: Generated from `#/components/schemas/ImportRunTargetOutcome`.
         @frozen public enum ImportRunTargetOutcome: String, Codable, Hashable, Sendable, CaseIterable {
             case replayed = "replayed"
@@ -21039,8 +21048,8 @@ extension Components {
         }
         /// - Remark: Generated from `#/components/schemas/InitiateImportRunEvidenceUploadInput`.
         public struct InitiateImportRunEvidenceUploadInput: Codable, Hashable, Sendable {
-            /// - Remark: Generated from `#/components/schemas/InitiateImportRunEvidenceUploadInput/runPublicId`.
-            public var runPublicId: Components.Schemas.ImportRunPublicId
+            /// - Remark: Generated from `#/components/schemas/InitiateImportRunEvidenceUploadInput/runId`.
+            public var runId: Components.Schemas.PurchaseImportRunShortcode
             /// - Remark: Generated from `#/components/schemas/InitiateImportRunEvidenceUploadInput/targetId`.
             public var targetId: Swift.String
             /// - Remark: Generated from `#/components/schemas/InitiateImportRunEvidenceUploadInput/kind`.
@@ -21085,7 +21094,7 @@ extension Components {
             /// Creates a new `InitiateImportRunEvidenceUploadInput`.
             ///
             /// - Parameters:
-            ///   - runPublicId:
+            ///   - runId:
             ///   - targetId:
             ///   - kind:
             ///   - contentType:
@@ -21094,7 +21103,7 @@ extension Components {
             ///   - filename:
             ///   - sourceMetadata:
             public init(
-                runPublicId: Components.Schemas.ImportRunPublicId,
+                runId: Components.Schemas.PurchaseImportRunShortcode,
                 targetId: Swift.String,
                 kind: Components.Schemas.ImportRunEvidenceKind,
                 contentType: Components.Schemas.InitiateImportRunEvidenceUploadInput.ContentTypePayload,
@@ -21103,7 +21112,7 @@ extension Components {
                 filename: Swift.String,
                 sourceMetadata: Components.Schemas.InitiateImportRunEvidenceUploadInput.SourceMetadataPayload? = nil
             ) {
-                self.runPublicId = runPublicId
+                self.runId = runId
                 self.targetId = targetId
                 self.kind = kind
                 self.contentType = contentType
@@ -21113,7 +21122,7 @@ extension Components {
                 self.sourceMetadata = sourceMetadata
             }
             public enum CodingKeys: String, CodingKey {
-                case runPublicId
+                case runId
                 case targetId
                 case kind
                 case contentType
@@ -30814,6 +30823,7 @@ extension Components {
                         case gardenEntry = "gardenEntry"
                         case vendorAccount = "vendorAccount"
                         case productCategory = "productCategory"
+                        case purchaseImportRun = "purchaseImportRun"
                     }
                     /// - Remark: Generated from `#/components/schemas/PhotoImportCommitInput/ImagesPayload/source/entity`.
                     public var entity: Components.Schemas.PhotoImportCommitInput.ImagesPayloadPayload.SourcePayload.EntityPayload
@@ -39647,6 +39657,10 @@ extension Components {
         }
         /// - Remark: Generated from `#/components/schemas/PurchaseImages`.
         public typealias PurchaseImages = [Components.Schemas.PurchaseImagesPayload]
+        /// purchaseImportRun shortcode, e.g. RUN-4K7M
+        ///
+        /// - Remark: Generated from `#/components/schemas/PurchaseImportRunShortcode`.
+        public typealias PurchaseImportRunShortcode = Swift.String
         /// - Remark: Generated from `#/components/schemas/PurchaseListItem`.
         public struct PurchaseListItem: Codable, Hashable, Sendable {
             /// - Remark: Generated from `#/components/schemas/PurchaseListItem/id`.

@@ -94,7 +94,13 @@ const EXPECTED_HARD_DELETE_ONLY_TABLES = new Set([
   "ImportFinding",
   "ImportHunt",
   "ImportPreparedOrder",
-  "ImportRun",
+  "ImportRunApproval",
+  "ImportRunControlEvent",
+  "ImportRunEvidence",
+  "ImportRunMutation",
+  "ImportRunOperation",
+  "ImportRunOrderCandidate",
+  "ImportRunProgress",
   "ImportRunTarget",
   "ImportSourceClaim",
   "ImageProcessingJob",
@@ -109,7 +115,7 @@ const EXPECTED_HARD_DELETE_ONLY_TABLES = new Set([
 ]);
 
 /** The must-target-live edges this audit checks, derived (not hand-maintained) should equal this. */
-const EXPECTED_EDGE_COUNT = 112;
+const EXPECTED_EDGE_COUNT = 127;
 
 /**
  * Derive one {@link EdgeAuditSpec} per `must-target-live` edge in

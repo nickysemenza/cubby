@@ -40,8 +40,12 @@ store.
 
 ### 1.1 Current shared-agent contract
 
-- An `ImportRun` has a public `PIR-*` handle, snapshotted actor, fixed
-  coordinator/model and skill/runtime revisions, and optional predecessor.
+- An `ImportRun` is the `purchaseImportRun` manifest entity (`RUN-` shortcode,
+  read-only through the kernel and MCP get/list) with a snapshotted actor,
+  fixed coordinator/model and skill/runtime revisions, and optional
+  predecessor. The agent, the MCP delegation gate and the `_runExecution`
+  envelope name a run by its private `runId`; the public code appears only in
+  URLs, links and read payloads.
   `paused_auth`, `paused_offline`, and `paused_approval` are resumable;
   `needs_review`, `completed`, and `failed` are terminal.
 - Browser runs act as the VendorAccount owner, Gmail runs as the mailbox owner,
@@ -61,7 +65,7 @@ store.
 - Terra coordinates one run without mid-run model switching. Jev handles closed
   choices and Sonnet handles bounded repair/audit. Sol is an explicit successor
   run. All provider traffic uses AI Gateway `cubby`.
-- `/purchase-imports/PIR-*` is the operational record: durable transcript and
+- `/purchase-imports/RUN-*` is the operational record: durable transcript and
   live controls, structured browser/server logs, approvals, affected Purchases,
   and every `AiUsage` row. Its cost header sums all priced rows and reports an
   unpriced count; pagination never changes the total.
@@ -105,14 +109,14 @@ store.
 | 33 | Loop implementation | Flue in a private `purchase-agent` Worker. Its generated entry/Vite configuration is isolated from the existing TanStack/Vite web Worker; there is no fallback runtime. |
 | 34 | Browser bridge tools | Read-only by construction: `navigate` (allow-listed to the VendorAccount's domains), `capture`, `click(selector)`, `paginate`, `screenshot`, `pdf`, `tabs`. No free-form `evaluate`, no tool that submits a form — page text reaches the agent as data, so a page must never be able to turn into an action in a signed-in session. |
 | 35 | Auditor batching | Per run; per ≤25 orders during backfill; input is the rendered import only. |
-| 36 | `ImportRun` | A plain table (not an entity): one row per run, `Purchase.importRunId`; cost is `SUM(AiUsage)` by job id, never stored. |
+| 36 | `ImportRun` | One row per run, `Purchase.importRunId`; cost is `SUM(AiUsage)` by job id, never stored. *(2026-09: promoted to the read-only `purchaseImportRun` manifest entity so the generic list, inspector and MCP get/list render it.)* |
 | 37 | Pause semantics | As 30. Status lives on `VendorAccount` only. |
 | 38 | Findings | `ImportFinding`, a plain table surfaced through a new `importFindings` Problems key *(review: Problems is a key registry with detectors; no abstraction needed)*. |
 | 39 | Gmail grant | Per member via better-auth's Google provider (`linkSocial`, `gmail.readonly`, offline access); refresh token in better-auth's `account` row; `historyId` on our side. |
 | 40 | UI split | Web: VendorAccounts, runs, hints, findings. Mac app: status line, "Sync now", browser choice. |
 | 41 | Currency | Lines are written at the USD figure the page shows; a page with no USD figure gets a `foreign_currency` finding and no lines. Nothing is scaled from `statedTotal` or held for settlement *(review: tenet 5)*. Further handling is deferred until the first such order exists. |
 | 42 | Dedupe key | The existing `Purchase.orderId` + `Purchase_vendorId_orderId_key`; `vendorAccountId` is an attribute *(review)*. |
-| 43 | Public prefixes | `VendorAccount` is `VACCT-`; `ImportRun` has the public `PIR-` handle used by agents and URLs while retaining an internal UUID; `ImportFinding` remains internal to its run/Problem surface. |
+| 43 | Public prefixes | `VendorAccount` is `VACCT-`; `ImportRun` carries a `RUN-` shortcode for URLs and read payloads while agents and the delegation gate use its internal UUID *(the earlier `PIR-` handle was replaced without an alias; in-flight runs were failed at cutover)*; `ImportFinding` remains internal to its run/Problem surface. |
 | 44 | Completeness | Every entity gets a 0–100 completeness score derived from its data-quality checks, each check weighted and carrying an `expectedIf` predicate; a Purchase at a `receipt_only` vendor is complete at amount + project + date, one at an `online_account` vendor is not complete without lines. Generalises today's `complete \| needs_data \| defect` (§10 item 2). **Status (2026-09):** shipped for every scored household entity via manifest `capabilities.dataQuality` (docs/entities.md → "Data quality"); durable exceptions remain Product/Purchase-only (docs/todos.md). |
 | 45 | "Tried, not available" | A data exception with reason `history_expired` (or `unavailable`) on `empty_expenses` / `primary_document`. The agent sets it automatically for orders older than the earliest order the vendor still shows; a human can set it from the Purchase. |
 | 46 | Exception staleness | **All** data exceptions are fingerprinted on the inputs their check reads (live expense count, document set, `orderId`, …) instead of the row's `updatedAt`: an exception is valid while the check's inputs are unchanged. Reasons stay mandatory and typed as today. |
@@ -467,7 +471,7 @@ derived cost, Vendor hints editor, findings on Problems.
 `purchase-import/SKILL.md` is the shared Flue/Claude/Codex procedure: learn a
 new vendor, prepare immutable evidence, investigate Product identity, commit
 explicit resolutions, and handle enrichment or settlement fallbacks. Its MCP
-calls carry the run's public identifier and the caller's OAuth delegation; the
+calls carry the run's private `runId` and the caller's OAuth delegation; the
 transactional writer resolves the owned VendorAccount from that run scope.
 
 ## 5. Flows

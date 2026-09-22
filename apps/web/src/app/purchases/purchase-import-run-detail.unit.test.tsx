@@ -8,7 +8,7 @@ import { PurchaseImportRunDetailPage } from "./purchase-import-run-detail";
 let harness: ReturnType<typeof createBrowserTestHarness>;
 
 const run = {
-  publicId: "PIR-ABCDE12345",
+  publicId: "RUN-4K7M",
   status: "completed",
   purpose: "purchase_validation",
   trigger: "manual",

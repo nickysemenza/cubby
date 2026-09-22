@@ -98,7 +98,7 @@ export function ActivityRunDetail({
               Open subject
             </a>
           ) : null}
-          {id.startsWith("PIR-") ? (
+          {id.startsWith("RUN-") ? (
             <a
               className="text-primary hover:underline"
               href={`/purchase-imports/${id}`}

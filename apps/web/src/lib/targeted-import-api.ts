@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 import { readJsonOrThrow } from "~/lib/http-error";
-import { importRunPublicId } from "~/lib/purchase-import-run-detail";
+import { importRunShortcode } from "~/lib/purchase-import-run-detail";
 
 /**
  * Browser contract for targeted import launch. Entity targets use public
@@ -60,7 +60,7 @@ export const targetedImportLaunchResponse = z.object({
 export type TargetedImportLaunch = z.infer<typeof targetedImportLaunchResponse>;
 
 const targetedImportCreatedRun = z.object({
-  publicId: importRunPublicId,
+  id: importRunShortcode,
   status: z.string().min(1),
   purpose: targetedImportPurpose,
   dispatchEventId: z.string().nullable().optional(),
@@ -72,7 +72,7 @@ export const targetedImportStartResponse = z.object({
       created: z.boolean(),
       run: targetedImportCreatedRun.nullable(),
       blockingRun: z
-        .object({ publicId: importRunPublicId, status: z.string().min(1) })
+        .object({ id: importRunShortcode, status: z.string().min(1) })
         .nullable()
         .default(null),
     }),

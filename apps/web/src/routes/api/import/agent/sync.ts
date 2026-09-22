@@ -50,7 +50,6 @@ export const Route = createFileRoute("/api/import/agent/sync")({
         await dispatchImportRunEvent(context.db, queue, {
           version: 1,
           runId: run.id,
-          publicId: run.publicId,
           eventId: run.created
             ? (run.dispatchEventId ?? crypto.randomUUID())
             : crypto.randomUUID(),
