@@ -240,7 +240,10 @@ export async function runImportOperation<T extends object | null>(
       Date.now() - recorded.updatedAt.getTime() < 5 * 60_000
     )
       throw new Error("Import operation is already in progress");
-    await database
+    // Compare-and-set on the state and fingerprint just read: two deliveries
+    // that both saw the same `failed` (or stale `started`) row must not both
+    // take it over and run `work` twice.
+    const [claimed] = await database
       .update(importRunOperation)
       .set({
         state: "started",
@@ -252,8 +255,12 @@ export async function runImportOperation<T extends object | null>(
         and(
           eq(importRunOperation.runId, runId),
           eq(importRunOperation.operationId, input.operationId),
+          eq(importRunOperation.state, recorded.state),
+          eq(importRunOperation.inputFingerprint, recorded.inputFingerprint),
         ),
-      );
+      )
+      .returning({ id: importRunOperation.id });
+    if (!claimed) throw new Error("Import operation is already in progress");
   }
   try {
     const result = await work();

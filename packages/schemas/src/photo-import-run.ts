@@ -70,16 +70,19 @@ export type PhotoGroupStoredInventory = Omit<
   "locationId"
 >;
 
+/** The writer's per-call cap on `images` and on `skip`. */
+const PROPOSAL_IMAGE_LIMIT = 50;
+
 const commitPhotoGroupInputBase = z.object({
   runId: importRunShortcode,
   groupKey: z.string().trim().min(1).max(200),
   // No `.min(1)`: a group may be skip-only (every image rejected, none
   // attached) — the cross-field check below requires only that `images` and
   // `skip` together are non-empty.
-  images: z.array(commitPhotoGroupImage).max(50).default([]),
+  images: z.array(commitPhotoGroupImage).max(PROPOSAL_IMAGE_LIMIT).default([]),
   product: commitPhotoGroupProduct,
   inventory: commitPhotoGroupInventory.optional(),
-  skip: z.array(commitPhotoGroupSkip).max(50).optional(),
+  skip: z.array(commitPhotoGroupSkip).max(PROPOSAL_IMAGE_LIMIT).optional(),
 });
 
 type GroupImageRoster = {
@@ -172,7 +175,20 @@ export const photoGroupProposalGroup = commitPhotoGroupInputBase
     /** Why these photos are one item and why this Product — shown to the reviewer. */
     evidence: z.string().trim().max(4_000).nullable().optional(),
   })
-  .superRefine(refineGroupImageRoster);
+  .superRefine(refineGroupImageRoster)
+  .superRefine((value, ctx) => {
+    // Discarding a proposal commits every image it holds as one `skip` list,
+    // which the writer caps at the same limit — so a proposal may not hold
+    // more than that across `images` and `skip` together.
+    const total = value.images.length + (value.skip ?? []).length;
+    if (total > PROPOSAL_IMAGE_LIMIT) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["images"],
+        message: `Group ${value.groupKey} holds ${total} photos; a proposed group holds at most ${PROPOSAL_IMAGE_LIMIT} counting attached and skipped photos together`,
+      });
+    }
+  });
 export type PhotoGroupProposalGroup = z.infer<typeof photoGroupProposalGroup>;
 
 export const proposePhotoGroupsInput = z
@@ -254,6 +270,11 @@ export const photoGroupProposal = z.object({
   /** Live Products whose name/alias collided on the last approval attempt. */
   conflict: z.array(proposalProductSummary).nullable(),
   lastError: z.string().nullable(),
+  /**
+   * Photos this group named that were since deleted (their run target went
+   * with them). They are left out of `images`/`skip` and of any approval.
+   */
+  missingImageCount: z.number().int().nonnegative(),
   committedAt: z.string().nullable(),
   updatedAt: z.string(),
 });
@@ -308,6 +329,8 @@ export type PhotoGroupApprovalResult = z.infer<typeof photoGroupApprovalResult>;
 
 export const reviewPhotoGroupsOutput = photoGroupProposalList.extend({
   results: z.array(photoGroupApprovalResult),
+  /** From a `save`: groupKeys already committed or discarded, left untouched. */
+  frozenGroupKeys: z.array(z.string()),
 });
 export type ReviewPhotoGroupsOutput = z.infer<typeof reviewPhotoGroupsOutput>;
 

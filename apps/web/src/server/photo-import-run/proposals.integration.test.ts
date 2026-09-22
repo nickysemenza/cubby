@@ -1,7 +1,7 @@
 import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type { PhotoGroupProposalGroup } from "@cubby/schemas/photo-import-run";
 import { generateShortcode } from "@cubby/shared";
-import { and, eq, ilike } from "drizzle-orm";
+import { and, eq, ilike, sql } from "drizzle-orm";
 import { TEST_HOME_SHORTCODE, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
@@ -128,6 +128,23 @@ describe("photo group proposals", () => {
         committed: true,
         groups: (codes: string[]) => [createGroup("a", [codes[0]!])],
         error: /already completed/,
+      },
+      {
+        // Discard commits images + skip as one skip list capped at 50.
+        name: "more than 50 photos across images and skip",
+        groups: () => [
+          {
+            ...createGroup(
+              "a",
+              Array.from({ length: 30 }, () => generateShortcode("image")),
+            ),
+            skip: Array.from({ length: 21 }, () => ({
+              id: parseShortcodeFor("image", generateShortcode("image")),
+              reason: "Blurry",
+            })),
+          },
+        ],
+        error: /holds 51 photos; a proposed group holds at most 50/,
       },
     ])("refuses $name", async ({ groups, error, committed }) => {
       const { run, codes } = await seedRun(2);
@@ -437,5 +454,126 @@ describe("photo group proposals", () => {
       kind: "existing",
       existing: { id: keeper.id },
     });
+  });
+
+  // Regression: deleting a run photo hard-deletes its ImportRunTarget but not
+  // the id in the proposal's JSON, and every reader threw "left its run" —
+  // breaking the review page, approve-all, and discard.
+  it("tolerates a proposal photo deleted after proposing: lists, approves and discards without it", async () => {
+    const { run, codes } = await seedRun(4);
+    await proposePhotoGroups(ctx.db, {
+      runId: run.shortcode,
+      groups: [
+        createGroup("kept", [codes[0]!, codes[1]!], "Synthetic Lamp"),
+        createGroup("gone", [codes[2]!], "Synthetic Vase"),
+        createGroup("rest", [codes[3]!], "Synthetic Rug"),
+      ],
+    });
+    const deletedIds = [
+      (await readRow(run.id, "kept"))!.images[1]!.imageId,
+      (await readRow(run.id, "gone"))!.images[0]!.imageId,
+    ];
+    for (const deleted of deletedIds)
+      await getDb(ctx.db)
+        .delete(importRunTarget)
+        .where(eq(importRunTarget.imageId, parseEntityId("image", deleted)));
+
+    const listed = await listPhotoGroupProposals(ctx.db, run.shortcode);
+    const kept = listed.proposals.find((entry) => entry.groupKey === "kept");
+    expect(kept?.images.map((entry) => entry.id)).toEqual([codes[0]]);
+    expect(kept?.missingImageCount).toBe(1);
+
+    const approved = await approvePhotoGroupProposals(
+      ctx.db,
+      { runId: run.shortcode, groupKeys: ["kept", "gone"] },
+      ctx.actor,
+    );
+    expect(approved.results).toEqual([
+      { groupKey: "kept", outcome: "committed" },
+      {
+        groupKey: "gone",
+        outcome: "failed",
+        error: expect.stringMatching(/Every photo in group gone was deleted/),
+      },
+    ]);
+    expect((await readRow(run.id, "kept"))?.images).toHaveLength(1);
+
+    await discardPhotoGroupProposal(
+      ctx.db,
+      { runId: run.shortcode, groupKey: "gone" },
+      ctx.actor,
+    );
+    const done = await discardPhotoGroupProposal(
+      ctx.db,
+      { runId: run.shortcode, groupKey: "rest" },
+      ctx.actor,
+    );
+    expect(done.runStatus).toBe("completed");
+    expect(
+      Object.fromEntries(
+        done.proposals.map((entry) => [entry.groupKey, entry.state]),
+      ),
+    ).toEqual({ kept: "committed", gone: "discarded", rest: "discarded" });
+  });
+
+  // Regression: an approval marked the row committed AFTER the writer ran,
+  // so a save landing between its read and its commit froze a roster and
+  // Product choice that were never committed.
+  it("freezes what the approval committed, not a save that landed mid-approval", async () => {
+    const { run, codes } = await seedRun(2);
+    await proposePhotoGroups(ctx.db, {
+      runId: run.shortcode,
+      groups: [createGroup("hat", [codes[0]!], "Synthetic Sun Hat")],
+    });
+    // A concurrent save, landed inside the writer's transaction: the trigger
+    // rewrites the row the approval already read. The file's database is
+    // reused across tests, so the trigger is dropped in `finally`.
+    const firstId = (await readRow(run.id, "hat"))!.images[0]!.imageId;
+    const [other] = await getDb(ctx.db)
+      .select({ imageId: importRunTarget.imageId })
+      .from(importRunTarget)
+      .where(
+        and(
+          eq(importRunTarget.runId, run.id),
+          sql`${importRunTarget.imageId} <> ${firstId}`,
+        ),
+      );
+    const db = getDb(ctx.db);
+    await db.execute(
+      sql.raw(`CREATE FUNCTION test_mid_approval_save() RETURNS trigger AS $$
+        BEGIN
+          UPDATE "PhotoGroupProposal"
+          SET "productCreate" = '{"name":"Edited Straw Hat"}'::jsonb,
+              images = images || '[{"imageId":"${other!.imageId}","purpose":"label"}]'::jsonb
+          WHERE "runId" = NEW."runId" AND "groupKey" = 'hat' AND state = 'proposed';
+          RETURN NEW;
+        END $$ LANGUAGE plpgsql`),
+    );
+    await db.execute(
+      sql.raw(`CREATE TRIGGER test_mid_approval_save AFTER UPDATE ON "ImportRunTarget"
+        FOR EACH ROW EXECUTE FUNCTION test_mid_approval_save()`),
+    );
+
+    let approved: Awaited<ReturnType<typeof approvePhotoGroupProposals>>;
+    try {
+      approved = await approvePhotoGroupProposals(
+        ctx.db,
+        { runId: run.shortcode },
+        ctx.actor,
+      );
+    } finally {
+      await db.execute(
+        sql.raw(`DROP TRIGGER test_mid_approval_save ON "ImportRunTarget"`),
+      );
+      await db.execute(sql.raw(`DROP FUNCTION test_mid_approval_save()`));
+    }
+
+    expect(approved.results).toEqual([
+      { groupKey: "hat", outcome: "committed" },
+    ]);
+    const row = await readRow(run.id, "hat");
+    expect(row?.images).toHaveLength(1);
+    expect(row?.productCreate).toMatchObject({ name: "Synthetic Sun Hat" });
+    expect(approved.unassignedImageIds).toEqual([codes[1]]);
   });
 });

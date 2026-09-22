@@ -6,8 +6,11 @@
  * contract.
  *
  * Invariants:
- *  - every image a `proposed` row mentions is a `pending` target of its run,
- *    and appears in exactly one `proposed` row (attached or skipped);
+ *  - every image a `proposed` row mentions is a `pending` target of its run
+ *    when saved, and appears in exactly one `proposed` row (attached or
+ *    skipped); deleting an image later hard-deletes its target but leaves its
+ *    id in the row's JSON, so every reader drops ids with no run target
+ *    (`liveRoster`) instead of failing;
  *  - `committed` and `discarded` rows are frozen: a save naming their
  *    groupKey leaves them untouched and reports it as frozen;
  *  - a discard commits the group's images as `skip` so the run can complete.
@@ -16,6 +19,7 @@ import type { ActorContext } from "@cubby/schemas/context";
 import {
   parseShortcodeFor,
   type ImageId,
+  type ImageShortcode,
   type ImportRunId,
   type LocationId,
   type ProductId,
@@ -55,6 +59,7 @@ import {
   imageProcessingJob,
   importRun,
   importRunTarget,
+  ledgerParty,
   location,
   photoGroupProposal,
   product,
@@ -86,6 +91,38 @@ const storedInventory = z.object({
   quantity: z.number().int().positive(),
 });
 
+/** A run that does not exist, or that this actor may not review; routes map it to 404. */
+export class PhotoRunNotFoundError extends Error {
+  constructor(runShortcode: string) {
+    super(`Import run ${runShortcode} was not found`);
+    this.name = "PhotoRunNotFoundError";
+  }
+}
+
+/**
+ * The browser surface's household-member gate, matching
+ * `loadImportRunByShortcode`: the actor must have a live `member` LedgerParty.
+ */
+export async function assertPhotoRunReviewer(
+  db: Database,
+  actor: ActorContext,
+  runShortcode: string,
+): Promise<void> {
+  const [member] = await getDb(db)
+    .select({ id: ledgerParty.id })
+    .from(ledgerParty)
+    .where(
+      and(
+        eq(ledgerParty.userId, actor.userId),
+        eq(ledgerParty.kind, "member"),
+        notDeleted(ledgerParty),
+      ),
+    )
+    .limit(1);
+  if (!member) throw new PhotoRunNotFoundError(runShortcode);
+  await loadRun(db, runShortcode);
+}
+
 async function loadRun(db: Database, runShortcode: string) {
   const [row] = await getDb(db)
     .select({
@@ -97,7 +134,7 @@ async function loadRun(db: Database, runShortcode: string) {
     .from(importRun)
     .where(eq(importRun.shortcode, importRunShortcode.parse(runShortcode)))
     .limit(1);
-  if (!row) throw new Error(`Import run ${runShortcode} was not found`);
+  if (!row) throw new PhotoRunNotFoundError(runShortcode);
   assertImportRunCapability(
     importRunPurpose.parse(row.purpose),
     "photo_commit",
@@ -137,6 +174,43 @@ const loadProposalRows = (db: Database, runId: ImportRunId) =>
     .from(photoGroupProposal)
     .where(eq(photoGroupProposal.runId, runId))
     .orderBy(photoGroupProposal.createdAt, photoGroupProposal.groupKey);
+
+type LiveRoster = {
+  /** Stored entries whose image is still a target of the run. */
+  images: ProposalRow["images"];
+  skip: ProposalRow["skip"];
+  /** Shortcodes, parallel to `images` / `skip`. */
+  imageCodes: ImageShortcode[];
+  skipCodes: ImageShortcode[];
+  missing: number;
+};
+
+/**
+ * A row's roster minus images that left the run: deleting an image
+ * hard-deletes its `ImportRunTarget` but not the id stored in this row's
+ * JSON, and a missing id must not break listing, approval, or discard.
+ */
+function liveRoster(
+  row: ProposalRow,
+  imagesById: Map<ImageId, RunImage>,
+): LiveRoster {
+  const live = <T extends { imageId: ImageId }>(entries: T[]) =>
+    entries.flatMap((entry) => {
+      const image = imagesById.get(entry.imageId);
+      return image
+        ? [{ entry, code: parseShortcodeFor("image", image.shortcode) }]
+        : [];
+    });
+  const images = live(row.images);
+  const skip = live(row.skip);
+  return {
+    images: images.map((item) => item.entry),
+    skip: skip.map((item) => item.entry),
+    imageCodes: images.map((item) => item.code),
+    skipCodes: skip.map((item) => item.code),
+    missing: row.images.length + row.skip.length - images.length - skip.length,
+  };
+}
 
 async function productSummaries(
   db: Database,
@@ -211,13 +285,8 @@ async function toViews(
     entry: (typeof chosen)[number] | undefined,
   ): PhotoGroupProposalProductSummary | null =>
     entry ? { id: entry.id, name: entry.name, coverUrl: entry.coverUrl } : null;
-  const code = (imageId: ImageId) => {
-    const entry = imagesById.get(imageId);
-    if (!entry) throw new Error(`Proposal image ${imageId} left its run`);
-    return parseShortcodeFor("image", entry.shortcode);
-  };
-
   return rows.map((row) => {
+    const roster = liveRoster(row, imagesById);
     const productSummary = row.productId
       ? strip(summaryById.get(row.productId))
       : null;
@@ -230,12 +299,12 @@ async function toViews(
     return {
       groupKey: row.groupKey,
       state: row.state,
-      images: row.images.map((entry) => ({
-        id: code(entry.imageId),
+      images: roster.images.map((entry, index) => ({
+        id: roster.imageCodes[index]!,
         purpose: entry.purpose,
       })),
-      skip: row.skip.map((entry) => ({
-        id: code(entry.imageId),
+      skip: roster.skip.map((entry, index) => ({
+        id: roster.skipCodes[index]!,
         reason: entry.reason,
       })),
       product:
@@ -270,6 +339,7 @@ async function toViews(
           })
         : null,
       lastError: row.lastError,
+      missingImageCount: roster.missing,
       committedAt: row.committedAt?.toISOString() ?? null,
       updatedAt: row.updatedAt.toISOString(),
     };
@@ -511,13 +581,12 @@ async function commitInputFor(
   db: Database,
   run: LoadedRun,
   row: ProposalRow,
-  imagesById: Map<ImageId, RunImage>,
+  roster: LiveRoster,
 ): Promise<CommitPhotoGroupInput> {
-  const code = (imageId: ImageId) => {
-    const entry = imagesById.get(imageId);
-    if (!entry) throw new Error(`Proposal image ${imageId} left its run`);
-    return parseShortcodeFor("image", entry.shortcode);
-  };
+  if (!roster.images.length && !roster.skip.length)
+    throw new Error(
+      `Every photo in group ${row.groupKey} was deleted; remove the group instead of approving it`,
+    );
   let productChoice: CommitPhotoGroupInput["product"];
   if (row.productKind === "existing") {
     if (!row.productId)
@@ -565,17 +634,57 @@ async function commitInputFor(
   return {
     runId: run.shortcode,
     groupKey: row.groupKey,
-    images: row.images.map((entry) => ({
-      id: code(entry.imageId),
+    images: roster.images.map((entry, index) => ({
+      id: roster.imageCodes[index]!,
       purpose: entry.purpose,
     })),
     product: productChoice,
     inventory,
-    skip: row.skip.map((entry) => ({
-      id: code(entry.imageId),
+    skip: roster.skip.map((entry, index) => ({
+      id: roster.skipCodes[index]!,
       reason: entry.reason,
     })),
   };
+}
+
+/**
+ * Freeze a group as committed or discarded with the roster and choices the
+ * writer actually committed — `row` as read before the commit, not whatever a
+ * concurrent save wrote since. Upserting also restores a row a concurrent
+ * save removed, so a committed group is never left without its record.
+ */
+async function persistSettled(
+  db: Database,
+  run: LoadedRun,
+  row: ProposalRow,
+  roster: LiveRoster,
+  state: "committed" | "discarded",
+  productId: ProductId | null,
+) {
+  const now = new Date();
+  const values = {
+    state,
+    images: roster.images,
+    skip: roster.skip,
+    productKind: row.productKind,
+    productId,
+    productCreate: row.productCreate,
+    inventoryLocationId: row.inventoryLocationId,
+    inventory: row.inventory,
+    evidence: row.evidence,
+    conflictProductIds: null,
+    lastError: null,
+    committedAt: now,
+    updatedAt: now,
+  };
+  await getDb(db)
+    .insert(photoGroupProposal)
+    .values({ runId: run.id, groupKey: row.groupKey, ...values })
+    .onConflictDoUpdate({
+      target: [photoGroupProposal.runId, photoGroupProposal.groupKey],
+      set: values,
+      setWhere: eq(photoGroupProposal.state, "proposed"),
+    });
 }
 
 async function approveRow(
@@ -593,10 +702,13 @@ async function approveRow(
       outcome: "failed",
       error: `Group ${row.groupKey} was discarded`,
     };
+  const roster = liveRoster(row, imagesById);
   try {
-    const input = await commitInputFor(db, run, row, imagesById);
+    const input = await commitInputFor(db, run, row, roster);
     const result = await commitPhotoGroup(db, input, actor);
     if (result.outcome === "conflict") {
+      // Only onto the row as read: a newer save already cleared the conflict
+      // for a payload this attempt never saw.
       await getDb(db)
         .update(photoGroupProposal)
         .set({
@@ -604,20 +716,27 @@ async function approveRow(
           lastError: null,
           updatedAt: new Date(),
         })
-        .where(eq(photoGroupProposal.id, row.id));
+        .where(
+          and(
+            eq(photoGroupProposal.id, row.id),
+            eq(photoGroupProposal.state, "proposed"),
+            eq(photoGroupProposal.updatedAt, row.updatedAt),
+          ),
+        );
       return { groupKey: row.groupKey, outcome: "conflict" };
     }
     const committedProductId = result.productId
       ? await resolveOrThrow(db, "product", result.productId)
       : row.productId;
+    await persistSettled(db, run, row, roster, "committed", committedProductId);
+    return { groupKey: row.groupKey, outcome: result.outcome };
+  } catch (error) {
+    // A frozen row never takes an error: a concurrent approval may have
+    // committed it while this attempt failed.
     await getDb(db)
       .update(photoGroupProposal)
       .set({
-        state: "committed",
-        productId: committedProductId,
-        conflictProductIds: null,
-        lastError: null,
-        committedAt: new Date(),
+        lastError: getErrorMessage(error).slice(0, 2_000),
         updatedAt: new Date(),
       })
       .where(
@@ -626,15 +745,6 @@ async function approveRow(
           eq(photoGroupProposal.state, "proposed"),
         ),
       );
-    return { groupKey: row.groupKey, outcome: result.outcome };
-  } catch (error) {
-    await getDb(db)
-      .update(photoGroupProposal)
-      .set({
-        lastError: getErrorMessage(error).slice(0, 2_000),
-        updatedAt: new Date(),
-      })
-      .where(eq(photoGroupProposal.id, row.id));
     return {
       groupKey: row.groupKey,
       outcome: "failed",
@@ -698,44 +808,30 @@ export async function discardPhotoGroupProposal(
   if (!row) throw new Error(`Group ${input.groupKey} does not exist`);
   if (row.state !== "proposed")
     throw new Error(`Group ${input.groupKey} is already ${row.state}`);
-  const code = (imageId: ImageId) => {
-    const entry = images.byId.get(imageId);
-    if (!entry) throw new Error(`Proposal image ${imageId} left its run`);
-    return parseShortcodeFor("image", entry.shortcode);
-  };
-  await commitPhotoGroup(
-    db,
-    {
-      runId: run.shortcode,
-      groupKey: row.groupKey,
-      images: [],
-      skip: [
-        ...row.images.map((entry) => ({
-          id: code(entry.imageId),
-          reason: DISCARD_REASON,
-        })),
-        ...row.skip.map((entry) => ({
-          id: code(entry.imageId),
-          reason: entry.reason,
-        })),
-      ],
-      // A skip-only group never touches its product (see the writer), but the
-      // contract still requires one; the group name is a harmless placeholder.
-      product: { kind: "create", create: { name: row.groupKey } },
-    },
-    actor,
-  );
-  const now = new Date();
-  await getDb(db)
-    .update(photoGroupProposal)
-    .set({
-      state: "discarded",
-      conflictProductIds: null,
-      lastError: null,
-      committedAt: now,
-      updatedAt: now,
-    })
-    .where(eq(photoGroupProposal.id, row.id));
+  const roster = liveRoster(row, images.byId);
+  // A group whose photos were all deleted has nothing left to skip.
+  if (roster.images.length || roster.skip.length) {
+    await commitPhotoGroup(
+      db,
+      {
+        runId: run.shortcode,
+        groupKey: row.groupKey,
+        images: [],
+        skip: [
+          ...roster.imageCodes.map((id) => ({ id, reason: DISCARD_REASON })),
+          ...roster.skip.map((entry, index) => ({
+            id: roster.skipCodes[index]!,
+            reason: entry.reason,
+          })),
+        ],
+        // A skip-only group never touches its product (see the writer), but
+        // the contract still requires one; the group name is a placeholder.
+        product: { kind: "create", create: { name: row.groupKey } },
+      },
+      actor,
+    );
+  }
+  await persistSettled(db, run, row, roster, "discarded", row.productId);
   return buildList(db, await loadRun(db, input.runId));
 }
 

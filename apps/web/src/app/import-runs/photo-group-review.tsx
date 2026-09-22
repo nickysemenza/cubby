@@ -150,12 +150,19 @@ function useReviewAction(runId: string) {
           committed === 1 ? "Group approved" : `${committed} groups approved`,
         );
       }
+      if (data.frozenGroupKeys.length) {
+        toast.warning("Some groups were already settled", {
+          description: `Left unchanged: ${data.frozenGroupKeys.join(", ")}`,
+        });
+      }
     },
     onError: (error) => showErrorToast(error),
   });
 }
 
-type Save = (edit: ProposalEdit) => void;
+/** Takes a builder so an edit that cannot be expressed (see `toGroupInput`) surfaces as a toast instead of an uncaught handler error. */
+type Save = (build: () => ProposalEdit) => void;
+type SaveGroup = (build: () => PhotoGroupProposalGroup) => void;
 type ImagesById = ReadonlyMap<string, PhotoRunImage>;
 
 const proposalName = (proposal: PhotoGroupProposal): string =>
@@ -205,17 +212,19 @@ function ImageMenu({
   const owner = proposals.find((proposal) => proposal.groupKey === groupKey);
   const setPurpose = (next: "item" | "label") => {
     if (!owner) return;
-    const input = toGroupInput(owner);
-    save({
-      groups: [
-        {
-          ...input,
-          images: input.images.map((image) =>
-            image.id === imageId ? { ...image, purpose: next } : image,
-          ),
-        },
-      ],
-      removeGroupKeys: [],
+    save(() => {
+      const input = toGroupInput(owner);
+      return {
+        groups: [
+          {
+            ...input,
+            images: input.images.map((image) =>
+              image.id === imageId ? { ...image, purpose: next } : image,
+            ),
+          },
+        ],
+        removeGroupKeys: [],
+      };
     });
   };
   return (
@@ -244,7 +253,7 @@ function ImageMenu({
           </>
         ) : null}
         <DropdownMenuItem
-          onClick={() => save(moveImage(proposals, imageId, null))}
+          onClick={() => save(() => moveImage(proposals, imageId, null))}
         >
           {groupKey ? "Split into a new group" : "Start a new group"}
         </DropdownMenuItem>
@@ -255,7 +264,7 @@ function ImageMenu({
               <DropdownMenuItem
                 key={target.groupKey}
                 onClick={() =>
-                  save(moveImage(proposals, imageId, target.groupKey))
+                  save(() => moveImage(proposals, imageId, target.groupKey))
                 }
               >
                 <span className="truncate">{proposalName(target)}</span>
@@ -411,17 +420,12 @@ function ProductPanel({
   save: Save;
   busy: boolean;
 }) {
-  const input = toGroupInput(proposal);
-  const saveGroup = (next: PhotoGroupProposalGroup) =>
-    save({ groups: [next], removeGroupKeys: [] });
+  const saveGroup: SaveGroup = (build) =>
+    save(() => ({ groups: [build()], removeGroupKeys: [] }));
+  const saveProduct = (next: PhotoGroupProposalGroup["product"]) =>
+    saveGroup(() => toGroupInput(proposal, { product: next }));
   const attachExisting = (existingId: ProductShortcode) =>
-    saveGroup({
-      ...input,
-      product: {
-        kind: "existing",
-        existingId,
-      },
-    });
+    saveProduct({ kind: "existing", existingId });
   const product = proposal.product;
   return (
     <Stack gap="sm" className="min-w-0">
@@ -460,12 +464,9 @@ function ProductPanel({
             disabled={busy}
             onCommit={(name) =>
               name &&
-              saveGroup({
-                ...input,
-                product: {
-                  kind: "create",
-                  create: { ...product.create, name },
-                },
+              saveProduct({
+                kind: "create",
+                create: { ...product.create, name },
               })
             }
           />
@@ -476,12 +477,9 @@ function ProductPanel({
               value={product.create.manufacturer ?? ""}
               disabled={busy}
               onCommit={(manufacturer) =>
-                saveGroup({
-                  ...input,
-                  product: {
-                    kind: "create",
-                    create: { ...product.create, manufacturer },
-                  },
+                saveProduct({
+                  kind: "create",
+                  create: { ...product.create, manufacturer },
                 })
               }
             />
@@ -491,12 +489,9 @@ function ProductPanel({
               value={product.create.model ?? ""}
               disabled={busy}
               onCommit={(model) =>
-                saveGroup({
-                  ...input,
-                  product: {
-                    kind: "create",
-                    create: { ...product.create, model: model || null },
-                  },
+                saveProduct({
+                  kind: "create",
+                  create: { ...product.create, model: model || null },
                 })
               }
             />
@@ -558,11 +553,13 @@ function ProductPanel({
             variant="ghost"
             disabled={busy}
             onClick={() =>
-              saveGroup({
-                ...input,
-                product: {
-                  kind: "create",
-                  create: { name: proposalName(proposal) },
+              saveProduct({
+                kind: "create",
+                create: {
+                  name:
+                    product.kind === "existing" && product.existing
+                      ? product.existing.name
+                      : proposal.groupKey,
                 },
               })
             }
@@ -587,10 +584,9 @@ function InventoryFields({
   busy,
 }: {
   proposal: PhotoGroupProposal;
-  save: (group: PhotoGroupProposalGroup) => void;
+  save: SaveGroup;
   busy: boolean;
 }) {
-  const input = toGroupInput(proposal);
   const inventory = proposal.inventory;
   const quantity = inventory?.quantity ?? 1;
   const selected =
@@ -608,21 +604,20 @@ function InventoryFields({
               label="location"
               items={items}
               value={selected}
-              setValue={(item) => {
-                const { inventory: _drop, ...rest } = input;
-                save(
-                  item
-                    ? {
-                        ...rest,
-                        inventory: {
-                          ...input.inventory,
+              setValue={(item) =>
+                save(() =>
+                  toGroupInput(proposal, {
+                    inventory: item
+                      ? {
+                          ownershipMode: inventory?.ownershipMode,
+                          ownerPartyId: inventory?.ownerPartyId,
                           locationId: item.id,
                           quantity,
-                        },
-                      }
-                    : rest,
-                );
-              }}
+                        }
+                      : undefined,
+                  }),
+                )
+              }
               onSearchChange={onSearchChange}
               onOpenChange={onOpenChange}
               isLoading={isLoading}
@@ -633,7 +628,7 @@ function InventoryFields({
           )}
         </WithEntitySearch>
       </div>
-      {input.inventory ? (
+      {inventory?.locationId ? (
         <CommitInput
           label="Qty"
           type="number"
@@ -642,10 +637,15 @@ function InventoryFields({
           disabled={busy}
           onCommit={(next) => {
             const parsed = Number.parseInt(next, 10);
-            if (input.inventory && Number.isInteger(parsed) && parsed > 0)
-              save({
-                ...input,
-                inventory: { ...input.inventory, quantity: parsed },
+            if (Number.isInteger(parsed) && parsed > 0)
+              save(() => {
+                const input = toGroupInput(proposal);
+                return input.inventory
+                  ? {
+                      ...input,
+                      inventory: { ...input.inventory, quantity: parsed },
+                    }
+                  : input;
               });
           }}
         />
@@ -675,6 +675,14 @@ function ProposalCard({
     (other) =>
       other.state === "proposed" && other.groupKey !== proposal.groupKey,
   );
+  // Photos deleted or settled outside this review (e.g. a direct commit) make
+  // the group unapprovable and undiscardable; removing it is the way out.
+  const stale =
+    proposal.missingImageCount > 0 ||
+    [...proposal.images, ...proposal.skip].some((entry) => {
+      const photo = imagesById.get(entry.id);
+      return photo !== undefined && photo.targetState !== "pending";
+    });
   return (
     <Card>
       <CardHeader>
@@ -713,7 +721,7 @@ function ProposalCard({
                       <DropdownMenuItem
                         key={target.groupKey}
                         onClick={() =>
-                          save(
+                          save(() =>
                             mergeGroups(
                               proposals,
                               proposal.groupKey,
@@ -728,6 +736,21 @@ function ProposalCard({
                   </DropdownMenuGroup>
                 </DropdownMenuContent>
               </DropdownMenu>
+            ) : null}
+            {stale ? (
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={working}
+                onClick={() =>
+                  save(() => ({
+                    groups: [],
+                    removeGroupKeys: [proposal.groupKey],
+                  }))
+                }
+              >
+                Remove group
+              </Button>
             ) : null}
             <Button
               variant="destructive"
@@ -775,6 +798,13 @@ function ProposalCard({
           />
           <ProductPanel proposal={proposal} save={save} busy={working} />
         </div>
+        {proposal.missingImageCount ? (
+          <StatusText as="p" tone="warning" className="mt-3 text-xs">
+            {proposal.missingImageCount === 1
+              ? "1 photo in this group was deleted."
+              : `${proposal.missingImageCount} photos in this group were deleted.`}
+          </StatusText>
+        ) : null}
         {proposal.lastError ? (
           <StatusText as="p" tone="destructive" className="mt-3 text-xs">
             Last approval failed: {proposal.lastError}
@@ -1010,12 +1040,20 @@ export function PhotoGroupReview({
 }) {
   const query = usePhotoRunReview(runId, runStatus);
   const action = useReviewAction(runId);
-  const save: Save = (edit) =>
+  const save: Save = (build) => {
+    let edit: ProposalEdit;
+    try {
+      edit = build();
+    } catch (error) {
+      showErrorToast(error);
+      return;
+    }
     action.mutate({
       action: "save",
       groups: edit.groups,
       removeGroupKeys: edit.removeGroupKeys,
     });
+  };
 
   if (query.isLoading && !query.data)
     return <StatusText>Loading proposed groups…</StatusText>;

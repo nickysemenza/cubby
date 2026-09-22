@@ -16,32 +16,45 @@ export type ProposalEdit = {
 
 type ImageId = PhotoGroupProposalGroup["images"][number]["id"];
 
-/** A proposal as the `save` action accepts it. A Product or Location deleted
- * after proposing falls back to "new product named after the group" and "no
- * inventory" so the reviewer can still edit the group. */
+/**
+ * A proposal as the `save` action accepts it, with `replace` swapping in a
+ * newly picked Product or inventory. A Product or Location deleted after
+ * proposing has no faithful input form, so any other save of that group
+ * throws until the reviewer picks a replacement — never silently turning it
+ * into a new Product or dropping its inventory.
+ */
 export function toGroupInput(
   proposal: PhotoGroupProposal,
+  replace: Partial<Pick<PhotoGroupProposalGroup, "product" | "inventory">> = {},
 ): PhotoGroupProposalGroup {
-  const product: PhotoGroupProposalGroup["product"] =
-    proposal.product.kind === "create"
-      ? proposal.product
-      : proposal.product.existing
-        ? { kind: "existing", existingId: proposal.product.existing.id }
-        : { kind: "create", create: { name: proposal.groupKey } };
-  const inventory = proposal.inventory;
+  let product: PhotoGroupProposalGroup["product"];
+  if ("product" in replace && replace.product) product = replace.product;
+  else if (proposal.product.kind === "create") product = proposal.product;
+  else if (proposal.product.existing)
+    product = { kind: "existing", existingId: proposal.product.existing.id };
+  else
+    throw new Error(
+      `Group ${proposal.groupKey}'s product was deleted; pick another product first`,
+    );
+  let inventory: PhotoGroupProposalGroup["inventory"];
+  if ("inventory" in replace) inventory = replace.inventory;
+  else if (proposal.inventory && !proposal.inventory.locationId)
+    throw new Error(
+      `Group ${proposal.groupKey}'s inventory location was deleted; pick another location or clear it first`,
+    );
+  else if (proposal.inventory?.locationId)
+    inventory = {
+      locationId: proposal.inventory.locationId,
+      quantity: proposal.inventory.quantity,
+      ownershipMode: proposal.inventory.ownershipMode,
+      ownerPartyId: proposal.inventory.ownerPartyId,
+    };
   return {
     groupKey: proposal.groupKey,
     images: proposal.images,
     skip: proposal.skip,
     product,
-    inventory: inventory?.locationId
-      ? {
-          locationId: inventory.locationId,
-          quantity: inventory.quantity,
-          ownershipMode: inventory.ownershipMode,
-          ownerPartyId: inventory.ownerPartyId,
-        }
-      : undefined,
+    inventory,
     evidence: proposal.evidence,
   };
 }

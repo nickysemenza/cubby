@@ -11,9 +11,11 @@ import { scrubErrorMessage } from "~/lib/error-diagnostics";
 import { importRunShortcode } from "~/lib/purchase-import-run-detail";
 import {
   approvePhotoGroupProposals,
+  assertPhotoRunReviewer,
   discardPhotoGroupProposal,
   listPhotoGroupProposals,
   listPhotoRunImages,
+  PhotoRunNotFoundError,
   proposePhotoGroups,
 } from "~/server/photo-import-run/proposals";
 import { createRequestContext, requireActor } from "~/server/request-context";
@@ -41,6 +43,11 @@ export const Route = createFileRoute("/api/import/runs/$publicId/photo-groups")(
             await createRequestContext({ headers: request.headers }),
           );
           try {
+            await assertPhotoRunReviewer(
+              context.db,
+              context.actorContext,
+              publicId.data,
+            );
             const [review, images] = await Promise.all([
               listPhotoGroupProposals(context.db, publicId.data),
               listPhotoRunImages(context.db, publicId.data),
@@ -49,6 +56,7 @@ export const Route = createFileRoute("/api/import/runs/$publicId/photo-groups")(
               photoRunReviewResponse.parse({ review, images }),
             );
           } catch (error) {
+            if (error instanceof PhotoRunNotFoundError) return notFound();
             return refused(getErrorMessage(error));
           }
         },
@@ -68,6 +76,11 @@ export const Route = createFileRoute("/api/import/runs/$publicId/photo-groups")(
           );
           const runId = publicId.data;
           try {
+            await assertPhotoRunReviewer(
+              context.db,
+              context.actorContext,
+              runId,
+            );
             const body = action.data;
             if (body.action === "save") {
               const saved = await proposePhotoGroups(context.db, {
@@ -85,7 +98,12 @@ export const Route = createFileRoute("/api/import/runs/$publicId/photo-groups")(
                 { runId, groupKeys: body.groupKeys },
                 context.actorContext,
               );
-              return Response.json(reviewPhotoGroupsOutput.parse(approved));
+              return Response.json(
+                reviewPhotoGroupsOutput.parse({
+                  ...approved,
+                  frozenGroupKeys: [],
+                }),
+              );
             }
             const discarded = await discardPhotoGroupProposal(
               context.db,
@@ -93,9 +111,14 @@ export const Route = createFileRoute("/api/import/runs/$publicId/photo-groups")(
               context.actorContext,
             );
             return Response.json(
-              reviewPhotoGroupsOutput.parse({ ...discarded, results: [] }),
+              reviewPhotoGroupsOutput.parse({
+                ...discarded,
+                results: [],
+                frozenGroupKeys: [],
+              }),
             );
           } catch (error) {
+            if (error instanceof PhotoRunNotFoundError) return notFound();
             return refused(getErrorMessage(error));
           }
         },

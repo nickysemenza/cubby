@@ -613,6 +613,18 @@ async function doCommit(
   const attaches = await resolveAttaches(txDb, input.images);
   const skips = await resolveSkips(txDb, input.skip ?? []);
 
+  // Run row first, then targets: `proposePhotoGroups` takes the same run lock
+  // before it validates that proposed images are still pending, so a proposal
+  // save cannot interleave with a commit. Every writer locks in this order
+  // (and `completeRunIfDone` only re-touches the row already held), so no
+  // run/target lock cycle exists.
+  const [lockedRun] = await getDb(txDb)
+    .select({ status: importRun.status })
+    .from(importRun)
+    .where(eq(importRun.id, scope.public.runId))
+    .for("update");
+  const runStatus = lockedRun?.status ?? scope.public.status;
+
   const { targetByImageId, allReplayed } = await lockTargets(
     txDb,
     scope,
@@ -626,9 +638,28 @@ async function doCommit(
 
   // Fresh work: every target is `pending`. A dead run may still legitimately
   // replay (above), but never starts new work.
-  if (scope.public.status !== "running") {
+  if (runStatus !== "running") {
     throw new Error(
-      `Photo-inventory run ${scope.public.shortcode} is not running (status: ${scope.public.status})`,
+      `Photo-inventory run ${scope.public.shortcode} is not running (status: ${runStatus})`,
+    );
+  }
+  // A `failed` ledger row may take over with a changed payload, but "failed"
+  // can also mean this transaction committed and only the ledger's completion
+  // write failed. Targets carrying this groupKey prove the earlier commit
+  // landed; running fresh work under the same key would duplicate it.
+  const [alreadyCommitted] = await getDb(txDb)
+    .select({ id: importRunTarget.id })
+    .from(importRunTarget)
+    .where(
+      and(
+        eq(importRunTarget.runId, scope.public.runId),
+        sql`${importRunTarget.diff}->>'groupKey' = ${input.groupKey}`,
+      ),
+    )
+    .limit(1);
+  if (alreadyCommitted) {
+    throw new Error(
+      `Group ${input.groupKey} was already committed to run ${scope.public.shortcode} with a different image roster; use a new groupKey`,
     );
   }
 
@@ -679,7 +710,7 @@ async function doCommit(
     productId: productShortcodeStr,
     inventoryId: inventoryShortcodeStr,
     images,
-    runStatus: runCompletes ? "completed" : scope.public.status,
+    runStatus: runCompletes ? "completed" : runStatus,
   });
 }
 

@@ -245,36 +245,65 @@ describe("commitPhotoGroup", () => {
     expect(attachments).toHaveLength(1);
   });
 
-  it("refuses a retry under the same groupKey with a changed payload", async () => {
-    const party = await seedMember();
-    const run = await seedRun(party);
-    const images = await seedImages(2);
-    await seedTargets(run.id, images);
+  it.each([
+    {
+      ledger: "completed",
+      error: /replayed with different input/,
+    },
+    {
+      // Regression: a `failed` ledger row may take over with a changed
+      // payload, but the writer transaction can commit and only the ledger's
+      // completion write fail — fresh work under that key duplicated it.
+      ledger: "failed",
+      error: /already committed to run .* with a different image roster/,
+    },
+  ] as const)(
+    "refuses a changed payload under a groupKey that already committed (ledger $ledger)",
+    async ({ ledger, error }) => {
+      const party = await seedMember();
+      const run = await seedRun(party);
+      const images = await seedImages(2);
+      await seedTargets(run.id, images);
 
-    await commitPhotoGroup(
-      ctx.db,
-      {
-        runId: run.shortcode,
-        groupKey: "group-drift",
-        images: [{ id: images[0]!.shortcode, purpose: "item" }],
-        product: { kind: "create", create: { name: "Drift Cardigan" } },
-      },
-      ctx.actor,
-    );
-
-    await expect(
-      commitPhotoGroup(
+      await commitPhotoGroup(
         ctx.db,
         {
           runId: run.shortcode,
           groupKey: "group-drift",
-          images: [{ id: images[1]!.shortcode, purpose: "item" }],
+          images: [{ id: images[0]!.shortcode, purpose: "item" }],
           product: { kind: "create", create: { name: "Drift Cardigan" } },
         },
         ctx.actor,
-      ),
-    ).rejects.toThrow(/replayed with different input/);
-  });
+      );
+      if (ledger === "failed")
+        await getDb(ctx.db)
+          .update(importRunOperation)
+          .set({ state: "failed" })
+          .where(
+            and(
+              eq(importRunOperation.runId, run.id),
+              eq(importRunOperation.operationId, "photo-group:group-drift"),
+            ),
+          );
+
+      await expect(
+        commitPhotoGroup(
+          ctx.db,
+          {
+            runId: run.shortcode,
+            groupKey: "group-drift",
+            images: [{ id: images[1]!.shortcode, purpose: "item" }],
+            product: { kind: "create", create: { name: "Drift Cardigan" } },
+          },
+          ctx.actor,
+        ),
+      ).rejects.toThrow(error);
+      const pending = (await readTargetStates(run.id)).filter(
+        (target) => target.state === "pending",
+      );
+      expect(pending).toHaveLength(1);
+    },
+  );
 
   it("reports a name collision as data, with zero writes and no operation row", async () => {
     const party = await seedMember();
