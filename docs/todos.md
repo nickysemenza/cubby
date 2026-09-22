@@ -897,6 +897,13 @@ history is the archive. Permanent product constraints live in the
   entity because one row has nowhere to put a set; a batch spanning entities
   under-reports the rest.
 
+- **Evaluate trade affinity in expense project suggestions** — Check once the
+  `expense.projectId` roster's per-project trade tallies (`renderLine` in
+  `server/ai/field-suggest/registry.ts`) have served real suggestions in
+  production: compare accept/override rates on `/ai-usage` against the
+  date-window-only roster, and drop the tallies if they add tokens without
+  better picks.
+
 - **Exact nutrition source tracing** — Resume when upstream conversion work is in
   scope. Extend `ingredient-parser` reports to retain actual mapping identities,
   directions, and competing mappings from the selected calculation path. Then
