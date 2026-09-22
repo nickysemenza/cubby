@@ -1,7 +1,8 @@
-import { execFileSync } from "node:child_process";
+import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
 import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
-import { dirname, resolve } from "node:path";
+import { availableParallelism } from "node:os";
+import { dirname, join, resolve } from "node:path";
 import type { EntityArtifacts } from "./entities/declarations.ts";
 
 /**
@@ -31,33 +32,61 @@ export const compactLiteral = <T>(value: T) =>
  */
 const isSealed = (relativePath: string) => /\.tsx?$/.test(relativePath);
 
-const formatSource = (root: string, artifact: EntityArtifacts): string =>
-  execFileSync(
-    "pnpm",
-    ["exec", "oxfmt", "--stdin-filepath", artifact.relativePath],
-    { cwd: root, encoding: "utf8", input: artifact.source },
-  );
+// The workspace's oxfmt binary, run in parallel: each `pnpm exec oxfmt`
+// spawn cost ~1.9s against ~0.5s direct, and a serial pass over ~58 sealed
+// artifacts made `pnpm generate` (and the post-merge regeneration) slow.
+const formatSource = (root: string, artifact: EntityArtifacts) =>
+  new Promise<string>((resolvePromise, reject) => {
+    const child = execFile(
+      join(root, "node_modules/.bin/oxfmt"),
+      ["--stdin-filepath", artifact.relativePath],
+      { cwd: root, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 },
+      (error, stdout) => (error ? reject(error) : resolvePromise(stdout)),
+    );
+    child.stdin?.end(artifact.source);
+  });
 
 const ARTIFACT_HASH_PATTERN =
   /^\/\/ Artifact hashes: source=([a-f0-9]+) content=([a-f0-9]+)\n/m;
 const artifactHash = (source: string) =>
   createHash("sha256").update(source).digest("hex").slice(0, 16);
 
-export const sealArtifact = (
+const sealArtifact = async (
   root: string,
   artifact: EntityArtifacts,
-): EntityArtifacts => {
+): Promise<EntityArtifacts> => {
   if (!isSealed(artifact.relativePath)) return artifact;
   if (!artifact.source.startsWith(generatedHeader))
     throw new Error(
       `${artifact.relativePath} does not start with the generated header.`,
     );
-  const formatted = formatSource(root, artifact);
+  const formatted = await formatSource(root, artifact);
   const hashLine = `// Artifact hashes: source=${artifactHash(artifact.source)} content=${artifactHash(formatted)}\n`;
   return {
     ...artifact,
     source: formatted.replace(generatedHeader, generatedHeader + hashLine),
   };
+};
+
+/** Seals every artifact, formatting at most one oxfmt process per core. */
+export const sealArtifacts = async (
+  root: string,
+  artifacts: readonly EntityArtifacts[],
+): Promise<EntityArtifacts[]> => {
+  const sealed = [...artifacts];
+  let next = 0;
+  const worker = async () => {
+    for (let index = next++; index < sealed.length; index = next++) {
+      // SAFETY: the loop condition bounds index to sealed's length.
+      sealed[index] = await sealArtifact(
+        root,
+        sealed[index] as EntityArtifacts,
+      );
+    }
+  };
+  const workers = Math.min(availableParallelism(), sealed.length);
+  await Promise.all(Array.from({ length: workers }, worker));
+  return sealed;
 };
 
 // The generator ownership header's first line, shared by every `//`-commented
