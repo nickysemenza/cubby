@@ -26,6 +26,7 @@ const iso = (value: Date | null) => value?.toISOString() ?? null;
 const browserRun = (
   run: Awaited<ReturnType<typeof loadImportRunByShortcode>>,
 ) => ({
+  publicId: run.publicId,
   status: run.status,
   purpose: run.purpose,
   trigger: run.trigger,

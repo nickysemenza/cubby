@@ -50,6 +50,7 @@ import {
   inventoryEntry,
   location,
   locationImage,
+  photoGroupProposal,
   planting,
   product,
   productImage,
@@ -136,6 +137,12 @@ export const LOCATION_DELETE_EDGE_POLICY = {
     effect: "detach",
     description:
       "A deleted location's children are promoted to its nearest surviving ancestor rather than the deletion being blocked.",
+  },
+  "PhotoGroupProposal.inventoryLocationId": {
+    code: "clear-proposal-location",
+    effect: "detach",
+    description:
+      "Deleting a location clears a photo group proposal's inventory location; a proposed group must then pick another before approval.",
   },
   "Planting.locationId": {
     code: "block-live-planting",
@@ -675,6 +682,10 @@ export const deleteLocations = async (
         .set({ parentId })
         .where(and(inArray(location.id, childIds), notDeleted(location)));
     }
+    await tx
+      .update(photoGroupProposal)
+      .set({ inventoryLocationId: null, updatedAt: new Date() })
+      .where(inArray(photoGroupProposal.inventoryLocationId, ids));
 
     return await removeEntity(tx, {
       entity: "location",

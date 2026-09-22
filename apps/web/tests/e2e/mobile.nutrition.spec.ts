@@ -1,5 +1,5 @@
 import { seedNutritionPrerequisite } from "./e2e-fixtures";
-import { waitForAppHydration } from "./e2e-helpers";
+import { gotoAuthenticatedPage } from "./e2e-helpers";
 import { expect, test } from "./e2e-test";
 
 test("phone nutrition focuses a nutrient with legible contributions and repair navigation", async ({
@@ -7,8 +7,10 @@ test("phone nutrition focuses a nutrient with legible contributions and repair n
 }, testInfo) => {
   const name = `E2E phone nutrition ${Date.now()}-${testInfo.workerIndex}`;
   const { recipe } = await seedNutritionPrerequisite(page, name);
-  await page.goto(`/recipes/${recipe.id}?view=data&nutritionBasis=serving`);
-  await waitForAppHydration(page);
+  await gotoAuthenticatedPage(
+    page,
+    `/recipes/${recipe.id}?view=data&nutritionBasis=serving`,
+  );
   const focus = page.getByRole("combobox", { name: "Focused nutrient" });
   const contributions = page.getByTestId("nutrition-contributions");
   // The select is disabled until its boundary hydrates (`useHydrationGate`),

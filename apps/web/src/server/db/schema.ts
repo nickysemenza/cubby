@@ -1850,6 +1850,79 @@ export const importRunOperation = pgTable(
   ],
 );
 
+/**
+ * An agent's proposed grouping of a photo-inventory run's images, awaiting
+ * human review. Approval runs the bounded `commit_photo_group` writer with
+ * this row's payload; `committed`/`discarded` rows are frozen history.
+ * Product and Location are real FKs so a merge can repoint and a delete can
+ * detach them; the image roster, category and owner party stay in the
+ * payload because images are pinned by `ImportRunTarget` and the writer
+ * re-resolves every code at approval time.
+ */
+export const photoGroupProposal = pgTable(
+  "PhotoGroupProposal",
+  {
+    id: pkUuid(),
+    runId: uuid("runId")
+      .notNull()
+      .$type<ImportRunId>()
+      .references(() => importRun.id),
+    groupKey: text("groupKey").notNull(),
+    state: text("state")
+      .notNull()
+      .default("proposed")
+      .$type<"proposed" | "committed" | "discarded">(),
+    images: jsonb("images")
+      .notNull()
+      .default(sql`'[]'::jsonb`)
+      .$type<{ imageId: ImageId; purpose: "item" | "label" }[]>(),
+    skip: jsonb("skip")
+      .notNull()
+      .default(sql`'[]'::jsonb`)
+      .$type<{ imageId: ImageId; reason: string }[]>(),
+    productKind: text("productKind").notNull().$type<"existing" | "create">(),
+    /** The chosen existing Product, or — once committed — the Product the group attached to. */
+    productId: uuid("productId")
+      .$type<ProductId>()
+      .references(() => product.id),
+    /** `commit_photo_group`'s `product.create` payload when `productKind` is `create`. */
+    productCreate:
+      jsonb("productCreate").$type<
+        import("@cubby/schemas/photo-import-run").CommitPhotoGroupProductCreate
+      >(),
+    inventoryLocationId: uuid("inventoryLocationId")
+      .$type<LocationId>()
+      .references(() => location.id),
+    /** `commit_photo_group`'s inventory minus `locationId`; null = no inventory. */
+    inventory:
+      jsonb("inventory").$type<
+        import("@cubby/schemas/photo-import-run").PhotoGroupStoredInventory
+      >(),
+    evidence: text("evidence"),
+    /** Product shortcodes that collided with a `create` name on the last approval. */
+    conflictProductIds: jsonb("conflictProductIds").$type<string[]>(),
+    lastError: text("lastError"),
+    committedAt: timestamp("committedAt", { mode: "date" }),
+    ...baseTimestamps(),
+  },
+  (table) => [
+    uniqueIndex("PhotoGroupProposal_run_group_key").on(
+      table.runId,
+      table.groupKey,
+    ),
+    index("PhotoGroupProposal_product_idx").on(table.productId),
+    index("PhotoGroupProposal_location_idx").on(table.inventoryLocationId),
+    check(
+      "PhotoGroupProposal_state_check",
+      sql`${table.state} IN ('proposed', 'committed', 'discarded')`,
+    ),
+    check(
+      "PhotoGroupProposal_product_kind_check",
+      sql`${table.productKind} IN ('existing', 'create')`,
+    ),
+  ],
+);
+
 /** Idempotent progress events mirrored from the private Flue coordinator. */
 export const importRunProgress = pgTable(
   "ImportRunProgress",

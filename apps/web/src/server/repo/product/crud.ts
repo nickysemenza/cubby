@@ -56,6 +56,7 @@ import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
 import {
   cookbook,
   device,
+  photoGroupProposal,
   expense,
   image,
   ingredient,
@@ -2413,6 +2414,17 @@ const PRODUCT_RETAINING_DEPENDENTS = {
       where: and(inArray(device.productId, ids), notDeleted(device)),
       columns: { productId: true },
     }),
+  // Never read either: a "detach" disposition, cleared below.
+  "PhotoGroupProposal.productId": (tx, ids) =>
+    tx
+      .select({ productId: photoGroupProposal.productId })
+      .from(photoGroupProposal)
+      .where(inArray(photoGroupProposal.productId, ids))
+      .then((rows) =>
+        rows.flatMap((row) =>
+          row.productId ? [{ productId: row.productId }] : [],
+        ),
+      ),
 } satisfies Record<ProductRetainingEdgeKey, ProductDependentFetcher>;
 
 /**
@@ -2512,6 +2524,14 @@ export const deleteProducts = async (
         })),
       );
     }
+
+    // "PhotoGroupProposal.productId" detaches too: a proposed group whose
+    // chosen Product vanished must pick another before approval, and a
+    // committed one keeps its image roster as history.
+    await tx
+      .update(photoGroupProposal)
+      .set({ productId: null, updatedAt: new Date() })
+      .where(inArray(photoGroupProposal.productId, ids));
 
     await tx
       .delete(productConversionCoverage)

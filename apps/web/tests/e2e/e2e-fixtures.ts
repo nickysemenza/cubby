@@ -7,7 +7,6 @@ import {
   makeCookbookExtraction,
   makeCookbookRecipe,
 } from "~/server/repo/repo.fixtures";
-import { financialAccountCreateInput } from "@cubby/schemas/financial-account";
 import { inventoryCreatePayloadData } from "@cubby/schemas/inventory";
 import { locationCreateInput } from "@cubby/schemas/location";
 import { ledgerPartyCreateInput } from "@cubby/schemas/ledger-party";
@@ -28,6 +27,8 @@ import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 import { z } from "zod";
 
+import type { PhotoGroupProposalGroup } from "@cubby/schemas/photo-import-run";
+
 import { Database } from "~/server/db";
 import * as schema from "~/server/db/schema";
 import type { EntityBrowserMutationCommand } from "~/server/entity-kernel/contracts";
@@ -37,9 +38,12 @@ import {
 } from "~/server/repo/image";
 import { saveMealFood } from "~/server/repo/meal/food";
 import { getDb } from "~/server/repo/database-helpers";
+import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import { requireActor } from "~/server/request-context";
 import { createTestRequestContext } from "~/server/testing/request-context";
 import { householdDaysFromNow, householdLocalDate } from "~/lib/household-date";
+import { proposePhotoGroups } from "~/server/photo-import-run/proposals";
+import { startPhotoInventoryRun } from "~/server/purchase-import/run-service";
 import {
   buildKernelContext,
   createFixtureWithContext,
@@ -63,7 +67,8 @@ function getFixtureDb(): Database {
       "E2E_DATABASE_URL is required for server-side Playwright fixtures",
     );
   }
-  const pool = new Pool({ connectionString, max: 2, allowExitOnIdle: true });
+  // Room for FIXTURE_CONCURRENCY parallel writes plus their nested reads.
+  const pool = new Pool({ connectionString, max: 8, allowExitOnIdle: true });
   const client = drizzle(pool, { schema });
   fixtureDb = new Database(() => ({
     client,
@@ -91,6 +96,25 @@ function fixtureUserId(page: Page): Promise<FixtureUserId> {
   })();
   fixtureUserIds.set(context, pending);
   return pending;
+}
+
+/** Parallel fixture writes; bounded so a large seed does not queue on the pool. */
+const FIXTURE_CONCURRENCY = 4;
+
+export async function seedConcurrently<Item, Result>(
+  items: readonly Item[],
+  run: (item: Item) => Promise<Result>,
+): Promise<Result[]> {
+  const results: Result[] = [];
+  // One shared iterator: each lane takes the next item as it frees up.
+  const queue = items.entries();
+  const lane = async () => {
+    for (const [index, item] of queue) results[index] = await run(item);
+  };
+  await Promise.all(
+    Array.from({ length: Math.min(FIXTURE_CONCURRENCY, items.length) }, lane),
+  );
+  return results;
 }
 
 async function createFixture<Input>(
@@ -209,20 +233,6 @@ export const seedProductPrerequisite = (
     ),
   );
 
-export const seedFinancialAccountPrerequisite = (page: Page, name: string) =>
-  createFixture(
-    page,
-    "financialAccount",
-    financialAccountCreateInput.parse({
-      name,
-      identity: { kind: "cash" },
-      provisional: false,
-      sourceAliases: [],
-      ledgerPartyId: null,
-      notes: null,
-    }),
-  );
-
 export const seedImagePrerequisite = async (name: string) => {
   const created = await createUploadedImageRecord(getFixtureDb(), {
     key: `e2e-${name}`,
@@ -259,8 +269,7 @@ export const seedInventoryPrerequisites = (
 ) =>
   (async () => {
     const location = await seedLocationPrerequisite(page, opts.locationName);
-    const products = [];
-    for (const product of opts.products) {
+    const products = await seedConcurrently(opts.products, async (product) => {
       const created = await seedProductPrerequisite(page, {
         name: product.name,
       });
@@ -273,8 +282,8 @@ export const seedInventoryPrerequisites = (
           amount: { value: product.quantity, unit: product.unit },
         }),
       );
-      products.push(created);
-    }
+      return created;
+    });
     return { products, location };
   })();
 
@@ -285,34 +294,38 @@ export async function seedToolFlowPrerequisite(
     productNames: readonly string[];
   }>,
 ) {
-  const seededGroups = [];
-  for (const group of groups) {
-    const location = await seedLocationPrerequisite(page, group.locationName);
-    const products = [];
-    for (const name of group.productNames) {
-      const product = await createFixture(
-        page,
-        "product",
-        productFixtureInput(
-          name,
-          "Flow fixture maker",
-          taxonomyShortcode("tools"),
-        ),
-      );
-      await createFixture(
-        page,
-        "inventory",
-        inventoryCreatePayloadData.parse({
-          productId: product.id,
-          locationId: location.id,
-          amount: { value: 1, unit: "each" },
-        }),
-      );
-      products.push(product);
-    }
-    seededGroups.push({ ...group, location, products });
-  }
-  return seededGroups;
+  const located = await seedConcurrently(groups, async (group) => ({
+    ...group,
+    location: await seedLocationPrerequisite(page, group.locationName),
+  }));
+  const placements = located.flatMap((group) =>
+    group.productNames.map((name) => ({ name, group })),
+  );
+  const products = await seedConcurrently(placements, async (placement) => {
+    const product = await createFixture(
+      page,
+      "product",
+      productFixtureInput(
+        placement.name,
+        "Flow fixture maker",
+        taxonomyShortcode("tools"),
+      ),
+    );
+    await createFixture(
+      page,
+      "inventory",
+      inventoryCreatePayloadData.parse({
+        productId: product.id,
+        locationId: placement.group.location.id,
+        amount: { value: 1, unit: "each" },
+      }),
+    );
+    return product;
+  });
+  return located.map((group) => ({
+    ...group,
+    products: products.filter((_, index) => placements[index]?.group === group),
+  }));
 }
 
 export async function seedCookbookSourcePrerequisite(page: Page, name: string) {
@@ -374,6 +387,39 @@ export async function seedStaplePlanningPrerequisite(page: Page, name: string) {
 
 export const seedIngredientPrerequisite = (page: Page, name: string) =>
   createFixture(page, "ingredient", { name });
+
+/**
+ * An ingredient priced by one linked product: 1 cup = $2.50 and 100 g = $1.50.
+ * Recipe cost assertions depend on these exact mappings (2 cups → $5.00, and
+ * 333 g through the chained cup → g conversion).
+ */
+export async function seedCostedIngredientPrerequisite(
+  page: Page,
+  name: string,
+) {
+  const ingredient = await createFixture(page, "ingredient", { name });
+  const product = await createFixture(
+    page,
+    "product",
+    productCreateInput.parse({
+      ...productFixtureInput(`${name} Brand Product`, "E2E fixture"),
+      ingredientId: ingredient.id,
+      unitMappings: [
+        {
+          a: { value: 1, unit: "cup" },
+          b: { value: 2.5, unit: "dollar" },
+          source: "E2E fixture",
+        },
+        {
+          a: { value: 100, unit: "grams" },
+          b: { value: 1.5, unit: "dollar" },
+          source: "E2E fixture",
+        },
+      ],
+    }),
+  );
+  return { ingredient, product };
+}
 
 export async function seedNutritionPrerequisite(
   page: Page,
@@ -852,4 +898,96 @@ export async function seedInheritancePrerequisite(page: Page, name: string) {
     lineKind: "tax",
   });
   return { project, purchase, expense, charge };
+}
+
+/**
+ * A running photo-inventory ImportRun with three synthetic photos, seeded
+ * two proposed groups (a two-photo item/label pair and a single-photo item),
+ * and the Location the item group's inventory targets. There is no browser
+ * flow to create a photo-inventory run with real uploaded photos, so this
+ * mirrors `proposals.integration.test.ts`'s `seedRun`: an ImportRunTarget row
+ * is inserted directly per image rather than through the byte-verifying
+ * `finalizePhotoImportRun` upload path, since `proposePhotoGroups` only
+ * requires each image to be a still-`pending` target of the run.
+ */
+export async function seedPhotoGroupReviewRun(page: Page, name: string) {
+  const db = getFixtureDb();
+  const userId = await fixtureUserId(page);
+
+  const existingMember = await getDb(db).query.ledgerParty.findFirst({
+    where: and(
+      eq(schema.ledgerParty.userId, userId),
+      eq(schema.ledgerParty.kind, "member"),
+      isNull(schema.ledgerParty.deletedAt),
+    ),
+  });
+  if (!existingMember) {
+    await insertWithShortcode(db, "ledgerParty", {
+      name: `${name} member`,
+      kind: "member",
+      userId,
+    });
+  }
+
+  const location = await seedLocationPrerequisite(page, `${name} location`);
+
+  const seedRunImage = async (label: string) => {
+    const row = await createUploadedImageRecord(db, {
+      key: `e2e-${name}-${label}-${crypto.randomUUID()}`,
+      filename: `4K7M-${label}.png`,
+      contentType: "image/png",
+      size: 100,
+    });
+    return {
+      uuid: parseEntityId("image", row.id),
+      shortcode: parseShortcodeFor("image", row.shortcode),
+    };
+  };
+  const itemImage = await seedRunImage("item");
+  const labelImage = await seedRunImage("label");
+  const soloImage = await seedRunImage("solo");
+
+  const run = await startPhotoInventoryRun(db, { actorUserId: userId });
+
+  await getDb(db)
+    .insert(schema.importRunTarget)
+    .values(
+      [itemImage, labelImage, soloImage].map((image, index) => ({
+        runId: run.id,
+        imageId: image.uuid,
+        position: index,
+        state: "pending" as const,
+        targetFingerprint: `e2e-${name}-${index}`,
+      })),
+    );
+
+  const groups: PhotoGroupProposalGroup[] = [
+    {
+      groupKey: "g1",
+      images: [
+        { id: itemImage.shortcode, purpose: "item" },
+        { id: labelImage.shortcode, purpose: "label" },
+      ],
+      product: { kind: "create", create: { name: "Gray crew t-shirt — M" } },
+      inventory: {
+        locationId: parseShortcodeFor("location", location.id),
+        quantity: 2,
+      },
+    },
+    {
+      groupKey: "g2",
+      images: [{ id: soloImage.shortcode, purpose: "item" }],
+      product: { kind: "create", create: { name: `${name} solo find` } },
+    },
+  ];
+
+  await proposePhotoGroups(db, { runId: run.publicId, groups });
+
+  return {
+    runId: run.publicId,
+    location,
+    itemImage,
+    labelImage,
+    soloImage,
+  };
 }

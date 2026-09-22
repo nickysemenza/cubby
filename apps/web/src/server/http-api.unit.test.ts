@@ -258,6 +258,39 @@ describe("HTTP boundary", () => {
       expect.objectContaining({ input }),
     );
   });
+  // A domain blocker (e.g. FINANCIAL_ACCOUNT_HAS_TRANSACTIONS, covered against
+  // PostgreSQL in financial.integration.test.ts) must reach an HTTP client as
+  // its own status with the blockers intact, not as a generic 500.
+  it.each([
+    ["PRECONDITION_FAILED", 412],
+    ["CONFLICT", 409],
+    ["NOT_FOUND", 404],
+  ] as const)(
+    "answers a dispatched %s as %i with its body",
+    async (code, status) => {
+      const error = {
+        code,
+        message: "Blocked",
+        reason: "FINANCIAL_ACCOUNT_HAS_TRANSACTIONS",
+        blockers: [{ id: "FTX-4K7M" }],
+      };
+      ports.dispatch.mockResolvedValueOnce({ ok: false, error });
+      const response = await request("financial-accounts/FAC-4K7M", {
+        method: "DELETE",
+        headers: { origin: "https://cubby.example" },
+      });
+      expect(response.status).toBe(status);
+      expect(await response.json()).toMatchObject(error);
+      expect(ports.dispatch).toHaveBeenCalledWith(
+        expect.objectContaining({
+          input: expect.objectContaining({
+            action: "delete",
+            entity: "financialAccount",
+          }),
+        }),
+      );
+    },
+  );
   it("resolves registered operation names before resource identifiers", async () => {
     expect((await request("image/detail?id=IMG-ABCD")).status).toBe(200);
     expect(ports.dispatch).toHaveBeenCalledWith(

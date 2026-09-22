@@ -48,26 +48,6 @@ function stepToward(
   };
 }
 
-/** Drive the same pointer events a person produces, including activation travel. */
-export async function dragByMouse(
-  page: Page,
-  source: Locator,
-  target: Locator,
-) {
-  let current = await visibleCenter(source);
-  await page.mouse.move(current.x, current.y);
-  await page.mouse.down();
-  await visibleCenter(target);
-  for (let remaining = 12; remaining > 1; remaining -= 1) {
-    current = stepToward(current, await currentCenter(target), remaining);
-    await page.mouse.move(current.x, current.y);
-    await nextAnimationFrame(source);
-  }
-  current = await currentCenter(target);
-  await page.mouse.move(current.x, current.y);
-  await page.mouse.up();
-}
-
 /** Activate dnd-kit from the focused grip, navigate, and commit. */
 export async function dragByKeyboard(
   source: Locator,

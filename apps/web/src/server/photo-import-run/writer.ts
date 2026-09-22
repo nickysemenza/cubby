@@ -474,7 +474,7 @@ async function markTargets(
   attaches: ResolvedAttach[],
   skips: ResolvedSkip[],
   targetByImageId: Map<ImageId | null, LockedTarget>,
-  productShortcodeStr: string,
+  productShortcodeStr: string | undefined,
   inventoryShortcodeStr: string | undefined,
   now: Date,
 ): Promise<{ id: string; state: string }[]> {
@@ -483,6 +483,9 @@ async function markTargets(
   const images: { id: string; state: string }[] = [];
   for (const entry of attaches) {
     const target = targetByImageId.get(entry.imageId)!;
+    if (!productShortcodeStr) {
+      throw new Error("An attached image needs a resolved Product");
+    }
     const diff: AttachedDiff = {
       groupKey,
       productId: productShortcodeStr,
@@ -611,6 +614,18 @@ async function doCommit(
   const attaches = await resolveAttaches(txDb, input.images);
   const skips = await resolveSkips(txDb, input.skip ?? []);
 
+  // Run row first, then targets: `proposePhotoGroups` takes the same run lock
+  // before it validates that proposed images are still pending, so a proposal
+  // save cannot interleave with a commit. Every writer locks in this order
+  // (and `completeRunIfDone` only re-touches the row already held), so no
+  // run/target lock cycle exists.
+  const [lockedRun] = await getDb(txDb)
+    .select({ status: importRun.status })
+    .from(importRun)
+    .where(eq(importRun.id, scope.public.runId))
+    .for("update");
+  const runStatus = lockedRun?.status ?? scope.public.status;
+
   const { targetByImageId, allReplayed } = await lockTargets(
     txDb,
     scope,
@@ -624,23 +639,51 @@ async function doCommit(
 
   // Fresh work: every target is `pending`. A dead run may still legitimately
   // replay (above), but never starts new work.
-  if (scope.public.status !== "running") {
+  if (runStatus !== "running") {
     throw new Error(
-      `Photo-inventory run ${scope.public.shortcode} is not running (status: ${scope.public.status})`,
+      `Photo-inventory run ${scope.public.shortcode} is not running (status: ${runStatus})`,
+    );
+  }
+  // A `failed` ledger row may take over with a changed payload, but "failed"
+  // can also mean this transaction committed and only the ledger's completion
+  // write failed. Targets carrying this groupKey prove the earlier commit
+  // landed; running fresh work under the same key would duplicate it.
+  const [alreadyCommitted] = await getDb(txDb)
+    .select({ id: importRunTarget.id })
+    .from(importRunTarget)
+    .where(
+      and(
+        eq(importRunTarget.runId, scope.public.runId),
+        sql`${importRunTarget.diff}->>'groupKey' = ${input.groupKey}`,
+      ),
+    )
+    .limit(1);
+  if (alreadyCommitted) {
+    throw new Error(
+      `Group ${input.groupKey} was already committed to run ${scope.public.shortcode} with a different image roster; use a new groupKey`,
     );
   }
 
-  const productShortcodeStr = await resolveProduct(txDb, scope, input, actor);
-  const productId = await resolveOrThrow(txDb, "product", productShortcodeStr);
-  const inventoryShortcodeStr = await receiveInventory(
-    txDb,
-    scope,
-    input,
-    productId,
-    actor,
-  );
-
-  await attachImages(txDb, attaches, productShortcodeStr, actor);
+  // A skip-only group (e.g. a discarded proposal) touches no Product: it must
+  // not mint a `create` Product nobody will ever see.
+  let productShortcodeStr: string | undefined;
+  let inventoryShortcodeStr: string | undefined;
+  if (groupTouchesProduct(input)) {
+    productShortcodeStr = await resolveProduct(txDb, scope, input, actor);
+    const productId = await resolveOrThrow(
+      txDb,
+      "product",
+      productShortcodeStr,
+    );
+    inventoryShortcodeStr = await receiveInventory(
+      txDb,
+      scope,
+      input,
+      productId,
+      actor,
+    );
+    await attachImages(txDb, attaches, productShortcodeStr, actor);
+  }
   const now = new Date();
   const images = await markTargets(
     txDb,
@@ -668,9 +711,12 @@ async function doCommit(
     productId: productShortcodeStr,
     inventoryId: inventoryShortcodeStr,
     images,
-    runStatus: runCompletes ? "completed" : scope.public.status,
+    runStatus: runCompletes ? "completed" : runStatus,
   });
 }
+
+const groupTouchesProduct = (input: CommitPhotoGroupInput): boolean =>
+  input.images.length > 0 || input.inventory !== undefined;
 
 export async function commitPhotoGroup(
   db: Database,
@@ -690,7 +736,7 @@ export async function commitPhotoGroup(
   // replay ledger — routing it through `runImportOperation` would either
   // replay the conflict forever (if reported under this operation id) or
   // reject a corrected payload sent under the same groupKey.
-  if (input.product.kind === "create") {
+  if (input.product.kind === "create" && groupTouchesProduct(input)) {
     const conflicts = await findProductNameConflicts(
       db,
       scope.public.runId,
@@ -715,6 +761,10 @@ export async function commitPhotoGroup(
       operationId: `photo-group:${input.groupKey}`,
       kind: "commit_photo_group",
       payload: input,
+      // The whole commit is one transaction, so a failed attempt left no
+      // partial writes: a corrected payload (e.g. an edited proposal) under
+      // the same groupKey may run instead of being refused forever.
+      retryFailedWithChangedInput: true,
     },
     () =>
       withTransactionDatabase(db, (transactionDb) =>

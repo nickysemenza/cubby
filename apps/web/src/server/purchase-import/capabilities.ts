@@ -79,6 +79,7 @@ export function capabilityForPurchaseAgentTool(
   if (toolName === "commit_purchase_import") return "commit_purchase_import";
   if (toolName === "commit_photo_group") return "photo_commit";
   if (toolName === "propose_product_match") return "match_proposal";
+  if (toolName === "propose_photo_groups") return "photo_commit";
   if (toolName.includes("audit") || toolName.includes("repair"))
     return "audit_repair";
   if (toolName.includes("attach") || toolName.includes("image"))

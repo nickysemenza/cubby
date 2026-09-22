@@ -2,7 +2,7 @@ import {
   seedPurchaseHeicAttachment,
   seedRecordListDisplayPrerequisite,
 } from "./e2e-fixtures";
-import { waitForAppHydration } from "./e2e-helpers";
+import { gotoAuthenticatedPage } from "./e2e-helpers";
 import { expect, test } from "./e2e-test";
 
 // Desktop-only: this is the SSR + cross-page navigation proof for declared
@@ -25,7 +25,12 @@ test("declared record lists retain identities, relationships and amounts on desk
     "href",
     `/purchases/${fixture.purchase.id}`,
   );
-  await expect(page.getByText("$12.34", { exact: true }).first()).toBeVisible();
+  await expect(
+    page
+      .getByRole("row")
+      .filter({ has: purchase })
+      .locator('[data-cell-col="statedTotal"]'),
+  ).toHaveText("$12.34");
   await expect(
     page.getByRole("button", {
       name: "Reorder reconciliation column",
@@ -36,12 +41,17 @@ test("declared record lists retain identities, relationships and amounts on desk
     page.getByText(`${name} purchase notes`, { exact: true }),
   ).toBeVisible();
   await page.goto(`/expenses?q=${encodeURIComponent(`${name} expense`)}`);
+  const expense = page.getByRole("link", {
+    name: `${name} expense`,
+    exact: true,
+  });
+  await expect(expense).toHaveCount(1);
+  const expenseRecord = page.getByRole("row").filter({ has: expense });
   await expect(
-    page.getByRole("link", { name: `${name} expense`, exact: true }),
-  ).toHaveCount(1);
-  await expect(page.getByText("$12.34", { exact: true }).first()).toBeVisible();
+    expenseRecord.getByText("$12.34", { exact: true }),
+  ).toBeVisible();
   await expect(
-    page.getByRole("link", { name: `${name} product`, exact: true }).first(),
+    expenseRecord.getByRole("link", { name: `${name} product`, exact: true }),
   ).toHaveAttribute("href", `/products/${fixture.product.id}`);
   await expect(
     page.getByRole("columnheader").filter({
@@ -53,8 +63,10 @@ test("declared record lists retain identities, relationships and amounts on desk
   ).toContainText("Purchase");
   // The parent relationship is visible in both table rows and mobile cards;
   // Children remains hidden by default in the existing display preferences.
-  await page.goto(`/locations?name=${encodeURIComponent(`${name} shelf`)}`);
-  await waitForAppHydration(page);
+  await gotoAuthenticatedPage(
+    page,
+    `/locations?name=${encodeURIComponent(`${name} shelf`)}`,
+  );
   await page.getByRole("button", { name: "List view", exact: true }).click();
   await expect(
     page.getByRole("button", { name: "List view", exact: true }),

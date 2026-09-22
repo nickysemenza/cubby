@@ -1,4 +1,4 @@
-import { gotoAuthenticatedPage, waitForAppHydration } from "./e2e-helpers";
+import { gotoAuthenticatedPage } from "./e2e-helpers";
 import { expect, test } from "./e2e-test";
 
 test.describe("iPhone WebKit smoke", () => {
@@ -27,10 +27,7 @@ test.describe("iPhone WebKit smoke", () => {
         // The initial opaque document can reject storage access.
       }
     });
-    await page.goto("/locations#deploy-skew", {
-      waitUntil: "domcontentloaded",
-    });
-    await waitForAppHydration(page);
+    await gotoAuthenticatedPage(page, "/locations#deploy-skew");
     await page.evaluate(() =>
       sessionStorage.removeItem("cubby:preload-reload-at"),
     );
@@ -39,7 +36,8 @@ test.describe("iPhone WebKit smoke", () => {
       Number(sessionStorage.getItem("cubby:e2e-document-loads")),
     );
 
-    const reloaded = page.waitForNavigation({ waitUntil: "domcontentloaded" });
+    // A reload keeps the URL, so wait for the new document itself.
+    const reloaded = page.waitForEvent("domcontentloaded");
     await page.evaluate(() => {
       setTimeout(() => {
         const event = new Event("vite:preloadError", { cancelable: true });
@@ -61,12 +59,10 @@ test.describe("iPhone WebKit smoke", () => {
   test("an intended document navigation wins over preload recovery", async ({
     page,
   }) => {
-    await page.goto("/products", { waitUntil: "domcontentloaded" });
-    await waitForAppHydration(page);
+    await gotoAuthenticatedPage(page, "/products");
     await page.evaluate(() =>
       sessionStorage.removeItem("cubby:preload-reload-at"),
     );
-    const navigated = page.waitForNavigation({ waitUntil: "domcontentloaded" });
     await page.evaluate(() => {
       const event = new Event("vite:preloadError", { cancelable: true });
       Object.defineProperty(event, "payload", {
@@ -75,8 +71,9 @@ test.describe("iPhone WebKit smoke", () => {
       window.dispatchEvent(event);
       window.location.assign("/recipes?deploy-skew-navigation=1");
     });
-    await navigated;
-    await expect(page).toHaveURL(/\/recipes\?deploy-skew-navigation=1$/);
+    await page.waitForURL(/\/recipes\?deploy-skew-navigation=1$/, {
+      waitUntil: "domcontentloaded",
+    });
     expect(
       await page.evaluate(() =>
         sessionStorage.getItem("cubby:preload-reload-at"),

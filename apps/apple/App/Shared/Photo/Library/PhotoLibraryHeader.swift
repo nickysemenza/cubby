@@ -76,6 +76,175 @@ struct PhotoLibraryStatus: Equatable {
     }
 }
 
+/// One row per load stage, computed from plain inputs the same way `PhotoLibraryStatus.derive`
+/// is — pure and unit-testable (`PhotoLibraryStatusTests`), previewable with no live store. Every
+/// number it shows already exists on `PhotoLibraryStore`/`PhotoMatchStore`/
+/// `PhotoClassificationSweep`; this only orders and captions them.
+enum PhotoLibraryStages {
+    enum State: Equatable {
+        case done
+        /// `value`/`total` are both `nil` for an indeterminate bar (a count isn't known yet).
+        case running(value: Double?, total: Double?)
+        /// An earlier stage in the sequence hasn't finished yet.
+        case waiting
+        case off(String)
+        case failed(String)
+    }
+
+    struct Stage: Identifiable, Equatable {
+        let id: String
+        let label: String
+        let state: State
+        /// Progress so far and its denominator; `count` is `nil` when there's nothing countable
+        /// to show yet (an `.off` or a not-yet-started `.waiting` stage).
+        let count: Int?
+        let total: Int?
+
+        /// "13,222 / 89,906 · ~3m · 15%" — the ETA only when one is known, the percent last.
+        func caption(eta: String? = nil) -> String? {
+            guard let count else { return nil }
+            guard let total, total > 0 else { return count.formatted() }
+            let percent = count >= total ? 100 : min(99, count * 100 / total)
+            return
+                ([count.formatted() + " / " + total.formatted()] + [eta].compactMap { $0 } + ["\(percent)%"])
+                .joined(separator: " · ")
+        }
+    }
+
+    struct CategoriesInput: Equatable {
+        let isRunning: Bool
+        let analysedCount: Int
+        let totalCount: Int
+    }
+
+    struct Inputs {
+        // Local photos (PhotoKit enumeration).
+        let loadedAssetCount: Int
+        let totalAssetCount: Int?
+        let isLoadingLibrary: Bool
+        // Cubby index (the remote hash index refresh).
+        let indexIsLoading: Bool
+        let indexHasIndex: Bool
+        let indexTotalCount: Int
+        let indexRemainingCount: Int
+        let indexError: String?
+        // Match check (the on-device fingerprint scan against the Cubby index).
+        let isParticipating: Bool
+        let isScanning: Bool
+        let scannedCount: Int
+        let checkedCount: Int
+        let libraryCount: Int
+        // Categories (the on-device classification sweep). `nil` when the sweep itself doesn't
+        // exist yet (`AppModel.photoClassificationSweep` before `preparePhotoSubsystem()` opens
+        // the analysis store) — the row still shows, marked off, rather than shifting the others.
+        let categories: CategoriesInput?
+    }
+
+    static func derive(_ inputs: Inputs) -> [Stage] {
+        let local = localStage(inputs)
+        let localDone = isDone(local.state)
+        return [
+            local, indexStage(inputs, localDone: localDone), matchStage(inputs, localDone: localDone),
+            categoriesStage(inputs, localDone: localDone),
+        ]
+    }
+
+    private static func isDone(_ state: State) -> Bool {
+        if case .done = state { return true }
+        return false
+    }
+
+    private static func localStage(_ inputs: Inputs) -> Stage {
+        let state: State =
+            inputs.isLoadingLibrary
+            ? .running(
+                value: Double(inputs.loadedAssetCount), total: inputs.totalAssetCount.map(Double.init))
+            : .done
+        return Stage(
+            id: "local", label: "Photos", state: state, count: inputs.loadedAssetCount,
+            total: inputs.totalAssetCount ?? (inputs.isLoadingLibrary ? nil : inputs.loadedAssetCount))
+    }
+
+    private static func indexStage(_ inputs: Inputs, localDone: Bool) -> Stage {
+        let checkedSoFar = max(0, inputs.indexTotalCount - inputs.indexRemainingCount)
+        let state: State
+        if let indexError = inputs.indexError {
+            state = .failed(indexError)
+        } else if !localDone {
+            state = .waiting
+        } else if inputs.indexIsLoading {
+            state =
+                inputs.indexHasIndex
+                ? .running(value: Double(checkedSoFar), total: Double(inputs.indexTotalCount))
+                : .running(value: nil, total: nil)
+        } else if inputs.indexHasIndex {
+            state = .done
+        } else if !inputs.isParticipating {
+            // `refresh()` skips the remote index entirely when matching is off, so it would
+            // otherwise sit in `.waiting` forever and the panel would never collapse.
+            state = .off("Off")
+        } else {
+            state = .waiting
+        }
+        return Stage(
+            id: "index", label: "Cubby index", state: state,
+            count: inputs.indexHasIndex ? checkedSoFar : nil, total: inputs.indexTotalCount)
+    }
+
+    private static func matchStage(_ inputs: Inputs, localDone: Bool) -> Stage {
+        guard inputs.isParticipating else {
+            return Stage(id: "match", label: "Matching", state: .off("Off"), count: nil, total: nil)
+        }
+        guard localDone else {
+            return Stage(id: "match", label: "Matching", state: .waiting, count: nil, total: nil)
+        }
+        let checkedNow = inputs.isScanning ? inputs.scannedCount : inputs.checkedCount
+        let state: State
+        if inputs.isScanning {
+            state = .running(value: Double(inputs.scannedCount), total: Double(inputs.libraryCount))
+        } else if inputs.indexIsLoading || !inputs.indexHasIndex {
+            state = .waiting
+        } else {
+            // A finished scan can leave photos unchecked for good (cloud-only originals it may
+            // not download), so "done" means the scan ended, not `checkedCount == libraryCount`;
+            // the caption keeps the true "x of y".
+            state = .done
+        }
+        return Stage(
+            id: "match", label: "Matching", state: state, count: checkedNow, total: inputs.libraryCount)
+    }
+
+    private static func categoriesStage(_ inputs: Inputs, localDone: Bool) -> Stage {
+        guard inputs.isParticipating else {
+            return Stage(id: "categories", label: "Categories", state: .off("Off"), count: nil, total: nil)
+        }
+        guard let categories = inputs.categories else {
+            return Stage(
+                id: "categories", label: "Categories", state: .off("Unavailable"), count: nil, total: nil)
+        }
+        let state: State
+        if !localDone {
+            state = .waiting
+        } else if categories.isRunning {
+            state = .running(
+                value: Double(categories.analysedCount), total: Double(categories.totalCount))
+        } else if categories.totalCount == 0 {
+            // `totalCount` is set when a pass starts, so 0/0 means no pass has run yet.
+            state = .off("Not started")
+        } else if categories.analysedCount >= categories.totalCount {
+            state = .done
+        } else {
+            // The sweep pauses (setting, thermal state, Low Power Mode, tab closed) and may not
+            // resume this session; settled, so it never pins the panel open.
+            state = .off("Paused")
+        }
+        let started = categories.totalCount > 0
+        return Stage(
+            id: "categories", label: "Categories", state: state,
+            count: started ? categories.analysedCount : nil, total: categories.totalCount)
+    }
+}
+
 /// Replaces `PhotoLibraryBrowser.controls`: that stack was up to twelve lines of chrome (a
 /// segmented filter, a category chip row, a mini spinner literally captioned "Loading photo
 /// library", a bare refresh button, a six-line monospaced debug dump, and a two-line explainer)
@@ -113,16 +282,26 @@ struct PhotoLibraryHeader: View {
                 activities: appModel.backgroundActivity.slice(BackgroundActivity.Kind.photoLibrary)))
     }
 
-    /// One line, visible to everyone (not gated on developer overlays — this is an explicit product
-    /// decision, not a debug layer) for exactly as long as PhotoKit enumeration is in flight. `nil`
-    /// the instant `isLoadingLibrary` clears, which is also exactly when `status.text` stops saying
-    /// "Loading photo library…" — the row that hosts this disappears on its own.
-    private var loadStepCaption: String? {
-        guard library.isLoadingLibrary else { return nil }
-        let progress =
-            library.expectedBatchCount.map { "\(library.loadedBatchCount) of \($0)" }
-            ?? "\(library.loadedBatchCount)"
-        return "\(library.loadingStep) · \(progress)"
+    private var stages: [PhotoLibraryStages.Stage] {
+        PhotoLibraryStages.derive(
+            PhotoLibraryStages.Inputs(
+                loadedAssetCount: library.count,
+                totalAssetCount: library.totalAssetCount,
+                isLoadingLibrary: library.isLoadingLibrary,
+                indexIsLoading: matches.isLoading,
+                indexHasIndex: matches.hasIndex,
+                indexTotalCount: matches.totalCount,
+                indexRemainingCount: matches.remainingCount,
+                indexError: matches.error,
+                isParticipating: library.isParticipating,
+                isScanning: library.isScanning,
+                scannedCount: library.scannedCount,
+                checkedCount: library.checked.count,
+                libraryCount: library.count,
+                categories: appModel.photoClassificationSweep.map {
+                    PhotoLibraryStages.CategoriesInput(
+                        isRunning: $0.isRunning, analysedCount: $0.analysedCount, totalCount: $0.totalCount)
+                }))
     }
 
     private var footnoteText: String? {
@@ -143,10 +322,9 @@ struct PhotoLibraryHeader: View {
     var body: some View {
         VStack(alignment: .leading, spacing: PorcelainTokens.Space.sm) {
             filterRow
-            PhotoLibraryStatusRow(
-                status: status, loadStepCaption: loadStepCaption,
-                loadStartedAt: library.loadingStartedAt, reduceMotion: reduceMotion,
-                barWidth: barWidth)
+            PhotoLibraryStagePanel(
+                status: status, stages: stages,
+                reduceMotion: reduceMotion, barWidth: barWidth)
             if let footnoteText {
                 Text(footnoteText).font(.caption2).foregroundStyle(.secondary).lineLimit(2)
             }
@@ -206,52 +384,68 @@ struct PhotoLibraryHeader: View {
     }
 }
 
-/// The status row's own layout, taking a `PhotoLibraryStatus` value rather than reading
-/// `PhotoLibraryHeader`'s live stores directly — every precedence case is then previewable from a
-/// plain `PhotoLibraryStatus.derive(...)` call, with no `PhotoLibraryStore`/`PhotoMatchStore`
-/// instance in sight. Not rendered at all when `status.text` is `nil`.
-private struct PhotoLibraryStatusRow: View {
+/// The stage panel's own layout, taking a `PhotoLibraryStatus` and a `[PhotoLibraryStages.Stage]`
+/// rather than reading `PhotoLibraryHeader`'s live stores directly — every case is then
+/// previewable from plain `derive(...)` calls, with no `PhotoLibraryStore`/`PhotoMatchStore`/
+/// `PhotoClassificationSweep` instance in sight. Shows all four stage rows while any stage is
+/// running or has failed; once every stage is done or off, it collapses to `status.text` — the
+/// same one-line summary the old single-row status showed — behind a disclosure chevron.
+private struct PhotoLibraryStagePanel: View {
     let status: PhotoLibraryStatus
-    let loadStepCaption: String?
-    /// Paired with `loadStepCaption`: `Text(_:style: .timer)` re-renders itself once a second, which
-    /// the old six-line block's `Elapsed:` line could not — it formatted `Date.now` inside an
-    /// untracked getter, so it only ever moved when some *other* observed property happened to
-    /// change, and read as frozen exactly when a stall made it worth reading.
-    let loadStartedAt: Date?
+    let stages: [PhotoLibraryStages.Stage]
     let reduceMotion: Bool
     let barWidth: CGFloat
+    @State private var expanded = false
+    @State private var eta = PhotoStageETA()
 
-    var body: some View {
-        if let text = status.text {
-            HStack(spacing: 6) {
-                indicator
-                Text(text).font(.caption).monospacedDigit().lineLimit(1)
-                Spacer(minLength: 0)
-                if let loadStepCaption {
-                    HStack(spacing: PorcelainTokens.Space.xs) {
-                        Text(loadStepCaption)
-                        if let loadStartedAt { Text(loadStartedAt, style: .timer) }
-                    }
-                    .font(.porcelainCode)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .accessibilityIdentifier("photos.loading.debug")
-                }
+    private var allSettled: Bool {
+        stages.allSatisfy {
+            switch $0.state {
+            case .done, .off: return true
+            case .running, .waiting, .failed: return false
             }
-            .foregroundStyle(.secondary)
-            // Store-driven changes (a scan progressing, an activity finishing) are unanimated by
-            // default here — correct Reduce Motion behaviour — so no transition is attached to
-            // this row's appearance/disappearance; only the determinate bar's own value below
-            // animates, and only when Reduce Motion is off.
-            .help(status.detail)
-            .accessibilityElement(children: .combine)
-            .accessibilityLabel(text)
-            .accessibilityValue(status.detail)
-            .accessibilityAddTraits(.updatesFrequently)
         }
     }
 
-    @ViewBuilder private var indicator: some View {
+    var body: some View {
+        VStack(alignment: .leading, spacing: PorcelainTokens.Space.xs) {
+            if allSettled, !expanded {
+                collapsedRow
+            } else {
+                ForEach(stages) { stage in stageRow(stage) }
+            }
+            if allSettled {
+                Button(expanded ? "Hide details" : "Show details") {
+                    if reduceMotion { expanded.toggle() } else { withAnimation { expanded.toggle() } }
+                }
+                .buttonStyle(.plain)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .accessibilityIdentifier("photos.stages.disclosure")
+            }
+        }
+        // One combined element reading every visible stage's label/value, rather than one per
+        // row — a VoiceOver user swiping past the header hears the whole picture at once.
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.updatesFrequently)
+        .onChange(of: stages, initial: true) { _, stages in eta.record(stages, at: .now) }
+    }
+
+    @ViewBuilder private var collapsedRow: some View {
+        if let text = status.text {
+            HStack(spacing: 6) {
+                statusIndicator
+                Text(text).font(.caption).monospacedDigit().lineLimit(1)
+                Spacer(minLength: 0)
+            }
+            .foregroundStyle(.secondary)
+            .help(status.detail)
+            .accessibilityLabel(text)
+            .accessibilityValue(status.detail)
+        }
+    }
+
+    @ViewBuilder private var statusIndicator: some View {
         switch status.indicator {
         case .none:
             EmptyView()
@@ -263,6 +457,71 @@ private struct PhotoLibraryStatusRow: View {
                 .animation(reduceMotion ? nil : .default, value: value)
         case .warning:
             Image(systemName: "exclamationmark.triangle").foregroundStyle(PorcelainTokens.destructive)
+        }
+    }
+
+    private func stageRow(_ stage: PhotoLibraryStages.Stage) -> some View {
+        HStack(spacing: 6) {
+            stageGlyph(stage.state)
+            Text(stage.label).font(.caption).lineLimit(1)
+            Spacer(minLength: 0)
+            trailingContent(for: stage)
+        }
+        .foregroundStyle(.secondary)
+        .help(stageHelp(stage))
+    }
+
+    @ViewBuilder private func stageGlyph(_ state: PhotoLibraryStages.State) -> some View {
+        switch state {
+        case .done:
+            Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
+        case .running(let value, let total):
+            if let value, let total, total > 0 {
+                ProgressView(value: value, total: total)
+                    .frame(width: barWidth)
+                    .animation(reduceMotion ? nil : .default, value: value)
+            } else {
+                ProgressView().controlSize(.small)
+            }
+        case .waiting:
+            Image(systemName: "clock").foregroundStyle(.secondary)
+        case .off:
+            Image(systemName: "minus.circle").foregroundStyle(.secondary)
+        case .failed:
+            Image(systemName: "exclamationmark.triangle").foregroundStyle(PorcelainTokens.destructive)
+        }
+    }
+
+    @ViewBuilder private func trailingContent(for stage: PhotoLibraryStages.Stage) -> some View {
+        switch stage.state {
+        case .off(let reason):
+            Text(reason).font(.caption2).lineLimit(1)
+        case .failed(let message):
+            Text(message).font(.caption2).foregroundStyle(PorcelainTokens.destructive).lineLimit(1)
+        default:
+            if let caption = stage.caption(eta: etaText(for: stage)) {
+                if stage.id == "local" {
+                    Text(caption).font(.caption).monospacedDigit()
+                        .accessibilityIdentifier("photos.loading.debug")
+                } else {
+                    Text(caption).font(.caption).monospacedDigit()
+                }
+            }
+        }
+    }
+
+    private func etaText(for stage: PhotoLibraryStages.Stage) -> String? {
+        guard case .running = stage.state else { return nil }
+        return eta.remaining(for: stage.id, at: .now).map(PhotoStageETA.format)
+    }
+
+    private func stageHelp(_ stage: PhotoLibraryStages.Stage) -> String {
+        switch stage.state {
+        case .done: return "\(stage.label): done" + (stage.caption().map { " (\($0))" } ?? "")
+        case .running: return "\(stage.label): in progress" + (stage.caption().map { " (\($0))" } ?? "")
+        case .waiting: return "\(stage.label): waiting"
+        case .off(let reason): return "\(stage.label): \(reason)"
+        case .failed(let message): return "\(stage.label): \(message)"
         }
     }
 }
@@ -318,72 +577,89 @@ struct CategoryChip: View {
 
 /// Builds a `Slice` the same way `BackgroundActivityBar.swift`'s `previewModel` helper seeds a
 /// whole `AppModel`, but scoped to a bare `BackgroundActivityCenter` — these previews exercise
-/// `PhotoLibraryStatusRow` directly, so they need an activity slice, not a live app session.
+/// `PhotoLibraryStagePanel` directly, so they need an activity slice, not a live app session.
 private func previewSlice(_ activities: [BackgroundActivity]) -> BackgroundActivityCenter.Slice {
     let center = BackgroundActivityCenter()
     for activity in activities { _ = center.begin(activity) }
     return center.slice(BackgroundActivity.Kind.photoLibrary)
 }
 
-#Preview("Status — loading library") {
-    PhotoLibraryStatusRow(
+#Preview("Stages — cold launch, mid-read") {
+    PhotoLibraryStagePanel(
         status: .derive(
             PhotoLibraryStatus.Inputs(
                 isParticipating: true, isLoadingLibrary: true, indexIsLoading: false, hasIndex: false,
                 indexError: nil, coverage: "Cubby has not been checked",
                 scanStatus: "Loading your photo library…", activities: previewSlice([]))),
-        loadStepCaption: "Reading local photos · 3 of 12", loadStartedAt: .now,
+        stages: PhotoLibraryStages.derive(
+            PhotoLibraryStages.Inputs(
+                loadedAssetCount: 4_200, totalAssetCount: 90_112, isLoadingLibrary: true,
+                indexIsLoading: false, indexHasIndex: false, indexTotalCount: 0, indexRemainingCount: 0,
+                indexError: nil, isParticipating: true, isScanning: false, scannedCount: 0, checkedCount: 0,
+                libraryCount: 4_200,
+                categories: PhotoLibraryStages.CategoriesInput(
+                    isRunning: false, analysedCount: 0, totalCount: 0))),
         reduceMotion: false, barWidth: 44
     )
     .padding()
 }
 
-#Preview("Status — scanning + sweep running") {
-    PhotoLibraryStatusRow(
-        status: .derive(
-            PhotoLibraryStatus.Inputs(
-                isParticipating: true, isLoadingLibrary: false, indexIsLoading: false, hasIndex: true,
-                indexError: nil,
-                coverage: "Checked 41 of 100 Cubby images. More matches may appear.",
-                scanStatus: "Checking photo 41 of 100…",
-                activities: previewSlice([
-                    BackgroundActivity(
-                        id: "photo-library-scan", kind: .libraryScan, title: "Scanning library",
-                        phase: .running, progress: 0.41, detail: "41 of 100", startedAt: .now,
-                        link: .localActivity("photo-library-scan"), isUserInitiated: false,
-                        isCancellable: false),
-                    BackgroundActivity(
-                        id: "photo-classification-sweep", kind: .classificationSweep,
-                        title: "Analysing photos", phase: .running, progress: 0.2, detail: "20 of 100",
-                        startedAt: .now, link: .localActivity("photo-classification-sweep"),
-                        isUserInitiated: false, isCancellable: false),
-                ]))),
-        loadStepCaption: nil, loadStartedAt: nil, reduceMotion: false, barWidth: 44
-    )
-    .padding()
-}
-
-#Preview("Status — index error") {
-    PhotoLibraryStatusRow(
+#Preview("Stages — index error, local done") {
+    PhotoLibraryStagePanel(
         status: .derive(
             PhotoLibraryStatus.Inputs(
                 isParticipating: true, isLoadingLibrary: false, indexIsLoading: false, hasIndex: true,
                 indexError: "Server error",
                 coverage: "Cubby could not be refreshed. Showing previously known matches.",
                 scanStatus: "142 of 200 library photos checked · 58 unchecked", activities: previewSlice([]))
-        ), loadStepCaption: nil, loadStartedAt: nil, reduceMotion: false, barWidth: 44
+        ),
+        stages: PhotoLibraryStages.derive(
+            PhotoLibraryStages.Inputs(
+                loadedAssetCount: 200, totalAssetCount: 200, isLoadingLibrary: false,
+                indexIsLoading: false, indexHasIndex: true, indexTotalCount: 200, indexRemainingCount: 200,
+                indexError: "Server error", isParticipating: true, isScanning: true, scannedCount: 142,
+                checkedCount: 142, libraryCount: 200,
+                categories: PhotoLibraryStages.CategoriesInput(
+                    isRunning: true, analysedCount: 80, totalCount: 200))),
+        reduceMotion: false, barWidth: 44
     )
     .padding()
 }
 
-#Preview("Status — automatic matching off") {
-    PhotoLibraryStatusRow(
+#Preview("Stages — all done, collapsed") {
+    PhotoLibraryStagePanel(
+        status: .derive(
+            PhotoLibraryStatus.Inputs(
+                isParticipating: true, isLoadingLibrary: false, indexIsLoading: false, hasIndex: true,
+                indexError: nil, coverage: "Checked 100 Cubby images",
+                scanStatus: "100 library photos checked", activities: previewSlice([]))),
+        stages: PhotoLibraryStages.derive(
+            PhotoLibraryStages.Inputs(
+                loadedAssetCount: 100, totalAssetCount: 100, isLoadingLibrary: false,
+                indexIsLoading: false, indexHasIndex: true, indexTotalCount: 100, indexRemainingCount: 0,
+                indexError: nil, isParticipating: true, isScanning: false, scannedCount: 100,
+                checkedCount: 100, libraryCount: 100,
+                categories: PhotoLibraryStages.CategoriesInput(
+                    isRunning: false, analysedCount: 100, totalCount: 100))),
+        reduceMotion: false, barWidth: 44
+    )
+    .padding()
+}
+
+#Preview("Stages — matching off") {
+    PhotoLibraryStagePanel(
         status: .derive(
             PhotoLibraryStatus.Inputs(
                 isParticipating: false, isLoadingLibrary: false, indexIsLoading: false, hasIndex: true,
                 indexError: nil, coverage: "Checked 100 Cubby images",
                 scanStatus: "Automatic matching is off", activities: previewSlice([]))),
-        loadStepCaption: nil, loadStartedAt: nil, reduceMotion: false, barWidth: 44
+        stages: PhotoLibraryStages.derive(
+            PhotoLibraryStages.Inputs(
+                loadedAssetCount: 100, totalAssetCount: 100, isLoadingLibrary: false,
+                indexIsLoading: false, indexHasIndex: true, indexTotalCount: 100, indexRemainingCount: 0,
+                indexError: nil, isParticipating: false, isScanning: false, scannedCount: 0, checkedCount: 0,
+                libraryCount: 100, categories: nil)),
+        reduceMotion: false, barWidth: 44
     )
     .padding()
 }

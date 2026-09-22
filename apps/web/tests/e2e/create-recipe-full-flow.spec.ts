@@ -1,37 +1,27 @@
-import { faker } from "@faker-js/faker";
+import { seedCostedIngredientPrerequisite } from "./e2e-fixtures";
 import {
-  createIngredientViaForm,
-  createProductWithIngredientMappings,
+  SHORTCODE,
   fillInput,
   selectComboboxItem,
+  uniqueName,
   waitForFormHydration,
 } from "./e2e-helpers";
 import { expect, test } from "./e2e-test";
 
 test.describe("Create Recipe - Full Flow", () => {
-  test("can create ingredient, product, and recipe with cost calculations", async ({
+  test("creates a recipe whose cost comes from the linked product", async ({
     page,
-  }) => {
-    const ingredientName = faker.food.ingredient();
-    const productName = `${ingredientName} Brand Product`;
-    const recipeName = faker.lorem
-      .words(3)
-      .split(" ")
-      .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-      .join(" ");
-
-    // The later cost and weight assertions depend on the helper's exact mappings.
-    await createIngredientViaForm(page, ingredientName);
-    await createProductWithIngredientMappings(page, {
-      name: productName,
-      manufacturer: faker.company.name(),
-      ingredientName,
-    });
+  }, testInfo) => {
+    // The ingredient's product pricing is a prerequisite; creating the recipe
+    // through the form, and its derived cost and weight, are the behavior.
+    const ingredientName = uniqueName(testInfo, "Recipe flow flour");
+    const recipeName = uniqueName(testInfo, "Recipe Flow Cookies");
+    await seedCostedIngredientPrerequisite(page, ingredientName);
 
     await page.goto("/recipes/new");
     await waitForFormHydration(page);
     await fillInput(page, "Enter recipe name", recipeName);
-    await fillInput(page, "Enter recipe URL", faker.internet.url());
+    await fillInput(page, "Enter recipe URL", "https://example.com/cookies");
 
     await page.getByLabel("Yield Value (Optional)").fill("12");
     await page.getByLabel("Yield Unit").fill("cookies");
@@ -54,16 +44,12 @@ test.describe("Create Recipe - Full Flow", () => {
     await page.getByRole("button", { name: /Add Instruction/i }).click();
     const instructionInput = page.getByRole("textbox", { name: "Step" });
     await expect(instructionInput).toBeVisible({ timeout: 5000 });
-    const instruction =
-      faker.lorem.sentence() +
-      ` Make sure to use the ${ingredientName} as the main ingredient.`;
-    await instructionInput.fill(instruction);
+    await instructionInput.fill(`Whisk the ${ingredientName} until smooth.`);
 
     await page.getByRole("button", { name: /^Create$/i }).click();
-    await expect(page).toHaveURL(
-      /\/recipes\/RCP-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}/,
-      { timeout: 15000 },
-    );
+    await expect(page).toHaveURL(new RegExp(`/recipes/RCP-${SHORTCODE}`), {
+      timeout: 15000,
+    });
 
     await expect(
       page.getByRole("heading", { name: recipeName, level: 1 }),
@@ -79,8 +65,11 @@ test.describe("Create Recipe - Full Flow", () => {
     await page.getByRole("button", { name: "Data view", exact: true }).click();
 
     const ingredientLink = page
-      .getByRole("link", { name: new RegExp(ingredientName) })
-      .first();
+      .getByRole("table", { name: "Recipe Ingredients Table" })
+      .getByRole("link", {
+        name: ingredientName,
+        exact: true,
+      });
     await expect(ingredientLink).toBeVisible();
     await expect(ingredientLink).toHaveAttribute("href", /\/ingredients\//);
 

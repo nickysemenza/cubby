@@ -22,12 +22,15 @@ final class PhotoLibraryStore: NSObject, PHPhotoLibraryChangeObserver {
     /// on this so a sweep that saw zero candidates (tab opened before the library finished
     /// loading) actually starts once photos exist, and a finished sweep re-arms for new ones.
     private(set) var monthsRevision = 0
+    /// Photos indexed so far — updates every batch during a load (cheap: an `Int` assignment),
+    /// unlike `months`/`monthsRevision`, which publish on a throttle (see `refresh`).
     private(set) var count = 0
+    /// The fetch result's total count, known from the first batch. `nil` before that, and while
+    /// there is no PhotoKit fetch in flight to ask (e.g. before the first `refresh`).
+    private(set) var totalAssetCount: Int?
     private(set) var checked: Set<String> = []
     private(set) var isScanning = false
     private(set) var isLoadingLibrary = false
-    private(set) var loadedBatchCount = 0
-    private(set) var expectedBatchCount: Int?
     private(set) var loadingStartedAt: Date?
     private(set) var loadingStep = "Idle"
     private(set) var completedLoadingSteps: [String] = []
@@ -40,9 +43,16 @@ final class PhotoLibraryStore: NSObject, PHPhotoLibraryChangeObserver {
     @ObservationIgnored private var analysisStore: PhotoAnalysisStore?
     @ObservationIgnored private let thumbnails = NSCache<NSString, ImageBox>()
     @ObservationIgnored private var scanTask: Task<Void, Never>?
+    @ObservationIgnored private var currentScanID: UUID?
     @ObservationIgnored private var libraryChangeTask: Task<Void, Never>?
     @ObservationIgnored private var visibleWork: [String: Task<CGImage, any Error>] = [:]
-    @ObservationIgnored private var assetsByID: [String: PHAsset] = [:]
+    @ObservationIgnored private var index = PhotoMonthIndex<PHAsset>()
+    /// The PhotoKit fetch result from the last full or incremental load — kept so a library-change
+    /// notification can ask PhotoKit for a diff (`changeDetails(for:)`) instead of falling back to
+    /// a full `refresh()`. Only ever written on the main actor (inside `refresh`/
+    /// `applyLibraryChange`); `photoLibraryDidChange` is a `nonisolated` delegate callback but only
+    /// reads it after hopping back to the main actor, so no concurrent access ever occurs.
+    @ObservationIgnored private var fetchResult: PHFetchResult<PHAsset>?
     @ObservationIgnored private var clients: [UUID: (PhotoMatchStore, CubbyClient)] = [:]
     @ObservationIgnored private var generation = UUID()
     @ObservationIgnored private var observing = false
@@ -79,9 +89,8 @@ final class PhotoLibraryStore: NSObject, PHPhotoLibraryChangeObserver {
         let step: String
         let elapsedSeconds: Double
         let completedSteps: [String]
-        let batchesPublished: Int
-        let expectedBatches: Int?
         let photosPublished: Int
+        let totalPhotos: Int?
         let analysisIndexAttached: Bool
     }
 
@@ -90,15 +99,14 @@ final class PhotoLibraryStore: NSObject, PHPhotoLibraryChangeObserver {
             step: loadingStep,
             elapsedSeconds: loadingStartedAt.map { Date.now.timeIntervalSince($0) } ?? 0,
             completedSteps: completedLoadingSteps,
-            batchesPublished: loadedBatchCount,
-            expectedBatches: expectedBatchCount,
             photosPublished: count,
+            totalPhotos: totalAssetCount,
             analysisIndexAttached: analysisStore != nil)
     }
 
     /// Photos this device has enumerated but not yet checked against Cubby — the "Not in Cubby"
     /// filter's footnote count (`PhotoLibraryHeader`). Never negative: `checked` only ever grows to
-    /// intersect `assetsByID`'s current keys (see `refresh`), but a defensive `max` keeps this safe
+    /// intersect the index's current keys (see `refresh`), but a defensive `max` keeps this safe
     /// even if that invariant is ever violated mid-refresh.
     var uncheckedCount: Int { max(0, count - checked.count) }
 
@@ -118,7 +126,15 @@ final class PhotoLibraryStore: NSObject, PHPhotoLibraryChangeObserver {
         guard self.analysisStore == nil else { return }
         self.analysisStore = analysisStore
         guard let (matches, client) = clients.values.first else { return }
-        Task { [weak self] in await self?.refresh(matches: matches, client: client) }
+        // A load already in flight reads `self.analysisStore` again once PhotoKit enumeration
+        // finishes (`reconcileAnalysis`, called from the tail of `refresh`), so it picks this
+        // store up on its own — restarting here via a full `refresh()` would cancel that
+        // in-flight enumeration (`stopWork()`) and start over from zero for no reason.
+        guard !isLoadingLibrary else { return }
+        let token = generation
+        Task { [weak self] in
+            await self?.reconcileAnalysis(token: token, matches: matches, client: client, matchRefresh: nil)
+        }
     }
 
     func activate(_ id: UUID, matches: PhotoMatchStore, client: CubbyClient) async {
@@ -140,11 +156,12 @@ final class PhotoLibraryStore: NSObject, PHPhotoLibraryChangeObserver {
         for (id, pair) in clients { pair.0.release(id) }
         if observing { PHPhotoLibrary.shared().unregisterChangeObserver(self); observing = false }
         clients = [:]; checked = []
-        selectedIDs = []; scrollID = nil; months = []; assetsByID = [:]
+        selectedIDs = []; scrollID = nil; months = []; index = PhotoMonthIndex()
+        fetchResult = nil
         monthsRevision += 1
         thumbnails.removeAllObjects()
-        count = 0; isScanning = false
-        loadedBatchCount = 0; expectedBatchCount = nil; loadingStartedAt = nil; loadingStep = "Idle"
+        count = 0; totalAssetCount = nil; isScanning = false
+        loadingStartedAt = nil; loadingStep = "Idle"
         completedLoadingSteps = []
     }
 
@@ -162,20 +179,26 @@ final class PhotoLibraryStore: NSObject, PHPhotoLibraryChangeObserver {
         // index request otherwise leaves the authorized screen showing an empty grid and
         // "Cubby has not been checked" indefinitely, even though PhotoKit is ready to load.
         isLoadingLibrary = true
-        loadedBatchCount = 0
-        expectedBatchCount = nil
+        totalAssetCount = nil
         loadingStartedAt = .now
         loadingStep = "Opening photo library"
         completedLoadingSteps = ["Refresh started", "Photos access checked"]
         let isParticipating = isParticipating
-        async let matchRefresh: Void = {
+        // A `Task` (not `async let`) so the same handle can be threaded through to
+        // `reconcileAnalysis`, which awaits it at the point it actually needs the result — the
+        // remote index refresh keeps running concurrently with the local PhotoKit read below
+        // exactly as it did as an `async let`.
+        let matchRefresh = Task { [weak matches] in
             guard isParticipating else { return }
+            guard let matches else { return }
             await matches.refresh(client: client)
-        }()
+        }
         guard generation == token, !Task.isCancelled else { return }
         guard hasFullAccess else {
+            index = PhotoMonthIndex()
             months = []; monthsRevision += 1
-            count = 0; checked = []; selectedIDs = []; assetsByID = [:]
+            count = 0; totalAssetCount = nil; checked = []; selectedIDs = []
+            fetchResult = nil
             thumbnails.removeAllObjects()
             if observing { PHPhotoLibrary.shared().unregisterChangeObserver(self); observing = false }
             return
@@ -183,74 +206,116 @@ final class PhotoLibraryStore: NSObject, PHPhotoLibraryChangeObserver {
         if !observing { PHPhotoLibrary.shared().register(self); observing = true }
         completedLoadingSteps.append("Library observer active")
         loadingStep = "Reading local photos"
-        let oldAssets = assetsByID
-        var calendar = Calendar(identifier: .gregorian); calendar.timeZone = .current
-        var grouped: [Date: [PHAsset]] = [:]
-        var result: [PHAsset] = []
+        // Kept only to detect a modificationDate change below (the loop can't consult `index`
+        // for that — it is reset to empty for this load's fresh append-only build-up).
+        let oldIndex = index
+        index = PhotoMonthIndex()
+        var clock = ContinuousClock.now
+        var publishedFirstBatch = false
         for await batch in Self.assetBatches() {
             guard generation == token, !Task.isCancelled else { return }
-            if let total = batch.totalCount { expectedBatchCount = (total + 199) / 200 }
+            if let result = batch.fetchResult { fetchResult = result }
+            if let total = batch.totalCount { totalAssetCount = total }
             for asset in batch.assets {
-                let month =
-                    asset.creationDate.flatMap { date in
-                        calendar.date(from: calendar.dateComponents([.year, .month], from: date))
-                    } ?? .distantPast
-                grouped[month, default: []].append(asset)
-                result.append(asset)
-                if let old = oldAssets[asset.localIdentifier], old.modificationDate != asset.modificationDate
+                if let old = oldIndex.asset(for: asset.localIdentifier),
+                    old.modificationDate != asset.modificationDate
                 {
                     thumbnails.removeObject(forKey: asset.localIdentifier as NSString)
                     checked.remove(asset.localIdentifier)
                 }
             }
-            // Publish newest-first batches so the grid becomes useful before a large library has
-            // completely enumerated. Yield lets SwiftUI commit this update before the next batch.
-            assetsByID = Dictionary(uniqueKeysWithValues: result.map { ($0.localIdentifier, $0) })
-            months = grouped.keys.sorted(by: >).map { Month(id: $0, assets: grouped[$0]!) }
-            monthsRevision += 1
-            count = result.count
-            loadedBatchCount += 1
+            index.append(batch.assets)
+            // `count` is cheap (an `Int`) and updates every batch so the "x of y photos" caption
+            // stays live; `months`/`monthsRevision` — which drive ~450 SwiftUI grid re-diffs at
+            // 200/batch on a 90k-photo library — publish at most every ~0.5s instead.
+            count = index.count
+            let now = ContinuousClock.now
+            if !publishedFirstBatch || now - clock >= .milliseconds(500) {
+                publishMonths()
+                clock = now
+                publishedFirstBatch = true
+            }
             await Task.yield()
         }
         guard generation == token, !Task.isCancelled else { return }
+        publishMonths()
         completedLoadingSteps.append("PhotoKit enumeration complete")
-        guard isParticipating, let analysisStore else {
-            selectedIDs.removeAll { assetsByID[$0] == nil }
+        guard isParticipating, analysisStore != nil else {
+            selectedIDs.removeAll { index.asset(for: $0) == nil }
             loadingStep =
                 isParticipating
                 ? "Local photos ready; Cubby analysis unavailable"
                 : "Local photos ready; automatic matching is off"
             return
         }
+        await reconcileAnalysis(token: token, matches: matches, client: client, matchRefresh: matchRefresh)
+    }
+
+    private func publishMonths() {
+        months = index.months.map { Month(id: $0.id, assets: $0.assets) }
+        monthsRevision += 1
+    }
+
+    /// The tail of a load: prune stale analysis rows, wait for the remote match refresh, mark
+    /// existing analysis, and (re)arm the hash scan. Shared by `refresh()` (a fresh PhotoKit
+    /// enumeration) and `install(analysisStore:)` (the store attaching after PhotoKit has already
+    /// finished enumerating — no PhotoKit read to redo). `matchRefresh` is the `Task` `refresh()`
+    /// already started concurrently with its local read; `install` has none in flight, so this
+    /// starts its own here instead.
+    private func reconcileAnalysis(
+        token: UUID, matches: PhotoMatchStore, client: CubbyClient, matchRefresh: Task<Void, Never>?
+    ) async {
+        guard let analysisStore else { return }
         loadingStep = "Reconciling on-device analysis"
         do {
-            try await analysisStore.pruneMissing(Set(assetsByID.keys))
+            try await analysisStore.pruneMissing(Set(index.assetsByID.keys))
         } catch {
             Diagnostics.report(error, context: "photos.analysisStore.prune")
         }
         guard generation == token, !Task.isCancelled else { return }
-        checked.formIntersection(assetsByID.keys)
-        selectedIDs.removeAll { assetsByID[$0] == nil }
-        months = grouped.keys.sorted(by: >).map { Month(id: $0, assets: grouped[$0]!) }
-        monthsRevision += 1
-        count = result.count
+        checked.formIntersection(index.assetsByID.keys)
+        selectedIDs.removeAll { index.asset(for: $0) == nil }
+        publishMonths()
+        count = index.count
         isLoadingLibrary = false
         loadingStep = "Checking Cubby matches"
-        await matchRefresh
+        let isParticipating = isParticipating
+        let refreshTask =
+            matchRefresh
+            ?? Task { [weak matches] in
+                guard isParticipating else { return }
+                guard let matches else { return }
+                await matches.refresh(client: client)
+            }
+        await refreshTask.value
         guard generation == token, !Task.isCancelled else { return }
         // One batch read for the whole library's dot status, rather than a fetch per cell; the
         // sweep republishes individual ids afterward as it classifies them.
-        if let snapshots = try? await analysisStore.snapshots(for: Array(assetsByID.keys)) {
+        if let snapshots = try? await analysisStore.snapshots(for: Array(index.assetsByID.keys)) {
             matches.markAnalysis(snapshots)
         }
-        let remaining = result.filter { !checked.contains($0.localIdentifier) }
-        let completedCount = result.count - remaining.count
+        let remaining = months.flatMap(\.assets).filter { !checked.contains($0.localIdentifier) }
+        startScan(remaining: remaining, matches: matches, token: token)
+    }
+
+    /// The background hash scan, factored out of `reconcileAnalysis` so `applyLibraryChange`
+    /// can re-arm it for just-changed/newly-inserted assets after a delta apply, without redoing
+    /// the whole reconciliation. `remaining` must already exclude `checked` ids.
+    private func startScan(remaining: [PHAsset], matches: PhotoMatchStore, token: UUID) {
+        let completedCount = count - remaining.count
         scannedCount = completedCount
+        // A delta re-arm (`applyLibraryChange`) keeps the same `generation`, so the previous scan
+        // must be cancelled here, and `isScanning` is owned by `scanID` rather than `token` —
+        // otherwise the superseded scan's `defer` clears it while the new scan is still running.
+        scanTask?.cancel()
+        let scanID = UUID()
+        currentScanID = scanID
         scanTask = Task { [weak self] in
             guard let self else { return }
             guard !Task.isCancelled, generation == token else { return }
+            guard let analysisStore else { return }
             isScanning = true
-            defer { if generation == token { isScanning = false } }
+            defer { if currentScanID == scanID { isScanning = false } }
             // Let visible cells enqueue their user-initiated requests before the utility scan.
             try? await Task.sleep(for: .milliseconds(150))
             // One batch read for the whole remaining set instead of one actor round trip per
@@ -258,8 +323,37 @@ final class PhotoLibraryStore: NSObject, PHPhotoLibraryChangeObserver {
             // is missing from this snapshot (e.g. newly added mid-scan).
             let preloadedHashes =
                 (try? await analysisStore.hashes(for: remaining.map(\.localIdentifier))) ?? [:]
+            // Warm path: photos with a still-valid cached fingerprint need no image work, so they
+            // register in large chunks. Each `registerBatch` bumps `matches.revision`, which
+            // invalidates the grid's filter caches — at 32 per batch that was ~2,800 bumps on a
+            // 90k-photo library and most of this stage's time on every launch.
+            var uncached: [PHAsset] = []
+            var warm: [String: HashQuery] = [:]
+            var warmDone = 0
+            @MainActor func flushWarm() async -> Bool {
+                guard !warm.isEmpty else { return true }
+                matches.markChecked(warm.keys)
+                await matches.registerBatch(warm)
+                guard generation == token, !Task.isCancelled else { return false }
+                checked.formUnion(warm.keys)
+                warmDone += warm.count
+                scannedCount = completedCount + warmDone
+                warm = [:]
+                await Task.yield()
+                return true
+            }
+            for asset in remaining where !checked.contains(asset.localIdentifier) {
+                if let record = preloadedHashes[asset.localIdentifier], Self.isCurrent(record, for: asset) {
+                    warm[asset.localIdentifier] = Self.hashQuery(for: asset, hash: record.perceptualHash)
+                    if warm.count >= 2_000, !(await flushWarm()) { return }
+                } else {
+                    uncached.append(asset)
+                }
+            }
+            guard await flushWarm() else { return }
+            let uncachedBase = completedCount + warmDone
             var pending: [String: HashQuery] = [:]
-            for (offset, asset) in remaining.enumerated() {
+            for (offset, asset) in uncached.enumerated() {
                 guard !Task.isCancelled, generation == token else { return }
                 // Visible cells may finish work after this scan's snapshot was taken.
                 if checked.contains(asset.localIdentifier) { continue }
@@ -278,8 +372,8 @@ final class PhotoLibraryStore: NSObject, PHPhotoLibraryChangeObserver {
                     }
                 }
                 // Coalesce progress even when cloud-only assets cannot be fingerprinted.
-                if offset.isMultiple(of: 32) || offset == remaining.count - 1 {
-                    scannedCount = completedCount + offset + 1
+                if offset.isMultiple(of: 32) || offset == uncached.count - 1 {
+                    scannedCount = uncachedBase + offset + 1
                 }
                 if pending.count >= 32 {
                     // Mark checked before the match round trip so a cell's published state
@@ -303,8 +397,8 @@ final class PhotoLibraryStore: NSObject, PHPhotoLibraryChangeObserver {
     }
 
     /// The sweep looks up a `PHAsset` by the identifier its scheduler ordered, without owning a
-    /// second copy of `assetsByID`.
-    func asset(for localIdentifier: String) -> PHAsset? { assetsByID[localIdentifier] }
+    /// second copy of the index.
+    func asset(for localIdentifier: String) -> PHAsset? { index.asset(for: localIdentifier) }
 
     /// `degraded` fires (possibly more than once) with a fast, low-resolution frame before the
     /// final image resolves, so a cell can show it immediately instead of a blank tile.
@@ -379,7 +473,7 @@ final class PhotoLibraryStore: NSObject, PHPhotoLibraryChangeObserver {
         selectionProgress = 0
         for (offset, id) in ids.enumerated() {
             try Task.checkCancellation()
-            guard let asset = assetsByID[id] else { continue }
+            guard let asset = index.asset(for: id) else { continue }
             // Explicit selection may retrieve iCloud data; the grid and scan never do.
             let image = try await PhotoLibraryIO.shared.thumbnail(for: asset, network: true) {
                 [weak self] fraction in
@@ -404,9 +498,58 @@ final class PhotoLibraryStore: NSObject, PHPhotoLibraryChangeObserver {
                     return
                 }
                 libraryChangeTask = nil
-                await refresh(matches: matches, client: client)
+                await self.applyLibraryChange(changeInstance, matches: matches, client: client)
             }
         }
+    }
+
+    /// Applies a PhotoKit change as a delta into `index` instead of a full `refresh()`, so an
+    /// iCloud sync burst on a 90k-photo library does not repeatedly reload everything. Falls back
+    /// to a full `refresh()` when PhotoKit reports no incremental diff is available (e.g. the
+    /// first change after a cold start, or a change too large for PhotoKit to diff), or when this
+    /// store has no prior `fetchResult` to diff against at all.
+    private func applyLibraryChange(
+        _ changeInstance: PHChange, matches: PhotoMatchStore, client: CubbyClient
+    ) async {
+        // Mid-load, `index` is still being filled from the load's own snapshot: a delta applied
+        // now would be overwritten (removed assets re-appended by later batches), so restart.
+        guard !isLoadingLibrary, let currentFetchResult = fetchResult,
+            let details = changeInstance.changeDetails(for: currentFetchResult),
+            details.hasIncrementalChanges
+        else {
+            await refresh(matches: matches, client: client)
+            return
+        }
+        let token = generation
+        for asset in details.changedObjects {
+            thumbnails.removeObject(forKey: asset.localIdentifier as NSString)
+            checked.remove(asset.localIdentifier)
+        }
+        for asset in details.removedObjects {
+            thumbnails.removeObject(forKey: asset.localIdentifier as NSString)
+            checked.remove(asset.localIdentifier)
+        }
+        let removedIDs = Set(details.removedObjects.map(\.localIdentifier))
+        selectedIDs.removeAll { removedIDs.contains($0) }
+        index.apply(
+            removed: details.removedObjects, inserted: details.insertedObjects,
+            changed: details.changedObjects)
+        fetchResult = details.fetchResultAfterChanges
+        count = index.count
+        totalAssetCount = index.count
+        publishMonths()
+        guard isParticipating, let analysisStore else { return }
+        do {
+            try await analysisStore.pruneMissing(Set(index.assetsByID.keys))
+        } catch {
+            Diagnostics.report(error, context: "photos.analysisStore.prune")
+        }
+        guard generation == token, !Task.isCancelled else { return }
+        // Re-arm the scan for whatever is still unchecked (the newly inserted/changed assets,
+        // plus anything a prior scan hadn't reached yet) rather than only the delta itself — a
+        // changed asset's `checked` entry was already cleared above.
+        let remaining = months.flatMap(\.assets).filter { !checked.contains($0.localIdentifier) }
+        startScan(remaining: remaining, matches: matches, token: token)
     }
 
     /// `preloaded` — from a batch `PhotoAnalysisStore.hashes(for:)` read — skips the per-id store
@@ -419,9 +562,7 @@ final class PhotoLibraryStore: NSObject, PHPhotoLibraryChangeObserver {
         let id = asset.localIdentifier
         guard let analysisStore else { throw CancellationError() }
         let hash: PerceptualHash64
-        if let preloaded, preloaded.hashRevision == PerceptualHash64.algorithmRevision,
-            preloaded.modificationDate == asset.modificationDate
-        {
+        if let preloaded, Self.isCurrent(preloaded, for: asset) {
             hash = preloaded.perceptualHash
         } else if preloaded == nil,
             let cached = try? await analysisStore.hash(for: id, modificationDate: asset.modificationDate)
@@ -436,6 +577,15 @@ final class PhotoLibraryStore: NSObject, PHPhotoLibraryChangeObserver {
                 localIdentifier: id, modificationDate: asset.modificationDate, perceptualHash: hash)
         }
         guard !Task.isCancelled, generation == token else { throw CancellationError() }
+        return Self.hashQuery(for: asset, hash: hash)
+    }
+
+    private static func isCurrent(_ record: PhotoHashRecord, for asset: PHAsset) -> Bool {
+        record.hashRevision == PerceptualHash64.algorithmRevision
+            && record.modificationDate == asset.modificationDate
+    }
+
+    private static func hashQuery(for asset: PHAsset, hash: PerceptualHash64) -> HashQuery {
         let ratio =
             Double(max(asset.pixelWidth, asset.pixelHeight))
             / Double(max(1, min(asset.pixelWidth, asset.pixelHeight)))
@@ -457,9 +607,16 @@ final class PhotoLibraryStore: NSObject, PHPhotoLibraryChangeObserver {
 
     /// PhotoKit's fetch result is enumerated off the UI actor. The stream publishes 200 assets at
     /// a time so the main actor can render between batches instead of receiving one giant array.
-    private struct AssetBatch {
+    /// `fetchResult` rides along on the first batch only — it is what `photoLibraryDidChange`
+    /// later diffs against instead of forcing a full reload.
+    private struct AssetBatch: @unchecked Sendable {
+        // `@unchecked Sendable`: `PHFetchResult`/`PHAsset` are not themselves annotated
+        // `Sendable` in this SDK, but Apple documents both as safe to use from any thread — this
+        // batch is produced once on a detached task and handed to a single `AsyncStream`
+        // consumer, never mutated or read concurrently.
         let assets: [PHAsset]
         let totalCount: Int?
+        let fetchResult: PHFetchResult<PHAsset>?
     }
 
     private static func assetBatches() -> AsyncStream<AssetBatch> {
@@ -476,14 +633,18 @@ final class PhotoLibraryStore: NSObject, PHPhotoLibraryChangeObserver {
                     batch.append(asset)
                     if batch.count == 200 {
                         continuation.yield(
-                            AssetBatch(assets: batch, totalCount: isFirstBatch ? totalCount : nil))
+                            AssetBatch(
+                                assets: batch, totalCount: isFirstBatch ? totalCount : nil,
+                                fetchResult: isFirstBatch ? fetched : nil))
                         isFirstBatch = false
                         batch.removeAll(keepingCapacity: true)
                     }
                 }
                 if !batch.isEmpty, !Task.isCancelled {
                     continuation.yield(
-                        AssetBatch(assets: batch, totalCount: isFirstBatch ? totalCount : nil))
+                        AssetBatch(
+                            assets: batch, totalCount: isFirstBatch ? totalCount : nil,
+                            fetchResult: isFirstBatch ? fetched : nil))
                 }
                 continuation.finish()
             }
@@ -491,6 +652,8 @@ final class PhotoLibraryStore: NSObject, PHPhotoLibraryChangeObserver {
         }
     }
 }
+
+extension PHAsset: PhotoMonthAsset {}
 
 private final class ImageBox {
     let image: CGImage

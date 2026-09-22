@@ -185,6 +185,11 @@ export async function runImportOperation<T extends object | null>(
     operationId: string;
     kind: string;
     payload: unknown;
+    /**
+     * Only for `work` that is a single transaction: a `failed` row holds no
+     * partial side effects, so a changed payload may take the operation over.
+     */
+    retryFailedWithChangedInput?: boolean;
   },
   work: () => Promise<T>,
 ): Promise<T> {
@@ -217,7 +222,13 @@ export async function runImportOperation<T extends object | null>(
         ),
       )
       .limit(1);
-    if (!recorded || recorded.inputFingerprint !== fingerprint)
+    const takesOverFailed =
+      input.retryFailedWithChangedInput === true &&
+      recorded?.state === "failed";
+    if (
+      !recorded ||
+      (recorded.inputFingerprint !== fingerprint && !takesOverFailed)
+    )
       throw new Error("Operation id was replayed with different input");
     if (recorded.state === "completed") {
       // SAFETY: the unique operation row is written only by this generic call
@@ -229,15 +240,27 @@ export async function runImportOperation<T extends object | null>(
       Date.now() - recorded.updatedAt.getTime() < 5 * 60_000
     )
       throw new Error("Import operation is already in progress");
-    await database
+    // Compare-and-set on the state and fingerprint just read: two deliveries
+    // that both saw the same `failed` (or stale `started`) row must not both
+    // take it over and run `work` twice.
+    const [claimed] = await database
       .update(importRunOperation)
-      .set({ state: "started", error: null, updatedAt: new Date() })
+      .set({
+        state: "started",
+        error: null,
+        inputFingerprint: fingerprint,
+        updatedAt: new Date(),
+      })
       .where(
         and(
           eq(importRunOperation.runId, runId),
           eq(importRunOperation.operationId, input.operationId),
+          eq(importRunOperation.state, recorded.state),
+          eq(importRunOperation.inputFingerprint, recorded.inputFingerprint),
         ),
-      );
+      )
+      .returning({ id: importRunOperation.id });
+    if (!claimed) throw new Error("Import operation is already in progress");
   }
   try {
     const result = await work();
@@ -3027,6 +3050,7 @@ export async function loadImportRunByShortcode(
   const hasMoreUsage = usageRows.length > usageLimit;
   const pageUsage = usageRows.slice(0, usageLimit);
   return {
+    publicId: run.publicId,
     status: run.status,
     purpose: run.purpose,
     trigger: run.trigger,
