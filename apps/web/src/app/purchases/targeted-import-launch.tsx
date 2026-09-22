@@ -2,7 +2,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { CheckCircle2, CircleAlert, Sparkles } from "lucide-react";
 import { useEffect, useState } from "react";
 
-import { purchaseImportRunHref } from "~/app/purchases/purchase-import-links";
+import { importRunHref } from "~/app/purchases/purchase-import-links";
 import { Button } from "~/components/ui/button";
 import {
   Dialog,
@@ -102,7 +102,7 @@ export function TargetedProductBulkEnrichmentDialog({
         (entry) => entry.created && entry.run,
       )?.run;
       onFinished(true);
-      if (first) window.location.assign(purchaseImportRunHref(first.id));
+      if (first) window.location.assign(importRunHref(first.id));
     },
   });
   return (
@@ -129,7 +129,7 @@ export function TargetedProductBulkEnrichmentDialog({
           .map((run) => (
             <a
               key={run.id}
-              href={purchaseImportRunHref(run.id)}
+              href={importRunHref(run.id)}
               className="text-sm text-primary hover:underline"
             >
               Open blocking run {run.id}
@@ -205,7 +205,7 @@ export function TargetedImportLaunchDialog({
     },
     onSuccess: (result) => {
       const run = result.runs.find((entry) => entry.created && entry.run)?.run;
-      if (run) window.location.assign(purchaseImportRunHref(run.id));
+      if (run) window.location.assign(importRunHref(run.id));
     },
   });
 
@@ -278,7 +278,7 @@ export function TargetedImportLaunchDialog({
                 <a
                   key={run.id}
                   className="w-fit text-primary hover:underline"
-                  href={purchaseImportRunHref(run.id)}
+                  href={importRunHref(run.id)}
                 >
                   Open {run.id} ({run.status})
                 </a>

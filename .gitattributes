@@ -19,6 +19,7 @@ apps/web/src/routes/_authenticated/financial-transactions.index.tsx linguist-gen
 apps/web/src/routes/_authenticated/garden-entries.index.tsx linguist-generated
 apps/web/src/routes/_authenticated/images.$shortcode.tsx linguist-generated
 apps/web/src/routes/_authenticated/ingredients.$shortcode.tsx linguist-generated
+apps/web/src/routes/_authenticated/import-runs.index.tsx linguist-generated
 apps/web/src/routes/_authenticated/ingredients.index.tsx linguist-generated
 apps/web/src/routes/_authenticated/inventory.$shortcode.tsx linguist-generated
 apps/web/src/routes/_authenticated/inventory.index.tsx linguist-generated

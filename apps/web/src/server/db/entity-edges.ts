@@ -202,6 +202,14 @@ export const ENTITY_EDGES = {
     },
   }),
   image: edges({
+    "ImportRunTarget.imageId": {
+      column: importRunTarget.imageId,
+      role: "history",
+      label: "photo import runs",
+      description:
+        "A photo-inventory run worklist row preserves the Image it grouped; it is not a gallery attachment.",
+      liveness: { kind: "must-target-live" },
+    },
     "ImageDerivative.imageId": {
       column: imageDerivative.imageId,
       role: "media",
@@ -1128,13 +1136,13 @@ export const ENTITY_EDGES = {
   }),
   // The read-only run record itself has no delete/merge operation
   // (`capabilities.delete: null`), so nothing here ever dispositions these
-  // edges under a purchaseImportRun operation — see entity-incoming-edges.ts's
+  // edges under a importRun operation — see entity-incoming-edges.ts's
   // doc comment. Child rows (target/evidence/mutation/operation/progress/
   // control-event/approval/prepared-order/order-candidate) exist only as part
   // of one run, so they're `owned-child`; rows other entities keep about a
   // run (purchases it touched, claims it advanced, findings it produced) are
   // `history`, mirroring vendorAccount's own edges above.
-  purchaseImportRun: edges({
+  importRun: edges({
     "Purchase.importRunId": {
       column: purchase.importRunId,
       role: "history",

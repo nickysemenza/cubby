@@ -65,6 +65,7 @@ import {
   image,
   importHunt,
   importPreparedOrder,
+  importRunTarget,
   location,
   locationImage,
   meal,
@@ -897,6 +898,8 @@ const imageReferenceCondition = (
     "ImageProcessingJob.imageId": sql`FALSE`,
     "ImageDerivative.imageId": sql`FALSE`,
     "ImageDescriptionCorrection.imageId": sql`FALSE`,
+    // A run worklist row records history, never ownership of the image.
+    "ImportRunTarget.imageId": sql`FALSE`,
     "ImportPreparedOrder.primaryDocumentImageId": exists(
       dbc
         .select({ one: sql`1` })
@@ -1329,6 +1332,12 @@ export const cullPendingImages = async (
  *   null it so the parent row survives, just without a cover.
  */
 export const IMAGE_HARD_DELETE = {
+  "ImportRunTarget.imageId": {
+    code: "deleteRow",
+    effect: "hard-delete",
+    description:
+      "A photo-inventory worklist row cannot outlive its image: the three-way target check forbids clearing the link.",
+  },
   "ImageProcessingJob.imageId": {
     code: "deleteRow",
     effect: "hard-delete",
@@ -1448,6 +1457,32 @@ const parseImageIds = (imageIds: readonly string[]): ImageId[] =>
   imageIds.map((imageId) => parseEntityId("image", imageId));
 
 const IMAGE_EDGE_OPERATIONS = {
+  "ImportRunTarget.imageId": {
+    countsAsOwnership: false,
+    clear: async (tx: DrizzleTransaction, imageIds: string[]) => {
+      await tx
+        .delete(importRunTarget)
+        .where(inArray(importRunTarget.imageId, parseImageIds(imageIds)));
+    },
+    findReferenced: async (
+      dbc: DrizzleClient | DrizzleTransaction,
+      imageIds?: string[],
+    ) => {
+      const rows = await dbc
+        .select({ imageId: importRunTarget.imageId })
+        .from(importRunTarget)
+        .where(
+          and(
+            isNotNull(importRunTarget.imageId),
+            imageIds
+              ? inArray(importRunTarget.imageId, parseImageIds(imageIds))
+              : undefined,
+          ),
+        );
+      return rows.flatMap(({ imageId }) => (imageId ? [imageId] : []));
+    },
+    joinColumn: undefined,
+  },
   // Job rows refer to derivatives as well as originals, so they must go first.
   "ImageProcessingJob.imageId": {
     countsAsOwnership: false,

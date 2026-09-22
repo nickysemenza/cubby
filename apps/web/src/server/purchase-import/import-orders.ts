@@ -3,7 +3,7 @@ import {
   type LedgerPartyId,
   parseEntityId,
   type VendorId,
-  purchaseImportRunId,
+  importRunId,
 } from "@cubby/schemas/identifiers";
 import {
   commitPurchaseImportInput,
@@ -524,7 +524,7 @@ async function finalizeReviewRun(
     })
     .where(
       and(
-        eq(importRun.id, purchaseImportRunId.parse(runId)),
+        eq(importRun.id, importRunId.parse(runId)),
         inArray(importRun.status, ["running", "paused_approval"]),
       ),
     );

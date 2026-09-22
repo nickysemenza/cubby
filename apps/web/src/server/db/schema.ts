@@ -11,6 +11,8 @@ import type {
   FinancialAccountId,
   FinancialTransactionId,
   GardenEntryId,
+  ImageId,
+  ImportRunId,
   IngredientId,
   LedgerPartyId,
   LedgerTransferId,
@@ -23,7 +25,6 @@ import type {
   ProductId,
   ProjectId,
   PurchaseId,
-  PurchaseImportRunId,
   RecipeId,
   TaskId,
   UserId,
@@ -99,7 +100,7 @@ import {
   generatedRecipeColumns,
   generatedTaskColumns,
   generatedVendorColumns,
-  generatedPurchaseImportRunColumns,
+  generatedImportRunColumns,
   generatedVendorAccountColumns,
   generatedWishColumns,
   imageRenderStatusEnum,
@@ -1431,7 +1432,7 @@ export const purchaseProduct = pgTable(
 export const importRun = pgTable(
   "ImportRun",
   {
-    ...generatedPurchaseImportRunColumns({
+    ...generatedImportRunColumns({
       ledgerParty: (): AnyPgColumn => ledgerParty.id,
       vendorAccount: (): AnyPgColumn => vendorAccount.id,
       vendor: (): AnyPgColumn => vendor.id,
@@ -1447,7 +1448,7 @@ export const importRun = pgTable(
     actorLedgerPartyName: text("actorLedgerPartyName").notNull(),
     actorLedgerPartyKind: text("actorLedgerPartyKind").notNull(),
     predecessorRunId: uuid("predecessorRunId")
-      .$type<PurchaseImportRunId>()
+      .$type<ImportRunId>()
       .references((): AnyPgColumn => importRun.id),
     /** Stable queue generation; duplicate and late deliveries are fenced to it. */
     dispatchEventId: text("dispatchEventId"),
@@ -1477,7 +1478,11 @@ export const importRun = pgTable(
     ),
     check(
       "ImportRun_purpose_check",
-      sql`${table.purpose} IN ('account_sync', 'purchase_validation', 'product_enrichment')`,
+      sql`${table.purpose} IN ('account_sync', 'purchase_validation', 'product_enrichment', 'photo_inventory')`,
+    ),
+    check(
+      "ImportRun_photo_inventory_no_vendor_check",
+      sql`${table.purpose} <> 'photo_inventory' OR ${table.vendorAccountId} IS NULL`,
     ),
     uniqueIndex("ImportRun_dispatch_event_unique")
       .on(table.dispatchEventId)
@@ -1504,6 +1509,11 @@ export const importRunTarget = pgTable(
     productId: uuid("productId")
       .$type<ProductId>()
       .references(() => product.id),
+    imageId: uuid("imageId")
+      .$type<ImageId>()
+      .references(() => image.id),
+    /** Picker order within a photo-inventory run; the tiebreak when capture times collide. */
+    position: integer("position"),
     vendorAccountId: uuid("vendorAccountId").references(() => vendorAccount.id),
     sourceKind: text("sourceKind"),
     sourceExternalKey: text("sourceExternalKey"),
@@ -1521,15 +1531,19 @@ export const importRunTarget = pgTable(
     index("ImportRunTarget_run_idx").on(table.runId),
     index("ImportRunTarget_purchase_idx").on(table.purchaseId),
     index("ImportRunTarget_product_idx").on(table.productId),
+    index("ImportRunTarget_image_idx").on(table.imageId),
     uniqueIndex("ImportRunTarget_run_purchase_key")
       .on(table.runId, table.purchaseId)
       .where(sql`${table.purchaseId} IS NOT NULL`),
     uniqueIndex("ImportRunTarget_run_product_key")
       .on(table.runId, table.productId)
       .where(sql`${table.productId} IS NOT NULL`),
+    uniqueIndex("ImportRunTarget_run_image_key")
+      .on(table.runId, table.imageId)
+      .where(sql`${table.imageId} IS NOT NULL`),
     check(
       "ImportRunTarget_exactly_one_target_check",
-      sql`((${table.purchaseId} IS NOT NULL)::int + (${table.productId} IS NOT NULL)::int) = 1`,
+      sql`((${table.purchaseId} IS NOT NULL)::int + (${table.productId} IS NOT NULL)::int + (${table.imageId} IS NOT NULL)::int) = 1`,
     ),
     check(
       "ImportRunTarget_state_check",
@@ -1537,7 +1551,7 @@ export const importRunTarget = pgTable(
     ),
     check(
       "ImportRunTarget_outcome_check",
-      sql`${table.outcome} IS NULL OR ${table.outcome} IN ('replayed', 'raw_evidence_drift', 'semantic_drift', 'enriched', 'unavailable', 'skipped')`,
+      sql`${table.outcome} IS NULL OR ${table.outcome} IN ('replayed', 'raw_evidence_drift', 'semantic_drift', 'enriched', 'unavailable', 'skipped', 'attached')`,
     ),
   ],
 );

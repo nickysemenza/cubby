@@ -1972,7 +1972,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/BrowserBridgeOperationCapture/evidenceScope`.
             public struct EvidenceScopePayload: Codable, Hashable, Sendable {
                 /// - Remark: Generated from `#/components/schemas/BrowserBridgeOperationCapture/evidenceScope/runId`.
-                public var runId: Components.Schemas.PurchaseImportRunShortcode
+                public var runId: Components.Schemas.ImportRunShortcode
                 /// - Remark: Generated from `#/components/schemas/BrowserBridgeOperationCapture/evidenceScope/targetId`.
                 public var targetId: Swift.String
                 /// Creates a new `EvidenceScopePayload`.
@@ -1981,7 +1981,7 @@ extension Components {
                 ///   - runId:
                 ///   - targetId:
                 public init(
-                    runId: Components.Schemas.PurchaseImportRunShortcode,
+                    runId: Components.Schemas.ImportRunShortcode,
                     targetId: Swift.String
                 ) {
                     self.runId = runId
@@ -1994,7 +1994,7 @@ extension Components {
                 public init(from decoder: any Swift.Decoder) throws {
                     let container = try decoder.container(keyedBy: CodingKeys.self)
                     self.runId = try container.decode(
-                        Components.Schemas.PurchaseImportRunShortcode.self,
+                        Components.Schemas.ImportRunShortcode.self,
                         forKey: .runId
                     )
                     self.targetId = try container.decode(
@@ -3936,8 +3936,8 @@ extension Components {
             public var planting: Swift.Int
             /// - Remark: Generated from `#/components/schemas/DashboardCountsOut/gardenEntry`.
             public var gardenEntry: Swift.Int
-            /// - Remark: Generated from `#/components/schemas/DashboardCountsOut/purchaseImportRun`.
-            public var purchaseImportRun: Swift.Int
+            /// - Remark: Generated from `#/components/schemas/DashboardCountsOut/importRun`.
+            public var importRun: Swift.Int
             /// - Remark: Generated from `#/components/schemas/DashboardCountsOut/usdaFoods`.
             public var usdaFoods: Swift.Int
             /// Creates a new `DashboardCountsOut`.
@@ -3961,7 +3961,7 @@ extension Components {
             ///   - image:
             ///   - planting:
             ///   - gardenEntry:
-            ///   - purchaseImportRun:
+            ///   - importRun:
             ///   - usdaFoods:
             public init(
                 product: Swift.Int,
@@ -3982,7 +3982,7 @@ extension Components {
                 image: Swift.Int,
                 planting: Swift.Int,
                 gardenEntry: Swift.Int,
-                purchaseImportRun: Swift.Int,
+                importRun: Swift.Int,
                 usdaFoods: Swift.Int
             ) {
                 self.product = product
@@ -4003,7 +4003,7 @@ extension Components {
                 self.image = image
                 self.planting = planting
                 self.gardenEntry = gardenEntry
-                self.purchaseImportRun = purchaseImportRun
+                self.importRun = importRun
                 self.usdaFoods = usdaFoods
             }
             public enum CodingKeys: String, CodingKey {
@@ -4025,7 +4025,7 @@ extension Components {
                 case image
                 case planting
                 case gardenEntry
-                case purchaseImportRun
+                case importRun
                 case usdaFoods
             }
             public init(from decoder: any Swift.Decoder) throws {
@@ -4102,9 +4102,9 @@ extension Components {
                     Swift.Int.self,
                     forKey: .gardenEntry
                 )
-                self.purchaseImportRun = try container.decode(
+                self.importRun = try container.decode(
                     Swift.Int.self,
-                    forKey: .purchaseImportRun
+                    forKey: .importRun
                 )
                 self.usdaFoods = try container.decode(
                     Swift.Int.self,
@@ -4129,7 +4129,7 @@ extension Components {
                     "image",
                     "planting",
                     "gardenEntry",
-                    "purchaseImportRun",
+                    "importRun",
                     "usdaFoods"
                 ])
             }
@@ -21049,7 +21049,7 @@ extension Components {
         /// - Remark: Generated from `#/components/schemas/InitiateImportRunEvidenceUploadInput`.
         public struct InitiateImportRunEvidenceUploadInput: Codable, Hashable, Sendable {
             /// - Remark: Generated from `#/components/schemas/InitiateImportRunEvidenceUploadInput/runId`.
-            public var runId: Components.Schemas.PurchaseImportRunShortcode
+            public var runId: Components.Schemas.ImportRunShortcode
             /// - Remark: Generated from `#/components/schemas/InitiateImportRunEvidenceUploadInput/targetId`.
             public var targetId: Swift.String
             /// - Remark: Generated from `#/components/schemas/InitiateImportRunEvidenceUploadInput/kind`.
@@ -21103,7 +21103,7 @@ extension Components {
             ///   - filename:
             ///   - sourceMetadata:
             public init(
-                runId: Components.Schemas.PurchaseImportRunShortcode,
+                runId: Components.Schemas.ImportRunShortcode,
                 targetId: Swift.String,
                 kind: Components.Schemas.ImportRunEvidenceKind,
                 contentType: Components.Schemas.InitiateImportRunEvidenceUploadInput.ContentTypePayload,
@@ -30823,7 +30823,7 @@ extension Components {
                         case gardenEntry = "gardenEntry"
                         case vendorAccount = "vendorAccount"
                         case productCategory = "productCategory"
-                        case purchaseImportRun = "purchaseImportRun"
+                        case importRun = "importRun"
                     }
                     /// - Remark: Generated from `#/components/schemas/PhotoImportCommitInput/ImagesPayload/source/entity`.
                     public var entity: Components.Schemas.PhotoImportCommitInput.ImagesPayloadPayload.SourcePayload.EntityPayload
@@ -39657,10 +39657,10 @@ extension Components {
         }
         /// - Remark: Generated from `#/components/schemas/PurchaseImages`.
         public typealias PurchaseImages = [Components.Schemas.PurchaseImagesPayload]
-        /// purchaseImportRun shortcode, e.g. RUN-4K7M
+        /// importRun shortcode, e.g. RUN-4K7M
         ///
-        /// - Remark: Generated from `#/components/schemas/PurchaseImportRunShortcode`.
-        public typealias PurchaseImportRunShortcode = Swift.String
+        /// - Remark: Generated from `#/components/schemas/ImportRunShortcode`.
+        public typealias ImportRunShortcode = Swift.String
         /// - Remark: Generated from `#/components/schemas/PurchaseListItem`.
         public struct PurchaseListItem: Codable, Hashable, Sendable {
             /// - Remark: Generated from `#/components/schemas/PurchaseListItem/id`.

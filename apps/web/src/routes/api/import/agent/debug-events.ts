@@ -1,4 +1,4 @@
-import { purchaseImportRunId } from "@cubby/schemas/identifiers";
+import { importRunId } from "@cubby/schemas/identifiers";
 import { createFileRoute } from "@tanstack/react-router";
 import { and, eq, inArray } from "drizzle-orm";
 
@@ -43,7 +43,7 @@ export const Route = createFileRoute("/api/import/agent/debug-events")({
             and(
               inArray(
                 importRun.id,
-                runIds.map((id) => purchaseImportRunId.parse(id)),
+                runIds.map((id) => importRunId.parse(id)),
               ),
               eq(importRun.ledgerPartyId, party.id),
               // A party peer cannot attach arbitrary device metadata to the

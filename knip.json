@@ -71,7 +71,7 @@
       "entry": [
         "src/app.ts!",
         "src/cloudflare.ts!",
-        "src/purchase-import-run.ts!",
+        "src/import-run.ts!",
         "src/**/*.unit.test.ts!",
         "flue.config.ts!",
         "vite.config.ts!"

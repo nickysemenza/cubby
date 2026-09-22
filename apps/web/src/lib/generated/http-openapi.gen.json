@@ -3336,7 +3336,7 @@
                 "gardenEntry",
                 "vendorAccount",
                 "productCategory",
-                "purchaseImportRun"
+                "importRun"
               ]
             },
             "style": "form",
@@ -10643,7 +10643,7 @@
                 "gardenEntry",
                 "vendorAccount",
                 "productCategory",
-                "purchaseImportRun"
+                "importRun"
               ]
             },
             "style": "form",
@@ -21672,7 +21672,7 @@
                 "gardenEntry",
                 "vendorAccount",
                 "productCategory",
-                "purchaseImportRun"
+                "importRun"
               ]
             },
             "style": "form",
@@ -22120,7 +22120,7 @@
                 "gardenEntry",
                 "vendorAccount",
                 "productCategory",
-                "purchaseImportRun"
+                "importRun"
               ]
             },
             "style": "form",
@@ -28259,7 +28259,7 @@
             "type": "object",
             "properties": {
               "runId": {
-                "$ref": "#/components/schemas/PurchaseImportRunShortcode"
+                "$ref": "#/components/schemas/ImportRunShortcode"
               },
               "targetId": {
                 "type": "string",
@@ -32338,7 +32338,7 @@
             "minimum": -9007199254740991,
             "maximum": 9007199254740991
           },
-          "purchaseImportRun": {
+          "importRun": {
             "type": "integer",
             "minimum": -9007199254740991,
             "maximum": 9007199254740991
@@ -32368,7 +32368,7 @@
           "image",
           "planting",
           "gardenEntry",
-          "purchaseImportRun",
+          "importRun",
           "usdaFoods"
         ],
         "additionalProperties": false
@@ -33603,7 +33603,7 @@
           "gardenEntry",
           "vendorAccount",
           "productCategory",
-          "purchaseImportRun"
+          "importRun"
         ]
       },
       "EntityAttachmentRead": {
@@ -33792,7 +33792,7 @@
               "gardenEntry",
               "vendorAccount",
               "productCategory",
-              "purchaseImportRun"
+              "importRun"
             ]
           },
           "deletedReferences": {
@@ -33824,7 +33824,7 @@
                     "gardenEntry",
                     "vendorAccount",
                     "productCategory",
-                    "purchaseImportRun"
+                    "importRun"
                   ]
                 },
                 "id": {
@@ -43443,6 +43443,11 @@
           "manual_upload"
         ]
       },
+      "ImportRunShortcode": {
+        "type": "string",
+        "pattern": "^RUN-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
+        "description": "importRun shortcode, e.g. RUN-4K7M"
+      },
       "ImportRunTargetOutcome": {
         "type": "string",
         "enum": [
@@ -44895,7 +44900,7 @@
         "type": "object",
         "properties": {
           "runId": {
-            "$ref": "#/components/schemas/PurchaseImportRunShortcode"
+            "$ref": "#/components/schemas/ImportRunShortcode"
           },
           "targetId": {
             "type": "string",
@@ -53154,7 +53159,7 @@
                         "gardenEntry",
                         "vendorAccount",
                         "productCategory",
-                        "purchaseImportRun"
+                        "importRun"
                       ]
                     },
                     "id": {
@@ -63050,11 +63055,6 @@
           ],
           "additionalProperties": false
         }
-      },
-      "PurchaseImportRunShortcode": {
-        "type": "string",
-        "pattern": "^RUN-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
-        "description": "purchaseImportRun shortcode, e.g. RUN-4K7M"
       },
       "PurchaselessExitExpense": {
         "type": "object",

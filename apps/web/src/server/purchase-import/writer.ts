@@ -8,7 +8,7 @@ import { cardLastFoursOn } from "@cubby/schemas/financial-account";
 import {
   parseEntityId,
   userId as userIdSchema,
-  purchaseImportRunId,
+  importRunId,
 } from "@cubby/schemas/identifiers";
 import {
   importWriterInput,
@@ -139,7 +139,7 @@ async function assertImportOwnership(
     .innerJoin(
       importRun,
       and(
-        eq(importRun.id, purchaseImportRunId.parse(input.runId)),
+        eq(importRun.id, importRunId.parse(input.runId)),
         eq(importRun.ledgerPartyId, ledgerParty.id),
         eq(importRun.actorUserId, userIdSchema.parse(actorUserId)),
       ),
@@ -837,7 +837,7 @@ export async function importVendorOrder(
       .innerJoin(
         importRun,
         and(
-          eq(importRun.id, purchaseImportRunId.parse(input.runId)),
+          eq(importRun.id, importRunId.parse(input.runId)),
           eq(importRun.ledgerPartyId, ledgerParty.id),
           eq(importRun.actorUserId, userIdSchema.parse(actorUserId)),
         ),

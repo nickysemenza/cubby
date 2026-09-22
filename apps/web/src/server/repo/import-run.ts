@@ -1,14 +1,11 @@
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
-import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
-import type {
-  PurchaseImportRunFilters,
-  PurchaseImportRunOut,
-} from "@cubby/schemas/purchase-import-run";
-import { purchaseImportRunOut } from "@cubby/schemas/purchase-import-run";
+import type { ImportRunFilters, ImportRunOut } from "@cubby/schemas/import-run";
+import { importRunOut } from "@cubby/schemas/import-run";
 import {
   importRunPurpose,
   type ImportRunPurpose,
-} from "@cubby/schemas/purchase-import-run-fields";
+} from "@cubby/schemas/import-run-fields";
+import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
 import { and, eq, sql } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
@@ -59,6 +56,7 @@ const columns = {
   updated: importRun.updated,
   skipped: importRun.skipped,
   failureCode: importRun.failureCode,
+  notes: importRun.notes,
   coordinatorModel: importRun.coordinatorModel,
   skillRevision: importRun.skillRevision,
   runtimeRevision: importRun.runtimeRevision,
@@ -92,6 +90,7 @@ type ImportRunRow = {
   updated: number;
   skipped: number;
   failureCode: string | null;
+  notes: string | null;
   coordinatorModel: string;
   skillRevision: string;
   runtimeRevision: string;
@@ -108,13 +107,14 @@ const PURPOSE_LABEL = {
   account_sync: "Account sync",
   purchase_validation: "Purchase validation",
   product_enrichment: "Product enrichment",
+  photo_inventory: "Photo inventory",
 } satisfies Record<ImportRunPurpose, string>;
 
-const toOut = (row: ImportRunRow): PurchaseImportRunOut =>
-  purchaseImportRunOut.parse({
+const toOut = (row: ImportRunRow): ImportRunOut =>
+  importRunOut.parse({
     ...row,
-    id: parseShortcodeFor("purchaseImportRun", String(row.shortcode)),
-    displayName: `${row.vendorName ?? "Purchase agent"} · ${PURPOSE_LABEL[importRunPurpose.parse(row.purpose)]}`,
+    id: parseShortcodeFor("importRun", String(row.shortcode)),
+    displayName: `${row.vendorName ?? row.ledgerPartyName} · ${PURPOSE_LABEL[importRunPurpose.parse(row.purpose)]}`,
     vendorAccountId: row.vendorAccountShortcode
       ? parseShortcodeFor("vendorAccount", row.vendorAccountShortcode)
       : null,
@@ -123,13 +123,13 @@ const toOut = (row: ImportRunRow): PurchaseImportRunOut =>
       : null,
     ledgerPartyId: parseShortcodeFor("ledgerParty", row.ledgerPartyShortcode),
     predecessorRunId: row.predecessorShortcode
-      ? parseShortcodeFor("purchaseImportRun", row.predecessorShortcode)
+      ? parseShortcodeFor("importRun", row.predecessorShortcode)
       : null,
   });
 
-const scaffold = listScaffold("purchaseImportRun", importRun);
+const scaffold = listScaffold("importRun", importRun);
 
-const buildWhere = (filters: PurchaseImportRunFilters) =>
+const buildWhere = (filters: ImportRunFilters) =>
   scaffold.where(filters, [
     shortcodeSetCondition(
       sql`(SELECT shortcode FROM "VendorAccount" WHERE id = "ImportRun"."vendorAccountId")`,
@@ -145,9 +145,9 @@ const buildWhere = (filters: PurchaseImportRunFilters) =>
     ),
   ]);
 
-export async function listPurchaseImportRuns(
+export async function listImportRuns(
   db: Database,
-  filters: PurchaseImportRunFilters,
+  filters: ImportRunFilters,
   sorts: SortParams[],
   pagination: PaginationParams,
 ) {
@@ -168,11 +168,11 @@ export async function listPurchaseImportRuns(
 
 const reader = createEntityReader<
   ImportRunRow,
-  PurchaseImportRunOut,
-  "purchaseImportRun",
+  ImportRunOut,
+  "importRun",
   Database | DrizzleTransaction
 >({
-  entity: "purchaseImportRun",
+  entity: "importRun",
   fetchById: async (db, id) => {
     const [row] = await unwrapDb(db)
       .select(columns)
@@ -184,4 +184,4 @@ const reader = createEntityReader<
   fromDB: (_db, row) => toOut(row),
 });
 
-export const getPurchaseImportRunByShortcode = reader.getByShortcode;
+export const getImportRunByShortcode = reader.getByShortcode;

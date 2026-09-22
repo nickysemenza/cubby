@@ -2,7 +2,7 @@ import { z } from "zod";
 
 import {
   ledgerPartyShortcode,
-  purchaseImportRunShortcode,
+  importRunShortcode,
   vendorAccountShortcode,
   vendorShortcode,
 } from "../identifier-fields.js";
@@ -10,7 +10,7 @@ import {
   importRunPurpose,
   importRunStatus,
   importRunTrigger,
-} from "../purchase-import-run-fields.js";
+} from "../import-run-fields.js";
 import { defineEntity } from "./definition.js";
 
 const readOnly = <T extends z.ZodTypeAny>(read: T) => ({
@@ -20,31 +20,32 @@ const readOnly = <T extends z.ZodTypeAny>(read: T) => ({
 });
 
 /**
- * One purchase-agent run: an account sync, validation or enrichment. The
- * record is written only by the run service and the writer; the manifest
+ * One import run: a purchase-agent account sync, validation or enrichment, or
+ * a photo-inventory batch a member uploads for an agent to work. The record is
+ * written only by the run service and the writers; the manifest
  * exposes it read-only so the generic list, detail, inspector and MCP get/list
  * render it like any other record.
  */
 export default defineEntity({
-  key: "purchaseImportRun",
+  key: "importRun",
   names: { singular: "Import Run", plural: "Import Runs" },
   route: {
-    basePath: "purchase-imports",
+    basePath: "import-runs",
     list: true,
     // The hand-written page stays until the generic detail carries its slots.
     detail: null,
   },
   table: "ImportRun",
-  identifiers: { brand: "PurchaseImportRunId", shortcode: "RUN-" },
+  identifiers: { brand: "ImportRunId", shortcode: "RUN-" },
   presentation: {
     titleField: "displayName",
     domain: "finance",
     description:
-      "Purchase-agent runs: account syncs, validations and enrichments.",
+      "Import runs: purchase-agent syncs, validations, enrichments and photo-inventory batches.",
     emptyState: {
       title: "No import runs yet",
       description:
-        "Runs appear when a vendor account syncs or a purchase is validated.",
+        "Runs appear when a vendor account syncs, a purchase is validated or photos are uploaded for inventory.",
     },
     icons: {
       lucide: "Bot",
@@ -75,6 +76,7 @@ export default defineEntity({
             "startedAt",
             "endedAt",
             "failureCode",
+            "notes",
           ],
         },
         {
@@ -143,6 +145,7 @@ export default defineEntity({
             { value: "account_sync", label: "Account sync" },
             { value: "purchase_validation", label: "Purchase validation" },
             { value: "product_enrichment", label: "Product enrichment" },
+            { value: "photo_inventory", label: "Photo inventory" },
           ],
         },
         display: { list: true, detail: true, width: "sm" },
@@ -241,6 +244,13 @@ export default defineEntity({
         validation: readOnly(z.string().nullable()),
       },
       {
+        key: "notes",
+        kind: "text",
+        nullable: true,
+        display: { detail: true },
+        validation: readOnly(z.string().nullable()),
+      },
+      {
         key: "coordinatorModel",
         kind: "text",
         display: { detail: true },
@@ -296,9 +306,9 @@ export default defineEntity({
         kind: "identifier",
         label: "Predecessor",
         nullable: true,
-        reference: { entity: "purchaseImportRun" },
+        reference: { entity: "importRun" },
         display: { detail: true },
-        validation: readOnly(purchaseImportRunShortcode.nullable()),
+        validation: readOnly(importRunShortcode.nullable()),
       },
       {
         key: "vendorAccountLabel",
@@ -320,7 +330,7 @@ export default defineEntity({
       {
         key: "id",
         kind: "identifier",
-        validation: readOnly(purchaseImportRunShortcode),
+        validation: readOnly(importRunShortcode),
       },
       {
         key: "createdAt",
@@ -344,7 +354,7 @@ export default defineEntity({
       {
         key: "id",
         default: "generated",
-        specialized: "primary-key:PurchaseImportRunId",
+        specialized: "primary-key:ImportRunId",
       },
       { key: "shortcode", specialized: "shortcode" },
       { key: "ledgerPartyId", reference: "ledgerParty" },
@@ -384,6 +394,7 @@ export default defineEntity({
       { key: "skipped", default: "literal", defaultValue: 0 },
       "auditedAt",
       "failureCode",
+      "notes",
       { key: "dispatchAttempts", default: "literal", defaultValue: 0 },
       "dispatchError",
       "coordinatorStartedAt",
@@ -410,6 +421,7 @@ export default defineEntity({
       "updated",
       "skipped",
       "failureCode",
+      "notes",
       "coordinatorModel",
       "skillRevision",
       "runtimeRevision",
@@ -443,14 +455,14 @@ export default defineEntity({
     create: null,
     update: null,
     output: {
-      module: "@cubby/schemas/purchase-import-run",
-      export: "purchaseImportRunOut",
+      module: "@cubby/schemas/import-run",
+      export: "importRunOut",
     },
   },
   filters: {
     schema: {
-      module: "@cubby/schemas/purchase-import-run",
-      export: "purchaseImportRunFilterFields",
+      module: "@cubby/schemas/import-run",
+      export: "importRunFilterFields",
     },
     descriptors: [
       {
@@ -502,6 +514,7 @@ export default defineEntity({
           { value: "account_sync", label: "Account sync" },
           { value: "purchase_validation", label: "Purchase validation" },
           { value: "product_enrichment", label: "Product enrichment" },
+          { value: "photo_inventory", label: "Photo inventory" },
         ],
       },
       {
@@ -570,7 +583,7 @@ export default defineEntity({
     {
       key: "predecessor",
       label: "Predecessor",
-      target: "purchaseImportRun",
+      target: "importRun",
       cardinality: "one",
       provenance: {
         kind: "local-path",
@@ -612,8 +625,8 @@ export default defineEntity({
     mcpNames: null,
     ports: {
       repository: {
-        module: "~/server/repo/purchase-import-run.entity-adapter",
-        export: "purchaseImportRunEntityAdapter",
+        module: "~/server/repo/import-run.entity-adapter",
+        export: "importRunEntityAdapter",
       },
       references: {
         label: { module: "~/entities/entities", export: "entityLabel" },

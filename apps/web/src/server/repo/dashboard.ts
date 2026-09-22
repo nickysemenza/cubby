@@ -73,7 +73,7 @@ const COUNT_WHERE = {
   wish: (db) => buildWishWhere(db, {}),
   planting: () => buildPlantingWhere(),
   gardenEntry: () => buildGardenEntryWhere(),
-  purchaseImportRun: () => notDeleted(importRun),
+  importRun: () => notDeleted(importRun),
 } satisfies Record<CountableEntity, CountWhere>;
 
 type EntityCounts = Record<CountableEntity, number>;

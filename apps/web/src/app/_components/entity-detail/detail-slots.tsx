@@ -156,7 +156,7 @@ export const detailSlots = {
   purchase: {
     "import-runs": slot(() =>
       import("~/app/purchases/slots").then((m) => ({
-        default: m.PurchaseImportRuns,
+        default: m.ImportRuns,
       })),
     ),
     "project-allocation": slot(() =>

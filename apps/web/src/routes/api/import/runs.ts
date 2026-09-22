@@ -1,19 +1,19 @@
 import type { EntityId } from "@cubby/schemas/identifiers";
 import { createFileRoute } from "@tanstack/react-router";
 
-import { purchaseImportRunsResponse } from "~/lib/purchase-import-run-detail";
+import { importRunsResponse } from "~/lib/purchase-import-run-detail";
 import {
   listProductImportRuns,
-  listPurchaseImportRuns,
+  listImportRuns,
   resolveProductImportTarget,
   resolvePurchaseImportTarget,
 } from "~/server/purchase-import/run-target";
 import { createRequestContext, requireActor } from "~/server/request-context";
 
 export {
-  purchaseImportRunsError,
-  purchaseImportRunsResponse,
-  type PurchaseImportRunSummary,
+  importRunsError,
+  importRunsResponse,
+  type ImportRunSummary,
 } from "~/lib/purchase-import-run-detail";
 
 export const Route = createFileRoute("/api/import/runs")({
@@ -72,9 +72,9 @@ export const Route = createFileRoute("/api/import/runs")({
         }
         const runs = productId
           ? await listProductImportRuns(context.db, party.id, productId)
-          : await listPurchaseImportRuns(context.db, party.id, purchaseId);
+          : await listImportRuns(context.db, party.id, purchaseId);
         return Response.json(
-          purchaseImportRunsResponse.parse({
+          importRunsResponse.parse({
             runs: runs.map((run) => ({
               vendorAccountLabel: run.vendorAccountLabel,
               vendorName: run.vendorName,

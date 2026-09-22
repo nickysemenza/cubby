@@ -5,10 +5,10 @@ import {
   productId,
   purchaseId,
   userId,
-  purchaseImportRunId,
+  importRunId,
   vendorAccountId,
   type LedgerPartyId,
-  type PurchaseImportRunId,
+  type ImportRunId,
   type VendorAccountId,
   type VendorId,
 } from "@cubby/schemas/identifiers";
@@ -20,7 +20,7 @@ import {
   importRunPurpose,
   importRunTrigger,
   importRunTargetState,
-  purchaseImportRunScope,
+  importRunScope,
   type BrowserBridgeOperation,
   type ImportRunTrigger,
   type ImportRunPurpose,
@@ -169,7 +169,7 @@ export async function runImportOperation<T extends object | null>(
   },
   work: () => Promise<T>,
 ): Promise<T> {
-  const runId = purchaseImportRunId.parse(input.runId);
+  const runId = importRunId.parse(input.runId);
   const fingerprint = await sha256(JSON.stringify(input.payload));
   const database = getDb(db);
   const [inserted] = await database
@@ -341,11 +341,11 @@ export async function startOrResumeImportRun(
       )
       .limit(1);
     if (existing) return { ...existing, created: false };
-    const id = purchaseImportRunId.parse(crypto.randomUUID());
+    const id = importRunId.parse(crypto.randomUUID());
     const dispatchEventId = crypto.randomUUID();
     let created:
       | {
-          id: PurchaseImportRunId;
+          id: ImportRunId;
           publicId: string;
           status: string;
           dispatchEventId: string | null;
@@ -356,7 +356,7 @@ export async function startOrResumeImportRun(
         .insert(importRun)
         .values({
           id,
-          shortcode: generateShortcode("purchaseImportRun"),
+          shortcode: generateShortcode("importRun"),
           ledgerPartyId: input.ledgerPartyId,
           actorUserId: scope.actorUserId,
           actorName: scope.actorName,
@@ -367,7 +367,7 @@ export async function startOrResumeImportRun(
           vendorAccountId: input.vendorAccountId,
           vendorId: scope.vendorId,
           predecessorRunId: input.predecessorRunId
-            ? purchaseImportRunId.parse(input.predecessorRunId)
+            ? importRunId.parse(input.predecessorRunId)
             : null,
           trigger,
           coordinatorModel: input.coordinatorModel ?? "gpt-5.6-terra",
@@ -474,13 +474,13 @@ export async function startTargetedImportRun(
         );
     }
 
-    const id = purchaseImportRunId.parse(crypto.randomUUID());
+    const id = importRunId.parse(crypto.randomUUID());
     const eventId = crypto.randomUUID();
     const [run] = await tx
       .insert(importRun)
       .values({
         id,
-        shortcode: generateShortcode("purchaseImportRun"),
+        shortcode: generateShortcode("importRun"),
         ledgerPartyId: input.ledgerPartyId,
         actorUserId: actor.actorUserId,
         actorName: actor.actorName,
@@ -491,7 +491,7 @@ export async function startTargetedImportRun(
         vendorId: input.vendorId,
         vendorAccountId: input.vendorAccountId ?? null,
         predecessorRunId: input.predecessorRunId
-          ? purchaseImportRunId.parse(input.predecessorRunId)
+          ? importRunId.parse(input.predecessorRunId)
           : null,
         purpose,
         trigger,
@@ -543,7 +543,7 @@ export async function acknowledgeImportRunCoordinator(
     })
     .where(
       and(
-        eq(importRun.id, purchaseImportRunId.parse(input.runId)),
+        eq(importRun.id, importRunId.parse(input.runId)),
         eq(importRun.dispatchEventId, input.eventId),
         eq(importRun.status, "running"),
         isNull(importRun.coordinatorStartedAt),
@@ -563,7 +563,7 @@ export async function canDispatchImportRunCoordinator(
     .from(importRun)
     .where(
       and(
-        eq(importRun.id, purchaseImportRunId.parse(input.runId)),
+        eq(importRun.id, importRunId.parse(input.runId)),
         eq(importRun.dispatchEventId, input.eventId),
         eq(importRun.status, "running"),
         isNull(importRun.coordinatorStartedAt),
@@ -574,7 +574,7 @@ export async function canDispatchImportRunCoordinator(
 }
 
 export async function loadRunScope(db: Database, runId: string) {
-  const parsedRunId = purchaseImportRunId.parse(runId);
+  const parsedRunId = importRunId.parse(runId);
   const [row] = await getDb(db)
     .select({
       runId: importRun.id,
@@ -628,7 +628,7 @@ export async function loadRunScope(db: Database, runId: string) {
   if (!row || !row.agentId || !row.actorUserId)
     throw new Error("Import run ownership is unavailable");
   return {
-    public: purchaseImportRunScope.parse({
+    public: importRunScope.parse({
       runId: row.runId,
       shortcode: row.publicId,
       agentId: row.agentId,
@@ -707,7 +707,7 @@ export async function listImportRunProgress(db: Database, runId: string) {
       createdAt: importRunProgress.createdAt,
     })
     .from(importRunProgress)
-    .where(eq(importRunProgress.runId, purchaseImportRunId.parse(runId)))
+    .where(eq(importRunProgress.runId, importRunId.parse(runId)))
     .orderBy(asc(importRunProgress.createdAt), asc(importRunProgress.id));
 }
 
@@ -722,7 +722,7 @@ export async function latestImportRunProgress(db: Database, runId: string) {
       createdAt: importRunProgress.createdAt,
     })
     .from(importRunProgress)
-    .where(eq(importRunProgress.runId, purchaseImportRunId.parse(runId)))
+    .where(eq(importRunProgress.runId, importRunId.parse(runId)))
     .orderBy(desc(importRunProgress.createdAt), desc(importRunProgress.id))
     .limit(1);
   return latest ?? null;
@@ -737,7 +737,7 @@ export async function pauseImportRunForAuthorization(
     .set({ status: "paused_auth", updatedAt: new Date() })
     .where(
       and(
-        eq(importRun.id, purchaseImportRunId.parse(runId)),
+        eq(importRun.id, importRunId.parse(runId)),
         eq(importRun.status, "running"),
       ),
     )
@@ -1238,7 +1238,7 @@ export async function claimNextImportWork(
 async function recordOrderListing(
   db: Database,
   input: {
-    runId: PurchaseImportRunId;
+    runId: ImportRunId;
     vendorId: VendorId;
     orders: ReadonlyArray<{
       orderId: string;
@@ -1312,7 +1312,7 @@ export async function issueBrowserCommand(
           .from(importRunTarget)
           .where(
             and(
-              eq(importRunTarget.runId, purchaseImportRunId.parse(input.runId)),
+              eq(importRunTarget.runId, importRunId.parse(input.runId)),
               inArray(importRunTarget.state, [
                 "pending",
                 "prepared",
@@ -1376,7 +1376,7 @@ export async function issueBrowserCommand(
     .from(importRunOperation)
     .where(
       and(
-        eq(importRunOperation.runId, purchaseImportRunId.parse(input.runId)),
+        eq(importRunOperation.runId, importRunId.parse(input.runId)),
         eq(importRunOperation.operationId, input.operationId),
       ),
     )
@@ -1403,7 +1403,7 @@ export async function issueBrowserCommand(
       });
   if (!recorded) {
     await database.insert(importRunOperation).values({
-      runId: purchaseImportRunId.parse(input.runId),
+      runId: importRunId.parse(input.runId),
       operationId: input.operationId,
       kind: "browser_command",
       inputFingerprint: fingerprint,
@@ -1418,7 +1418,7 @@ export async function issueBrowserCommand(
       database
         .update(importRun)
         .set({ status: "paused_offline", updatedAt: new Date() })
-        .where(eq(importRun.id, purchaseImportRunId.parse(input.runId))),
+        .where(eq(importRun.id, importRunId.parse(input.runId))),
       database
         .update(vendorAccount)
         .set({ status: "paused_offline", updatedAt: new Date() })
@@ -1440,7 +1440,7 @@ export async function issueBrowserCommand(
     })
     .where(
       and(
-        eq(importRunOperation.runId, purchaseImportRunId.parse(input.runId)),
+        eq(importRunOperation.runId, importRunId.parse(input.runId)),
         eq(importRunOperation.operationId, input.operationId),
       ),
     );
@@ -1460,7 +1460,7 @@ export async function readBrowserCommandResult(
     .from(importRunOperation)
     .where(
       and(
-        eq(importRunOperation.runId, purchaseImportRunId.parse(input.runId)),
+        eq(importRunOperation.runId, importRunId.parse(input.runId)),
         eq(importRunOperation.operationId, input.operationId),
       ),
     )
@@ -1554,7 +1554,7 @@ export async function importBrowserOrderEvidence(
     .from(importRunOperation)
     .where(
       and(
-        eq(importRunOperation.runId, purchaseImportRunId.parse(input.runId)),
+        eq(importRunOperation.runId, importRunId.parse(input.runId)),
         eq(importRunOperation.kind, "browser_command"),
       ),
     );
@@ -1598,7 +1598,7 @@ export async function importBrowserOrderEvidence(
       .from(importRunTarget)
       .where(
         and(
-          eq(importRunTarget.runId, purchaseImportRunId.parse(input.runId)),
+          eq(importRunTarget.runId, importRunId.parse(input.runId)),
           eq(importRunTarget.id, evidenceScope.targetId),
         ),
       )
@@ -1632,7 +1632,7 @@ export async function importBrowserOrderEvidence(
       .where(
         and(
           inArray(importRunEvidence.id, evidenceIds),
-          eq(importRunEvidence.runId, purchaseImportRunId.parse(input.runId)),
+          eq(importRunEvidence.runId, importRunId.parse(input.runId)),
           eq(importRunEvidence.targetId, target.id),
           eq(importRunEvidence.kind, "browser_capture"),
         ),
@@ -1705,7 +1705,7 @@ export async function importBrowserOrderEvidence(
         (order) => order.orderedAt !== null && order.orderedAt < newestKnown,
       );
     const seen = await recordOrderListing(db, {
-      runId: purchaseImportRunId.parse(input.runId),
+      runId: importRunId.parse(input.runId),
       vendorId: scope.vendorId,
       orders: classified.orders,
     });
@@ -1714,10 +1714,7 @@ export async function importBrowserOrderEvidence(
       .from(importRunOrderCandidate)
       .where(
         and(
-          eq(
-            importRunOrderCandidate.runId,
-            purchaseImportRunId.parse(input.runId),
-          ),
+          eq(importRunOrderCandidate.runId, importRunId.parse(input.runId)),
           eq(importRunOrderCandidate.state, "pending"),
         ),
       );
@@ -1729,7 +1726,7 @@ export async function importBrowserOrderEvidence(
         historyExhaustedAt: nextPageUrl ? null : new Date(),
         updatedAt: new Date(),
       })
-      .where(eq(importRun.id, purchaseImportRunId.parse(input.runId)));
+      .where(eq(importRun.id, importRunId.parse(input.runId)));
     return {
       kind: "order_list" as const,
       orders: classified.orders,
@@ -1774,7 +1771,7 @@ export async function importBrowserOrderEvidence(
   const writeResult = await importVendorOrder(
     db,
     {
-      runId: purchaseImportRunId.parse(input.runId),
+      runId: importRunId.parse(input.runId),
       ledgerPartyId: scope.ledgerPartyId,
       vendorId: scope.vendorId,
       vendorAccountId: scope.public.vendorAccountId,
@@ -1814,10 +1811,7 @@ export async function importBrowserOrderEvidence(
       .set({ state: "imported", updatedAt: new Date() })
       .where(
         and(
-          eq(
-            importRunOrderCandidate.runId,
-            purchaseImportRunId.parse(input.runId),
-          ),
+          eq(importRunOrderCandidate.runId, importRunId.parse(input.runId)),
           eq(importRunOrderCandidate.orderId, extraction.candidate.orderId),
           eq(importRunOrderCandidate.state, "pending"),
         ),
@@ -1941,7 +1935,7 @@ export async function auditImportBatch(
   const scope = await loadRunScope(db, input.runId);
   assertRunActive(scope.public.status);
   if (!scope.actorUserId) throw new Error("Import run actor is unavailable");
-  const runId = purchaseImportRunId.parse(input.runId);
+  const runId = importRunId.parse(input.runId);
   const importedPurchases = await getDb(db)
     .selectDistinct({
       id: purchase.id,
@@ -2127,7 +2121,7 @@ export async function stopImportRunForReview(
   },
 ) {
   const scope = await loadRunScope(db, input.runId);
-  const runId = purchaseImportRunId.parse(input.runId);
+  const runId = importRunId.parse(input.runId);
   const summary = z.string().trim().min(1).max(1_000).parse(input.summary);
   const kind = z
     .enum([
@@ -2291,7 +2285,7 @@ export async function finishImportRun(
   input: { runId: string; operationId: string },
 ) {
   const scope = await loadRunScope(db, input.runId);
-  const runId = purchaseImportRunId.parse(input.runId);
+  const runId = importRunId.parse(input.runId);
   if (scope.public.status !== "completed") {
     assertRunActive(scope.public.status);
     if (scope.public.purpose !== "account_sync") {
@@ -2448,7 +2442,7 @@ export async function markImportRunFailed(
     dispatchEventId?: string;
   },
 ) {
-  const runId = purchaseImportRunId.parse(input.runId);
+  const runId = importRunId.parse(input.runId);
   const [run] = await getDb(db)
     .update(importRun)
     .set({
@@ -3111,14 +3105,14 @@ export async function controlImportRun(
         if (sourceTargets.some((target) => !target.purchaseId))
           throw new Error("Purchase validation runs require Purchase targets");
 
-        const successorId = purchaseImportRunId.parse(crypto.randomUUID());
+        const successorId = importRunId.parse(crypto.randomUUID());
         const isUnavailable = input.action === "no_evidence_available";
         const dispatchEventId = isUnavailable ? null : crypto.randomUUID();
         const [successor] = await tx
           .insert(importRun)
           .values({
             id: successorId,
-            shortcode: generateShortcode("purchaseImportRun"),
+            shortcode: generateShortcode("importRun"),
             ledgerPartyId: locked.ledgerPartyId,
             actorUserId: locked.actorUserId,
             actorName: locked.actorName,
@@ -3221,13 +3215,13 @@ export async function controlImportRun(
             created: false,
           };
         }
-        const successorId = purchaseImportRunId.parse(crypto.randomUUID());
+        const successorId = importRunId.parse(crypto.randomUUID());
         const dispatchEventId = crypto.randomUUID();
         const [successor] = await tx
           .insert(importRun)
           .values({
             id: successorId,
-            shortcode: generateShortcode("purchaseImportRun"),
+            shortcode: generateShortcode("importRun"),
             ledgerPartyId: locked.ledgerPartyId,
             actorUserId: locked.actorUserId,
             actorName: locked.actorName,

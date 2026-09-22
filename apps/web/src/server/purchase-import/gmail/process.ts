@@ -1,4 +1,4 @@
-import { parseEntityId, purchaseImportRunId } from "@cubby/schemas/identifiers";
+import { parseEntityId, importRunId } from "@cubby/schemas/identifiers";
 import { generateShortcode } from "@cubby/shared";
 import { and, eq, gte, inArray, isNotNull, isNull, lte } from "drizzle-orm";
 
@@ -176,10 +176,10 @@ export async function processOrderMails(
           .limit(1);
         if (!actorSnapshot?.actorUserId)
           throw new Error("Order mail party has no controlling member");
-        const runId = purchaseImportRunId.parse(crypto.randomUUID());
+        const runId = importRunId.parse(crypto.randomUUID());
         await database.insert(importRun).values({
           id: runId,
-          shortcode: generateShortcode("purchaseImportRun"),
+          shortcode: generateShortcode("importRun"),
           ledgerPartyId: mail.ledgerPartyId,
           actorUserId: actorSnapshot.actorUserId,
           actorName: actorSnapshot.actorName,

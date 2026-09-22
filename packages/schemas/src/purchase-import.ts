@@ -8,14 +8,14 @@ import {
   importRunPurpose,
   importRunStatus,
   importRunTrigger,
-} from "./purchase-import-run-fields";
+} from "./import-run-fields";
 import { expenseLineKindSchema } from "./expense-line-kind";
 import {
   imageShortcode,
   productShortcode,
   projectShortcode,
-  purchaseImportRunId,
-  purchaseImportRunShortcode,
+  importRunId,
+  importRunShortcode,
   purchaseShortcode,
   vendorShortcode,
 } from "./identifier-fields";
@@ -40,7 +40,7 @@ export {
   importRunPurpose,
   importRunStatus,
   importRunTrigger,
-} from "./purchase-import-run-fields";
+} from "./import-run-fields";
 export type ImportRunTrigger = z.infer<typeof importRunTrigger>;
 export type ImportRunStatus = z.infer<typeof importRunStatus>;
 export type ImportRunPurpose = z.infer<typeof importRunPurpose>;
@@ -76,9 +76,7 @@ export const importRunEvidenceKind = z.enum([
 ]);
 export type ImportRunEvidenceKind = z.infer<typeof importRunEvidenceKind>;
 
-/** Public, non-entity identity for one durable purchase-import run. */
-/** A run's public code, the `RUN-` shortcode every public surface uses. */
-export const importRunShortcode = purchaseImportRunShortcode;
+export { importRunShortcode };
 export type ImportRunPublicId = z.infer<typeof importRunShortcode>;
 
 /** Stage bytes for a run target only; this never creates an Image or Document. */
@@ -692,8 +690,8 @@ export const purchaseAgentEvent = z.object({
 });
 export type PurchaseAgentEvent = z.infer<typeof purchaseAgentEvent>;
 
-export const purchaseImportRunScope = z.object({
-  runId: purchaseImportRunId,
+export const importRunScope = z.object({
+  runId: importRunId,
   shortcode: importRunShortcode,
   agentId: z.string().trim().min(1),
   trigger: importRunTrigger,
@@ -711,7 +709,7 @@ export const purchaseImportRunScope = z.object({
   dispatchError: z.string().nullable(),
   coordinatorStartedAt: z.iso.datetime().nullable(),
 });
-export type PurchaseImportRunScope = z.infer<typeof purchaseImportRunScope>;
+export type ImportRunScope = z.infer<typeof importRunScope>;
 
 export const importWriterInput = z.object({
   defaultTrade: tradeSchema.optional(),

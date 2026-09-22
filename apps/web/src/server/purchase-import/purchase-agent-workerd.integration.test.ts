@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { purchaseImportRunId } from "@cubby/schemas/identifiers";
+import { importRunId } from "@cubby/schemas/identifiers";
 import { and, eq } from "drizzle-orm";
 import { type TestDbContext, withTestDb } from "tooling/test-setup";
 import { afterEach, describe, expect, it } from "vitest";
@@ -221,7 +221,7 @@ async function workerdDiagnostic(db: TestDbContext["db"], runId: string) {
         coordinatorStartedAt: importRun.coordinatorStartedAt,
       })
       .from(importRun)
-      .where(eq(importRun.id, purchaseImportRunId.parse(runId))),
+      .where(eq(importRun.id, importRunId.parse(runId))),
     getDb(db)
       .select({
         operationId: importRunOperation.operationId,

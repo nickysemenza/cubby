@@ -16,19 +16,19 @@ import {
   useSyncExternalStore,
 } from "react";
 
-import { purchaseImportRunHref } from "~/app/purchases/purchase-import-links";
+import { importRunHref } from "~/app/purchases/purchase-import-links";
 import { Badge, type BadgeVariant } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { StatusText } from "~/components/ui/status-text";
 import { readJsonOrThrow } from "~/lib/http-error";
 import {
-  purchaseImportRunLogResponse,
-  type PurchaseImportRunLogEntry,
+  importRunLogResponse,
+  type ImportRunLogEntry,
 } from "~/lib/purchase-import-debug";
 import {
-  purchaseImportRunControlResponse,
-  purchaseImportRunDetailResponse,
-  type PurchaseImportRunDetail,
+  importRunControlResponse,
+  importRunDetailResponse,
+  type ImportRunDetail,
 } from "~/lib/purchase-import-run-detail";
 import { formatCurrency } from "~/lib/utils";
 
@@ -62,7 +62,7 @@ const formatMoment = (value: string | null): string =>
 const getRun = async (
   publicId: string,
   usageCursor: string | null,
-): Promise<PurchaseImportRunDetail> => {
+): Promise<ImportRunDetail> => {
   const query = usageCursor
     ? `?usageCursor=${encodeURIComponent(usageCursor)}`
     : "";
@@ -71,7 +71,7 @@ const getRun = async (
   );
   const data = await readJsonOrThrow(
     response,
-    purchaseImportRunDetailResponse,
+    importRunDetailResponse,
     "Import run could not load.",
   );
   return data.run;
@@ -98,7 +98,7 @@ function Metadata({ label, value }: { label: string; value: string | null }) {
   );
 }
 
-function RunControl({ run }: { run: PurchaseImportRunDetail }) {
+function RunControl({ run }: { run: ImportRunDetail }) {
   const queryClient = useQueryClient();
   const update = useMutation({
     mutationFn: async (action: "pause" | "resume" | "cancel") => {
@@ -112,7 +112,7 @@ function RunControl({ run }: { run: PurchaseImportRunDetail }) {
       );
       const data = await readJsonOrThrow(
         response,
-        purchaseImportRunControlResponse,
+        importRunControlResponse,
         "Run could not be updated.",
         { method: "PATCH" },
       );
@@ -144,7 +144,7 @@ function RunControl({ run }: { run: PurchaseImportRunDetail }) {
   );
 }
 
-function TerminalRunControls({ run }: { run: PurchaseImportRunDetail }) {
+function TerminalRunControls({ run }: { run: ImportRunDetail }) {
   const queryClient = useQueryClient();
   const retry = useMutation({
     mutationFn: async (action: "retry" | "escalate_sol") => {
@@ -158,16 +158,14 @@ function TerminalRunControls({ run }: { run: PurchaseImportRunDetail }) {
       );
       return readJsonOrThrow(
         response,
-        purchaseImportRunControlResponse,
+        importRunControlResponse,
         "A successor run could not be created.",
         { method: "PATCH" },
       );
     },
     onSuccess: (result) => {
       if (result.successor) {
-        window.location.assign(
-          purchaseImportRunHref(result.successor.publicId),
-        );
+        window.location.assign(importRunHref(result.successor.publicId));
         return;
       }
       void queryClient.refetchQueries({
@@ -210,7 +208,7 @@ function TerminalRunControls({ run }: { run: PurchaseImportRunDetail }) {
 }
 
 /** A committed run without Flue admission is recoverable, not silently stuck. */
-function DispatchRecoveryControls({ run }: { run: PurchaseImportRunDetail }) {
+function DispatchRecoveryControls({ run }: { run: ImportRunDetail }) {
   const queryClient = useQueryClient();
   const dispatch = run.dispatch;
   const action = useMutation({
@@ -225,7 +223,7 @@ function DispatchRecoveryControls({ run }: { run: PurchaseImportRunDetail }) {
       );
       const data = await readJsonOrThrow(
         response,
-        purchaseImportRunControlResponse,
+        importRunControlResponse,
         "Run could not be updated.",
         { method: "PATCH" },
       );
@@ -275,7 +273,7 @@ function DispatchRecoveryControls({ run }: { run: PurchaseImportRunDetail }) {
 }
 
 /** A terminal validation without usable evidence is retried as an immutable successor. */
-function EvidenceRecoveryControls({ run }: { run: PurchaseImportRunDetail }) {
+function EvidenceRecoveryControls({ run }: { run: ImportRunDetail }) {
   const action = useMutation({
     mutationFn: async (next: "upload_evidence" | "no_evidence_available") => {
       const response = await fetch(
@@ -288,14 +286,13 @@ function EvidenceRecoveryControls({ run }: { run: PurchaseImportRunDetail }) {
       );
       return readJsonOrThrow(
         response,
-        purchaseImportRunControlResponse,
+        importRunControlResponse,
         "Evidence retry could not start.",
         { method: "PATCH" },
       );
     },
     onSuccess: ({ successor }) => {
-      if (successor)
-        window.location.assign(purchaseImportRunHref(successor.publicId));
+      if (successor) window.location.assign(importRunHref(successor.publicId));
     },
   });
   if (
@@ -336,7 +333,7 @@ function EvidenceRecoveryControls({ run }: { run: PurchaseImportRunDetail }) {
   );
 }
 
-function ManualEvidenceUpload({ run }: { run: PurchaseImportRunDetail }) {
+function ManualEvidenceUpload({ run }: { run: ImportRunDetail }) {
   const target = run.targets.find((item) => item.state === "needs_evidence");
   const upload = useMutation({
     mutationFn: async (file: File) => {
@@ -384,7 +381,7 @@ function ManualEvidenceUpload({ run }: { run: PurchaseImportRunDetail }) {
       );
       if (!dispatched.ok)
         throw new Error("Evidence was stored, but dispatch failed.");
-      return purchaseImportRunControlResponse.parse(await dispatched.json());
+      return importRunControlResponse.parse(await dispatched.json());
     },
     onSuccess: () => window.location.reload(),
   });
@@ -415,14 +412,14 @@ function ManualEvidenceUpload({ run }: { run: PurchaseImportRunDetail }) {
   );
 }
 
-function AgentSurface({ run }: { run: PurchaseImportRunDetail }) {
+function AgentSurface({ run }: { run: ImportRunDetail }) {
   if (!ACTIVE_RUN_STATUSES.has(run.status)) {
     return <TerminalAgentSurface run={run} />;
   }
   return <ActiveAgentSurface run={run} />;
 }
 
-function RunProgress({ run }: { run: PurchaseImportRunDetail }) {
+function RunProgress({ run }: { run: ImportRunDetail }) {
   return (
     <section className="grid gap-3 border border-border bg-card p-4">
       <div>
@@ -495,7 +492,7 @@ function RunProgress({ run }: { run: PurchaseImportRunDetail }) {
   );
 }
 
-function TerminalAgentSurface({ run }: { run: PurchaseImportRunDetail }) {
+function TerminalAgentSurface({ run }: { run: ImportRunDetail }) {
   const client = useMemo(
     () =>
       createFlueClient({
@@ -532,7 +529,7 @@ function TerminalAgentSurface({ run }: { run: PurchaseImportRunDetail }) {
   );
 }
 
-function ActiveAgentSurface({ run }: { run: PurchaseImportRunDetail }) {
+function ActiveAgentSurface({ run }: { run: ImportRunDetail }) {
   const [prompt, setPrompt] = useState("");
   const queryClient = useQueryClient();
   const client = useMemo(
@@ -777,7 +774,7 @@ function ToolValue({ label, value }: { label: string; value: unknown }) {
   );
 }
 
-function RunTimeline({ run }: { run: PurchaseImportRunDetail }) {
+function RunTimeline({ run }: { run: ImportRunDetail }) {
   return (
     <section className="grid gap-3 border border-border bg-card p-4">
       <div>
@@ -829,7 +826,7 @@ function RunTimeline({ run }: { run: PurchaseImportRunDetail }) {
   );
 }
 
-function RunTargets({ run }: { run: PurchaseImportRunDetail }) {
+function RunTargets({ run }: { run: ImportRunDetail }) {
   return (
     <section className="grid gap-3 border border-border bg-card p-4">
       <div>
@@ -885,7 +882,7 @@ function RunTargets({ run }: { run: PurchaseImportRunDetail }) {
   );
 }
 
-function RunEvidence({ run }: { run: PurchaseImportRunDetail }) {
+function RunEvidence({ run }: { run: ImportRunDetail }) {
   return (
     <section className="grid gap-3 border border-border bg-card p-4">
       <div>
@@ -942,7 +939,7 @@ function PendingApprovalActions({
       );
       const data = await readJsonOrThrow(
         response,
-        purchaseImportRunControlResponse,
+        importRunControlResponse,
         "Approval could not be recorded.",
         { method: "PATCH" },
       );
@@ -997,7 +994,7 @@ function RunDebugLog({
       });
       return readJsonOrThrow(
         response,
-        purchaseImportRunLogResponse,
+        importRunLogResponse,
         "The run log could not load.",
         { method: "POST" },
       );
@@ -1033,7 +1030,7 @@ function RunDebugLog({
   );
 }
 
-function RunDebugLogEntry({ entry }: { entry: PurchaseImportRunLogEntry }) {
+function RunDebugLogEntry({ entry }: { entry: ImportRunLogEntry }) {
   return (
     <div className="grid gap-1 border-b border-border py-2 last:border-0 md:grid-cols-[12rem_minmax(0,1fr)] md:gap-2">
       <time
@@ -1057,11 +1054,7 @@ function RunDebugLogEntry({ entry }: { entry: PurchaseImportRunLogEntry }) {
   );
 }
 
-export function PurchaseImportRunDetailPage({
-  publicId,
-}: {
-  publicId: string;
-}) {
+export function ImportRunDetailPage({ publicId }: { publicId: string }) {
   const [usageCursorHistory, setUsageCursorHistory] = useState<
     Array<string | null>
   >([null]);
@@ -1081,7 +1074,7 @@ export function PurchaseImportRunDetailPage({
   if (!run) return null;
 
   return (
-    <PurchaseImportRunContent
+    <ImportRunContent
       run={run}
       usageCursorHistory={usageCursorHistory}
       setUsageCursorHistory={setUsageCursorHistory}
@@ -1093,13 +1086,13 @@ export function PurchaseImportRunDetailPage({
 // The operational record intentionally renders every durable evidence family
 // together so terminal history cannot silently omit one during refactors.
 // eslint-disable-next-line complexity
-function PurchaseImportRunContent({
+function ImportRunContent({
   run,
   usageCursorHistory,
   setUsageCursorHistory,
   loading,
 }: {
-  run: PurchaseImportRunDetail;
+  run: ImportRunDetail;
   usageCursorHistory: Array<string | null>;
   setUsageCursorHistory: Dispatch<SetStateAction<Array<string | null>>>;
   loading: boolean;
@@ -1125,7 +1118,7 @@ function PurchaseImportRunContent({
             </div>
             <a
               className="mt-1 inline-flex min-h-11 items-center gap-1 text-sm text-primary hover:underline"
-              href={purchaseImportRunHref(run.publicId)}
+              href={importRunHref(run.publicId)}
             >
               <Link className="size-3.5" />
               Public run URL
@@ -1401,7 +1394,7 @@ function AiUsageRecords({
   canGoBack,
   loading,
 }: {
-  usage: NonNullable<PurchaseImportRunDetail["usage"]>;
+  usage: NonNullable<ImportRunDetail["usage"]>;
   onPrevious: () => void;
   onNext: () => void;
   canGoBack: boolean;
@@ -1524,7 +1517,7 @@ function RunLink({
       {publicId ? (
         <a
           className="inline-flex items-center gap-1 font-mono text-xs text-primary hover:underline"
-          href={purchaseImportRunHref(publicId)}
+          href={importRunHref(publicId)}
         >
           {publicId}
           <SquareArrowOutUpRight className="size-3" />

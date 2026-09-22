@@ -89,7 +89,7 @@ export const ENTITY_EDGE_SEMANTICS = {
   task: projectSemantics(ENTITY_EDGES.task),
   vendor: projectSemantics(ENTITY_EDGES.vendor),
   vendorAccount: projectSemantics(ENTITY_EDGES.vendorAccount),
-  purchaseImportRun: projectSemantics(ENTITY_EDGES.purchaseImportRun),
+  importRun: projectSemantics(ENTITY_EDGES.importRun),
   purchase: projectSemantics(ENTITY_EDGES.purchase),
   financialAccount: projectSemantics(ENTITY_EDGES.financialAccount),
   financialTransaction: projectSemantics(ENTITY_EDGES.financialTransaction),

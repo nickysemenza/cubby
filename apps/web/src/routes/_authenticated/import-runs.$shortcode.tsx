@@ -1,19 +1,17 @@
 import { createFileRoute } from "@tanstack/react-router";
 
-import { PurchaseImportRunDetailPage } from "~/app/purchases/purchase-import-run-detail";
+import { ImportRunDetailPage } from "~/app/purchases/purchase-import-run-detail";
 import { Page } from "~/components/page/Page";
 import { pageTitle } from "~/lib/page-title";
 
-export const Route = createFileRoute(
-  "/_authenticated/purchase-imports/$shortcode",
-)({
+export const Route = createFileRoute("/_authenticated/import-runs/$shortcode")({
   head: ({ params }) => ({
     meta: [{ title: pageTitle(`Import ${params.shortcode}`) }],
   }),
-  component: PurchaseImportRunRoute,
+  component: ImportRunRoute,
 });
 
-function PurchaseImportRunRoute() {
+function ImportRunRoute() {
   const { shortcode } = Route.useParams();
   return (
     <Page
@@ -22,7 +20,7 @@ function PurchaseImportRunRoute() {
       bodyGutter="standard"
       decoration="none"
     >
-      <PurchaseImportRunDetailPage publicId={shortcode} />
+      <ImportRunDetailPage publicId={shortcode} />
     </Page>
   );
 }

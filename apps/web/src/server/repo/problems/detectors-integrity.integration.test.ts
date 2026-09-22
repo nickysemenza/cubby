@@ -274,7 +274,7 @@ const mkImportRun = async (
   ]);
   if (!partySnapshot) throw new Error("Import run party fixture was not found");
   return insertAndReturn(db, importRun, {
-    shortcode: generateShortcode("purchaseImportRun"),
+    shortcode: generateShortcode("importRun"),
     ledgerPartyId: party,
     actorUserId: userId.parse(actor.id),
     actorName: actor.name,
@@ -443,7 +443,7 @@ const TARGET_FACTORIES = {
   financialAccount: mkFinancialAccount,
   financialTransaction: mkFinancialTransaction,
   wish: mkWish,
-  purchaseImportRun: mkImportRun,
+  importRun: mkImportRun,
 } satisfies Partial<Record<Entity, (db: Database) => Promise<{ id: string }>>>;
 
 /** One factory per must-target-live edge: insert a live SOURCE row whose FK
@@ -1340,24 +1340,24 @@ const SOURCE_FACTORIES = {
     const vendor = await mkVendor(db);
     return insertWithShortcode(db, "purchase", {
       vendorId: vendor.id,
-      importRunId: parseEntityId("purchaseImportRun", targetId),
+      importRunId: parseEntityId("importRun", targetId),
       date: "2024-01-15",
     });
   },
   "ImportRun.predecessorRunId": (db, targetId) =>
     mkImportRun(db, {
-      predecessorRunId: parseEntityId("purchaseImportRun", targetId),
+      predecessorRunId: parseEntityId("importRun", targetId),
     }),
   "ImportRunTarget.runId": async (db, targetId) => {
     const product = await mkProduct(db);
     return mkImportRunTarget(db, {
-      runId: parseEntityId("purchaseImportRun", targetId),
+      runId: parseEntityId("importRun", targetId),
       productId: product.id,
     });
   },
   "ImportRunOrderCandidate.runId": (db, targetId) =>
     insertAndReturn(db, importRunOrderCandidate, {
-      runId: parseEntityId("purchaseImportRun", targetId),
+      runId: parseEntityId("importRun", targetId),
       orderId: uniq("order"),
     }),
   "ImportRunEvidence.runId": async (db, targetId) => {
@@ -1366,7 +1366,7 @@ const SOURCE_FACTORIES = {
       productId: product.id,
     });
     return insertAndReturn(db, importRunEvidence, {
-      runId: parseEntityId("purchaseImportRun", targetId),
+      runId: parseEntityId("importRun", targetId),
       targetId: evidenceTarget.id,
       kind: "manual_upload",
       objectKey: uniq("test/evidence-object"),
@@ -1376,7 +1376,7 @@ const SOURCE_FACTORIES = {
   },
   "ImportRunMutation.runId": (db, targetId) =>
     insertAndReturn(db, importRunMutation, {
-      runId: parseEntityId("purchaseImportRun", targetId),
+      runId: parseEntityId("importRun", targetId),
       targetType: "purchase",
       targetId: crypto.randomUUID(),
       mutationKind: "liveness-fixture",
@@ -1384,20 +1384,20 @@ const SOURCE_FACTORIES = {
     }),
   "ImportRunOperation.runId": (db, targetId) =>
     insertAndReturn(db, importRunOperation, {
-      runId: parseEntityId("purchaseImportRun", targetId),
+      runId: parseEntityId("importRun", targetId),
       operationId: uniq("operation"),
       kind: "liveness-fixture",
       inputFingerprint: uniq("input-fingerprint"),
     }),
   "ImportRunProgress.runId": (db, targetId) =>
     insertAndReturn(db, importRunProgress, {
-      runId: parseEntityId("purchaseImportRun", targetId),
+      runId: parseEntityId("importRun", targetId),
       eventId: uniq("progress-event"),
       phase: "liveness-fixture",
     }),
   "ImportRunControlEvent.runId": (db, targetId) =>
     insertAndReturn(db, importRunControlEvent, {
-      runId: parseEntityId("purchaseImportRun", targetId),
+      runId: parseEntityId("importRun", targetId),
       action: "prompt",
       controllerUserId: userId.parse(uniq("controller-user")),
       controllerName: "Liveness fixture controller",
@@ -1412,11 +1412,11 @@ const SOURCE_FACTORIES = {
     }),
   "ImportPreparedOrder.runId": (db, targetId) =>
     mkImportPreparedOrder(db, {
-      runId: parseEntityId("purchaseImportRun", targetId),
+      runId: parseEntityId("importRun", targetId),
     }),
   "ImportRunApproval.runId": (db, targetId) =>
     insertAndReturn(db, importRunApproval, {
-      runId: parseEntityId("purchaseImportRun", targetId),
+      runId: parseEntityId("importRun", targetId),
       operationId: uniq("approval-operation"),
       operationKind: "liveness-fixture",
       args: {},
@@ -1426,16 +1426,16 @@ const SOURCE_FACTORIES = {
     }),
   "ImportSourceClaim.firstRunId": (db, targetId) =>
     mkImportSourceClaim(db, {
-      firstRunId: parseEntityId("purchaseImportRun", targetId),
+      firstRunId: parseEntityId("importRun", targetId),
     }),
   "ImportSourceClaim.lastRunId": (db, targetId) =>
     mkImportSourceClaim(db, {
-      lastRunId: parseEntityId("purchaseImportRun", targetId),
+      lastRunId: parseEntityId("importRun", targetId),
     }),
   "ImportFinding.importRunId": async (db, targetId) => {
     const party = await mkLedgerParty(db);
     return insertAndReturn(db, importFinding, {
-      importRunId: parseEntityId("purchaseImportRun", targetId),
+      importRunId: parseEntityId("importRun", targetId),
       ledgerPartyId: party.id,
       targetType: "purchase",
       targetId: crypto.randomUUID(),
@@ -1446,7 +1446,7 @@ const SOURCE_FACTORIES = {
   },
   "ImportHunt.receiptRunId": (db, targetId) =>
     mkImportHunt(db, {
-      receiptRunId: parseEntityId("purchaseImportRun", targetId),
+      receiptRunId: parseEntityId("importRun", targetId),
     }),
 } satisfies Record<
   string,

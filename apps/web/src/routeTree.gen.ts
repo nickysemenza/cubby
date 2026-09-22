@@ -88,8 +88,8 @@ import { Route as AuthenticatedProductsShortcodeRouteImport } from './routes/_au
 import { Route as AuthenticatedProjectsIndexRouteImport } from './routes/_authenticated/projects.index'
 import { Route as AuthenticatedProjectsShortcodeRouteImport } from './routes/_authenticated/projects.$shortcode'
 import { Route as AuthenticatedProjectsToolsRouteImport } from './routes/_authenticated/projects.tools'
-import { Route as AuthenticatedPurchaseImportsIndexRouteImport } from './routes/_authenticated/purchase-imports.index'
-import { Route as AuthenticatedPurchaseImportsShortcodeRouteImport } from './routes/_authenticated/purchase-imports.$shortcode'
+import { Route as AuthenticatedPurchaseImportsIndexRouteImport } from './routes/_authenticated/import-runs.index'
+import { Route as AuthenticatedPurchaseImportsShortcodeRouteImport } from './routes/_authenticated/import-runs.$shortcode'
 import { Route as AuthenticatedPurchasesIndexRouteImport } from './routes/_authenticated/purchases.index'
 import { Route as AuthenticatedPurchasesShortcodeRouteImport } from './routes/_authenticated/purchases.$shortcode'
 import { Route as AuthenticatedRecipesIndexRouteImport } from './routes/_authenticated/recipes.index'
@@ -591,14 +591,14 @@ const AuthenticatedProjectsToolsRoute =
   } as any)
 const AuthenticatedPurchaseImportsIndexRoute =
   AuthenticatedPurchaseImportsIndexRouteImport.update({
-    id: '/purchase-imports/',
-    path: '/purchase-imports/',
+    id: '/import-runs/',
+    path: '/import-runs/',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
 const AuthenticatedPurchaseImportsShortcodeRoute =
   AuthenticatedPurchaseImportsShortcodeRouteImport.update({
-    id: '/purchase-imports/$shortcode',
-    path: '/purchase-imports/$shortcode',
+    id: '/import-runs/$shortcode',
+    path: '/import-runs/$shortcode',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
 const AuthenticatedPurchasesIndexRoute =
@@ -950,7 +950,7 @@ export interface FileRoutesByFullPath {
   '/products/$shortcode': typeof AuthenticatedProductsShortcodeRoute
   '/projects/$shortcode': typeof AuthenticatedProjectsShortcodeRoute
   '/projects/tools': typeof AuthenticatedProjectsToolsRoute
-  '/purchase-imports/$shortcode': typeof AuthenticatedPurchaseImportsShortcodeRoute
+  '/import-runs/$shortcode': typeof AuthenticatedPurchaseImportsShortcodeRoute
   '/purchases/$shortcode': typeof AuthenticatedPurchasesShortcodeRoute
   '/recipes/$shortcode': typeof AuthenticatedRecipesShortcodeRoute
   '/recipes/compare': typeof AuthenticatedRecipesCompareRoute
@@ -991,7 +991,7 @@ export interface FileRoutesByFullPath {
   '/product-categories/': typeof AuthenticatedProductCategoriesIndexRoute
   '/products/': typeof AuthenticatedProductsIndexRoute
   '/projects/': typeof AuthenticatedProjectsIndexRoute
-  '/purchase-imports/': typeof AuthenticatedPurchaseImportsIndexRoute
+  '/import-runs/': typeof AuthenticatedPurchaseImportsIndexRoute
   '/purchases/': typeof AuthenticatedPurchasesIndexRoute
   '/recipes/': typeof AuthenticatedRecipesIndexRoute
   '/search/': typeof AuthenticatedSearchIndexRoute
@@ -1082,7 +1082,7 @@ export interface FileRoutesByTo {
   '/products/$shortcode': typeof AuthenticatedProductsShortcodeRoute
   '/projects/$shortcode': typeof AuthenticatedProjectsShortcodeRoute
   '/projects/tools': typeof AuthenticatedProjectsToolsRoute
-  '/purchase-imports/$shortcode': typeof AuthenticatedPurchaseImportsShortcodeRoute
+  '/import-runs/$shortcode': typeof AuthenticatedPurchaseImportsShortcodeRoute
   '/purchases/$shortcode': typeof AuthenticatedPurchasesShortcodeRoute
   '/recipes/$shortcode': typeof AuthenticatedRecipesShortcodeRoute
   '/recipes/compare': typeof AuthenticatedRecipesCompareRoute
@@ -1123,7 +1123,7 @@ export interface FileRoutesByTo {
   '/product-categories': typeof AuthenticatedProductCategoriesIndexRoute
   '/products': typeof AuthenticatedProductsIndexRoute
   '/projects': typeof AuthenticatedProjectsIndexRoute
-  '/purchase-imports': typeof AuthenticatedPurchaseImportsIndexRoute
+  '/import-runs': typeof AuthenticatedPurchaseImportsIndexRoute
   '/purchases': typeof AuthenticatedPurchasesIndexRoute
   '/recipes': typeof AuthenticatedRecipesIndexRoute
   '/search': typeof AuthenticatedSearchIndexRoute
@@ -1217,7 +1217,7 @@ export interface FileRoutesById {
   '/_authenticated/products/$shortcode': typeof AuthenticatedProductsShortcodeRoute
   '/_authenticated/projects/$shortcode': typeof AuthenticatedProjectsShortcodeRoute
   '/_authenticated/projects/tools': typeof AuthenticatedProjectsToolsRoute
-  '/_authenticated/purchase-imports/$shortcode': typeof AuthenticatedPurchaseImportsShortcodeRoute
+  '/_authenticated/import-runs/$shortcode': typeof AuthenticatedPurchaseImportsShortcodeRoute
   '/_authenticated/purchases/$shortcode': typeof AuthenticatedPurchasesShortcodeRoute
   '/_authenticated/recipes/$shortcode': typeof AuthenticatedRecipesShortcodeRoute
   '/_authenticated/recipes/compare': typeof AuthenticatedRecipesCompareRoute
@@ -1258,7 +1258,7 @@ export interface FileRoutesById {
   '/_authenticated/product-categories/': typeof AuthenticatedProductCategoriesIndexRoute
   '/_authenticated/products/': typeof AuthenticatedProductsIndexRoute
   '/_authenticated/projects/': typeof AuthenticatedProjectsIndexRoute
-  '/_authenticated/purchase-imports/': typeof AuthenticatedPurchaseImportsIndexRoute
+  '/_authenticated/import-runs/': typeof AuthenticatedPurchaseImportsIndexRoute
   '/_authenticated/purchases/': typeof AuthenticatedPurchasesIndexRoute
   '/_authenticated/recipes/': typeof AuthenticatedRecipesIndexRoute
   '/_authenticated/search/': typeof AuthenticatedSearchIndexRoute
@@ -1352,7 +1352,7 @@ export interface FileRouteTypes {
     | '/products/$shortcode'
     | '/projects/$shortcode'
     | '/projects/tools'
-    | '/purchase-imports/$shortcode'
+    | '/import-runs/$shortcode'
     | '/purchases/$shortcode'
     | '/recipes/$shortcode'
     | '/recipes/compare'
@@ -1393,7 +1393,7 @@ export interface FileRouteTypes {
     | '/product-categories/'
     | '/products/'
     | '/projects/'
-    | '/purchase-imports/'
+    | '/import-runs/'
     | '/purchases/'
     | '/recipes/'
     | '/search/'
@@ -1484,7 +1484,7 @@ export interface FileRouteTypes {
     | '/products/$shortcode'
     | '/projects/$shortcode'
     | '/projects/tools'
-    | '/purchase-imports/$shortcode'
+    | '/import-runs/$shortcode'
     | '/purchases/$shortcode'
     | '/recipes/$shortcode'
     | '/recipes/compare'
@@ -1525,7 +1525,7 @@ export interface FileRouteTypes {
     | '/product-categories'
     | '/products'
     | '/projects'
-    | '/purchase-imports'
+    | '/import-runs'
     | '/purchases'
     | '/recipes'
     | '/search'
@@ -1618,7 +1618,7 @@ export interface FileRouteTypes {
     | '/_authenticated/products/$shortcode'
     | '/_authenticated/projects/$shortcode'
     | '/_authenticated/projects/tools'
-    | '/_authenticated/purchase-imports/$shortcode'
+    | '/_authenticated/import-runs/$shortcode'
     | '/_authenticated/purchases/$shortcode'
     | '/_authenticated/recipes/$shortcode'
     | '/_authenticated/recipes/compare'
@@ -1659,7 +1659,7 @@ export interface FileRouteTypes {
     | '/_authenticated/product-categories/'
     | '/_authenticated/products/'
     | '/_authenticated/projects/'
-    | '/_authenticated/purchase-imports/'
+    | '/_authenticated/import-runs/'
     | '/_authenticated/purchases/'
     | '/_authenticated/recipes/'
     | '/_authenticated/search/'
@@ -2278,17 +2278,17 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedProjectsToolsRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
-    '/_authenticated/purchase-imports/': {
-      id: '/_authenticated/purchase-imports/'
-      path: '/purchase-imports'
-      fullPath: '/purchase-imports/'
+    '/_authenticated/import-runs/': {
+      id: '/_authenticated/import-runs/'
+      path: '/import-runs'
+      fullPath: '/import-runs/'
       preLoaderRoute: typeof AuthenticatedPurchaseImportsIndexRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
-    '/_authenticated/purchase-imports/$shortcode': {
-      id: '/_authenticated/purchase-imports/$shortcode'
-      path: '/purchase-imports/$shortcode'
-      fullPath: '/purchase-imports/$shortcode'
+    '/_authenticated/import-runs/$shortcode': {
+      id: '/_authenticated/import-runs/$shortcode'
+      path: '/import-runs/$shortcode'
+      fullPath: '/import-runs/$shortcode'
       preLoaderRoute: typeof AuthenticatedPurchaseImportsShortcodeRouteImport
       parentRoute: typeof AuthenticatedRoute
     }

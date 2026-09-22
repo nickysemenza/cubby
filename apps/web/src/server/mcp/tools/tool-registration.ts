@@ -1,5 +1,5 @@
 import { mcpAppResourceUriForTool } from "@cubby/mcp-apps/metadata";
-import { purchaseImportRunId } from "@cubby/schemas/identifiers";
+import { importRunId } from "@cubby/schemas/identifiers";
 import { purchaseImportRunExecution } from "@cubby/schemas/purchase-import";
 import type {
   McpServer,
@@ -345,7 +345,7 @@ export function registerMcpTool<
           const [delegatedRun] = await getDb(parsedKernel.db)
             .select({ id: importRun.id })
             .from(importRun)
-            .where(eq(importRun.id, purchaseImportRunId.parse(trusted.runId)))
+            .where(eq(importRun.id, importRunId.parse(trusted.runId)))
             .limit(1);
           if (delegatedRun?.id !== execution.runId)
             throw new Error(

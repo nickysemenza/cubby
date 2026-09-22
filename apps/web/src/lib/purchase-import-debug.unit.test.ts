@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest";
 
 import {
   purchaseImportDebugEvent,
-  purchaseImportRunLogRequest,
-  purchaseImportRunLogResponse,
+  importRunLogRequest,
+  importRunLogResponse,
 } from "./purchase-import-debug";
 
 const validEvent = {
@@ -36,7 +36,7 @@ describe("purchase import debug contract", () => {
   });
 
   it("does not expose operation input or result payloads in the web log", () => {
-    const parsed = purchaseImportRunLogResponse.parse({
+    const parsed = importRunLogResponse.parse({
       entries: [
         {
           id: "event-1",
@@ -67,12 +67,11 @@ describe("purchase import debug contract", () => {
   });
 
   it("accepts the public PIR address used by the detail page", () => {
-    expect(purchaseImportRunLogRequest.parse({ publicId: "RUN-4K7M" })).toEqual(
-      { publicId: "RUN-4K7M" },
-    );
+    expect(importRunLogRequest.parse({ publicId: "RUN-4K7M" })).toEqual({
+      publicId: "RUN-4K7M",
+    });
     expect(
-      purchaseImportRunLogRequest.safeParse({ publicId: validEvent.runId })
-        .success,
+      importRunLogRequest.safeParse({ publicId: validEvent.runId }).success,
     ).toBe(false);
   });
 });

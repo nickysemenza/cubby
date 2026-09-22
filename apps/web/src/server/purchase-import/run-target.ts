@@ -30,7 +30,7 @@ export async function resolveProductImportTarget(
 }
 
 /** List write provenance and targeted no-op validation runs for a Purchase. */
-export function listPurchaseImportRuns(
+export function listImportRuns(
   db: Database,
   ledgerPartyId: EntityId<"ledgerParty">,
   purchaseId?: EntityId<"purchase">,

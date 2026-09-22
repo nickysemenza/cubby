@@ -11,8 +11,8 @@ import { NoneValue } from "~/components/ui/none-value";
 import { StatusText } from "~/components/ui/status-text";
 import { readJsonOrThrow } from "~/lib/http-error";
 import {
-  purchaseImportRunsResponse,
-  type PurchaseImportRunSummary,
+  importRunsResponse,
+  type ImportRunSummary,
 } from "~/lib/purchase-import-run-detail";
 import { purchaseLabel } from "~/lib/purchase-label";
 import { formatCurrency } from "~/lib/utils";
@@ -20,7 +20,7 @@ import { formatCurrency } from "~/lib/utils";
 import { FinancialSettlement } from "./financial-settlement";
 import { LinkExpensesDialog } from "./link-expenses-dialog";
 import { LinkProductsDialog } from "./link-products-dialog";
-import { purchaseImportRunHref } from "./purchase-import-links";
+import { importRunHref } from "./purchase-import-links";
 import {
   purchaseReconciliationStatus,
   ReconciliationStatus,
@@ -32,7 +32,7 @@ import { TargetedImportLaunchButton } from "./targeted-import-launch";
 const EMPTY_PURCHASE_PRODUCTS: PurchaseProductOut[] = [];
 
 /** Runs are linked through ImportRunMutation, so replay-only source claims do not appear here. */
-export const PurchaseImportRuns: DetailSlotComponent<"purchase"> = ({
+export const ImportRuns: DetailSlotComponent<"purchase"> = ({
   record: purchase,
 }) => {
   const runs = useQuery({
@@ -43,7 +43,7 @@ export const PurchaseImportRuns: DetailSlotComponent<"purchase"> = ({
       );
       const data = await readJsonOrThrow(
         response,
-        purchaseImportRunsResponse,
+        importRunsResponse,
         "Purchase import runs could not load.",
       );
       return data.runs;
@@ -87,14 +87,14 @@ export const PurchaseImportRuns: DetailSlotComponent<"purchase"> = ({
       {startValidation}
       <div className="grid gap-3">
         {importRuns.map((run) => (
-          <PurchaseImportRunSummary key={run.publicId} run={run} />
+          <ImportRunSummary key={run.publicId} run={run} />
         ))}
       </div>
     </Stack>
   );
 };
 
-function PurchaseImportRunSummary({ run }: { run: PurchaseImportRunSummary }) {
+function ImportRunSummary({ run }: { run: ImportRunSummary }) {
   return (
     <div className="grid gap-1 border-b border-border pb-3 text-sm last:border-0 last:pb-0">
       <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
@@ -116,7 +116,7 @@ function PurchaseImportRunSummary({ run }: { run: PurchaseImportRunSummary }) {
       ) : null}
       <a
         className="w-fit text-xs font-medium text-primary hover:underline"
-        href={purchaseImportRunHref(run.publicId)}
+        href={importRunHref(run.publicId)}
       >
         Open import run
       </a>
