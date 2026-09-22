@@ -119,11 +119,9 @@ export interface JevChoiceResult {
 export type JevPort = (input: JevChoiceInput) => Promise<JevChoiceResponse>;
 
 // Jev's calibrated probability for the winning choice is bucketed into the
-// public `confidence` here. TODO: expose the raw probability on the wire (a
-// nullable field on the suggestion schemas) once the proposal UI has a place
-// to show it. Exported so a caller that computes its own aggregate
-// probability (e.g. the min across several prune-target removals) can bucket
-// it the same way instead of re-deriving the thresholds.
+// public `confidence` here. Exported so a caller that computes its own
+// aggregate probability (e.g. the min across several prune-target removals)
+// can bucket it the same way instead of re-deriving the thresholds.
 export function decisionConfidence(probability: number): Confidence {
   if (probability >= 0.85) return "high";
   if (probability >= 0.6) return "medium";

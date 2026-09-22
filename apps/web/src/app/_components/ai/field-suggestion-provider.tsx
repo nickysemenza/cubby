@@ -1,4 +1,7 @@
-import type { FieldSuggestion } from "@cubby/schemas/ai";
+import type {
+  FieldSuggestion,
+  FieldSuggestionOutcome,
+} from "@cubby/schemas/ai";
 import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
 import { resolveExpenseLineKind } from "@cubby/schemas/expense-line-kind";
 import {
@@ -20,19 +23,23 @@ import {
 import { useFormContext, useFormState, useWatch } from "react-hook-form";
 import { z } from "zod";
 
-import { Description } from "~/components/ui/description";
-
 import {
   basisValueOf,
   type EntitySuggestionsOperations,
   type FieldSuggestionSource,
   FIELD_SUGGEST_DEBOUNCE_MS,
   isBasisSufficient,
+  type SuggestTargets,
   suggestionContextKeys,
   suggestTargetsFor,
   useEntitySuggestionsQuery,
 } from "./field-suggestion";
-import { SuggestionVisitProvider } from "./suggestion-review";
+import {
+  actionableSuggestion,
+  SuggestionVisitProvider,
+  useSuggestionVisit,
+} from "./suggestion-review";
+import { SuggestionStatus } from "./suggestion-status";
 
 export interface FieldSuggestionContextValue {
   readonly questionKey: string;
@@ -41,6 +48,10 @@ export interface FieldSuggestionContextValue {
   readonly suggestions: Record<string, FieldSuggestion | null>;
   readonly isFetching: boolean;
   readonly resolutionFor: (field: string) => FieldResolution | null;
+  readonly outcomeFor: (field: string) => FieldSuggestionOutcome | null;
+  /** The field's own current value, as `useEntitySuggestionsQuery` would see
+   * it — what the always-visible mark compares a proposal against. */
+  readonly currentValueFor: (field: string) => string | null;
   readonly isAlternative: (field: string) => boolean;
   /** Records that `field`'s current value is this provider's own write, still
    * untouched — the next basis snapshot sends `null` for it instead of
@@ -405,6 +416,22 @@ export function FieldSuggestionProvider({
     }),
     [suggestedQuery.suggestions, alternativeQuery.suggestions],
   );
+  const outcomes = useMemo(
+    () => ({
+      ...suggestedQuery.outcomes,
+      ...alternativeQuery.outcomes,
+    }),
+    [suggestedQuery.outcomes, alternativeQuery.outcomes],
+  );
+  // What the mark compares a proposal against — the same values the form
+  // itself sends as `targetValues`, zipped back onto each target's key.
+  const currentValuesByField = useMemo(() => {
+    const map: Record<string, string | null> = {};
+    targets.targets.forEach((target, index) => {
+      map[target.key] = basisValueOf(targetValues[index]);
+    });
+    return map;
+  }, [targets.targets, targetValues]);
   const liveResolutions = useMemo<FieldResolutions>(
     () => ({
       ...authoritativeResolutions,
@@ -418,19 +445,22 @@ export function FieldSuggestionProvider({
     ],
   );
   const isFetching = suggestedQuery.isFetching || alternativeQuery.isFetching;
+  const settled = JSON.stringify(basis) === JSON.stringify(debouncedBasis);
+  const failures =
+    (suggestedQuery.isError ? 1 : 0) + (alternativeQuery.isError ? 1 : 0);
 
   const value = useMemo<FieldSuggestionContextValue>(
     () => ({
       questionKey: JSON.stringify([suggestedSource, alternativeSource]),
       entity,
       mode,
-      suggestions:
-        JSON.stringify(basis) === JSON.stringify(debouncedBasis)
-          ? suggestions
-          : {},
-      isFetching:
-        isFetching || JSON.stringify(basis) !== JSON.stringify(debouncedBasis),
+      suggestions: settled ? suggestions : {},
+      isFetching: isFetching || !settled,
       resolutionFor: (field) => liveResolutions[field] ?? null,
+      // A mark never claims "agrees"/"leaning" against a basis it wasn't
+      // asked about — gated the same way `suggestions` is above.
+      outcomeFor: (field) => (settled ? (outcomes[field] ?? null) : null),
+      currentValueFor: (field) => currentValuesByField[field] ?? null,
       isAlternative: (field) => alternativeTargets.includes(field),
       markAutoFilled,
       clearAutoFilled,
@@ -439,11 +469,12 @@ export function FieldSuggestionProvider({
     [
       suggestedSource,
       alternativeSource,
-      basis,
-      debouncedBasis,
+      settled,
       entity,
       mode,
       suggestions,
+      outcomes,
+      currentValuesByField,
       isFetching,
       liveResolutions,
       alternativeTargets,
@@ -456,13 +487,73 @@ export function FieldSuggestionProvider({
   return (
     <SuggestionVisitProvider>
       <FieldSuggestionContext.Provider value={value}>
-        {(suggestedSource || alternativeSource) && value.isFetching ? (
-          <Description size="xs" as="output">
-            Checking suggestions…
-          </Description>
-        ) : null}
+        <FieldSuggestionStatusBridge
+          targets={targets}
+          suggestions={value.suggestions}
+          alternativeTargets={alternativeTargets}
+          failures={failures}
+        />
         {children}
       </FieldSuggestionContext.Provider>
     </SuggestionVisitProvider>
+  );
+}
+
+/**
+ * Renders the form's status line. Mounted as a child of `SuggestionVisitProvider`
+ * (which `FieldSuggestionProvider` creates as part of its own returned JSX, so
+ * it cannot read that provider's own `dismissed` set from its own function
+ * body — only a descendant can) — `useSuggestionVisit()` here reads the
+ * dismiss state that excludes an already-dismissed field from `count`, the
+ * same way `BoundRecordSuggestions` does one tree level up from its own
+ * `SuggestionVisitProvider`.
+ */
+function FieldSuggestionStatusBridge({
+  targets,
+  suggestions,
+  alternativeTargets,
+  failures,
+}: {
+  targets: SuggestTargets;
+  suggestions: Record<string, FieldSuggestion | null>;
+  alternativeTargets: readonly string[];
+  failures: number;
+}) {
+  const context = useFieldSuggestionContext();
+  const visit = useSuggestionVisit();
+  if (!context) return null;
+  const fields = targets.targets.flatMap((target) => {
+    const outcome = context.outcomeFor(target.key);
+    if (!outcome) return [];
+    return [
+      {
+        label: target.label,
+        outcome,
+        suggestion: suggestions[target.key] ?? null,
+        currentValue: context.currentValueFor(target.key),
+      },
+    ];
+  });
+  const count = targets.targets.filter((target) => {
+    const suggestion = suggestions[target.key] ?? null;
+    const current = context.currentValueFor(target.key);
+    const alternative = alternativeTargets.includes(target.key);
+    const key = JSON.stringify([
+      context.questionKey,
+      current,
+      suggestion?.value,
+    ]);
+    return (
+      actionableSuggestion(suggestion, current, alternative) &&
+      !visit?.dismissed.has(key)
+    );
+  }).length;
+  return (
+    <SuggestionStatus
+      checking={context.isFetching}
+      failures={failures}
+      count={count}
+      fields={fields}
+    />
   );
 }

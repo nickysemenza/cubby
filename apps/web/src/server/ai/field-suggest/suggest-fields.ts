@@ -1,5 +1,7 @@
 import type {
   FieldSuggestion,
+  FieldSuggestionAlternative,
+  FieldSuggestionOutcome,
   FieldSuggestionRemoval,
   FieldSuggestionsInput,
   FieldSuggestionsOut,
@@ -13,6 +15,8 @@ import type {
  * includes `projectId`, itself a target when the caller asks for both) sees
  * that target's freshly resolved value when the client sent none of its own.
  * Provided-basis mode evaluates every target concurrently from supplied values.
+ * Every requested target also gets an `outcomes` entry naming why it does or
+ * doesn't carry a `suggestions` proposal — see `FieldSuggestionOutcome`.
  */
 import { entityRefKey } from "@cubby/schemas/entity";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
@@ -36,6 +40,7 @@ import {
 import {
   decisionConfidence,
   runJevChoice,
+  type JevChoiceResult,
   type JevPort,
 } from "~/server/ai/jev";
 import {
@@ -246,14 +251,62 @@ async function resolveDisplayBasis(
   );
 }
 
-/** One target's resolved outcome: the suggestion to return, plus the raw
- * value (shortcode/enum member/string) a dependent sibling target chains. */
+/** One target's resolved outcome: the suggestion to return, the raw value
+ * (shortcode/enum member/string) a dependent sibling target chains, and the
+ * `outcome` explaining why `suggestion` is or isn't a proposal. */
 interface TargetResolution {
   suggestion: FieldSuggestion | null;
   rawValue: string | null;
+  outcome: FieldSuggestionOutcome;
 }
 
-const noSuggestion: TargetResolution = { suggestion: null, rawValue: null };
+/** The decision tier was never asked for this target. */
+function skipped(
+  reason: Extract<FieldSuggestionOutcome, { kind: "skipped" }>["reason"],
+): TargetResolution {
+  return {
+    suggestion: null,
+    rawValue: null,
+    outcome: { kind: "skipped", reason },
+  };
+}
+
+/** The decision tier answered but declined every candidate — every fill
+ * target's `none` and every prune target whose entries all survived. */
+function declined(args: {
+  confidence: FieldSuggestion["confidence"];
+  probability: number | null;
+  alternatives: FieldSuggestionAlternative[];
+}): TargetResolution {
+  return {
+    suggestion: null,
+    rawValue: null,
+    outcome: {
+      kind: "evaluated",
+      answer: "none",
+      confidence: args.confidence,
+      probability: args.probability,
+      alternatives: args.alternatives,
+    },
+  };
+}
+
+/** Alternatives mapped through a spec's own `idOf`/`labelOf`/`detailOf`,
+ * shared between a resolver's pick and decline paths so the ranked
+ * candidates are only mapped once. */
+function mapAlternatives<C>(
+  alternatives: readonly { candidate: C; probability: number }[],
+  idOf: (candidate: C) => string,
+  labelOf: (candidate: C) => string,
+  detailOf?: (candidate: C) => string | null,
+): FieldSuggestionAlternative[] {
+  return alternatives.map((alternative) => ({
+    value: idOf(alternative.candidate),
+    label: labelOf(alternative.candidate),
+    detail: detailOf?.(alternative.candidate) ?? null,
+    probability: alternative.probability,
+  }));
+}
 
 async function resolveEnumTarget(
   spec: Extract<FieldSuggestSpec, { kind: "enum" }>,
@@ -270,6 +323,12 @@ async function resolveEnumTarget(
     usage,
     port: jev,
   });
+  const alternatives = result.alternatives.map((alternative) => ({
+    value: alternative.value,
+    label: spec.labelOf?.(alternative.value) ?? alternative.value,
+    detail: null,
+    probability: alternative.probability,
+  }));
   return {
     suggestion: {
       value: result.value,
@@ -278,16 +337,18 @@ async function resolveEnumTarget(
       confidence: result.confidence,
       probability: result.probability,
       reasoning: result.reasoning,
-      alternatives: result.alternatives.map((alternative) => ({
-        value: alternative.value,
-        label: spec.labelOf?.(alternative.value) ?? alternative.value,
-        detail: null,
-        probability: alternative.probability,
-      })),
+      alternatives,
       operation: "set",
       removals: [],
     },
     rawValue: result.value,
+    outcome: {
+      kind: "evaluated",
+      answer: "pick",
+      confidence: result.confidence,
+      probability: result.probability,
+      alternatives,
+    },
   };
 }
 
@@ -314,7 +375,20 @@ async function resolveReferenceTarget(
     usage,
     jev,
   });
-  if (!outcome.selected) return noSuggestion;
+  if (!outcome.evaluated) return skipped("no_candidates");
+  const alternatives = mapAlternatives(
+    outcome.alternatives,
+    spec.idOf,
+    spec.labelOf,
+    spec.detailOf,
+  );
+  if (outcome.selected === null) {
+    return declined({
+      confidence: outcome.confidence,
+      probability: outcome.probability,
+      alternatives,
+    });
+  }
   const value = spec.idOf(outcome.selected);
   return {
     suggestion: {
@@ -324,16 +398,18 @@ async function resolveReferenceTarget(
       confidence: outcome.confidence,
       probability: outcome.probability,
       reasoning: outcome.reasoning,
-      alternatives: outcome.alternatives.map((alternative) => ({
-        value: spec.idOf(alternative.candidate),
-        label: spec.labelOf(alternative.candidate),
-        detail: spec.detailOf?.(alternative.candidate) ?? null,
-        probability: alternative.probability,
-      })),
+      alternatives,
       operation: "set",
       removals: [],
     },
     rawValue: value,
+    outcome: {
+      kind: "evaluated",
+      answer: "pick",
+      confidence: outcome.confidence,
+      probability: outcome.probability,
+      alternatives,
+    },
   };
 }
 
@@ -359,7 +435,19 @@ async function resolveTextTarget(
     usage,
     jev,
   });
-  if (!outcome.selected) return noSuggestion;
+  if (!outcome.evaluated) return skipped("no_candidates");
+  const alternatives = mapAlternatives(
+    outcome.alternatives,
+    (value) => value,
+    (value) => value,
+  );
+  if (outcome.selected === null) {
+    return declined({
+      confidence: outcome.confidence,
+      probability: outcome.probability,
+      alternatives,
+    });
+  }
   return {
     suggestion: {
       value: outcome.selected,
@@ -368,16 +456,18 @@ async function resolveTextTarget(
       confidence: outcome.confidence,
       probability: outcome.probability,
       reasoning: outcome.reasoning,
-      alternatives: outcome.alternatives.map((alternative) => ({
-        value: alternative.candidate,
-        label: alternative.candidate,
-        detail: null,
-        probability: alternative.probability,
-      })),
+      alternatives,
       operation: "set",
       removals: [],
     },
     rawValue: outcome.selected,
+    outcome: {
+      kind: "evaluated",
+      answer: "pick",
+      confidence: outcome.confidence,
+      probability: outcome.probability,
+      alternatives,
+    },
   };
 }
 
@@ -438,7 +528,9 @@ async function resolveOneTarget(
  * full instruction text the model sees. */
 const JEV_TAG_REMOVAL_REASON = "a sibling field";
 /** `runJevChoice`'s two per-tag criteria: index 0 is "redundant", index 1 is
- * "genuine" — `resolvePruneTarget` only ever acts on index 0. */
+ * "genuine". A removal only ever acts on index 0; the `evaluated/none`
+ * outcome (every entry survived) also reports index 1, the probability the
+ * survivor is genuinely worth keeping. */
 const TAG_PRUNE_CHOICES = [
   "Restates the manufacturer, the classification, or a generic category word already recorded elsewhere on the product.",
   "A genuine compatibility or ecosystem token (a battery platform, mount, thread, or size standard) worth keeping.",
@@ -447,11 +539,23 @@ const TAG_PRUNE_CHOICES = [
  * same "high confidence" floor a `set` suggestion auto-applies at. */
 const PRUNE_INCLUDE_THRESHOLD = 0.85;
 
+/** One Jev-judged survivor's P(redundant) and P(genuine), read off the
+ * ranked distribution (`allowNone: false` keeps both criteria in `ranked`)
+ * rather than derived from each other, so a future third criterion can't
+ * silently make `1 - p` wrong. */
+function pruneJudgment(result: JevChoiceResult) {
+  const at = (index: number): number =>
+    result.ranked.find((entry) => entry.index === index)?.probability ?? 0;
+  return { redundant: at(0), genuine: at(1) };
+}
+
 /**
  * Resolves a `mode: "prune"` target: every current entry `redundantTokens`
  * already flags (probability 1, no Jev call) plus every surviving entry a
- * per-tag Jev binary call flags at `PRUNE_INCLUDE_THRESHOLD` or above. `null`
- * when nothing is removable — an empty array, or every entry survives.
+ * per-tag Jev binary call flags at `PRUNE_INCLUDE_THRESHOLD` or above.
+ * `skipped("no_candidates")` for an empty array; `evaluated/none` when every
+ * entry survives (a prune target has nothing left to write to `suggestions`
+ * either way, but the two outcomes are asked and unasked respectively).
  */
 async function resolvePruneTarget(
   db: Database,
@@ -462,7 +566,7 @@ async function resolvePruneTarget(
   jev: JevPort | undefined,
 ): Promise<TargetResolution> {
   const candidates = spec.candidates(resolvedBasis, rawBasis);
-  if (candidates.length === 0) return noSuggestion;
+  if (candidates.length === 0) return skipped("no_candidates");
 
   const deterministic = await spec.deterministic(resolvedBasis, rawBasis, db);
   const deterministicValues = new Set(
@@ -477,6 +581,7 @@ async function resolvePruneTarget(
   const survivors = candidates
     .filter((value) => !deterministicValues.has(value))
     .slice(0, spec.maxJevCandidates);
+  const judged: { value: string; redundant: number; genuine: number }[] = [];
   for (const value of survivors) {
     const result = await runJevChoice({
       feature: FIELD_SUGGESTION_FEATURE,
@@ -487,6 +592,8 @@ async function resolvePruneTarget(
       allowNone: false,
       port: jev,
     });
+    const { redundant, genuine } = pruneJudgment(result);
+    judged.push({ value, redundant, genuine });
     if (
       result.selectedIndex === 0 &&
       result.probability >= PRUNE_INCLUDE_THRESHOLD
@@ -499,7 +606,25 @@ async function resolvePruneTarget(
     }
   }
 
-  if (removals.length === 0) return noSuggestion;
+  if (removals.length === 0) {
+    const probability =
+      judged.length === 0
+        ? null
+        : Math.min(...judged.map((entry) => entry.genuine));
+    return declined({
+      confidence:
+        probability === null ? "low" : decisionConfidence(probability),
+      probability,
+      alternatives: judged
+        .map((entry) => ({
+          value: entry.value,
+          label: entry.value,
+          detail: null,
+          probability: entry.redundant,
+        }))
+        .sort((a, b) => b.probability - a.probability),
+    });
+  }
   const sortedValues = [
     ...new Set(removals.map((removal) => removal.value)),
   ].sort();
@@ -511,12 +636,13 @@ async function resolvePruneTarget(
       removals.map((removal) => removal.reason.replace(/^restates /u, "")),
     ),
   ];
+  const confidence = decisionConfidence(probability);
   return {
     suggestion: {
       value: sortedValues.join(", "),
       label: `Remove ${sortedValues.join(", ")}`,
       detail: `restates ${reasons.join(", ")}`,
-      confidence: decisionConfidence(probability),
+      confidence,
       probability,
       reasoning: "",
       alternatives: [],
@@ -524,6 +650,13 @@ async function resolvePruneTarget(
       removals,
     },
     rawValue: null,
+    outcome: {
+      kind: "evaluated",
+      answer: "pick",
+      confidence,
+      probability,
+      alternatives: [],
+    },
   };
 }
 
@@ -603,6 +736,13 @@ export async function suggestFields(
       (resolution.mode === "inherit" && resolution.value === null)
     );
   });
+  const eligibleSet = new Set(eligibleTargets);
+  const outcomes: Record<string, FieldSuggestionOutcome> = {};
+  for (const target of input.targets) {
+    if (!eligibleSet.has(target)) {
+      outcomes[target] = { kind: "skipped", reason: "resolved" };
+    }
+  }
 
   const targetSpecs = resolveTargetSpecs(
     { ...input, targets: eligibleTargets },
@@ -675,6 +815,7 @@ export async function suggestFields(
       const hasSignal = basisKeys.some((key) => resolvedBasis[key] != null);
       if (!hasSignal) {
         suggestions[target] = null;
+        outcomes[target] = { kind: "skipped", reason: "no_signal" };
         resolvedRawByTarget.set(target, null);
         return;
       }
@@ -685,7 +826,7 @@ export async function suggestFields(
         cacheStatus: "none",
         force: ports?.force,
       };
-      const { suggestion, rawValue } = await resolveSpec(
+      const { suggestion, rawValue, outcome } = await resolveSpec(
         db,
         spec,
         resolvedBasis,
@@ -694,6 +835,7 @@ export async function suggestFields(
         ports?.jev,
       );
       suggestions[target] = suggestion;
+      outcomes[target] = outcome;
       resolvedRawByTarget.set(target, rawValue);
     });
     pending.set(target, task);
@@ -701,5 +843,5 @@ export async function suggestFields(
   };
   await Promise.all([...requestedTargets].map(resolveTarget));
 
-  return { suggestions, fieldResolutions, eligibleTargets };
+  return { suggestions, outcomes, fieldResolutions, eligibleTargets };
 }

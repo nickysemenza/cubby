@@ -2,6 +2,7 @@ import {
   aiLocationIdInput,
   approveDetectedInventoryItemInput,
   detectedInventoryAiResultSchema,
+  fieldSuggestionOutcomeSchema,
   MAX_DETECTED_INVENTORY_ITEMS,
 } from "./ai";
 import { describe, expect, it } from "vitest";
@@ -45,5 +46,33 @@ describe("AI location inputs", () => {
         summary: "Too many items.",
       }).success,
     ).toBe(false);
+  });
+});
+
+describe("fieldSuggestionOutcomeSchema", () => {
+  it("round-trips a skipped outcome", () => {
+    const outcome = {
+      kind: "skipped" as const,
+      reason: "no_candidates" as const,
+    };
+    expect(fieldSuggestionOutcomeSchema.parse(outcome)).toEqual(outcome);
+  });
+
+  it("round-trips an evaluated outcome", () => {
+    const outcome = {
+      kind: "evaluated" as const,
+      answer: "none" as const,
+      confidence: "medium" as const,
+      probability: 0.62,
+      alternatives: [
+        {
+          value: "PRJ-AAAA",
+          label: "Kitchen Remodel",
+          detail: null,
+          probability: 0.3,
+        },
+      ],
+    };
+    expect(fieldSuggestionOutcomeSchema.parse(outcome)).toEqual(outcome);
   });
 });

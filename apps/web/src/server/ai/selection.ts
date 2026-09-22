@@ -95,6 +95,8 @@ export interface AiSelectionOutcome<C> {
    * Always `[]` on the overflow/chat-tier path — a prose pick has no
    * distribution to rank — and when there were no candidates to choose from. */
   alternatives: { candidate: C; probability: number }[];
+  /** False only when there were no candidates to show, so no model was asked. */
+  evaluated: boolean;
 }
 
 /** The overflow model is copying an id out of prose; tolerate the
@@ -126,6 +128,7 @@ export async function runAiSelection<C>(
       probability: null,
       reasoning: "No candidates were available to choose from.",
       alternatives: [],
+      evaluated: false,
     };
   }
 
@@ -148,6 +151,7 @@ export async function runAiSelection<C>(
       probability: null,
       reasoning: result.reasoning,
       alternatives: [],
+      evaluated: true,
     };
   }
 
@@ -177,5 +181,6 @@ export async function runAiSelection<C>(
     probability: result.probability,
     reasoning: "",
     alternatives,
+    evaluated: true,
   };
 }

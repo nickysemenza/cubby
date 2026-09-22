@@ -167,7 +167,11 @@ function DesktopDataCell<TItem extends RowData>({
       )}
       style={{ width, minWidth: width, maxWidth: width, ...inset }}
     >
-      <RecordFieldSuggestion record={cell.row.original} field={cell.column.id}>
+      <RecordFieldSuggestion
+        record={cell.row.original}
+        field={cell.column.id}
+        surface="cell"
+      >
         {explained}
       </RecordFieldSuggestion>
     </TableCell>
