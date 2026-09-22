@@ -11,6 +11,7 @@ import {
   useEntityDisplayImages,
 } from "~/app/_components/entity-media/entity-display-images";
 import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
+import { ErrorDisplay } from "~/components/feedback/error-display";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Description } from "~/components/ui/description";
@@ -64,7 +65,7 @@ export const ExpensePurchaseSection: FC<ExpensePurchaseSectionProps> = ({
   // Called unconditionally, before the no-purchase return below: `purchaseId` can
   // change under the same component instance (clearing a vendor detaches the
   // Expense), and a conditional hook would break the hook order when it does.
-  const { data, isPending, isError, isFetching, refetch } = useQuery(
+  const { data, isPending, isError, error, isFetching, refetch } = useQuery(
     operations.chargeContext(expense.id),
   );
   const others = data?.siblings ?? NO_OTHER_EXPENSES;
@@ -96,7 +97,7 @@ export const ExpensePurchaseSection: FC<ExpensePurchaseSectionProps> = ({
   if (isError) {
     return (
       <Stack gap="sm">
-        <p role="alert">Could not load the purchase items.</p>
+        <ErrorDisplay error={error} title="the purchase items" />
         <Button
           variant="outline"
           size="sm"

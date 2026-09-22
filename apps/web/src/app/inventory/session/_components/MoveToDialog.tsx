@@ -66,8 +66,8 @@ export function MoveToDialog({
       form.reset();
       onOpenChange(false);
     } catch {
-      // onConfirm surfaces its own toast; keep the dialog open so the user can
-      // pick a different destination and retry.
+      // SILENT: onConfirm surfaces its own toast; keep the dialog open so the
+      // user can pick a different destination and retry.
     } finally {
       setPending(false);
     }

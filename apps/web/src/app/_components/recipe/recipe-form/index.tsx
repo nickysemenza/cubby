@@ -15,6 +15,7 @@ import { toast } from "sonner";
 import { z } from "zod";
 
 import { recipe as recipeOperations } from "~/app/recipes/recipe.functions";
+import { showErrorToast } from "~/components/feedback/error-details";
 import { Row, Stack } from "~/components/layout";
 import {
   AlertDialog,
@@ -299,7 +300,8 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
       setHtmlInput("");
       setOpenTool(null);
     } catch (error) {
-      // Parse failures are toasted by the global MutationCache onError handler.
+      // SILENT: parse failures are toasted by the global MutationCache
+      // onError handler (parseHtmlMutation has no local onError).
       console.error("HTML parse failed:", error);
     }
   };
@@ -364,7 +366,7 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
       setTextImportInstructions("");
       setOpenTool(null);
     } catch (error) {
-      console.error("Import failed:", error);
+      showErrorToast(error);
     }
   };
 

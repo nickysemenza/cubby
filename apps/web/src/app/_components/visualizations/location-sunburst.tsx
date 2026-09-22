@@ -7,6 +7,7 @@ import {
   type LocationHierarchyNode,
   useLocationHierarchy,
 } from "~/hooks/useLocationHierarchy";
+import { getAppErrorDetails } from "~/lib/error-utils";
 import { formatCurrency } from "~/lib/utils";
 
 import { formatPricingStatusSummary } from "../locations/calculate-inventory-valuation";
@@ -32,7 +33,7 @@ export const LOCATION_SUNBURST_DESCRIPTION =
   "How owned-item counts are distributed across your locations.";
 
 export default function LocationSunburst() {
-  const { data, isError, isLoading, refetch } = useLocationHierarchy({
+  const { data, error, isError, isLoading, refetch } = useLocationHierarchy({
     valuationMode: LOCATION_SUNBURST_METRIC,
   });
 
@@ -49,7 +50,7 @@ export default function LocationSunburst() {
     return (
       <VisualizationPlaceholder
         message="Inventory locations are unavailable"
-        subMessage="Try again to reload the location breakdown."
+        subMessage={getAppErrorDetails(error).message}
         height={500}
         onRetry={() => void refetch()}
       />

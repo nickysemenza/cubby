@@ -53,7 +53,13 @@ export async function stagePhotoImport(
         height: item.height,
       });
       items.push({ kind: "upload", clientId: item.clientId, ...staged });
-    } catch {
+    } catch (error) {
+      // SILENT: already surfaced to the caller as this item's `failed`/
+      // `retryable` result below; there's no richer per-item channel here.
+      console.error("photo-import.stage-failed", {
+        clientId: item.clientId,
+        error,
+      });
       items.push({ kind: "failed", clientId: item.clientId, retryable: true });
     }
   }

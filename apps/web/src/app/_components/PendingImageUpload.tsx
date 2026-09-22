@@ -6,6 +6,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { z } from "zod";
 
+import { showErrorToast } from "~/components/feedback/error-details";
 import { FileDropField } from "~/components/file-upload/FileDropField";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
@@ -171,17 +172,19 @@ export function PendingImageUpload({
 
   const uploadImageMutation = useMutation(
     operations.uploadImage.mutationOptions({
-      onError: (error) => {
-        toast.error(`Upload initialization failed: ${getErrorMessage(error)}`);
-      },
+      // No toast here: `uploadFile`/`runUpload` below already turn any
+      // failure into one `showErrorToast`; a populated `onError` would
+      // additionally trigger the global toast.
+      onError: () => {},
     }),
   );
 
   const importFromUrlMutation = useMutation(
     operations.importFromUrl.mutationOptions({
-      onError: (error) => {
-        toast.error(`Import failed: ${getErrorMessage(error)}`);
-      },
+      // No toast here: `importUrl`'s catch below already turns any failure
+      // into one `showErrorToast`; a populated `onError` would additionally
+      // trigger the global toast.
+      onError: () => {},
     }),
   );
 
@@ -192,10 +195,7 @@ export function PendingImageUpload({
       const trimmed = rawUrl.trim();
       if (!trimmed) return;
 
-      try {
-        const parsedUrl = new URL(trimmed);
-        void parsedUrl;
-      } catch {
+      if (!URL.canParse(trimmed)) {
         if (!silent) toast.error("Please enter a valid URL");
         return;
       }
@@ -219,7 +219,7 @@ export function PendingImageUpload({
         setImageUrl("");
         toast.success("Photo added.");
       } catch (error) {
-        toast.error(`Import failed: ${getErrorMessage(error)}`);
+        showErrorToast(error, "Import failed");
       } finally {
         setImporting(false);
       }
@@ -327,7 +327,7 @@ export function PendingImageUpload({
               : draft,
           ),
         );
-        toast.error(`Upload failed: ${message}`);
+        showErrorToast(error, "Upload failed");
       } finally {
         activeDraftIdsRef.current.delete(draftId);
       }

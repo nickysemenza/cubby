@@ -2,16 +2,11 @@ name: Claude Code Review
 
 on:
   pull_request:
-    types: [opened, synchronize, ready_for_review, reopened, labeled]
-
-concurrency:
-  group: claude-review-${{ github.event.pull_request.number }}
-  cancel-in-progress: true
+    types: [opened, ready_for_review, reopened]
 
 jobs:
   claude-review:
     if: |
-      contains(github.event.pull_request.labels.*.name, 'claude-review') &&
       github.event.pull_request.user.login != 'renovate[bot]' &&
       !github.event.pull_request.head.repo.fork
 
@@ -31,10 +26,13 @@ jobs:
 
       - name: Run Claude Code Review
         id: claude-review
+        # This floating @v1 is the deliberate exception to the repo's
+        # SHA-pinning: Renovate has digest/patch updates disabled and this
+        # action ships patch releases daily, so a SHA pin would freeze it.
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           plugin_marketplaces: 'https://github.com/anthropics/claude-code.git'
           plugins: 'code-review@claude-code-plugins'
           prompt: '/code-review:code-review --comment ${{ github.repository }}/pull/${{ github.event.pull_request.number }}'
-          claude_args: '--allowedTools "mcp__github_inline_comment__create_inline_comment"'
+          claude_args: '--allowedTools "mcp__github_inline_comment__create_inline_comment" --model claude-sonnet-5'

@@ -1525,6 +1525,11 @@ const preservePurchaseItemAttribution = async (
         trade = row.effectiveTrade;
       }
     } catch {
+      // SILENT: this probe is exploratory — it only decides whether to pin
+      // `trade` explicit. The authoritative check runs right below on
+      // whatever `trade` ends up being and throws CONSTRAINT_VIOLATION if
+      // the final effective values still don't match the original, so a
+      // probe failure can't let a real mismatch through silently.
       trade = row.effectiveTrade;
     }
 

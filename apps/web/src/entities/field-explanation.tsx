@@ -11,6 +11,7 @@ import { z } from "zod";
 import { EntityInlineLinkById } from "~/app/_components/EntityInlineLinkById";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { inventory } from "~/app/inventory/inventory.functions";
+import { ErrorDisplay } from "~/components/feedback/error-display";
 import { Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { NoneValue } from "~/components/ui/none-value";
@@ -180,8 +181,8 @@ export function FieldExplanation({
           {result.isPending ? (
             <p>Loading explanation…</p>
           ) : result.isError ? (
-            <div role="alert">
-              <p>Could not load this explanation.</p>
+            <Stack gap="sm">
+              <ErrorDisplay error={result.error} title="this explanation" />
               <Button
                 size="sm"
                 variant="outline"
@@ -190,7 +191,7 @@ export function FieldExplanation({
               >
                 Retry explanation
               </Button>
-            </div>
+            </Stack>
           ) : (
             <>
               <p className="text-sm">{result.data.rule.description}</p>

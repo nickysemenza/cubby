@@ -209,6 +209,32 @@
       }
     },
     {
+      "files": ["apps/web/src/**/*.ts", "apps/web/src/**/*.tsx"],
+      "excludeFiles": [
+        "**/*.test.ts",
+        "**/*.test.tsx",
+        "**/*.spec.ts",
+        "**/*.spec.tsx",
+        "**/*.fixtures.ts",
+        "**/*.fixtures.tsx",
+        "**/tests/**",
+        "**/test/**",
+        "**/__fixtures__/**",
+        "**/test-support/**",
+        "**/tooling/**"
+      ],
+      "rules": {
+        "cubby/no-swallowed-catch": "error",
+        "cubby/no-error-toast-in-handler": "error"
+      }
+    },
+    {
+      "files": ["apps/web/src/components/feedback/error-details.tsx"],
+      "rules": {
+        "cubby/no-error-toast-in-handler": "off"
+      }
+    },
+    {
       "files": ["apps/web/tooling/test-setup.ts"],
       "rules": {
         "no-restricted-imports": [

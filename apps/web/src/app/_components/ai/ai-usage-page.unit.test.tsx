@@ -91,9 +91,7 @@ describe("AiUsageTableStatus", () => {
       { wrapper: harness.wrapper },
     );
 
-    expect(screen.getByRole("alert")).toHaveTextContent(
-      "AI usage data could not load.",
-    );
+    expect(screen.getByRole("alert")).toHaveTextContent("usage unavailable");
     expect(screen.queryByText("No recent calls")).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Retry recent calls" }));
     expect(retries).toBe(1);

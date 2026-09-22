@@ -150,6 +150,8 @@ export function listStoredSessionPasses(): StoredSessionPass[] {
         if (!stored.success) continue;
         parsed = stored.data;
       } catch {
+        // SILENT: a corrupt/foreign localStorage entry under this prefix is
+        // skipped rather than breaking the whole pass list for one bad key.
         continue;
       }
 

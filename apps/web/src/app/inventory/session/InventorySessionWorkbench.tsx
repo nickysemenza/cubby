@@ -24,6 +24,7 @@ import { QueuePassResumePrompt } from "~/app/_components/queue-pass/QueuePassPro
 import { inventory } from "~/app/inventory/inventory.functions";
 import { location } from "~/app/locations/location.functions";
 import { product } from "~/app/products/product.functions";
+import { showErrorToast } from "~/components/feedback/error-details";
 import { Row, Stack } from "~/components/layout";
 import { Button, buttonVariants } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
@@ -138,8 +139,7 @@ export function InventorySessionWorkbench({
   const { data: tree, isLoading: treeLoading } = treeQuery;
   const ensureUnknown = useMutation(
     location.ensureGlobalUnknown.mutationOptions({
-      onError: (error) =>
-        toast.error(`Could not create Unknown: ${getErrorMessage(error)}`),
+      onError: (error) => showErrorToast(error, "Could not create Unknown"),
     }),
   );
 
@@ -312,7 +312,7 @@ export function InventorySessionWorkbench({
       onError: (error) => {
         void inventoryQuery.refetch();
         void currentSnapshotQuery.refetch();
-        toast.error(getErrorMessage(error));
+        showErrorToast(error);
       },
     }),
   );
@@ -321,8 +321,10 @@ export function InventorySessionWorkbench({
     try {
       await action.run();
       toast.success("Undone.");
-    } catch (error) {
-      toast.error(`Undo failed: ${getErrorMessage(error)}`);
+    } catch {
+      // SILENT: action.run() always resolves through a useActionMutation /
+      // useEntityActionMutation mutation (bulkMove, updateLocation), whose
+      // own onError already showErrorToast'd this failure.
     }
   };
 

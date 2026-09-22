@@ -3,6 +3,7 @@ import * as React from "react";
 import { toast } from "sonner";
 import { match } from "ts-pattern";
 
+import { showErrorToast } from "~/components/feedback/error-details";
 import { copyText } from "~/lib/clipboard";
 import { getErrorMessage } from "~/lib/error-utils";
 
@@ -530,7 +531,7 @@ export function useCellSelection<TItem extends RowData>({
       void target
         .apply()
         .then(() => flashCoords(container, [target.coord], "pasted"))
-        .catch((error) => toast.error(getErrorMessage(error)))
+        .catch((error) => showErrorToast(error))
         .finally(() => {
           clearPendingRef.current = false;
         });

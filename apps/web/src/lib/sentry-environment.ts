@@ -15,7 +15,9 @@ export function sentryEnvironment(
       return fallback === "test" ? "test" : "development";
     }
   } catch {
-    // Relative or malformed URLs cannot establish a runtime environment.
+    // SILENT: relative or malformed URLs cannot establish a runtime
+    // environment; `fallback` below is the environment classification itself,
+    // used unchanged rather than failing Sentry init over a bad origin.
   }
   return fallback;
 }

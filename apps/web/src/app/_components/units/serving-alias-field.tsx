@@ -84,7 +84,7 @@ export function ServingAliasField({
           values[key] = result.value;
         }
       } catch {
-        // No bridge to this nutrient yet — skip, not an error.
+        // SILENT: no bridge to this nutrient yet — skip, not an error.
       }
     }
     return Object.keys(values).length > 0 ? buildNutrients(values) : null;

@@ -40,7 +40,6 @@ import {
   Wrench,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { toast } from "sonner";
 import { match } from "ts-pattern";
 
 import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
@@ -68,7 +67,6 @@ import { NativeSelect } from "~/components/ui/native-select";
 import { Skeleton } from "~/components/ui/skeleton";
 import { ripple } from "~/integrations/tanstack-query/cache-tags";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
-import { getErrorMessage } from "~/lib/error-utils";
 import { toolTimelineConflict } from "~/lib/tool-timeline";
 import { cn, formatCurrency } from "~/lib/utils";
 
@@ -386,11 +384,7 @@ export function ToolMatrixPage({
     };
   }, []);
 
-  const setUsage = useMutation(
-    project.setToolUsage.mutationOptions({
-      onError: (error) => toast.error(getErrorMessage(error)),
-    }),
-  );
+  const setUsage = useMutation(project.setToolUsage.mutationOptions());
 
   const toggleCell = useCallback(
     (projectId: string, productId: string, nextUsed: boolean) => {

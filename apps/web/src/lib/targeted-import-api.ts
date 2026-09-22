@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { readJsonOrThrow } from "~/lib/http-error";
 import { importRunPublicId } from "~/lib/purchase-import-run-detail";
 
 /**
@@ -106,21 +107,17 @@ export type TargetedImportStartInput =
 
 export const targetedImportError = z.object({ error: z.string().min(1) });
 
-const readError = async (response: Response, fallback: string) => {
-  const body: unknown = await response.json();
-  const parsed = targetedImportError.safeParse(body);
-  throw new Error(parsed.success ? parsed.data.error : fallback);
-};
-
 export async function loadTargetedImportLaunch(
   purpose: TargetedImportPurpose,
   targetId: string,
 ): Promise<TargetedImportLaunch> {
   const query = new URLSearchParams({ purpose, targetId });
   const response = await fetch(`/api/import/targeted?${query.toString()}`);
-  if (!response.ok)
-    return await readError(response, "Import options could not load.");
-  return targetedImportLaunchResponse.parse(await response.json());
+  return readJsonOrThrow(
+    response,
+    targetedImportLaunchResponse,
+    "Import options could not load.",
+  );
 }
 
 export async function startTargetedImport(
@@ -131,7 +128,10 @@ export async function startTargetedImport(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(input),
   });
-  if (!response.ok)
-    return await readError(response, "Import run could not start.");
-  return targetedImportStartResponse.parse(await response.json());
+  return readJsonOrThrow(
+    response,
+    targetedImportStartResponse,
+    "Import run could not start.",
+    { method: "POST" },
+  );
 }

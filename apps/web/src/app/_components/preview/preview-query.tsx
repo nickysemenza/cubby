@@ -1,6 +1,6 @@
 import { type ReactNode, useEffect } from "react";
 
-import { Button } from "~/components/ui/button";
+import { ErrorDisplay } from "~/components/feedback/error-display";
 
 import { PreviewDeleted, PreviewLoading } from "./manifest-card";
 
@@ -16,6 +16,7 @@ export function PreviewQuery<T>({
     data: T | undefined;
     isLoading: boolean;
     isError: boolean;
+    error?: unknown;
     refetch: () => Promise<PreviewRefetchResult>;
   };
   label: string;
@@ -30,19 +31,11 @@ export function PreviewQuery<T>({
   if (query.isLoading) return <PreviewLoading />;
   if (query.isError && !query.data) {
     return (
-      <div className="space-y-2" role="alert">
-        <p className="text-sm text-muted-foreground">
-          {label} could not be loaded.
-        </p>
-        <Button
-          type="button"
-          size="sm"
-          variant="outline"
-          onClick={() => void query.refetch()}
-        >
-          Retry
-        </Button>
-      </div>
+      <ErrorDisplay
+        error={query.error}
+        title={label}
+        onRetry={() => void query.refetch()}
+      />
     );
   }
   if (!query.data) return <PreviewDeleted label={label} />;

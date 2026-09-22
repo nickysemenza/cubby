@@ -186,4 +186,50 @@ describe("RelationshipTree display images", () => {
       "/ledger-parties/LPY-A234",
     );
   });
+
+  it("surfaces the raw loadChildren failure and retries via onLoadMore", async () => {
+    const loadChildren = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("relation query timed out"))
+      .mockResolvedValueOnce({
+        items: [
+          {
+            entity: "product",
+            id: "PRD-RETRY",
+            label: "Recovered product",
+            displayImage: null,
+          },
+        ],
+        hasMore: false,
+      });
+    renderTree(
+      <RelationshipTree
+        presets={[
+          {
+            key: "connections",
+            label: "Connections",
+            groups: [
+              {
+                key: "vendor.products",
+                label: "Products",
+                totalCount: 1,
+              },
+            ],
+          },
+        ]}
+        initialExpandedGroupKeys={[]}
+        loadChildren={loadChildren}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /Products/ }));
+
+    expect(await screen.findByText(/relation query timed out/)).toBeVisible();
+
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    await waitFor(() =>
+      expect(screen.getByText("Recovered product")).toBeVisible(),
+    );
+    expect(loadChildren).toHaveBeenCalledTimes(2);
+  });
 });

@@ -4,6 +4,7 @@ import { useRouter } from "@tanstack/react-router";
 import { useMemo } from "react";
 
 import { recipe } from "~/app/recipes/recipe.functions";
+import { ErrorDisplay } from "~/components/feedback/error-display";
 import { Stack } from "~/components/layout";
 
 import type { GraphData, GraphFilters } from "./dependency-graph-model";
@@ -24,7 +25,7 @@ export function RecipeDependencyGraph({
   onSearch: (value: string) => void;
 }) {
   const router = useRouter();
-  const { data, isLoading, isError } = useQuery(
+  const { data, isLoading, isError, error, refetch } = useQuery(
     recipe.getDependencyGraph.queryOptions({ cookbookId }),
   );
   const graph = useMemo<GraphData>(
@@ -54,9 +55,11 @@ export function RecipeDependencyGraph({
   if (isLoading) return <output>Loading recipe graph…</output>;
   if (isError)
     return (
-      <p role="alert">
-        Recipe relationships could not load. Reload this page to retry.
-      </p>
+      <ErrorDisplay
+        error={error}
+        title="recipe relationships"
+        onRetry={() => void refetch()}
+      />
     );
   return (
     <Stack gap="md">

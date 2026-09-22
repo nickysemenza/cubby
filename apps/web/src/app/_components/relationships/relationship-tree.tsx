@@ -1,9 +1,10 @@
 import type { Entity } from "@cubby/schemas/entity";
 import { relatedViewRegistry } from "@cubby/schemas/related-view";
-import { ChevronRight, Network, RotateCcw } from "lucide-react";
+import { ChevronRight, Network } from "lucide-react";
 import { type ReactNode, useCallback, useMemo, useState } from "react";
 
 import { EntityIdentityMark } from "~/components/entity/entity-identity-mark";
+import { ErrorDisplay } from "~/components/feedback/error-display";
 import { Button } from "~/components/ui/button";
 import {
   browserEntityDefinition,
@@ -75,7 +76,7 @@ export interface RelationshipTreeProps {
 
 type LoadedPage = RelationshipChildrenPage & {
   loading?: boolean;
-  error?: boolean;
+  error?: unknown;
 };
 
 const EMPTY_PRESETS: readonly RelationshipPreset[] = [];
@@ -206,6 +207,7 @@ function GroupRow({
   const visibleItems = page?.items ?? group.items ?? [];
   const hasMore = page?.hasMore ?? group.hasMore ?? false;
   const error = page?.error;
+  const hasError = error !== undefined;
   const loading = page?.loading;
   return (
     <div>
@@ -227,7 +229,7 @@ function GroupRow({
       {expanded && (
         <div>
           {visibleItems.map((item) => renderEntity(item, depth + 1))}
-          {visibleItems.length === 0 && !loading && !error && (
+          {visibleItems.length === 0 && !loading && !hasError && (
             <p
               className="border-t border-[var(--border)] px-2 py-1 text-sm text-muted-foreground"
               style={{ paddingLeft: `${(depth + 1) * 1.25 + 0.5}rem` }}
@@ -240,17 +242,15 @@ function GroupRow({
               Loading…
             </p>
           )}
-          {error && (
-            <Button
-              variant="ghost"
-              size="sm"
+          {hasError && (
+            <ErrorDisplay
+              error={error}
+              title="these related records"
               className="m-1"
-              onClick={onLoadMore}
-            >
-              <RotateCcw /> Retry
-            </Button>
+              onRetry={onLoadMore}
+            />
           )}
-          {hasMore && !loading && !error && loadChildren && (
+          {hasMore && !loading && !hasError && loadChildren && (
             <Button
               variant="ghost"
               size="sm"
@@ -333,10 +333,10 @@ export function RelationshipTree({
             hasMore: next.hasMore,
           },
         }));
-      } catch {
+      } catch (err) {
         setPages((current) => ({
           ...current,
-          [stateKey]: { items: baseItems, hasMore: false, error: true },
+          [stateKey]: { items: baseItems, hasMore: false, error: err },
         }));
       }
     },

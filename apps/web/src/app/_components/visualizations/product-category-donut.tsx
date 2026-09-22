@@ -11,6 +11,7 @@ import {
 import { product } from "~/app/products/product.functions";
 import { FILTER_NONE } from "~/entities/filters";
 import { useContainerDimensions } from "~/hooks/useContainerDimensions";
+import { getAppErrorDetails } from "~/lib/error-utils";
 
 import { VisualizationPlaceholder } from "./visualization-placeholder";
 import { VizTooltip } from "./viz-overlay";
@@ -22,7 +23,7 @@ type CategoryData = {
 };
 
 export default function ProductCategoryDonut() {
-  const { data, isError, isLoading, refetch } = useQuery(
+  const { data, isError, error, isLoading, refetch } = useQuery(
     product.categoryDistribution.queryOptions(),
   );
 
@@ -39,7 +40,7 @@ export default function ProductCategoryDonut() {
     return (
       <VisualizationPlaceholder
         message="Product categories are unavailable"
-        subMessage="Try again to reload the category distribution."
+        subMessage={getAppErrorDetails(error).message}
         height={400}
         onRetry={() => void refetch()}
       />

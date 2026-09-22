@@ -373,7 +373,7 @@ them under `$CODEX_HOME/worktrees`. A few things to know:
 | `pnpm run build` | Build all three production Worker bundles |
 | `pnpm run check` | Fast full-tree quality, TypeScript, entity freshness, Knip, and high-risk guards |
 | `pnpm run check:all` | `check` plus Worker/OpenAPI, script-test, and security validation |
-| `pnpm run dedupe:check` | Dependency deduplication; CI runs it only for manifest/workspace/patch/lockfile changes |
+| `pnpm run dedupe:check` | Dependency deduplication; CI runs it on every run |
 | `pnpm run typecheck` | Recursive package typecheck with `tsc` (TypeScript 7, native) |
 | `pnpm run lint` | Full-tree Oxlint |
 | `pnpm run lint:fix` | Full-tree Oxlint auto-fix |
@@ -653,9 +653,7 @@ themselves through dynamic client registration. There is no API key and no
   `codex mcp login cubby-localhost`; the desktop app, CLI, and IDE extension
   share the stored login.
 
-Preview deploys are not supported: each gets a unique
-`<prefix>-cubby.nicky.workers.dev` host, and the accepted token audience is
-pinned to one origin per environment in [auth.ts](apps/web/src/lib/auth.ts).
+Preview deploys are not supported; production is the only deployed environment.
 
 ### MCP Apps (interactive UIs in the conversation)
 

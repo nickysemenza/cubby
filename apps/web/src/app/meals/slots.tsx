@@ -13,6 +13,7 @@ import { toast } from "sonner";
 
 import { StaticPicker } from "~/app/_components/combobox/static-picker";
 import type { DetailSlotComponent } from "~/app/_components/entity-detail/detail-slots";
+import { showErrorToast } from "~/components/feedback/error-details";
 import { SimpleLoading } from "~/components/feedback/loading-skeletons";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
@@ -23,7 +24,6 @@ import { ResponsiveDialog } from "~/components/ui/responsive-dialog";
 import { entityDetailLink } from "~/entities/entities";
 import { entityDetailFor } from "~/entities/entity-detail.functions";
 import type { EntityDetailByEntity } from "~/entities/generated/entity-details.gen";
-import { getErrorMessage } from "~/lib/error-utils";
 
 import { AddFoodDialog } from "./add-food-dialog";
 import { formatCostEstimate } from "./meal-nutrition";
@@ -281,7 +281,7 @@ function RecipeRow({
       if (context?.previous)
         queryClient.setQueryData(mealKey, context.previous);
       setScale(String(mr.scale));
-      toast.error(getErrorMessage(error));
+      showErrorToast(error);
     },
     onSettled: onChanged,
   });
@@ -304,7 +304,7 @@ function RecipeRow({
     onError: (error, _variables, context) => {
       if (context?.previous)
         queryClient.setQueryData(mealKey, context.previous);
-      toast.error(getErrorMessage(error));
+      showErrorToast(error);
     },
     onSettled: onChanged,
   });

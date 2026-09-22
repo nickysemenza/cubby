@@ -16,12 +16,17 @@ describe("search result recovery", () => {
 
   it("offers the same retry action in the phone projection", () => {
     const onRetry = vi.fn();
-    render(<SearchResultsFeedback state="error" onRetry={onRetry} mobile />);
-
-    expect(screen.getByRole("alert")).toHaveTextContent(
-      "Search could not load.",
+    render(
+      <SearchResultsFeedback
+        state="error"
+        error={new Error("search unavailable")}
+        onRetry={onRetry}
+        mobile
+      />,
     );
-    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+
+    expect(screen.getByRole("alert")).toHaveTextContent("search unavailable");
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
     expect(onRetry).toHaveBeenCalledOnce();
   });
 });

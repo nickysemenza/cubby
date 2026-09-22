@@ -19,6 +19,7 @@ import { type ReactNode, useId, useMemo, useState } from "react";
 
 import { DatePickerInput } from "~/app/_components/date-picker-input";
 import { ChartEmpty } from "~/app/projects/charts/chart-empty";
+import { ErrorDisplay } from "~/components/feedback/error-display";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Description } from "~/components/ui/description";
@@ -551,17 +552,19 @@ export function EntityTimeline<E extends TimelineEntity>({
     mode,
     onControlsChange,
   });
-  const { data, isError, isLoading } = useQuery(
+  const query = useQuery(
     entityTimelineFor(entity, operations.timeline).queryOptions(
       timelineParams(filters, ids, state),
     ),
   );
+  const { data, isError, isLoading } = query;
 
   if (isError)
     return (
-      <ChartEmpty
-        icon={CalendarClock}
-        title="The timeline could not be loaded. Check the date range and try again."
+      <ErrorDisplay
+        error={query.error}
+        title="the timeline"
+        onRetry={() => void query.refetch()}
       />
     );
   if (isLoading || !data)

@@ -8,6 +8,7 @@ import { useMemo } from "react";
 
 import { todayPlain } from "~/app/projects/charts/gantt/gantt-date";
 import { project } from "~/app/projects/project.functions";
+import { ErrorDisplay } from "~/components/feedback/error-display";
 import { Row, Stack } from "~/components/layout";
 import { NativeSelect } from "~/components/ui/native-select";
 import { effectiveTaskDueDate } from "~/lib/task-dates";
@@ -32,7 +33,7 @@ export function WorkDependencyGraph({
   onSearch: (value: string) => void;
 }) {
   const router = useRouter();
-  const { data, isLoading, isError } = useQuery(
+  const { data, isLoading, isError, error, refetch } = useQuery(
     project.getDependencyGraph.queryOptions({ projectId }),
   );
   const { data: projects } = useQuery(project.options.queryOptions(undefined));
@@ -94,9 +95,11 @@ export function WorkDependencyGraph({
       {isLoading ? (
         <output>Loading work graph…</output>
       ) : isError ? (
-        <p role="alert">
-          Work relationships could not load. Reload this page to retry.
-        </p>
+        <ErrorDisplay
+          error={error}
+          title="work relationships"
+          onRetry={() => void refetch()}
+        />
       ) : (
         <>
           <EntityGraphControls

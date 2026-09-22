@@ -225,7 +225,7 @@ export function useQueuePass<TStop extends QueueStop, TExtra = undefined>({
     try {
       raw = localStorage.getItem(config.storageKey(scopeKey));
     } catch {
-      // Private mode / quota failures must not block starting a pass.
+      // SILENT: private mode / quota failures must not block starting a pass.
     }
     const restored = raw ? parseStoredQueuePass(raw, config) : null;
     if (!restored) {
@@ -278,9 +278,10 @@ export function useQueuePass<TStop extends QueueStop, TExtra = undefined>({
         config.storageKey(scopeKey),
         JSON.stringify(payload),
       );
-    } catch {
-      // Best effort: a failed write must not block the pass.
     }
+    // SILENT: best effort — a failed write must not block the pass; the
+    // in-memory progress state is still authoritative for this session.
+    catch {}
   }, [
     scopeKey,
     startedAt,
@@ -392,6 +393,6 @@ export function clearStoredQueuePass<TExtra>(
   try {
     localStorage.removeItem(persistence.storageKey(scopeKey));
   } catch {
-    // Best effort, as with the write.
+    // SILENT: best effort, as with the write.
   }
 }

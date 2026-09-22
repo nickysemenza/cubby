@@ -98,13 +98,6 @@ async function getAuthorizedGoogleUserInfo(
   );
 }
 
-// Preview deploys (`wrangler versions upload`) each get a unique host, so a
-// host-only session cookie forces a fresh login on every preview. CI injects
-// COOKIE_DOMAIN via `--var` on preview uploads (see preview-cf.yaml); scoping
-// the cookie to the configured preview suffix means one login carries to all
-// previews. Unset in prod, which keeps a host-only cookie.
-const previewCookieDomain = env.COOKIE_DOMAIN;
-
 const advancedOptions: BetterAuthAdvancedOptions = {};
 // E2E only: the production Worker artifact otherwise emits Secure cookies,
 // which Playwright's Linux WebKit rejects over the harness's localhost HTTP.
@@ -115,12 +108,6 @@ if (env.INSECURE_AUTH_COOKIES === "true") {
 // and keeps Better Auth's default resolution.
 if (!isDev) {
   advancedOptions.ipAddress = { ipAddressHeaders: ["cf-connecting-ip"] };
-}
-if (previewCookieDomain) {
-  advancedOptions.crossSubDomainCookies = {
-    enabled: true,
-    domain: previewCookieDomain,
-  };
 }
 
 export const auth = betterAuth({
@@ -241,11 +228,8 @@ export const auth = betterAuth({
   // lives in the shared DB, so an existing login already carries across ports; this
   // only unblocks origin validation.
   //
-  // In prod, trust the mobile scheme plus per-PR preview deploys (see
-  // preview-cf.yaml). The wildcard is scoped to our account subdomain —
-  // better-auth's `*` doesn't cross `/`, so this only widens the auth-origin
-  // (CSRF) surface to those Workers. Email/password works on previews. The
-  // custom domain is trusted automatically as the baseURL.
+  // In prod, trust only the mobile scheme. The custom domain is trusted
+  // automatically as the baseURL.
   trustedOrigins: isDev
     ? (request) => {
         const base = [
@@ -258,7 +242,7 @@ export const auth = betterAuth({
           origin && /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin);
         return isLocal ? [...base, origin] : base;
       }
-    : ["cubby-mobile://", "https://*.nicky.workers.dev"],
+    : ["cubby-mobile://"],
   socialProviders:
     env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET
       ? {

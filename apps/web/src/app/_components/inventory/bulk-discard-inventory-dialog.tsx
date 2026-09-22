@@ -159,8 +159,9 @@ export const BulkDiscardInventoryDialog: FC<
         reason: values.reason.trim() || null,
       });
     } catch {
-      // `onError` already put the refusal on the dialog; keeping it open is the
-      // point — a closed dialog would drop the reason with it.
+      // SILENT: the mutation's `onError` (above) already put the raw refusal
+      // message into `error`, rendered on the dialog; this catch only stops
+      // the rethrow so the dialog stays open for retry.
       return;
     }
     const removed = result.items.filter((line) => line.removed).length;

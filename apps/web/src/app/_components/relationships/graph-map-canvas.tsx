@@ -16,6 +16,7 @@ import {
 } from "@xyflow/react";
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 
+import { ErrorDisplay } from "~/components/feedback/error-display";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Image } from "~/components/ui/image";
@@ -120,7 +121,7 @@ export function GraphMapCanvas({
     positionsRef.current = positions;
   }, [positions]);
   const [revision, setRevision] = useState(0);
-  const [error, setError] = useState(false);
+  const [error, setError] = useState<unknown>(null);
   const [layingOut, setLayingOut] = useState(false);
   const worker = useRef<Worker>(null);
   const requestID = useRef(0);
@@ -139,8 +140,8 @@ export function GraphMapCanvas({
         new URL("./graph-map-layout.worker.ts", import.meta.url),
         { type: "module" },
       );
-    } catch {
-      setError(true);
+    } catch (err) {
+      setError(err);
       setLayingOut(false);
       return;
     }
@@ -151,10 +152,12 @@ export function GraphMapCanvas({
       setPositions(result.data.positions);
       camera.positions = result.data.positions;
       setLayingOut(false);
-      setError(false);
+      setError(null);
     });
-    layoutWorker.addEventListener("error", () => {
-      setError(true);
+    layoutWorker.addEventListener("error", (event) => {
+      setError(
+        event.error ?? new Error(event.message || "Graph layout worker failed"),
+      );
       setLayingOut(false);
     });
     return () => {
@@ -285,15 +288,6 @@ export function GraphMapCanvas({
             Placing new records…
           </output>
         )}
-        {error && (
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setRevision((old) => old + 1)}
-          >
-            Retry layout
-          </Button>
-        )}
       </Row>
       <div className="graph-map min-h-0 flex-1" aria-label="Relationship graph">
         <ReactFlow<RecordNode>
@@ -341,10 +335,12 @@ export function GraphMapCanvas({
           <MiniMap pannable zoomable className="hidden md:block" />
         </ReactFlow>
       </div>
-      {error && (
-        <p role="alert">
-          Graph layout could not load. Use the record list or retry.
-        </p>
+      {error !== null && (
+        <ErrorDisplay
+          error={error}
+          title="the relationship graph layout"
+          onRetry={() => setRevision((old) => old + 1)}
+        />
       )}
     </Stack>
   );

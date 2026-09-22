@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { toast } from "sonner";
 
-import { getErrorMessage, type UnparsedError } from "~/lib/error-utils";
+import { showErrorToast } from "~/components/feedback/error-details";
+import type { UnparsedError } from "~/lib/error-utils";
 
 interface AiProposal<T> {
   result: T;
@@ -28,7 +28,7 @@ export interface UseAiProposalResult<T> {
  * that arrives after `basisKey` has moved on is dropped rather than shown
  * (the model answered a question nobody is asking anymore), and an existing
  * proposal is cleared the moment `basisKey` itself changes. A `run` that
- * throws surfaces as `toast.error(getErrorMessage(...))` by default.
+ * throws surfaces via `showErrorToast` by default.
  *
  * The hook only knows about `basisKey`. A caller that also needs to
  * invalidate on something outside it — e.g. the field the proposal would
@@ -43,7 +43,7 @@ export function useAiProposal<T>({
   /** Stable serialization of the inputs the model will inspect. */
   basisKey: string;
   run: () => Promise<T>;
-  /** Defaults to `toast.error(getErrorMessage(error))`. */
+  /** Defaults to `showErrorToast(error)`. */
   onError?: (error: UnparsedError) => void;
 }): UseAiProposalResult<T> {
   const [proposal, setProposal] = useState<AiProposal<T> | null>(null);
@@ -72,7 +72,7 @@ export function useAiProposal<T>({
       setProposal({ result, basisKey: requestBasis, at: new Date() });
     } catch (error) {
       if (onError) onError(error);
-      else toast.error(getErrorMessage(error));
+      else showErrorToast(error);
     } finally {
       setIsLoading(false);
     }

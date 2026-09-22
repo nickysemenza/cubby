@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 
 import { EntityInlineLinkById } from "~/app/_components/EntityInlineLinkById";
+import { ErrorDisplay } from "~/components/feedback/error-display";
 import { Grid, Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Spinner } from "~/components/ui/spinner";
@@ -128,10 +129,8 @@ export function AiUsageTableStatus({
         {isLoading ? (
           <Spinner />
         ) : error ? (
-          <Stack role="alert" gap="sm" className="items-start py-2">
-            <p className="text-sm text-destructive">
-              AI usage data could not load.
-            </p>
+          <Stack gap="sm" className="items-start py-2">
+            <ErrorDisplay error={error} title="AI usage data" />
             <Button type="button" variant="outline" onClick={onRetry}>
               {retryLabel}
             </Button>

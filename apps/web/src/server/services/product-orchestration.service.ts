@@ -97,6 +97,10 @@ export async function createProductWithSideEffects(
         entityId,
       );
     } catch (error) {
+      // SILENT: best-effort cover photo on create; the product still returns
+      // successfully with no image. Known gap — no `sideEffects`/warnings
+      // field exists on this response to carry a caller-visible signal (see
+      // docs/todos.md); the separate product-enrichment pass is the mitigation.
       console.error(`[product.create] Image import failed:`, error);
     }
   }
@@ -215,6 +219,10 @@ export async function applyUpcDataWithSideEffects(
         input.id,
       );
     } catch (error) {
+      // SILENT: best-effort cover photo backfill; the update still returns
+      // successfully with no image. Known gap — no `sideEffects`/warnings
+      // field exists on this response to carry a caller-visible signal (see
+      // docs/todos.md); the separate product-enrichment pass is the mitigation.
       console.error(`[product.applyUpcData] Image import failed:`, error);
     }
   }
@@ -403,6 +411,10 @@ export async function findOrCreateByUPC(
               await resolveCreatedOrInvariant(db, "product", newProduct.id),
             );
           } catch (error) {
+            // SILENT: best-effort cover photo on create; `emitCreated` below
+            // still returns the new product successfully with no image.
+            // Known gap — no field on this response to carry a caller-visible
+            // signal (see docs/todos.md); product-enrichment is the mitigation.
             console.error(`[findOrCreateByUPC] Image import failed:`, error);
           }
         }
@@ -495,6 +507,10 @@ async function findOrCreateByISBN(
             await resolveCreatedOrInvariant(db, "product", product.id),
           );
         } catch (error) {
+          // SILENT: best-effort cover photo on create; `emitCreated` below
+          // still returns the new product successfully with no image. Known
+          // gap — no field on this response to carry a caller-visible signal
+          // (see docs/todos.md); product-enrichment is the mitigation.
           console.error(`[findOrCreateByISBN] Image import failed:`, error);
         }
       }

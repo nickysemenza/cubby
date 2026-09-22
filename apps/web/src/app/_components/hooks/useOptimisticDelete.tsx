@@ -335,10 +335,11 @@ export function useOptimisticDelete<
           onSubmit={async () => {
             try {
               await submitDelete();
-            } catch {
-              // `useMutation` has already rolled back the snapshot and shown
-              // the structured refusal toast; keep this dialog open for retry.
             }
+            // SILENT: `useMutation` has already rolled back the snapshot and
+            // shown the structured refusal toast; keep this dialog open for
+            // retry.
+            catch {}
           }}
           isPending={deletable ? isDeletePending : false}
         />

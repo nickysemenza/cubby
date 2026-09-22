@@ -138,7 +138,7 @@ function ConversionDialogContent({
             resultPaths[kind] = explained.path;
           }
         } catch {
-          // explain is best-effort; the result row already shows convertibility
+          // SILENT: explain is best-effort; the result row already shows convertibility
         }
       }
 

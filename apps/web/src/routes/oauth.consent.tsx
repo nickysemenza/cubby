@@ -153,6 +153,9 @@ function ConsentPage() {
                 <p role="alert" className="text-xs text-destructive">
                   {clientState.message}
                 </p>
+                <p className="text-2xs text-muted-foreground">
+                  {clientState.detail}
+                </p>
                 <div>
                   <Button variant="outline" onClick={() => void loadClient()}>
                     Retry verification

@@ -105,6 +105,33 @@ export const chargeCondition = (
     : inArray(expense.purchaseId, chargeIdsWhere(db, inner));
 
 /**
+ * Effective-trade filter as an uncorrelated `IN` sub-select, for the same
+ * reason as `chargeCondition` above: `effectiveExpenseTradeSql` spells its
+ * outer-row references as raw `"Expense"."…"`, which the relational builder
+ * cannot rewrite to its `"expense"` alias. Inside a standalone
+ * `select … from "Expense"` the raw name binds to the sub-select's own FROM,
+ * and the only outer reference is `expense.id`, a top-level column every
+ * builder aliases correctly. (CUBBY-11R: the list leg threw
+ * `invalid reference to FROM-clause entry for table "Expense"`.)
+ *
+ * An empty requested set is "no constraint", matching `eqAny`.
+ */
+const tradeCondition = (
+  db: Database,
+  trades: ExpenseFilters["trade"],
+): SQL | undefined => {
+  const values = trades === undefined ? [] : [trades].flat();
+  if (values.length === 0) return undefined;
+  return inArray(
+    expense.id,
+    getDb(db)
+      .select({ id: expense.id })
+      .from(expense)
+      .where(and(notDeleted(expense), inArray(effectiveTrade, values))),
+  );
+};
+
+/**
  * "Has / has no order id", resolved through the charge.
  *
  * `"none"` folds TWO states: a row with no charge at all, and a row whose charge
@@ -289,9 +316,11 @@ export const buildExpenseWhereClause = async (
   // `filters.search` over notes — most rows have no notes, which would
   // silently zero out expense search.
   //
-  // `lineKind`, `lineBasis`, `costType`, `trade` (multiselect) and `future`
-  // (boolean) are also declared stored filters — applied by
-  // `expenseScaffold.where` before the conditions below.
+  // `lineKind`, `lineBasis`, `costType` (multiselect) and `future` (boolean)
+  // are also declared stored filters — applied by `expenseScaffold.where`
+  // before the conditions below. `trade` is stripped from `storedFilters`
+  // (below) and applied instead by `tradeCondition`, an uncorrelated
+  // sub-select — see its doc above.
   const storedFilters = { ...filters, trade: undefined };
   return expenseScaffold.where(storedFilters, [
     ...auditDateWhereConditions(expense, filters),
@@ -355,7 +384,7 @@ export const buildExpenseWhereClause = async (
       expense.productQuantity,
       filters.productQuantityPresenceFilter,
     ),
-    filters.trade ? inArray(effectiveTrade, [filters.trade].flat()) : undefined,
+    tradeCondition(db, filters.trade),
     // `orderId` presence can't be a column-null check any more: it's a column
     // on the CHARGE, and a row with a charge that has no order id is a
     // different state from a row with no charge at all. Both read as "no order

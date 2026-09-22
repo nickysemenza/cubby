@@ -129,9 +129,10 @@ function safeParsePayload(
   try {
     const parsed = cellClipboardEnvelopeSchema.safeParse(JSON.parse(raw));
     return parsed.success ? parsed.data : null;
-  } catch {
-    // fall through to text paste
   }
+  // SILENT: raw isn't our typed JSON payload (e.g. clipboard text copied
+  // from outside the app) — handlePaste falls through to plain text paste.
+  catch {}
   return null;
 }
 

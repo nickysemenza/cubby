@@ -11,12 +11,12 @@ import {
   AiProvenance,
 } from "~/app/_components/ai/ai-proposal-card";
 import { FormFieldGroup } from "~/app/_components/forms/form-field-group";
+import { showErrorToast } from "~/components/feedback/error-details";
 import { Row } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Description } from "~/components/ui/description";
 import { usdaFood } from "~/entities/usda.functions";
 import { ai } from "~/lib/ai.functions";
-import { getErrorMessage } from "~/lib/error-utils";
 import { parseUsdaFoodRef } from "~/lib/parse-usda-food-ref";
 import { type DedupedFood, dedupeUsdaFoodsByUpc } from "~/lib/usda-food-stats";
 
@@ -169,7 +169,7 @@ export function UsdaFoodSearchField({
         });
       }
     } catch (error) {
-      toast.error(getErrorMessage(error));
+      showErrorToast(error);
     } finally {
       setIsSuggesting(false);
     }

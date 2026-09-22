@@ -1,6 +1,7 @@
 import { entityIdSchema, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { useCallback, useRef, useState } from "react";
 
+import { showErrorToast } from "~/components/feedback/error-details";
 import { precomputeEnrichmentProposalsStream } from "~/lib/ai.functions";
 import type { EnrichmentProposal } from "~/server/services/ai-enrichment/proposals";
 
@@ -95,7 +96,7 @@ export function useProposalCache() {
       // Page failed (network/abort): unmark so a later ensure() retries it.
       for (const it of page) requestedRef.current.delete(it.id);
       setRequested(requestedRef.current.size);
-      console.error("[useProposalCache] page failed", err);
+      showErrorToast(err, "Proposal prefetch failed");
     } finally {
       runningRef.current = false;
       setRunning(false);

@@ -3,8 +3,8 @@ import { useQuery } from "@tanstack/react-query";
 import type { DetailSlotComponent } from "~/app/_components/entity-detail/detail-slots";
 import { Stack } from "~/components/layout";
 import { StatusText } from "~/components/ui/status-text";
+import { readJsonOrThrow } from "~/lib/http-error";
 import {
-  purchaseImportRunsError,
   purchaseImportRunsResponse,
   type PurchaseImportRunSummary,
 } from "~/lib/purchase-import-run-detail";
@@ -22,16 +22,12 @@ export const ProductImportRuns: DetailSlotComponent<"product"> = ({
       const response = await fetch(
         `/api/import/runs?productId=${encodeURIComponent(product.id)}`,
       );
-      const body: unknown = await response.json();
-      if (!response.ok) {
-        const parsed = purchaseImportRunsError.safeParse(body);
-        throw new Error(
-          parsed.success
-            ? parsed.data.error
-            : "Product enrichment runs could not load.",
-        );
-      }
-      return purchaseImportRunsResponse.parse(body).runs;
+      const data = await readJsonOrThrow(
+        response,
+        purchaseImportRunsResponse,
+        "Product enrichment runs could not load.",
+      );
+      return data.runs;
     },
   });
   const launch = (

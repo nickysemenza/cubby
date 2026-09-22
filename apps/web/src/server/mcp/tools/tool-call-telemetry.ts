@@ -36,7 +36,9 @@ export function toolCallResultTraceAttributes(result: CallToolResult) {
     const serialized = JSON.stringify(result);
     serializedBytes = new TextEncoder().encode(serialized).byteLength;
   } catch {
-    // Observation cannot turn a valid tool result into a transport failure.
+    // SILENT: a circular/unserializable result must not turn a valid tool
+    // response into a transport failure; `serializedBytes` just stays
+    // `undefined` and is omitted from the trace attributes below.
   }
   const summary = batchSummarySchema.safeParse(
     result.structuredContent?.summary,

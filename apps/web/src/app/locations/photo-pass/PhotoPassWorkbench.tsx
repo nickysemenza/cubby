@@ -44,6 +44,7 @@ import {
   useQueuePass,
 } from "~/app/_components/queue-pass/useQueuePass";
 import { location } from "~/app/locations/location.functions";
+import { showErrorToast } from "~/components/feedback/error-details";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent } from "~/components/ui/card";
@@ -193,13 +194,13 @@ function ScanPass() {
           label: "Retake",
           onClick: () => {
             void discardCapture(stop.id, imageId).catch((error) =>
-              toast.error(`Retake failed: ${getErrorMessage(error)}`),
+              showErrorToast(error, "Retake failed"),
             );
           },
         },
       });
     } catch (error) {
-      toast.error(`Photo failed: ${getErrorMessage(error)}`);
+      showErrorToast(error, "Photo failed");
     }
   };
 
@@ -314,7 +315,7 @@ function QueuePass({ parent, all, type }: PhotoPassSearch) {
       await discardCapture(stop.id, imageId);
       pass.unsettle(stop.id);
     } catch (error) {
-      toast.error(`Retake failed: ${getErrorMessage(error)}`);
+      showErrorToast(error, "Retake failed");
     }
   };
 
@@ -329,7 +330,7 @@ function QueuePass({ parent, all, type }: PhotoPassSearch) {
         },
       });
     } catch (error) {
-      toast.error(`Photo failed: ${getErrorMessage(error)}`);
+      showErrorToast(error, "Photo failed");
     }
   };
 

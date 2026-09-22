@@ -16,6 +16,7 @@ import {
   contributionGapLabels,
   MoneyCell,
 } from "~/app/_components/household-contribution-format";
+import { ErrorDisplay } from "~/components/feedback/error-display";
 import { Row, Stack } from "~/components/layout";
 import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
 import { Badge } from "~/components/ui/badge";
@@ -301,13 +302,11 @@ export function HouseholdContributionLedger() {
 
       {ledgerQuery.isLoading && <LedgerSkeleton />}
       {ledgerQuery.isError && (
-        <Alert variant="destructive">
-          <AlertTriangle className="size-3.5" />
-          <AlertTitle>Contribution ledger could not load</AlertTitle>
-          <AlertDescription>
-            Try again after the connection recovers.
-          </AlertDescription>
-        </Alert>
+        <ErrorDisplay
+          error={ledgerQuery.error}
+          title="the contribution ledger"
+          onRetry={() => void ledgerQuery.refetch()}
+        />
       )}
       {data && <HouseholdContributionLedgerReport data={data} />}
     </Stack>

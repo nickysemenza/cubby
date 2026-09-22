@@ -2,8 +2,8 @@ import { useCallback, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { ingredient } from "~/app/ingredients/ingredient.functions";
+import { showErrorToast } from "~/components/feedback/error-details";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
-import { getErrorMessage } from "~/lib/error-utils";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
 
 import { useActionMutation } from "../hooks/useActionMutation";
@@ -56,7 +56,7 @@ function useMergeIngredientsEntityAction(): EntityActionHandles {
         );
         finish(true);
       } catch (err) {
-        toast.error(`Merge failed: ${getErrorMessage(err)}`);
+        showErrorToast(err, "Merge failed");
       } finally {
         setMergePending(false);
       }
