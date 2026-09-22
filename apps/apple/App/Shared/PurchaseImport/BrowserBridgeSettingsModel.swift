@@ -38,6 +38,11 @@ struct BrowserBridgeAccountState: Identifiable, Equatable {
 final class BrowserBridgeSettingsModel {
     private(set) var status: BrowserBridgeConnectionStatus = .disconnected
     private(set) var isSyncing = false
+    /// Set on the transition into syncing, cleared alongside `isSyncing`. SwiftUI reads
+    /// `currentActivities` on every body evaluation, so a literal `.now` there would make the
+    /// Activity screen's relative timestamp perpetually say "now" — this is computed once per sync
+    /// instead.
+    private(set) var syncStartedAt: Date?
     private(set) var lastCompletedAt: Date?
     private(set) var connectedAccountCount = 0
     private(set) var accountCount = 0
@@ -131,6 +136,7 @@ final class BrowserBridgeSettingsModel {
     func syncNow(browser: BrowserChoice, enhancedEvidence: Bool) {
         guard let controller, !isSyncing else { return }
         isSyncing = true
+        syncStartedAt = .now
         error = nil
         Task { [weak self] in
             do {
@@ -138,10 +144,12 @@ final class BrowserBridgeSettingsModel {
                 guard let self else { return }
                 lastCompletedAt = .now
                 isSyncing = false
+                syncStartedAt = nil
             } catch {
                 guard let self else { return }
                 self.error = error.localizedDescription
                 isSyncing = false
+                syncStartedAt = nil
                 Diagnostics.report(error, context: "purchaseImport.browser.sync")
             }
         }

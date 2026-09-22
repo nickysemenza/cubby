@@ -28,7 +28,17 @@ final class LibraryMetadataSync {
 
     private(set) var isRunning = false
     private(set) var sentCount = 0
+    /// Every candidate this pass has finished with, success or failure — what `currentActivities`
+    /// drives its progress bar from. `sentCount` alone stalls the bar on a library with a lot of
+    /// already-classified-elsewhere or momentarily-unsendable candidates, since neither a skip nor
+    /// a failure ever touched it.
+    private(set) var processedCount = 0
     private(set) var totalCount = 0
+    /// Set on the transition into running, cleared alongside `isRunning`. SwiftUI reads
+    /// `currentActivities` on every body evaluation, so a literal `.now` there would make the
+    /// Activity screen's relative timestamp perpetually say "now" — this is computed once per run
+    /// instead.
+    private(set) var startedAt: Date?
 
     @ObservationIgnored private let analysisStore: PhotoAnalysisStore
     @ObservationIgnored private let host: String
@@ -49,6 +59,18 @@ final class LibraryMetadataSync {
     @ObservationIgnored private var isParticipating: Bool
     @ObservationIgnored private var runTask: Task<Void, Never>?
     @ObservationIgnored private var runGeneration = UUID()
+    /// Set by `reconcile()` when it is called while a run is already in flight, instead of
+    /// cancelling that run: `PhotoMatchStore.revision` bumps on every 32-asset scan batch and every
+    /// visible-cell query batch, so treating each bump as "cancel and restart from candidate 0"
+    /// turned a 20k-asset scan into ~600 full restarts — this is the POST-stream bug. `run(token:)`
+    /// checks it after every pass and, if set, clears it and re-plans in place rather than
+    /// restarting the task.
+    @ObservationIgnored private var replanRequested = false
+    /// Set by `cancel()` and left set until `setParticipating(true)` or `setSignedIn(true)` clears
+    /// it. Without this, `cancel()` only tore down the in-flight `Task` — it changed no gate — so
+    /// the very next thermal/power notification or scene-active toggle called `reconcile()` again
+    /// and undid the cancellation within seconds of the user tapping Cancel on the Activity screen.
+    @ObservationIgnored private var cancelledByUser = false
     // `nonisolated(unsafe)`: same justification as `PhotoClassificationSweep` — `deinit` is not
     // main-actor-isolated, and these tokens are only ever unregistered there.
     @ObservationIgnored nonisolated(unsafe) private var systemConditionObservers: [NSObjectProtocol] = []
@@ -104,6 +126,7 @@ final class LibraryMetadataSync {
     /// write sightings with, and a run in flight is cancelled immediately.
     func setSignedIn(_ signedIn: Bool) {
         isSignedIn = signedIn
+        if signedIn { cancelledByUser = false }
         reconcile()
     }
 
@@ -116,15 +139,20 @@ final class LibraryMetadataSync {
     /// The master "Automatic work on this device" switch.
     func setParticipating(_ participating: Bool) {
         isParticipating = participating
+        if participating { cancelledByUser = false }
         reconcile()
     }
 
-    /// Cancels an in-flight run without changing any gate — `AppModel`'s cancel handler for the
-    /// Activity screen's "Cancel" action (`isCancellable: true`).
+    /// Cancels an in-flight run and keeps it cancelled — `AppModel`'s cancel handler for the
+    /// Activity screen's "Cancel" action (`isCancellable: true`). Sticky until the user flips
+    /// participation or signs back in (see `cancelledByUser`); a plain "cancel the task" here would
+    /// let the next thermal/power notification silently restart the run underneath the user.
     func cancel() {
+        cancelledByUser = true
         runTask?.cancel()
         runTask = nil
         isRunning = false
+        startedAt = nil
     }
 
     static func shouldRun(
@@ -144,52 +172,97 @@ final class LibraryMetadataSync {
     /// Re-plans against the current candidate source and system conditions. Called by every
     /// setter above, and by `PhotosRootView` whenever `PhotoMatchStore.revision` changes (a fresh
     /// batch of strong matches) — mirrors `PhotoClassificationSweep.reconcile()`'s role for
-    /// `PhotoLibraryStore.monthsRevision`.
-    func reconcile(force: Bool = false) {
-        guard shouldRunNow else {
+    /// `PhotoLibraryStore.monthsRevision`. A run already in flight is never cancelled here: it
+    /// finishes its current pass and `run(token:)` re-plans once on `replanRequested`, so a burst
+    /// of calls (a fast-scrolling scan bumping `revision` hundreds of times) collapses into at most
+    /// one extra pass rather than one restart per bump.
+    func reconcile() {
+        guard shouldRunNow, !cancelledByUser else {
             runTask?.cancel()
             runTask = nil
             isRunning = false
+            startedAt = nil
             return
         }
-        guard runTask == nil || force else { return }
-        runTask?.cancel()
+        guard runTask == nil else {
+            replanRequested = true
+            return
+        }
         let token = UUID()
         runGeneration = token
         // Flip synchronously: a scheduled run is already "running" to the activity bar and to
         // anyone polling `isRunning` right after `reconcile()`; `run` clears it when it ends.
         isRunning = true
+        startedAt = .now
         runTask = Task(priority: .utility) { [weak self] in await self?.run(token: token) }
     }
 
+    /// Repeats `pass(token:)` until a pass completes with no replan requested during it — the
+    /// "finish this pass, then re-plan once" behaviour `reconcile()` promises. `isRunning`/
+    /// `runTask`/`startedAt` cover the whole repeat, not each pass, so the activity bar reads as
+    /// one continuous run across a replan instead of flickering between runs.
     private func run(token: UUID) async {
-        let candidates = candidateProvider()
-        totalCount = candidates.count
-        sentCount = 0
         defer {
             if runGeneration == token {
                 isRunning = false
                 runTask = nil
+                startedAt = nil
             }
         }
+        repeat {
+            replanRequested = false
+            await pass(token: token)
+        } while replanRequested && runGeneration == token && !Task.isCancelled
+    }
+
+    /// One planning-and-send pass: re-reads the candidate source fresh (so a candidate appended
+    /// mid-run, e.g. after a replan, is included), pre-filters out anything already recorded for
+    /// its current `modificationDate`, then sends the rest at up to 4 in flight. Counters reset at
+    /// the top so neither a fresh run nor a replanned pass briefly shows the previous pass's totals.
+    private func pass(token: UUID) async {
+        sentCount = 0
+        processedCount = 0
+        totalCount = 0
+        let candidates = candidateProvider()
         guard !candidates.isEmpty, !Task.isCancelled else { return }
+        let alreadySent =
+            (try? await analysisStore.librarySightingsSent(host: host, version: Self.version)) ?? []
+        // `factsProvider` runs on this actor (PhotoKit lookups are main-actor-bound), so planning a
+        // pass over thousands of candidates would otherwise block the UI for the whole filter step;
+        // yielding periodically lets SwiftUI keep drawing while a big library plans.
+        var pending: [Candidate] = []
+        pending.reserveCapacity(candidates.count)
+        for (offset, candidate) in candidates.enumerated() {
+            guard !Task.isCancelled, runGeneration == token else { return }
+            if let facts = factsProvider(candidate.localIdentifier) {
+                let key = SentSightingKey(
+                    localIdentifier: candidate.localIdentifier, imageId: candidate.imageID.rawValue,
+                    modificationDate: facts.modificationDate)
+                if alreadySent.contains(key) { continue }
+            }
+            pending.append(candidate)
+            if offset % 200 == 199 { await Task.yield() }
+        }
+        totalCount = pending.count
+        guard !pending.isEmpty, !Task.isCancelled else { return }
         guard let deviceShortcode = await deviceShortcodeProvider(), runGeneration == token,
             !Task.isCancelled
         else { return }
-        var iterator = candidates.makeIterator()
+        var iterator = pending.makeIterator()
         await withTaskGroup(of: Bool.self) { group in
-            var pendingCount = 0
+            var inFlightCount = 0
             func enqueue() {
-                guard !Task.isCancelled, pendingCount < 4, let candidate = iterator.next() else { return }
-                pendingCount += 1
+                guard !Task.isCancelled, inFlightCount < 4, let candidate = iterator.next() else { return }
+                inFlightCount += 1
                 group.addTask { [weak self] in
                     await self?.sendSighting(for: candidate, deviceShortcode: deviceShortcode) ?? false
                 }
             }
             for _ in 0..<4 { enqueue() }
-            while pendingCount > 0 {
+            while inFlightCount > 0 {
                 guard let sent = await group.next() else { break }
-                pendingCount -= 1
+                inFlightCount -= 1
+                processedCount += 1
                 if sent { sentCount += 1 }
                 guard !Task.isCancelled, runGeneration == token else { break }
                 enqueue()
@@ -197,17 +270,12 @@ final class LibraryMetadataSync {
         }
     }
 
-    /// One candidate's full pipeline: skip if already sent for its current `modificationDate`,
-    /// else resolve its cloud identifier, build the sighting, write it, and mark it sent. A
-    /// send failure is reported and simply leaves the row unmarked so the next pass retries it.
+    /// One candidate's full send: resolve its cloud identifier, build the sighting, write it, and
+    /// mark it sent. `pass(token:)` has already excluded already-sent candidates, so there is no
+    /// send-once check here — a send failure is reported and simply leaves the row unmarked so the
+    /// next pass retries it.
     private func sendSighting(for candidate: Candidate, deviceShortcode: DeviceShortcode) async -> Bool {
         guard let facts = factsProvider(candidate.localIdentifier) else { return false }
-        let alreadySent =
-            (try? await analysisStore.librarySightingSent(
-                host: host, localIdentifier: candidate.localIdentifier,
-                imageId: candidate.imageID.rawValue, version: Self.version,
-                modificationDate: facts.modificationDate)) ?? false
-        guard !alreadySent else { return false }
         let cloudIdentifier = await cloudIdentifierProvider(candidate.localIdentifier)
         let metadata = LibrarySightingBuilder.metadata(from: facts, cloudIdentifier: cloudIdentifier)
         let input = LibrarySightingBuilder.createInput(
@@ -230,8 +298,18 @@ final class LibraryMetadataSync {
 
 extension LibraryMetadataSync: BackgroundActivitySource {
     var currentActivities: [BackgroundActivity] {
-        guard isRunning, totalCount > 0 else { return [] }
-        let progress = Double(min(sentCount, totalCount)) / Double(totalCount)
+        guard isRunning else { return [] }
+        // `totalCount == 0` is the planning phase: `pass(token:)` is still filtering already-sent
+        // candidates out and does not yet know its denominator. That step walks the whole candidate
+        // list on this actor, so on a large library it lasts long enough to matter — report
+        // indeterminate rather than returning `[]`, or the activity blinks out of every surface at
+        // the start of each pass.
+        //
+        // Otherwise: driven by `processedCount`, not `sentCount`, because a skip or a send failure
+        // still finishes a candidate, and the bar must advance for those too or it reads "0 of N"
+        // until every candidate happens to succeed.
+        let progress =
+            totalCount > 0 ? Double(min(processedCount, totalCount)) / Double(totalCount) : nil
         return [
             BackgroundActivity(
                 id: "library-metadata-sync",
@@ -239,8 +317,8 @@ extension LibraryMetadataSync: BackgroundActivitySource {
                 title: "Recording library matches",
                 phase: .running,
                 progress: progress,
-                detail: "\(sentCount) of \(totalCount)",
-                startedAt: .now,
+                detail: totalCount > 0 ? "\(processedCount) of \(totalCount)" : nil,
+                startedAt: startedAt ?? .now,
                 link: .localActivity("library-metadata-sync"),
                 isUserInitiated: false,
                 isCancellable: true)

@@ -54,7 +54,12 @@ final class AppModel {
     /// available. Local photo browsing never waits for it.
     @ObservationIgnored private var storedPhotoAnalysisStore: PhotoAnalysisStore?
     @ObservationIgnored private var storedPhotoClassificationSweep: PhotoClassificationSweep?
-    @ObservationIgnored private var storedLibraryMetadataSync: LibraryMetadataSync?
+    // Not `@ObservationIgnored`: `LibraryMetadataSyncActivitySource`'s adapter closure below reads
+    // this property fresh on every access, so its assignment in `preparePhotoSubsystem()` (the
+    // first instance ever existing) and in `rebindClients()` (a host change) must invalidate any
+    // reader that observed this property while it was still `nil` — otherwise the sync's
+    // activities never appear until something unrelated re-triggers that reader.
+    private var storedLibraryMetadataSync: LibraryMetadataSync?
     @ObservationIgnored private var photoSubsystemTask: Task<Void, Never>?
 
     var photoAnalysisStore: PhotoAnalysisStore? { storedPhotoAnalysisStore }
@@ -98,7 +103,10 @@ final class AppModel {
 
     /// Registered once here (not rebuilt in `rebindClients()`) — `LibraryMetadataSyncActivitySource`
     /// below reads `storedLibraryMetadataSync` fresh on every access, so replacing the instance on
-    /// a host change (`rebindClients()`) never leaves a stale registration behind.
+    /// a host change (`rebindClients()`) never leaves a stale registration behind. And because
+    /// `storedLibraryMetadataSync` itself is not `@ObservationIgnored`, this assignment (and the
+    /// first one, in `preparePhotoSubsystem()`) also invalidates any reader of the adapter's
+    /// `currentActivities` that observed the property while it was still `nil`.
     private func makeLibraryMetadataSync(analysisStore: PhotoAnalysisStore) -> LibraryMetadataSync {
         let sync = LibraryMetadataSync(
             analysisStore: analysisStore, library: photoLibrary, matches: photoMatches, client: client,

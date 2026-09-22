@@ -164,6 +164,15 @@ history is the archive. Permanent product constraints live in the
 
 ## Ready projects
 
+- **Batch the image-sighting backfill.** `LibraryMetadataSync` writes one
+  `resources.imageSighting.create` per sighting at four concurrent requests, and
+  the generated routes expose only create/get/list/update/delete for the entity,
+  so a first backfill on a large member library is thousands of round trips. A
+  bulk create route would cut that to one request per page; the adapter already
+  upserts on the unique key, so batch semantics match the single write. The
+  client side is ready — the sync plans a whole pass before sending, so it has
+  the full pending list in hand.
+
 - **Resolve arrival findings after receiving.** The import writer files
   `arrived` findings, but the interactive receive flow does not resolve them.
   Connect successful receiving to the corresponding finding's lifecycle;
