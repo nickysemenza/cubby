@@ -102,8 +102,13 @@ describe("production entity action catalog", () => {
       deleteActions.flatMap((action) => action.entities),
     );
 
+    // `usda-food` has no local rows; `purchaseImportRun` is immutable history.
     expect(deletableEntities).toEqual(
-      new Set(browserRoutedEntities.filter((entity) => entity !== "usda-food")),
+      new Set(
+        browserRoutedEntities.filter(
+          (entity) => entity !== "usda-food" && entity !== "purchaseImportRun",
+        ),
+      ),
     );
     expect(
       deleteActions.find((action) => action.entities.includes("cookbook")),

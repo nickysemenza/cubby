@@ -84,9 +84,13 @@ describe("entity manifest", () => {
   });
 
   it("only claims a delete lifecycle for entities with a table", () => {
+    // `purchaseImportRun` is the one stored entity that is immutable history:
+    // it has a table and deliberately no delete lifecycle.
     for (const entity of allEntities) {
       const { dbTable, lifecycle } = entityManifest[entity];
-      expect(lifecycle.delete === null).toBe(dbTable === null);
+      expect(lifecycle.delete === null).toBe(
+        dbTable === null || entity === "purchaseImportRun",
+      );
     }
   });
 
@@ -168,6 +172,7 @@ describe("entity manifest", () => {
       "image",
       "planting",
       "gardenEntry",
+      "purchaseImportRun",
     ]);
   });
 

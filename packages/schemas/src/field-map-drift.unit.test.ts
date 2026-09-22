@@ -607,6 +607,12 @@ const INTENTIONAL_RESPELLINGS = {
     "shortcode-list filter spelled as entityFilterList(vendorShortcode) over the generated scalar vendorId field",
   "vendorAccount::vendorAccountFilters::ledgerPartyId":
     "shortcode-list filter spelled as entityFilterList(ledgerPartyShortcode) over the generated scalar ledgerPartyId field",
+  "purchaseImportRun::purchaseImportRunFilters::vendorAccountId":
+    "shortcode-list filter spelled as entityFilterList(vendorAccountShortcode) over the generated scalar vendorAccountId field",
+  "purchaseImportRun::purchaseImportRunFilters::vendorId":
+    "shortcode-list filter spelled as entityFilterList(vendorShortcode) over the generated scalar vendorId field",
+  "purchaseImportRun::purchaseImportRunFilters::ledgerPartyId":
+    "shortcode-list filter spelled as entityFilterList(ledgerPartyShortcode) over the generated scalar ledgerPartyId field",
 
   // --- recipe: recipeTopLevelFields (recipe-shared.ts) is a hand-declared
   // shared map predating the generator, reused across many exports (one
