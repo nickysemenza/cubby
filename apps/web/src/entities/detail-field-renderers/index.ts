@@ -54,6 +54,7 @@ export const detailRendererCoverage = {
   },
   product: {
     "product-id": implemented(productDetailFields["product-id"]),
+    "product-category": implemented(productDetailFields["product-category"]),
     "product-primary-gtin": implemented(
       productDetailFields["product-primary-gtin"],
     ),
