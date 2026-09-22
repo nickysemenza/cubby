@@ -8,6 +8,7 @@ export const activityKind = z.enum([
   "purchase_import",
   "purchase_validation",
   "product_enrichment",
+  "photo_inventory",
   "describe_image",
   "subject_lift",
 ]);

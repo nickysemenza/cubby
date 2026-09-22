@@ -16,7 +16,7 @@ function ImportRunRoute() {
   return (
     <Page
       variant="list"
-      title="Purchase import"
+      title="Import run"
       bodyGutter="standard"
       decoration="none"
     >

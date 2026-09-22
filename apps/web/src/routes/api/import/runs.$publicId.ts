@@ -45,6 +45,7 @@ const browserRun = (
   updated: run.updated,
   skipped: run.skipped,
   failureCode: run.failureCode,
+  notes: run.notes,
   dispatch: {
     eventId: run.dispatch.eventId,
     state: run.dispatch.coordinatorStartedAt
@@ -79,7 +80,13 @@ const browserRun = (
   })),
   targets: run.targets.map((target) => ({
     id: target.id,
-    targetType: target.purchaseId ? "purchase" : "product",
+    // A photo-inventory run's targets are always images — it never creates a
+    // purchase or product target row, so the run's purpose alone disambiguates.
+    targetType: target.purchaseId
+      ? "purchase"
+      : run.purpose === "photo_inventory"
+        ? "image"
+        : "product",
     targetShortcode: target.purchaseId ?? target.productId,
     targetName: null,
     sourceId: null,
