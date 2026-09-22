@@ -1,7 +1,9 @@
 import { expect, test } from "./e2e-test";
 import { gotoAuthenticatedPage } from "./e2e-helpers";
 
-test("workspace shell responds from phone navigation through desktop sidebar", async ({
+// The phone half (bottom navigation instead of the sidebar) lives in
+// `mobile.console-ledger-overhaul.spec.ts`.
+test("desktop workspace sidebar marks the current page and collapses", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
@@ -16,12 +18,7 @@ test("workspace shell responds from phone navigation through desktop sidebar", a
   ).toHaveAttribute("aria-current", "page");
   await page.getByRole("button", { name: "Collapse sidebar" }).click();
   await expect.poll(async () => (await sidebar.boundingBox())?.width).toBe(56);
-
-  await page.setViewportSize({ width: 390, height: 844 });
-  await expect(sidebar).toBeHidden();
-  const bottomNav = page.getByRole("navigation", { name: "Main navigation" });
-  await expect(bottomNav).toBeVisible();
   await expect(
-    bottomNav.getByRole("link", { name: "Inventory", exact: true }),
-  ).toBeVisible();
+    page.getByRole("navigation", { name: "Main navigation" }),
+  ).toBeHidden();
 });

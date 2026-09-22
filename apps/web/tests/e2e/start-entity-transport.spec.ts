@@ -182,7 +182,8 @@ test("core entity list, detail, and mutation ride named Start operations", async
   for (const requestId of requestIds) expect(requestId).toBe(canaryRequestId);
 });
 
-test("server error references remain usable on desktop and narrow screens", async ({
+// The phone sheet half lives in `mobile.start-entity-transport.spec.ts`.
+test("server error references remain usable on desktop", async ({
   page,
   context,
 }, testInfo) => {
@@ -235,16 +236,4 @@ test("server error references remain usable on desktop and narrow screens", asyn
   );
   await expect(dialog.getByRole("button", { name: "Copied" })).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath("error-desktop.png") });
-  // ResponsiveDialog swaps its Dialog tree for a Sheet tree below 768px,
-  // remounting the body and resetting the "Copied" state back to "Copy
-  // details" — assert the clipboard/"Copied" state above, before resizing.
-  await page.setViewportSize({ width: 390, height: 844 });
-  await expect(dialog).toBeVisible();
-  await expect(
-    dialog.getByRole("button", { name: "Copy details" }),
-  ).toBeVisible();
-  const bounds = await dialog.boundingBox();
-  expect(bounds).not.toBeNull();
-  expect((bounds?.x ?? 0) + (bounds?.width ?? 0)).toBeLessThanOrEqual(390);
-  await page.screenshot({ path: testInfo.outputPath("error-mobile.png") });
 });

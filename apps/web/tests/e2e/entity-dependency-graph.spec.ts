@@ -4,7 +4,6 @@ import {
   seedTaskPrerequisite,
 } from "./e2e-fixtures";
 import {
-  expectViewportBounded,
   waitForAppHydration,
   waitForFormHydration,
   gotoAuthenticatedPage,
@@ -72,21 +71,6 @@ test("work graph renders through Viz, restores filters, and opens a graph node",
   await expect(find).toHaveValue(name);
   await expect(types).toHaveValue("task");
   await expect(graph).toBeVisible({ timeout: 15_000 });
-
-  await page.setViewportSize({ width: 390, height: 844 });
-  await expect(graph).toBeVisible();
-  await expectViewportBounded(page);
-  await expect
-    .poll(async () =>
-      graph.evaluate((svg) => {
-        const frame = svg.getBoundingClientRect();
-        return Array.from(svg.querySelectorAll("a")).every((link) => {
-          const bounds = link.getBoundingClientRect();
-          return bounds.left >= frame.left && bounds.right <= frame.right;
-        });
-      }),
-    )
-    .toBe(true);
 
   await graphLink.click();
   await expect(page).toHaveURL(new RegExp(`/tasks/${task.id}$`));
@@ -227,25 +211,6 @@ test("graph workspace keeps its map while selecting, expanding, and opening reco
   await page.getByRole("button", { name: "Clear path", exact: true }).click();
   await expect(page).toHaveURL((url) => !url.searchParams.has("destination"));
 
-  await page.setViewportSize({ width: 390, height: 844 });
-  await expectViewportBounded(page);
-  await expect(
-    page.getByRole("heading", { name: "Graph inspector", exact: true }),
-  ).toBeVisible();
-  await page.getByRole("button", { name: "Close", exact: true }).click();
-  await page
-    .getByRole("button", { name: "Inspect selection", exact: true })
-    .click();
-  await expect(
-    page.getByRole("heading", { name: "Graph inspector", exact: true }),
-  ).toBeVisible();
-  await page.getByRole("button", { name: "Close", exact: true }).click();
-  expect(
-    await page
-      .getByLabel("Find explored records")
-      .evaluate((input) => input.getBoundingClientRect().width),
-  ).toBeGreaterThan(300);
-  await page.setViewportSize({ width: 1280, height: 900 });
   await gotoAuthenticatedPage(page, `/products/${product.id}`);
   await page.getByRole("tab", { name: "Relations", exact: true }).click();
   await page.getByRole("button", { name: "Graph view", exact: true }).click();

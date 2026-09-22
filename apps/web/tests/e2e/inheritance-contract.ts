@@ -78,7 +78,8 @@ export function inheritanceContract() {
       explanation.getByText("Stored override", { exact: true }),
     ).toHaveCount(0);
     await expectViewportBounded(page);
-    if (test.info().project.name === "Authenticated tests") {
+    // The purchase table's project cell is a desktop layout; phones get cards.
+    if ((page.viewportSize()?.width ?? 0) >= 768) {
       await gotoAuthenticatedPage(page, `/purchases/${fixture.purchase.id}`);
       const projectCell = page
         .locator('[data-cell-col="project"]')

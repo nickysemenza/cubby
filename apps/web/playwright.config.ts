@@ -35,6 +35,13 @@ for (const [key, value] of Object.entries(e2eProcessEnvDefaults)) {
   process.env[key] ??= value;
 }
 
+/** The iPhone 13 screen as current iOS reports it (402x874 at 3x). */
+const iPhone13Metrics = {
+  viewport: { width: 402, height: 874 },
+  contextOptions: { screen: { width: 402, height: 874 } },
+  deviceScaleFactor: 3,
+};
+
 /**
  * See https://playwright.dev/docs/test-configuration.
  */
@@ -88,11 +95,16 @@ export default defineConfig({
     screenshot: "only-on-failure",
   },
 
-  /* Configure projects for major browsers */
+  /* Projects split by layout, not engine. Desktop users run Chrome, and
+     Playwright's WebKit is not iOS Safari, so phone layout runs on Chromium
+     at iPhone 13 metrics (`mobile.*`). WebKit keeps only engine-specific
+     cases (`webkit.*`). Server/API contracts run once, in the desktop project.
+     Patterns anchor on the basename so a mid-name match cannot move a spec
+     between projects. */
   projects: [
     {
       name: "Unauthenticated tests",
-      testMatch: /unauth\..*\.spec\.ts/,
+      testMatch: /(^|\/)unauth\.[^/]*\.spec\.ts$/,
       metadata: { authenticated: false },
       use: {
         ...devices["Desktop Chrome"],
@@ -101,21 +113,29 @@ export default defineConfig({
     {
       name: "Authenticated tests",
       testMatch: /\.spec\.ts$/,
-      testIgnore: /(?:unauth|mobile)\./,
+      testIgnore: /(^|\/)(?:unauth|mobile|webkit)\.[^/]*\.spec\.ts$/,
       metadata: { authenticated: true },
       use: {
         ...devices["Desktop Chrome"],
       },
     },
     {
-      name: "iPhone WebKit smoke",
-      testMatch: /mobile\..*\.spec\.ts/,
+      name: "Chromium phone",
+      testMatch: /(^|\/)mobile\.[^/]*\.spec\.ts$/,
       metadata: { authenticated: true },
       use: {
         ...devices["iPhone 13"],
-        viewport: { width: 402, height: 874 },
-        contextOptions: { screen: { width: 402, height: 874 } },
-        deviceScaleFactor: 3,
+        ...iPhone13Metrics,
+        browserName: "chromium",
+      },
+    },
+    {
+      name: "WebKit smoke",
+      testMatch: /(^|\/)webkit\.[^/]*\.spec\.ts$/,
+      metadata: { authenticated: true },
+      use: {
+        ...devices["iPhone 13"],
+        ...iPhone13Metrics,
       },
     },
   ],

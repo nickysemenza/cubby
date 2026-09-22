@@ -13,6 +13,11 @@ import { expect, test } from "./e2e-test";
 const createdExpense = z.object({ item: expenseOut.pick({ id: true }) });
 const clearedExpense = z.object({ cost: z.number(), date: z.null() });
 
+/**
+ * Clears a fresh expense's date through the bulk dialog in the current layout
+ * and returns its id. The server-side refusal contract is asserted once, in
+ * the desktop spec.
+ */
 export async function clearExpenseDatesInBrowser(page: Page, baseURL: string) {
   const name = uniqueName(test.info(), "Undated supplies");
   const response = await page.request.post("/api/v1/expenses", {
@@ -74,10 +79,5 @@ export async function clearExpenseDatesInBrowser(page: Page, baseURL: string) {
     cost: 0,
     date: null,
   });
-  const refused = await page.request.patch(`/api/v1/expenses/${item.id}`, {
-    headers: { Origin: baseURL },
-    data: { cost: 12 },
-  });
-  expect(refused.ok()).toBe(false);
-  expect(await refused.text()).toContain("A date is required");
+  return item.id;
 }

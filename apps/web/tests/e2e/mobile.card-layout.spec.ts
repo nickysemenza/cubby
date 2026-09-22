@@ -6,8 +6,10 @@ test("phone cards and compact tiles remain navigable within the viewport", async
   page,
 }, testInfo) => {
   const name = `Phone cards ${Date.now()}`;
-  await seedConcurrently([0, 1, 2], (index) =>
-    seedProductPrerequisite(page, { name: `${name} ${index}` }),
+  // A long name proves a compact tile wraps instead of widening the page.
+  const longName = `${name} 0 Long handled precision workshop tool with an unusually descriptive name`;
+  await seedConcurrently([longName, `${name} 1`, `${name} 2`], (productName) =>
+    seedProductPrerequisite(page, { name: productName }),
   );
   await gotoAuthenticatedPage(
     page,
@@ -16,7 +18,7 @@ test("phone cards and compact tiles remain navigable within the viewport", async
   const grid = page.getByTestId("entity-card-grid");
   await expect(grid.locator(":scope > *")).toHaveCount(3);
   await expectViewportBounded(page);
-  await page.screenshot({ path: testInfo.outputPath("webkit-cards.png") });
+  await page.screenshot({ path: testInfo.outputPath("phone-cards.png") });
   await page
     .getByRole("button", { name: "Products view: Cards", exact: true })
     .click();
@@ -24,12 +26,12 @@ test("phone cards and compact tiles remain navigable within the viewport", async
   await expect(grid).toHaveAttribute("data-compact", "true");
   await expectViewportBounded(page);
   await page.screenshot({
-    path: testInfo.outputPath("webkit-compact.png"),
+    path: testInfo.outputPath("phone-compact.png"),
     animations: "disabled",
   });
-  await grid.getByRole("link", { name: `${name} 0`, exact: true }).click();
+  await grid.getByRole("link", { name: longName, exact: true }).click();
   await expect(page).toHaveURL(/\/products\/PRD-/);
   await expect(
-    page.getByRole("heading", { name: `${name} 0`, exact: true }),
+    page.getByRole("heading", { name: longName, exact: true }),
   ).toBeVisible();
 });

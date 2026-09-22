@@ -77,27 +77,10 @@ test("card density adapts to the work surface and stays temporary through filter
   await expectViewportBounded(page);
   await page.screenshot({ path: testInfo.outputPath("desktop-compact.png") });
 
+  // The phone Cards menu and card navigation are covered by
+  // `mobile.card-layout.spec.ts`.
   await page.reload();
   await expect(grid).toHaveAttribute("data-compact", "false");
-  await page.setViewportSize({ width: 402, height: 874 });
-  await page
-    .getByRole("button", { name: "Products view: Cards", exact: true })
-    .click();
-  await page.getByRole("menuitem", { name: "Compact", exact: true }).click();
-  await expect(grid).toHaveAttribute("data-compact", "true");
-  await expectViewportBounded(page);
-  await page.screenshot({
-    path: testInfo.outputPath("phone-compact.png"),
-    animations: "disabled",
-  });
-  await firstCard.click();
-  await expect(page).toHaveURL(/\/products\/PRD-/);
-  await expect(
-    page.getByRole("heading", {
-      name: `${name} Long handled precision workshop tool with an unusually descriptive name`,
-      exact: true,
-    }),
-  ).toBeVisible();
 });
 
 test("complete-list cookbooks keep local search across card and list presentations", async ({

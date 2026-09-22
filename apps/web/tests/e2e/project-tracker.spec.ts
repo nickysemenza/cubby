@@ -22,27 +22,6 @@ test("command palette search deep-links a task straight to its detail page", asy
   await expect(page.getByRole("heading", { level: 1, name })).toBeVisible();
 });
 
-test("mobile expense quick-add renders as a bottom sheet and still submits", async ({
-  page,
-}) => {
-  await page.setViewportSize({ width: 375, height: 812 });
-  const name = `e2e mobile expense ${Date.now()}`;
-  await gotoAuthenticatedPage(page, "/expenses");
-  await page.getByRole("button", { name: "New", exact: true }).click();
-
-  const sheet = page.locator('[data-slot="sheet-content"][data-side="bottom"]');
-  await expect(sheet).toBeVisible();
-  await sheet.getByLabel("Name").fill(name);
-  await sheet.getByRole("spinbutton", { name: "Cost" }).fill("12.34");
-  await sheet.getByPlaceholder("Select cost type").click();
-  await page.getByRole("option", { name: "Materials", exact: true }).click();
-  await sheet.getByPlaceholder("Select trade").click();
-  await page.getByRole("option", { name: "Other", exact: true }).click();
-  await sheet.getByRole("button", { name: /^Create$/ }).click();
-  await expect(sheet).not.toBeVisible();
-  await expect(page.getByText(name, { exact: true })).toBeVisible();
-});
-
 test("task quick-add requires a deliberate trade and saves assignment modes", async ({
   page,
 }) => {

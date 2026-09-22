@@ -12,19 +12,6 @@ import {
 } from "./e2e-helpers";
 import { expect, test } from "./e2e-test";
 
-test("Home Screen manifest opens Today without changing the installed app identity", async ({
-  request,
-}) => {
-  const response = await request.get("/manifest.json");
-  expect(response.ok()).toBe(true);
-  expect(await response.json()).toMatchObject({
-    id: "/inventory/session",
-    start_url: "/",
-    scope: "/",
-    share_target: { action: "/recipes/new" },
-  });
-});
-
 test("search detail Back retains query and does not reopen the input", async ({
   page,
 }, testInfo) => {
@@ -142,4 +129,24 @@ test("recipe scaling and shopping checkmarks keep their existing behavior", asyn
   await check.uncheck();
   await expect(check).not.toBeChecked();
   await expectViewportBounded(page);
+});
+
+test("mobile expense quick-add renders as a bottom sheet and still submits", async ({
+  page,
+}) => {
+  const name = `e2e mobile expense ${Date.now()}`;
+  await gotoAuthenticatedPage(page, "/expenses");
+  await page.getByRole("button", { name: "New", exact: true }).click();
+
+  const sheet = page.locator('[data-slot="sheet-content"][data-side="bottom"]');
+  await expect(sheet).toBeVisible();
+  await sheet.getByLabel("Name").fill(name);
+  await sheet.getByRole("spinbutton", { name: "Cost" }).fill("12.34");
+  await sheet.getByPlaceholder("Select cost type").click();
+  await page.getByRole("option", { name: "Materials", exact: true }).click();
+  await sheet.getByPlaceholder("Select trade").click();
+  await page.getByRole("option", { name: "Other", exact: true }).click();
+  await sheet.getByRole("button", { name: /^Create$/ }).click();
+  await expect(sheet).not.toBeVisible();
+  await expect(page.getByText(name, { exact: true })).toBeVisible();
 });
