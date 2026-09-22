@@ -456,8 +456,14 @@ jobs:
       # still keeps the generator build and SPM clones for the next attempt.
       # A concurrent job may have saved the same key first; that 409 is
       # harmless and must never fail the check.
-      - name: Save OpenAPI generator cache
+      # Never save an empty generator directory: a run that fails before the
+      # generator is built would otherwise poison the exact key for good.
+      - name: Check OpenAPI generator binary
+        id: generator-built
         if: always() && steps.apple-tools.outputs.openapi-generator-cache-hit != 'true'
+        run: test -x "$CUBBY_OPENAPI_GENERATOR_BIN" && echo "present=true" >> "$GITHUB_OUTPUT" || true
+      - name: Save OpenAPI generator cache
+        if: always() && steps.generator-built.outputs.present == 'true'
         continue-on-error: true
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
