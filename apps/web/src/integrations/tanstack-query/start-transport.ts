@@ -129,8 +129,27 @@ async function dispatchStartOperation<Input>(
   );
 }
 
+let dispatchOverride: StartTransportRuntime["dispatch"] | null = null;
+
+/**
+ * Test seam: route every operation without its own transport through
+ * `dispatch` until the returned restore runs. The browser test harness uses it
+ * so an unmocked read fails inside the test instead of reaching the real
+ * Start dispatcher and rejecting after teardown.
+ */
+export function overrideStartDispatch(
+  dispatch: StartTransportRuntime["dispatch"],
+): () => void {
+  const previous = dispatchOverride;
+  dispatchOverride = dispatch;
+  return () => {
+    dispatchOverride = previous;
+  };
+}
+
 const productionStartTransportRuntime: StartTransportRuntime = {
-  dispatch: dispatchStartOperation,
+  dispatch: (operation, input, transport) =>
+    (dispatchOverride ?? dispatchStartOperation)(operation, input, transport),
 };
 
 export interface StartOperation<Input, Output> {

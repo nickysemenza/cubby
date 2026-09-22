@@ -79,6 +79,22 @@ describe("entity field provenance", () => {
     );
   });
 
+  it("rejects a reference field without a label", () => {
+    const declaration = {
+      ...purchaseDeclaration,
+      model: {
+        ...purchaseDeclaration.model,
+        fields: purchaseDeclaration.model.fields.map((field) =>
+          field.key === "vendorId" ? { ...field, label: undefined } : field,
+        ),
+      },
+    };
+
+    expect(() => compileEntity(declaration, 0)).toThrow(
+      /is a reference field and must declare a sentence-case label/u,
+    );
+  });
+
   it("rejects an inspectable source whose relation targets another entity", () => {
     const declaration = {
       ...purchaseDeclaration,

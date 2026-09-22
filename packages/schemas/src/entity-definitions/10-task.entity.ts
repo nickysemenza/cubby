@@ -387,6 +387,7 @@ export default defineEntity({
       {
         key: "pendingImageIds",
         kind: "identifier",
+        label: "Pending image IDs",
         readKey: null,
         reference: { entity: "image", multiple: true },
         validation: {
@@ -398,6 +399,7 @@ export default defineEntity({
       {
         key: "removeImageIds",
         kind: "identifier",
+        label: "Remove image IDs",
         readKey: null,
         reference: { entity: "image", multiple: true },
         validation: {
