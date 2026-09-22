@@ -59,15 +59,21 @@ describe("PreviewQuery", () => {
 
     rerender(
       <PreviewQuery
-        query={{ data: undefined, isLoading: false, isError: true, refetch }}
+        query={{
+          data: undefined,
+          isLoading: false,
+          isError: true,
+          error: new Error("preview transport down"),
+          refetch,
+        }}
         label="Product"
       >
         {(data: { name: string }) => <span>{data.name}</span>}
       </PreviewQuery>,
     );
-    expect(
-      screen.getByText("Product could not be loaded."),
-    ).toBeInTheDocument();
+    expect(screen.getByText("Couldn't load Product.")).toBeInTheDocument();
+    // The raw failure rides along, never a generic-only line.
+    expect(screen.getByText("preview transport down")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Retry" }));
     expect(refetch).toHaveBeenCalledOnce();
 

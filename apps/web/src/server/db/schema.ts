@@ -1474,6 +1474,10 @@ export const importRun = pgTable(
     dispatchError: text("dispatchError"),
     coordinatorStartedAt: timestamp("coordinatorStartedAt", { mode: "date" }),
     agentSessionId: text("agentSessionId"),
+    /** The order-history page the walk resumes from; null before the first listing. */
+    historyCursorUrl: text("historyCursorUrl"),
+    /** Set when a listing had no next page or predated the account cursor. */
+    historyExhaustedAt: timestamp("historyExhaustedAt", { mode: "date" }),
     ...baseTimestamps(),
   },
   (table) => [
@@ -1557,6 +1561,39 @@ export const importRunTarget = pgTable(
     check(
       "ImportRunTarget_outcome_check",
       sql`${table.outcome} IS NULL OR ${table.outcome} IN ('replayed', 'raw_evidence_drift', 'semantic_drift', 'enriched', 'unavailable', 'skipped')`,
+    ),
+  ],
+);
+
+/**
+ * The orders an account-sync run saw on the vendor's order-history pages. A
+ * row is a worklist item, not evidence: `claim_next_import_work` hands the
+ * oldest `pending` one to the coordinator, and `ordersSeen` counts these rows
+ * rather than commits. No vendorAccount FK: the run already carries it.
+ */
+export const importRunOrderCandidate = pgTable(
+  "ImportRunOrderCandidate",
+  {
+    id: pkUuid(),
+    runId: uuid("runId")
+      .notNull()
+      .references(() => importRun.id),
+    orderId: text("orderId").notNull(),
+    orderUrl: text("orderUrl"),
+    orderedAt: date("orderedAt", { mode: "string" }),
+    state: text("state").notNull().default("pending"),
+    listedAt: timestamp("listedAt", { mode: "date" }).notNull().defaultNow(),
+    ...baseTimestamps(),
+  },
+  (table) => [
+    uniqueIndex("ImportRunOrderCandidate_run_order_key").on(
+      table.runId,
+      table.orderId,
+    ),
+    index("ImportRunOrderCandidate_run_state_idx").on(table.runId, table.state),
+    check(
+      "ImportRunOrderCandidate_state_check",
+      sql`${table.state} IN ('pending', 'covered', 'imported', 'skipped')`,
     ),
   ],
 );

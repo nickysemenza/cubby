@@ -94,7 +94,12 @@ export const verifyImageRows = async (
       }
       await ports.updateImageIntegrity(db, row.id, inspected);
       results.push({ imageId: row.id, storageStatus: "available" });
-    } catch {
+    } catch (error) {
+      // SILENT: an inspection failure (corrupt bytes, unreadable format) is
+      // already surfaced to the caller as this row's `metadata_mismatch`
+      // result below; there's no richer caller-visible channel at this
+      // per-row granularity.
+      console.error("image-verification.inspect-failed", { id: row.id, error });
       await ports.updateImageIntegrity(db, row.id, {
         renderStatus: "failed",
         storageStatus: "metadata_mismatch",

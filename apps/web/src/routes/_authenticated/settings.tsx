@@ -34,16 +34,14 @@ import { copyText } from "~/lib/clipboard";
 import { getErrorMessage } from "~/lib/error-utils";
 import { hasGmailReadonlyScope } from "~/lib/google-auth";
 import { GMAIL_READONLY_SCOPE } from "~/lib/google-auth-constants";
+import { readJsonOrThrow } from "~/lib/http-error";
 import { pageTitle } from "~/lib/page-title";
 import {
   timingResponseSchema,
   type TimingResponse,
 } from "~/routes/api/debug/timing";
 import { merchantRulesResponse } from "~/routes/api/import/merchant-rules";
-import {
-  memberLoginsError,
-  memberLoginsResponse,
-} from "~/routes/api/settings/member-logins";
+import { memberLoginsResponse } from "~/routes/api/settings/member-logins";
 
 export const Route = createFileRoute("/_authenticated/settings")({
   component: SettingsPage,
@@ -129,10 +127,11 @@ function MerchantVendorRulesCard() {
     queryKey: ["purchase-import", "merchant-rules"],
     queryFn: async () => {
       const response = await fetch("/api/import/merchant-rules");
-      const body: unknown = await response.json();
-      if (!response.ok)
-        throw new Error("Merchant routing rules could not load.");
-      return merchantRulesResponse.parse(body);
+      return readJsonOrThrow(
+        response,
+        merchantRulesResponse,
+        "Merchant routing rules could not load.",
+      );
     },
   });
   const save = useMutation({
@@ -142,10 +141,12 @@ function MerchantVendorRulesCard() {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ merchant, vendorId }),
       });
-      const body: unknown = await response.json();
-      if (!response.ok)
-        throw new Error("Merchant routing rule could not save.");
-      return merchantRulesResponse.parse(body);
+      return readJsonOrThrow(
+        response,
+        merchantRulesResponse,
+        "Merchant routing rule could not save.",
+        { method: "POST" },
+      );
     },
     onSuccess: (data) => {
       queryClient.setQueryData(["purchase-import", "merchant-rules"], data);
@@ -238,14 +239,11 @@ function MemberLoginsCard() {
     queryKey: ["settings", "member-logins"],
     queryFn: async () => {
       const response = await fetch("/api/settings/member-logins");
-      const body: unknown = await response.json();
-      if (!response.ok) {
-        const parsed = memberLoginsError.safeParse(body);
-        throw new Error(
-          parsed.success ? parsed.data.error : "Member logins could not load.",
-        );
-      }
-      return memberLoginsResponse.parse(body);
+      return readJsonOrThrow(
+        response,
+        memberLoginsResponse,
+        "Member logins could not load.",
+      );
     },
   });
   const update = useMutation({
@@ -258,16 +256,12 @@ function MemberLoginsCard() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(input),
       });
-      const body: unknown = await response.json();
-      if (!response.ok) {
-        const parsed = memberLoginsError.safeParse(body);
-        throw new Error(
-          parsed.success
-            ? parsed.data.error
-            : "Member login could not be updated.",
-        );
-      }
-      return memberLoginsResponse.parse(body);
+      return readJsonOrThrow(
+        response,
+        memberLoginsResponse,
+        "Member login could not be updated.",
+        { method: "PATCH" },
+      );
     },
     onSuccess: (data) => {
       queryClient.setQueryData(["settings", "member-logins"], data);
@@ -276,7 +270,9 @@ function MemberLoginsCard() {
       });
       toast.success("Member login updated");
     },
-    onError: (error) => toast.error(getErrorMessage(error)),
+    // No local onError: the global MutationCache toasts unhandled mutation
+    // failures with the raw diagnostics (root-provider.tsx), and nothing here
+    // renders `update.error` inline.
   });
 
   return (

@@ -350,6 +350,9 @@ export function throwRelationRefusal(opts: {
       toPublicImpact(item, opts.codeById, "throw"),
     );
   } catch {
+    // SILENT: see the docstring above — the typed `createBlockedError` thrown
+    // below is the refusal itself; losing the structured `blockers[]` extra
+    // must not replace it with a bookkeeping-detail error instead.
     blockers = [];
   }
   throw createBlockedError(

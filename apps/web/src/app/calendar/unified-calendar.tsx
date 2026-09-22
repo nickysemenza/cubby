@@ -18,6 +18,8 @@ import {
 } from "react";
 import { toast } from "sonner";
 
+import { showErrorToast } from "~/components/feedback/error-details";
+import { ErrorDisplay } from "~/components/feedback/error-display";
 import { Row, Stack } from "~/components/layout";
 import {
   type EventCalendarRenderEventProps,
@@ -37,7 +39,6 @@ import { createPopoverHandle, PopoverTrigger } from "~/components/ui/popover";
 import { ResponsiveSheet } from "~/components/ui/responsive-sheet";
 import { ChoiceSwitcher } from "~/components/ui/view-switcher";
 import { useEntityCommands } from "~/entities/editing/use-entity-commands";
-import { getErrorMessage } from "~/lib/error-utils";
 import { HOUSEHOLD_TIMEZONE, householdLocalDate } from "~/lib/household-date";
 import { formatEstimate } from "~/lib/nutrition-format";
 import { formatPlainDate, parsePlainDate } from "~/lib/plain-date";
@@ -247,7 +248,7 @@ export function UnifiedCalendar({
     }),
     [filters, lockedKinds, visibleRange],
   );
-  const { data, isLoading, isError, refetch } = useQuery({
+  const { data, isLoading, isError, error, refetch } = useQuery({
     ...calendar.range.queryOptions(range),
     // Without this every chip toggle blanks the month grid mid-flight.
     placeholderData: keepPreviousData,
@@ -311,7 +312,7 @@ export function UnifiedCalendar({
       void request
         .then(() => toast.success(`${label} updated`))
         .catch((cause: unknown) => {
-          toast.error(getErrorMessage(cause));
+          showErrorToast(cause);
           setEvents(sourceEvents);
         });
       return true;
@@ -437,7 +438,9 @@ export function UnifiedCalendar({
           />
         </Row>
 
-        {isError && <CalendarRangeError onRetry={() => void refetch()} />}
+        {isError && (
+          <CalendarRangeError error={error} onRetry={() => void refetch()} />
+        )}
 
         {/* Both trees render; the BREAKPOINT decides, not JS. `useIsMobile`
             reports false on the server, so a JS-only switch would paint the
@@ -631,25 +634,20 @@ function CalendarDaySheet({
   );
 }
 
-function CalendarRangeError({ onRetry }: { onRetry: () => void }) {
+function CalendarRangeError({
+  error,
+  onRetry,
+}: {
+  error: unknown;
+  onRetry: () => void;
+}) {
   return (
-    <div
-      role="alert"
-      className="flex flex-wrap items-center gap-x-3 gap-y-2 border border-destructive/40 bg-destructive/5 px-2 py-2 text-sm md:px-3 md:py-1.5"
-    >
-      <Description className="m-0 flex-1">
-        The calendar could not be loaded. Your entries are unavailable until it
-        reconnects.
-      </Description>
-      <Button
-        type="button"
-        variant="outline"
-        className="h-11 shrink-0 md:h-8"
-        onClick={onRetry}
-      >
-        Retry
-      </Button>
-    </div>
+    <ErrorDisplay
+      error={error}
+      title="the calendar"
+      onRetry={onRetry}
+      className="border border-destructive/40 bg-destructive/5 px-2 py-2 md:px-3 md:py-1.5"
+    />
   );
 }
 

@@ -445,13 +445,12 @@ or environment secrets are:
 | Secret | Purpose |
 |---|---|
 | `CLOUDFLARE_API_TOKEN` | Deploy all four Workers and manage their declared bindings |
-| `CODECOV_TOKEN` | Optional coverage upload workflow |
 | `CLAUDE_CODE_OAUTH_TOKEN` | Automated Claude workflows, not application runtime |
 
 The Cloudflare token should be scoped to the checked-in account and only the
 resource types the deployment workflow manages. Production deploys always
-build before invoking Wrangler; previews upload a completed CI build and reuse
-production bindings without routing production traffic.
+build before invoking Wrangler. Preview deploys are not supported; production
+is the only deployed environment.
 
 ## Apple platform
 

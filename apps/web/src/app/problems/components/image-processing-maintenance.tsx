@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
+import { ErrorDisplay } from "~/components/feedback/error-display";
 import { Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import {
@@ -53,7 +54,11 @@ export function ImageProcessingMaintenance() {
       {result.isPending ? (
         <p>Loading image work…</p>
       ) : result.isError ? (
-        <p role="alert">Could not load image work.</p>
+        <ErrorDisplay
+          error={result.error}
+          title="image work"
+          onRetry={() => void result.refetch()}
+        />
       ) : (
         <>
           <Table>

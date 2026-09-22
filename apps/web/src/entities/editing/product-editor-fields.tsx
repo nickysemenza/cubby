@@ -37,6 +37,7 @@ import type { PendingImage } from "~/app/_components/PendingImageUpload";
 import { ExternalIdKindSuggestion } from "~/app/_components/products/external-id-kind-suggestion";
 import { IdentifyProductButton } from "~/app/_components/products/identify-product-with-ai";
 import { UnitMappingPairField } from "~/app/_components/units/unit-mapping-pair-field";
+import { showErrorToast } from "~/components/feedback/error-details";
 import { ArrayFieldManager } from "~/components/forms/array-field-manager";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
@@ -313,7 +314,7 @@ export function ProductUpcField({
         if (result.imageUrl) setLookupImageUrl(result.imageUrl);
       }
     } catch (err) {
-      console.error("[Product] UPC lookup failed:", err);
+      showErrorToast(err, "UPC lookup failed");
     } finally {
       setIsLookingUp(false);
     }

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
+import { showErrorToast } from "~/components/feedback/error-details";
 import type { BulkProgressEvent } from "~/lib/bulk-progress";
 import { getErrorMessage, type UnparsedError } from "~/lib/error-utils";
 
@@ -93,10 +94,10 @@ export function useBulkStream<Item = unknown, Result = unknown>() {
       } catch (error) {
         if (controller.signal.aborted) return;
         if (runIdRef.current === runId) {
-          const message =
-            handlers.errorToast?.(error) ?? getErrorMessage(error);
+          const customMessage = handlers.errorToast?.(error);
+          const message = customMessage ?? getErrorMessage(error);
           setState((s) => ({ ...s, running: false, error: message }));
-          toast.error(message);
+          showErrorToast(error, customMessage);
         }
       }
     },

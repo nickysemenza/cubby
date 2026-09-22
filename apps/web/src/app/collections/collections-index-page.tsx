@@ -6,14 +6,12 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { ArrowRight, Grid3X3, Plus, Sparkles } from "lucide-react";
 import { useId, useState } from "react";
-import { toast } from "sonner";
 
 import { Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { NativeSelect } from "~/components/ui/native-select";
 import { focusOnMount } from "~/hooks/focus-on-mount";
-import { getErrorMessage } from "~/lib/error-utils";
 
 import { collection } from "./collection.functions";
 import { useSmartCollections } from "./smart-collection-state";
@@ -67,7 +65,6 @@ export function CollectionsIndexPage({
         params: { collection: result.slug },
       });
     },
-    onError: (error) => toast.error(getErrorMessage(error)),
   });
   const slug = normalizeCollectionSlug(name);
 

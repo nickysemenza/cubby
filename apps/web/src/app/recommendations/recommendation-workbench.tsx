@@ -16,6 +16,7 @@ import {
 import { RelatedProductRow } from "~/app/_components/relatedness/related-product-row";
 import { inventory } from "~/app/inventory/inventory.functions";
 import { DuplicateProductMergeFix } from "~/app/problems/components/tier2-fixes";
+import { ErrorDisplay } from "~/components/feedback/error-display";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
@@ -159,12 +160,11 @@ function PlacementRecommendation({
   }
   if (recommendation.isError) {
     return (
-      <Stack gap="sm">
-        <p className="text-sm text-destructive">
-          Placement recommendations could not be loaded.
-        </p>
-        <RetryAction onRetry={() => void recommendation.refetch?.()} />
-      </Stack>
+      <ErrorDisplay
+        error={recommendation.error}
+        title="placement recommendations"
+        onRetry={() => void recommendation.refetch?.()}
+      />
     );
   }
   if (!recommendation.data) {
@@ -239,12 +239,11 @@ function TagPropagationRecommendation({
   }
   if (recommendation.isError) {
     return (
-      <Stack gap="sm">
-        <p className="text-sm text-destructive">
-          Tag proposals could not be loaded.
-        </p>
-        <RetryAction onRetry={() => void recommendation.refetch?.()} />
-      </Stack>
+      <ErrorDisplay
+        error={recommendation.error}
+        title="tag proposals"
+        onRetry={() => void recommendation.refetch?.()}
+      />
     );
   }
   if (!recommendation.data) {
@@ -356,12 +355,11 @@ function ProductRelatednessRecommendation({
     );
   if (relatedness.isError)
     return (
-      <Stack gap="sm">
-        <p className="text-sm text-destructive">
-          Recommendations could not be loaded.
-        </p>
-        <RetryAction onRetry={() => void relatedness.refetch?.()} />
-      </Stack>
+      <ErrorDisplay
+        error={relatedness.error}
+        title="recommendations"
+        onRetry={() => void relatedness.refetch?.()}
+      />
     );
   if (relatedness.data?.status !== "ready") {
     return (
@@ -467,12 +465,11 @@ function DuplicateProductRecommendation({
   }
   if (recommendation.isError) {
     return (
-      <Stack gap="sm">
-        <p className="text-sm text-destructive">
-          Duplicate-product recommendations could not be loaded.
-        </p>
-        <RetryAction onRetry={() => void recommendation.refetch?.()} />
-      </Stack>
+      <ErrorDisplay
+        error={recommendation.error}
+        title="duplicate-product recommendations"
+        onRetry={() => void recommendation.refetch?.()}
+      />
     );
   }
   if (!recommendation.data) {

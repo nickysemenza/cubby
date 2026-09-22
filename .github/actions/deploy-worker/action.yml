@@ -1,7 +1,8 @@
 name: "Deploy a Cloudflare Worker"
 description: >-
   Checks out current main twice (before building and again before deploying)
-  and installs, optionally builds, then deploys one package's Worker. Shared
+  and installs, optionally builds, then deploys one package's Worker via its
+  own deploy-command (every package has wrangler as a devDependency). Shared
   by every job in deploy.yaml; each job's own concurrency/environment/
   timeout-minutes stay on the job because a composite action cannot own them.
 
@@ -16,10 +17,6 @@ inputs:
     description: 'setup-node-with-deps "wasm" input: restore or false'
     required: false
     default: "false"
-  web-env:
-    description: 'setup-node-with-deps "web-env" input: true or false'
-    required: false
-    default: "false"
   build-command:
     description: "Shell command that builds the package. Skipped entirely when empty."
     required: false
@@ -32,26 +29,9 @@ inputs:
     default: ""
   deploy-command:
     description: >-
-      Shell command that deploys the package. Ignored when wrangler-action is
-      "true".
-    required: false
-    default: ""
-  wrangler-action:
-    description: >-
-      Deploy via cloudflare/wrangler-action instead of deploy-command. Web's
-      deploy:cf script re-runs build:cf, which would duplicate the
-      build-command step above, so web keeps the direct wrangler-action call
-      that only deploys.
-    required: false
-    default: "false"
-  wrangler-command:
-    description: "wrangler-action's command input. Required when wrangler-action is true."
-    required: false
-    default: ""
-  working-directory:
-    description: "wrangler-action's workingDirectory input."
-    required: false
-    default: "."
+      Shell command that deploys the package, using its own wrangler
+      devDependency.
+    required: true
   cloudflare-api-token:
     description: "Cloudflare API token"
     required: true
@@ -71,7 +51,6 @@ runs:
       with:
         wasm: ${{ inputs.wasm }}
         workspace-filter: ${{ inputs.workspace-filter }}
-        web-env: ${{ inputs.web-env }}
 
     - name: Build ${{ inputs.package }}
       if: steps.current_main.outputs.current == 'true' && inputs.build-command != ''
@@ -87,17 +66,8 @@ runs:
       id: deploy_current
       uses: ./.github/actions/check-current-main
 
-    - name: Deploy ${{ inputs.package }} (wrangler-action)
-      if: steps.deploy_current.outputs.current == 'true' && inputs.wrangler-action == 'true'
-      uses: cloudflare/wrangler-action@ebbaa1584979971c8614a24965b4405ff95890e0 # v4
-      with:
-        apiToken: ${{ inputs.cloudflare-api-token }}
-        accountId: ${{ inputs.cloudflare-account-id }}
-        command: ${{ inputs.wrangler-command }}
-        workingDirectory: ${{ inputs.working-directory }}
-
     - name: Deploy ${{ inputs.package }}
-      if: steps.deploy_current.outputs.current == 'true' && inputs.wrangler-action != 'true'
+      if: steps.deploy_current.outputs.current == 'true'
       shell: bash
       env:
         CLOUDFLARE_API_TOKEN: ${{ inputs.cloudflare-api-token }}

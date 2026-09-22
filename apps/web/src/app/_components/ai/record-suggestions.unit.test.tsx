@@ -12,7 +12,8 @@ import {
   screen,
   waitFor,
 } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { toast } from "sonner";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createEntityMutationPort } from "~/entities/editing/use-entity-commands";
 import { ai } from "~/lib/ai.functions";
@@ -432,11 +433,14 @@ describe("record suggestions", () => {
       { wrapper: harness.wrapper },
     );
 
+    const errorSpy = vi.spyOn(toast, "error").mockImplementation(() => "");
     await screen.findByText("Suggested: Electrical");
     fireEvent.click(screen.getByRole("button", { name: "Use suggestion" }));
-    await screen.findByRole("alert");
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent("Suggestion inputs changed");
     expect(calls).toBe(1);
     expect(commands).toHaveLength(0);
+    errorSpy.mockRestore();
   });
 
   it("resets a redundant override when the proposal matches its inherited fallback", async () => {

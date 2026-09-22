@@ -450,6 +450,11 @@ const handler = {
         ]);
         if (offline.expired > 0 || stale.expired > 0)
           console.log("[scheduled] Purchase runs expired", { offline, stale });
+        for (const failure of stale.failures)
+          Sentry.captureMessage(
+            `Stale purchase run could not be moved to review: ${failure.error}`,
+            "warning",
+          );
       });
       return;
     }

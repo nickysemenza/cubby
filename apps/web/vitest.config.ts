@@ -121,22 +121,32 @@ export default defineConfig({
     // Dependency prebundling regresses this import-heavy graph; remeasure before
     // enabling it. WASM initialization is not the material cost.
 
-    // `default` keeps the familiar output (progress + full diffs); the second
-    // reporter re-prints just the failing test names at the very end so a
-    // `| tail` of the run still shows what broke. See the reporter for the
-    // measured re-run waste that motivated it.
-    reporters: [
-      "dot",
-      "./tooling/failure-summary-reporter.ts",
-      "./tooling/test-run-contract-reporter.ts",
-    ],
+    // Under GitHub Actions, `github-actions` turns failures into inline PR
+    // annotations, so `default` (progress + full diffs) covers the terminal
+    // side and the failure-summary reporter's re-print at the end is
+    // redundant. Locally, `dot` keeps output quiet and the failure summary
+    // re-prints just the failing test names so a `| tail` of the run still
+    // shows what broke. See the reporter for the measured re-run waste that
+    // motivated it.
+    reporters:
+      process.env.GITHUB_ACTIONS === "true"
+        ? [
+            "default",
+            "github-actions",
+            "./tooling/test-run-contract-reporter.ts",
+          ]
+        : [
+            "dot",
+            "./tooling/failure-summary-reporter.ts",
+            "./tooling/test-run-contract-reporter.ts",
+          ],
     // Passing fixtures intentionally exercise error logging and transport
     // tracing. Printing those expected messages dominates terminal I/O in the
     // shared-graph suite; failed tests still retain their console output.
     silent: "passed-only",
-    coverage: {
-      exclude: ["src/components/reui/**"],
-    },
+    // CI runners are slower than local dev machines but should still fail
+    // fast on a genuinely hung test; local runs keep Vitest's own default.
+    testTimeout: process.env.CI ? 10_000 : 5000,
     // Vitest 5 makes file ordering a root-only concern. Every project still
     // inherits the same deterministic shuffle; project sequence config only
     // controls which groups may run together.

@@ -69,13 +69,17 @@ describe("CalendarAppPasswordSection", () => {
 });
 
 describe("CalendarSubscriptionSection", () => {
-  it("keeps read-only subscriptions secondary and avoids raw query errors", () => {
+  it("keeps read-only subscriptions secondary and surfaces the raw query error", () => {
     const retry = vi.fn();
     render(
       <CalendarSubscriptionSection
         token={null}
         isPending={false}
-        hasError
+        error={
+          new Error(
+            "select * from calendar_feed_tokens where household_id = $1",
+          )
+        }
         isRotating={false}
         onCreateOrRotate={() => undefined}
         onRetry={retry}
@@ -86,9 +90,10 @@ describe("CalendarSubscriptionSection", () => {
     expect(
       screen.getByText(/cannot create or edit Cubby records/),
     ).toBeVisible();
-    expect(screen.getByText(/could not be loaded. Try again/)).toBeVisible();
-    expect(screen.queryByText(/select \* from/i)).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+    expect(
+      screen.getByText(/select \* from calendar_feed_tokens/i),
+    ).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
     expect(retry).toHaveBeenCalledOnce();
   });
 
@@ -97,7 +102,7 @@ describe("CalendarSubscriptionSection", () => {
       <CalendarSubscriptionSection
         token="subscription-token"
         isPending={false}
-        hasError={false}
+        error={null}
         isRotating={false}
         onCreateOrRotate={() => undefined}
         onRetry={() => undefined}
@@ -114,16 +119,29 @@ describe("CalendarSubscriptionSection", () => {
 });
 
 describe("CalendarConnectionStatus", () => {
-  it("reports a refresh failure without exposing transport details", () => {
+  it("reports a refresh failure", () => {
     render(
       <CalendarConnectionStatus
         caldav={{ ready: true, refreshFailedAt: "2026-09-07T12:01:00.000Z" }}
-        hasError={false}
+        error={null}
         isPending={false}
       />,
     );
 
     expect(screen.getByText(/refresh needs attention/i)).toBeVisible();
-    expect(screen.queryByText(/select \* from/i)).toBeNull();
+  });
+
+  it("surfaces the raw connection status error, not a generic message", () => {
+    render(
+      <CalendarConnectionStatus
+        caldav={undefined}
+        error={new Error("select * from calendar_inspections where id = $1")}
+        isPending={false}
+      />,
+    );
+
+    expect(
+      screen.getByText(/select \* from calendar_inspections/i),
+    ).toBeVisible();
   });
 });

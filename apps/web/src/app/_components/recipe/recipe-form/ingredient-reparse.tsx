@@ -4,6 +4,7 @@ import { useState } from "react";
 import type { UseFormReturn } from "react-hook-form";
 import { toast } from "sonner";
 
+import { showErrorToast } from "~/components/feedback/error-details";
 import { Button } from "~/components/ui/button";
 import { computeParseDrift, hasDrift } from "~/lib/parse-drift";
 import { wasm } from "~/lib/wasm";
@@ -108,8 +109,8 @@ export function IngredientReparse({
         aliases: resolved.aliases ?? [],
       });
       toast.success(`Updated to "${resolved.name}"`);
-    } catch {
-      toast.error("Re-parse failed");
+    } catch (error) {
+      showErrorToast(error, "Re-parse failed");
     } finally {
       setApplying(false);
     }

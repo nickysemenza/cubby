@@ -20,14 +20,13 @@ import { purchaseImportRunHref } from "~/app/purchases/purchase-import-links";
 import { Badge, type BadgeVariant } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { StatusText } from "~/components/ui/status-text";
+import { readJsonOrThrow } from "~/lib/http-error";
 import {
-  purchaseImportRunLogError,
   purchaseImportRunLogResponse,
   type PurchaseImportRunLogEntry,
 } from "~/lib/purchase-import-debug";
 import {
   purchaseImportRunControlResponse,
-  purchaseImportRunDetailError,
   purchaseImportRunDetailResponse,
   type PurchaseImportRunDetail,
 } from "~/lib/purchase-import-run-detail";
@@ -70,14 +69,12 @@ const getRun = async (
   const response = await fetch(
     `/api/import/runs/${encodeURIComponent(publicId)}${query}`,
   );
-  const body: unknown = await response.json();
-  if (!response.ok) {
-    const parsed = purchaseImportRunDetailError.safeParse(body);
-    throw new Error(
-      parsed.success ? parsed.data.error : "Import run could not load.",
-    );
-  }
-  return purchaseImportRunDetailResponse.parse(body).run;
+  const data = await readJsonOrThrow(
+    response,
+    purchaseImportRunDetailResponse,
+    "Import run could not load.",
+  );
+  return data.run;
 };
 
 const EMPTY_AGENT_SNAPSHOT: AgentConversationObservationSnapshot = {
@@ -113,14 +110,13 @@ function RunControl({ run }: { run: PurchaseImportRunDetail }) {
           body: JSON.stringify({ action }),
         },
       );
-      const body: unknown = await response.json();
-      if (!response.ok) {
-        const parsed = purchaseImportRunDetailError.safeParse(body);
-        throw new Error(
-          parsed.success ? parsed.data.error : "Run could not be updated.",
-        );
-      }
-      return purchaseImportRunControlResponse.parse(body).run;
+      const data = await readJsonOrThrow(
+        response,
+        purchaseImportRunControlResponse,
+        "Run could not be updated.",
+        { method: "PATCH" },
+      );
+      return data.run;
     },
     onSuccess: () => {
       void queryClient.refetchQueries({
@@ -160,16 +156,12 @@ function TerminalRunControls({ run }: { run: PurchaseImportRunDetail }) {
           body: JSON.stringify({ action }),
         },
       );
-      const body: unknown = await response.json();
-      if (!response.ok) {
-        const parsed = purchaseImportRunDetailError.safeParse(body);
-        throw new Error(
-          parsed.success
-            ? parsed.data.error
-            : "A successor run could not be created.",
-        );
-      }
-      return purchaseImportRunControlResponse.parse(body);
+      return readJsonOrThrow(
+        response,
+        purchaseImportRunControlResponse,
+        "A successor run could not be created.",
+        { method: "PATCH" },
+      );
     },
     onSuccess: (result) => {
       if (result.successor) {
@@ -231,14 +223,13 @@ function DispatchRecoveryControls({ run }: { run: PurchaseImportRunDetail }) {
           body: JSON.stringify({ action: next }),
         },
       );
-      const body: unknown = await response.json();
-      if (!response.ok) {
-        const parsed = purchaseImportRunDetailError.safeParse(body);
-        throw new Error(
-          parsed.success ? parsed.data.error : "Run could not be updated.",
-        );
-      }
-      return purchaseImportRunControlResponse.parse(body).run;
+      const data = await readJsonOrThrow(
+        response,
+        purchaseImportRunControlResponse,
+        "Run could not be updated.",
+        { method: "PATCH" },
+      );
+      return data.run;
     },
     onSuccess: () => {
       void queryClient.refetchQueries({
@@ -295,16 +286,12 @@ function EvidenceRecoveryControls({ run }: { run: PurchaseImportRunDetail }) {
           body: JSON.stringify({ action: next }),
         },
       );
-      const body: unknown = await response.json();
-      if (!response.ok) {
-        const parsed = purchaseImportRunDetailError.safeParse(body);
-        throw new Error(
-          parsed.success
-            ? parsed.data.error
-            : "Evidence retry could not start.",
-        );
-      }
-      return purchaseImportRunControlResponse.parse(body);
+      return readJsonOrThrow(
+        response,
+        purchaseImportRunControlResponse,
+        "Evidence retry could not start.",
+        { method: "PATCH" },
+      );
     },
     onSuccess: ({ successor }) => {
       if (successor)
@@ -953,16 +940,13 @@ function PendingApprovalActions({
           body: JSON.stringify({ action, operationId, approvalId }),
         },
       );
-      const body: unknown = await response.json();
-      if (!response.ok) {
-        const parsed = purchaseImportRunDetailError.safeParse(body);
-        throw new Error(
-          parsed.success
-            ? parsed.data.error
-            : "Approval could not be recorded.",
-        );
-      }
-      return purchaseImportRunControlResponse.parse(body).run;
+      const data = await readJsonOrThrow(
+        response,
+        purchaseImportRunControlResponse,
+        "Approval could not be recorded.",
+        { method: "PATCH" },
+      );
+      return data.run;
     },
     onSuccess: () => {
       void queryClient.refetchQueries({
@@ -1011,14 +995,12 @@ function RunDebugLog({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ publicId }),
       });
-      const body: unknown = await response.json();
-      if (!response.ok) {
-        const parsed = purchaseImportRunLogError.safeParse(body);
-        throw new Error(
-          parsed.success ? parsed.data.error : "The run log could not load.",
-        );
-      }
-      return purchaseImportRunLogResponse.parse(body);
+      return readJsonOrThrow(
+        response,
+        purchaseImportRunLogResponse,
+        "The run log could not load.",
+        { method: "POST" },
+      );
     },
     refetchInterval: active ? 3_000 : false,
   });

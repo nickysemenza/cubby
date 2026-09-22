@@ -8,6 +8,9 @@ on:
 permissions:
   contents: read
 
+env:
+  CLOUDFLARE_ACCOUNT_ID: "9f10f078d35d86c78dedece2300a6b88"
+
 jobs:
   deploy-web:
     name: Build and deploy web
@@ -26,18 +29,14 @@ jobs:
           package: "@cubby/web"
           workspace-filter: "@cubby/web..."
           wasm: "restore"
-          web-env: "true"
           build-command: "pnpm --filter @cubby/web run build:cf"
           sentry-auth-token: ${{ secrets.SENTRY_AUTH_TOKEN }}
-          # web's deploy:cf script (`build:cf && wrangler deploy`) would
-          # rerun build:cf a second time here, so this stays on
-          # wrangler-action calling wrangler directly instead of through
-          # deploy:cf — see the composite's wrangler-action input doc.
-          wrangler-action: "true"
-          wrangler-command: "deploy --config dist/server/wrangler.json"
-          working-directory: apps/web
+          # web's deploy:cf script re-runs build:cf, which would duplicate the
+          # build-command step above, so this deploys the already-built
+          # bundle directly instead of going through deploy:cf.
+          deploy-command: "pnpm --filter @cubby/web exec wrangler deploy --config dist/server/wrangler.json"
           cloudflare-api-token: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          cloudflare-account-id: "9f10f078d35d86c78dedece2300a6b88"
+          cloudflare-account-id: ${{ env.CLOUDFLARE_ACCOUNT_ID }}
 
   deploy-worker:
     name: Deploy ${{ matrix.pkg }} Worker
@@ -61,7 +60,7 @@ jobs:
           wasm: "false"
           deploy-command: "pnpm --filter @cubby/${{ matrix.pkg }} run deploy"
           cloudflare-api-token: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          cloudflare-account-id: "9f10f078d35d86c78dedece2300a6b88"
+          cloudflare-account-id: ${{ env.CLOUDFLARE_ACCOUNT_ID }}
 
   deploy-purchase-agent:
     name: Build and deploy purchase agent
@@ -85,4 +84,4 @@ jobs:
           wasm: "false"
           deploy-command: "pnpm --filter @cubby/purchase-agent run deploy"
           cloudflare-api-token: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          cloudflare-account-id: "9f10f078d35d86c78dedece2300a6b88"
+          cloudflare-account-id: ${{ env.CLOUDFLARE_ACCOUNT_ID }}

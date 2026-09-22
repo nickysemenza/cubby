@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { match } from "ts-pattern";
 
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
+import { ErrorDisplay } from "~/components/feedback/error-display";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
@@ -236,6 +237,8 @@ function DisconnectedFix({
     data: product,
     isLoading,
     isError,
+    error,
+    refetch,
   } = useQuery(entityDetailFor("product").queryOptions(id));
   const update = useActionMutation({
     mutationFn: updateProduct,
@@ -292,9 +295,11 @@ function DisconnectedFix({
         </Row>
       ))}
       {isError && (
-        <p className="text-xs text-destructive">
-          Couldn't load this product's current conversions.
-        </p>
+        <ErrorDisplay
+          error={error}
+          title="this product's current conversions"
+          onRetry={() => void refetch()}
+        />
       )}
       <Button
         size="sm"

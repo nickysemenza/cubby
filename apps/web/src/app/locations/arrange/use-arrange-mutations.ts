@@ -4,13 +4,12 @@ import {
 } from "@cubby/schemas/identifiers";
 import type { InfLocation } from "@cubby/schemas/location";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { toast } from "sonner";
 
 import { inventory } from "~/app/inventory/inventory.functions";
 import { location } from "~/app/locations/location.functions";
+import { showErrorToast } from "~/components/feedback/error-details";
 import { ripple } from "~/integrations/tanstack-query/cache-tags";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
-import { getErrorMessage } from "~/lib/error-utils";
 
 import { applyItemMove, applyLocationMove } from "./arrange-tree-utils";
 import type { ItemDragData } from "./arrange-types";
@@ -52,7 +51,7 @@ export function useArrangeMutations() {
     },
     onError: (err) => {
       void invalidateOperationTags(queryClient, ripple.location);
-      toast.error(getErrorMessage(err));
+      showErrorToast(err);
     },
   });
 
@@ -77,7 +76,7 @@ export function useArrangeMutations() {
     },
     onError: (err) => {
       void invalidateOperationTags(queryClient, ripple.location);
-      toast.error(getErrorMessage(err));
+      showErrorToast(err);
     },
   });
 

@@ -15,6 +15,8 @@ import {
   problemsViewsSchema,
   recipeUsageByProductInput,
   recipeUsageByProductOut,
+  resolveArrivedFindingsInput,
+  resolveArrivedFindingsOut,
   resolveImportFindingInput,
   resolveImportFindingOut,
 } from "@cubby/schemas/problems";
@@ -82,6 +84,10 @@ export const problemsContract = defineContract("problems", {
   resolveImportFinding: mutation({
     input: resolveImportFindingInput,
     output: resolveImportFindingOut,
+  }),
+  resolveArrivedFindings: mutation({
+    input: resolveArrivedFindingsInput,
+    output: resolveArrivedFindingsOut,
   }),
 });
 

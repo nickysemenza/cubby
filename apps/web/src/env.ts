@@ -18,9 +18,6 @@ export const env = createEnv({
     UPC_LOOKUP_API_KEY: z.string().min(1).optional(),
     BETTER_AUTH_SECRET: z.string().min(1),
     BETTER_AUTH_URL: z.string().url().optional(),
-    // Set only on preview deploys (CI `--var`) to share the session cookie
-    // across the configured preview-host suffix. Unset in prod. See auth.ts.
-    COOKIE_DOMAIN: z.string().min(1).optional(),
     // Personal instance: signup is closed unless this is explicitly "true".
     ALLOW_SIGNUP: z.enum(["true", "false"]).default("false"),
     // E2E-only (wrangler --var in e2e-global-setup): serve plain (non-Secure,
@@ -56,7 +53,6 @@ export const env = createEnv({
     UPC_LOOKUP_API_KEY: process.env.UPC_LOOKUP_API_KEY,
     BETTER_AUTH_SECRET: process.env.BETTER_AUTH_SECRET,
     BETTER_AUTH_URL: process.env.BETTER_AUTH_URL,
-    COOKIE_DOMAIN: process.env.COOKIE_DOMAIN,
     ALLOW_SIGNUP: process.env.ALLOW_SIGNUP,
     INSECURE_AUTH_COOKIES: process.env.INSECURE_AUTH_COOKIES,
     E2E_AUTH_TEST_MODE: process.env.E2E_AUTH_TEST_MODE,

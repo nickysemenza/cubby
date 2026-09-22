@@ -12,7 +12,7 @@ import {
   type ProposedImportFix,
 } from "@cubby/schemas/purchase-import";
 import { tradeSchema } from "@cubby/schemas/task-fields";
-import { and, eq, gt, isNull } from "drizzle-orm";
+import { and, eq, gt, inArray, isNotNull, isNull } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
@@ -22,6 +22,7 @@ import {
   importHunt,
   importRunMutation,
   importSourceClaim,
+  inventoryEntry,
   ledgerParty,
   product,
   purchase,
@@ -220,6 +221,8 @@ async function applyFix(
     return;
   }
 
+  if (fix.lines.length === 0)
+    throw new Error("The proposed replacement has no lines.");
   const current = await loadExpenses(tx, purchaseId);
   const decision = decideLineWrite(current, fix.lines);
   if (decision.kind !== "replace_aggregate") {
@@ -351,5 +354,90 @@ export async function resolveImportFinding(
       })
       .where(eq(importFinding.id, finding.id));
     return resolveImportFindingOut.parse({ id: finding.id, status });
+  });
+}
+
+/**
+ * Resolve any OPEN "arrived" findings on a Purchase once receiving has caught
+ * up, without ever moving inventory itself (that stays interactive — see
+ * `applyFix`'s refusal of `receive_purchase` above).
+ *
+ * Partial-receipt rule: a Purchase can have several product-bearing Expense
+ * lines (one per shipment/item), and a member may receive them one at a time.
+ * The finding is left open until EVERY live, product-bearing Expense line on
+ * the Purchase has at least one live InventoryEntry for its Product — so
+ * receiving line 1 of 2 does not silently close out line 2. This is checked
+ * fresh on every call rather than cached, so it stays correct regardless of
+ * how many partial receives happened before this one.
+ */
+export async function resolveArrivedFindingsForPurchase(
+  db: Database,
+  input: { purchaseId: string },
+  actor: ActorContext,
+): Promise<{ resolved: number }> {
+  return withTransaction(db, async (tx) => {
+    const openFindings = await tx
+      .select({ id: importFinding.id })
+      .from(importFinding)
+      .innerJoin(
+        ledgerParty,
+        and(
+          eq(ledgerParty.id, importFinding.ledgerPartyId),
+          eq(ledgerParty.userId, actor.userId),
+          notDeleted(ledgerParty),
+        ),
+      )
+      .where(
+        and(
+          eq(importFinding.targetType, "purchase"),
+          eq(importFinding.targetId, input.purchaseId),
+          eq(importFinding.kind, "arrived"),
+          eq(importFinding.status, "open"),
+        ),
+      )
+      .for("update");
+    if (openFindings.length === 0) return { resolved: 0 };
+
+    const productLines = await tx
+      .select({ productId: expense.productId })
+      .from(expense)
+      .where(
+        and(
+          eq(expense.purchaseId, parseEntityId("purchase", input.purchaseId)),
+          isNotNull(expense.productId),
+          notDeleted(expense),
+        ),
+      );
+    // No product-bearing line at all: nothing to receive against, so leave
+    // the finding open rather than resolving it vacuously.
+    if (productLines.length === 0) return { resolved: 0 };
+
+    const productIds = [
+      ...new Set(productLines.map(({ productId }) => productId!)),
+    ];
+    const stocked = await tx
+      .select({ productId: inventoryEntry.productId })
+      .from(inventoryEntry)
+      .where(
+        and(
+          inArray(inventoryEntry.productId, productIds),
+          notDeleted(inventoryEntry),
+        ),
+      );
+    const stockedIds = new Set(stocked.map((row) => row.productId));
+    const everyLineReceived = productIds.every((id) => stockedIds.has(id));
+    if (!everyLineReceived) return { resolved: 0 };
+
+    const ids = openFindings.map((finding) => finding.id);
+    await tx
+      .update(importFinding)
+      .set({
+        status: "applied",
+        resolvedAt: new Date(),
+        resolvedByUserId: actor.userId,
+        updatedAt: new Date(),
+      })
+      .where(inArray(importFinding.id, ids));
+    return { resolved: ids.length };
   });
 }

@@ -92,7 +92,7 @@ describe("ExpensePurchaseSection", () => {
       { wrapper: harness.wrapper },
     );
     expect(await screen.findByRole("alert")).toHaveTextContent(
-      "Could not load the purchase items.",
+      "Temporary connection failure",
     );
     unavailable = false;
     fireEvent.click(

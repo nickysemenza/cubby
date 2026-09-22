@@ -32,7 +32,9 @@ export function parseObservedFailure<TError>(error: TError): ObservedFailure {
     const serializable = z.json().safeParse(error);
     if (serializable.success) return serializable.data;
   } catch {
-    // Cycles and throwing getters must not replace the failure being observed.
+    // SILENT: cycles and throwing getters must not replace the failure being
+    // observed; the fallback `Error` wrapper below still carries the
+    // original `error` as `cause`.
   }
   return new Error("A non-serializable value was thrown", { cause: error });
 }

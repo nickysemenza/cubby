@@ -214,13 +214,13 @@ describe("shared entity Relations", () => {
       await screen.findByRole("heading", { name: "Recipes" }),
     ).toBeVisible();
     expect(
-      await screen.findByText("Suggestions could not be loaded."),
+      await screen.findByText("recommendations unavailable"),
     ).toBeVisible();
     failSuggestions = false;
     fireEvent.click(screen.getByRole("button", { name: "Retry suggestions" }));
     await waitFor(() =>
       expect(
-        screen.queryByText("Suggestions could not be loaded."),
+        screen.queryByText("recommendations unavailable"),
       ).not.toBeInTheDocument(),
     );
     expect(screen.getByRole("heading", { name: "Recipes" })).toBeVisible();
@@ -782,13 +782,11 @@ describe("shared entity Relations", () => {
       />,
       { wrapper: harness.wrapper },
     );
-    expect(
-      await screen.findByText("Relationships could not be loaded."),
-    ).toHaveTextContent("Relationships could not be loaded");
-    failed = false;
-    fireEvent.click(
-      screen.getByRole("button", { name: "Retry relationships" }),
+    expect(await screen.findByText("unavailable")).toHaveTextContent(
+      "unavailable",
     );
+    failed = false;
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
     await waitFor(() =>
       expect(screen.getByRole("heading", { name: "Recipes" })).toBeVisible(),
     );

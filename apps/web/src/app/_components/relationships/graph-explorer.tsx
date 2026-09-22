@@ -5,6 +5,7 @@ import { Link, useRouter } from "@tanstack/react-router";
 import { ArrowLeft, ArrowRight, List, Network } from "lucide-react";
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 
+import { ErrorDisplay } from "~/components/feedback/error-display";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
@@ -173,12 +174,11 @@ export function GraphExplorer({
   if (model.loading) return <output>Loading relationships…</output>;
   if (model.initial.isError && !model.data.nodes.length)
     return (
-      <Stack gap="sm">
-        <p role="alert">Relationships could not be loaded.</p>
-        <Button variant="outline" onClick={() => void model.initial.refetch()}>
-          Retry relationships
-        </Button>
-      </Stack>
+      <ErrorDisplay
+        error={model.initial.error}
+        title="relationships"
+        onRetry={() => void model.initial.refetch()}
+      />
     );
   if (!model.data.nodes.length)
     return (
@@ -475,9 +475,11 @@ function GraphRecordInspector({
               </Button>
             </Row>
             {model.errors.has(model.selected) && (
-              <p role="alert" className="text-sm">
-                Connections could not load. Try Expand connections again.
-              </p>
+              <ErrorDisplay
+                error={model.errors.get(model.selected)}
+                title="connections"
+                onRetry={() => void model.expand(selected)}
+              />
             )}
           </Stack>
           <Stack gap="sm" aria-label="Relationship branches">
@@ -526,9 +528,11 @@ function GraphRecordInspector({
                       </Button>
                     )}
                     {model.errors.has(key) && (
-                      <span role="alert" className="text-xs">
-                        Could not load. Retry this branch.
-                      </span>
+                      <ErrorDisplay
+                        error={model.errors.get(key)}
+                        title="this branch"
+                        onRetry={() => void model.more(branch)}
+                      />
                     )}
                   </Row>
                 </Stack>

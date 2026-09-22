@@ -17,6 +17,7 @@ import { Check, ChevronLeft, ChevronRight, MapPin, Plus } from "lucide-react";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
+import { showErrorToast } from "~/components/feedback/error-details";
 import { Stack } from "~/components/layout";
 import { CrossTabTable } from "~/components/matrix/cross-tab-table";
 import { Button } from "~/components/ui/button";
@@ -37,7 +38,6 @@ import { Tabs, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { EntityIcon, entityDetailLink } from "~/entities/entities";
 import { focusOnMount } from "~/hooks/focus-on-mount";
 import { IDEMPOTENT_MUTATION_RETRY } from "~/integrations/tanstack-query/query-policy";
-import { getErrorMessage } from "~/lib/error-utils";
 import { cn } from "~/lib/utils";
 
 import type { CollectionAssignmentSearch } from "./collection-assignment-search";
@@ -200,7 +200,6 @@ function NewCollectionDialog({
       setName("");
       setMemberId("");
     },
-    onError: (error) => toast.error(getErrorMessage(error)),
   });
 
   const handleOpenChange = (nextOpen: boolean) => {
@@ -404,7 +403,7 @@ export function CollectionAssignmentMatrix({
         delete next[key];
         return next;
       });
-      toast.error(`Assignment was restored: ${getErrorMessage(error)}`);
+      showErrorToast(error, "Assignment was restored");
     },
   });
 

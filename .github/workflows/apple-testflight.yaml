@@ -1,65 +1,307 @@
 name: Apple TestFlight
 
-# Manual dispatch wrapper around apple-release.yaml's reusable archive/
-# export/upload path. The split exists so the reusable part can stay
-# read-only: a called workflow's jobs are capped by the caller's
-# permissions, and ci.yaml's release-dry-run job calls apple-release.yaml
-# from a pull_request event, which GitHub never grants contents: write. Only
-# this manual-dispatch workflow adds the `tag` job (contents: write) on top
-# of apple-release.yaml's output. `publish: true` uploads both apps to App
-# Store Connect and tags the released commit; `publish: false` (the
-# default) exercises the identical signed archive/export path without
-# uploading or tagging anything. There is no tag-push trigger: the `tag` job
-# below creates the release tag itself once the upload succeeds, so a
-# manually pushed tag can never start a second release.
+# Pushing a vMAJOR.MINOR.PATCH tag at a commit on main is the release. The
+# `coordinates` job fails fast in seconds (ubuntu) before any macOS runner
+# starts. A failed release leaves its tag in place; re-run the failed jobs
+# (`gh run rerun --failed`) to retry at build <count>.2, or push a new tag.
+# No dry-run mode: every run uploads to App Store Connect.
+#
+# ci.yaml's warm-apple-ffi job pre-populates the FFI caches this workflow
+# restores.
 on:
-  workflow_dispatch:
-    inputs:
-      version:
-        description: "Version to release (MAJOR.MINOR.PATCH)"
-        required: true
-        default: "1.0.0"
-        type: string
-      publish:
-        description: "Upload to App Store Connect and tag the release (false only validates)"
-        required: false
-        default: false
-        type: boolean
+  push:
+    tags: ["v*"]
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}-${{ inputs.version }}
+  group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: false
 
 permissions:
   contents: read
 
 jobs:
-  release:
-    name: Archive, export, and upload
-    uses: ./.github/workflows/apple-release.yaml
-    with:
-      version: ${{ inputs.version }}
-      publish: ${{ inputs.publish }}
-    secrets: inherit
-
-  tag:
-    name: Tag the release
-    needs: release
-    if: inputs.publish == true
+  coordinates:
+    name: Resolve release coordinates
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    permissions:
-      contents: write
+    outputs:
+      version: ${{ steps.resolve.outputs.version }}
+      build: ${{ steps.resolve.outputs.build }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+
+      - name: Validate the tag and resolve coordinates
+        id: resolve
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || {
+            echo "::error::Release tag must be vMAJOR.MINOR.PATCH; got '${GITHUB_REF_NAME}'."
+            exit 1
+          }
+
+          # Refresh origin/main explicitly so the ancestor check never trusts
+          # whatever the checkout happened to fetch.
+          git fetch --no-tags origin main
+          git merge-base --is-ancestor "$(git rev-parse 'HEAD^{commit}')" origin/main || {
+            echo "::error::Release tags must point at a commit on main."
+            exit 1
+          }
+
+          build="$(git rev-list --count HEAD).${GITHUB_RUN_ATTEMPT}"
+          {
+            echo "version=$version"
+            echo "build=$build"
+          } >> "$GITHUB_OUTPUT"
+
+  # One matrix leg per platform so the Rust FFI build (the dominant cold-cache
+  # cost) only compiles the target that platform needs, and both archives run
+  # concurrently instead of the historical single serial job.
+  archive:
+    name: Archive ${{ matrix.platform }}
+    needs: coordinates
+    runs-on: macos-26
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [ios, macos]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
-      - name: Create and push the release tag
+      - name: Resolve platform coordinates
+        id: platform
         shell: bash
-        env:
-          TAG: ${{ needs.release.outputs.tag }}
-          VERSION: ${{ needs.release.outputs.version }}
-          BUILD: ${{ needs.release.outputs.build }}
         run: |
           set -euo pipefail
-          git tag -a "$TAG" -m "Cubby $VERSION (build $BUILD)"
-          git push origin "$TAG"
+          case '${{ matrix.platform }}' in
+            ios)
+              echo "ffi-target=device" >> "$GITHUB_OUTPUT"
+              echo "archive-dir=Cubby-iOS.xcarchive" >> "$GITHUB_OUTPUT"
+              ;;
+            macos)
+              echo "ffi-target=mac" >> "$GITHUB_OUTPUT"
+              echo "archive-dir=Cubby-macOS.xcarchive" >> "$GITHUB_OUTPUT"
+              ;;
+          esac
+
+      - uses: ./.github/actions/setup-apple-ffi
+        with:
+          targets: ${{ steps.platform.outputs.ffi-target }}
+          profile: dist
+
+      - uses: ./.github/actions/setup-apple-tools
+        id: apple-tools
+        with:
+          sentry-cli: "true"
+
+      - uses: ./.github/actions/prepare-apple-release-project
+
+      # The Sentry dSYM upload archive phase reads this file directly; it is
+      # never passed to xcodebuild.
+      - name: Write temporary Sentry credentials
+        shell: bash
+        env:
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+        run: |
+          set -euo pipefail
+          [[ -n "$SENTRY_AUTH_TOKEN" ]] || {
+            echo "::error::SENTRY_AUTH_TOKEN is required."
+            exit 1
+          }
+          printf '[auth]\ntoken=%s\n' "$SENTRY_AUTH_TOKEN" > "$HOME/.sentryclirc"
+          chmod 600 "$HOME/.sentryclirc"
+
+      - uses: ./.github/actions/import-apple-signing
+        with:
+          p12-base64: ${{ secrets.APPLE_DISTRIBUTION_P12_BASE64 }}
+          p12-password: ${{ secrets.APPLE_DISTRIBUTION_P12_PASSWORD }}
+          verify-mac-installer: ${{ matrix.platform == 'macos' && 'true' || 'false' }}
+
+      - name: Download provisioning profile
+        id: profile
+        uses: ./.github/actions/download-apple-profile
+        with:
+          profile-type: ${{ matrix.platform == 'ios' && 'IOS_APP_STORE' || 'MAC_APP_STORE' }}
+          issuer-id: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          api-key-id: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          api-private-key: ${{ secrets.APP_STORE_CONNECT_API_KEY_P8 }}
+
+      - name: Archive ${{ matrix.platform }}
+        shell: bash
+        env:
+          MARKETING_VERSION: ${{ needs.coordinates.outputs.version }}
+          IOS_BUILD_NUMBER: ${{ needs.coordinates.outputs.build }}
+          MACOS_BUILD_NUMBER: ${{ needs.coordinates.outputs.build }}
+          IOS_PROFILES_JSON: ${{ matrix.platform == 'ios' && steps.profile.outputs.profiles || '' }}
+          MACOS_PROFILES_JSON: ${{ matrix.platform == 'macos' && steps.profile.outputs.profiles || '' }}
+          TESTFLIGHT_OUTPUT_DIR: ${{ runner.temp }}/CubbyTestFlight
+        run: apps/apple/scripts/testflight.sh archive '${{ matrix.platform }}'
+
+      # setup-apple-tools only restores; save explicitly here so a cache
+      # miss populated by this run survives even if the archive step above
+      # failed (`if: always()`), matching the pattern PR 1 uses in the
+      # hosted Apple checks job. `continue-on-error` because another
+      # concurrent job racing the same key is a harmless 409, never a
+      # reason to fail this one.
+      - name: Save OpenAPI generator cache
+        if: always() && steps.apple-tools.outputs.openapi-generator-cache-hit != 'true'
+        continue-on-error: true
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        with:
+          path: ${{ env.CUBBY_OPENAPI_GENERATOR_BIN_DIR }}
+          key: ${{ steps.apple-tools.outputs.openapi-generator-cache-key }}
+
+      - name: Save SPM clone cache
+        if: always() && steps.apple-tools.outputs.spm-clones-cache-hit != 'true'
+        continue-on-error: true
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        with:
+          path: apps/apple/SourcePackages
+          key: ${{ steps.apple-tools.outputs.spm-clones-cache-key }}
+
+      # actions/upload-artifact zips its input and does not preserve the
+      # executable bit or symlinks, which would leave Cubby.app's main binary
+      # non-executable and its embedded framework symlinks flattened after
+      # download; tar the archive first so both survive the round trip.
+      - name: Package the archive for hand-off
+        shell: bash
+        run: |
+          set -euo pipefail
+          tar -C "${{ runner.temp }}/CubbyTestFlight" \
+            -cf "${{ runner.temp }}/CubbyTestFlight/${{ steps.platform.outputs.archive-dir }}.tar" \
+            "${{ steps.platform.outputs.archive-dir }}"
+
+      - name: Preserve the archive
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: Cubby-${{ matrix.platform }}-archive-${{ needs.coordinates.outputs.version }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/CubbyTestFlight/${{ steps.platform.outputs.archive-dir }}.tar
+          if-no-files-found: error
+          retention-days: 3
+
+      - name: Remove temporary Sentry credentials
+        if: always()
+        shell: bash
+        run: rm -f "$HOME/.sentryclirc"
+
+  upload:
+    name: Export and upload
+    needs: [coordinates, archive]
+    runs-on: macos-26
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      # `runner` isn't available in a job-level `env:` block, so this is set
+      # via GITHUB_ENV instead, from the first step onward.
+      - name: Resolve output directory
+        shell: bash
+        run: echo "TESTFLIGHT_OUTPUT_DIR=${{ runner.temp }}/CubbyTestFlight" >> "$GITHUB_ENV"
+
+      - name: Download iOS archive
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: Cubby-ios-archive-${{ needs.coordinates.outputs.version }}-${{ github.run_attempt }}
+          path: ${{ env.TESTFLIGHT_OUTPUT_DIR }}
+
+      - name: Download macOS archive
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: Cubby-macos-archive-${{ needs.coordinates.outputs.version }}-${{ github.run_attempt }}
+          path: ${{ env.TESTFLIGHT_OUTPUT_DIR }}
+
+      # Reverses the archive job's tar packaging (see the comment there): it
+      # preserves the executable bit and symlinks that upload-artifact's zip
+      # would otherwise strip, so unpack back to the exact paths
+      # testflight.sh expects before exporting.
+      - name: Unpack archives
+        shell: bash
+        run: |
+          set -euo pipefail
+          tar -C "$TESTFLIGHT_OUTPUT_DIR" -xf "$TESTFLIGHT_OUTPUT_DIR/Cubby-iOS.xcarchive.tar"
+          tar -C "$TESTFLIGHT_OUTPUT_DIR" -xf "$TESTFLIGHT_OUTPUT_DIR/Cubby-macOS.xcarchive.tar"
+
+      - name: Write temporary App Store Connect credentials
+        shell: bash
+        env:
+          API_KEY_P8: ${{ secrets.APP_STORE_CONNECT_API_KEY_P8 }}
+          API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+        run: |
+          set -euo pipefail
+          [[ -n "$API_KEY_P8" && -n "$API_KEY_ID" ]] || {
+            echo "::error::App Store Connect API credentials are required to publish."
+            exit 1
+          }
+          api_key_path="$RUNNER_TEMP/AuthKey_${API_KEY_ID}.p8"
+          printf '%s' "$API_KEY_P8" > "$api_key_path"
+          chmod 600 "$api_key_path"
+          echo "ASC_API_KEY_PATH=$api_key_path" >> "$GITHUB_ENV"
+
+      # xcodebuild -exportArchive re-signs, so the identities and profiles
+      # must be imported again here even though the archive job already
+      # verified them.
+      - uses: ./.github/actions/import-apple-signing
+        with:
+          p12-base64: ${{ secrets.APPLE_DISTRIBUTION_P12_BASE64 }}
+          p12-password: ${{ secrets.APPLE_DISTRIBUTION_P12_PASSWORD }}
+          verify-mac-installer: "true"
+
+      - name: Download iOS provisioning profile
+        id: ios-profile
+        uses: ./.github/actions/download-apple-profile
+        with:
+          profile-type: IOS_APP_STORE
+          issuer-id: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          api-key-id: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          api-private-key: ${{ secrets.APP_STORE_CONNECT_API_KEY_P8 }}
+
+      - name: Download macOS provisioning profile
+        id: macos-profile
+        uses: ./.github/actions/download-apple-profile
+        with:
+          profile-type: MAC_APP_STORE
+          issuer-id: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          api-key-id: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          api-private-key: ${{ secrets.APP_STORE_CONNECT_API_KEY_P8 }}
+
+      - name: Export iOS
+        shell: bash
+        env:
+          MARKETING_VERSION: ${{ needs.coordinates.outputs.version }}
+          IOS_PROFILES_JSON: ${{ steps.ios-profile.outputs.profiles }}
+          APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+        run: apps/apple/scripts/testflight.sh export ios
+
+      - name: Export macOS
+        shell: bash
+        env:
+          MARKETING_VERSION: ${{ needs.coordinates.outputs.version }}
+          MACOS_PROFILES_JSON: ${{ steps.macos-profile.outputs.profiles }}
+          APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+        run: apps/apple/scripts/testflight.sh export macos
+
+      - name: Preserve exports and symbols
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: Cubby-${{ needs.coordinates.outputs.version }}-${{ github.run_attempt }}
+          path: |
+            ${{ env.TESTFLIGHT_OUTPUT_DIR }}/exports
+            ${{ env.TESTFLIGHT_OUTPUT_DIR }}/ExportOptions-*.plist
+            ${{ env.TESTFLIGHT_OUTPUT_DIR }}/*.xcarchive/Info.plist
+            ${{ env.TESTFLIGHT_OUTPUT_DIR }}/*.xcarchive/dSYMs
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Remove temporary service credentials
+        if: always()
+        shell: bash
+        run: |
+          if [[ -n "${ASC_API_KEY_PATH:-}" ]]; then rm -f "$ASC_API_KEY_PATH"; fi

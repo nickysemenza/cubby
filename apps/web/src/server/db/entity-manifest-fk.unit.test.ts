@@ -82,6 +82,8 @@ const NON_ENTITY_FK_TARGETS = {
   ImportRun: "purchase-import execution bookkeeping, not a domain entity",
   ImportRunTarget:
     "explicit operational target for a validation or enrichment import run",
+  ImportRunOrderCandidate:
+    "an account-sync run's order-history worklist, not a domain entity",
   ImportPreparedOrder:
     "immutable purchase-import evidence preparation, not a domain entity",
   ImportSourceClaim: "idempotency provenance for imported evidence",

@@ -182,14 +182,16 @@ export class PurchaseImportSqlStore {
       : null;
   }
 
-  hasPendingCommands(runId: string): boolean {
-    const row = this.storage.sql
-      .exec<{ count: number }>(
-        "SELECT count(*) AS count FROM broker_command WHERE run_id = ? AND state IN ('pending','sent')",
+  pendingCommands(
+    runId: string,
+  ): Array<{ requestId: string; createdAt: number }> {
+    return this.storage.sql
+      .exec<{ request_id: string; created_at: number }>(
+        "SELECT request_id, created_at FROM broker_command WHERE run_id = ? AND state IN ('pending','sent') ORDER BY created_at ASC",
         runId,
       )
-      .toArray()[0];
-    return (row?.count ?? 0) > 0;
+      .toArray()
+      .map((row) => ({ requestId: row.request_id, createdAt: row.created_at }));
   }
 
   cancel(requestId: string): void {

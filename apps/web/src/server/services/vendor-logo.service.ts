@@ -219,6 +219,9 @@ async function fetchAndAttachVendorLogoWithPorts<
     await ports.deleteStoredObjects(result.detachedImageKeys);
     return { output: result.output, entityId: result.entityId };
   } catch (error) {
+    // SILENT: this is rollback for the `replaceVendorLogo` failure being
+    // rethrown below (`error`); losing the rollback itself only strands
+    // the uploaded R2 object, and must not replace the original failure.
     await ports.deleteUploadedObject(key).catch((cleanupError) => {
       console.error("Failed to roll back vendor logo object:", cleanupError);
     });

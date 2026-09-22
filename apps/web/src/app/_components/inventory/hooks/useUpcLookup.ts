@@ -10,6 +10,7 @@ import { useCallback } from "react";
 import { toast } from "sonner";
 
 import { product } from "~/app/products/product.functions";
+import { showErrorToast } from "~/components/feedback/error-details";
 import { getErrorMessage } from "~/lib/error-utils";
 
 import { useProductLookupInvalidation } from "./useInventoryMutation";
@@ -69,7 +70,7 @@ export function useUpcLookup(options: UseUpcLookupOptions = {}) {
       } catch (err) {
         const errorMessage = getErrorMessage(err);
         options.onError?.(errorMessage);
-        toast.error(`UPC lookup failed: ${errorMessage}`);
+        showErrorToast(err, "UPC lookup failed");
         return null;
       }
     },

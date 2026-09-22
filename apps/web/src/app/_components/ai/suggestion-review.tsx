@@ -8,9 +8,11 @@ import {
   type ReactNode,
 } from "react";
 
+import { showErrorToast } from "~/components/feedback/error-details";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Description } from "~/components/ui/description";
+import { getAppErrorDetails } from "~/lib/error-utils";
 
 /** A `remove` (prune) proposal reviews at 0.85 regardless of `alternative` or
  * whether the field already has a value — it is never a "replace a value
@@ -63,7 +65,7 @@ export function SuggestionVisitProvider({ children }: { children: ReactNode }) {
   );
 }
 
-/** Dismiss/apply/saving/failed state shared by both the `remove` and `set`
+/** Dismiss/apply/saving/failure state shared by both the `remove` and `set`
  * review bodies — factored out so `SuggestionReview` itself stays a thin
  * gate + layout switch instead of owning every branch. */
 function useSuggestionActions(
@@ -74,7 +76,7 @@ function useSuggestionActions(
   const visit = useSuggestionVisit();
   const [localDismissed, setLocalDismissed] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const [failed, setFailed] = useState(false);
+  const [failure, setFailure] = useState<unknown>(null);
   const active = useRef(false);
   const dismissed = visit ? visit.dismissed.has(key) : localDismissed === key;
   const dismiss = () => (visit ? visit.dismiss(key) : setLocalDismissed(key));
@@ -82,25 +84,26 @@ function useSuggestionActions(
     if (active.current || pending) return;
     active.current = true;
     setSaving(true);
-    setFailed(false);
+    setFailure(null);
     try {
       await onApply();
       dismiss();
-    } catch {
-      setFailed(true);
+    } catch (error) {
+      setFailure(error);
+      showErrorToast(error);
     } finally {
       active.current = false;
       setSaving(false);
     }
   };
-  return { dismissed, dismiss, apply, saving, failed };
+  return { dismissed, dismiss, apply, saving, failure };
 }
 
 interface ReviewBodyProps {
   suggestion: FieldSuggestion & { value: string };
   pending?: boolean;
   saving: boolean;
-  failed: boolean;
+  failure: unknown;
   apply: () => void;
   dismiss: () => void;
   applyLabel: string;
@@ -114,7 +117,7 @@ function RemoveReviewBody({
   suggestion,
   pending,
   saving,
-  failed,
+  failure,
   apply,
   dismiss,
   applyLabel,
@@ -154,9 +157,9 @@ function RemoveReviewBody({
           Keep
         </Button>
       </Row>
-      {failed ? (
+      {failure !== null ? (
         <Description size="xs" role="alert">
-          Could not save. Try again.
+          Could not save: {getAppErrorDetails(failure).message}
         </Description>
       ) : null}
     </Stack>
@@ -169,7 +172,7 @@ function SetReviewBody({
   currentLabel,
   pending,
   saving,
-  failed,
+  failure,
   apply,
   dismiss,
   applyLabel,
@@ -222,9 +225,9 @@ function SetReviewBody({
           {currentValue?.trim() ? "Keep current" : "Dismiss"}
         </Button>
       </Row>
-      {failed ? (
+      {failure !== null ? (
         <Description size="xs" role="alert">
-          Could not save. Try again.
+          Could not save: {getAppErrorDetails(failure).message}
         </Description>
       ) : null}
     </Stack>
@@ -254,7 +257,7 @@ export function SuggestionReview({
   alternative?: boolean;
 }) {
   const key = JSON.stringify([questionKey, currentValue, suggestion?.value]);
-  const { dismissed, dismiss, apply, saving, failed } = useSuggestionActions(
+  const { dismissed, dismiss, apply, saving, failure } = useSuggestionActions(
     key,
     onApply,
     pending,
@@ -268,7 +271,7 @@ export function SuggestionReview({
     suggestion,
     pending,
     saving,
-    failed,
+    failure,
     apply,
     dismiss,
     applyLabel: resolvedApplyLabel,

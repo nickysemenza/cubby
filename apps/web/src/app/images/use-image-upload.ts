@@ -7,7 +7,7 @@ import { useCallback, useRef, useState } from "react";
 import { toast } from "sonner";
 import { z } from "zod";
 
-import { getErrorMessage } from "~/lib/error-utils";
+import { showErrorToast } from "~/components/feedback/error-details";
 import { imageUpload } from "~/lib/image.functions";
 
 export interface UploadedImage {
@@ -45,10 +45,17 @@ export function useImageUpload(
   const inFlightFilesRef = useRef(new WeakSet<File>());
 
   const uploadImageMutation = useMutation(
-    operations.uploadImage.mutationOptions(),
+    operations.uploadImage.mutationOptions({
+      // No toast here: `uploadFile`'s catch below already turns any failure
+      // in this flow into one `showErrorToast`; a populated `onError` would
+      // additionally trigger the global toast.
+      onError: () => {},
+    }),
   );
   const markUploadedMutation = useMutation(
-    operations.markUploaded.mutationOptions(),
+    operations.markUploaded.mutationOptions({
+      onError: () => {},
+    }),
   );
 
   const uploadFile = useCallback(
@@ -107,9 +114,7 @@ export function useImageUpload(
         await markUploadedMutation.mutateAsync({ id: uploadedImage.id });
         return { state: "complete", image: uploadedImage };
       } catch (error) {
-        toast.error(
-          `Upload failed for ${file.name}: ${getErrorMessage(error)}`,
-        );
+        showErrorToast(error, `Upload failed for ${file.name}`);
         return { state: "failed", uploadedImage };
       } finally {
         inFlightFilesRef.current.delete(file);

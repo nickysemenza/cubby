@@ -12,12 +12,11 @@ import type {
 import { taskBoardOut, taskOut } from "@cubby/schemas/project";
 import type { QueryKey } from "@tanstack/react-query";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { toast } from "sonner";
 import type { z } from "zod";
 
 import { task } from "~/app/tasks/task.functions";
+import { showErrorToast } from "~/components/feedback/error-details";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
-import { getErrorMessage } from "~/lib/error-utils";
 
 import type { TaskBoardPatch } from "./board-types";
 
@@ -161,7 +160,7 @@ export function useBoardMutations(target: BoardCacheTarget) {
     },
     onError: (err, _vars, ctx) => {
       if (ctx?.prev) queryClient.setQueryData(queryKey, ctx.prev);
-      toast.error(getErrorMessage(err));
+      showErrorToast(err);
     },
   });
 
@@ -198,7 +197,7 @@ export function useBoardMutations(target: BoardCacheTarget) {
     },
     onError: (err, _vars, ctx) => {
       if (ctx?.prev) queryClient.setQueryData(queryKey, ctx.prev);
-      toast.error(getErrorMessage(err));
+      showErrorToast(err);
     },
   });
 
@@ -235,7 +234,7 @@ export function useBoardMutations(target: BoardCacheTarget) {
     },
     onError: (err, _vars, ctx) => {
       if (ctx?.prev) queryClient.setQueryData(queryKey, ctx.prev);
-      toast.error(getErrorMessage(err));
+      showErrorToast(err);
     },
   });
 

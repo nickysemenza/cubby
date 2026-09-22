@@ -34,6 +34,7 @@ import {
   createManyProductsStream,
   markProductsUsdaUnavailableStream,
 } from "~/app/products/product.functions";
+import { showErrorToast } from "~/components/feedback/error-details";
 import { Row, Stack } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
@@ -318,7 +319,14 @@ export function EnrichmentWorkbench({
     [base, filter],
   );
 
-  const suggestUsda = useMutation(ai.suggestUsdaFoodBatch.mutationOptions());
+  const suggestUsda = useMutation(
+    ai.suggestUsdaFoodBatch.mutationOptions({
+      // No toast here: `handleSuggest`'s catch below already turns any
+      // failure into one `showErrorToast`; a populated `onError` would
+      // additionally trigger the global toast.
+      onError: () => {},
+    }),
+  );
   const createMany = useBulkActionMutation({
     run: (vars: z.input<typeof productCreateManyInput>) =>
       createManyProductsStream(vars),
@@ -364,7 +372,12 @@ export function EnrichmentWorkbench({
   });
   const markNoUsdaMutateAsync = markNoUsda.mutateAsync;
   const suggestMerges = useMutation(
-    ai.suggestIngredientMergeBatch.mutationOptions(),
+    ai.suggestIngredientMergeBatch.mutationOptions({
+      // No toast here: `handleSuggestMerges`'s catch below already turns any
+      // failure into one `showErrorToast`; a populated `onError` would
+      // additionally trigger the global toast.
+      onError: () => {},
+    }),
   );
   const suggestUsdaAsync = suggestUsda.mutateAsync;
   const suggestMergesAsync = suggestMerges.mutateAsync;
@@ -398,7 +411,7 @@ export function EnrichmentWorkbench({
         toast.success(`AI found ${matched} merge${matched === 1 ? "" : "s"}.`);
         return true;
       } catch (caught) {
-        toast.error(`Merge suggestion failed: ${getErrorMessage(caught)}`);
+        showErrorToast(caught, "Merge suggestion failed");
         return false;
       }
     },
@@ -459,7 +472,7 @@ export function EnrichmentWorkbench({
         toast.success(`AI matched ${matched}/${ingredients.length}.`);
         return true;
       } catch (caught) {
-        toast.error(`Suggestion failed: ${getErrorMessage(caught)}`);
+        showErrorToast(caught, "Suggestion failed");
         return false;
       }
     },
