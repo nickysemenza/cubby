@@ -2,7 +2,7 @@ import {
   expenseChargeContextOut,
   type ExpenseOut,
 } from "@cubby/schemas/project";
-import { testShortcode } from "@cubby/schemas/testing";
+import { testCompleteDataQuality, testShortcode } from "@cubby/schemas/testing";
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { z } from "zod";
@@ -43,6 +43,7 @@ const expense: ExpenseOut = {
   beneficiaries: [],
   funders: [],
   sourceClaims: [],
+  dataQuality: testCompleteDataQuality(),
   createdAt: new Date("2026-07-31T12:00:00Z"),
   updatedAt: new Date("2026-07-31T12:00:00Z"),
 };

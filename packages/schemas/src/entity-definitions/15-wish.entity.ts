@@ -371,6 +371,17 @@ export default defineEntity({
     merge: false,
     operationOwners: { delete: "kernel", merge: null },
     mcp: ["get", "list", "search", "create", "update", "delete"],
+    dataQuality: {
+      checks: [
+        {
+          id: "wish_candidate",
+          facet: "linkage",
+          weight: 1,
+          label: "Candidate",
+          message: "No candidate product is linked to this wish.",
+        },
+      ],
+    },
   },
   extensions: {
     countFilter: null,

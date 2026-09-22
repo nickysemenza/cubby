@@ -38,13 +38,12 @@ export const basicProblemQueries = [
     description:
       "Vendors with at least one live purchase and no displayable logo image.",
     emptyMessage: "Every active vendor has a logo.",
+    // `vendor_logo`'s own `expected` is "has a live purchase"
+    // (checks/vendor.ts), the same population `purchaseCount: "1"` selected.
     source: {
       kind: "entity",
       entity: "vendor",
-      filters: [
-        { id: "purchaseCount", value: "1" },
-        { id: "logo", value: "none" },
-      ],
+      filters: [{ id: "dataGaps", value: ["vendor_logo"] }],
       sort: [{ id: "purchaseCount", desc: true }],
       columnVisibility: { logo: true, purchaseCount: true },
     },

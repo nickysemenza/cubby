@@ -1,5 +1,5 @@
 import type { ProjectOut, TaskOut } from "@cubby/schemas/project";
-import { testShortcode } from "@cubby/schemas/testing";
+import { testCompleteDataQuality, testShortcode } from "@cubby/schemas/testing";
 import { describe, expect, it } from "vitest";
 
 import { toDayIndex } from "./gantt-date";
@@ -82,6 +82,7 @@ function project(params: {
         costEstimate: null,
       },
     },
+    dataQuality: testCompleteDataQuality(),
   };
 }
 
@@ -118,6 +119,7 @@ function task(params: {
     subtaskCount: 0,
     doneSubtaskCount: 0,
     images: [],
+    dataQuality: testCompleteDataQuality(),
     createdAt: new Date(),
     updatedAt: new Date(),
   };

@@ -195,6 +195,7 @@ describe("financial transaction list display columns", () => {
       "rawDescription",
       "sourceCategory",
       "notes",
+      "dataQuality",
     ]);
   });
 
@@ -216,6 +217,7 @@ describe("financial transaction list display columns", () => {
       rawDescription: "Statement description",
       sourceCategory: "Source category",
       notes: "Notes",
+      dataQuality: "Data quality",
     });
   });
 

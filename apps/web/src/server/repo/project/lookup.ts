@@ -15,6 +15,7 @@ import { and, asc, eq, inArray, isNull, or, type SQL, sql } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
 import { image, project, projectImage } from "~/server/db/schema";
+import { loadDataQualities } from "~/server/repo/data-quality";
 import {
   auditDateWhereConditions,
   countWhere,
@@ -378,13 +379,15 @@ export const projectList = async (
 
   const ids = rows.map((r) => r.id);
 
-  const [projectContext, deps] = await Promise.all([
+  const [projectContext, deps, dataQualities] = await Promise.all([
     loadProjectSubtreeRollups(db, ids, tree),
     projectDependencyIds(db, ids),
+    loadDataQualities(db, "project", ids),
   ]);
 
   const data = await withDisplayImages(db, "project", rows, (row) =>
-    hydrateProjectRow(row, projectContext, deps),
+    // SAFETY: `row` came from `rows`, which `dataQualities` was loaded for.
+    hydrateProjectRow(row, projectContext, deps, dataQualities.get(row.id)!),
   );
 
   return { data, count, sums };

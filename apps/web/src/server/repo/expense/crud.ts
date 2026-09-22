@@ -43,7 +43,10 @@ import {
   logAuditEntries,
   logAuditEntry,
 } from "~/server/repo/audit-log";
-import { touchDataQualityTargets } from "~/server/repo/data-quality";
+import {
+  loadDataQualities,
+  touchDataQualityTargets,
+} from "~/server/repo/data-quality";
 import {
   buildPartialUpdateValues,
   getDb,
@@ -291,7 +294,11 @@ const expenseCrud = createEntityCrud({
   table: expense,
   entity: "expense",
   fetchById: fetchExpenseById,
-  fromDB: (_db, row) => dbExpenseToAPI(row),
+  fromDB: async (db, row) => {
+    const dataQualities = await loadDataQualities(db, "expense", [row.id]);
+    // SAFETY: `row` was just fetched live by id, so its quality was evaluated.
+    return dbExpenseToAPI(row, dataQualities.get(row.id)!);
+  },
   toUpdate: (data: ResolvedExpenseUpdate) =>
     buildPartialUpdateValues({
       name: data.name,
@@ -911,7 +918,10 @@ const getExpensesByIDs = async (
     extras: expenseInheritanceReadExtras(),
     ...relations.expense.withProject,
   });
-  const allocations = await loadExpenseProjectAllocations(db, ids);
+  const [allocations, dataQualities] = await Promise.all([
+    loadExpenseProjectAllocations(db, ids),
+    loadDataQualities(db, "expense", ids),
+  ]);
   const byExpense = new Map<ExpenseId, typeof allocations>();
   for (const allocation of allocations) {
     const existing = byExpense.get(allocation.expenseId) ?? [];
@@ -919,10 +929,14 @@ const getExpensesByIDs = async (
     byExpense.set(allocation.expenseId, existing);
   }
   return rows.map((row) =>
-    dbExpenseToAPI({
-      ...row,
-      projectAllocations: byExpense.get(row.id) ?? [],
-    }),
+    dbExpenseToAPI(
+      {
+        ...row,
+        projectAllocations: byExpense.get(row.id) ?? [],
+      },
+      // SAFETY: `row` came from `rows`, which `dataQualities` was loaded for.
+      dataQualities.get(row.id)!,
+    ),
   );
 };
 

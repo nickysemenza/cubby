@@ -1,3 +1,4 @@
+import type { DataQuality } from "@cubby/schemas/data-quality";
 import type {
   ProductId,
   ProjectId,
@@ -70,8 +71,9 @@ export const dbTaskToAPI = (
   row: TaskRow,
   blockedByIds: TaskShortcode[],
   blockingIds: TaskShortcode[],
-  subtaskCount = 0,
-  doneSubtaskCount = 0,
+  subtaskCount: number,
+  doneSubtaskCount: number,
+  dataQuality: DataQuality,
 ): TaskOut => ({
   id: parseShortcodeFor("task", row.shortcode),
   name: row.name,
@@ -103,6 +105,7 @@ export const dbTaskToAPI = (
   subtaskCount,
   doneSubtaskCount,
   images: mapImages(row.images),
+  dataQuality,
   createdAt: row.createdAt,
   updatedAt: row.updatedAt,
 });

@@ -28,6 +28,7 @@ import {
 } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
 import { logAuditEntry } from "~/server/repo/audit-log";
+import { loadDataQualities } from "~/server/repo/data-quality";
 import {
   associatePendingImages,
   auditDateWhereConditions,
@@ -118,7 +119,11 @@ const fetchMealById = async (db: Database, id: MealId) => {
 const mealReader = createEntityReader({
   entity: "meal",
   fetchById: fetchMealById,
-  fromDB: (_db, row) => dbMealToAPI(row),
+  fromDB: async (db, row) => {
+    const qualities = await loadDataQualities(db, "meal", [row.id]);
+    // SAFETY: `row` was just fetched live by id, so its quality was evaluated.
+    return dbMealToAPI(row, qualities.get(row.id)!);
+  },
 });
 
 export const getMealByID = (
@@ -146,7 +151,13 @@ export const getMealsByDateRange = async (
     orderBy: (m, { asc }) => [asc(m.date), asc(m.sortOrder), asc(m.createdAt)],
     ...relations.meal.full,
   });
-  return rows.map(dbMealToAPI);
+  const qualities = await loadDataQualities(
+    db,
+    "meal",
+    rows.map((row) => row.id),
+  );
+  // SAFETY: `row` came from `rows`, which `qualities` was loaded for.
+  return rows.map((row) => dbMealToAPI(row, qualities.get(row.id)!));
 };
 
 /** Compact, bounded Home projection over the same canonical date ordering. */
@@ -162,8 +173,14 @@ export const getUpcomingMealSummary = async (
     limit,
     ...relations.meal.full,
   });
+  const qualities = await loadDataQualities(
+    db,
+    "meal",
+    rows.map((row) => row.id),
+  );
   return rows.map((row) => {
-    const full = dbMealToAPI(row);
+    // SAFETY: `row` came from `rows`, which `qualities` was loaded for.
+    const full = dbMealToAPI(row, qualities.get(row.id)!);
     return {
       id: full.id,
       date: full.date,
@@ -279,7 +296,15 @@ export const mealList = async (
     return { data: [], count };
   }
 
-  const items = await withDisplayImages(db, "meal", rows, dbMealToAPI);
+  const qualities = await loadDataQualities(
+    db,
+    "meal",
+    rows.map((row) => row.id),
+  );
+  const items = await withDisplayImages(db, "meal", rows, (row) =>
+    // SAFETY: `row` came from `rows`, which `qualities` was loaded for.
+    dbMealToAPI(row, qualities.get(row.id)!),
+  );
   return { data: items, count };
 };
 

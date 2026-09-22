@@ -1,5 +1,5 @@
 import { type InfLocation, infLocation } from "@cubby/schemas/location";
-import { testShortcode } from "@cubby/schemas/testing";
+import { testCompleteDataQuality, testShortcode } from "@cubby/schemas/testing";
 import { describe, expect, it } from "vitest";
 
 import { buildLocationGalleryData } from "./location-gallery-data";
@@ -22,6 +22,7 @@ const location = (
     valuation: null,
     createdAt: new Date(0),
     updatedAt: new Date(0),
+    dataQuality: testCompleteDataQuality(),
     inventoryItems: productIds.map((productId, index) => ({
       id: testShortcode("inventory", `INV-${String(index + 2).repeat(4)}`),
       productId: testShortcode("product", productId),

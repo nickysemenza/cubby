@@ -1,4 +1,4 @@
-import { testShortcode } from "@cubby/schemas/testing";
+import { testCompleteDataQuality, testShortcode } from "@cubby/schemas/testing";
 import { vendorOut } from "@cubby/schemas/vendor";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -37,6 +37,7 @@ const fetchedVendor = vendorOut.parse({
   logo: null,
   createdAt: new Date("2026-08-27T00:00:00.000Z"),
   updatedAt: new Date("2026-08-27T00:00:00.000Z"),
+  dataQuality: testCompleteDataQuality(),
 });
 
 function createOperations() {

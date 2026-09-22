@@ -64,6 +64,7 @@ import {
   logAuditEntries,
   logAuditEntry,
 } from "~/server/repo/audit-log";
+import { loadDataQualities } from "~/server/repo/data-quality";
 import {
   assertNoDependents,
   associatePendingImages,
@@ -904,15 +905,26 @@ export const locationList = async (
   const pageProducts = results.flatMap((row) =>
     row.inventoryEntries.map((entry) => entry.product),
   );
-  const [pricingByProductId, valuations] = await Promise.all([
+  const [pricingByProductId, valuations, dataQualities] = await Promise.all([
     loadProductPricing(db, pageProducts),
     // One whole-tree compute per page, not per row: valuation is a rollup over
     // the WHOLE subtree beneath each location, which a page-scoped query
     // cannot produce on its own.
     computeLocationValuations(db),
+    loadDataQualities(
+      db,
+      "location",
+      results.map((row) => row.id),
+    ),
   ]);
   const items = await withDisplayImages(db, "location", results, (row) =>
-    dbLocationToListAPI(row, pricingByProductId, valuations),
+    dbLocationToListAPI(
+      row,
+      pricingByProductId,
+      valuations,
+      // SAFETY: `row` came from `results`, which `dataQualities` was loaded for.
+      dataQualities.get(row.id)!,
+    ),
   );
   return { data: items, count: totalCount };
 };
@@ -1230,6 +1242,7 @@ export const getLocationById = async (
 
   // Fetch parent chain recursively (up to 10 levels)
   let parentChain: LocationWithParentChild | null = null;
+  const parentChainIds: LocationId[] = [];
   if (res.parentId) {
     let currentParentId: LocationId | null = res.parentId;
     let depth = 0;
@@ -1252,6 +1265,7 @@ export const getLocationById = async (
       if (!parentData) break;
 
       parents.unshift(parentData);
+      parentChainIds.push(parentData.id);
       currentParentId = parentData.parentId;
       depth++;
     }
@@ -1283,7 +1297,7 @@ export const getLocationById = async (
   // surface reading this payload (the location hovercard, the Contents
   // header's fallback) report 0 for a location that holds stock directly and
   // has no children to roll up.
-  const [childCountResults, stockItemsByLocationId, valuations] =
+  const [childCountResults, stockItemsByLocationId, valuations, dataQualities] =
     await Promise.all([
       childIds.length > 0
         ? dbClient
@@ -1303,6 +1317,9 @@ export const getLocationById = async (
       // A whole-tree compute: this location's own valuation is a rollup over
       // its entire subtree, which nothing scoped to `id`/`childIds` can produce.
       computeLocationValuations(db),
+      // Root, every direct child and the whole ancestor chain — everywhere
+      // `buildLocationWithChildren` recurses into below.
+      loadDataQualities(db, "location", [id, ...childIds, ...parentChainIds]),
     ]);
 
   for (const row of childCountResults) {
@@ -1326,5 +1343,11 @@ export const getLocationById = async (
     images: res.images,
   };
 
-  return buildLocationWithChildren(locationWithParent, id, true, valuations);
+  return buildLocationWithChildren(
+    locationWithParent,
+    id,
+    true,
+    valuations,
+    dataQualities,
+  );
 };

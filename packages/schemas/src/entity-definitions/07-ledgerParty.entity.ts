@@ -388,6 +388,17 @@ export default defineEntity({
     merge: true,
     operationOwners: { delete: "kernel", merge: "kernel" },
     mcp: ["get", "list", "create", "update", "delete", "merge"],
+    dataQuality: {
+      checks: [
+        {
+          id: "ledger_party_financial_account",
+          facet: "linkage",
+          weight: 1,
+          label: "Financial account",
+          message: "No financial account is linked to this member.",
+        },
+      ],
+    },
   },
   extensions: {
     countFilter: null,

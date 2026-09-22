@@ -1,5 +1,5 @@
 import type { TaskOut } from "@cubby/schemas/project";
-import { testShortcode } from "@cubby/schemas/testing";
+import { testCompleteDataQuality, testShortcode } from "@cubby/schemas/testing";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -49,6 +49,7 @@ function task(params: {
     subtaskCount: 0,
     doneSubtaskCount: 0,
     images: [],
+    dataQuality: testCompleteDataQuality(),
     createdAt: new Date("2026-01-01"),
     updatedAt: params.updatedAt ?? new Date("2026-01-01"),
   };

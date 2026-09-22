@@ -1,4 +1,4 @@
-import { testShortcode } from "@cubby/schemas/testing";
+import { testCompleteDataQuality, testShortcode } from "@cubby/schemas/testing";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -24,6 +24,7 @@ function makeInventoryItem(params: {
     id: testShortcode("inventory", params.id),
     displayName: "Example product · Example location",
     displayImages: [],
+    dataQuality: testCompleteDataQuality(),
     createdAt: now,
     updatedAt: now,
     amount: { value: 1, unit: "each" },

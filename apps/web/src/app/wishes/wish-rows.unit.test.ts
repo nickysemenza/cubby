@@ -1,4 +1,4 @@
-import { testShortcode } from "@cubby/schemas/testing";
+import { testCompleteDataQuality, testShortcode } from "@cubby/schemas/testing";
 import type { WishCandidateOut, WishListItemOut } from "@cubby/schemas/wish";
 import { describe, expect, it } from "vitest";
 
@@ -33,6 +33,7 @@ const wish = (
     candidateCount: candidates.length,
     priceRange,
     displayImages: [],
+    dataQuality: testCompleteDataQuality(),
     createdAt: new Date("2026-01-01"),
     updatedAt: new Date("2026-01-01"),
   };

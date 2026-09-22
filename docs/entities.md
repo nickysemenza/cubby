@@ -594,6 +594,62 @@ projection and its fan-out projections inside the write transaction; a change
 to projection SQL itself does not rewrite persisted rows — run the streaming
 "Repair index" maintenance action after such a change.
 
+## Data quality
+
+`capabilities.dataQuality` on an entity definition
+(`entityDataQualityMetadataSchema` in
+`packages/schemas/src/entity-definitions/definition.ts`) declares
+`checks[{id, facet, kind, weight, label, message}]`, `exceptions` (true only
+where the table carries a `dataExceptions` jsonb column), `related` (other
+scored entities whose gaps roll up into this one), and `listOrder`. `id` must
+be globally unique across every entity's checks — it doubles as the `dataGap`
+filter option value.
+
+The compiler (`scripts/generator/entities/data-quality.ts`) synthesizes two
+model fields (`dataQuality`, `dataGaps`) with the `data-quality` list
+renderer, the `dataStatus`/`dataGap` filter descriptors, and a `dataQuality`
+sort entry — the sort shares the column id, so the "Data quality" column
+header sorts by score. **Declaration wins**: hand-spelling `dataQuality`,
+`dataGaps`, or a `dataQuality` sort field anywhere else in the manifest is a
+compile error — the block is the single source, the same way `filters.audit`
+owns `createdAt`/`updatedAt`. A cross-entity pass enforces global check-id
+uniqueness and turns each `related` entity's own check ids into `dataGap`
+filter options on the rolling-up entity. The generated leaf
+(`packages/schemas/src/generated/data-quality-checks.gen.ts`) exports
+`dataCheck`, `dataChecksByEntity`, the per-check facet/kind/weight/label/
+message maps, `dataQualityFacets`, `relatedDataQualityEntities`,
+`dataQualityExceptionEntities`, and `scoredEntities`; `data-quality.ts`
+composes the public schema from that leaf.
+
+Every declared check id needs exactly one binding in the web registry
+(`apps/web/src/server/repo/data-quality/checks/<entity>.ts`), typechecked two
+ways: `entries.ts`'s `satisfies` against the generated per-entity check
+union, and the registry unit test. A `CheckBinding<T>` supplies
+`expected?(t)` (omitted = always expected), `missing(t)`, and
+`fingerprint?(t)` — required exactly when the entity has exceptions, and the
+inputs are whatever that check actually reads, never `updatedAt` (see
+`docs/agents/domain-rules.md`). `t` is the entity's own table or an
+`alias()` of it, so a related roll-up evaluates the same binding the related
+entity's own list uses.
+
+`sql.ts` builds every predicate as one parenthesized group so callers can
+safely embed it under `NOT` or beside `OR` — a bare conjunction once emptied
+a production worklist; the unit test asserts the shape.
+`expected`/`missing`/`fingerprint` combine into a live-gap condition (expected,
+missing, not covered by an active exception) and the score:
+`100 × satisfied expected weight / expected weight`, 100 when nothing is
+expected — the same arithmetic the hydrated `score` uses, so `ORDER BY`
+agrees with the read value. The score is unindexed — a correlated `EXISTS`
+per check per row — which is fine at household scale. `related` roll-ups add
+an `EXISTS` against an aliased related table using that entity's own
+bindings; `list-scaffold.ts` binds the resulting filters and sort for every
+scored entity's list in one place.
+
+Durable "not available" exceptions (`set_data_exception`/
+`clear_data_exception`) remain Product/Purchase-only this pass — only those
+tables carry a `dataExceptions` jsonb column. A generic exception store for
+every scored entity is a tracked follow-up (`docs/todos.md`).
+
 ## Relations, deletion, and merge
 
 Every logical relation declares its target, cardinality, primary named source,

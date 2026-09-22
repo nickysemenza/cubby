@@ -1,4 +1,5 @@
 import type { ActorContext } from "@cubby/schemas/context";
+import type { DataQuality } from "@cubby/schemas/data-quality";
 import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 import {
   type ProductCategoryId,
@@ -28,6 +29,7 @@ import type { Database, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import { product, productCategory } from "~/server/db/schema";
 import { logAuditEntry } from "~/server/repo/audit-log";
+import { loadDataQualities } from "~/server/repo/data-quality";
 import {
   auditDateWhereConditions,
   countWhere,
@@ -171,6 +173,7 @@ const pathsFor = async (
 const toOut = async (
   db: Database | DrizzleTransaction,
   row: CategoryRow,
+  dataQuality: DataQuality,
   paths?: Map<string, CategoryPathRow["path"]>,
 ): Promise<ProductCategoryOut> => {
   const path = paths?.get(row.id) ?? (await pathsFor(db, [row.id])).get(row.id);
@@ -210,6 +213,7 @@ const toOut = async (
     path: parsedPath,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
+    dataQuality,
   });
 };
 
@@ -236,12 +240,22 @@ export async function listProductCategories(
       .offset(skip),
     countWhere(db, productCategory, where),
   );
-  const paths = await pathsFor(
-    db,
-    data.map((row) => row.id),
-  );
+  const [paths, dataQualities] = await Promise.all([
+    pathsFor(
+      db,
+      data.map((row) => row.id),
+    ),
+    loadDataQualities(
+      db,
+      "productCategory",
+      data.map((row) => row.id),
+    ),
+  ]);
   return {
-    data: await Promise.all(data.map((row) => toOut(db, row, paths))),
+    data: await Promise.all(
+      // SAFETY: `row` came from `data`, which `dataQualities` was loaded for.
+      data.map((row) => toOut(db, row, dataQualities.get(row.id)!, paths)),
+    ),
     count,
   };
 }
@@ -261,7 +275,13 @@ const reader = createEntityReader<
       .limit(1);
     return row;
   },
-  fromDB: (db, row) => toOut(db, row),
+  fromDB: async (db, row) => {
+    const id = parseEntityId("productCategory", row.id);
+    const dataQuality = (
+      await loadDataQualities(db, "productCategory", [id])
+    ).get(id)!;
+    return toOut(db, row, dataQuality);
+  },
 });
 
 export const getProductCategoryByShortcode = reader.getByShortcode;

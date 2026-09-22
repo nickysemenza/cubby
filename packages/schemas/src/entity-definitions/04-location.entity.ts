@@ -881,6 +881,24 @@ export default defineEntity({
     merge: false,
     operationOwners: { delete: "kernel", merge: null },
     mcp: ["get", "list", "search", "create", "update", "delete", "bulkUpdate"],
+    dataQuality: {
+      checks: [
+        {
+          id: "location_ai_description",
+          facet: "content",
+          weight: 1,
+          label: "AI description",
+          message: "No AI-generated description is recorded.",
+        },
+        {
+          id: "location_type",
+          facet: "identity",
+          weight: 1,
+          label: "Type",
+          message: "Location type is not recorded.",
+        },
+      ],
+    },
   },
   extensions: {
     countFilter: null,

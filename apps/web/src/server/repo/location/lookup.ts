@@ -33,6 +33,7 @@ import { alias } from "drizzle-orm/pg-core";
 
 import type { Database } from "~/server/db";
 import { inventoryEntry, location, product } from "~/server/db/schema";
+import { loadDataQualities } from "~/server/repo/data-quality";
 import {
   findOrCreate,
   getDb,
@@ -134,18 +135,24 @@ export const getLocationsByShortcodes = async (
 ): Promise<(LocationOut & { parentName: string | null })[]> => {
   if (shortcodes.length === 0) return [];
   const uppercased = shortcodes.map((s) => s.toUpperCase());
-  const [results, valuations] = await Promise.all([
-    getDb(db).query.location.findMany({
-      where: and(inArray(location.shortcode, uppercased), notDeleted(location)),
-      with: {
-        ...relations.location.withImages.with,
-        parent: true,
-      },
-    }),
+  const results = await getDb(db).query.location.findMany({
+    where: and(inArray(location.shortcode, uppercased), notDeleted(location)),
+    with: {
+      ...relations.location.withImages.with,
+      parent: true,
+    },
+  });
+  const [valuations, dataQualities] = await Promise.all([
     computeLocationValuations(db),
+    loadDataQualities(
+      db,
+      "location",
+      results.map((r) => r.id),
+    ),
   ]);
   return results.map((r) => ({
-    ...dbLocationToAPI(r, valuations),
+    // SAFETY: `r` came from `results`, which `dataQualities` was loaded for.
+    ...dbLocationToAPI(r, valuations, dataQualities.get(r.id)!),
     parentName: r.parent?.name ?? null,
   }));
 };

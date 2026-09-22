@@ -13,9 +13,14 @@ source-backed batch report.
 
 Use supplied `PRD-` identifiers regardless of inventory. Enrichment never
 decides whether an import line becomes a Product and never receives inventory.
-For a backlog, inspect Products with inventory present and missing item imagery
-or missing verified catalog imagery, sorted by identity strength, in pages of 25. Start with summary/count reads, then request
-the relevant page; request full records only for candidates being researched.
+For a backlog, `entity list product` with `sort=dataQuality` ascending puts the
+weakest identity first (heavier identity checks — manufacturer, external ID —
+outweigh lighter ones), in pages of 25. Narrow to a specific gap with
+`filters.dataGap` on a check id: `product_manufacturer`, `product_external_id`,
+`product_category`, `product_model`, `product_price`, `product_image`,
+`amazon_asin`, `duplicate_external_id`. Start with summary/count reads, then
+request the relevant page; request full records only for candidates being
+researched.
 
 Read a candidate immediately before every write. `imageCount` is the complete
 attachment count used by upload preconditions; `itemImageCount` and

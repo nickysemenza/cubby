@@ -86,7 +86,7 @@ export const settleableUnpricedExpenseCountSql = (purchaseAlias: string) =>
  * fingerprint so a changed charge amount cannot inherit an exception for a
  * different financial delta.
  */
-const purchaseFinancialComparisonTotalSql = (purchaseAlias: string) =>
+export const purchaseFinancialComparisonTotalSql = (purchaseAlias: string) =>
   `(CASE WHEN (
     SELECT count(DISTINCT a."transactionId")
     FROM "FinancialTransactionAllocation" a
@@ -210,10 +210,7 @@ export const postedRefundTotalSql = (purchaseAlias: string) =>
  * without the visible predicate it fails the build — correctly, since it has
  * no way to prove the filter exists. Keep both.
  */
-export const settlementReferencePredicate = (
-  ftxAlias: string,
-  accountAlias: string,
-) =>
+const settlementReferencePredicate = (ftxAlias: string, accountAlias: string) =>
   `${ftxAlias}."status" = 'posted'
      AND ${ftxAlias}."kind" IN (${purchaseSettlementKinds
        .map((kind) => `'${kind}'`)

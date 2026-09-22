@@ -1,4 +1,5 @@
 import type { ActorContext } from "@cubby/schemas/context";
+import type { DataQuality } from "@cubby/schemas/data-quality";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 import type {
@@ -29,6 +30,7 @@ import {
 } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
 import { computeChanges, logAuditEntry } from "~/server/repo/audit-log";
+import { loadDataQualities } from "~/server/repo/data-quality";
 import {
   auditDateWhereConditions,
   buildPartialUpdateValues,
@@ -151,7 +153,10 @@ const classificationFor = (row: LedgerTransferRow) =>
         ? "household_distribution"
         : "reimbursement";
 
-const toOut = (row: LedgerTransferRow): LedgerTransferOut =>
+const toOut = (
+  row: LedgerTransferRow,
+  dataQuality: DataQuality,
+): LedgerTransferOut =>
   ledgerTransferOut.parse({
     id: parseShortcodeFor("ledgerTransfer", row.shortcode),
     fromPartyId: parseShortcodeFor("ledgerParty", row.fromPartyShortcode),
@@ -172,6 +177,7 @@ const toOut = (row: LedgerTransferRow): LedgerTransferOut =>
     evidenceTransactionIds: row.evidenceTransactionIds.map((id) =>
       parseShortcodeFor("financialTransaction", id),
     ),
+    dataQuality,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   });
@@ -196,7 +202,13 @@ const reader = createEntityReader<
 >({
   entity: "ledgerTransfer",
   fetchById: getById,
-  fromDB: (_db, row) => toOut(row),
+  fromDB: async (db, row) => {
+    const dataQualities = await loadDataQualities(db, "ledgerTransfer", [
+      row.id,
+    ]);
+    // SAFETY: `row` was just fetched live by id, so its quality was evaluated.
+    return toOut(row, dataQualities.get(row.id)!);
+  },
 });
 
 export const getLedgerTransferByShortcode = reader.getByShortcode;
@@ -530,5 +542,14 @@ export async function listLedgerTransfers(
       .offset(skip),
     countWhere(db, ledgerTransfer, where),
   );
-  return { data: data.map(toOut), count };
+  const dataQualities = await loadDataQualities(
+    db,
+    "ledgerTransfer",
+    data.map((row) => row.id),
+  );
+  return {
+    // SAFETY: `row` came from `data`, which `dataQualities` was loaded for.
+    data: data.map((row) => toOut(row, dataQualities.get(row.id)!)),
+    count,
+  };
 }

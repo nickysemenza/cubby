@@ -1,7 +1,6 @@
 import { defineEntity } from "./definition.js";
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
 import { plainDate } from "@cubby/schemas/base-entity";
-import { dataQuality } from "@cubby/schemas/data-quality";
 import {
   externalIdInputs,
   externalIdOut,
@@ -919,45 +918,6 @@ export default defineEntity({
           sourceDependencies: [{ path: "notes", label: "Product notes" }],
         },
       },
-      {
-        key: "dataGaps",
-        kind: "json",
-        readKey: null,
-        provenance: { kind: "derived", sources: [{ entity: "product" }] },
-        explanation: {
-          ruleId: "product.data-gaps",
-          description:
-            "Data gaps are the current checks reported by this product's data-quality evaluation.",
-          projections: { list: "dataGaps", summary: "dataGaps" },
-          sourceDependencies: [{ path: "dataGaps", label: "Detected gaps" }],
-        },
-      },
-      {
-        key: "dataQuality",
-        kind: "json",
-        // Default label would be "Data Quality"; the list column has always
-        // headed this "Data quality".
-        label: "Data quality",
-        display: { list: true, listOrder: 7, listHidden: true },
-        provenance: { kind: "derived", sources: [{ entity: "product" }] },
-        explanation: {
-          ruleId: "product.data-quality",
-          description:
-            "Data-quality gaps are evaluated from the fields and relationships in this product projection.",
-          projections: {
-            list: "dataQuality.status",
-            summary: "dataQuality.status",
-          },
-          sourceDependencies: [
-            { path: "dataQuality.gaps", label: "Detected gaps" },
-          ],
-        },
-        validation: {
-          read: dataQuality,
-          create: null,
-          update: null,
-        },
-      },
       // Read-only, list-only computed values carried on `ProductListItem`
       // (never a stored `Product` column) — each needs the override
       // `productlist.tsx` supplies, per docs/entities.md's "declaration
@@ -1327,7 +1287,6 @@ export default defineEntity({
         "related:product.projects",
         "related:product.vendors",
         "related:product.purchases",
-        "identity_strength",
       ],
       default: "createdAt",
       computed: [
@@ -1341,7 +1300,6 @@ export default defineEntity({
         "related:product.projects",
         "related:product.vendors",
         "related:product.purchases",
-        "identity_strength",
       ],
       groupable: ["category"],
     },
@@ -1443,7 +1401,6 @@ export default defineEntity({
       "usdaUnavailable",
       "stockTracked",
       "labelNutrition",
-      "dataQuality",
       "createdAt",
       "updatedAt",
       "category",
@@ -1685,31 +1642,6 @@ export default defineEntity({
         options: [
           { value: "has", label: "Has notes", meta: true },
           { value: "none", label: "(none)", meta: true },
-        ],
-      },
-      {
-        columnId: "dataQuality",
-        field: "dataStatus",
-        kind: "select",
-        placeholder: "Filter data quality...",
-        options: [
-          { value: "complete", label: "Complete", color: "var(--slate)" },
-          { value: "needs_data", label: "Needs data", color: "var(--warning)" },
-          { value: "defect", label: "Defect", color: "var(--destructive)" },
-        ],
-      },
-      {
-        columnId: "dataGaps",
-        field: "dataGap",
-        kind: "multiselect",
-        placeholder: "Filter data gaps...",
-        options: [
-          { value: "product_manufacturer", label: "Manufacturer" },
-          { value: "product_category", label: "Category" },
-          { value: "product_model", label: "Model" },
-          { value: "product_image", label: "No image (stocked)" },
-          { value: "amazon_asin", label: "Amazon ASIN" },
-          { value: "duplicate_external_id", label: "Duplicate external ID" },
         ],
       },
       {
@@ -2426,6 +2358,72 @@ export default defineEntity({
   capabilities: {
     auditable: true,
     timeline: "custom",
+    // Identity carries the weight: `dataQualityScore asc` is the enrichment
+    // worklist (it replaced the bespoke `identity_strength` sort), so a
+    // product with no manufacturer or external id sorts before one that
+    // only lacks a photo.
+    dataQuality: {
+      exceptions: true,
+      listOrder: 7,
+      checks: [
+        {
+          id: "product_manufacturer",
+          facet: "identity",
+          weight: 3,
+          label: "Manufacturer",
+          message: "Manufacturer is not recorded.",
+        },
+        {
+          id: "product_external_id",
+          facet: "identity",
+          weight: 3,
+          label: "External ID",
+          message:
+            "No barcode, ASIN, or other external identifier is recorded.",
+        },
+        {
+          id: "product_category",
+          facet: "identity",
+          weight: 2,
+          label: "Category",
+          message: "Product category is not recorded.",
+        },
+        {
+          id: "product_model",
+          facet: "identity",
+          weight: 2,
+          label: "Model",
+          message: "Manufacturer model is not recorded.",
+        },
+        {
+          id: "product_price",
+          facet: "ledger",
+          weight: 2,
+          label: "Price (stocked)",
+          message: "Stocked product has no price to value it by.",
+        },
+        {
+          id: "product_image",
+          facet: "provenance",
+          label: "No image (stocked)",
+          message: "No product image is attached.",
+        },
+        {
+          id: "amazon_asin",
+          facet: "provenance",
+          label: "Amazon ASIN",
+          message: "Amazon-linked product has no Amazon ASIN.",
+        },
+        {
+          id: "duplicate_external_id",
+          facet: "integrity",
+          kind: "defect",
+          label: "Duplicate external ID",
+          message:
+            "An exact external identifier is shared with another live product.",
+        },
+      ],
+    },
     images: {
       storage: "gallery",
       ingress: [

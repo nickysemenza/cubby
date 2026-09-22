@@ -1,6 +1,6 @@
 import type { CalendarItem } from "@cubby/schemas/calendar";
 import { type ExpenseOut, expenseOut } from "@cubby/schemas/project";
-import { testShortcode } from "@cubby/schemas/testing";
+import { testCompleteDataQuality, testShortcode } from "@cubby/schemas/testing";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
@@ -66,6 +66,7 @@ const savedExpense: ExpenseOut = expenseOut.parse({
   funders: [],
   createdAt: new Date("2026-08-18T12:00:00Z"),
   updatedAt: new Date("2026-08-18T12:00:00Z"),
+  dataQuality: testCompleteDataQuality(),
 });
 
 function editableDescriptor(item: CalendarItem) {

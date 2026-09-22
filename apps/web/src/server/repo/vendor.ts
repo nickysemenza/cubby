@@ -1,6 +1,7 @@
 /** Vendor spend is derived only from `SUM(Expense.cost)` through live purchases. */
 
 import type { ActorContext } from "@cubby/schemas/context";
+import type { DataQuality } from "@cubby/schemas/data-quality";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 import {
@@ -41,6 +42,7 @@ import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import { image, purchase, vendor } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
 import { logAuditEntry } from "~/server/repo/audit-log";
+import { loadDataQualities } from "~/server/repo/data-quality";
 import {
   auditDateWhereConditions,
   correlated,
@@ -315,7 +317,10 @@ type VendorRow = {
   } | null;
 };
 
-const dbVendorToAPI = (row: VendorRow): VendorOut => ({
+const dbVendorToAPI = (
+  row: VendorRow,
+  dataQuality: DataQuality,
+): VendorOut => ({
   id: parseShortcodeFor("vendor", row.shortcode),
   name: row.name,
   website: row.website,
@@ -335,6 +340,7 @@ const dbVendorToAPI = (row: VendorRow): VendorOut => ({
     id: parseShortcodeFor("image", row.logo.id),
     url: getR2PublicUrl(row.logo.key),
   },
+  dataQuality,
   createdAt: row.createdAt,
   updatedAt: row.updatedAt,
 });
@@ -431,8 +437,14 @@ export const vendorList = async (
           .where(whereClause),
   ]);
 
+  const dataQualities = await loadDataQualities(
+    db,
+    "vendor",
+    rows.map((row) => row.id),
+  );
   return {
-    data: rows.map(dbVendorToAPI),
+    // SAFETY: `row` came from `rows`, which `dataQualities` was loaded for.
+    data: rows.map((row) => dbVendorToAPI(row, dataQualities.get(row.id)!)),
     count,
     sums: {
       spend: Number(totals?.spend ?? 0),
@@ -461,7 +473,9 @@ export const getVendorByID = async (
   if (!row) {
     throw createAppError("VENDOR_NOT_FOUND", `Vendor not found: ${id}`);
   }
-  return dbVendorToAPI(row);
+  const dataQualities = await loadDataQualities(db, "vendor", [row.id]);
+  // SAFETY: `row` was just fetched live by id, so its quality was evaluated.
+  return dbVendorToAPI(row, dataQualities.get(row.id)!);
 };
 
 export const getVendorByShortcode = async (

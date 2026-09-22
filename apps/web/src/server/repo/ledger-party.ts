@@ -1,4 +1,5 @@
 import type { ActorContext } from "@cubby/schemas/context";
+import type { DataQuality } from "@cubby/schemas/data-quality";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 import type {
@@ -39,6 +40,11 @@ import {
 } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
 import { computeChanges, logAuditEntry } from "~/server/repo/audit-log";
+import {
+  dataQualityFilterPredicates,
+  dataQualitySortResolver,
+  loadDataQualities,
+} from "~/server/repo/data-quality";
 import {
   auditDateWhereConditions,
   buildPartialUpdateValues,
@@ -246,12 +252,13 @@ type LedgerPartyRow = {
   updatedAt: Date;
 };
 
-const toOut = (row: LedgerPartyRow): LedgerPartyOut =>
+const toOut = (row: LedgerPartyRow, dataQuality: DataQuality): LedgerPartyOut =>
   ledgerPartyOut.parse({
     id: parseShortcodeFor("ledgerParty", row.shortcode),
     name: row.name,
     kind: row.kind,
     notes: row.notes,
+    dataQuality,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   });
@@ -275,7 +282,11 @@ const reader = createEntityReader<
 >({
   entity: "ledgerParty",
   fetchById: getById,
-  fromDB: (_db, row) => toOut(row),
+  fromDB: async (db, row) => {
+    const dataQualities = await loadDataQualities(db, "ledgerParty", [row.id]);
+    // SAFETY: `row` was just fetched live by id, so its quality was evaluated.
+    return toOut(row, dataQualities.get(row.id)!);
+  },
 });
 
 export const getLedgerPartyByShortcode = reader.getByShortcode;
@@ -292,6 +303,7 @@ export const buildLedgerPartyWhere = (filters: LedgerPartyFilters) =>
     // `search` (trimmed, over name) and `kind` are declared stored filters.
     ...declaredFilterPredicates("ledgerParty", ledgerParty, filters),
     ...relatedWhereConditions("ledgerParty", filters, ledgerParty.id),
+    ...dataQualityFilterPredicates("ledgerParty", ledgerParty, filters),
   );
 
 export async function listLedgerParties(
@@ -302,6 +314,10 @@ export async function listLedgerParties(
 ) {
   const where = buildLedgerPartyWhere(filters);
   const order = sorts[0] ?? { orderBy: "name", direction: "asc" as const };
+  const dataQualityOrderBy = dataQualitySortResolver(
+    "ledgerParty",
+    ledgerParty,
+  )(order);
   const orderColumn = (() => {
     switch (order.orderBy) {
       case "kind":
@@ -321,13 +337,24 @@ export async function listLedgerParties(
       .from(ledgerParty)
       .where(where)
       .orderBy(
-        order.direction === "desc" ? desc(orderColumn) : asc(orderColumn),
+        ...(dataQualityOrderBy ?? [
+          order.direction === "desc" ? desc(orderColumn) : asc(orderColumn),
+        ]),
       )
       .limit(take)
       .offset(skip),
     countWhere(db, ledgerParty, where),
   );
-  return { data: data.map(toOut), count };
+  const dataQualities = await loadDataQualities(
+    db,
+    "ledgerParty",
+    data.map((row) => row.id),
+  );
+  return {
+    // SAFETY: `row` came from `data`, which `dataQualities` was loaded for.
+    data: data.map((row) => toOut(row, dataQualities.get(row.id)!)),
+    count,
+  };
 }
 
 /**

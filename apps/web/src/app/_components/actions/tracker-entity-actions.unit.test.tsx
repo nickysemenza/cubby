@@ -1,5 +1,5 @@
 import { expenseOut } from "@cubby/schemas/project";
-import { testShortcode } from "@cubby/schemas/testing";
+import { testCompleteDataQuality, testShortcode } from "@cubby/schemas/testing";
 import {
   fireEvent,
   render,
@@ -46,6 +46,7 @@ const plannedExpense = expenseOut.parse({
   funders: [],
   createdAt: new Date("2026-01-01T00:00:00Z"),
   updatedAt: new Date("2026-01-01T00:00:00Z"),
+  dataQuality: testCompleteDataQuality(),
 });
 
 let harness: ReturnType<typeof createBrowserTestHarness>;

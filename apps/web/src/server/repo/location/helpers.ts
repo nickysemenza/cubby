@@ -4,6 +4,7 @@
  */
 
 import { extractDbTimestampsFromDBRec } from "@cubby/schemas/common";
+import type { DataQuality } from "@cubby/schemas/data-quality";
 import {
   type LocationId,
   type ProductId,
@@ -54,7 +55,8 @@ export const dbLocationToAPI = (
       deletedAt?: Date | null;
     }>;
   },
-  valuations?: ReadonlyMap<LocationId, LocationValuation>,
+  valuations: ReadonlyMap<LocationId, LocationValuation> | undefined,
+  dataQuality: DataQuality,
 ): LocationOut => {
   return {
     id: parseShortcodeFor("location", locationData.shortcode),
@@ -71,6 +73,7 @@ export const dbLocationToAPI = (
     product: mapLocationIdentityProduct(locationData),
     images: mapImages(locationData.images),
     valuation: valuations?.get(locationData.id) ?? null,
+    dataQuality,
     ...extractDbTimestampsFromDBRec(locationData),
   };
 };
@@ -89,9 +92,10 @@ const dbLocationToListRef = (
 export const dbLocationToListAPI = (
   locationData: LocationListDB,
   pricingByProductId: ReadonlyMap<ProductId, ProductPricing>,
-  valuations?: ReadonlyMap<LocationId, LocationValuation>,
+  valuations: ReadonlyMap<LocationId, LocationValuation> | undefined,
+  dataQuality: DataQuality,
 ): Omit<LocationListItemOut, "displayImages"> => ({
-  ...dbLocationToAPI(locationData, valuations),
+  ...dbLocationToAPI(locationData, valuations, dataQuality),
   parent:
     locationData.parent && isNotDeleted(locationData.parent)
       ? dbLocationToListRef(locationData.parent)
@@ -125,9 +129,10 @@ export const dbLocationToListAPI = (
  */
 export const buildLocationWithChildren = (
   x: LocationWithParentChild,
-  excludeId?: string,
-  includeParent = true,
-  valuations?: ReadonlyMap<LocationId, LocationValuation>,
+  excludeId: string | undefined,
+  includeParent: boolean,
+  valuations: ReadonlyMap<LocationId, LocationValuation> | undefined,
+  dataQualities: ReadonlyMap<LocationId, DataQuality>,
 ): InfLocation => {
   const children =
     x.children && x.children.length > 0
@@ -139,6 +144,7 @@ export const buildLocationWithChildren = (
               excludeId,
               includeParent,
               valuations,
+              dataQualities,
             ),
           )
       : [];
@@ -164,6 +170,9 @@ export const buildLocationWithChildren = (
     product: mapLocationIdentityProduct(x),
     images: mapImages(x.images),
     valuation: valuations?.get(x.id) ?? null,
+    // SAFETY: every node this recurses into is in the batch `dataQualities`
+    // was loaded for (root, children, and ancestor chain — see call sites).
+    dataQuality: dataQualities.get(x.id)!,
     children,
     parent:
       includeParent && x.parent
@@ -172,6 +181,7 @@ export const buildLocationWithChildren = (
             excludeId,
             includeParent,
             valuations,
+            dataQualities,
           )
         : undefined,
     // getLocationById queries childCount directly; the tree builder doesn't,

@@ -633,6 +633,24 @@ export default defineEntity({
     merge: false,
     operationOwners: { delete: "kernel", merge: null },
     mcp: ["get", "list", "search", "create", "update", "delete"],
+    dataQuality: {
+      checks: [
+        {
+          id: "financial_account_ledger_party",
+          facet: "linkage",
+          weight: 1,
+          label: "Ledger party",
+          message: "No ledger party is linked to this account.",
+        },
+        {
+          id: "financial_account_confirmed",
+          facet: "identity",
+          weight: 1,
+          label: "Confirmed",
+          message: "This account is still provisional.",
+        },
+      ],
+    },
   },
   extensions: {
     countFilter: null,

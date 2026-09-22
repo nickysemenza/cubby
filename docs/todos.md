@@ -360,6 +360,26 @@ history is the archive. Permanent product constraints live in the
 
 ## Requires database changes
 
+- **HIGH PRIORITY — Generic durable data exceptions.** Every scored entity
+  (`dataChecksByEntity`/`scoredEntities` in
+  `packages/schemas/src/generated/data-quality-checks.gen.ts`) can now record
+  a computed 0–100 data-quality score and per-check gaps, but only Product
+  and Purchase can record a reasoned, evidence-fingerprinted "not available"
+  exception for one: those two tables alone carry a `dataExceptions` jsonb
+  column, and `set_data_exception`/`clear_data_exception` are hardcoded to
+  `dataExceptionEntity = z.enum(["purchase", "product"])`
+  (`packages/schemas/src/data-quality.ts`). As more entities gain
+  `capabilities.dataQuality` checks, they need the same "not applicable to
+  this row, and here's why" escape hatch. Likely shape: a polymorphic
+  `DataException` row keyed by `(entityType, entityId, check)`, with the
+  cascade/merge cleanup every other polymorphic-by-entity-type table needs.
+  This may relate to
+  [entity-identity-and-files.md § Follow-ups → 2. Selective conversion of
+  remaining polymorphic references](plans/entity-identity-and-files.md),
+  which already names data-quality exception records as a candidate family —
+  design this against that plan's reference-policy registry rather than in
+  isolation, so it doesn't reinvent a second polymorphic-reference story.
+
 - **Finish the meal amount migration.** `MealFoodEntry` and
   `MealRecipePortion` still retain legacy `grams` columns and read/input
   compatibility paths. Verify legacy rows and writers have drained, remove
@@ -423,12 +443,19 @@ history is the archive. Permanent product constraints live in the
 
 ## Requires thought or evidence
 
-- **Completeness scores for every entity.** Purchase and Product already have
-  computed 0–100 scores; the [universal scoring commitment](plans/purchase-import-redesign.md#10-pre-implementation-improvements)
-  remains unfinished. Define checks and weights for the remaining entities,
-  declare them in the manifest, expose scores and sorting across entity lists,
-  and share the checks with Problems and enrichment worklists. Preserve
-  vendor-aware expectations, durable exceptions, and existing status filters.
+- **Completeness scores for every entity — exceptions still to come.** Every
+  scored household entity now declares `capabilities.dataQuality` in its
+  manifest (see `docs/entities.md` → "Data quality") and gets a computed
+  0–100 score, `dataStatus`/`dataGap` list filters, and a `sort=dataQuality`
+  worklist ordering (ascending = weakest first), fulfilling most of the
+  [universal scoring commitment](plans/purchase-import-redesign.md#10-pre-implementation-improvements).
+  What remains: durable "not available" exceptions still only exist for
+  Product and Purchase (the `dataExceptions` jsonb column and
+  `set_data_exception`/`clear_data_exception` are hardcoded to those two —
+  see "Generic durable data exceptions" below); the per-check weights shipped
+  are a first cut and may need tuning once worklists are used in anger;
+  `projectsMissingBudget` remains a Problems tracker rule, not a `dataQuality`
+  check, because its subtree spend rollup is not a per-row predicate.
 
 - **Incremental import cursors and paced backfill.** The account cursor declares
   newest-date/order-ID and backfill bounds, but imports do not advance them;

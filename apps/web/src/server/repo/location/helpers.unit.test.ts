@@ -2,7 +2,11 @@ import {
   locationListItemOut,
   locationListRefOut,
 } from "@cubby/schemas/location";
-import { testEntityId, testShortcode } from "@cubby/schemas/testing";
+import {
+  testCompleteDataQuality,
+  testEntityId,
+  testShortcode,
+} from "@cubby/schemas/testing";
 import {
   categorySummaryFixture,
   taxonomyId,
@@ -145,15 +149,19 @@ const deletedProduct = {
 
 describe("location mappers", () => {
   it("maps scalar location rows and filters deleted image rows", () => {
-    const result = dbLocationToAPI({
-      ...baseLocation,
-      deletedAt: null,
-      images: [
-        { image, deletedAt: null },
-        { image: deletedImage, deletedAt: null },
-        { image, deletedAt: DELETED_AT },
-      ],
-    });
+    const result = dbLocationToAPI(
+      {
+        ...baseLocation,
+        deletedAt: null,
+        images: [
+          { image, deletedAt: null },
+          { image: deletedImage, deletedAt: null },
+          { image, deletedAt: DELETED_AT },
+        ],
+      },
+      undefined,
+      testCompleteDataQuality(),
+    );
 
     expect(result).toMatchObject({
       id: testShortcode("location", "LOC-TEST"),
@@ -210,7 +218,12 @@ describe("location mappers", () => {
     const pricingByProductId = new Map([
       [PRODUCT_ID, resolveProductPricing(product.price)],
     ]);
-    const result = dbLocationToListAPI(row, pricingByProductId);
+    const result = dbLocationToListAPI(
+      row,
+      pricingByProductId,
+      undefined,
+      testCompleteDataQuality(),
+    );
 
     expect(result.parent).toEqual({
       id: testShortcode("location", "LOC-2345"),

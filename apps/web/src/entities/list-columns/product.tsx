@@ -67,7 +67,6 @@ import {
   labeledFieldProvenance,
   relationshipFieldProvenance,
 } from "~/entities/field-provenance";
-import { dataQualityOptions } from "~/lib/data-quality-options";
 import { relatedData } from "~/lib/related-data.functions";
 import { booleanCellOptions, presenceCellOptions } from "~/lib/select-options";
 import { formatCurrency } from "~/lib/utils";
@@ -452,19 +451,6 @@ export const productListOverride = defineListOverride<
                   });
                 },
               },
-            }),
-          );
-          add(
-            columnHelper.accessor((row) => row.dataQuality.status, {
-              id: "dataQuality",
-              header: "Data quality",
-              enableSorting: false,
-              meta: {
-                className: "w-28",
-                mobile: { slot: "meta", priority: 75 },
-              },
-              cell: (info) =>
-                renderOptionCell(info.getValue(), dataQualityOptions),
             }),
           );
           add(

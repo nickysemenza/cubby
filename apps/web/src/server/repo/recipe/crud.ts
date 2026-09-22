@@ -53,6 +53,7 @@ import {
 import { createAppError } from "~/server/errors/app-error";
 import { runWithConflictRecovery } from "~/server/errors/db-errors";
 import { computeChanges, logAuditEntry } from "~/server/repo/audit-log";
+import { loadDataQualities } from "~/server/repo/data-quality";
 import {
   associatePendingImages,
   auditDateWhereConditions,
@@ -156,7 +157,10 @@ export const getRecipeByID = async (
     where: and(eq(recipe.id, id), notDeleted(recipe)),
     ...relations.recipe.full,
   });
-  return res === null || res === undefined ? null : dbRecipeToAPI(res);
+  if (res === null || res === undefined) return null;
+  const qualities = await loadDataQualities(db, "recipe", [res.id]);
+  // SAFETY: `res` was just fetched live by id, so its quality was evaluated.
+  return dbRecipeToAPI(res, qualities.get(res.id)!);
 };
 
 export const getRecipeCoverImageUrlsByShortcodes = async (
@@ -559,11 +563,18 @@ export const recipeList = async (
     count: () => countWhere(db, recipe, whereClause),
   });
 
+  const qualities = await loadDataQualities(
+    db,
+    "recipe",
+    results.map((row) => row.id),
+  );
   const items = await withDisplayImages(
     db,
     "recipe",
     results,
-    dbRecipeToListAPI,
+    (row, displayImages) =>
+      // SAFETY: `row` came from `results`, which `qualities` was loaded for.
+      dbRecipeToListAPI(row, displayImages, qualities.get(row.id)!),
   );
   return { data: items, count: totalCount };
 };

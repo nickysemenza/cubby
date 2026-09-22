@@ -7,7 +7,7 @@ import {
   type RecipeFlowPlan,
   recipeFlowGenerateInputSchema,
 } from "@cubby/schemas/recipe-flow";
-import { testShortcode } from "@cubby/schemas/testing";
+import { testCompleteDataQuality, testShortcode } from "@cubby/schemas/testing";
 import { describe, expect, it } from "vitest";
 
 import { validateRecipeFlowPlan } from "./validation";
@@ -71,6 +71,7 @@ const recipe: RecipeOut = recipeOut.parse({
   meta: null,
   createdAt: new Date("2026-01-01"),
   updatedAt: new Date("2026-01-01"),
+  dataQuality: testCompleteDataQuality(),
 });
 
 const validPlan = (): RecipeFlowPlan => ({

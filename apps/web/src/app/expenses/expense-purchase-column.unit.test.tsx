@@ -1,5 +1,5 @@
 import type { ExpenseOut } from "@cubby/schemas/project";
-import { testShortcode } from "@cubby/schemas/testing";
+import { testCompleteDataQuality, testShortcode } from "@cubby/schemas/testing";
 import { render, screen } from "@testing-library/react";
 import { useMemo } from "react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -40,6 +40,7 @@ const LINKED: ExpenseOut = {
   beneficiaries: [],
   funders: [],
   sourceClaims: [],
+  dataQuality: testCompleteDataQuality(),
   createdAt: new Date("2026-07-20T00:00:00Z"),
   updatedAt: new Date("2026-07-20T00:00:00Z"),
 };

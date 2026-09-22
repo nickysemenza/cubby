@@ -10,7 +10,7 @@ import type { USDAClient } from "~/server/clients/usda";
 import type { Database } from "~/server/db";
 import { product } from "~/server/db/schema";
 import { observeOperationPhase } from "~/server/observed-request";
-import { loadProductDetailDataQuality } from "~/server/repo/data-quality";
+import { loadDataQualities } from "~/server/repo/data-quality";
 import { getDb, notDeleted, relations } from "~/server/repo/database-helpers";
 import { resolveEntityDisplayImages } from "~/server/repo/entity-display-image";
 import { getRecipeUsagesForIngredient } from "~/server/repo/ingredient";
@@ -158,7 +158,14 @@ export async function readProductDetail(
   const dataQuality = await observeOperationPhase(
     PRODUCT_DETAIL_OPERATION,
     "quality",
-    () => loadProductDetailDataQuality(context.db, row),
+    async () => {
+      const quality = (
+        await loadDataQualities(context.db, "product", [row.id])
+      ).get(row.id);
+      if (!quality)
+        throw new Error(`Data quality was not loaded for product ${row.id}`);
+      return quality;
+    },
   );
   // Not wrapped in `observeOperationPhase`: the tracked phase vocabulary for
   // "entity.detail" is a closed list (`entity-detail.functions.ts`) this repo

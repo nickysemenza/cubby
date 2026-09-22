@@ -1,5 +1,5 @@
 import { type InfLocation, infLocation } from "@cubby/schemas/location";
-import { testShortcode } from "@cubby/schemas/testing";
+import { testCompleteDataQuality, testShortcode } from "@cubby/schemas/testing";
 import { describe, expect, it, vi } from "vitest";
 
 import { categorySummaryFixture } from "../../../tooling/product-category-fixtures";
@@ -25,6 +25,7 @@ describe("isometric pantry layout", () => {
       valuation: null,
       createdAt: new Date("2026-01-01"),
       updatedAt: new Date("2026-01-01"),
+      dataQuality: testCompleteDataQuality(),
       children,
     });
 
