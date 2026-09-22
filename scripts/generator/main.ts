@@ -3,7 +3,7 @@ import { fileURLToPath } from "node:url";
 import {
   checkArtifacts,
   findExtraArtifacts,
-  sealArtifact,
+  sealArtifacts,
   writeArtifacts,
 } from "./artifacts.ts";
 import {
@@ -53,10 +53,7 @@ const main = async () => {
     if (check) {
       problems.push(...(await checkArtifacts(ROOT, artifacts)));
     } else {
-      await writeArtifacts(
-        ROOT,
-        artifacts.map((artifact) => sealArtifact(ROOT, artifact)),
-      );
+      await writeArtifacts(ROOT, await sealArtifacts(ROOT, artifacts));
     }
     written.push(...artifacts);
   };
