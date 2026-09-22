@@ -64,21 +64,20 @@ export async function assignImageProcessingExecutor(
     // to `PARTICIPATION_TTL_MS` stale, so a device that flipped `remotePaused`
     // or `automaticWork` off between hello and this assignment must still be
     // refused here, inside the transaction that grants the assignment.
-    if (input.executor.kind === "device" && input.executor.deviceId) {
-      const participation = await getDeviceParticipation(
-        tx,
-        input.executor.deviceId,
-      );
+    let executor = input.executor;
+    if (executor.kind === "device" && executor.deviceId) {
+      const participation = await getDeviceParticipation(tx, executor.deviceId);
       if (
         participation &&
         (!participation.automaticWork || participation.remotePaused)
       )
         return false;
+      if (participation) executor = { ...executor, name: participation.name };
     }
     const assigned = await tx
       .update(imageProcessingAttempt)
       .set({
-        executor: input.executor,
+        executor,
         assignedUserId: input.userId ?? null,
         assignedConnectionId: input.connectionId ?? null,
         diagnostics: sql`coalesce(${imageProcessingAttempt.diagnostics}, '{}'::jsonb) || ${JSON.stringify(input.diagnostics ?? {})}::jsonb`,
@@ -97,8 +96,8 @@ export async function assignImageProcessingExecutor(
       eventKey: `${input.attemptId}:assigned`,
       event: "execution.assigned",
       attempt: job.attempts,
-      source: input.executor.kind,
-      details: input.executor,
+      source: executor.kind,
+      details: executor,
     });
     return true;
   });

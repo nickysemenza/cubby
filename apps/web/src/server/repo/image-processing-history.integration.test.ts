@@ -20,6 +20,7 @@ import {
 } from "./activity-input";
 import { getDb } from "./database-helpers";
 import { createDevice, getDeviceByID, updateDevice } from "./device";
+import { upsertDeviceFromHello } from "./device-participation";
 import { createUploadedImageRecord, deleteImages } from "./image";
 import {
   claimImageProcessingJob,
@@ -74,6 +75,62 @@ describe("image execution history conservation", () => {
     if (!lease) throw new Error("Missing test lease");
     return lease;
   }
+  it("preserves a device's edited name across hello and records it on new activity", async () => {
+    const installationId = crypto.randomUUID();
+    const created = await createDevice(
+      ctx.db,
+      {
+        installationId,
+        name: "iPhone",
+        platform: "ios",
+        appVersion: null,
+        osVersion: null,
+        automaticWork: true,
+        remotePaused: false,
+      },
+      TEST_ACTOR,
+    );
+    await updateDevice(
+      ctx.db,
+      created.output.id,
+      { name: "Kitchen phone" },
+      TEST_ACTOR,
+    );
+
+    await upsertDeviceFromHello(ctx.db, {
+      installationId,
+      name: "stale-host.local",
+      platform: "ios",
+      appVersion: "1.1",
+      osVersion: "26",
+      automaticWork: true,
+    });
+    expect((await getDeviceByID(ctx.db, created.entityId)).name).toBe(
+      "Kitchen phone",
+    );
+
+    const { jobId } = await setup();
+    const lease = await claim(jobId);
+    expect(
+      await assignImageProcessingExecutor(ctx.db, {
+        jobId,
+        attemptId: lease.attemptId,
+        executor: {
+          kind: "device",
+          deviceId: installationId,
+          name: "stale-host.local",
+          platform: "ios",
+          appVersion: "1.1",
+          osVersion: "26",
+        },
+      }),
+    ).toBe(true);
+    const [attempt] = await getDb(ctx.db)
+      .select({ executor: imageProcessingAttempt.executor })
+      .from(imageProcessingAttempt)
+      .where(eq(imageProcessingAttempt.id, lease.attemptId));
+    expect(attempt?.executor?.name).toBe("Kitchen phone");
+  });
   it("fixes submission membership, reuses running work, and assigns each retry to only its new submission", async () => {
     const { source, jobId } = await setup();
     const repeated = await scheduleImageProcessingJobs(ctx.db, {

@@ -48,6 +48,7 @@ public actor CompanionImageWorker {
     private let failureObserver: FailureObserver?
     private let activityObserver: ActivityObserver?
     private let deviceID: UUID
+    private let deviceName: String
     private var foreground: Bool
     /// The master "Automatic work on this device" switch. `false` keeps `start()`/`stop()` working
     /// normally but never opens a socket (`platformAllowsConnection`); flipping it off mid-session
@@ -65,6 +66,7 @@ public actor CompanionImageWorker {
         baseURL: URL,
         credentials: CredentialProvider,
         deviceID: UUID,
+        deviceName: String,
         foreground: Bool,
         isParticipating: Bool = true,
         outbox: CompanionResultOutbox<ImageProcessingResult>,
@@ -76,6 +78,7 @@ public actor CompanionImageWorker {
         self.baseURL = baseURL
         self.credentials = credentials
         self.deviceID = deviceID
+        self.deviceName = deviceName
         self.foreground = foreground
         self.isParticipating = isParticipating
         self.outbox = outbox
@@ -217,7 +220,7 @@ public actor CompanionImageWorker {
         #endif
         try await send(
             .companionHello(
-                deviceID: deviceID, foreground: advertisedForeground,
+                deviceID: deviceID, deviceName: deviceName, foreground: advertisedForeground,
                 imageDescriptionAvailable: descriptionAvailable, automaticWork: isParticipating),
             on: socket)
         activityObserver?(.init(phase: .idle))

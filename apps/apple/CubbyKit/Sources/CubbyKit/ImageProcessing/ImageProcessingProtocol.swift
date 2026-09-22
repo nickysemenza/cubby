@@ -10,7 +10,7 @@ public enum CompanionImageProcessingProtocol {
 
 extension ImageProcessingClientMessage {
     static func companionHello(
-        deviceID: UUID, foreground: Bool,
+        deviceID: UUID, deviceName: String, foreground: Bool,
         subjectLiftAvailable: Bool = true,
         imageDescriptionAvailable: Bool,
         automaticWork: Bool
@@ -28,7 +28,7 @@ extension ImageProcessingClientMessage {
                 platform: platform,
                 appVersion: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString")
                     as? String ?? "unknown",
-                deviceName: ProcessInfo.processInfo.hostName,
+                deviceName: deviceName,
                 osVersion: ProcessInfo.processInfo.operatingSystemVersionString,
                 capabilities: ImageProcessingCapabilities(
                     visionSubjectLift: .init(

@@ -5,6 +5,17 @@ import Testing
 
 @Suite("CompanionImageWorker")
 struct CompanionImageWorkerTests {
+    @Test func helloUsesTheSuppliedCreationHint() {
+        let message = ImageProcessingClientMessage.companionHello(
+            deviceID: UUID(), deviceName: "Kitchen phone", foreground: true,
+            imageDescriptionAvailable: false, automaticWork: true)
+        guard case .hello(let hello) = message else {
+            Issue.record("Expected a companion hello")
+            return
+        }
+        #expect(hello.deviceName == "Kitchen phone")
+    }
+
     private func outbox() throws -> CompanionResultOutbox<ImageProcessingResult> {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(
             UUID().uuidString, isDirectory: true)
@@ -32,6 +43,7 @@ struct CompanionImageWorkerTests {
             baseURL: URL(string: "http://localhost:3000")!,
             credentials: try credentials(bearer: "tok"),
             deviceID: UUID(),
+            deviceName: "Test phone",
             foreground: true,
             isParticipating: false,
             outbox: try outbox(),
@@ -51,6 +63,7 @@ struct CompanionImageWorkerTests {
             baseURL: URL(string: "http://localhost:3000")!,
             credentials: try credentials(bearer: nil),
             deviceID: UUID(),
+            deviceName: "Test phone",
             foreground: true,
             isParticipating: true,
             outbox: try outbox(),
