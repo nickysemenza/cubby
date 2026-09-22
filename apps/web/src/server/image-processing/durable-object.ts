@@ -10,6 +10,7 @@ import { DurableObject } from "cloudflare:workers";
 import { z } from "zod";
 
 import { db, withRequestDbClient } from "~/server/db";
+import { upsertDeviceFromHello } from "~/server/repo/device-participation";
 import {
   assignImageProcessingExecutor,
   isAssignedImageProcessingDevice,
@@ -30,8 +31,20 @@ const socketAttachment = z.object({
   osVersion: z.string().optional(),
   platform: z.enum(["macos", "ios"]),
   capabilities: imageProcessingCapabilities,
+  // Device.automaticWork && !Device.remotePaused, cached from the row a
+  // hello upserted/read. Absent (legacy pre-hello attachment) reads as
+  // non-participating below, never as an implicit opt-in.
+  participating: z.boolean().optional(),
 });
 type SocketAttachment = z.infer<typeof socketAttachment>;
+
+/** Set by the hello for the socket's lifetime. A socket that never said hello
+ * reads as non-participating, never as an implicit opt-in. A flip of
+ * `automaticWork`/`remotePaused` after hello is caught by
+ * `assignImageProcessingExecutor`'s authoritative re-read; the cache only
+ * keeps opted-out devices out of the dispatch loop. */
+const isParticipating = (attachment: SocketAttachment): boolean =>
+  attachment.participating === true;
 
 function decode(message: string | ArrayBuffer) {
   try {
@@ -100,7 +113,8 @@ export class ImageProcessingDurableObject
         // advertises foreground=true for its resident companion worker.
         return capable &&
           attachment.data.deviceId &&
-          attachment.data.capabilities.foreground
+          attachment.data.capabilities.foreground &&
+          isParticipating(attachment.data)
           ? [{ socket, attachment: attachment.data }]
           : [];
       })
@@ -152,17 +166,46 @@ export class ImageProcessingDurableObject
     }
     if (parsed.data.type === "hello") {
       const previous = socketAttachment.parse(socket.deserializeAttachment());
+      const hello = parsed.data;
+      const name =
+        hello.deviceName ?? (hello.platform === "macos" ? "Mac" : "iOS device");
+      // The `Device` row is the durable half of participation — the
+      // installationId (this hello's `deviceId`) is its unique key. Created on
+      // first contact with `automaticWork` seeded from this hello's own
+      // switch; refreshed (name/versions/lastSeenAt) on every later hello.
+      const { automaticWork, remotePaused } = await withRequestDbClient(
+        this.env.HYPERDRIVE.connectionString,
+        () =>
+          upsertDeviceFromHello(db, {
+            installationId: hello.deviceId,
+            name,
+            platform: hello.platform,
+            appVersion: hello.appVersion,
+            osVersion: hello.osVersion ?? null,
+            automaticWork: hello.participation.automaticWork,
+          }),
+      );
       socket.serializeAttachment({
         protocolVersion: 1,
         userId: previous.userId,
         connectionId: previous.connectionId ?? crypto.randomUUID(),
-        deviceId: parsed.data.deviceId,
-        deviceName: parsed.data.deviceName,
-        appVersion: parsed.data.appVersion,
-        osVersion: parsed.data.osVersion,
-        platform: parsed.data.platform,
-        capabilities: parsed.data.capabilities,
+        deviceId: hello.deviceId,
+        deviceName: hello.deviceName,
+        appVersion: hello.appVersion,
+        osVersion: hello.osVersion,
+        platform: hello.platform,
+        capabilities: hello.capabilities,
+        participating: automaticWork && !remotePaused,
       } satisfies SocketAttachment);
+      socket.send(
+        JSON.stringify(
+          imageProcessingServerMessage.parse({
+            protocolVersion: 1,
+            type: "helloAck",
+            remotePaused,
+          }),
+        ),
+      );
       return;
     }
     const connection = socketAttachment.parse(socket.deserializeAttachment());

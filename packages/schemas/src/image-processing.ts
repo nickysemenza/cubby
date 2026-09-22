@@ -82,6 +82,16 @@ export type ImageProcessingCapabilities = z.infer<
   typeof imageProcessingCapabilities
 >;
 
+/** The device-set half of the master participation switch (PR2 adds the
+ * native surface that writes it); `remotePaused` is web-set and lives only on
+ * the `Device` row, never on the wire. */
+export const imageProcessingParticipation = z.object({
+  automaticWork: z.boolean(),
+});
+export type ImageProcessingParticipation = z.infer<
+  typeof imageProcessingParticipation
+>;
+
 export const imageProcessingHello = z.object({
   protocolVersion: z.literal(IMAGE_PROCESSING_PROTOCOL_VERSION),
   type: z.literal("hello"),
@@ -91,6 +101,7 @@ export const imageProcessingHello = z.object({
   deviceName: z.string().max(200).optional(),
   osVersion: z.string().max(100).optional(),
   capabilities: imageProcessingCapabilities,
+  participation: imageProcessingParticipation,
 });
 
 export const imageProcessingSource = z.object({
@@ -207,6 +218,11 @@ export const imageProcessingServerMessage = z.discriminatedUnion("type", [
     type: z.literal("acknowledge"),
     jobId: z.uuid(),
     attemptId: z.uuid(),
+  }),
+  z.object({
+    protocolVersion: z.literal(IMAGE_PROCESSING_PROTOCOL_VERSION),
+    type: z.literal("helloAck"),
+    remotePaused: z.boolean(),
   }),
 ]);
 

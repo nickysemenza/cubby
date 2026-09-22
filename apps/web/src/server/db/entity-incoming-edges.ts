@@ -82,6 +82,7 @@ export const INCOMING_EDGES = {
   gardenEntry: projectIncomingEdges(ENTITY_EDGES.gardenEntry),
   inventory: projectIncomingEdges(ENTITY_EDGES.inventory),
   "usda-food": projectIncomingEdges(ENTITY_EDGES["usda-food"]),
+  device: projectIncomingEdges(ENTITY_EDGES.device),
 } satisfies Record<Entity, Record<string, IncomingEdge>>;
 
 /** The declared incoming-edge keys for entity `E` — e.g. `IncomingEdgeKey<"image">`. */

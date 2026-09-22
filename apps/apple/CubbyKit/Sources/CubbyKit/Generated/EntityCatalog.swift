@@ -2589,6 +2589,77 @@ public enum EntityCatalog {
     )
   )
 
+  private static let deviceDescriptor: EntityDescriptor =
+  EntityDescriptor(
+    key: .device,
+    singular: "Device",
+    plural: "Devices",
+    basePath: "devices",
+    shortcodePrefix: "DEV-",
+    titleField: "name",
+    domain: nil,
+    sfSymbol: "iphone",
+    emoji: "📱",
+    searchable: false,
+    primarySearch: nil,
+    timeline: nil,
+    fields: [
+      FieldDescriptor(key: "installationId", columnId: nil, label: "Installation ID", kind: .text, nullable: false, reference: nil, explanation: nil, controlKind: .text, controlRenderer: nil, controlSection: "main", controlWidth: nil, controlOptions: nil, placeholder: "Installation identifier", initial: nil, inCreate: true, requiredOnCreate: true, inUpdate: false, showInList: false, showInDetail: true, detailOrder: nil, listOrder: nil, listHidden: false, width: nil, format: nil, listRenderer: nil, detailRenderer: nil, mobileSlot: nil, mobilePriority: nil, mobileInteractive: false),
+      FieldDescriptor(key: "name", columnId: nil, label: "Name", kind: .text, nullable: false, reference: nil, explanation: nil, controlKind: .text, controlRenderer: nil, controlSection: "main", controlWidth: nil, controlOptions: nil, placeholder: "Device name", initial: nil, inCreate: true, requiredOnCreate: true, inUpdate: true, showInList: true, showInDetail: true, detailOrder: nil, listOrder: nil, listHidden: false, width: nil, format: nil, listRenderer: nil, detailRenderer: nil, mobileSlot: nil, mobilePriority: nil, mobileInteractive: false),
+      FieldDescriptor(key: "platform", columnId: nil, label: "Platform", kind: .`enum`, nullable: false, reference: nil, explanation: nil, controlKind: .select, controlRenderer: nil, controlSection: "main", controlWidth: nil, controlOptions: [LabeledOption(value: "ios", label: "iOS"), LabeledOption(value: "macos", label: "macOS")], placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: true, inUpdate: false, showInList: true, showInDetail: true, detailOrder: nil, listOrder: nil, listHidden: false, width: "sm", format: nil, listRenderer: nil, detailRenderer: nil, mobileSlot: nil, mobilePriority: nil, mobileInteractive: false),
+      FieldDescriptor(key: "appVersion", columnId: nil, label: "App version", kind: .text, nullable: true, reference: nil, explanation: nil, controlKind: nil, controlRenderer: nil, controlSection: nil, controlWidth: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: false, showInDetail: true, detailOrder: nil, listOrder: nil, listHidden: false, width: nil, format: nil, listRenderer: nil, detailRenderer: nil, mobileSlot: nil, mobilePriority: nil, mobileInteractive: false),
+      FieldDescriptor(key: "osVersion", columnId: nil, label: "OS version", kind: .text, nullable: true, reference: nil, explanation: nil, controlKind: nil, controlRenderer: nil, controlSection: nil, controlWidth: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: false, showInDetail: true, detailOrder: nil, listOrder: nil, listHidden: false, width: nil, format: nil, listRenderer: nil, detailRenderer: nil, mobileSlot: nil, mobilePriority: nil, mobileInteractive: false),
+      FieldDescriptor(key: "lastSeenAt", columnId: nil, label: "Last seen", kind: .timestamp, nullable: true, reference: nil, explanation: nil, controlKind: nil, controlRenderer: nil, controlSection: nil, controlWidth: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: true, showInList: true, showInDetail: true, detailOrder: nil, listOrder: nil, listHidden: false, width: nil, format: "timestamp", listRenderer: nil, detailRenderer: nil, mobileSlot: nil, mobilePriority: nil, mobileInteractive: false),
+      FieldDescriptor(key: "automaticWork", columnId: nil, label: "Automatic work", kind: .boolean, nullable: false, reference: nil, explanation: nil, controlKind: .checkbox, controlRenderer: nil, controlSection: "main", controlWidth: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: true, showInDetail: true, detailOrder: nil, listOrder: nil, listHidden: false, width: nil, format: nil, listRenderer: nil, detailRenderer: nil, mobileSlot: nil, mobilePriority: nil, mobileInteractive: false),
+      FieldDescriptor(key: "remotePaused", columnId: nil, label: "Remotely paused", kind: .boolean, nullable: false, reference: nil, explanation: nil, controlKind: .checkbox, controlRenderer: nil, controlSection: "main", controlWidth: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: true, showInDetail: true, detailOrder: nil, listOrder: nil, listHidden: false, width: nil, format: nil, listRenderer: nil, detailRenderer: nil, mobileSlot: nil, mobilePriority: nil, mobileInteractive: false),
+      FieldDescriptor(key: "ledgerPartyId", columnId: "ledgerPartyName", label: "Owner", kind: .identifier, nullable: true, reference: FieldReference(entity: .ledgerParty, multiple: false, scope: [], filters: []), explanation: nil, controlKind: .specialized, controlRenderer: .entitySelect, controlSection: "main", controlWidth: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: true, showInDetail: true, detailOrder: nil, listOrder: nil, listHidden: false, width: nil, format: nil, listRenderer: nil, detailRenderer: nil, mobileSlot: nil, mobilePriority: nil, mobileInteractive: false),
+      FieldDescriptor(key: "productId", columnId: "productName", label: "Hardware", kind: .identifier, nullable: true, reference: FieldReference(entity: .product, multiple: false, scope: [], filters: []), explanation: nil, controlKind: .specialized, controlRenderer: .entitySelect, controlSection: "main", controlWidth: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: false, showInDetail: true, detailOrder: nil, listOrder: nil, listHidden: false, width: nil, format: nil, listRenderer: nil, detailRenderer: nil, mobileSlot: nil, mobilePriority: nil, mobileInteractive: false),
+      FieldDescriptor(key: "ledgerPartyName", columnId: nil, label: "Ledger Party Name", kind: .text, nullable: true, reference: nil, explanation: FieldExplanation(ruleId: "device.ledgerPartyName", version: 1, description: "The current name of this device's owner, if set.", readPath: nil, resolver: "field", projections: [:], sourceDependencies: [], actions: []), controlKind: nil, controlRenderer: nil, controlSection: nil, controlWidth: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, listOrder: nil, listHidden: false, width: nil, format: nil, listRenderer: nil, detailRenderer: nil, mobileSlot: nil, mobilePriority: nil, mobileInteractive: false),
+      FieldDescriptor(key: "productName", columnId: nil, label: "Product Name", kind: .text, nullable: true, reference: nil, explanation: FieldExplanation(ruleId: "device.productName", version: 1, description: "The current name of this device's linked hardware Product, if set.", readPath: nil, resolver: "field", projections: [:], sourceDependencies: [], actions: []), controlKind: nil, controlRenderer: nil, controlSection: nil, controlWidth: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, listOrder: nil, listHidden: false, width: nil, format: nil, listRenderer: nil, detailRenderer: nil, mobileSlot: nil, mobilePriority: nil, mobileInteractive: false),
+      FieldDescriptor(key: "id", columnId: nil, label: "Id", kind: .identifier, nullable: false, reference: nil, explanation: nil, controlKind: nil, controlRenderer: nil, controlSection: nil, controlWidth: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, listOrder: nil, listHidden: false, width: nil, format: nil, listRenderer: nil, detailRenderer: nil, mobileSlot: nil, mobilePriority: nil, mobileInteractive: false),
+      FieldDescriptor(key: "createdAt", columnId: nil, label: "Created At", kind: .timestamp, nullable: false, reference: nil, explanation: nil, controlKind: nil, controlRenderer: nil, controlSection: nil, controlWidth: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: true, detailOrder: nil, listOrder: nil, listHidden: false, width: nil, format: nil, listRenderer: nil, detailRenderer: nil, mobileSlot: nil, mobilePriority: nil, mobileInteractive: false),
+      FieldDescriptor(key: "updatedAt", columnId: nil, label: "Updated At", kind: .timestamp, nullable: false, reference: nil, explanation: nil, controlKind: nil, controlRenderer: nil, controlSection: nil, controlWidth: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: true, detailOrder: nil, listOrder: nil, listHidden: false, width: nil, format: nil, listRenderer: nil, detailRenderer: nil, mobileSlot: nil, mobilePriority: nil, mobileInteractive: false),
+      FieldDescriptor(key: "shortcode", columnId: nil, label: "Shortcode", kind: .text, nullable: false, reference: nil, explanation: nil, controlKind: nil, controlRenderer: nil, controlSection: nil, controlWidth: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, listOrder: nil, listHidden: false, width: nil, format: nil, listRenderer: nil, detailRenderer: nil, mobileSlot: nil, mobilePriority: nil, mobileInteractive: false),
+      FieldDescriptor(key: "deletedAt", columnId: nil, label: "Deleted At", kind: .timestamp, nullable: true, reference: nil, explanation: nil, controlKind: nil, controlRenderer: nil, controlSection: nil, controlWidth: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, listOrder: nil, listHidden: false, width: nil, format: nil, listRenderer: nil, detailRenderer: nil, mobileSlot: nil, mobilePriority: nil, mobileInteractive: false),
+      FieldDescriptor(key: "dataQuality", columnId: "dataQuality", label: "Data quality", kind: .json, nullable: false, reference: nil, explanation: FieldExplanation(ruleId: "device.data-quality", version: 1, description: "Data-quality gaps and the 0–100 completeness score are evaluated from the checks this entity declares.", readPath: nil, resolver: "field", projections: ["list": "dataQuality.status", "summary": "dataQuality.status"], sourceDependencies: [FieldExplanationDependency(path: "dataQuality.gaps", label: "Detected gaps")], actions: []), controlKind: nil, controlRenderer: nil, controlSection: nil, controlWidth: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: true, showInDetail: false, detailOrder: nil, listOrder: nil, listHidden: true, width: nil, format: nil, listRenderer: .dataQuality, detailRenderer: nil, mobileSlot: nil, mobilePriority: nil, mobileInteractive: false),
+      FieldDescriptor(key: "dataGaps", columnId: nil, label: "Data gaps", kind: .json, nullable: false, reference: nil, explanation: FieldExplanation(ruleId: "device.data-gaps", version: 1, description: "Data gaps are the current checks reported by this entity's data-quality evaluation.", readPath: nil, resolver: "field", projections: ["list": "dataQuality.gaps", "summary": "dataQuality.gaps"], sourceDependencies: [FieldExplanationDependency(path: "dataQuality.gaps", label: "Detected gaps")], actions: []), controlKind: nil, controlRenderer: nil, controlSection: nil, controlWidth: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, listOrder: nil, listHidden: false, width: nil, format: nil, listRenderer: nil, detailRenderer: nil, mobileSlot: nil, mobilePriority: nil, mobileInteractive: false)
+    ],
+    filters: [
+      FilterDescriptor(columnId: "name", urlKey: "q", kind: .text, placeholder: "Search devices...", label: nil, options: nil, wire: .param(name: "search"), targetEntity: nil),
+      FilterDescriptor(columnId: "platform", urlKey: "platform", kind: .multiselect, placeholder: "Filter by platform...", label: nil, options: [LabeledOption(value: "ios", label: "iOS"), LabeledOption(value: "macos", label: "macOS")], wire: .param(name: "platform"), targetEntity: nil),
+      FilterDescriptor(columnId: "automaticWork", urlKey: "automaticWork", kind: .boolean, placeholder: "Filter by automatic work...", label: nil, options: [LabeledOption(value: "true", label: "Automatic work on"), LabeledOption(value: "false", label: "Automatic work off")], wire: .param(name: "automaticWork"), targetEntity: nil),
+      FilterDescriptor(columnId: "remotePaused", urlKey: "remotePaused", kind: .boolean, placeholder: "Filter by paused state...", label: nil, options: [LabeledOption(value: "true", label: "Paused"), LabeledOption(value: "false", label: "Not paused")], wire: .param(name: "remotePaused"), targetEntity: nil),
+      FilterDescriptor(columnId: "ledgerPartyId", urlKey: "ledgerPartyId", kind: .idMulti, placeholder: "Filter by owner...", label: nil, options: nil, wire: .param(name: "ledgerPartyId"), targetEntity: .ledgerParty),
+      FilterDescriptor(columnId: "dataQuality", urlKey: "dataQuality", kind: .select, placeholder: "Filter data quality...", label: nil, options: [LabeledOption(value: "complete", label: "Complete"), LabeledOption(value: "needs_data", label: "Needs data"), LabeledOption(value: "defect", label: "Defect")], wire: .param(name: "dataStatus"), targetEntity: nil),
+      FilterDescriptor(columnId: "dataGaps", urlKey: "dataGaps", kind: .multiselect, placeholder: "Filter data gaps...", label: nil, options: [LabeledOption(value: "device_owner_missing", label: "Owner"), LabeledOption(value: "device_stale", label: "Last seen")], wire: .param(name: "dataGap"), targetEntity: nil),
+      FilterDescriptor(columnId: "createdAt", urlKey: "createdAt", kind: .range, placeholder: "Filter by created date...", label: nil, options: [LabeledOption(value: "30d", label: "Last 30 days"), LabeledOption(value: "90d", label: "Last 90 days"), LabeledOption(value: "ytd", label: "Year to date"), LabeledOption(value: "1y", label: "Last 12 months")], wire: .range(from: "createdFrom", to: "createdTo", presence: nil), targetEntity: nil),
+      FilterDescriptor(columnId: "updatedAt", urlKey: "updatedAt", kind: .range, placeholder: "Filter by updated date...", label: nil, options: [LabeledOption(value: "30d", label: "Last 30 days"), LabeledOption(value: "90d", label: "Last 90 days"), LabeledOption(value: "ytd", label: "Year to date"), LabeledOption(value: "1y", label: "Last 12 months")], wire: .range(from: "updatedFrom", to: "updatedTo", presence: nil), targetEntity: nil)
+    ],
+    relations: [
+      RelationDescriptor(key: "owner", label: "Owner", target: .ledgerParty, cardinality: .one),
+      RelationDescriptor(key: "hardware", label: "Hardware", target: .product, cardinality: .one)
+    ],
+    presentation: EntityPresentation(
+      detailVariant: .standard,
+      heroChip: nil,
+      heroStats: [],
+      heroBreadcrumb: nil,
+      heroImages: false,
+      heroActions: ["edit"],
+      detailSections: [
+        DetailSection(id: "overview", title: "Overview", placement: .supporting, collapsed: false, explanationField: nil, kind: .fields(["name", "platform", "appVersion", "osVersion", "lastSeenAt", "automaticWork", "remotePaused", "ledgerPartyId", "productId", "installationId", "createdAt", "updatedAt"]))
+      ],
+      listViews: [.table, .shelf],
+      shelfSubtitle: [],
+      listActions: ["delete"],
+      timelineFields: [],
+      lifecycle: nil,
+      editSections: nil,
+      readOnlyOnUpdate: [],
+      readOnlyWhen: []
+    )
+  )
+
   public static let all: [EntityDescriptor] = [
     productDescriptor,
     recipeDescriptor,
@@ -2614,6 +2685,7 @@ public enum EntityCatalog {
     vendorAccountDescriptor,
     productCategoryDescriptor,
     purchaseImportRunDescriptor,
+    deviceDescriptor,
   ]
 
   private static let byKey: [EntityKey: EntityDescriptor] = Dictionary(

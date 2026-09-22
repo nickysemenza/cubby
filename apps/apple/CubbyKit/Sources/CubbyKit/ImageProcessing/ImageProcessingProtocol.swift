@@ -12,7 +12,8 @@ extension ImageProcessingClientMessage {
     static func companionHello(
         deviceID: UUID, foreground: Bool,
         subjectLiftAvailable: Bool = true,
-        imageDescriptionAvailable: Bool
+        imageDescriptionAvailable: Bool,
+        automaticWork: Bool = true
     ) -> Self {
         #if os(macOS)
             let platform: ImageProcessingHello.PlatformPayload = .macos
@@ -36,7 +37,10 @@ extension ImageProcessingClientMessage {
                     actualImageDescription: .init(
                         available: imageDescriptionAvailable,
                         revision: imageDescriptionAvailable ? 1 : nil),
-                    foreground: foreground)))
+                    foreground: foreground),
+                // The device owns this switch; the server mirrors it onto the
+                // `Device` row and refuses to dispatch when it is off.
+                participation: .init(automaticWork: automaticWork)))
     }
 
     static func companionResult(_ result: ImageProcessingResult) -> Self {

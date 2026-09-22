@@ -201,6 +201,10 @@ public actor CompanionImageWorker {
         _ message: ImageProcessingServerMessage, socket: URLSessionWebSocketTask
     ) async throws {
         switch message {
+        case .helloAck:
+            // `remotePaused` becomes actionable once the participation switch
+            // exists on the device; until then the server simply withholds jobs.
+            break
         case .acknowledge(let envelope):
             try await outbox.acknowledge(
                 CompanionImageProcessingProtocol.attemptKey(

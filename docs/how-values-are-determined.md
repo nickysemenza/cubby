@@ -1181,3 +1181,37 @@ Data gaps are the current checks reported by this entity's data-quality evaluati
 - Resolver: Declared field projection
 - Value paths: List `dataQuality.gaps`; Summary `dataQuality.gaps`
 - Source dependencies: Detected gaps (`dataQuality.gaps`)
+
+## Devices (`device`)
+
+### Ledger Party Name (`ledgerPartyName`)
+
+The current name of this device's owner, if set.
+
+- Rule: `device.ledgerPartyName`, version 1
+- Resolver: Declared field projection
+
+### Product Name (`productName`)
+
+The current name of this device's linked hardware Product, if set.
+
+- Rule: `device.productName`, version 1
+- Resolver: Declared field projection
+
+### Data quality (`dataQuality`)
+
+Data-quality gaps and the 0–100 completeness score are evaluated from the checks this entity declares.
+
+- Rule: `device.data-quality`, version 1
+- Resolver: Declared field projection
+- Value paths: List `dataQuality.status`; Summary `dataQuality.status`
+- Source dependencies: Detected gaps (`dataQuality.gaps`)
+
+### Data gaps (`dataGaps`)
+
+Data gaps are the current checks reported by this entity's data-quality evaluation.
+
+- Rule: `device.data-gaps`, version 1
+- Resolver: Declared field projection
+- Value paths: List `dataQuality.gaps`; Summary `dataQuality.gaps`
+- Source dependencies: Detected gaps (`dataQuality.gaps`)

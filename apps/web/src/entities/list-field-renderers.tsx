@@ -160,6 +160,7 @@ export const listRendererCoverage = {
   gardenEntry: scoredCoverage<"gardenEntry">(),
   ledgerParty: scoredCoverage<"ledgerParty">(),
   ledgerTransfer: scoredCoverage<"ledgerTransfer">(),
+  device: scoredCoverage<"device">(),
 } satisfies {
   [E in ListRendererEntity]: EntityListRendererCoverage<E>;
 };

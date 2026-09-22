@@ -100,4 +100,5 @@ export const ENTITY_EDGE_SEMANTICS = {
   gardenEntry: projectSemantics(ENTITY_EDGES.gardenEntry),
   inventory: projectSemantics(ENTITY_EDGES.inventory),
   "usda-food": projectSemantics(ENTITY_EDGES["usda-food"]),
+  device: projectSemantics(ENTITY_EDGES.device),
 } satisfies { [E in Entity]: IncomingEdgeMap<E, EdgeSemantics> };

@@ -55,6 +55,7 @@ import type { USDAClient } from "~/server/clients/usda";
 import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
 import {
   cookbook,
+  device,
   expense,
   image,
   ingredient,
@@ -76,7 +77,11 @@ import {
 } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
 import { observeOperationPhase } from "~/server/observed-request";
-import { computeChanges, logAuditEntry } from "~/server/repo/audit-log";
+import {
+  computeChanges,
+  logAuditEntries,
+  logAuditEntry,
+} from "~/server/repo/audit-log";
 import { loadDataQualities } from "~/server/repo/data-quality";
 import {
   assertNoDependents,
@@ -2390,6 +2395,14 @@ const PRODUCT_RETAINING_DEPENDENTS = {
       productId: componentProductId,
     }));
   },
+  // Never read: `Device.productId`'s disposition is "detach", not "block",
+  // so the loop below skips it before calling this. Present only to satisfy
+  // this map's exhaustiveness over every retaining edge.
+  "Device.productId": (tx, ids) =>
+    tx.query.device.findMany({
+      where: and(inArray(device.productId, ids), notDeleted(device)),
+      columns: { productId: true },
+    }),
 } satisfies Record<ProductRetainingEdgeKey, ProductDependentFetcher>;
 
 /**
@@ -2464,6 +2477,30 @@ export const deleteProducts = async (
         message: (count, names) =>
           `Cannot delete ${count} product(s): ${names} have ${disposition.label}. Remove them first.`,
       });
+    }
+
+    // "Device.productId" is a "detach" disposition, not a block: a device
+    // survives its linked hardware Product's deletion as one with no
+    // linked hardware.
+    const detachingDevices = await tx
+      .select({ id: device.id, productId: device.productId })
+      .from(device)
+      .where(and(inArray(device.productId, ids), notDeleted(device)));
+    if (detachingDevices.length > 0) {
+      await tx
+        .update(device)
+        .set({ productId: null })
+        .where(and(inArray(device.productId, ids), notDeleted(device)));
+      await logAuditEntries(
+        tx,
+        actor,
+        detachingDevices.map((row) => ({
+          entityType: "device" as const,
+          entityId: row.id,
+          action: "update" as const,
+          changes: { productId: { from: row.productId, to: null } },
+        })),
+      );
     }
 
     await tx
