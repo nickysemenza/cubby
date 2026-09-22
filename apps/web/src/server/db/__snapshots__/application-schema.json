@@ -5790,7 +5790,7 @@
           "name": "ledgerPartyId",
           "type": "uuid",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
         },
         "actorName": {
           "name": "actorName",
@@ -5972,19 +5972,19 @@
           "name": "actorLedgerPartyShortcode",
           "type": "text",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
         },
         "actorLedgerPartyName": {
           "name": "actorLedgerPartyName",
           "type": "text",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
         },
         "actorLedgerPartyKind": {
           "name": "actorLedgerPartyKind",
           "type": "text",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
         },
         "predecessorRunId": {
           "name": "predecessorRunId",
@@ -6239,6 +6239,10 @@
         "ImportRun_channel_check": {
           "name": "ImportRun_channel_check",
           "value": "\"ImportRun\".\"channel\" IN ('web', 'api', 'mcp', 'caldav', 'system')"
+        },
+        "ImportRun_import_party_check": {
+          "name": "ImportRun_import_party_check",
+          "value": "\"ImportRun\".\"purpose\" NOT IN ('account_sync', 'purchase_validation', 'product_enrichment', 'photo_inventory') OR (\"ImportRun\".\"ledgerPartyId\" IS NOT NULL AND \"ImportRun\".\"actorLedgerPartyShortcode\" IS NOT NULL)"
         }
       },
       "isRLSEnabled": false

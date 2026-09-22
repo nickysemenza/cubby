@@ -1555,9 +1555,10 @@ export const importRun = pgTable(
       .$type<UserId>()
       .references(() => user.id),
     actorEmail: text("actorEmail").notNull(),
-    actorLedgerPartyShortcode: text("actorLedgerPartyShortcode").notNull(),
-    actorLedgerPartyName: text("actorLedgerPartyName").notNull(),
-    actorLedgerPartyKind: text("actorLedgerPartyKind").notNull(),
+    // Null when the actor has no member party (the system user).
+    actorLedgerPartyShortcode: text("actorLedgerPartyShortcode"),
+    actorLedgerPartyName: text("actorLedgerPartyName"),
+    actorLedgerPartyKind: text("actorLedgerPartyKind"),
     predecessorRunId: uuid("predecessorRunId")
       .$type<ImportRunId>()
       .references((): AnyPgColumn => importRun.id),
@@ -1590,6 +1591,10 @@ export const importRun = pgTable(
     check(
       "ImportRun_trigger_check",
       sql`${table.trigger} IN ('foreground', 'discovery', 'manual', 'backfill', 'ephemeral')`,
+    ),
+    check(
+      "ImportRun_import_party_check",
+      sql`${table.purpose} NOT IN ('account_sync', 'purchase_validation', 'product_enrichment', 'photo_inventory') OR (${table.ledgerPartyId} IS NOT NULL AND ${table.actorLedgerPartyShortcode} IS NOT NULL)`,
     ),
     check(
       "ImportRun_channel_check",

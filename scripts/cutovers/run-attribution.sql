@@ -8,8 +8,8 @@
 -- Delete this file after verification.
 BEGIN;
 
--- System actor: only for work with no user present (crons, retries). Its runs
--- belong to the household party; it has no member party and cannot sign in.
+-- System actor: only for work with no user present (crons, retries). It has
+-- no member party and cannot sign in.
 INSERT INTO "user" (id, name, email, email_verified, created_at, updated_at)
 VALUES ('cubby-system', 'Cubby', 'system@cubby.invalid', false, now(), now())
 ON CONFLICT (id) DO NOTHING;
@@ -31,6 +31,16 @@ ALTER TABLE "ImportRun" ADD CONSTRAINT "ImportRun_purpose_check"
 ALTER TABLE "ImportRun" DROP CONSTRAINT IF EXISTS "ImportRun_channel_check";
 ALTER TABLE "ImportRun" ADD CONSTRAINT "ImportRun_channel_check"
   CHECK ("channel" IN ('web', 'api', 'mcp', 'caldav', 'system'));
+-- Runs that group AI work have no member scope; import runs keep requiring it.
+ALTER TABLE "ImportRun"
+  ALTER COLUMN "ledgerPartyId" DROP NOT NULL,
+  ALTER COLUMN "actorLedgerPartyShortcode" DROP NOT NULL,
+  ALTER COLUMN "actorLedgerPartyName" DROP NOT NULL,
+  ALTER COLUMN "actorLedgerPartyKind" DROP NOT NULL;
+ALTER TABLE "ImportRun" DROP CONSTRAINT IF EXISTS "ImportRun_import_party_check";
+ALTER TABLE "ImportRun" ADD CONSTRAINT "ImportRun_import_party_check"
+  CHECK ("purpose" NOT IN ('account_sync', 'purchase_validation', 'product_enrichment', 'photo_inventory')
+    OR ("ledgerPartyId" IS NOT NULL AND "actorLedgerPartyShortcode" IS NOT NULL));
 CREATE UNIQUE INDEX IF NOT EXISTS "ImportRun_clientKey_unique"
   ON "ImportRun" ("clientKey") WHERE "clientKey" IS NOT NULL;
 
@@ -45,13 +55,12 @@ INSERT INTO "ImportRun" (
   "actorLedgerPartyShortcode", "actorLedgerPartyName", "actorLedgerPartyKind",
   channel, notes
 )
-SELECT
-  '00000000-0000-4000-8000-00000000c0de', 'RUN-PAST', lp.id, 'Cubby',
+VALUES (
+  '00000000-0000-4000-8000-00000000c0de', 'RUN-PAST', NULL, 'Cubby',
   'legacy', 'ephemeral', 'completed', now(), now(), 'cubby-system',
-  'system@cubby.invalid', lp.shortcode, lp.name, lp.kind, 'system',
+  'system@cubby.invalid', NULL, NULL, NULL, 'system',
   'AI usage recorded before every AI call belonged to a run.'
-FROM "LedgerParty" lp
-WHERE lp.kind = 'household' AND lp."deletedAt" IS NULL
+)
 ON CONFLICT (id) DO NOTHING;
 
 -- AiUsage.runId: purchase-import usage maps to its real run, the rest to legacy.

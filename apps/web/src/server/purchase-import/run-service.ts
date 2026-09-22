@@ -734,7 +734,8 @@ export async function loadRunScope(db: Database, runId: string) {
     )
     .where(eq(importRun.id, parsedRunId))
     .limit(1);
-  if (!row || !row.agentId || !row.actorUserId)
+  // Only runs that group AI work lack a party, and they have no import scope.
+  if (!row || !row.agentId || !row.actorUserId || !row.ledgerPartyId)
     throw new Error("Import run ownership is unavailable");
   return {
     public: importRunScope.parse({

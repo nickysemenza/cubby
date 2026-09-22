@@ -195,9 +195,12 @@ export default defineEntity({
         key: "ledgerPartyId",
         kind: "identifier",
         label: "Member",
+        // Null only on runs that group AI work (see `ensureRun`); import
+        // purposes always carry the member scope (`ImportRun_import_party_check`).
+        nullable: true,
         reference: { entity: "ledgerParty" },
         display: { list: true, detail: true, columnId: "ledgerPartyName" },
-        validation: readOnly(ledgerPartyShortcode),
+        validation: readOnly(ledgerPartyShortcode.nullable()),
       },
       {
         key: "actorName",

@@ -807,7 +807,7 @@
             "explode": true
           },
           {
-            "name": "oauthClientId",
+            "name": "oauthClient",
             "in": "query",
             "schema": {
               "type": "string",
@@ -22650,6 +22650,47 @@
         }
       }
     },
+    "/api/v1/recommendations/dismissProductMatch": {
+      "post": {
+        "tags": [
+          "recommendations"
+        ],
+        "parameters": [],
+        "operationId": "recommendations.dismissProductMatch",
+        "requestBody": {
+          "description": "Body",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DismissProductMatchInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "200",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecommendationOk"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/recommendations/dismissTagPropagation": {
       "post": {
         "tags": [
@@ -22815,6 +22856,47 @@
         }
       }
     },
+    "/api/v1/recommendations/mergeProductMatch": {
+      "post": {
+        "tags": [
+          "recommendations"
+        ],
+        "parameters": [],
+        "operationId": "recommendations.mergeProductMatch",
+        "requestBody": {
+          "description": "Body",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MergeProductMatchInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "200",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecommendationOk"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/recommendations/placement": {
       "get": {
         "tags": [
@@ -22886,6 +22968,90 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/RecommendationWorkbenchOut"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/recommendations/productMatches": {
+      "get": {
+        "tags": [
+          "recommendations"
+        ],
+        "parameters": [
+          {
+            "name": "productId",
+            "in": "query",
+            "description": "product shortcode, e.g. PRD-4K7M",
+            "schema": {
+              "type": "string",
+              "pattern": "^PRD-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$"
+            },
+            "style": "form",
+            "explode": true
+          }
+        ],
+        "operationId": "recommendations.productMatches",
+        "responses": {
+          "200": {
+            "description": "200",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProductMatchQueueOut"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/recommendations/proposeProductMatch": {
+      "post": {
+        "tags": [
+          "recommendations"
+        ],
+        "parameters": [],
+        "operationId": "recommendations.proposeProductMatch",
+        "requestBody": {
+          "description": "Body",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProposeProductMatchInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "200",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProposeProductMatchOut"
                 }
               }
             }
@@ -34383,6 +34549,17 @@
         },
         "required": [
           "sourceId"
+        ]
+      },
+      "DismissProductMatchInput": {
+        "type": "object",
+        "properties": {
+          "productIds": {
+            "$ref": "#/components/schemas/ProductMatchPair"
+          }
+        },
+        "required": [
+          "productIds"
         ]
       },
       "DismissProductRecommendationInput": {
@@ -54167,6 +54344,21 @@
           "candidates"
         ]
       },
+      "MergeProductMatchInput": {
+        "type": "object",
+        "properties": {
+          "keepId": {
+            "$ref": "#/components/schemas/ProductShortcode"
+          },
+          "mergeId": {
+            "$ref": "#/components/schemas/ProductShortcode"
+          }
+        },
+        "required": [
+          "keepId",
+          "mergeId"
+        ]
+      },
       "MergeProductsInput": {
         "type": "object",
         "properties": {
@@ -60391,6 +60583,207 @@
           ]
         }
       },
+      "ProductMatchCandidate": {
+        "type": "object",
+        "properties": {
+          "source": {
+            "$ref": "#/components/schemas/ProductMatchSource"
+          },
+          "keeper": {
+            "$ref": "#/components/schemas/ProductMatchSide"
+          },
+          "other": {
+            "$ref": "#/components/schemas/ProductMatchSide"
+          },
+          "evidence": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "sourceUrls": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "signals": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "warnings": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "source",
+          "keeper",
+          "other",
+          "evidence",
+          "sourceUrls",
+          "signals",
+          "warnings"
+        ]
+      },
+      "ProductMatchOwner": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/LedgerPartyShortcode"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ]
+      },
+      "ProductMatchPair": {
+        "minItems": 2,
+        "maxItems": 2,
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/ProductShortcode"
+        }
+      },
+      "ProductMatchQueueOut": {
+        "type": "object",
+        "properties": {
+          "semanticRanking": {
+            "type": "boolean"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ProductMatchCandidate"
+            }
+          }
+        },
+        "required": [
+          "semanticRanking",
+          "items"
+        ]
+      },
+      "ProductMatchSide": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/ProductShortcode"
+          },
+          "name": {
+            "type": "string"
+          },
+          "role": {
+            "$ref": "#/components/schemas/ProductMatchSideRole"
+          },
+          "category": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "inventoryCount": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "owner": {
+            "$ref": "#/components/schemas/ProductMatchOwner",
+            "description": "Explicit stock owner for a photo product; purchase-inherited owner for a purchase product; null when undeterminable"
+          },
+          "purchase": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "properties": {
+              "id": {
+                "$ref": "#/components/schemas/PurchaseShortcode"
+              },
+              "date": {
+                "type": "string"
+              },
+              "vendor": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "line": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "id",
+              "date",
+              "vendor",
+              "line"
+            ]
+          },
+          "gtins": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "sources": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "role",
+          "category",
+          "inventoryCount",
+          "purchase",
+          "gtins",
+          "sources"
+        ]
+      },
+      "ProductMatchSideRole": {
+        "type": "string",
+        "enum": [
+          "photo",
+          "purchase",
+          "other"
+        ]
+      },
+      "ProductMatchSource": {
+        "type": "string",
+        "enum": [
+          "agent",
+          "detector"
+        ]
+      },
+      "ProductMatchSourceUrls": {
+        "maxItems": 10,
+        "type": "array",
+        "items": {
+          "type": "string",
+          "format": "uri"
+        }
+      },
+      "ProductMatchState": {
+        "type": "string",
+        "enum": [
+          "open",
+          "dismissed"
+        ]
+      },
       "ProductMergeOutput": {
         "type": "object",
         "properties": {
@@ -65446,6 +65839,74 @@
           "kind",
           "purchaseId",
           "lines"
+        ]
+      },
+      "ProposeProductMatchInput": {
+        "type": "object",
+        "properties": {
+          "productIds": {
+            "minItems": 2,
+            "maxItems": 2,
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ProductShortcode"
+            },
+            "description": "The two Product shortcodes (PRD-) believed to be the same real item, in either order"
+          },
+          "evidence": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000,
+            "description": "Why these are one item — what you compared (photo vs vendor page, size, colour, order line). Shown verbatim to the reviewer."
+          },
+          "sourceUrls": {
+            "description": "Pages the evidence came from, e.g. the vendor product page",
+            "$ref": "#/components/schemas/ProductMatchSourceUrls"
+          }
+        },
+        "required": [
+          "productIds",
+          "evidence"
+        ]
+      },
+      "ProposeProductMatchOut": {
+        "type": "object",
+        "properties": {
+          "productIds": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ProductShortcode"
+            }
+          },
+          "source": {
+            "$ref": "#/components/schemas/ProductMatchSource"
+          },
+          "state": {
+            "$ref": "#/components/schemas/ProductMatchState"
+          },
+          "evidence": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "sourceUrls": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "created": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "productIds",
+          "source",
+          "state",
+          "evidence",
+          "sourceUrls",
+          "created"
         ]
       },
       "PruneOrphanedOAuthClientsOut": {

@@ -11,7 +11,7 @@ import {
 } from "@cubby/schemas/import-run-fields";
 import type { ImportRunTrigger } from "@cubby/schemas/purchase-import";
 import { generateShortcode } from "@cubby/shared";
-import { and, eq, or, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
 import { importRun, ledgerParty, user } from "~/server/db/schema";
@@ -70,13 +70,11 @@ export async function ensureRun(
   const values = {
     id: importRunId.parse(crypto.randomUUID()),
     shortcode: generateShortcode("importRun"),
-    // Ephemeral runs belong to the household, so thousands of Jev passes never
-    // block a member's delete or merge (`LEDGER_PARTY_*_EDGE_POLICY`); the
-    // actor snapshot still names who started them.
-    ledgerPartyId:
-      trigger === "ephemeral"
-        ? snapshot.householdPartyId
-        : snapshot.ledgerPartyId,
+    // Only import runs carry a member scope. Ephemeral runs have none, so
+    // thousands of Jev passes never block a member's delete or merge
+    // (`LEDGER_PARTY_*_EDGE_POLICY`); the actor snapshot still names who
+    // started them.
+    ledgerPartyId: trigger === "ephemeral" ? null : snapshot.ledgerPartyId,
     actorUserId: actor.userId,
     actorName: snapshot.actorName,
     actorEmail: snapshot.actorEmail,
@@ -132,7 +130,8 @@ export const cookbookImportRunInput = (
   clientKey: `epub:${cookbookName}`,
 });
 
-// The system user has no member party, so its runs belong to the household.
+// The actor's member party; the system user (and a member not yet linked to
+// a party) has none.
 async function actorSnapshot(database: ReturnType<typeof getDb>, id: UserId) {
   const [actor] = await database
     .select({ name: user.name, email: user.email })
@@ -140,7 +139,7 @@ async function actorSnapshot(database: ReturnType<typeof getDb>, id: UserId) {
     .where(eq(user.id, id))
     .limit(1);
   if (!actor) throw new Error(`Run actor ${id} does not exist`);
-  const parties = await database
+  const [party] = await database
     .select({
       id: ledgerParty.id,
       shortcode: ledgerParty.shortcode,
@@ -150,25 +149,18 @@ async function actorSnapshot(database: ReturnType<typeof getDb>, id: UserId) {
     .from(ledgerParty)
     .where(
       and(
+        eq(ledgerParty.userId, id),
+        eq(ledgerParty.kind, "member"),
         notDeleted(ledgerParty),
-        or(
-          and(eq(ledgerParty.userId, id), eq(ledgerParty.kind, "member")),
-          eq(ledgerParty.kind, "household"),
-        ),
       ),
-    );
-  const household = parties.find((party) => party.kind === "household");
-  const party =
-    parties.find((candidate) => candidate.kind === "member") ?? household;
-  if (!party || !household)
-    throw new Error(`Run actor ${id} has no ledger party`);
+    )
+    .limit(1);
   return {
     actorName: actor.name,
     actorEmail: actor.email,
-    householdPartyId: household.id,
-    ledgerPartyId: party.id,
-    ledgerPartyShortcode: party.shortcode,
-    ledgerPartyName: party.name,
-    ledgerPartyKind: party.kind,
+    ledgerPartyId: party?.id ?? null,
+    ledgerPartyShortcode: party?.shortcode ?? null,
+    ledgerPartyName: party?.name ?? null,
+    ledgerPartyKind: party?.kind ?? null,
   };
 }

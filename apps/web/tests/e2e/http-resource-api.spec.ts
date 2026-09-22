@@ -103,18 +103,18 @@ test("signed-in resource CRUD preserves fields, audit identity, and calendar eff
       name: "Renamed resource",
     });
     const audit = await page.request.get("/api/v1/auditLog/list", {
-      params: { entityType: "recipe", entityId: id, source: "api" },
+      params: { entityType: "recipe", entityId: id, channel: "api" },
     });
     expect(await audit.json()).toMatchObject({
       entries: expect.arrayContaining([
         expect.objectContaining({
           action: "create",
-          source: "api",
+          channel: "api",
           userId: session.user.id,
         }),
         expect.objectContaining({
           action: "update",
-          source: "api",
+          channel: "api",
           userId: session.user.id,
         }),
       ]),
