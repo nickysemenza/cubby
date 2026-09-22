@@ -6,9 +6,9 @@ is host state; these supported pairs are the Cubby routing contract.
 
 | Work | Codex | Claude |
 | --- | --- | --- |
-| Targeted search, log extraction, mechanical sanitization | `gpt-5.6-luna` / low | haiku / default |
+| Targeted search, log extraction, mechanical sanitization | `gpt-6-luna` / low | haiku / default |
 | Bounded implementation, focused tests, docs restructure | `gpt-5.6-terra` / medium | sonnet / medium |
-| Hard diagnosis, cross-subsystem work | `gpt-5.6-sol` / high | opus / medium |
+| Hard diagnosis, cross-subsystem work | `gpt-6-sol` / high | opus / medium |
 | Independent broad or high-risk review | `gpt-6-astra` / high | opus / high |
 
 Escalate when evidence conflicts or a diagnosis has a demonstrated gap. Do not
