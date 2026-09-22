@@ -76,7 +76,8 @@ enum PreviewFixtures {
                                  {"start": "2026-03-09", "confident": false}],
                    "markers": [{"date": "2026-03-09", "kind": "sale"}]}],
          "stats": [{"key": "events", "label": "Events", "value": "3"}],
-         "notes": [], "extent": {"from": "2026-03-02", "to": "2026-03-09"}}
+         "notes": [], "extent": {"from": "2026-03-02", "to": "2026-03-09"},
+         "meta": {"totalCount": 1, "pageIndex": 0, "pageSize": 200}}
         """)
 
     /// Ranked candidates for `IdentifyResultsSection` previews; distances are illustrative only.

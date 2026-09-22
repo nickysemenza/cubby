@@ -41,6 +41,7 @@
     { "key": "events", "label": "Events", "value": "3" },
     { "key": "net", "label": "Net", "value": "$8.50" }
   ],
-  "notes": ["Showing the first 500 rows."],
-  "extent": { "from": "2026-03-02", "to": "2026-03-09" }
+  "notes": ["Showing page 1 of 3."],
+  "extent": { "from": "2026-03-02", "to": "2026-03-09" },
+  "meta": { "totalCount": 1, "pageIndex": 0, "pageSize": 200 }
 }

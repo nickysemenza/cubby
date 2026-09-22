@@ -7,7 +7,7 @@ import Testing
 struct EntityTimelineTests {
     @Test func decodesUnknownDateWithoutInventingTimelineBounds() throws {
         let data = Data(
-            #"{"groups":[{"key":"undated:EXP-2345","date":null,"events":[{"id":"EXP-2345","kind":"exited","label":"Discarded tool"}]}],"stats":[],"notes":[]}"#
+            #"{"groups":[{"key":"undated:EXP-2345","date":null,"events":[{"id":"EXP-2345","kind":"exited","label":"Discarded tool"}]}],"stats":[],"notes":[],"meta":{"totalCount":0,"pageIndex":0,"pageSize":200}}"#
                 .utf8
         )
         let timeline = try JSONDecoder.cubby().decode(EntityTimelineOut.self, from: data)
