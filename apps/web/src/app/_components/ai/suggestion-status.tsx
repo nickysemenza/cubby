@@ -139,10 +139,16 @@ export function SuggestionStatus({
         <PopoverTrigger
           openOnHover
           closeDelay={150}
-          className="inline-flex items-center gap-1 rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="inline-flex min-w-0 items-center gap-1 rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
-          <Sparkle className="size-3" />
-          {text}
+          <Sparkle className="size-3 shrink-0" />
+          {/* The per-field breakdown text can run long ("No suggestions ·
+              0 fields checked · 1 not checked · Some suggestions
+              unavailable"); a single wrapping line would grow the row it
+              sits in on a phone-width page. It stays one line — hover/tap
+              already opens the full breakdown, and clipping the summary
+              costs nothing the popover doesn't restate. */}
+          <span className="min-w-0 truncate">{text}</span>
         </PopoverTrigger>
         {showBreakdown ? (
           <PopoverContent
