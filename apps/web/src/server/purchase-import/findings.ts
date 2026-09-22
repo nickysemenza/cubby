@@ -221,6 +221,8 @@ async function applyFix(
     return;
   }
 
+  if (fix.lines.length === 0)
+    throw new Error("The proposed replacement has no lines.");
   const current = await loadExpenses(tx, purchaseId);
   const decision = decideLineWrite(current, fix.lines);
   if (decision.kind !== "replace_aggregate") {

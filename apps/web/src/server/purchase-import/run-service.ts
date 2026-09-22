@@ -891,15 +891,26 @@ export async function expireStaleImportRuns(
       ),
     );
   let expired = 0;
+  const failures: Array<{ runId: string; error: string }> = [];
   for (const run of stale) {
-    const outcome = await reconcileSettledImportRun(db, namespace, {
-      runId: run.id,
-      operationId: `stale-run:${now.toISOString()}`,
-      detail: "No coordinator activity for two hours",
-    });
-    if (outcome.reconciled) expired += 1;
+    // One run's review path can fail on a provider call (the required audit
+    // pass); that must not abort the tick for every other run or the offline
+    // expiry that shares it. The next tick retries.
+    try {
+      const outcome = await reconcileSettledImportRun(db, namespace, {
+        runId: run.id,
+        operationId: `stale-run:${now.toISOString()}`,
+        detail: "No coordinator activity for two hours",
+      });
+      if (outcome.reconciled) expired += 1;
+    } catch (error) {
+      failures.push({
+        runId: run.id,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
   }
-  return { expired };
+  return { expired, failures };
 }
 
 const assertRunActive = (status: string) => {

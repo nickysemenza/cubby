@@ -590,7 +590,7 @@ describe("purchase import run admission", () => {
       now,
     );
 
-    expect(outcome).toEqual({ expired: 1 });
+    expect(outcome).toEqual({ expired: 1, failures: [] });
     const rows = await getDb(ctx.db)
       .select({ id: importRun.id, status: importRun.status })
       .from(importRun)
