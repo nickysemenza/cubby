@@ -36,6 +36,7 @@ const events: EntityTimelineOut = {
   stats: [{ key: "movements", label: "Movements", value: "2" }],
   notes: ["1 planned movement is omitted."],
   extent: { from: "2026-01-10", to: "2026-03-01" },
+  meta: { totalCount: 1, pageIndex: 0, pageSize: 200 },
 };
 
 const withRows: EntityTimelineOut = {
@@ -172,5 +173,54 @@ describe("EntityTimeline", () => {
       screen.getByRole("link", { name: "Recommended transplant · Tomato" }),
     ).toHaveAttribute("href", "/plantings/PLT-2222");
     expect(screen.getByText("Unlinked recommendation").closest("a")).toBeNull();
+  });
+
+  it("pages from the result's meta and asks the server for the chosen page", async () => {
+    const pages: unknown[] = [];
+    const operations = {
+      timeline: entityTimeline.timeline.withTransport(async ({ input }) => {
+        pages.push(input.pagination);
+        return {
+          ...events,
+          meta: {
+            pageIndex: input.pagination?.pageIndex ?? -1,
+            pageSize: input.pagination?.pageSize ?? -1,
+            totalCount: 450,
+          },
+        };
+      }),
+    };
+    render(<EntityTimeline entity="product" operations={operations} />, {
+      wrapper: harness.wrapper,
+    });
+    expect(
+      await screen.findByText("Page 1 of 3 (450 records)"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Go to previous page" }),
+    ).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "Go to next page" }));
+    expect(
+      await screen.findByText("Page 2 of 3 (450 records)"),
+    ).toBeInTheDocument();
+    expect(pages).toEqual([
+      { pageIndex: 0, pageSize: 200 },
+      { pageIndex: 1, pageSize: 200 },
+    ]);
+  });
+
+  it("shows no pager when one page holds the whole scope", async () => {
+    render(
+      <EntityTimeline
+        entity="product"
+        ids={["PRD-2222"]}
+        operations={operationsFor(events)}
+      />,
+      { wrapper: harness.wrapper },
+    );
+    expect(await screen.findByText("Toolco · Order 42")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Go to next page" }),
+    ).toBeNull();
   });
 });

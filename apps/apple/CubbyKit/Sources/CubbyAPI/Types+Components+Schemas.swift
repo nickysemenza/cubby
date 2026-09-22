@@ -4596,6 +4596,35 @@ extension Components {
                 case id
             }
         }
+        /// - Remark: Generated from `#/components/schemas/EntityTimelineMeta`.
+        public struct EntityTimelineMeta: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/EntityTimelineMeta/totalCount`.
+            public var totalCount: Swift.Int
+            /// - Remark: Generated from `#/components/schemas/EntityTimelineMeta/pageIndex`.
+            public var pageIndex: Swift.Int
+            /// - Remark: Generated from `#/components/schemas/EntityTimelineMeta/pageSize`.
+            public var pageSize: Swift.Int
+            /// Creates a new `EntityTimelineMeta`.
+            ///
+            /// - Parameters:
+            ///   - totalCount:
+            ///   - pageIndex:
+            ///   - pageSize:
+            public init(
+                totalCount: Swift.Int,
+                pageIndex: Swift.Int,
+                pageSize: Swift.Int
+            ) {
+                self.totalCount = totalCount
+                self.pageIndex = pageIndex
+                self.pageSize = pageSize
+            }
+            public enum CodingKeys: String, CodingKey {
+                case totalCount
+                case pageIndex
+                case pageSize
+            }
+        }
         /// - Remark: Generated from `#/components/schemas/EntityTimelineOut`.
         public struct EntityTimelineOut: Codable, Hashable, Sendable {
             /// - Remark: Generated from `#/components/schemas/EntityTimelineOut/groups`.
@@ -4631,6 +4660,8 @@ extension Components {
             }
             /// - Remark: Generated from `#/components/schemas/EntityTimelineOut/extent`.
             public var extent: Components.Schemas.EntityTimelineOut.ExtentPayload?
+            /// - Remark: Generated from `#/components/schemas/EntityTimelineOut/meta`.
+            public var meta: Components.Schemas.EntityTimelineMeta
             /// Creates a new `EntityTimelineOut`.
             ///
             /// - Parameters:
@@ -4639,18 +4670,21 @@ extension Components {
             ///   - stats:
             ///   - notes:
             ///   - extent:
+            ///   - meta:
             public init(
                 groups: [Components.Schemas.EntityTimelineGroup],
                 rows: [Components.Schemas.EntityTimelineRow]? = nil,
                 stats: [Components.Schemas.EntityTimelineStat],
                 notes: [Swift.String],
-                extent: Components.Schemas.EntityTimelineOut.ExtentPayload? = nil
+                extent: Components.Schemas.EntityTimelineOut.ExtentPayload? = nil,
+                meta: Components.Schemas.EntityTimelineMeta
             ) {
                 self.groups = groups
                 self.rows = rows
                 self.stats = stats
                 self.notes = notes
                 self.extent = extent
+                self.meta = meta
             }
             public enum CodingKeys: String, CodingKey {
                 case groups
@@ -4658,6 +4692,7 @@ extension Components {
                 case stats
                 case notes
                 case extent
+                case meta
             }
         }
         /// - Remark: Generated from `#/components/schemas/EntityTimelineRow`.

@@ -1,18 +1,22 @@
 import { entitySchema } from "@cubby/schemas/entity";
-import type {
-  EntityTimelineEvent,
-  EntityTimelineGroup,
-  EntityTimelineOrder,
-  EntityTimelineOut,
-  EntityTimelineRow,
+import {
+  ENTITY_TIMELINE_DEFAULT_PAGE_SIZE,
+  type EntityTimelineEvent,
+  type EntityTimelineGroup,
+  type EntityTimelineMeta,
+  type EntityTimelineOrder,
+  type EntityTimelineOut,
+  type EntityTimelineRow,
 } from "@cubby/schemas/entity-timeline";
-import { useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import {
   ArrowDown,
   ArrowUp,
   CalendarClock,
   CalendarRange,
+  ChevronLeft,
+  ChevronRight,
   Clock3,
 } from "lucide-react";
 import { type ReactNode, useId, useMemo, useState } from "react";
@@ -515,10 +519,57 @@ function useTimelineControls({
   };
 }
 
+/**
+ * Page through the records in scope. A page change keeps the previous page on
+ * screen until the next one arrives; any other control change starts over at
+ * the first page.
+ */
+function TimelinePager({
+  meta,
+  onPageChange,
+}: {
+  meta: EntityTimelineMeta;
+  onPageChange: (pageIndex: number) => void;
+}) {
+  const pageCount = Math.max(1, Math.ceil(meta.totalCount / meta.pageSize));
+  if (pageCount === 1 && meta.pageIndex === 0) return null;
+  return (
+    <Row
+      align="center"
+      justify="end"
+      gap="xs"
+      className="font-mono text-2xs text-muted-foreground uppercase tabular-nums"
+    >
+      <span className="mr-2">
+        Page {meta.pageIndex + 1} of {pageCount} ({meta.totalCount} records)
+      </span>
+      <Button
+        variant="outline"
+        size="icon"
+        onClick={() => onPageChange(meta.pageIndex - 1)}
+        disabled={meta.pageIndex === 0}
+      >
+        <span className="sr-only">Go to previous page</span>
+        <ChevronLeft />
+      </Button>
+      <Button
+        variant="outline"
+        size="icon"
+        onClick={() => onPageChange(meta.pageIndex + 1)}
+        disabled={meta.pageIndex + 1 >= pageCount}
+      >
+        <span className="sr-only">Go to next page</span>
+        <ChevronRight />
+      </Button>
+    </Row>
+  );
+}
+
 function timelineParams<E extends TimelineEntity>(
   filters: EntityTimelineFiltersByEntity[E] | undefined,
   ids: readonly string[] | undefined,
   state: ResolvedControls,
+  pageIndex: number,
 ): EntityTimelineParams<E> {
   const window: EntityTimelineWindowByEntity[E] = { order: state.order };
   if (ids && ids.length > 0) window.ids = [...ids];
@@ -531,6 +582,7 @@ function timelineParams<E extends TimelineEntity>(
   return {
     filters: filters ?? ({} as EntityTimelineFiltersByEntity[E]),
     window,
+    pagination: { pageIndex, pageSize: ENTITY_TIMELINE_DEFAULT_PAGE_SIZE },
   } as EntityTimelineParams<E>;
 }
 
@@ -552,11 +604,22 @@ export function EntityTimeline<E extends TimelineEntity>({
     mode,
     onControlsChange,
   });
-  const query = useQuery(
-    entityTimelineFor(entity, operations.timeline).queryOptions(
-      timelineParams(filters, ids, state),
+  // The page belongs to one scope: a new scope reads its first page.
+  const scopeKey = JSON.stringify([
+    filters ?? null,
+    ids ?? null,
+    state.from ?? null,
+    state.to ?? null,
+    state.order,
+  ]);
+  const [page, setPage] = useState({ scopeKey, pageIndex: 0 });
+  const pageIndex = page.scopeKey === scopeKey ? page.pageIndex : 0;
+  const query = useQuery({
+    ...entityTimelineFor(entity, operations.timeline).queryOptions(
+      timelineParams(filters, ids, state, pageIndex),
     ),
-  );
+    placeholderData: keepPreviousData,
+  });
   const { data, isError, isLoading } = query;
 
   if (isError)
@@ -604,6 +667,10 @@ export function EntityTimeline<E extends TimelineEntity>({
       {data.notes.length > 0 && (
         <Description>{data.notes.join(" ")}</Description>
       )}
+      <TimelinePager
+        meta={data.meta}
+        onPageChange={(next) => setPage({ scopeKey, pageIndex: next })}
+      />
       {activeMode === "lifecycles" && data.rows ? (
         <>
           <LifecyclesView rows={data.rows} extent={data.extent} />

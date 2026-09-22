@@ -1311,6 +1311,8 @@ extension EntityDescriptor {
                 case "from": query.from = try value.string(name)
                 case "to": query.to = try value.string(name)
                 case "order": query.order = try value.enumCase(name)
+                case "page": query.page = try value.int(name)
+                case "pageSize": query.pageSize = try value.int(name)
                 default: throw EntityFilterError.unknownParameter(.gardenEntry, name)
                 }
             }
@@ -1337,6 +1339,8 @@ extension EntityDescriptor {
                 case "from": query.from = try value.string(name)
                 case "to": query.to = try value.string(name)
                 case "order": query.order = try value.enumCase(name)
+                case "page": query.page = try value.int(name)
+                case "pageSize": query.pageSize = try value.int(name)
                 default: throw EntityFilterError.unknownParameter(.planting, name)
                 }
             }
@@ -1437,6 +1441,8 @@ extension EntityDescriptor {
                 case "from": query.from = try value.string(name)
                 case "to": query.to = try value.string(name)
                 case "order": query.order = try value.enumCase(name)
+                case "page": query.page = try value.int(name)
+                case "pageSize": query.pageSize = try value.int(name)
                 default: throw EntityFilterError.unknownParameter(.product, name)
                 }
             }
@@ -1484,6 +1490,8 @@ extension EntityDescriptor {
                 case "from": query.from = try value.string(name)
                 case "to": query.to = try value.string(name)
                 case "order": query.order = try value.enumCase(name)
+                case "page": query.page = try value.int(name)
+                case "pageSize": query.pageSize = try value.int(name)
                 default: throw EntityFilterError.unknownParameter(.task, name)
                 }
             }

@@ -51,21 +51,12 @@ history is the archive. Permanent product constraints live in the
     selected, so nothing is unreachable.
   - The timeline list view keeps its own controls inside the body; the
     ListTimeline artboard draws them as a second 40px band (mode seg, From /
-    To chips, order seg, cohort line); the product read's own cap is the
-    next entry.
+    To chips, order seg, cohort line).
   - The phone band still carries the grouped toggle beside the view seg;
     the artboard's band has only seg · search · Filter — fold it into the
     Filter sheet with sort and columns.
   - The canvas's NEXT SESSION note still describes this pass; retire it on
     the next canvas edit.
-
-- **Cap the product timeline like the default one.** `productTimeline`
-  (`server/repo/product/movement-timeline.ts`) returns one lifecycle row per
-  product in the cohort; an unfiltered `/products?view=timeline` ran 19.6 s
-  and rendered ~7 MB of DOM for 6,085 rows. Apply the default
-  implementation's 500-row cap with the truncation stated in `notes`/`stats`,
-  or page `rows`, and have the list mount refuse to run the read until a
-  filter narrows the cohort.
 
 - **Give the browser test harness a rejecting default transport.** UI tests
   that mount slots (relatedness rail, product image summaries) reach the real

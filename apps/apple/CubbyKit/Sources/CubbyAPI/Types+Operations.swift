@@ -7576,6 +7576,14 @@ public enum Operations {
                 }
                 /// - Remark: Generated from `#/paths/api/v1/garden-entries/timeline/GET/query/order`.
                 public var order: Operations.Resources_gardenEntry_timeline.Input.Query.OrderPayload?
+                /// Page number, starting at 1 (default 1)
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/garden-entries/timeline/GET/query/page`.
+                public var page: Swift.Int?
+                /// Records per page (default 200, maximum 500)
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/garden-entries/timeline/GET/query/pageSize`.
+                public var pageSize: Swift.Int?
                 /// Creates a new `Query`.
                 ///
                 /// - Parameters:
@@ -7596,6 +7604,8 @@ public enum Operations {
                 ///   - from: Calendar day as "YYYY-MM-DD"
                 ///   - to: Calendar day as "YYYY-MM-DD"
                 ///   - order:
+                ///   - page: Page number, starting at 1 (default 1)
+                ///   - pageSize: Records per page (default 200, maximum 500)
                 public init(
                     createdFrom: Swift.String? = nil,
                     createdTo: Swift.String? = nil,
@@ -7613,7 +7623,9 @@ public enum Operations {
                     ids: [Swift.String]? = nil,
                     from: Swift.String? = nil,
                     to: Swift.String? = nil,
-                    order: Operations.Resources_gardenEntry_timeline.Input.Query.OrderPayload? = nil
+                    order: Operations.Resources_gardenEntry_timeline.Input.Query.OrderPayload? = nil,
+                    page: Swift.Int? = nil,
+                    pageSize: Swift.Int? = nil
                 ) {
                     self.createdFrom = createdFrom
                     self.createdTo = createdTo
@@ -7632,6 +7644,8 @@ public enum Operations {
                     self.from = from
                     self.to = to
                     self.order = order
+                    self.page = page
+                    self.pageSize = pageSize
                 }
             }
             public var query: Operations.Resources_gardenEntry_timeline.Input.Query
@@ -21288,6 +21302,14 @@ public enum Operations {
                 }
                 /// - Remark: Generated from `#/paths/api/v1/plantings/timeline/GET/query/order`.
                 public var order: Operations.Resources_planting_timeline.Input.Query.OrderPayload?
+                /// Page number, starting at 1 (default 1)
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/plantings/timeline/GET/query/page`.
+                public var page: Swift.Int?
+                /// Records per page (default 200, maximum 500)
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/plantings/timeline/GET/query/pageSize`.
+                public var pageSize: Swift.Int?
                 /// Creates a new `Query`.
                 ///
                 /// - Parameters:
@@ -21308,6 +21330,8 @@ public enum Operations {
                 ///   - from: Calendar day as "YYYY-MM-DD"
                 ///   - to: Calendar day as "YYYY-MM-DD"
                 ///   - order:
+                ///   - page: Page number, starting at 1 (default 1)
+                ///   - pageSize: Records per page (default 200, maximum 500)
                 public init(
                     createdFrom: Swift.String? = nil,
                     createdTo: Swift.String? = nil,
@@ -21325,7 +21349,9 @@ public enum Operations {
                     ids: [Swift.String]? = nil,
                     from: Swift.String? = nil,
                     to: Swift.String? = nil,
-                    order: Operations.Resources_planting_timeline.Input.Query.OrderPayload? = nil
+                    order: Operations.Resources_planting_timeline.Input.Query.OrderPayload? = nil,
+                    page: Swift.Int? = nil,
+                    pageSize: Swift.Int? = nil
                 ) {
                     self.createdFrom = createdFrom
                     self.createdTo = createdTo
@@ -21344,6 +21370,8 @@ public enum Operations {
                     self.from = from
                     self.to = to
                     self.order = order
+                    self.page = page
+                    self.pageSize = pageSize
                 }
             }
             public var query: Operations.Resources_planting_timeline.Input.Query
@@ -25068,6 +25096,14 @@ public enum Operations {
                 }
                 /// - Remark: Generated from `#/paths/api/v1/products/timeline/GET/query/order`.
                 public var order: Operations.Resources_product_timeline.Input.Query.OrderPayload?
+                /// Page number, starting at 1 (default 1)
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/products/timeline/GET/query/page`.
+                public var page: Swift.Int?
+                /// Records per page (default 200, maximum 500)
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/products/timeline/GET/query/pageSize`.
+                public var pageSize: Swift.Int?
                 /// Creates a new `Query`.
                 ///
                 /// - Parameters:
@@ -25162,6 +25198,8 @@ public enum Operations {
                 ///   - from: Calendar day as "YYYY-MM-DD"
                 ///   - to: Calendar day as "YYYY-MM-DD"
                 ///   - order:
+                ///   - page: Page number, starting at 1 (default 1)
+                ///   - pageSize: Records per page (default 200, maximum 500)
                 public init(
                     createdFrom: Swift.String? = nil,
                     createdTo: Swift.String? = nil,
@@ -25253,7 +25291,9 @@ public enum Operations {
                     ids: [Swift.String]? = nil,
                     from: Swift.String? = nil,
                     to: Swift.String? = nil,
-                    order: Operations.Resources_product_timeline.Input.Query.OrderPayload? = nil
+                    order: Operations.Resources_product_timeline.Input.Query.OrderPayload? = nil,
+                    page: Swift.Int? = nil,
+                    pageSize: Swift.Int? = nil
                 ) {
                     self.createdFrom = createdFrom
                     self.createdTo = createdTo
@@ -25346,6 +25386,8 @@ public enum Operations {
                     self.from = from
                     self.to = to
                     self.order = order
+                    self.page = page
+                    self.pageSize = pageSize
                 }
             }
             public var query: Operations.Resources_product_timeline.Input.Query
@@ -31391,6 +31433,14 @@ public enum Operations {
                 }
                 /// - Remark: Generated from `#/paths/api/v1/tasks/timeline/GET/query/order`.
                 public var order: Operations.Resources_task_timeline.Input.Query.OrderPayload?
+                /// Page number, starting at 1 (default 1)
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/tasks/timeline/GET/query/page`.
+                public var page: Swift.Int?
+                /// Records per page (default 200, maximum 500)
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/tasks/timeline/GET/query/pageSize`.
+                public var pageSize: Swift.Int?
                 /// Creates a new `Query`.
                 ///
                 /// - Parameters:
@@ -31432,6 +31482,8 @@ public enum Operations {
                 ///   - from: Calendar day as "YYYY-MM-DD"
                 ///   - to: Calendar day as "YYYY-MM-DD"
                 ///   - order:
+                ///   - page: Page number, starting at 1 (default 1)
+                ///   - pageSize: Records per page (default 200, maximum 500)
                 public init(
                     createdFrom: Swift.String? = nil,
                     createdTo: Swift.String? = nil,
@@ -31470,7 +31522,9 @@ public enum Operations {
                     ids: [Swift.String]? = nil,
                     from: Swift.String? = nil,
                     to: Swift.String? = nil,
-                    order: Operations.Resources_task_timeline.Input.Query.OrderPayload? = nil
+                    order: Operations.Resources_task_timeline.Input.Query.OrderPayload? = nil,
+                    page: Swift.Int? = nil,
+                    pageSize: Swift.Int? = nil
                 ) {
                     self.createdFrom = createdFrom
                     self.createdTo = createdTo
@@ -31510,6 +31564,8 @@ public enum Operations {
                     self.from = from
                     self.to = to
                     self.order = order
+                    self.page = page
+                    self.pageSize = pageSize
                 }
             }
             public var query: Operations.Resources_task_timeline.Input.Query

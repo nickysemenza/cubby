@@ -1,4 +1,7 @@
-import type { EntityTimelineOut } from "@cubby/schemas/entity-timeline";
+import type {
+  EntityTimelineOut,
+  EntityTimelinePagination,
+} from "@cubby/schemas/entity-timeline";
 import {
   type ExpenseShortcode,
   parseEntityId,
@@ -13,7 +16,20 @@ import type {
   ProductFilters,
   ProductMovementKind,
 } from "@cubby/schemas/product";
-import { and, eq, inArray } from "drizzle-orm";
+import {
+  and,
+  asc,
+  count,
+  eq,
+  gte,
+  inArray,
+  isNotNull,
+  lte,
+  notExists,
+  type SQL,
+  sql,
+} from "drizzle-orm";
+import { unionAll } from "drizzle-orm/pg-core";
 import { groupBy, sumBy } from "es-toolkit";
 
 import { householdLocalDate } from "~/lib/household-date";
@@ -26,6 +42,7 @@ import { formatCurrency } from "~/lib/utils";
 import type { Database } from "~/server/db";
 import {
   expense,
+  product,
   project,
   projectToolUsage,
   purchase,
@@ -37,9 +54,7 @@ import { getDb, notDeleted } from "~/server/repo/database-helpers";
 import { effectiveExpenseProjectSql } from "~/server/repo/expense-inheritance";
 import { resolveLiveShortcodes } from "~/server/repo/shortcode-resolver";
 
-import { getProductsByShortcodes, productList } from "./crud";
-
-const ALL_PRODUCTS = { pageIndex: 0, pageSize: 100_000 } as const;
+import { buildProductWhere, getProductsByShortcodes } from "./crud";
 
 export interface ProductMovementTimelineInput {
   filters: ProductFilters;
@@ -48,6 +63,7 @@ export interface ProductMovementTimelineInput {
   from?: string | undefined;
   to?: string | undefined;
   order: "asc" | "desc";
+  pagination: EntityTimelinePagination;
 }
 
 type MovementProject = { id: ProjectShortcode; name: string };
@@ -101,6 +117,9 @@ export interface ProductMovementTimeline {
   };
   extent: { from: string; to: string } | null;
   omitted: { productsWithoutMovements: number; plannedMovements: number };
+  /** `totalCount` is every product with a movement in the window; the
+   * groups, rows and movement totals cover only this page of them. */
+  meta: EntityTimelinePagination & { totalCount: number };
 }
 
 type CohortProduct = {
@@ -111,11 +130,15 @@ type CohortProduct = {
   coverImageUrl: string | null;
 };
 
-const emptyTimeline = (): ProductMovementTimeline => ({
+const emptyTimeline = (
+  pagination: EntityTimelinePagination,
+  matchingProducts: number,
+  totalCount: number,
+): ProductMovementTimeline => ({
   products: [],
   groups: [],
   summary: {
-    matchingProducts: 0,
+    matchingProducts,
     productsWithMovements: 0,
     movementCount: 0,
     spent: 0,
@@ -124,40 +147,140 @@ const emptyTimeline = (): ProductMovementTimeline => ({
     unknownAmountCount: 0,
   },
   extent: null,
-  omitted: { productsWithoutMovements: 0, plannedMovements: 0 },
+  omitted: {
+    productsWithoutMovements: matchingProducts - totalCount,
+    plannedMovements: 0,
+  },
+  meta: { ...pagination, totalCount },
 });
 
+/**
+ * Each product's movement dates, as the timeline below dates them: an
+ * expense on its purchase's date (undated when the expense is), and a
+ * purchase line no expense itemizes on the purchase date. Planned (`future`)
+ * expenses are not movements.
+ */
+const movementDates = (db: Database) =>
+  unionAll(
+    getDb(db)
+      .select({
+        productId: sql<string>`${expense.productId}`.as("productId"),
+        date: sql<
+          string | null
+        >`case when ${expense.date} is null then null else coalesce(${purchase.date}, ${expense.date}) end`.as(
+          "date",
+        ),
+      })
+      .from(expense)
+      .leftJoin(
+        purchase,
+        and(eq(purchase.id, expense.purchaseId), notDeleted(purchase)),
+      )
+      .where(
+        and(
+          notDeleted(expense),
+          eq(expense.future, false),
+          isNotNull(expense.productId),
+        ),
+      ),
+    getDb(db)
+      .select({
+        productId: sql<string>`${purchaseProduct.productId}`.as("productId"),
+        date: sql<string | null>`${purchase.date}`.as("date"),
+      })
+      .from(purchaseProduct)
+      .innerJoin(
+        purchase,
+        and(eq(purchase.id, purchaseProduct.purchaseId), notDeleted(purchase)),
+      )
+      .where(
+        and(
+          notDeleted(purchaseProduct),
+          notExists(
+            getDb(db)
+              .select({ one: sql`1` })
+              .from(expense)
+              .where(
+                and(
+                  eq(expense.purchaseId, purchase.id),
+                  eq(expense.productId, purchaseProduct.productId),
+                  eq(expense.future, false),
+                  notDeleted(expense),
+                ),
+              ),
+          ),
+        ),
+      ),
+  ).as("movement_dates");
+
+/**
+ * One page of the products that moved inside the window, ordered by their
+ * lifecycle start (first movement; undated-only products last) then id, so
+ * pages are stable; plus how many products match the filters at all.
+ */
 async function loadCohort(
   db: Database,
   input: ProductMovementTimelineInput,
-): Promise<{ data: CohortProduct[]; count: number }> {
-  if (input.ids) {
-    const data = (await getProductsByShortcodes(db, [...input.ids])).map(
-      (item) => ({
-        id: item.id,
-        name: item.name,
-        manufacturer: item.manufacturer,
-        category: item.category,
-        coverImageUrl: item.coverImageUrl,
-      }),
-    );
-    return { data, count: data.length };
-  }
-  const cohort = await productList(
-    db,
-    input.filters,
-    [{ orderBy: "name", direction: "asc" }],
-    ALL_PRODUCTS,
+): Promise<{
+  data: CohortProduct[];
+  matchingProducts: number;
+  totalCount: number;
+}> {
+  const scope: SQL | undefined = input.ids
+    ? and(notDeleted(product), inArray(product.shortcode, [...input.ids]))
+    : await buildProductWhere(db, input.filters);
+  const moves = movementDates(db);
+  const inWindow = and(
+    input.from ? gte(moves.date, input.from) : undefined,
+    input.to ? lte(moves.date, input.to) : undefined,
+  );
+  const movers = getDb(db)
+    .select({
+      productId: moves.productId,
+      start: sql<string | null>`min(${moves.date})`.as("start"),
+    })
+    .from(moves)
+    .where(inWindow)
+    .groupBy(moves.productId)
+    .as("movers");
+  const { pageIndex, pageSize } = input.pagination;
+  const [page, [moverCount], [matching]] = await Promise.all([
+    getDb(db)
+      .select({ shortcode: product.shortcode })
+      .from(product)
+      .innerJoin(movers, eq(movers.productId, product.id))
+      .where(scope)
+      .orderBy(sql`${movers.start} asc nulls last`, asc(product.id))
+      .limit(pageSize)
+      .offset(pageIndex * pageSize),
+    getDb(db)
+      .select({ value: count() })
+      .from(product)
+      .innerJoin(movers, eq(movers.productId, product.id))
+      .where(scope),
+    getDb(db).select({ value: count() }).from(product).where(scope),
+  ]);
+  const codes = page.map((row) => parseShortcodeFor("product", row.shortcode));
+  const byCode = new Map(
+    (await getProductsByShortcodes(db, codes)).map((item) => [item.id, item]),
   );
   return {
-    data: cohort.data.map((item) => ({
-      id: item.id,
-      name: item.name,
-      manufacturer: item.manufacturer,
-      category: item.category,
-      coverImageUrl: item.displayImages[0]?.url ?? null,
-    })),
-    count: cohort.count,
+    data: codes.flatMap((code) => {
+      const item = byCode.get(code);
+      return item
+        ? [
+            {
+              id: item.id,
+              name: item.name,
+              manufacturer: item.manufacturer,
+              category: item.category,
+              coverImageUrl: item.coverImageUrl,
+            },
+          ]
+        : [];
+    }),
+    matchingProducts: matching?.value ?? 0,
+    totalCount: moverCount?.value ?? 0,
   };
 }
 
@@ -166,7 +289,9 @@ export async function getProductMovementTimeline(
   input: ProductMovementTimelineInput,
 ): Promise<ProductMovementTimeline> {
   const cohort = await loadCohort(db, input);
-  if (cohort.data.length === 0) return emptyTimeline();
+  const empty = () =>
+    emptyTimeline(input.pagination, cohort.matchingProducts, cohort.totalCount);
+  if (cohort.data.length === 0) return empty();
 
   const resolved = await resolveLiveShortcodes(
     db,
@@ -180,7 +305,7 @@ export async function getProductMovementTimeline(
     [...idByCode].map(([code, id]) => [id, parseShortcodeFor("product", code)]),
   );
   const productIds = [...idByCode.values()];
-  if (productIds.length === 0) return emptyTimeline();
+  if (productIds.length === 0) return empty();
 
   const rows = await getDb(db)
     .select({
@@ -460,7 +585,7 @@ export async function getProductMovementTimeline(
     products,
     groups,
     summary: {
-      matchingProducts: cohort.count,
+      matchingProducts: cohort.matchingProducts,
       productsWithMovements,
       movementCount: movements.length,
       spent,
@@ -474,9 +599,10 @@ export async function getProductMovementTimeline(
         ? { from: dates[0]!, to: dates[dates.length - 1]! }
         : null,
     omitted: {
-      productsWithoutMovements: cohort.count - productsWithMovements,
+      productsWithoutMovements: cohort.matchingProducts - cohort.totalCount,
       plannedMovements: rows.filter((row) => row.future).length,
     },
+    meta: { ...input.pagination, totalCount: cohort.totalCount },
   };
 }
 
@@ -577,8 +703,12 @@ export function toEntityTimeline(
     ],
     markers: markersByProduct.get(product.id) ?? [],
   }));
-  const { summary, omitted } = timeline;
+  const { summary, omitted, meta } = timeline;
   const notes: string[] = [];
+  if (meta.totalCount > timeline.products.length)
+    notes.push(
+      `Movements and totals cover the ${timeline.products.length} product${timeline.products.length === 1 ? "" : "s"} on this page of ${meta.totalCount}.`,
+    );
   if (omitted.productsWithoutMovements > 0)
     notes.push(
       `${omitted.productsWithoutMovements} matching product${omitted.productsWithoutMovements === 1 ? " has" : "s have"} no recorded movement in this window.`,
@@ -619,6 +749,7 @@ export function toEntityTimeline(
       },
     ],
     notes,
+    meta,
   };
   if (timeline.extent) out.extent = timeline.extent;
   return out;
@@ -636,5 +767,6 @@ export const productTimeline: EntityTimelineImplementation<"product"> = async (
       from: input.window.from,
       to: input.window.to,
       order: input.window.order,
+      pagination: input.pagination,
     }),
   );

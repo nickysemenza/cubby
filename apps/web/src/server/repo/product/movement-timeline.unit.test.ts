@@ -92,6 +92,7 @@ const timeline: ProductMovementTimeline = {
   },
   extent: { from: "2026-01-10", to: "2026-03-01" },
   omitted: { productsWithoutMovements: 2, plannedMovements: 1 },
+  meta: { totalCount: 1, pageIndex: 0, pageSize: 200 },
 };
 
 describe("toEntityTimeline", () => {
@@ -143,5 +144,17 @@ describe("toEntityTimeline", () => {
       "1 planned movement is omitted.",
     ]);
     expect(out.extent).toEqual({ from: "2026-01-10", to: "2026-03-01" });
+  });
+
+  it("passes the page through and says the totals cover only this page when more products moved", () => {
+    expect(out.meta).toEqual({ totalCount: 1, pageIndex: 0, pageSize: 200 });
+    const paged = toEntityTimeline({
+      ...timeline,
+      meta: { totalCount: 3, pageIndex: 1, pageSize: 1 },
+    });
+    expect(paged.meta).toEqual({ totalCount: 3, pageIndex: 1, pageSize: 1 });
+    expect(paged.notes[0]).toBe(
+      "Movements and totals cover the 1 product on this page of 3.",
+    );
   });
 });
