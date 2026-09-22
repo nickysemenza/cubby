@@ -114,7 +114,10 @@ export const BulkDiscardInventoryDialog: FC<
   // bulk-edit's own basis rule (`bulk-edit-entity-action.tsx`).
   const soleProduct = useMemo(() => {
     const ids = new Set(items.map((item) => item.product.id));
-    return ids.size === 1 ? items[0]?.product : undefined;
+    const only = items[0]?.product;
+    return ids.size === 1 && only?.id !== undefined
+      ? { id: only.id, name: only.name }
+      : undefined;
   }, [items]);
 
   const discard = useMutation(

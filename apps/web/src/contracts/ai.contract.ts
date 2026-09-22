@@ -90,9 +90,11 @@ export const aiContract = defineContract("ai", {
     output: fieldSuggestionsOut,
     http: false,
   }),
+  // Same reason as `suggestFields`: a per-row hint, not a public HTTP query.
   suggestExternalIdKind: query({
     input: externalIdKindSuggestionInput,
     output: suggestExternalIdKindOut,
+    http: false,
   }),
   usageRecent: query({
     input: aiUsageRecentInput,

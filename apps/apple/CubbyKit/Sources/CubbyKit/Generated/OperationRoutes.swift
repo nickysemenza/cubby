@@ -19,7 +19,6 @@ extension OperationRoute {
         OperationRoute(operationID: "ai.describeLocation", method: .post, path: "/api/v1/ai/describeLocation", pathParameters: [], queryParameters: [], hasBody: true),
         OperationRoute(operationID: "ai.detectInventoryItems", method: .post, path: "/api/v1/ai/detectInventoryItems", pathParameters: [], queryParameters: [], hasBody: true),
         OperationRoute(operationID: "ai.identifyProduct", method: .post, path: "/api/v1/ai/identifyProduct", pathParameters: [], queryParameters: [], hasBody: true),
-        OperationRoute(operationID: "ai.suggestExternalIdKind", method: .get, path: "/api/v1/ai/suggestExternalIdKind", pathParameters: [], queryParameters: ["identifier", "manufacturer", "productName", "source", "url"], hasBody: false),
         OperationRoute(operationID: "ai.suggestIngredientMergeBatch", method: .post, path: "/api/v1/ai/suggestIngredientMergeBatch", pathParameters: [], queryParameters: [], hasBody: true),
         OperationRoute(operationID: "ai.suggestUsdaFood", method: .post, path: "/api/v1/ai/suggestUsdaFood", pathParameters: [], queryParameters: [], hasBody: true),
         OperationRoute(operationID: "ai.suggestUsdaFoodBatch", method: .post, path: "/api/v1/ai/suggestUsdaFoodBatch", pathParameters: [], queryParameters: [], hasBody: true),
