@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 
 import type { AuditEntityType } from "@cubby/schemas/audit";
+import type { AuditChannel } from "@cubby/schemas/context";
 import { testShortcode } from "@cubby/schemas/testing";
 import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
@@ -21,13 +22,13 @@ import {
 import { insertWithShortcode } from "./shortcode-utils";
 
 /**
- * `getAuditLog` (PR 6, Phase 6) gained `source` and a `createdAtFrom`/
+ * `getAuditLog` filters by `channel` and a `createdAtFrom`/
  * `createdAtTo` window on top of the existing entityType/entityId/cursor
  * filters. Rows are inserted directly against the `auditLog` table (rather
  * than through `logAuditEntry`) so each test can pin an exact `createdAt` —
  * `logAuditEntry` always stamps `defaultNow()`.
  */
-describe("getAuditLog — source + time window", () => {
+describe("getAuditLog — channel + time window", () => {
   const ctx = withTestDb();
 
   it("routes unknown and mismatched public audit subjects to an empty result", async () => {
@@ -60,7 +61,7 @@ describe("getAuditLog — source + time window", () => {
 
   const makeEntry = (overrides: {
     createdAt: Date;
-    source?: string;
+    channel?: AuditChannel;
     entityType?: AuditEntityType;
   }) =>
     insertAndReturn(ctx.db, auditLog, {
@@ -68,7 +69,7 @@ describe("getAuditLog — source + time window", () => {
       entityId: randomUUID(),
       action: "update",
       userId: ctx.actor.userId,
-      source: overrides.source ?? "ui",
+      channel: overrides.channel ?? "web",
       createdAt: overrides.createdAt,
     });
 
@@ -94,10 +95,10 @@ describe("getAuditLog — source + time window", () => {
 
   it("paginates identical timestamps without repeating or skipping entries", async () => {
     const timestamp = new Date("2026-07-20T12:00:00.000Z");
-    const source = "script:audit-cursor-boundary";
+    const channel = "system";
     await Promise.all(
       Array.from({ length: 7 }, () =>
-        makeEntry({ createdAt: timestamp, source }),
+        makeEntry({ createdAt: timestamp, channel }),
       ),
     );
 
@@ -106,7 +107,7 @@ describe("getAuditLog — source + time window", () => {
     do {
       const page = await getAuditLog(ctx.db, {
         limit: 2,
-        source,
+        channel,
         cursor,
       });
       entryKeys.push(...page.entries.map((entry) => entry.entryKey));
@@ -134,7 +135,6 @@ describe("getAuditLog — entityName", () => {
       entityId,
       action: "update",
       userId: ctx.actor.userId,
-      source: "ui",
     });
 
   it("still names a row that was soft-deleted after the entry was written", async () => {

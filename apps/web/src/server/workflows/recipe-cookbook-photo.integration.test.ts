@@ -23,7 +23,7 @@ const PNG_BASE64 =
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==";
 
 describe("cookbook recipe photo workflow", () => {
-  const ctx = withTestDb("epub_import");
+  const ctx = withTestDb();
 
   const setup = async () => {
     const sourceRecipes = ["Pancakes", "Waffles", "Biscuits"].map((title, i) =>

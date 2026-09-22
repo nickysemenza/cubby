@@ -30,7 +30,7 @@ const routing: DatabaseReadRouting = {
 const user = (label: string) => testUserId(`freshness-${label}`);
 
 const authenticatedContext = (
-  source: "ui" | "api" | "mcp",
+  channel: "web" | "api" | "mcp",
   label: string,
 ): AuthenticatedRequestContext => {
   const id = user(label);
@@ -39,8 +39,8 @@ const authenticatedContext = (
   );
   return {
     ...context,
-    actorContext: buildActorContext(id, source),
-    requestOrigin: source === "mcp" ? "mcp" : source,
+    actorContext: buildActorContext(id, channel),
+    requestOrigin: channel === "web" ? "ui" : channel,
   };
 };
 
@@ -50,7 +50,7 @@ beforeEach(() => {
 
 describe("shared database freshness operation routing", () => {
   it("uses cached reads before a write, then makes every household caller strong until expiry", async () => {
-    const ui = authenticatedContext("ui", "ui");
+    const ui = authenticatedContext("web", "ui");
     const api = authenticatedContext("api", "api");
     const mcp = authenticatedContext("mcp", "mcp");
 
@@ -70,7 +70,7 @@ describe("shared database freshness operation routing", () => {
   });
 
   it("keeps mutations strong and does not reuse a decision from an earlier operation", async () => {
-    const context = authenticatedContext("ui", "sequential");
+    const context = authenticatedContext("web", "sequential");
 
     const cached = await selectOperationContext(context, "context", routing);
     expect(cached.db).toBe(boundedStaleDb);

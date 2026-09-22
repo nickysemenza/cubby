@@ -919,11 +919,12 @@ export class PurchaseImportService extends WorkerEntrypoint<Env> {
         byte.toString(16).padStart(2, "0"),
       ).join("");
       const eventId = `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+      const { runId, ...rest } = input;
+      const { importRunId } = await import("@cubby/schemas/identifiers");
       await recordAiUsage(db, {
-        ...input,
+        ...rest,
         eventId,
-        jobKind: "purchase_import_run",
-        jobId: input.runId,
+        runId: importRunId.parse(runId),
         cacheStatus:
           input.cacheReadTokens > 0 || input.cacheWriteTokens > 0
             ? "hit"

@@ -1,3 +1,4 @@
+import type { ImportRunId } from "@cubby/schemas/identifiers";
 /**
  * The one runner for structured AI calls.
  *
@@ -53,6 +54,8 @@ export interface AiRunContext<T = unknown> {
    * (the eval harness and smoke paths that have no database).
    */
   db?: Database;
+  /** Every AI call belongs to a run; see `ensureRun`. */
+  runId: ImportRunId;
   /** The code path placing the call — `suggestCategory`, `select`, … */
   operation: string;
   /** Correlates calls emitted while one durable job is executing. */
@@ -120,6 +123,7 @@ export function planStructuredRun<T = unknown>(
     usage: ctx.db
       ? usageFor(spec.model, {
           db: ctx.db,
+          runId: ctx.runId,
           feature: spec.feature,
           operation: ctx.operation,
           jobKind: ctx.job?.kind ?? null,

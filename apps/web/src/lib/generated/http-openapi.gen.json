@@ -788,30 +788,52 @@
             "explode": true
           },
           {
-            "name": "source",
+            "name": "channel",
             "in": "query",
             "schema": {
               "type": "array",
               "items": {
-                "anyOf": [
-                  {
-                    "type": "string",
-                    "enum": [
-                      "ui",
-                      "csv_import",
-                      "sheets_import",
-                      "epub_import",
-                      "api",
-                      "mcp",
-                      "caldav"
-                    ]
-                  },
-                  {
-                    "type": "string",
-                    "pattern": "^script:[\\s\\S]{1,}$"
-                  }
+                "type": "string",
+                "enum": [
+                  "web",
+                  "api",
+                  "mcp",
+                  "caldav",
+                  "system"
                 ]
               }
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "oauthClientId",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "deviceId",
+            "in": "query",
+            "description": "device shortcode, e.g. DEV-4K7M",
+            "schema": {
+              "type": "string",
+              "pattern": "^DEV-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$"
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "runId",
+            "in": "query",
+            "description": "importRun shortcode, e.g. RUN-4K7M",
+            "schema": {
+              "type": "string",
+              "pattern": "^RUN-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$"
             },
             "style": "form",
             "explode": true
@@ -28697,6 +28719,16 @@
           "components"
         ]
       },
+      "AuditChannel": {
+        "type": "string",
+        "enum": [
+          "web",
+          "api",
+          "mcp",
+          "caldav",
+          "system"
+        ]
+      },
       "AuditEntity": {
         "type": "string",
         "enum": [
@@ -28781,8 +28813,53 @@
           "userId": {
             "type": "string"
           },
-          "source": {
-            "$ref": "#/components/schemas/AuditSource"
+          "channel": {
+            "$ref": "#/components/schemas/AuditChannel"
+          },
+          "oauthClient": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "id",
+              "name"
+            ]
+          },
+          "device": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "properties": {
+              "id": {
+                "$ref": "#/components/schemas/DeviceShortcode"
+              },
+              "name": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "id",
+              "name"
+            ]
+          },
+          "runId": {
+            "$ref": "#/components/schemas/ImportRunShortcode"
           },
           "createdAt": {
             "type": "string",
@@ -28830,7 +28907,9 @@
           "action",
           "changes",
           "userId",
-          "source",
+          "channel",
+          "oauthClient",
+          "device",
           "createdAt",
           "user"
         ]
@@ -28850,26 +28929,6 @@
         },
         "required": [
           "entries"
-        ]
-      },
-      "AuditSource": {
-        "anyOf": [
-          {
-            "type": "string",
-            "enum": [
-              "ui",
-              "csv_import",
-              "sheets_import",
-              "epub_import",
-              "api",
-              "mcp",
-              "caldav"
-            ]
-          },
-          {
-            "type": "string",
-            "pattern": "^script:[\\s\\S]{1,}$"
-          }
         ]
       },
       "AvailabilitySource": {

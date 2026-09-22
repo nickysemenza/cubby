@@ -1,3 +1,4 @@
+import { importRunId } from "@cubby/schemas/identifiers";
 import { describe, expect, it, vi } from "vitest";
 
 import { Database } from "~/server/db";
@@ -16,6 +17,7 @@ const db = new Database(() => {
 
 const usage: AiSelectionUsage = {
   db,
+  runId: importRunId.parse("00000000-0000-4000-8000-000000000001"),
   operation: "test-select",
   cacheStatus: "none",
 };

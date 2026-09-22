@@ -48,6 +48,12 @@ const capabilityMatrix = {
     "generic_mutation",
     "finalize",
   ]),
+  // Runs that only group AI work never authorize purchase-agent writes.
+  ai_suggest: new Set(),
+  ai_action: new Set(),
+  background: new Set(),
+  file_import: new Set(),
+  legacy: new Set(),
 } satisfies Record<ImportRunPurpose, ReadonlySet<Capability>>;
 
 export function capabilityForPurchaseAgentTool(

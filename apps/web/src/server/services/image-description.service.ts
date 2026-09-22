@@ -1,4 +1,8 @@
-import { parseShortcodeFor, type ImageId } from "@cubby/schemas/identifiers";
+import {
+  parseShortcodeFor,
+  type ImageId,
+  type ImportRunId,
+} from "@cubby/schemas/identifiers";
 import {
   IMAGE_DESCRIPTION_PROMPT_REVISION,
   IMAGE_DESCRIPTION_RESULT_SCHEMA_REVISION,
@@ -94,7 +98,7 @@ function descriptionRequest(imageUrl: string) {
  */
 export async function describeOriginalImage(
   db: Database,
-  input: { imageId: ImageId; attemptId: string },
+  input: { imageId: ImageId; attemptId: string; runId: ImportRunId },
 ): Promise<{
   result: ImageDescriptionResult;
   cached: boolean;
@@ -184,6 +188,7 @@ export async function describeOriginalImage(
     descriptionRequest(analysisUrl),
     {
       db,
+      runId: input.runId,
       operation: "imageDescription",
       job: { kind: "image_processing_attempt", id: input.attemptId },
       cacheStatus: "miss",

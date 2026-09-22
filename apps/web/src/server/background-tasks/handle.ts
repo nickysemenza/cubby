@@ -87,8 +87,17 @@ export async function handleBackgroundTask(
     case "location-ai.description.refresh": {
       const { describeLocation, isLocationHasNoImagesToAnalyzeError } =
         await import("~/server/services/ai-enrichment/location-vision");
+      const { ensureRun, systemActor } =
+        await import("~/server/runs/ensure-run");
       try {
-        await describeLocation(db, task.locationId);
+        // No actor rides along on a queued background task; this call could
+        // originate from a member's mutation side effect or a backfill, but
+        // neither carries an actor through the queue message, so it books
+        // under the system actor rather than guessing at attribution.
+        const runId = await ensureRun(db, systemActor(), {
+          purpose: "background",
+        });
+        await describeLocation(db, task.locationId, runId);
       } catch (error) {
         if (isLocationHasNoImagesToAnalyzeError(error)) return "skipped";
         throw error;
@@ -98,8 +107,13 @@ export async function handleBackgroundTask(
     case "location-ai.inventory.refresh": {
       const { detectInventoryItems, isLocationHasNoImagesToAnalyzeError } =
         await import("~/server/services/ai-enrichment/location-vision");
+      const { ensureRun, systemActor } =
+        await import("~/server/runs/ensure-run");
       try {
-        await detectInventoryItems(db, task.locationId);
+        const runId = await ensureRun(db, systemActor(), {
+          purpose: "background",
+        });
+        await detectInventoryItems(db, task.locationId, runId);
       } catch (error) {
         if (isLocationHasNoImagesToAnalyzeError(error)) return "skipped";
         throw error;

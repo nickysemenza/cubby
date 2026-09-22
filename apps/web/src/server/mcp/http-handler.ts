@@ -1,3 +1,5 @@
+import { importRunId } from "@cubby/schemas/identifiers";
+
 import { withErrorReporting } from "~/server/errors/report-error";
 import { normalizeStartOperationError } from "~/server/start-operation.server";
 import { getRequestId } from "~/server/tracing";
@@ -25,7 +27,17 @@ export async function handleMcpHttpRequest(request: Request) {
       const ctx = requireActor(
         await createRequestContext({
           headers: request.headers,
-          actor: { ...actor, source: "mcp" },
+          actor: {
+            userId: actor.userId,
+            sessionId: actor.sessionId,
+            channel: "mcp",
+            oauthClientId: actor.clientId,
+            // Flue's token is scoped to its run, so everything it writes
+            // inherits that run (validated against the grant below).
+            runId: actor.purchaseAgentRunId
+              ? importRunId.parse(actor.purchaseAgentRunId)
+              : null,
+          },
         }),
       );
       if (actor.purchaseAgentRunId) {

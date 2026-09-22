@@ -1,4 +1,5 @@
 import type { AuditLogListOut, auditLogListInput } from "@cubby/schemas/audit";
+import { deviceId, importRunId } from "@cubby/schemas/identifiers";
 import type { z } from "zod";
 
 import type { Database } from "~/server/db";
@@ -13,14 +14,18 @@ const auditLogWorkflow = workflow<Database, AuditInput>("auditLog.list")
     resolved: input.entityId
       ? await resolveShortcode(db, input.entityId)
       : null,
+    device: input.deviceId ? await resolveShortcode(db, input.deviceId) : null,
+    run: input.runId ? await resolveShortcode(db, input.runId) : null,
   }))
   .branch("result", {
     when: async (_, { subject }) =>
       !(
-        subject.data.entityId &&
-        (!subject.resolved ||
-          (subject.data.entityType &&
-            subject.resolved.entity !== subject.data.entityType))
+        (subject.data.entityId &&
+          (!subject.resolved ||
+            (subject.data.entityType &&
+              subject.resolved.entity !== subject.data.entityType))) ||
+        (subject.data.deviceId && !subject.device) ||
+        (subject.data.runId && !subject.run)
       ),
     whenTrue: (branch) =>
       branch
@@ -28,7 +33,12 @@ const auditLogWorkflow = workflow<Database, AuditInput>("auditLog.list")
           getAuditLog(db, {
             entityType: subject.data.entityType,
             entityId: subject.resolved?.id,
-            source: subject.data.source,
+            channel: subject.data.channel,
+            oauthClientId: subject.data.oauthClientId,
+            deviceId: subject.device
+              ? deviceId.parse(subject.device.id)
+              : undefined,
+            runId: subject.run ? importRunId.parse(subject.run.id) : undefined,
             createdAtFrom: subject.data.createdAtFrom,
             createdAtTo: subject.data.createdAtTo,
             limit: subject.data.limit,

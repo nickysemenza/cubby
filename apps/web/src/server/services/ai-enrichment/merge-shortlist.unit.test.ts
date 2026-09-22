@@ -1,3 +1,4 @@
+import { importRunId } from "@cubby/schemas/identifiers";
 import { testEntityId } from "@cubby/schemas/testing";
 import { describe, expect, it } from "vitest";
 
@@ -16,6 +17,7 @@ const db = new Database(() => {
   );
 });
 
+const runId = importRunId.parse("00000000-0000-4000-8000-000000000009");
 const sourceId = testEntityId("ingredient", "source");
 const source = { id: sourceId, name: "scallion" };
 
@@ -46,6 +48,7 @@ describe("buildMergeShortlist", () => {
     const shortlist = await buildMergeShortlist(
       db,
       source,
+      runId,
       20,
       portOf([green], [scallionAlt]),
     );
@@ -63,6 +66,7 @@ describe("buildMergeShortlist", () => {
     const shortlist = await buildMergeShortlist(
       db,
       source,
+      runId,
       20,
       portOf([shared], [sharedFromSemantic]),
     );
@@ -83,6 +87,7 @@ describe("buildMergeShortlist", () => {
     const shortlist = await buildMergeShortlist(
       db,
       source,
+      runId,
       20,
       portOf([self, other], []),
     );
@@ -98,6 +103,7 @@ describe("buildMergeShortlist", () => {
     const shortlist = await buildMergeShortlist(
       db,
       source,
+      runId,
       20,
       portOf(many, []),
     );
@@ -111,6 +117,7 @@ describe("buildMergeShortlist", () => {
     const shortlist = await buildMergeShortlist(
       db,
       source,
+      runId,
       20,
       portOf([green], []),
     );

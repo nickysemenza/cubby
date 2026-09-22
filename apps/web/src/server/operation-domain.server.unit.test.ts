@@ -93,7 +93,7 @@ describe("implementOperationDomain", () => {
         actor: {
           userId: testUserId("operation-domain-user"),
           sessionId: null,
-          source: "ui",
+          channel: "web",
         },
       }),
     );

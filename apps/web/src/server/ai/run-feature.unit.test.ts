@@ -1,3 +1,4 @@
+import { importRunId } from "@cubby/schemas/identifiers";
 import { describe, expect, it } from "vitest";
 
 import { AI_CACHE_TTL_SECONDS } from "~/server/clients/ai-adapters";
@@ -21,6 +22,7 @@ import {
 const db = new Database(() => {
   throw new Error("run-feature unit tests never resolve a database runtime");
 });
+const runId = importRunId.parse("00000000-0000-4000-8000-000000000001");
 
 const request: AiChatRequest = {
   systemPrompts: ["frame"],
@@ -83,6 +85,7 @@ describe("planStructuredRun", () => {
   it("caches a structured feature for the gateway's full TTL", () => {
     const plan = planStructuredRun(PRODUCT_IDENTIFICATION_FEATURE, {
       db,
+      runId,
       operation: "suggestCategory",
     });
 
@@ -96,6 +99,7 @@ describe("planStructuredRun", () => {
   it("turns a caller's force into a skip rather than a shorter TTL", () => {
     const plan = planStructuredRun(PRODUCT_IDENTIFICATION_FEATURE, {
       db,
+      runId,
       operation: "suggestCategory",
       force: true,
     });
@@ -107,6 +111,7 @@ describe("planStructuredRun", () => {
   it("skips the cache for an uncacheable feature, and streams it", () => {
     const plan = planStructuredRun(AGENT_ASK_FEATURE, {
       db,
+      runId,
       operation: "runAgentStream",
     });
 
@@ -118,6 +123,7 @@ describe("planStructuredRun", () => {
   it("labels the gateway call with the spec's feature and the caller's entity", () => {
     const plan = planStructuredRun(LOCATION_DESCRIPTION_FEATURE, {
       db,
+      runId,
       operation: "locationDescription",
       entity: { entityType: "location", entityId: "loc-1" },
     });
@@ -136,6 +142,7 @@ describe("planStructuredRun", () => {
     expect(
       planStructuredRun(PRODUCT_IDENTIFICATION_FEATURE, {
         db,
+        runId,
         operation: "suggestCategory",
       }).usage,
     ).toMatchObject({
@@ -148,6 +155,7 @@ describe("planStructuredRun", () => {
     expect(
       planStructuredRun(RECIPE_FLOW_PRIMARY_FEATURE, {
         db,
+        runId,
         operation: "recipeFlow",
       }).usage,
     ).toMatchObject({ provider: "anthropic", model: "claude-sonnet-5" });
@@ -155,6 +163,7 @@ describe("planStructuredRun", () => {
     expect(
       planStructuredRun(LOCATION_DESCRIPTION_FEATURE, {
         db,
+        runId,
         operation: "locationDescription",
       }).usage,
     ).toMatchObject({ provider: "google", model: "gemini-2.5-flash" });
@@ -163,6 +172,7 @@ describe("planStructuredRun", () => {
   it("records no usage when the caller has no database", () => {
     expect(
       planStructuredRun(PRODUCT_IDENTIFICATION_FEATURE, {
+        runId,
         operation: "eval",
       }).usage,
     ).toBeUndefined();
@@ -176,7 +186,7 @@ describe("runStructuredFeature", () => {
     await runStructuredFeature(
       PRODUCT_IDENTIFICATION_FEATURE,
       request,
-      { db, operation: "suggestCategory" },
+      { db, runId, operation: "suggestCategory" },
       ports,
     );
 
@@ -195,7 +205,7 @@ describe("runStructuredFeature", () => {
     await runStructuredFeature(
       LOCATION_DESCRIPTION_FEATURE,
       request,
-      { db, operation: "locationDescription" },
+      { db, runId, operation: "locationDescription" },
       ports,
     );
 
@@ -209,7 +219,7 @@ describe("runStructuredFeature", () => {
     await runStructuredFeature(
       RECIPE_FLOW_PRIMARY_FEATURE,
       request,
-      { db, operation: "recipeFlow" },
+      { db, runId, operation: "recipeFlow" },
       ports,
     );
 
@@ -226,7 +236,7 @@ describe("runStructuredFeature", () => {
     await runStructuredFeature(
       PRODUCT_IDENTIFICATION_FEATURE,
       request,
-      { db, operation: "suggestCategory" },
+      { db, runId, operation: "suggestCategory" },
       ports,
     );
 
@@ -241,7 +251,7 @@ describe("runStructuredFeature", () => {
     await runStructuredFeature(
       PRODUCT_IDENTIFICATION_FEATURE,
       request,
-      { db, operation: "suggestCategory" },
+      { db, runId, operation: "suggestCategory" },
       withDb.ports,
     );
     expect(withDb.calls[0]!.middleware).toHaveLength(1);
@@ -250,7 +260,7 @@ describe("runStructuredFeature", () => {
     await runStructuredFeature(
       PRODUCT_IDENTIFICATION_FEATURE,
       request,
-      { operation: "eval" },
+      { operation: "eval", runId },
       withoutDb.ports,
     );
     expect(withoutDb.calls[0]!.middleware).toHaveLength(0);
@@ -265,6 +275,7 @@ describe("runStructuredFeature repair", () => {
   // one carries), not the shape of any one tier's schema.
   const okContext = (): AiRunContext<unknown> => ({
     db,
+    runId,
     operation: "suggestCategory",
     validate: () => ({ ok: true }),
   });
@@ -292,7 +303,7 @@ describe("runStructuredFeature repair", () => {
     const result = await runStructuredFeature(
       PRODUCT_IDENTIFICATION_FEATURE,
       request,
-      { db, operation: "suggestCategory" },
+      { db, runId, operation: "suggestCategory" },
       ports,
     );
 
@@ -305,6 +316,7 @@ describe("runStructuredFeature repair", () => {
     let validateCalls = 0;
     const ctx: AiRunContext<unknown> = {
       db,
+      runId,
       operation: "suggestCategory",
       validate: () => {
         validateCalls += 1;
@@ -362,10 +374,12 @@ describe("runStructuredFeature repair", () => {
     // `placeCall`.
     const firstPlan = planStructuredRun(PRODUCT_IDENTIFICATION_FEATURE, {
       db,
+      runId,
       operation: "suggestCategory",
     });
     const repairPlan = planStructuredRun(PRODUCT_IDENTIFICATION_FEATURE, {
       db,
+      runId,
       operation: "suggestCategory",
       force: true,
     });
@@ -378,6 +392,7 @@ describe("runStructuredFeature repair", () => {
     const { calls, ports } = fakeChat([{ bad: 1 }, { stillBad: 2 }]);
     const ctx: AiRunContext<unknown> = {
       db,
+      runId,
       operation: "suggestCategory",
       validate: () => ({ ok: false, issues: ["still missing a field"] }),
     };

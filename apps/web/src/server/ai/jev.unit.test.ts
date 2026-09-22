@@ -1,3 +1,4 @@
+import { importRunId } from "@cubby/schemas/identifiers";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { FIELD_SUGGESTION_FEATURE } from "./features";
@@ -12,7 +13,11 @@ const base = {
   feature: FIELD_SUGGESTION_FEATURE,
   subject: "pick one",
   rules: "Choose one.",
-  usage: { operation: "jev-test", cacheStatus: "none" as const },
+  usage: {
+    operation: "jev-test",
+    cacheStatus: "none" as const,
+    runId: importRunId.parse("00000000-0000-4000-8000-000000000001"),
+  },
 };
 
 function answerFor(

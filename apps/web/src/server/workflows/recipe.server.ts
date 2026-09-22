@@ -3,7 +3,7 @@ import type {
   CandidateEquivalence,
   EquivalenceReport,
 } from "@cubby/schemas/equivalences";
-import type { RecipeId } from "@cubby/schemas/identifiers";
+import type { ImportRunId, RecipeId } from "@cubby/schemas/identifiers";
 import type {
   recipeCooccurrenceInput,
   recipeCookbookScopeInput,
@@ -262,21 +262,22 @@ export const getFlowWorkflow = bindWorkflow(
     input,
   }),
 );
+type GenerateFlowContext = { db: Database; runId: ImportRunId };
 export const generateFlowWorkflow = bindWorkflow(
-  workflow<Database, typeof recipeFlowGenerateInputSchema._output>(
+  workflow<GenerateFlowContext, typeof recipeFlowGenerateInputSchema._output>(
     "recipe.generateFlow",
   )
     .call("id", async ({ context }, { input }) =>
-      recipeShortcodes.one(context, input.id),
+      recipeShortcodes.one(context.db, input.id),
     )
     .commit("flow", async ({ context }, { input, id }) =>
-      generateRecipeFlow(context, { ...input, id }),
+      generateRecipeFlow(context.db, { ...input, id }, context.runId),
     )
     .output(({ flow }) => flow),
-  (db: Database, input: typeof recipeFlowGenerateInputSchema._output) => ({
-    context: db,
-    input,
-  }),
+  (
+    context: GenerateFlowContext,
+    input: typeof recipeFlowGenerateInputSchema._output,
+  ) => ({ context, input }),
 );
 
 const convertWithinKind = (

@@ -20,17 +20,18 @@ const readOnly = <T extends z.ZodTypeAny>(read: T) => ({
 });
 
 /**
- * One import run: a purchase-agent account sync, validation or enrichment, or
- * a photo-inventory batch a member uploads for an agent to work. The record is
+ * One run: a purchase-agent account sync, validation or enrichment, a
+ * photo-inventory batch a member uploads for an agent to work, or a group of
+ * AI calls (Jev suggestions on a page, one AI action, background work). The record is
  * written only by the run service and the writers; the manifest
  * exposes it read-only so the generic list, detail, inspector and MCP get/list
  * render it like any other record.
  */
 export default defineEntity({
   key: "importRun",
-  names: { singular: "Import Run", plural: "Import Runs" },
+  names: { singular: "Run", plural: "Runs" },
   route: {
-    basePath: "import-runs",
+    basePath: "runs",
     list: true,
     // The hand-written page stays until the generic detail carries its slots.
     detail: null,
@@ -41,9 +42,9 @@ export default defineEntity({
     titleField: "displayName",
     domain: "finance",
     description:
-      "Import runs: purchase-agent syncs, validations, enrichments and photo-inventory batches.",
+      "Runs: purchase-agent syncs, validations, enrichments, photo-inventory batches and grouped AI work.",
     emptyState: {
-      title: "No import runs yet",
+      title: "No runs yet",
       description:
         "Runs appear when a vendor account syncs, a purchase is validated or photos are uploaded for inventory.",
     },
@@ -146,6 +147,11 @@ export default defineEntity({
             { value: "purchase_validation", label: "Purchase validation" },
             { value: "product_enrichment", label: "Product enrichment" },
             { value: "photo_inventory", label: "Photo inventory" },
+            { value: "ai_suggest", label: "AI suggestions" },
+            { value: "ai_action", label: "AI action" },
+            { value: "background", label: "Background" },
+            { value: "file_import", label: "File import" },
+            { value: "legacy", label: "Legacy" },
           ],
         },
         display: { list: true, detail: true, width: "sm" },
@@ -161,6 +167,7 @@ export default defineEntity({
             { value: "discovery", label: "Discovery" },
             { value: "manual", label: "Manual" },
             { value: "backfill", label: "Backfill" },
+            { value: "ephemeral", label: "Ephemeral" },
           ],
         },
         display: { list: true, detail: true, width: "sm", listHidden: true },

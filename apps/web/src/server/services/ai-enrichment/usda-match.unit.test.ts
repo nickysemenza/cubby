@@ -1,3 +1,4 @@
+import { importRunId } from "@cubby/schemas/identifiers";
 import { testEntityId } from "@cubby/schemas/testing";
 import type { FoodSummaryWithLinkedProducts } from "@cubby/schemas/usda";
 import { describe, expect, it, vi } from "vitest";
@@ -16,6 +17,7 @@ interface TestDatabase {
   readonly scope: "usda-match";
 }
 const database: TestDatabase = { scope: "usda-match" };
+const runId = importRunId.parse("00000000-0000-4000-8000-000000000009");
 const lookup: UsdaLookupPort = {
   listFoods: async () => ({ data: [], count: 0 }),
 };
@@ -38,9 +40,12 @@ describe("suggestUsdaFoodBatch", () => {
 
     const service = createUsdaMatchService(adapter);
     await expect(
-      service.suggestUsdaFoodBatch(lookup, database, [
-        { id: ingredientId, name: "AP flour" },
-      ]),
+      service.suggestUsdaFoodBatch(
+        lookup,
+        database,
+        [{ id: ingredientId, name: "AP flour" }],
+        runId,
+      ),
     ).resolves.toEqual([
       {
         name: "AP flour",
@@ -63,9 +68,12 @@ describe("suggestUsdaFoodBatch", () => {
     }));
     const service = createUsdaMatchService(adapter);
     await expect(
-      service.suggestUsdaFoodBatch(lookup, database, [
-        { id: ingredientId, name: "unobtainium" },
-      ]),
+      service.suggestUsdaFoodBatch(
+        lookup,
+        database,
+        [{ id: ingredientId, name: "unobtainium" }],
+        runId,
+      ),
     ).resolves.toEqual([
       {
         name: "unobtainium",
@@ -87,10 +95,14 @@ describe("suggestUsdaFoodBatch", () => {
       reasoning: "No suitable match found.",
     }));
     const service = createUsdaMatchService(ports(suggest));
-    await service.suggestUsdaFoodBatch(lookup, database, [
-      { id: ingredientId, name: "unobtainium" },
-    ]);
+    await service.suggestUsdaFoodBatch(
+      lookup,
+      database,
+      [{ id: ingredientId, name: "unobtainium" }],
+      runId,
+    );
     expect(suggest).toHaveBeenCalledWith(lookup, database, "unobtainium", {
+      runId,
       ingredientId,
     });
   });
@@ -147,7 +159,7 @@ describe("suggestUsdaFood", () => {
       shortlistLookup,
       db,
       "AP flour",
-      {},
+      { runId },
       ai,
     );
 
@@ -168,7 +180,7 @@ describe("suggestUsdaFood", () => {
     };
 
     await expect(
-      suggestUsdaFood(shortlistLookup, db, "AP flour", {}, ai),
+      suggestUsdaFood(shortlistLookup, db, "AP flour", { runId }, ai),
     ).resolves.toEqual({
       food: null,
       confidence: "low",
@@ -194,7 +206,7 @@ describe("suggestUsdaFood", () => {
       },
     };
 
-    await suggestUsdaFood(shortlistLookup, db, "AP flour", {}, ai);
+    await suggestUsdaFood(shortlistLookup, db, "AP flour", { runId }, ai);
 
     expect(renderedLines.some((line) => line.includes("FDC 501"))).toBe(true);
     expect(renderedLines.some((line) => line.includes("FDC 502"))).toBe(true);
@@ -220,7 +232,7 @@ describe("suggestUsdaFood", () => {
     };
 
     await expect(
-      suggestUsdaFood(emptyLookup, db, "unobtainium", {}, ai),
+      suggestUsdaFood(emptyLookup, db, "unobtainium", { runId }, ai),
     ).resolves.toEqual({
       food: null,
       confidence: "low",

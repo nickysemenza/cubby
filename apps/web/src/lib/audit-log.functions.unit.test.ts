@@ -7,7 +7,7 @@ describe("audit log Start query options", () => {
     const options = auditLogListOptions({
       entityType: undefined,
       entityId: undefined,
-      source: undefined,
+      channel: undefined,
       limit: 20,
     });
 

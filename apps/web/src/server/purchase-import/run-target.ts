@@ -67,11 +67,7 @@ export function listImportRuns(
     )
     .leftJoin(
       aiUsage,
-      and(
-        eq(aiUsage.jobKind, "purchase_import_run"),
-        eq(aiUsage.jobId, sql<string>`${importRun.id}::text`),
-        notDeleted(aiUsage),
-      ),
+      and(eq(aiUsage.runId, importRun.id), notDeleted(aiUsage)),
     )
     .where(
       and(
@@ -149,11 +145,7 @@ export function listProductImportRuns(
     )
     .leftJoin(
       aiUsage,
-      and(
-        eq(aiUsage.jobKind, "purchase_import_run"),
-        eq(aiUsage.jobId, sql<string>`${importRun.id}::text`),
-        notDeleted(aiUsage),
-      ),
+      and(eq(aiUsage.runId, importRun.id), notDeleted(aiUsage)),
     )
     .where(
       and(

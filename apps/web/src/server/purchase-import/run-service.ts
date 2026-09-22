@@ -2159,7 +2159,9 @@ export async function markHistoryExpired(
       ),
     );
   const { setDataException } = await import("~/server/repo/data-quality");
-  const actor = buildActorContext(scope.actorUserId, "api");
+  const actor = buildActorContext(scope.actorUserId, "mcp", {
+    runId: importRunId.parse(input.runId),
+  });
   let marked = 0;
   for (const row of rows) {
     for (const check of ["primary_document", "empty_expenses"] as const) {
@@ -2280,7 +2282,9 @@ export async function auditImportBatch(
     runId: input.runId,
     renderedBatch,
   });
-  const actor = buildActorContext(scope.actorUserId, "api");
+  const actor = buildActorContext(scope.actorUserId, "mcp", {
+    runId: importRunId.parse(input.runId),
+  });
   const batchExpenseIds = new Set(
     renderedBatch.flatMap((purchaseRow) =>
       purchaseRow.expenses.map((expenseRow) => expenseRow.id),
@@ -2925,13 +2929,7 @@ export async function loadImportRunByShortcode(
         unpricedCount: sql<number>`(count(*) filter (where ${aiUsage.estimatedCost} is null and ${aiUsage.status} = 'succeeded'))::int`,
       })
       .from(aiUsage)
-      .where(
-        and(
-          eq(aiUsage.jobKind, "purchase_import_run"),
-          eq(aiUsage.jobId, run.id),
-          notDeleted(aiUsage),
-        ),
-      ),
+      .where(and(eq(aiUsage.runId, run.id), notDeleted(aiUsage))),
     database
       .select({
         id: aiUsage.id,
@@ -2954,8 +2952,7 @@ export async function loadImportRunByShortcode(
       .from(aiUsage)
       .where(
         and(
-          eq(aiUsage.jobKind, "purchase_import_run"),
-          eq(aiUsage.jobId, run.id),
+          eq(aiUsage.runId, run.id),
           notDeleted(aiUsage),
           usageCursor
             ? or(

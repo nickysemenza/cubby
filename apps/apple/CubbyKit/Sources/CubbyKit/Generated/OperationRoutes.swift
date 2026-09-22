@@ -24,7 +24,7 @@ extension OperationRoute {
         OperationRoute(operationID: "ai.suggestUsdaFoodBatch", method: .post, path: "/api/v1/ai/suggestUsdaFoodBatch", pathParameters: [], queryParameters: [], hasBody: true),
         OperationRoute(operationID: "ai.usageRecent", method: .get, path: "/api/v1/ai/usageRecent", pathParameters: [], queryParameters: ["limit"], hasBody: false),
         OperationRoute(operationID: "ai.usageSummary", method: .get, path: "/api/v1/ai/usageSummary", pathParameters: [], queryParameters: ["days"], hasBody: false),
-        OperationRoute(operationID: "auditLog.list", method: .get, path: "/api/v1/auditLog/list", pathParameters: [], queryParameters: ["createdAtFrom", "createdAtTo", "cursor", "entityId", "entityType", "limit", "source"], hasBody: false),
+        OperationRoute(operationID: "auditLog.list", method: .get, path: "/api/v1/auditLog/list", pathParameters: [], queryParameters: ["channel", "createdAtFrom", "createdAtTo", "cursor", "deviceId", "entityId", "entityType", "limit", "oauthClientId", "runId"], hasBody: false),
         OperationRoute(operationID: "calendar.clearUncertainWrite", method: .post, path: "/api/v1/calendar/clearUncertainWrite", pathParameters: [], queryParameters: [], hasBody: true),
         OperationRoute(operationID: "calendar.getCredential", method: .get, path: "/api/v1/calendar/getCredential", pathParameters: [], queryParameters: [], hasBody: false),
         OperationRoute(operationID: "calendar.getFeed", method: .get, path: "/api/v1/calendar/getFeed", pathParameters: [], queryParameters: [], hasBody: false),

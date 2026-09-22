@@ -103,6 +103,21 @@ const NON_ENTITY_FK_TARGETS = {
  * once its edge becomes graph-visible.
  */
 const NON_GRAPH_ENTITY_FK_EXEMPTIONS = {
+  // Caller attribution. AuditLog and AiUsage are append-only telemetry, not
+  // entities, so the device/run they name is recorded provenance, not a
+  // navigable relationship.
+  "AuditLog.deviceId": {
+    classification: "metadata",
+    reason: "records the Apple install a write came from",
+  },
+  "AuditLog.runId": {
+    classification: "metadata",
+    reason: "records the Run a write belonged to",
+  },
+  "AiUsage.runId": {
+    classification: "metadata",
+    reason: "records the Run a model call belonged to",
+  },
   "ImportRunTarget.purchaseId": {
     classification: "metadata",
     reason: "records the Purchase a targeted validation examined",

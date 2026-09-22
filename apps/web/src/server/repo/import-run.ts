@@ -6,7 +6,7 @@ import {
   type ImportRunPurpose,
 } from "@cubby/schemas/import-run-fields";
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, ne, sql } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { importRun } from "~/server/db/schema";
@@ -108,6 +108,11 @@ const PURPOSE_LABEL = {
   purchase_validation: "Purchase validation",
   product_enrichment: "Product enrichment",
   photo_inventory: "Photo inventory",
+  ai_suggest: "AI suggestions",
+  ai_action: "AI action",
+  background: "Background",
+  file_import: "File import",
+  legacy: "Legacy",
 } satisfies Record<ImportRunPurpose, string>;
 
 const toOut = (row: ImportRunRow): ImportRunOut =>
@@ -143,6 +148,9 @@ const buildWhere = (filters: ImportRunFilters) =>
       sql`(SELECT shortcode FROM "LedgerParty" WHERE id = "ImportRun"."ledgerPartyId")`,
       filters.ledgerPartyId,
     ),
+    filters.includeEphemeral || filters.purpose !== undefined
+      ? undefined
+      : ne(importRun.trigger, "ephemeral"),
   ]);
 
 export async function listImportRuns(

@@ -263,7 +263,7 @@ export function createHttpApiHandler(ports: HttpApiPorts) {
         actor = {
           userId: userId.parse(verification.key.referenceId),
           sessionId: null,
-          source: "api",
+          channel: "api",
         };
     } else {
       const sessionResult = await authenticateHttpSession({
@@ -282,7 +282,7 @@ export function createHttpApiHandler(ports: HttpApiPorts) {
         actor = {
           userId: userId.parse(session.user.id),
           sessionId: session.session.id,
-          source: "api",
+          channel: "api",
         };
     }
     if (!actor)

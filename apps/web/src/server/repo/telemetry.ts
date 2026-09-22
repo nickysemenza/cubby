@@ -1,15 +1,17 @@
-import { userId } from "@cubby/schemas/identifiers";
+import { importRunId, userId } from "@cubby/schemas/identifiers";
 import type {
   AiUsageTelemetry,
   McpToolCallTelemetry,
   TelemetryMessageV1,
 } from "@cubby/schemas/telemetry";
+import { inArray } from "drizzle-orm";
 import { match } from "ts-pattern";
 
 import { estimateAiUsageCostUsd } from "~/server/ai/models";
 import type { Database } from "~/server/db";
-import { aiUsage, mcpToolCall } from "~/server/db/schema";
+import { aiUsage, importRun, mcpToolCall } from "~/server/db/schema";
 import { withTransaction } from "~/server/repo/database-helpers";
+import { LEGACY_RUN_ID } from "~/server/runs/ensure-run";
 
 /** Persist a validated telemetry batch atomically and idempotently. */
 export async function persistTelemetryMessages(
@@ -28,6 +30,21 @@ export async function persistTelemetryMessages(
   }
 
   await withTransaction(db, async (tx) => {
+    // One AI row naming a missing run must not fail the batch (and retry the
+    // MCP rows beside it into the DLQ), so unknown runs file under legacy.
+    const requestedRuns = [
+      ...new Set(ai.flatMap((event) => event.runId ?? [])),
+    ].map((id) => importRunId.parse(id));
+    const knownRuns = new Set(
+      requestedRuns.length === 0
+        ? []
+        : (
+            await tx
+              .select({ id: importRun.id })
+              .from(importRun)
+              .where(inArray(importRun.id, requestedRuns))
+          ).map((row): string => row.id),
+    );
     if (mcp.length > 0) {
       await tx
         .insert(mcpToolCall)
@@ -62,6 +79,10 @@ export async function persistTelemetryMessages(
             provider: event.provider,
             model: event.model,
             operation: event.operation,
+            runId:
+              event.runId && knownRuns.has(event.runId)
+                ? importRunId.parse(event.runId)
+                : LEGACY_RUN_ID,
             jobKind: event.jobKind ?? null,
             jobId: event.jobId ?? null,
             inputTokens: event.inputTokens,

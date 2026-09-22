@@ -1,3 +1,4 @@
+import { importRunId } from "@cubby/schemas/identifiers";
 import { describe, expect, it } from "vitest";
 
 import type {
@@ -74,6 +75,7 @@ function fakePort(respond: () => Response) {
 // SAFETY: the unit under test never dereferences the database; it only hands
 // it to the injected `recordUsage` port, which ignores it.
 const db = {} as Database;
+const runId = importRunId.parse("00000000-0000-4000-8000-000000000001");
 
 describe("forwardGatewayRequest", () => {
   it("forwards the built request with the server's token and feature, and records priced usage", async () => {
@@ -86,7 +88,7 @@ describe("forwardGatewayRequest", () => {
     );
     const out = await forwardGatewayRequest(
       request,
-      { db, feature: "cookbook-epub-parsing" },
+      { db, runId, feature: "cookbook-epub-parsing" },
       port,
     );
     expect(out.status).toBe(200);
@@ -137,7 +139,7 @@ describe("forwardGatewayRequest", () => {
     );
     const out = await forwardGatewayRequest(
       request,
-      { db, feature: "cookbook-epub-parsing" },
+      { db, runId, feature: "cookbook-epub-parsing" },
       port,
     );
     expect(out.headers).toContainEqual(["cf-aig-cache-status", "HIT"]);
@@ -160,7 +162,7 @@ describe("forwardGatewayRequest", () => {
     );
     const out = await forwardGatewayRequest(
       request,
-      { db, feature: "cookbook-epub-parsing" },
+      { db, runId, feature: "cookbook-epub-parsing" },
       port,
     );
     expect(out.status).toBe(429);

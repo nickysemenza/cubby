@@ -20,6 +20,7 @@ import {
 import { assignImageProcessingExecutor } from "~/server/repo/image-processing-history";
 import { readImageProcessingSettings } from "~/server/repo/image-processing-maintenance";
 import { refreshDirectImageOwnerSearchDocuments } from "~/server/repo/search-document";
+import { ensureRun, systemActor } from "~/server/runs/ensure-run";
 import { describeOriginalImage } from "~/server/services/image-description.service";
 import {
   generatePresignedDownloadUrl,
@@ -72,9 +73,15 @@ export async function dispatchImageProcessingWakeup(
         },
       });
       if (!assigned) return "skipped";
+      // No user rides along with a dispatched image-processing job; books
+      // under the system actor, same as every other background AI call.
+      const runId = await ensureRun(db, systemActor(), {
+        purpose: "background",
+      });
       const { result, fingerprint } = await describeOriginalImage(db, {
         imageId: claimed.imageId,
         attemptId: claimed.attemptId,
+        runId,
       });
       const completion = await completeImageProcessingJob(db, {
         result: {

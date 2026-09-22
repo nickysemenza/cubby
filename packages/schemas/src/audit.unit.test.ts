@@ -1,99 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { auditLogListInput, auditLogListOut } from "./audit";
-import {
-  APPLICATION_AUDIT_SOURCES,
-  auditSourceSchema,
-  isScriptAuditSource,
-} from "./context";
-import { oneOrMany } from "./pagination";
-
-/**
- * Regression guard for the closed-enum outage: `AuditLog` rows written by
- * out-of-band maintenance scripts carried sources outside
- * `auditSourceSchema`, so `auditLog.list` failed *output* validation and the
- * activity feed / home page rendered an error instead of content.
- *
- * The failure mode that matters is the second describe block: one unparseable
- * row rejects the whole `entries` array, so a single stray source takes out
- * every entry on the page — not just its own.
- */
-describe("auditSourceSchema", () => {
-  it.each([...APPLICATION_AUDIT_SOURCES])("accepts %s", (source) => {
-    expect(auditSourceSchema.parse(source)).toBe(source);
-  });
-
-  it.each([
-    "script:vendor-normalization-2026-07-28",
-    "script:url-cleanup-2026-07-28",
-    "script:home-depot-export-2026-07-28",
-    "script:vendor-from-name-2026-07-28",
-  ])("accepts the real out-of-band source %s", (source) => {
-    expect(auditSourceSchema.parse(source)).toBe(source);
-  });
-
-  it.each([
-    // A bare prefix carries no provenance, which is the point of rejecting it.
-    "script:",
-    "",
-    "ui ",
-    "nonsense",
-    "SCRIPT:shouting",
-  ])("rejects %o", (source) => {
-    expect(auditSourceSchema.safeParse(source).success).toBe(false);
-  });
-
-  it("narrows script sources without swallowing application ones", () => {
-    expect(isScriptAuditSource("script:whatever")).toBe(true);
-    expect(isScriptAuditSource("ui")).toBe(false);
-  });
-});
-
-/**
- * `auditLogListInput.source` (PR 6, Phase 6) reuses `auditSourceSchema`
- * through `oneOrMany` rather than narrowing it — a closed enum on the filter
- * would reintroduce the exact outage this file's first describe block guards
- * against, just on the read side of a query param instead of the DB column.
- */
-describe("oneOrMany(auditSourceSchema)", () => {
-  const sourceFilter = oneOrMany(auditSourceSchema);
-
-  it.each([...APPLICATION_AUDIT_SOURCES])(
-    "accepts a bare APPLICATION_AUDIT_SOURCES value: %s",
-    (source) => {
-      expect(sourceFilter.parse(source)).toBe(source);
-    },
-  );
-
-  it("accepts a bare script: value", () => {
-    expect(sourceFilter.parse("script:home-depot-export-2026-07-28")).toBe(
-      "script:home-depot-export-2026-07-28",
-    );
-  });
-
-  it("accepts an array mixing application and script sources", () => {
-    const value = ["ui", "script:url-cleanup-2026-07-28", "api"];
-    expect(sourceFilter.parse(value)).toEqual(value);
-  });
-
-  it.each(["script:", "", "nonsense", "SCRIPT:shouting"])(
-    "rejects %o whether bare or inside an array",
-    (bad) => {
-      expect(sourceFilter.safeParse(bad).success).toBe(false);
-      expect(sourceFilter.safeParse([bad]).success).toBe(false);
-    },
-  );
-
-  it("is exactly what auditLogListInput.source accepts", () => {
-    expect(
-      auditLogListInput.shape.source.parse(
-        "script:vendor-normalization-2026-07-28",
-      ),
-    ).toBe("script:vendor-normalization-2026-07-28");
-    expect(
-      auditLogListInput.shape.source.parse(["ui", "sheets_import"]),
-    ).toEqual(["ui", "sheets_import"]);
-  });
-});
+import { AUDIT_CHANNELS } from "./context";
 
 describe("auditLogListInput window filters", () => {
   it("accepts public entity shortcodes and rejects UUID filters", () => {
@@ -121,16 +28,16 @@ describe("auditLogListInput window filters", () => {
     expect(parsed.createdAtTo).toBe("2026-07-31T23:59:59.999Z");
   });
 
-  it("leaves createdAtFrom/createdAtTo/source optional", () => {
+  it("leaves createdAtFrom/createdAtTo/channel optional", () => {
     const parsed = auditLogListInput.parse({ limit: 50 });
     expect(parsed.createdAtFrom).toBeUndefined();
     expect(parsed.createdAtTo).toBeUndefined();
-    expect(parsed.source).toBeUndefined();
+    expect(parsed.channel).toBeUndefined();
   });
 });
 
-const entry = (source: string) => ({
-  entryKey: `test:${source}`,
+const entry = (channel: string) => ({
+  entryKey: `test:${channel}`,
   entityType: "product" as const,
   entityId: "PRD-2CRC",
   entityName: "Track Saw Rail",
@@ -138,31 +45,28 @@ const entry = (source: string) => ({
   action: "update" as const,
   changes: { tags: { from: [], to: ["fs-rail"] } },
   userId: "user-1",
-  source,
+  channel,
+  oauthClient: null,
+  device: null,
+  runId: null,
   createdAt: new Date("2026-07-28T00:00:00Z"),
   user: null,
 });
 
+/**
+ * Regression guard for the audit-feed outage: one row whose provenance value
+ * the read schema rejected failed the whole `entries` array, so the activity
+ * feed and home page rendered an error. `AuditLog_channel_check` now keeps the
+ * column inside `AUDIT_CHANNELS`, and the read schema must accept every value
+ * that constraint admits.
+ */
 describe("auditLogListOut", () => {
-  it("parses an entry whose source came from a script", () => {
+  it("parses a page holding every channel the database admits", () => {
     const parsed = auditLogListOut.parse({
-      entries: [entry("script:home-depot-export-2026-07-28")],
+      entries: AUDIT_CHANNELS.map(entry),
     });
-    expect(parsed.entries[0]?.source).toBe(
-      "script:home-depot-export-2026-07-28",
-    );
-  });
-
-  it("keeps every sibling entry when a script source is present", () => {
-    // The original bug: this array is what `auditLog.list` returns, and one
-    // rejected row failed the entire response.
-    const parsed = auditLogListOut.parse({
-      entries: [
-        entry("ui"),
-        entry("script:url-cleanup-2026-07-28"),
-        entry("sheets_import"),
-      ],
-    });
-    expect(parsed.entries).toHaveLength(3);
+    expect(parsed.entries.map((row) => row.channel)).toEqual([
+      ...AUDIT_CHANNELS,
+    ]);
   });
 });

@@ -74,6 +74,8 @@ import type { EdgeLiveness, EdgeRole } from "@cubby/schemas/entity-integrity";
 import type { AnyColumn } from "drizzle-orm";
 
 import {
+  aiUsage,
+  auditLog,
   cookbook,
   device,
   expense,
@@ -1184,6 +1186,20 @@ export const ENTITY_EDGES = {
   // run (purchases it touched, claims it advanced, findings it produced) are
   // `history`, mirroring vendorAccount's own edges above.
   importRun: edges({
+    "AuditLog.runId": {
+      column: auditLog.runId,
+      role: "history",
+      label: "audit entries",
+      description: "An audit entry written as part of this run.",
+      liveness: { kind: "must-target-live" },
+    },
+    "AiUsage.runId": {
+      column: aiUsage.runId,
+      role: "history",
+      label: "AI usage",
+      description: "One model call made as part of this run.",
+      liveness: { kind: "must-target-live" },
+    },
     "Purchase.importRunId": {
       column: purchase.importRunId,
       role: "history",
@@ -1297,6 +1313,14 @@ export const ENTITY_EDGES = {
   }),
   "usda-food": edges({}),
   device: edges({
+    "AuditLog.deviceId": {
+      column: auditLog.deviceId,
+      role: "history",
+      label: "audit entries",
+      description:
+        "An audit entry written from this install; the column is cleared when the device goes.",
+      liveness: { kind: "must-target-live" },
+    },
     "ImageSighting.deviceId": {
       column: imageSighting.deviceId,
       role: "owned-child",

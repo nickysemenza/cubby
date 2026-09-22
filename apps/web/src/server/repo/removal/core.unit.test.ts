@@ -1,4 +1,4 @@
-import type { ActorContext } from "@cubby/schemas/context";
+import { type ActorContext, buildActorContext } from "@cubby/schemas/context";
 import type { AuditableEntity } from "@cubby/schemas/entity-manifest";
 import { auditableEntities } from "@cubby/schemas/entity-manifest";
 import type { SearchableEntity } from "@cubby/schemas/search";
@@ -11,7 +11,7 @@ import { SHORTCODE_TABLE } from "~/server/repo/shortcode-tables";
 
 import { cascadeRemoval, type RemovableEntity } from "./core";
 
-const ACTOR: ActorContext = { userId: testUserId("user-1"), source: "ui" };
+const ACTOR: ActorContext = buildActorContext(testUserId("user-1"));
 
 const ids = <E extends RemovableEntity>(entity: E, ...v: string[]) =>
   v.map((seed) => testEntityId(entity, seed));

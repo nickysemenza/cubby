@@ -44,7 +44,7 @@ import {
 
 // EPUB importer suite — actor audits as an epub import, not the UI.
 describe("cookbook repository", () => {
-  const ctx = withTestDb("epub_import");
+  const ctx = withTestDb();
   const workflowContext = () =>
     requireActor(
       createTestRequestContext(ctx.db, { auth: { userId: ctx.actor.userId } }),

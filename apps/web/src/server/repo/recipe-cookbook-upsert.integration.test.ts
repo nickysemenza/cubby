@@ -29,7 +29,7 @@ import {
 
 // This suite imports from cookbooks — stamp the actor as an epub import.
 describe("upsertCookbookRecipe", () => {
-  const ctx = withTestDb("epub_import");
+  const ctx = withTestDb();
   let db: Database;
   let actor: ActorContext;
   let ingredientId: string;

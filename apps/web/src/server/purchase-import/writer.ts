@@ -409,7 +409,7 @@ async function chooseLineStage(
     usage: {
       db,
       operation: `purchaseImport.${stage}.${index}`,
-      job: { kind: "purchase_import_run", id: input.runId },
+      runId: importRunId.parse(input.runId),
     },
   });
 }
@@ -572,7 +572,7 @@ async function decideLineIdentities(
       usage: {
         db,
         operation: `purchaseImport.productIdentity.${index}`,
-        job: { kind: "purchase_import_run", id: input.runId },
+        runId: importRunId.parse(input.runId),
       },
     });
     const selected =
@@ -1302,7 +1302,9 @@ export async function importVendorOrder(
         await applyAllocationChanges(tx, {
           transactionIds,
           before,
-          actor: buildActorContext(userIdSchema.parse(actorUserId), "api"),
+          actor: buildActorContext(userIdSchema.parse(actorUserId), "mcp", {
+            runId: importRunId.parse(input.runId),
+          }),
         });
       }
     }

@@ -8,8 +8,9 @@
  * `.claude/skills/photo-inventory-import/SKILL.md` for the workflow this serves.
  */
 import { auditEntitySchema } from "@cubby/schemas/audit";
-import type { ActorContext } from "@cubby/schemas/context";
+import { type ActorContext, actorInRun } from "@cubby/schemas/context";
 import {
+  importRunId,
   parseShortcodeFor,
   type ImageId,
   type ImageShortcode,
@@ -717,7 +718,12 @@ export async function commitPhotoGroup(
     },
     () =>
       withTransactionDatabase(db, (transactionDb) =>
-        doCommit(transactionDb, scope, input, actor),
+        doCommit(
+          transactionDb,
+          scope,
+          input,
+          actorInRun(actor, importRunId.parse(scope.public.runId)),
+        ),
       ),
   );
 }

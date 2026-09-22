@@ -1,3 +1,4 @@
+import { importRunId } from "@cubby/schemas/identifiers";
 import {
   type RecipeOut,
   recipeOut,
@@ -27,6 +28,7 @@ const RECIPE_ID = testEntityId(
   "recipe",
   "00000000-0000-4000-8000-000000000001",
 );
+const RUN_ID = importRunId.parse("00000000-0000-4000-8000-000000000009");
 const SECTION_ID = "00000000-0000-4000-8000-000000000002";
 const USAGE_ID = "00000000-0000-4000-8000-000000000003";
 const db = new Database(() => {
@@ -220,7 +222,12 @@ describe("recipe-flow service", () => {
     memory.generated.push(validCandidate());
 
     await expect(
-      generateRecipeFlow(db, { id: RECIPE_ID, force: false }, memory.ports),
+      generateRecipeFlow(
+        db,
+        { id: RECIPE_ID, force: false },
+        RUN_ID,
+        memory.ports,
+      ),
     ).resolves.toMatchObject({ model: "claude-sonnet-5" });
     expect(memory.analyses).toHaveLength(1);
   });
@@ -237,7 +244,12 @@ describe("recipe-flow service", () => {
     memory.generated.push(invalid, validCandidate());
 
     await expect(
-      generateRecipeFlow(db, { id: RECIPE_ID, force: true }, memory.ports),
+      generateRecipeFlow(
+        db,
+        { id: RECIPE_ID, force: true },
+        RUN_ID,
+        memory.ports,
+      ),
     ).resolves.toMatchObject({ model: "claude-sonnet-5" });
     expect(memory.analyses).toHaveLength(1);
   });
@@ -249,7 +261,12 @@ describe("recipe-flow service", () => {
     memory.generated.push(invalid, structuredClone(invalid));
 
     await expect(
-      generateRecipeFlow(db, { id: RECIPE_ID, force: true }, memory.ports),
+      generateRecipeFlow(
+        db,
+        { id: RECIPE_ID, force: true },
+        RUN_ID,
+        memory.ports,
+      ),
     ).rejects.toThrow(/invalid/i);
     expect(memory.analyses).toHaveLength(0);
   });
@@ -263,7 +280,12 @@ describe("recipe-flow service", () => {
     );
 
     await expect(
-      generateRecipeFlow(db, { id: RECIPE_ID, force: true }, memory.ports),
+      generateRecipeFlow(
+        db,
+        { id: RECIPE_ID, force: true },
+        RUN_ID,
+        memory.ports,
+      ),
     ).rejects.toThrow(/walkthrough/i);
     expect(memory.analyses).toHaveLength(0);
   });
@@ -272,13 +294,23 @@ describe("recipe-flow service", () => {
     // The request body is identical on a forced regenerate, so without this
     // the gateway would hand back the very flow the user asked to replace.
     memory.generated.push(validCandidate());
-    await generateRecipeFlow(db, { id: RECIPE_ID, force: true }, memory.ports);
+    await generateRecipeFlow(
+      db,
+      { id: RECIPE_ID, force: true },
+      RUN_ID,
+      memory.ports,
+    );
     expect(memory.runContexts).toEqual([{ force: true }]);
   });
 
   it("leaves the gateway response cache in play for an unforced generate", async () => {
     memory.generated.push(validCandidate());
-    await generateRecipeFlow(db, { id: RECIPE_ID, force: false }, memory.ports);
+    await generateRecipeFlow(
+      db,
+      { id: RECIPE_ID, force: false },
+      RUN_ID,
+      memory.ports,
+    );
     expect(memory.runContexts).toEqual([{ force: false }]);
   });
 
@@ -294,7 +326,12 @@ describe("recipe-flow service", () => {
     });
 
     await expect(
-      generateRecipeFlow(db, { id: RECIPE_ID, force: false }, memory.ports),
+      generateRecipeFlow(
+        db,
+        { id: RECIPE_ID, force: false },
+        RUN_ID,
+        memory.ports,
+      ),
     ).resolves.toEqual(cached);
     expect(memory.usage).toEqual([{ cacheStatus: "hit" }]);
   });
