@@ -15,9 +15,8 @@ usage() {
   echo "       $0 export <ios|macos>" >&2
   echo "common env: MARKETING_VERSION TESTFLIGHT_OUTPUT_DIR" >&2
   echo "archive additionally needs: <PLATFORM>_BUILD_NUMBER <PLATFORM>_PROFILES_JSON" >&2
-  echo "export additionally needs: MODE(validate|upload) <PLATFORM>_PROFILES_JSON" >&2
+  echo "export additionally needs: <PLATFORM>_PROFILES_JSON ASC_API_KEY_PATH APP_STORE_CONNECT_KEY_ID APP_STORE_CONNECT_ISSUER_ID" >&2
   echo "  (macOS also needs MAC_INSTALLER_SIGNING_CERTIFICATE)" >&2
-  echo "  (MODE=upload also needs ASC_API_KEY_PATH APP_STORE_CONNECT_KEY_ID APP_STORE_CONNECT_ISSUER_ID)" >&2
 }
 
 if [[ $# -ne 2 ]]; then
@@ -107,9 +106,8 @@ resolve_profile() {
 write_export_options() {
   local path="$1"
   local profile_uuid="$2"
-  local destination="export"
+  local destination="upload"
   local installer_certificate="${3:-}"
-  [[ "$MODE" == "upload" ]] && destination="upload"
 
   printf '%s\n' '<?xml version="1.0" encoding="UTF-8"?>' \
     '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "https://www.apple.com/DTDs/PropertyList-1.0.dtd">' \
@@ -193,13 +191,11 @@ export_platform() {
     -exportPath "$output"
     -exportOptionsPlist "$options"
   )
-  if [[ "$MODE" == "upload" ]]; then
-    arguments+=(
-      -authenticationKeyPath "$ASC_API_KEY_PATH"
-      -authenticationKeyID "$APP_STORE_CONNECT_KEY_ID"
-      -authenticationKeyIssuerID "$APP_STORE_CONNECT_ISSUER_ID"
-    )
-  fi
+  arguments+=(
+    -authenticationKeyPath "$ASC_API_KEY_PATH"
+    -authenticationKeyID "$APP_STORE_CONNECT_KEY_ID"
+    -authenticationKeyIssuerID "$APP_STORE_CONNECT_ISSUER_ID"
+  )
   xcodebuild "${arguments[@]}"
 }
 
@@ -237,11 +233,6 @@ if [[ "$command" == "archive" ]]; then
   esac
 
 elif [[ "$command" == "export" ]]; then
-  require MODE
-  [[ "$MODE" == "validate" || "$MODE" == "upload" ]] || {
-    echo "error: MODE must be validate or upload" >&2
-    exit 1
-  }
   # Unlike `archive`, `export` never reads a build number: xcodebuild
   # -exportArchive takes it from the already-archived .xcarchive.
   profiles_var="$(tr '[:lower:]' '[:upper:]' <<< "$platform")_PROFILES_JSON"
@@ -250,9 +241,7 @@ elif [[ "$command" == "export" ]]; then
   if [[ "$platform" == "macos" ]]; then
     require MAC_INSTALLER_SIGNING_CERTIFICATE
   fi
-  if [[ "$MODE" == "upload" ]]; then
-    require ASC_API_KEY_PATH APP_STORE_CONNECT_KEY_ID APP_STORE_CONNECT_ISSUER_ID
-  fi
+  require ASC_API_KEY_PATH APP_STORE_CONNECT_KEY_ID APP_STORE_CONNECT_ISSUER_ID
 
   mkdir -p "$TESTFLIGHT_OUTPUT_DIR/exports/$platform"
 

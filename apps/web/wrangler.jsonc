@@ -41,15 +41,10 @@
       "custom_domain": true
     }
   ],
-  // Prod is custom-domain only — keep the production *.workers.dev URL off so
-  // cubby.nickysemenza.com is the sole prod origin. Per-PR preview deploys
-  // (`wrangler versions upload`) still get https://<prefix>-cubby.nicky.workers.dev
-  // via preview_urls. NOTE: these are non-versioned settings — they apply on
-  // `wrangler deploy` (deploy-cf), not on `versions upload`, so enable Preview
-  // URLs once in the dashboard for them to take effect before the first prod
-  // deploy. Pinned here so a later deploy can't silently flip either.
+  // Prod is custom-domain only — cubby.nickysemenza.com is the sole prod
+  // origin. Both flags are pinned false so a later deploy can't flip them.
   "workers_dev": false,
-  "preview_urls": true,
+  "preview_urls": false,
   // MCP App documents are hashed Vite assets; the Worker reads them through
   // this binding on the first `resources/read` and keeps the result in-isolate.
   "assets": { "binding": "ASSETS", "html_handling": "none" },
