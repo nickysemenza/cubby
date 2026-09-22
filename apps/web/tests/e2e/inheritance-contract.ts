@@ -25,17 +25,25 @@ export function inheritanceContract() {
     const useInherited = page
       .getByRole("button", { name: "Use inherited value", exact: true })
       .first();
-    // Regression: settling Jev field suggestions grew each suggestible field
-    // by an outcome glyph (and inline proposals), shifting this control so a
-    // phone tap landed on empty space and the project stayed explicit.
-    await expectStableLayoutWhile(page, "**/_serverFn/**", useInherited, {
-      during: () =>
-        gotoAuthenticatedPage(page, `/expenses/${fixture.expense.id}`),
-      match: (route) =>
-        (route.request().headers()["x-cubby-operation"] ?? "").includes(
-          "suggestFields",
-        ),
-    });
+    const open = () =>
+      gotoAuthenticatedPage(page, `/expenses/${fixture.expense.id}`);
+    // Regression (phone): settling Jev field suggestions grew each suggestible
+    // field by an outcome glyph and an inline proposal, shifting this control
+    // so a tap landed on empty space and the project stayed explicit. Below md
+    // reviews now fold into the glyph's popover. At desktop width an inline
+    // review still mounts (+24px), which a pointer click tolerates, so the
+    // stability contract is the phone layout's.
+    if ((page.viewportSize()?.width ?? 0) < 768) {
+      await expectStableLayoutWhile(page, "**/_serverFn/**", useInherited, {
+        during: open,
+        match: (route) =>
+          (route.request().headers()["x-cubby-operation"] ?? "").includes(
+            "suggestFields",
+          ),
+      });
+    } else {
+      await open();
+    }
     await expect(
       page.getByText("Matches inherited value", { exact: true }).first(),
     ).toBeVisible();
