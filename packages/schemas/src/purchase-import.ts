@@ -301,8 +301,8 @@ const extractedOrderCandidateModelOutput = z.object({
   merchant: z.string().trim().min(1).max(300).nullable(),
   currency: z.string().trim().length(3),
   printedGrandTotal: money.nullable(),
-  lines: z.array(extractedPurchaseLineModelOutput).max(500),
-  payments: z.array(extractedPaymentEvidenceModelOutput).max(100),
+  lines: z.array(extractedPurchaseLineModelOutput),
+  payments: z.array(extractedPaymentEvidenceModelOutput),
   allShipmentsDelivered: z.boolean().nullable(),
 });
 
@@ -401,7 +401,10 @@ export const proposedImportFix = z.discriminatedUnion("kind", [
   z.object({
     kind: z.literal("replace_aggregate_line"),
     purchaseId: z.uuid(),
-    lines: z.array(extractedPurchaseLine).min(1),
+    // No `.min(1)`: this shape is the auditor model's output and Anthropic
+    // structured outputs reject array bounds. `applyFix` refuses an empty
+    // roster instead.
+    lines: z.array(extractedPurchaseLine),
   }),
   z.object({
     kind: z.literal("relink_product"),
@@ -1066,7 +1069,10 @@ export const importAuditFinding = z.object({
   proposedFix: proposedImportFix.nullable(),
 });
 
+// Model-output schemas carry no array bounds: Anthropic structured outputs
+// reject `maxItems`/`minItems` outright. The writer re-parses lines against
+// the bounded `extractedOrderCandidate` before anything is stored.
 export const importAuditOutput = z.object({
-  findings: z.array(importAuditFinding).max(100),
+  findings: z.array(importAuditFinding),
 });
 export type ImportAuditOutput = z.infer<typeof importAuditOutput>;

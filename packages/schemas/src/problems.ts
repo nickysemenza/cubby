@@ -730,6 +730,14 @@ export const resolveImportFindingOut = z.object({
   status: z.enum(["applied", "dismissed"]),
 });
 
+/** Receiving is interactive; this only closes `arrived` once every product line landed. */
+export const resolveArrivedFindingsInput = z.object({
+  purchaseId: purchaseShortcode,
+});
+export const resolveArrivedFindingsOut = z.object({
+  resolved: z.number().int().nonnegative(),
+});
+
 const problemsFastFields = {
   importFindings: z.array(importFindingProblemSchema),
   duplicateInventory: z.array(duplicateUniqueProductSchema),

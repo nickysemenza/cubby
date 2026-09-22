@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { z } from "zod";
 
 import {
   AGENT_ASK_FEATURE,
@@ -184,5 +185,18 @@ describe("inventory detection eval fixtures", () => {
     expect(result.missingExpectedItems).toEqual(fixture.expectedItems);
     expect(result.presentExcludedItems).toContain("cream cloth items");
     expect(result.missingEvidenceItems).toContain("cream cloth items");
+  });
+});
+
+describe("reasoning-tier output schemas", () => {
+  // Anthropic structured outputs reject array bounds (`maxItems`/`minItems`)
+  // with a 400 that no retry can fix. The audit feature shipped one and
+  // every stop-for-review of an account-sync run failed on it.
+  it("carry no array bounds Anthropic rejects", () => {
+    for (const feature of AI_FEATURES) {
+      if (feature.tier !== "reasoning" || !("schema" in feature)) continue;
+      const rendered = JSON.stringify(z.toJSONSchema(feature.schema));
+      expect(rendered).not.toMatch(/"(max|min)Items"/);
+    }
   });
 });

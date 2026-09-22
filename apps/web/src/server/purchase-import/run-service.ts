@@ -51,6 +51,7 @@ import {
   importRunApproval,
   importRunControlEvent,
   importRunOperation,
+  importRunOrderCandidate,
   importRunProgress,
   importPreparedLine,
   importPreparedOrder,
@@ -79,6 +80,7 @@ import { getR2PublicUrl } from "~/server/utils/r2-public-url";
 import type { PurchaseImportDurableObjectRpc } from "./contracts";
 import { resolveImportFinding } from "./findings";
 import { attachPendingOrderMailEvidence } from "./gmail/process";
+import { classifyOrderCapture } from "./order-list";
 import { loadReceiptEvidenceForRun } from "./receipt-evidence";
 import { mintImportRunPublicId } from "./run-identifiers";
 import { importVendorOrder } from "./writer";
@@ -889,15 +891,26 @@ export async function expireStaleImportRuns(
       ),
     );
   let expired = 0;
+  const failures: Array<{ runId: string; error: string }> = [];
   for (const run of stale) {
-    const outcome = await reconcileSettledImportRun(db, namespace, {
-      runId: run.id,
-      operationId: `stale-run:${now.toISOString()}`,
-      detail: "No coordinator activity for two hours",
-    });
-    if (outcome.reconciled) expired += 1;
+    // One run's review path can fail on a provider call (the required audit
+    // pass); that must not abort the tick for every other run or the offline
+    // expiry that shares it. The next tick retries.
+    try {
+      const outcome = await reconcileSettledImportRun(db, namespace, {
+        runId: run.id,
+        operationId: `stale-run:${now.toISOString()}`,
+        detail: "No coordinator activity for two hours",
+      });
+      if (outcome.reconciled) expired += 1;
+    } catch (error) {
+      failures.push({
+        runId: run.id,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
   }
-  return { expired };
+  return { expired, failures };
 }
 
 const assertRunActive = (status: string) => {
@@ -1118,6 +1131,28 @@ export async function claimNextImportWork(
   const hints = vendorAgentHints.parse(scope.public.navigationHints);
   const startUrl = hints.ordersListUrl ?? scope.website;
   if (hunt && startUrl) return { kind: "hunt" as const, startUrl, ...hunt };
+  // Listed orders come before enrichment and before walking further pages:
+  // the worklist is what a listing produced, and finishing while one is
+  // pending is refused.
+  const [order] = await getDb(db)
+    .select({
+      orderId: importRunOrderCandidate.orderId,
+      orderUrl: importRunOrderCandidate.orderUrl,
+      orderedAt: importRunOrderCandidate.orderedAt,
+    })
+    .from(importRunOrderCandidate)
+    .where(
+      and(
+        eq(importRunOrderCandidate.runId, scope.public.runId),
+        eq(importRunOrderCandidate.state, "pending"),
+      ),
+    )
+    .orderBy(
+      desc(importRunOrderCandidate.orderedAt),
+      asc(importRunOrderCandidate.listedAt),
+    )
+    .limit(1);
+  if (order) return { kind: "order" as const, ...order };
   const enrichment = await getDb(db)
     .selectDistinct({
       productId: product.id,
@@ -1163,9 +1198,79 @@ export async function claimNextImportWork(
     )
     .limit(1);
   if (scanFinished) return { kind: "none" as const };
-  return startUrl
-    ? { kind: "cursor_walk" as const, startUrl }
+  const [history] = await getDb(db)
+    .select({
+      cursorUrl: importRun.historyCursorUrl,
+      exhaustedAt: importRun.historyExhaustedAt,
+    })
+    .from(importRun)
+    .where(eq(importRun.id, scope.public.runId))
+    .limit(1);
+  if (history?.exhaustedAt) return { kind: "none" as const };
+  const walkFrom = history?.cursorUrl ?? startUrl;
+  return walkFrom
+    ? { kind: "cursor_walk" as const, startUrl: walkFrom }
     : { kind: "none" as const };
+}
+
+/**
+ * Record an order-history page as worklist rows. An order the vendor already
+ * has a Purchase for is `covered`; the rest are `pending`. `ordersSeen` counts
+ * the listing, not commits — the agent's "95 on the page, 12 imported" gap was
+ * invisible while the writer owned that counter.
+ */
+async function recordOrderListing(
+  db: Database,
+  input: {
+    runId: string;
+    vendorId: VendorId;
+    orders: ReadonlyArray<{
+      orderId: string;
+      orderUrl: string | null;
+      orderedAt: string | null;
+    }>;
+  },
+) {
+  if (input.orders.length > 0) {
+    const covered = new Set(
+      (
+        await getDb(db)
+          .select({ orderId: purchase.orderId })
+          .from(purchase)
+          .where(
+            and(
+              eq(purchase.vendorId, input.vendorId),
+              inArray(
+                purchase.orderId,
+                input.orders.map((order) => order.orderId),
+              ),
+              notDeleted(purchase),
+            ),
+          )
+      ).map((row) => row.orderId),
+    );
+    await getDb(db)
+      .insert(importRunOrderCandidate)
+      .values(
+        input.orders.map((order) => ({
+          runId: input.runId,
+          orderId: order.orderId,
+          orderUrl: order.orderUrl,
+          orderedAt: order.orderedAt,
+          state: covered.has(order.orderId) ? "covered" : "pending",
+        })),
+      )
+      .onConflictDoNothing();
+  }
+  const [seen] = await getDb(db)
+    .select({ value: count() })
+    .from(importRunOrderCandidate)
+    .where(eq(importRunOrderCandidate.runId, input.runId));
+  await getDb(db)
+    .update(importRun)
+    .set({ ordersSeen: seen?.value ?? 0, updatedAt: new Date() })
+    .where(eq(importRun.id, input.runId));
+  return seen?.value ?? 0;
 }
 
 // eslint-disable-next-line complexity -- Browser commands are fenced by purpose, target, and allowlisted operation type here.
@@ -1552,6 +1657,68 @@ export async function importBrowserOrderEvidence(
     })),
     capturedAt: capture.capturedAt,
   });
+  const classified = classifyOrderCapture(captureInput, {
+    allowedHosts: scope.public.allowedHosts,
+  });
+  if (classified.kind === "order_list") {
+    // A page listing orders is a worklist, never an order: the single-order
+    // extractor read one as "unreadable" and the writer then refused it.
+    const cursor = scope.public.vendorAccountId
+      ? vendorAccountCursor.parse(
+          (
+            await getDb(db)
+              .select({ cursor: vendorAccount.cursor })
+              .from(vendorAccount)
+              .where(
+                eq(
+                  vendorAccount.id,
+                  vendorAccountId.parse(scope.public.vendorAccountId),
+                ),
+              )
+              .limit(1)
+          )[0]?.cursor,
+        )
+      : null;
+    const newestKnown = cursor?.newestOrderAt?.slice(0, 10) ?? null;
+    // Stop paging once a whole page predates the account cursor: everything
+    // older was covered by an earlier run.
+    const reachedCursor =
+      newestKnown !== null &&
+      classified.orders.length > 0 &&
+      classified.orders.every(
+        (order) => order.orderedAt !== null && order.orderedAt < newestKnown,
+      );
+    const seen = await recordOrderListing(db, {
+      runId: z.uuid().parse(input.runId),
+      vendorId: scope.vendorId,
+      orders: classified.orders,
+    });
+    const pending = await getDb(db)
+      .select({ value: count() })
+      .from(importRunOrderCandidate)
+      .where(
+        and(
+          eq(importRunOrderCandidate.runId, z.uuid().parse(input.runId)),
+          eq(importRunOrderCandidate.state, "pending"),
+        ),
+      );
+    const nextPageUrl = reachedCursor ? null : classified.nextPageUrl;
+    await getDb(db)
+      .update(importRun)
+      .set({
+        historyCursorUrl: nextPageUrl,
+        historyExhaustedAt: nextPageUrl ? null : new Date(),
+        updatedAt: new Date(),
+      })
+      .where(eq(importRun.id, z.uuid().parse(input.runId)));
+    return {
+      kind: "order_list" as const,
+      orders: classified.orders,
+      ordersSeen: seen,
+      pending: pending[0]?.value ?? 0,
+      nextPageUrl,
+    };
+  }
   const screenshot = capture.evidence.find(
     (item) => item.kind === "screenshot",
   );
@@ -1568,6 +1735,15 @@ export async function importBrowserOrderEvidence(
     capture: captureInput,
     screenshotImageId: screenshot?.id,
   });
+  if (extraction.status === "unreadable" && !extraction.candidate) {
+    // Nothing typed to write; the writer would only throw. The agent gets the
+    // extractor's reason and decides between another capture and review.
+    return {
+      kind: "unreadable" as const,
+      detail: extraction.detail,
+      classification: classified.kind,
+    };
+  }
   const stableEvidence = {
     sourceURL: capture.sourceURL,
     title: capture.title,
@@ -1612,6 +1788,18 @@ export async function importBrowserOrderEvidence(
         purchaseShortcode: written.shortcode,
       });
     }
+  }
+  if (extraction.candidate?.orderId) {
+    await getDb(db)
+      .update(importRunOrderCandidate)
+      .set({ state: "imported", updatedAt: new Date() })
+      .where(
+        and(
+          eq(importRunOrderCandidate.runId, z.uuid().parse(input.runId)),
+          eq(importRunOrderCandidate.orderId, extraction.candidate.orderId),
+          eq(importRunOrderCandidate.state, "pending"),
+        ),
+      );
   }
   await settleAllocatedBrowserHunt(
     db,
@@ -2017,6 +2205,64 @@ export async function stopImportRunForReview(
   });
 }
 
+/**
+ * Move the account cursor forward to the newest order this run handled
+ * (imported or already covered). Only forward: a run that walked an old page
+ * never rewinds `newestOrderAt`, and `orderIdsOnNewestDate` disambiguates
+ * same-day orders on the next listing.
+ */
+async function advanceAccountCursor(
+  db: Database,
+  input: { runId: string; vendorAccountId: VendorAccountId },
+) {
+  const handled = await getDb(db)
+    .select({
+      orderId: importRunOrderCandidate.orderId,
+      orderedAt: importRunOrderCandidate.orderedAt,
+    })
+    .from(importRunOrderCandidate)
+    .where(
+      and(
+        eq(importRunOrderCandidate.runId, input.runId),
+        inArray(importRunOrderCandidate.state, ["imported", "covered"]),
+        isNotNull(importRunOrderCandidate.orderedAt),
+      ),
+    );
+  const newest = handled.reduce<string | null>(
+    (acc, row) =>
+      row.orderedAt && (!acc || row.orderedAt > acc) ? row.orderedAt : acc,
+    null,
+  );
+  if (!newest) return null;
+  const [account] = await getDb(db)
+    .select({ cursor: vendorAccount.cursor })
+    .from(vendorAccount)
+    .where(eq(vendorAccount.id, input.vendorAccountId))
+    .limit(1);
+  const cursor = vendorAccountCursor.parse(account?.cursor);
+  const current = cursor.newestOrderAt?.slice(0, 10) ?? null;
+  if (current && newest < current) return cursor;
+  const sameDay = handled
+    .filter((row) => row.orderedAt === newest)
+    .map((row) => row.orderId);
+  const next = vendorAccountCursor.parse({
+    ...cursor,
+    newestOrderAt: `${newest}T00:00:00.000Z`,
+    orderIdsOnNewestDate:
+      current === newest
+        ? [...new Set([...cursor.orderIdsOnNewestDate, ...sameDay])].slice(
+            0,
+            500,
+          )
+        : sameDay.slice(0, 500),
+  });
+  await getDb(db)
+    .update(vendorAccount)
+    .set({ cursor: next, updatedAt: new Date() })
+    .where(eq(vendorAccount.id, input.vendorAccountId));
+  return next;
+}
+
 export async function finishImportRun(
   db: Database,
   namespace: PurchaseImportNamespace,
@@ -2085,6 +2331,19 @@ export async function finishImportRun(
         .limit(1);
       if (pendingReceipt)
         throw new Error("Import run still has unsettled receipt evidence");
+      const [pendingOrder] = await getDb(db)
+        .select({ value: count() })
+        .from(importRunOrderCandidate)
+        .where(
+          and(
+            eq(importRunOrderCandidate.runId, runId),
+            eq(importRunOrderCandidate.state, "pending"),
+          ),
+        );
+      if (pendingOrder && pendingOrder.value > 0)
+        throw new Error(
+          `Import run still has ${pendingOrder.value} listed order(s) to import or stop for review`,
+        );
 
       await auditAllImportBatches(db, {
         runId: input.runId,
@@ -2105,6 +2364,11 @@ export async function finishImportRun(
             sql`${importRun.status} IN ('running', 'paused_auth', 'paused_offline')`,
           ),
         );
+      if (scope.public.vendorAccountId)
+        await advanceAccountCursor(db, {
+          runId,
+          vendorAccountId: vendorAccountId.parse(scope.public.vendorAccountId),
+        });
     }
   }
   const [run] = await getDb(db)
