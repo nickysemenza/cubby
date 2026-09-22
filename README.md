@@ -277,6 +277,47 @@ Required keys (see [apps/web/.env.example](apps/web/.env.example) for the full f
 | `NOTION_API_KEY` | *(optional)* Notion recipes import |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | *(optional)* OTLP traces → Jaeger (`pnpm trace`; defaults to localhost:4318) |
 
+### Local dev database (optional)
+
+`pnpm run dev` uses whatever `DATABASE_URL` is in `apps/web/.env` — normally
+the shared prod Neon instance (see "⚠ Shared prod DB" below). For iteration
+that shouldn't touch prod, run against a persistent local PostgreSQL instead:
+
+```sh
+pnpm db:dev:up      # start (or reuse) a local "cubby-dev-pg" Apple container
+pnpm db:dev:push    # push the Drizzle schema to it
+pnpm db:dev:seed    # seed a deterministic synthetic household corpus
+pnpm dev:local      # vite dev, DATABASE_URL pointed at the local container
+pnpm db:dev:down    # stop the container (the named volume, and its data, persist)
+```
+
+`db:dev:up` is macOS/Apple-`container`-only, matches a fixed name
+(`cubby-dev-pg`) and port (`localhost:55432`), and is idempotent — rerunning
+it reuses the existing container rather than recreating it. `db:dev:push` and
+`db:dev:seed` refuse to run against anything but that local database (checked
+by host + database name), so a stray `DATABASE_URL` can never point them at
+prod. `db:dev:seed` is **not** idempotent — a second run fails on duplicate
+names; reset with `db:dev:down && container volume rm cubby-dev-pg-data`
+before reseeding.
+
+The corpus is created through a local, synthetic-only account
+(`dev@cubby.localhost` / `cubby-dev-local-only`, seeded by the real
+better-auth sign-up flow so its session behaves exactly like a real account —
+never used against the shared deployment) and a deterministic
+(`faker.seed(1)`) set of locations, a product taxonomy, products, inventory,
+a financial account, and tasks. See
+[apps/web/tooling/scenarios/corpus.ts](apps/web/tooling/scenarios/corpus.ts)
+for exactly what it seeds and what it deliberately leaves out (recipes need
+the WASM build; a few Playwright-only scenarios aren't reimplemented
+headlessly).
+
+For faster local Playwright iteration, `pnpm --filter @cubby/web
+test:e2e:watch` keeps warm PostgreSQL/IntegreSQL containers across runs
+(`cubby-test-pg` / `cubby-test-integresql` — see "Test services" below),
+rebuilds the Worker bundle on file change (`vite build --watch`), and opens
+Playwright's `--ui` rerun loop. It is a local-only fast-iteration lane, never
+the CI merge gate.
+
 ### Worktrees (parallel sessions)
 
 Claude Code and Codex can run parallel sessions in isolated git worktrees.
@@ -337,6 +378,13 @@ them under `$CODEX_HOME/worktrees`. A few things to know:
   shares one pair across its concurrent database tiers. Container IPs avoid host
   port conflicts, so overlapping worktrees need no coordination. Tests retain
   their separate IntegreSQL databases and template hashes.
+- **Warm test services:** `CUBBY_TEST_SERVICES=warm` (or `--warm`) reuses
+  fixed-name containers (`cubby-test-pg` / `cubby-test-integresql`) across
+  runs instead of creating and tearing down a new pair every time — the
+  IntegreSQL schema template then only rebuilds when the schema actually
+  changes, not on every invocation. They are never torn down automatically;
+  run `pnpm test:services:down` to remove them. This is what
+  `test:e2e:watch` (above) uses.
 - **Lifecycle:** images are cached; containers and test data are removed on
   success, failure, Ctrl-C and SIGTERM. No volumes or per-run networks are created.
   The native container management service may stay running with no workload VMs.
@@ -384,6 +432,10 @@ them under `$CODEX_HOME/worktrees`. A few things to know:
 | `pnpm run test:e2e` | PostgreSQL-backed Playwright tests (disposable Apple containers on macOS) |
 | `pnpm run test:all` | Fast tests, then PostgreSQL and Playwright concurrently |
 | `pnpm run test:local` | Alias of `test:all` |
+| `pnpm run test:services:down` | Remove warm `CUBBY_TEST_SERVICES=warm` containers |
+| `pnpm --filter @cubby/web run test:e2e:watch` | Warm services + `vite build --watch` + Playwright `--ui`, local-only |
+| `pnpm run db:dev:up` / `:push` / `:seed` / `:down` | Persistent local dev PostgreSQL + synthetic corpus (see above) |
+| `pnpm run dev:local` | `vite dev` against the local dev database instead of prod |
 | `pnpm --filter @cubby/web run db:push` | Push the web Drizzle schema to the configured Postgres DB |
 | `pnpm --filter @cubby/web run build:cf` | Build only the main web Worker |
 | `pnpm --filter @cubby/web run preview:cf` | Run the Workers build locally |
