@@ -19,6 +19,7 @@ import {
   markImageUploaded,
 } from "~/server/repo/image";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
+import { publishImageMetadataExtraction } from "~/server/services/image-metadata-extraction.service";
 import { scheduleImageProcessingJobs } from "~/server/services/image-processing.service";
 import {
   attachFileToEntity,
@@ -47,6 +48,16 @@ export const markImageUploadedWorkflow = bindWorkflow(
         kinds: ["describe_image", "subject_lift"],
         automatic: true,
       }),
+    )
+    .commit(
+      "scheduleImageMetadataExtraction",
+      async ({ context }, { resolveImage, markUploaded }) =>
+        publishImageMetadataExtraction(
+          context,
+          resolveImage,
+          markUploaded.contentType,
+          "image.markUploaded",
+        ),
     )
     .output(({ markUploaded }) => markUploaded),
   (db: Database, input: MarkUploadedInput) => ({ context: db, input }),

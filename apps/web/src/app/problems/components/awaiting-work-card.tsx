@@ -23,7 +23,11 @@ export const awaitingWorkRefetchInterval = (
   data: AwaitingWork | undefined,
 ): number | false =>
   data &&
-  data.staleRecipeTotals + data.unembeddedEntities + data.pendingUploads > 0
+  data.staleRecipeTotals +
+    data.unembeddedEntities +
+    data.pendingUploads +
+    data.staleImageMetadata >
+    0
     ? 15_000
     : false;
 
@@ -46,6 +50,11 @@ const LINES: ReadonlyArray<{
     key: "pendingUploads",
     noun: "upload",
     detail: "abandoned more than a day ago",
+  },
+  {
+    key: "staleImageMetadata",
+    noun: "image",
+    detail: "awaiting embedded EXIF/GPS extraction",
   },
 ];
 
@@ -91,6 +100,9 @@ export function AwaitingWorkCard({
         result.culledUploads > 0
           ? `${result.culledUploads} abandoned ${pluralWord("upload", result.culledUploads)} removed`
           : null,
+        result.publishedImageMetadataTasks > 0
+          ? `${result.publishedImageMetadataTasks} image metadata ${pluralWord("extraction", result.publishedImageMetadataTasks)}`
+          : null,
       ].filter((part): part is string => part !== null);
       if (parts.length === 0) return "Nothing was waiting.";
       return result.transport === "inline"
@@ -101,7 +113,10 @@ export function AwaitingWorkCard({
 
   const data = awaiting.data;
   const total = data
-    ? data.staleRecipeTotals + data.unembeddedEntities + data.pendingUploads
+    ? data.staleRecipeTotals +
+      data.unembeddedEntities +
+      data.pendingUploads +
+      data.staleImageMetadata
     : undefined;
 
   let body: ReactNode;

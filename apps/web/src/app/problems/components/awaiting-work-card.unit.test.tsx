@@ -18,6 +18,7 @@ const counts = (overrides: Partial<AwaitingWork> = {}): AwaitingWork => ({
   staleRecipeTotals: 0,
   unembeddedEntities: 0,
   pendingUploads: 0,
+  staleImageMetadata: 0,
   computedAt: "2026-09-12T12:00:00.000Z",
   ...overrides,
 });
@@ -28,6 +29,7 @@ function createOperations(
     publishedRecipeTasks: 0,
     publishedEmbeddingTasks: 0,
     culledUploads: 0,
+    publishedImageMetadataTasks: 0,
     transport: "queue",
   },
 ) {
@@ -68,6 +70,7 @@ describe("AwaitingWorkCard", () => {
         publishedRecipeTasks: 1,
         publishedEmbeddingTasks: 12,
         culledUploads: 0,
+        publishedImageMetadataTasks: 0,
         transport: "queue",
       },
     );

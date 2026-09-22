@@ -3201,6 +3201,12 @@
           "primaryKey": false,
           "notNull": false
         },
+        "embeddedMetadata": {
+          "name": "embeddedMetadata",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
         "targetType": {
           "name": "targetType",
           "type": "text",

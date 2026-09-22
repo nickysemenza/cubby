@@ -11132,6 +11132,47 @@
         }
       }
     },
+    "/api/v1/maintenance/backfillImageMetadata": {
+      "post": {
+        "tags": [
+          "maintenance"
+        ],
+        "parameters": [],
+        "operationId": "maintenance.backfillImageMetadata",
+        "requestBody": {
+          "description": "Body",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BackfillImageMetadataInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "200",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackfillImageMetadataOut"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/maintenance/backfillImageProcessing": {
       "post": {
         "tags": [
@@ -28760,6 +28801,11 @@
             "minimum": 0,
             "maximum": 9007199254740991
           },
+          "staleImageMetadata": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
           "computedAt": {
             "type": "string",
             "format": "date-time",
@@ -28770,7 +28816,71 @@
           "staleRecipeTotals",
           "unembeddedEntities",
           "pendingUploads",
+          "staleImageMetadata",
           "computedAt"
+        ]
+      },
+      "BackfillImageMetadataInput": {
+        "type": "object",
+        "properties": {
+          "batchSize": {
+            "default": 25,
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 100
+          },
+          "maxBatches": {
+            "default": 20,
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 100
+          }
+        }
+      },
+      "BackfillImageMetadataOut": {
+        "type": "object",
+        "properties": {
+          "batches": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "scanned": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "extracted": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "skipped": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "remaining": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "stopped": {
+            "type": "string",
+            "enum": [
+              "complete",
+              "limit",
+              "no_progress"
+            ]
+          }
+        },
+        "required": [
+          "batches",
+          "scanned",
+          "extracted",
+          "skipped",
+          "remaining",
+          "stopped"
         ]
       },
       "BackgroundBatchRef": {
@@ -70845,6 +70955,11 @@
             "minimum": 0,
             "maximum": 9007199254740991
           },
+          "publishedImageMetadataTasks": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
           "transport": {
             "type": "string",
             "enum": [
@@ -70857,6 +70972,7 @@
           "publishedRecipeTasks",
           "publishedEmbeddingTasks",
           "culledUploads",
+          "publishedImageMetadataTasks",
           "transport"
         ]
       },

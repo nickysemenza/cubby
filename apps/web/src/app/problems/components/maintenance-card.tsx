@@ -28,6 +28,7 @@ import {
 import { openSearchIndexRepairStream } from "~/lib/search.functions";
 
 import { BACKFILL } from "./backfill-registry";
+import { ImageMetadataMaintenance } from "./image-metadata-maintenance";
 import { ImageProcessingMaintenance } from "./image-processing-maintenance";
 import { ImageProvenanceMaintenance } from "./image-provenance-maintenance";
 import { BackfillButton } from "./problem-backfill-action";
@@ -353,6 +354,7 @@ export function MaintenanceCard() {
         <Stack gap="lg">
           <ImageProcessingMaintenance />
           <ImageProvenanceMaintenance />
+          <ImageMetadataMaintenance />
           {MAINTENANCE_GROUPS.map(({ group, tools }) => (
             <Stack key={group} gap="tight">
               <Eyebrow>{group}</Eyebrow>

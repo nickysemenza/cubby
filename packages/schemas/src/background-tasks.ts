@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { searchableEntities } from "./entity-manifest";
-import { locationId, parseEntityRef, recipeId } from "./identifiers";
+import { imageId, locationId, parseEntityRef, recipeId } from "./identifiers";
 import { imageProcessingResult } from "./image-processing";
 
 /**
@@ -20,6 +20,7 @@ export const backgroundTaskKinds = [
   "location-ai.inventory.refresh",
   "image-processing.wakeup",
   "image-processing.result",
+  "image-metadata.extract",
 ] as const;
 
 export const backgroundTaskKindSchema = z.enum(backgroundTaskKinds);
@@ -87,6 +88,18 @@ export const imageProcessingResultTaskSchema = z.object({
   result: imageProcessingResult,
 });
 
+/**
+ * A wakeup to (re-)extract an uploaded image's embedded EXIF/GPS metadata.
+ * The handler re-reads `Image.metadataRevision` against
+ * `IMAGE_METADATA_REVISION` before doing any work, so a duplicate or
+ * out-of-order delivery after the image already advanced is a no-op.
+ */
+export const imageMetadataExtractTaskSchema = z.object({
+  kind: z.literal("image-metadata.extract"),
+  ...taskEnvelopeFields,
+  imageId,
+});
+
 export const backgroundTaskSchema = z.discriminatedUnion("kind", [
   recipeTotalsRecomputeTaskSchema,
   entityEmbeddingRefreshTaskSchema,
@@ -94,6 +107,7 @@ export const backgroundTaskSchema = z.discriminatedUnion("kind", [
   locationAiInventoryRefreshTaskSchema,
   imageProcessingWakeupTaskSchema,
   imageProcessingResultTaskSchema,
+  imageMetadataExtractTaskSchema,
 ]);
 
 /** The parsed (branded) task a handler receives. */

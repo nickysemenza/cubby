@@ -15,6 +15,7 @@ export const awaitingWorkSchema = z.object({
   staleRecipeTotals: z.number().int().nonnegative(),
   unembeddedEntities: z.number().int().nonnegative(),
   pendingUploads: z.number().int().nonnegative(),
+  staleImageMetadata: z.number().int().nonnegative(),
   computedAt: z.iso.datetime(),
 });
 export type AwaitingWork = z.infer<typeof awaitingWorkSchema>;
@@ -23,6 +24,7 @@ export const settleAwaitingWorkOutSchema = z.object({
   publishedRecipeTasks: z.number().int().nonnegative(),
   publishedEmbeddingTasks: z.number().int().nonnegative(),
   culledUploads: z.number().int().nonnegative(),
+  publishedImageMetadataTasks: z.number().int().nonnegative(),
   transport: backgroundTaskReceiptSchema.shape.transport,
 });
 export type SettleAwaitingWorkOut = z.infer<typeof settleAwaitingWorkOutSchema>;
@@ -44,6 +46,32 @@ export type RepairImageDimensionsInput = z.infer<
 >;
 export type RepairImageDimensionsOut = z.infer<
   typeof repairImageDimensionsOutSchema
+>;
+
+/**
+ * Bounded backfill for images whose `metadataRevision` is stale (never
+ * extracted, or extracted under an older `IMAGE_METADATA_REVISION`) — the
+ * "Settle now" republish already wakes most of these; this repairs any row a
+ * lost queue message left behind, mirroring `repairImageDimensions`'s
+ * bounded-loop shape.
+ */
+export const backfillImageMetadataInputSchema = z.object({
+  batchSize: z.number().int().positive().max(100).default(25),
+  maxBatches: z.number().int().positive().max(100).default(20),
+});
+export const backfillImageMetadataOutSchema = z.object({
+  batches: z.number().int().nonnegative(),
+  scanned: z.number().int().nonnegative(),
+  extracted: z.number().int().nonnegative(),
+  skipped: z.number().int().nonnegative(),
+  remaining: z.number().int().nonnegative(),
+  stopped: z.enum(["complete", "limit", "no_progress"]),
+});
+export type BackfillImageMetadataInput = z.infer<
+  typeof backfillImageMetadataInputSchema
+>;
+export type BackfillImageMetadataOut = z.infer<
+  typeof backfillImageMetadataOutSchema
 >;
 
 /**

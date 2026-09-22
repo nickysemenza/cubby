@@ -99,6 +99,7 @@ class MemoryImageStorage {
   } | null = null;
   reuseAttachment = false;
   deletedImageIds: string[] = [];
+  publishedMetadataExtractions: { imageId: string; contentType: string }[] = [];
 
   readonly ports: ImageStoragePorts<TestDatabase> = {
     repository: {
@@ -123,7 +124,7 @@ class MemoryImageStorage {
       createUploadedImageRecord: async (_database, params) => {
         if (this.createUploadError) throw this.createUploadError;
         this.createdUploads.push(params);
-        return { shortcode: "IMG-7QRS" };
+        return { id: testEntityId("image", "uploaded"), shortcode: "IMG-7QRS" };
       },
       cullPendingImages: async (_database, olderThanHours) => {
         if (this.cullError) throw this.cullError;
@@ -186,6 +187,15 @@ class MemoryImageStorage {
           : code === "PRD-TEST"
             ? productId
             : null,
+    },
+    backgroundTasks: {
+      publishImageMetadataExtraction: async (
+        _database,
+        imageId,
+        contentType,
+      ) => {
+        this.publishedMetadataExtractions.push({ imageId, contentType });
+      },
     },
   };
 }

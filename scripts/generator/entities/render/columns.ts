@@ -44,6 +44,7 @@ const storageJsonTypes = {
   "image.sourceFingerprint": "ImageSourceFingerprint | null",
   "image.captureLocation": "ImageCaptureLocation | null",
   "image.provenanceEvidence": "ImageProvenanceEvidence | null",
+  "image.embeddedMetadata": "StoredImageEmbeddedMetadata | null",
   "imageSighting.location": "ImageSightingLocation | null",
   "imageSighting.camera": "ImageSightingCamera | null",
   "inventory.amount": "Amount",
@@ -214,7 +215,7 @@ export const renderEntityColumnsArtifact = (
     'import type { FinancialTransactionSourceRef } from "@cubby/schemas/financial-transaction";\n' +
     `import type { ${Object.values(identifierTypeNames).sort().join(", ")} } from "@cubby/schemas/identifiers";\n` +
     'import { imageStatusValues } from "@cubby/schemas/image";\n' +
-    'import type { ImageSourceFingerprint } from "@cubby/schemas/image";\n' +
+    'import type { ImageSourceFingerprint, StoredImageEmbeddedMetadata } from "@cubby/schemas/image";\n' +
     'import type { ImageCaptureLocation, ImageProvenanceEvidence } from "@cubby/schemas/image-capture-fields";\n' +
     'import type { ImageSightingCamera, ImageSightingLocation } from "@cubby/schemas/image-sighting-fields";\n' +
     'import type { CookbookExtraction, CookbookRunReport } from "@cubby/schemas/cookbook";\n' +

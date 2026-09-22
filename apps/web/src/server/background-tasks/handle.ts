@@ -1,5 +1,6 @@
 import type { BackgroundTask } from "@cubby/schemas/background-tasks";
 import { entityRefKey } from "@cubby/schemas/entity";
+import type { ImageId } from "@cubby/schemas/identifiers";
 
 import type { Database } from "~/server/db";
 
@@ -11,12 +12,32 @@ import {
 
 export type BackgroundTaskOutcome = "succeeded" | "skipped";
 
+type ExtractImageMetadataPort = (
+  db: Database,
+  imageId: ImageId,
+) => Promise<BackgroundTaskOutcome>;
+
+/** Lazily imports the real service — keeps it out of the request-time bundle
+ * (same reason every other branch below dynamic-imports its handler
+ * module), while still going through the `BackgroundTaskPorts` seam a test
+ * can inject a faithful fake into instead of mocking the module. */
+const productionExtractImageMetadata: ExtractImageMetadataPort = async (
+  db,
+  imageId,
+) => {
+  const { extractAndStoreImageMetadata } =
+    await import("~/server/services/image-metadata-extraction.service");
+  return extractAndStoreImageMetadata(db, imageId);
+};
+
 export interface BackgroundTaskPorts {
   readonly embedding: EmbeddingRefreshPort;
+  readonly extractImageMetadata: ExtractImageMetadataPort;
 }
 
 export const productionBackgroundTaskPorts: BackgroundTaskPorts = {
   embedding: productionEmbeddingRefreshPort,
+  extractImageMetadata: productionExtractImageMetadata,
 };
 
 /**
@@ -29,6 +50,7 @@ export const productionBackgroundTaskPorts: BackgroundTaskPorts = {
  * Handler modules are imported lazily so the request-time bundle never pulls
  * in the WASM costing engine or the vision client.
  */
+// eslint-disable-next-line complexity -- the switch IS the kind→handler dispatch table; one branch per BackgroundTaskKind, each already as small as its domain call allows.
 export async function handleBackgroundTask(
   db: Database,
   task: BackgroundTask,
@@ -99,5 +121,7 @@ export async function handleBackgroundTask(
       );
       return completion.adopted ? "succeeded" : "skipped";
     }
+    case "image-metadata.extract":
+      return ports.extractImageMetadata(db, task.imageId);
   }
 }

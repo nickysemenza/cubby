@@ -159,6 +159,22 @@ export const getS3Object = async (key: string): Promise<Response> =>
   await r2.fetch(objectUrl(key));
 
 /**
+ * Read only the leading `maxBytes` of an R2 object via a signed Range GET.
+ * Used by metadata extraction, which only ever needs a container's header —
+ * never a full-object fetch for something that may be many megabytes of
+ * pixel data. R2 honours `Range` on GET and returns 206 with a `Content-
+ * Range` header; a range past EOF (a file smaller than `maxBytes`) still
+ * returns the whole object with 200, which callers treat the same as 206.
+ */
+export const getS3ObjectRange = async (
+  key: string,
+  maxBytes: number,
+): Promise<Response> =>
+  await r2.fetch(objectUrl(key), {
+    headers: { range: `bytes=0-${maxBytes - 1}` },
+  });
+
+/**
  * Upload a file directly to S3/R2 storage (server-side upload)
  * Use this for importing images from external URLs where presigned URLs aren't needed.
  */

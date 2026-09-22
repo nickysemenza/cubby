@@ -516,6 +516,12 @@ export default defineEntity({
         readKey: null,
       },
       {
+        key: "embeddedMetadata",
+        kind: "json",
+        nullable: true,
+        readKey: null,
+      },
+      {
         key: "createdAt",
         kind: "timestamp",
         display: { detail: true },
@@ -596,6 +602,7 @@ export default defineEntity({
         specialized: "json:provenanceEvidence",
       },
       "metadataRevision",
+      { key: "embeddedMetadata", specialized: "json:embeddedMetadata" },
       { key: "targetType", specialized: "enum:targetType" },
       "targetId",
       "idempotencyKey",

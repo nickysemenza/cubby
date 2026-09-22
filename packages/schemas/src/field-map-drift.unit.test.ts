@@ -279,6 +279,10 @@ const INTENTIONAL_RESPELLINGS = {
   "image::importImageFromUrlResponseSchema::url": IMAGE_READ_FIELD_HAND_COPY,
   "image::importImageFromUrlSchema::url":
     "external-URL import input — a plain z.url() the server fetches from, not any generated field (image has no generated create schema)",
+  "image::storedImageEmbeddedMetadataSchema::capturedAt":
+    "the embedded-EXIF blob's own capturedAt (a jsonb-nested ISO string read from an image's bytes), not the top-level Image.capturedAt column it seeds — coincidental key-name collision, see image-metadata.ts",
+  "image::storedImageEmbeddedMetadataSchema::capturedAtOffsetMinutes":
+    "the embedded-EXIF blob's own offset, not the top-level Image.capturedAtOffsetMinutes column it seeds — same reason as storedImageEmbeddedMetadataSchema::capturedAt",
   "image::initiateDocumentUploadSchema::contentType": IMAGE_NO_GENERATED_CREATE,
   "image::initiateDocumentUploadSchema::filename": IMAGE_NO_GENERATED_CREATE,
   "image::initiateDocumentUploadSchema::size": IMAGE_NO_GENERATED_CREATE,
