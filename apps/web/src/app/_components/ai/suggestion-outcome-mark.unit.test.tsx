@@ -271,8 +271,18 @@ describe("unsettled mark", () => {
     expect(screen.getByRole("button", { name: label })).toBeInTheDocument();
   });
 
-  it("renders nothing when neither pending nor failed", () => {
-    const { container } = render(<SuggestionOutcomeMark outcome={null} />);
+  it.each([
+    ["neither pending nor failed", {}],
+    // Regression: a form's never-enabled query reports isPending forever; its
+    // glyph spun indefinitely and its hover popover swallowed the Create click.
+    [
+      "a form field (line surface) still pending",
+      { pending: true, surface: "line" as const },
+    ],
+  ])("renders nothing for %s", (_, state) => {
+    const { container } = render(
+      <SuggestionOutcomeMark outcome={null} {...state} />,
+    );
     expect(container).toBeEmptyDOMElement();
   });
 });

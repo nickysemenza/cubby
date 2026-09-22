@@ -330,6 +330,11 @@ function UnsettledMark({
   error?: unknown;
   surface: SuggestionOutcomeSurface;
 }) {
+  // Record surfaces only: a form's `pending` is react-query's `isPending`,
+  // which stays true forever for a query that was never enabled, so a form
+  // glyph would spin indefinitely and its hover popover swallowed the next
+  // click (the dialog's Create). Forms already have their own status line.
+  if (surface === "line") return null;
   const failed = error !== undefined && error !== null;
   if (!failed && !pending) return null;
   const text = failed
