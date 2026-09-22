@@ -891,6 +891,13 @@ describe("useAutoFieldSuggestion", () => {
               detail: null,
               probability: 0.05,
             },
+            // Below the seed floor: a "0%" runner-up must not be pinned.
+            {
+              value: "PRJ-SHED",
+              label: "Shed",
+              detail: null,
+              probability: 0.004,
+            },
           ],
           operation: "set",
           removals: [],

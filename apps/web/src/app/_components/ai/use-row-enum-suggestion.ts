@@ -1,7 +1,7 @@
 import type { FieldSuggestion } from "@cubby/schemas/ai";
 import { useDebouncedValue } from "@tanstack/react-pacer";
 import type { UseQueryOptions } from "@tanstack/react-query";
-import { useQuery } from "@tanstack/react-query";
+import { skipToken, useQuery } from "@tanstack/react-query";
 import { useCallback, useEffect } from "react";
 import {
   useFormState,
@@ -23,6 +23,9 @@ const textValueSchema = z.string().catch("");
  * row commits itself with no operator glance at all, so it only does that
  * once Jev is very sure. */
 const AUTO_APPLY_THRESHOLD = 0.95;
+
+/** Placeholder key for a row that is not askable yet (see `opts`); never fetched. */
+const IDLE_QUERY_KEY = ["row-enum-suggestion", "idle"] as const;
 
 export interface UseRowEnumSuggestionResult {
   suggestion: FieldSuggestion | null;
@@ -83,18 +86,47 @@ export function useRowEnumSuggestion<
     wait: FIELD_SUGGEST_DEBOUNCE_MS,
   });
   const settled = JSON.stringify(basis) === JSON.stringify(debouncedBasis);
-  const opts = queryOptions(debouncedBasis);
-  const query = useQuery({
-    ...opts,
-    enabled: enabled && settled,
+  // Build the real options only once the row is askable: the operation's
+  // `queryOptions` validates its input eagerly, so a not-yet-fillable row
+  // (blank source, one-character identifier) would throw out of render
+  // before `enabled: false` ever mattered — the crash that took down the
+  // whole product dialog on "Add external ID".
+  const askable = enabled && settled;
+  const opts = askable ? queryOptions(debouncedBasis) : null;
+  const innerFn =
+    opts?.queryFn !== undefined && opts.queryFn !== skipToken
+      ? opts.queryFn
+      : null;
+  // Our own (unbranded) key type so the idle placeholder and the caller's
+  // branded key share one `useQuery` call; the caller's `queryFn` still
+  // receives its own key through the context it was written for. The
+  // caller's other options (stale/gc policy, persister) are typed against
+  // its branded key and are not carried over — the row hint is a transient
+  // ask and the answer is already cached at the AI gateway by request body.
+  const query = useQuery<
+    FieldSuggestion | null,
+    Error,
+    FieldSuggestion | null,
+    readonly unknown[]
+  >({
+    queryKey: opts?.queryKey ?? IDLE_QUERY_KEY,
+    queryFn:
+      opts && innerFn
+        ? (context) => innerFn({ ...context, queryKey: opts.queryKey })
+        : skipToken,
+    enabled: askable,
     retry: false,
-    meta: { ...opts.meta, silentErrors: true },
+    meta: { ...opts?.meta, silentErrors: true },
   });
   const suggestion = settled ? (query.data ?? null) : null;
 
   const formState = useFormState({ control: form.control, name: path });
   const fieldState = form.getFieldState(path, formState);
-  const isDirty = fieldState.isDirty || fieldState.isTouched;
+  // Touched, not dirty: a row appended through `useFieldArray` is born dirty
+  // (its default `legacy_unspecified` differs from the record's empty array),
+  // so a dirty gate would block auto-apply on exactly the rows it exists for.
+  // Touched means the operator focused the cell themselves.
+  const isDirty = fieldState.isTouched;
   const current: unknown = form.getValues(path);
   const currentText = textValueSchema.parse(current);
   const isUnset = unsetValues.includes(currentText);

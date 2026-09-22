@@ -61,6 +61,11 @@ const NO_SUGGESTION: UseAutoFieldSuggestionResult = {
  * every real group's `order >= 0`). */
 const SUGGESTED_GROUP = { id: "suggested", label: "Suggested", order: -1 };
 
+/** A runner-up that rounds to "0%" is a distribution artifact, not a
+ * candidate worth pinning; Jev always returns the full map, so the floor is
+ * what keeps a confident winner from dragging three noise rows with it. */
+const MIN_SEED_PROBABILITY = 0.05;
+
 const suggestedStatus = (probability: number | null) =>
   probability == null
     ? undefined
@@ -104,16 +109,18 @@ function suggestionSeedItems(suggestion: FieldSuggestion): ComboboxItem[] {
         status: suggestedStatus(suggestion.probability),
       },
     },
-    ...suggestion.alternatives.map((alternative): ComboboxItem => ({
-      id: alternative.value,
-      shortcode: alternative.value,
-      name: alternative.label,
-      detail: alternative.detail ?? undefined,
-      presentation: {
-        group: SUGGESTED_GROUP,
-        status: suggestedStatus(alternative.probability),
-      },
-    })),
+    ...suggestion.alternatives
+      .filter((alternative) => alternative.probability >= MIN_SEED_PROBABILITY)
+      .map((alternative): ComboboxItem => ({
+        id: alternative.value,
+        shortcode: alternative.value,
+        name: alternative.label,
+        detail: alternative.detail ?? undefined,
+        presentation: {
+          group: SUGGESTED_GROUP,
+          status: suggestedStatus(alternative.probability),
+        },
+      })),
   ];
 }
 
