@@ -126,6 +126,11 @@ export interface PurchaseImportService {
     detail?: string;
     dispatchEventId?: string;
   }): Promise<PurchaseImportServiceResult>;
+  reconcileSettledRun(input: {
+    runId: string;
+    operationId: string;
+    detail?: string;
+  }): Promise<{ reconciled: boolean; status: string }>;
 }
 
 const serviceBindingSchema = z.object({

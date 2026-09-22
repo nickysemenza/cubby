@@ -26,10 +26,8 @@ import {
   vendor,
   vendorAccount,
 } from "~/server/db/schema";
-import {
-  recordImportRunDispatchAttempt,
-  startTargetedImportRun,
-} from "~/server/purchase-import/run-service";
+import { recordImportRunDispatchAttempt } from "~/server/purchase-import/dispatch";
+import { startTargetedImportRun } from "~/server/purchase-import/run-service";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 import { createRequestContext, requireActor } from "~/server/request-context";

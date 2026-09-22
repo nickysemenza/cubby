@@ -9,7 +9,13 @@ import {
   imageProcessingJob,
   imageProcessingSubmission,
 } from "~/server/db/image-processing-schema";
-import { aiAnalysis, aiUsage, image, importRun } from "~/server/db/schema";
+import {
+  aiAnalysis,
+  aiUsage,
+  image,
+  importRun,
+  importRunOperation,
+} from "~/server/db/schema";
 
 import {
   activityDevices,
@@ -298,10 +304,11 @@ describe("activity image processing projection", () => {
       .update(imageProcessingJob)
       .set({ createdAt: at })
       .where(eq(imageProcessingJob.id, imageJob));
-    await getDb(ctx.db)
+    const runPublicId = `PIR-${crypto.randomUUID().replaceAll("-", "").slice(0, 10).toUpperCase()}`;
+    const [run] = await getDb(ctx.db)
       .insert(importRun)
       .values({
-        publicId: `PIR-${crypto.randomUUID().replaceAll("-", "").slice(0, 10).toUpperCase()}`,
+        publicId: runPublicId,
         ledgerPartyId: party.id,
         actorUserId: ctx.actor.userId,
         actorName: "Activity member",
@@ -314,7 +321,29 @@ describe("activity image processing projection", () => {
         status: "completed",
         startedAt: at,
         endedAt: at,
-      });
+      })
+      .returning({ id: importRun.id });
+    // The real diagnosis, not a placeholder: the feed is the first place an
+    // operator looks when a run stalls.
+    await getDb(ctx.db).insert(importRunOperation).values({
+      runId: run!.id,
+      operationId: "browser-import-orders-1",
+      kind: "import_order_evidence",
+      inputFingerprint: "fp",
+      state: "failed",
+      error: "Browser evidence is not complete",
+    });
+    const runEvents = await activityEvents(ctx.db, party.id, {
+      id: runPublicId,
+      limit: 10,
+    });
+    expect(runEvents.items[0]).toMatchObject({
+      event: "operation.import_order_evidence",
+      level: "error",
+    });
+    expect(JSON.parse(runEvents.items[0]!.detailsJson!)).toMatchObject({
+      error: "Browser evidence is not complete",
+    });
 
     const first = await listActivity(ctx.db, party.id, {
       limit: 1,

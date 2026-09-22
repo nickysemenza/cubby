@@ -31,6 +31,8 @@ export interface PurchaseImportDurableObjectRpc {
   result(requestId: string): Promise<BrowserBridgeResult | null>;
   cancel(requestId: string): Promise<void>;
   connected(): Promise<boolean>;
+  /** Whether a command for this run is still queued or in flight on the bridge. */
+  hasPendingCommands(runID: string): Promise<boolean>;
   notifyRunCompleted(summary: {
     runID: string;
     terminalStatus: "completed" | "needs_review" | "failed" | "dispatch_failed";
