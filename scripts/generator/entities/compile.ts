@@ -1137,6 +1137,7 @@ export const compileEntity = (
     declaredFieldModel,
     declaredDescriptors,
     declaration.fields !== null,
+    filterSchema !== null,
     context,
   );
   const descriptorColumns = filterDescriptors.map(({ columnId }) => columnId);

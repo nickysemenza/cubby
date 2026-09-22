@@ -933,7 +933,7 @@ export const renderEntityArtifacts = (
           'import { fieldSchemasOf } from "../entity-definitions/definition";\n' +
           (entity.dataQuality === null
             ? ""
-            : 'import { dataQuality } from "../data-quality";\n') +
+            : 'import { dataQuality } from "../data-quality-shape";\n') +
           filterFields.imports +
           (declaration.enumExports.length
             ? `export {${declaration.enumExports.join(",")}} from ${JSON.stringify(declaration.path)};\n`

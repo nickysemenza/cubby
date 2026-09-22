@@ -70,6 +70,7 @@ export const compileDataQuality = (
   fieldModel: EntityFieldModel,
   descriptors: readonly FilterDescriptor[],
   hasContract: boolean,
+  hasFilterSchema: boolean,
   context: string,
 ): CompiledDataQualityResult => {
   const reserved = [DATA_QUALITY_FIELD, DATA_GAPS_FIELD];
@@ -251,9 +252,18 @@ export const compileDataQuality = (
         ...sort,
         fields: [sort.fields[0], ...sort.fields.slice(1), DATA_QUALITY_SORT],
         computed: [...sort.computed, DATA_QUALITY_SORT],
+        // An empty `groupable` means "every sortable field groups"; a json
+        // score column cannot group, so pin the declared roster instead.
+        groupable:
+          sort.groupable.length === 0 ? [...sort.fields] : sort.groupable,
       },
     },
-    descriptors: [...descriptors, statusDescriptor, gapDescriptor],
+    // An entity with no `filters.schema` has no list-filter surface to bind
+    // the descriptors to (cookbook's browser is not a kernel list), so it
+    // gets the score and column without the two filters.
+    descriptors: hasFilterSchema
+      ? [...descriptors, statusDescriptor, gapDescriptor]
+      : descriptors,
   };
 };
 

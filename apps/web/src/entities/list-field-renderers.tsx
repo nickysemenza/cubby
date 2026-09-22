@@ -1,6 +1,7 @@
 import type { DataQuality } from "@cubby/schemas/data-quality";
 import type { Entity } from "@cubby/schemas/entity";
 import type { ListRendererId } from "@cubby/schemas/entity-manifest";
+import type { CookbookSummary } from "@cubby/schemas/recipe";
 
 import { renderOptionCell } from "~/app/_components/data-table/columnHelpers";
 import {
@@ -22,7 +23,6 @@ import { dataQualityOptions } from "~/lib/data-quality-options";
 import {
   implemented,
   type PresentationCoverage,
-  unsupported,
 } from "./presentation-coverage";
 
 type ListRowOf<E extends ListEntity> =
@@ -32,10 +32,21 @@ type ListRenderer<E extends ListEntity> = (
   helper: CubbyColumnHelper<ListRowOf<E>>,
 ) => CubbyColumnCollection<ListRowOf<E>>;
 
+/**
+ * Entities outside the kernel list roster whose index still builds columns
+ * from the manifest through a client-mode override (`list-columns/*.tsx`),
+ * keyed to the row type that override pages.
+ */
+type ClientListRows = { cookbook: CookbookSummary };
+
+type ClientListRenderer<TRow extends object> = (
+  helper: CubbyColumnHelper<TRow>,
+) => CubbyColumnCollection<TRow>;
+
 // Ranges over every entity, not just `ListEntity`: a scored entity with no
-// generic list page (cookbook — bespoke browser, no pagination envelope, see
+// generic list read (cookbook — bespoke browser, no pagination envelope, see
 // cookbook.ts) still gets the manifest's `dataQuality` list-renderer id and
-// must carry an explicit (if `unsupported`) disposition here.
+// must carry a disposition here.
 type ListRendererEntity = {
   [E in Entity]: ListRendererId<E> extends never ? never : E;
 }[Entity];
@@ -45,7 +56,9 @@ type EntityListRendererCoverage<E extends ListRendererEntity> = Readonly<
     ListRendererId<E>,
     E extends ListEntity
       ? PresentationCoverage<ListRenderer<E>>
-      : PresentationCoverage<never>
+      : E extends keyof ClientListRows
+        ? PresentationCoverage<ClientListRenderer<ClientListRows[E]>>
+        : PresentationCoverage<never>
   >
 >;
 
@@ -126,12 +139,9 @@ export const listRendererCoverage = {
   purchase: scoredCoverage<"purchase">(),
   // pantry and garden entities
   ingredient: scoredCoverage<"ingredient">(),
-  // cookbook has no generic list-page contract (bespoke browser, no
-  // pagination envelope — see cookbook.ts): its `dataQuality` column has no
-  // column-collection renderer to implement here.
   cookbook: {
-    "data-quality": unsupported(
-      "cookbook's list is a bespoke, non-paginated browser (cookbook.ts) with no generic column-collection contract to implement this renderer against",
+    "data-quality": implemented<ClientListRenderer<CookbookSummary>>((helper) =>
+      dataQualityRenderer(helper),
     ),
   },
   location: scoredCoverage<"location">(),
@@ -168,7 +178,9 @@ export function listRendererColumns<TRecord extends object>(
     ([key]) => key === entity,
   )?.[1];
   const disposition:
-    | PresentationCoverage<ListRenderer<ListEntity>>
+    | PresentationCoverage<
+        ListRenderer<ListEntity> | ClientListRenderer<CookbookSummary>
+      >
     | undefined =
     entry === undefined
       ? undefined

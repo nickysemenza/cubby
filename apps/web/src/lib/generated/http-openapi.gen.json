@@ -3743,7 +3743,7 @@
           {
             "name": "groupBy",
             "in": "query",
-            "description": "Group rows by one field. One of: name, provisional, transactionCount, createdAt, updatedAt, dataQuality",
+            "description": "Group rows by one field. One of: name, provisional, transactionCount, createdAt, updatedAt",
             "schema": {
               "type": "string",
               "enum": [
@@ -3751,8 +3751,7 @@
                 "provisional",
                 "transactionCount",
                 "createdAt",
-                "updatedAt",
-                "dataQuality"
+                "updatedAt"
               ]
             },
             "style": "form",
@@ -4427,7 +4426,7 @@
           {
             "name": "groupBy",
             "in": "query",
-            "description": "Group rows by one field. One of: transactionDate, postedDate, amount, merchant, kind, status, createdAt, updatedAt, dataQuality",
+            "description": "Group rows by one field. One of: transactionDate, postedDate, amount, merchant, kind, status, createdAt, updatedAt",
             "schema": {
               "type": "string",
               "enum": [
@@ -4438,8 +4437,7 @@
                 "kind",
                 "status",
                 "createdAt",
-                "updatedAt",
-                "dataQuality"
+                "updatedAt"
               ]
             },
             "style": "form",
@@ -4964,15 +4962,14 @@
           {
             "name": "groupBy",
             "in": "query",
-            "description": "Group rows by one field. One of: observedOn, createdAt, updatedAt, kind, dataQuality",
+            "description": "Group rows by one field. One of: observedOn, createdAt, updatedAt, kind",
             "schema": {
               "type": "string",
               "enum": [
                 "observedOn",
                 "createdAt",
                 "updatedAt",
-                "kind",
-                "dataQuality"
+                "kind"
               ]
             },
             "style": "form",
@@ -7110,7 +7107,7 @@
           {
             "name": "groupBy",
             "in": "query",
-            "description": "Group rows by one field. One of: createdAt, updatedAt, name, appearsInRecipes, product, dataQuality",
+            "description": "Group rows by one field. One of: createdAt, updatedAt, name, appearsInRecipes, product",
             "schema": {
               "type": "string",
               "enum": [
@@ -7118,8 +7115,7 @@
                 "updatedAt",
                 "name",
                 "appearsInRecipes",
-                "product",
-                "dataQuality"
+                "product"
               ]
             },
             "style": "form",
@@ -7664,7 +7660,7 @@
           {
             "name": "groupBy",
             "in": "query",
-            "description": "Group rows by one field. One of: createdAt, updatedAt, name, product, location, amount, valuation, verifiedAt, dataQuality",
+            "description": "Group rows by one field. One of: createdAt, updatedAt, name, product, location, amount, valuation, verifiedAt",
             "schema": {
               "type": "string",
               "enum": [
@@ -7675,8 +7671,7 @@
                 "location",
                 "amount",
                 "valuation",
-                "verifiedAt",
-                "dataQuality"
+                "verifiedAt"
               ]
             },
             "style": "form",
@@ -8678,15 +8673,14 @@
           {
             "name": "groupBy",
             "in": "query",
-            "description": "Group rows by one field. One of: name, kind, createdAt, updatedAt, dataQuality",
+            "description": "Group rows by one field. One of: name, kind, createdAt, updatedAt",
             "schema": {
               "type": "string",
               "enum": [
                 "name",
                 "kind",
                 "createdAt",
-                "updatedAt",
-                "dataQuality"
+                "updatedAt"
               ]
             },
             "style": "form",
@@ -9068,15 +9062,14 @@
           {
             "name": "groupBy",
             "in": "query",
-            "description": "Group rows by one field. One of: date, amount, createdAt, updatedAt, dataQuality",
+            "description": "Group rows by one field. One of: date, amount, createdAt, updatedAt",
             "schema": {
               "type": "string",
               "enum": [
                 "date",
                 "amount",
                 "createdAt",
-                "updatedAt",
-                "dataQuality"
+                "updatedAt"
               ]
             },
             "style": "form",
@@ -11651,7 +11644,7 @@
           {
             "name": "groupBy",
             "in": "query",
-            "description": "Group rows by one field. One of: date, name, mealType, createdAt, updatedAt, dataQuality",
+            "description": "Group rows by one field. One of: date, name, mealType, createdAt, updatedAt",
             "schema": {
               "type": "string",
               "enum": [
@@ -11659,8 +11652,7 @@
                 "name",
                 "mealType",
                 "createdAt",
-                "updatedAt",
-                "dataQuality"
+                "updatedAt"
               ]
             },
             "style": "form",
@@ -12355,7 +12347,7 @@
           {
             "name": "groupBy",
             "in": "query",
-            "description": "Group rows by one field. One of: createdAt, updatedAt, status, sowedOn, finishedOn, dataQuality",
+            "description": "Group rows by one field. One of: createdAt, updatedAt, status, sowedOn, finishedOn",
             "schema": {
               "type": "string",
               "enum": [
@@ -12363,8 +12355,7 @@
                 "updatedAt",
                 "status",
                 "sowedOn",
-                "finishedOn",
-                "dataQuality"
+                "finishedOn"
               ]
             },
             "style": "form",
@@ -13482,14 +13473,13 @@
           {
             "name": "groupBy",
             "in": "query",
-            "description": "Group rows by one field. One of: name, sortOrder, updatedAt, dataQuality",
+            "description": "Group rows by one field. One of: name, sortOrder, updatedAt",
             "schema": {
               "type": "string",
               "enum": [
                 "name",
                 "sortOrder",
-                "updatedAt",
-                "dataQuality"
+                "updatedAt"
               ]
             },
             "style": "form",
@@ -18704,7 +18694,7 @@
           {
             "name": "groupBy",
             "in": "query",
-            "description": "Group rows by one field. One of: name, status, kind, startDate, costEstimate, createdAt, updatedAt, dataQuality",
+            "description": "Group rows by one field. One of: name, status, kind, startDate, costEstimate, createdAt, updatedAt",
             "schema": {
               "type": "string",
               "enum": [
@@ -18714,8 +18704,7 @@
                 "startDate",
                 "costEstimate",
                 "createdAt",
-                "updatedAt",
-                "dataQuality"
+                "updatedAt"
               ]
             },
             "style": "form",
@@ -19763,7 +19752,7 @@
           {
             "name": "groupBy",
             "in": "query",
-            "description": "Group rows by one field. One of: orderId, displayLabel, date, statedTotal, vendor, expenseCount, expenseTotal, reconciliationGap, documentCount, createdAt, updatedAt, dataQuality",
+            "description": "Group rows by one field. One of: orderId, displayLabel, date, statedTotal, vendor, expenseCount, expenseTotal, reconciliationGap, documentCount, createdAt, updatedAt",
             "schema": {
               "type": "string",
               "enum": [
@@ -19777,8 +19766,7 @@
                 "reconciliationGap",
                 "documentCount",
                 "createdAt",
-                "updatedAt",
-                "dataQuality"
+                "updatedAt"
               ]
             },
             "style": "form",
@@ -25671,7 +25659,7 @@
           {
             "name": "groupBy",
             "in": "query",
-            "description": "Group rows by one field. One of: name, purchaseCount, spend, latestPurchaseDate, createdAt, updatedAt, dataQuality",
+            "description": "Group rows by one field. One of: name, purchaseCount, spend, latestPurchaseDate, createdAt, updatedAt",
             "schema": {
               "type": "string",
               "enum": [
@@ -25680,8 +25668,7 @@
                 "spend",
                 "latestPurchaseDate",
                 "createdAt",
-                "updatedAt",
-                "dataQuality"
+                "updatedAt"
               ]
             },
             "style": "form",
@@ -26094,7 +26081,7 @@
           {
             "name": "groupBy",
             "in": "query",
-            "description": "Group rows by one field. One of: name, acquiredAt, priceRange, createdAt, updatedAt, dataQuality",
+            "description": "Group rows by one field. One of: name, acquiredAt, priceRange, createdAt, updatedAt",
             "schema": {
               "type": "string",
               "enum": [
@@ -26102,8 +26089,7 @@
                 "acquiredAt",
                 "priceRange",
                 "createdAt",
-                "updatedAt",
-                "dataQuality"
+                "updatedAt"
               ]
             },
             "style": "form",
@@ -32377,66 +32363,6 @@
         ],
         "additionalProperties": false
       },
-      "DataCheck": {
-        "type": "string",
-        "enum": [
-          "product_manufacturer",
-          "product_external_id",
-          "product_category",
-          "product_model",
-          "product_price",
-          "product_image",
-          "amazon_asin",
-          "duplicate_external_id",
-          "recipe_ingredients",
-          "recipe_instructions",
-          "recipe_source",
-          "ingredient_product",
-          "cookbook_import_incomplete",
-          "cookbook_cover",
-          "location_ai_description",
-          "location_type",
-          "inventory_verified",
-          "meal_contents",
-          "ledger_party_financial_account",
-          "ledger_transfer_transaction",
-          "project_kind",
-          "project_start_date",
-          "task_due_date",
-          "task_trade",
-          "vendor_order_evidence",
-          "vendor_logo",
-          "vendor_website",
-          "purchase_date",
-          "order_id",
-          "stated_total",
-          "primary_document",
-          "empty_expenses",
-          "unpriced_expense",
-          "paperwork_mismatch",
-          "settlement_reference",
-          "settlement_mismatch",
-          "financial_account_ledger_party",
-          "financial_account_confirmed",
-          "financial_transaction_allocation",
-          "financial_transaction_merchant",
-          "wish_candidate",
-          "expense_cost",
-          "planting_variety",
-          "planting_location",
-          "garden_entry_note",
-          "garden_entry_harvest_amount",
-          "category_description",
-          "category_feature"
-        ]
-      },
-      "DataExceptionEntity": {
-        "type": "string",
-        "enum": [
-          "purchase",
-          "product"
-        ]
-      },
       "DataExceptionReason": {
         "type": "string",
         "enum": [
@@ -32501,11 +32427,18 @@
         ],
         "additionalProperties": false
       },
+      "DataQualityCheckKind": {
+        "type": "string",
+        "enum": [
+          "missing",
+          "defect"
+        ]
+      },
       "DataQualityException": {
         "type": "object",
         "properties": {
           "check": {
-            "$ref": "#/components/schemas/DataCheck"
+            "type": "string"
           },
           "reason": {
             "$ref": "#/components/schemas/DataExceptionReason"
@@ -32515,7 +32448,7 @@
             "minLength": 1
           },
           "targetType": {
-            "$ref": "#/components/schemas/DataExceptionEntity"
+            "type": "string"
           },
           "targetId": {
             "type": "string"
@@ -32578,38 +32511,16 @@
         "type": "object",
         "properties": {
           "check": {
-            "$ref": "#/components/schemas/DataCheck"
+            "type": "string"
           },
           "facet": {
             "$ref": "#/components/schemas/DataQualityFacetName"
           },
           "kind": {
-            "$ref": "#/components/schemas/DataQualityGapKind"
+            "$ref": "#/components/schemas/DataQualityCheckKind"
           },
           "targetType": {
-            "type": "string",
-            "enum": [
-              "product",
-              "recipe",
-              "ingredient",
-              "cookbook",
-              "location",
-              "inventory",
-              "meal",
-              "ledgerParty",
-              "ledgerTransfer",
-              "project",
-              "task",
-              "vendor",
-              "purchase",
-              "financialAccount",
-              "financialTransaction",
-              "wish",
-              "expense",
-              "planting",
-              "gardenEntry",
-              "productCategory"
-            ]
+            "type": "string"
           },
           "targetId": {
             "type": "string"
@@ -32627,13 +32538,6 @@
           "message"
         ],
         "additionalProperties": false
-      },
-      "DataQualityGapKind": {
-        "type": "string",
-        "enum": [
-          "missing",
-          "defect"
-        ]
       },
       "DataQualityStatus": {
         "type": "string",

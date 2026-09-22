@@ -37,7 +37,7 @@ import {
  */
 export const calculateDataQualityScore = (
   expectedChecks: readonly DataCheck[],
-  unresolvedGaps: readonly Pick<DataQualityGap, "check">[],
+  unresolvedGaps: readonly { check: DataCheck }[],
 ): number => {
   const expected = new Set(expectedChecks);
   const totalWeight = [...expected].reduce(
@@ -131,7 +131,12 @@ const evaluateRow = (
   const checks = checksOf(entity);
   const targetId = parseShortcodeFor(entity, row.shortcode);
   const expectedChecks: DataCheck[] = [];
-  const rawGaps: Array<DataQualityGap & { fingerprint: string | null }> = [];
+  const rawGaps: Array<
+    Omit<DataQualityGap, "check"> & {
+      check: DataCheck;
+      fingerprint: string | null;
+    }
+  > = [];
   checks.forEach((check, index) => {
     if (row[expectedKey(index)] === true) expectedChecks.push(check);
     if (row[gapKey(index)] !== true) return;
@@ -166,7 +171,7 @@ const evaluateRow = (
       .filter((exception) => exception.state === "active")
       .map((exception) => exception.check),
   );
-  const gaps: DataQualityGap[] = rawGaps
+  const gaps = rawGaps
     .filter((gap) => !activeChecks.has(gap.check))
     .map(({ fingerprint: _fingerprint, ...gap }) => gap);
   const facets = dataQualityFacets[entity].map((name) => {

@@ -958,7 +958,7 @@ extension EntityDescriptor {
                 case "dataGap": ["financial_account_ledger_party", "financial_account_confirmed"]
                 case "identityKind": ["credit_card", "bank_account", "stored_value", "cash", "other"]
                 case "sourceAliasPresenceFilter": ["has", "none"]
-                case "groupBy": ["name", "provisional", "transactionCount", "createdAt", "updatedAt", "dataQuality"]
+                case "groupBy": ["name", "provisional", "transactionCount", "createdAt", "updatedAt"]
                 default: nil
             }
         case .financialTransaction:
@@ -972,7 +972,7 @@ extension EntityDescriptor {
                 case "dataGap": ["financial_transaction_allocation", "financial_transaction_merchant"]
                 case "purchasePresenceFilter": ["has", "none"]
                 case "allocationIntegrity": ["defect"]
-                case "groupBy": ["transactionDate", "postedDate", "amount", "merchant", "kind", "status", "createdAt", "updatedAt", "dataQuality"]
+                case "groupBy": ["transactionDate", "postedDate", "amount", "merchant", "kind", "status", "createdAt", "updatedAt"]
                 default: nil
             }
         case .gardenEntry:
@@ -980,7 +980,7 @@ extension EntityDescriptor {
                 case "kind": ["note", "harvest"]
                 case "dataStatus": ["complete", "needs_data", "defect"]
                 case "dataGap": ["garden_entry_note", "garden_entry_harvest_amount"]
-                case "groupBy": ["observedOn", "createdAt", "updatedAt", "kind", "dataQuality"]
+                case "groupBy": ["observedOn", "createdAt", "updatedAt", "kind"]
                 default: nil
             }
         case .ingredient:
@@ -992,7 +992,7 @@ extension EntityDescriptor {
                 case "recipePresenceFilter": ["has", "none"]
                 case "mealPresenceFilter": ["has", "none"]
                 case "eaterPresenceFilter": ["has", "none"]
-                case "groupBy": ["createdAt", "updatedAt", "name", "appearsInRecipes", "product", "dataQuality"]
+                case "groupBy": ["createdAt", "updatedAt", "name", "appearsInRecipes", "product"]
                 default: nil
             }
         case .inventory:
@@ -1004,7 +1004,7 @@ extension EntityDescriptor {
                 case "locationRole": ["global_unknown"]
                 case "verifiedPresenceFilter": ["has", "none"]
                 case "valuationStatus": ["valued", "missing", "missing_with_priced_product"]
-                case "groupBy": ["createdAt", "updatedAt", "name", "product", "location", "amount", "valuation", "verifiedAt", "dataQuality"]
+                case "groupBy": ["createdAt", "updatedAt", "name", "product", "location", "amount", "valuation", "verifiedAt"]
                 default: nil
             }
         case .ledgerParty:
@@ -1014,14 +1014,14 @@ extension EntityDescriptor {
                 case "dataGap": ["ledger_party_financial_account"]
                 case "mealPresenceFilter": ["has", "none"]
                 case "recipePresenceFilter": ["has", "none"]
-                case "groupBy": ["name", "kind", "createdAt", "updatedAt", "dataQuality"]
+                case "groupBy": ["name", "kind", "createdAt", "updatedAt"]
                 default: nil
             }
         case .ledgerTransfer:
             switch wireKey {
                 case "dataStatus": ["complete", "needs_data", "defect"]
                 case "dataGap": ["ledger_transfer_transaction"]
-                case "groupBy": ["date", "amount", "createdAt", "updatedAt", "dataQuality"]
+                case "groupBy": ["date", "amount", "createdAt", "updatedAt"]
                 default: nil
             }
         case .location:
@@ -1051,7 +1051,7 @@ extension EntityDescriptor {
                 case "foodProductPresenceFilter": ["has", "none"]
                 case "foodIngredientPresenceFilter": ["has", "none"]
                 case "eaterPresenceFilter": ["has", "none"]
-                case "groupBy": ["date", "name", "mealType", "createdAt", "updatedAt", "dataQuality"]
+                case "groupBy": ["date", "name", "mealType", "createdAt", "updatedAt"]
                 default: nil
             }
         case .planting:
@@ -1059,7 +1059,7 @@ extension EntityDescriptor {
                 case "status": ["planned", "growing", "finished"]
                 case "dataStatus": ["complete", "needs_data", "defect"]
                 case "dataGap": ["planting_variety", "planting_location"]
-                case "groupBy": ["createdAt", "updatedAt", "status", "sowedOn", "finishedOn", "dataQuality"]
+                case "groupBy": ["createdAt", "updatedAt", "status", "sowedOn", "finishedOn"]
                 default: nil
             }
         case .product:
@@ -1109,7 +1109,7 @@ extension EntityDescriptor {
             switch wireKey {
                 case "dataStatus": ["complete", "needs_data", "defect"]
                 case "dataGap": ["category_description", "category_feature"]
-                case "groupBy": ["name", "sortOrder", "updatedAt", "dataQuality"]
+                case "groupBy": ["name", "sortOrder", "updatedAt"]
                 default: nil
             }
         case .project:
@@ -1128,7 +1128,7 @@ extension EntityDescriptor {
                 case "parentProjectPresenceFilter": ["has", "none"]
                 case "imagePresenceFilter": ["has", "none"]
                 case "attention": ["stalled", "missing_budget", "blocked_no_next_action"]
-                case "groupBy": ["name", "status", "kind", "startDate", "costEstimate", "createdAt", "updatedAt", "dataQuality"]
+                case "groupBy": ["name", "status", "kind", "startDate", "costEstimate", "createdAt", "updatedAt"]
                 default: nil
             }
         case .purchase:
@@ -1145,7 +1145,7 @@ extension EntityDescriptor {
                 case "reconciliation": ["unknown", "match", "refund_adjusted", "mismatch"]
                 case "financialReconciliation": ["mismatch"]
                 case "documentPresenceFilter": ["has", "none"]
-                case "groupBy": ["orderId", "displayLabel", "date", "statedTotal", "vendor", "expenseCount", "expenseTotal", "reconciliationGap", "documentCount", "createdAt", "updatedAt", "dataQuality"]
+                case "groupBy": ["orderId", "displayLabel", "date", "statedTotal", "vendor", "expenseCount", "expenseTotal", "reconciliationGap", "documentCount", "createdAt", "updatedAt"]
                 default: nil
             }
         case .recipe:
@@ -1192,7 +1192,7 @@ extension EntityDescriptor {
                 case "dataGap": ["vendor_order_evidence", "vendor_logo", "vendor_website"]
                 case "latestPurchaseDatePresenceFilter": ["has", "none"]
                 case "logoPresenceFilter": ["has", "none"]
-                case "groupBy": ["name", "purchaseCount", "spend", "latestPurchaseDate", "createdAt", "updatedAt", "dataQuality"]
+                case "groupBy": ["name", "purchaseCount", "spend", "latestPurchaseDate", "createdAt", "updatedAt"]
                 default: nil
             }
         case .vendorAccount:
@@ -1206,7 +1206,7 @@ extension EntityDescriptor {
                 case "productPresenceFilter": ["has", "none"]
                 case "dataStatus": ["complete", "needs_data", "defect"]
                 case "dataGap": ["wish_candidate"]
-                case "groupBy": ["name", "acquiredAt", "priceRange", "createdAt", "updatedAt", "dataQuality"]
+                case "groupBy": ["name", "acquiredAt", "priceRange", "createdAt", "updatedAt"]
                 default: nil
             }
         default: nil

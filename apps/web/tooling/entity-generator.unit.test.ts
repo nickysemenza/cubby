@@ -62,7 +62,12 @@ const expectDeclaredEntityParity = (
   });
   expect(compiled.fieldModel.create).toEqual(definition.model?.create ?? []);
   expect(compiled.fieldModel.update).toEqual(definition.model?.update ?? []);
-  expect(compiled.fieldModel.output).toEqual(definition.model?.output ?? []);
+  // `capabilities.dataQuality` synthesizes one output field beyond the
+  // declaration's own roster (docs/entities.md "Data quality").
+  expect(compiled.fieldModel.output).toEqual([
+    ...(definition.model?.output ?? []),
+    ...(definition.capabilities.dataQuality ? ["dataQuality"] : []),
+  ]);
   expect(compiled.descriptor.relationships).toEqual(
     definition.relations.map((relation) => ({
       ...relation,
