@@ -3,7 +3,7 @@ import type {
   InventoryItemForTree,
 } from "@cubby/schemas/location";
 import { infLocation } from "@cubby/schemas/location";
-import { testShortcode } from "@cubby/schemas/testing";
+import { testCompleteDataQuality, testShortcode } from "@cubby/schemas/testing";
 import { describe, expect, it } from "vitest";
 
 import { canDropOnArrangeTarget } from "./arrange-drop-policy";
@@ -41,6 +41,7 @@ function loc(
     valuation: null,
     createdAt: new Date(0),
     updatedAt: new Date(0),
+    dataQuality: testCompleteDataQuality(),
     children,
     inventoryItems: items,
   });
@@ -60,6 +61,7 @@ function item(id: string, productId: string): InventoryItemForTree {
     valuation: null,
     createdAt: new Date(0),
     updatedAt: new Date(0),
+    dataQuality: testCompleteDataQuality(),
     inventoryItems: [
       {
         id: testShortcode("inventory", id),

@@ -9,7 +9,11 @@ import {
   recipeOut,
   sectionIngredientOut,
 } from "@cubby/schemas/recipe";
-import { testEntityId, testShortcode } from "@cubby/schemas/testing";
+import {
+  testCompleteDataQuality,
+  testEntityId,
+  testShortcode,
+} from "@cubby/schemas/testing";
 import { err, ok } from "neverthrow";
 import { describe, expect, it } from "vitest";
 const unavailableNutrition = buildNutrition(() => ({
@@ -224,6 +228,7 @@ const recipe = (
     ],
     createdAt: new Date("2026-01-01"),
     updatedAt: new Date("2026-01-01"),
+    dataQuality: testCompleteDataQuality(),
   });
 
 const firstRows = (node: RecipeTreeNode) => node.sections[0]?.rows ?? [];

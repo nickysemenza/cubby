@@ -579,10 +579,15 @@ const productLocationRefOut = z.object({
   ancestors: z.array(productLocationAncestorOut),
 });
 
+// The embedded location is an identity reference for the movement timeline,
+// not a place to read the location's own completeness (its `valuation` is
+// null for the same reason), so the location's `dataQuality` stays off it.
+const { dataQuality: _locationDataQuality, ...locationEmbedFields } =
+  locationOutFields;
 const productInventoryWithLocationOut = z.object({
   ...productInventoryFields,
   location: z.object({
-    ...locationOutFields,
+    ...locationEmbedFields,
     displayImage: imageUrlSummary.nullable(),
     ancestors: z.array(productLocationAncestorOut),
   }),

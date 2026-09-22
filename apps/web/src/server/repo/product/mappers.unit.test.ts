@@ -3,7 +3,11 @@ import {
   productTopLevelOut,
   productWithIngredientAndInventoryAndMappingsOut,
 } from "@cubby/schemas/product";
-import { testEntityId, testShortcode } from "@cubby/schemas/testing";
+import {
+  testCompleteDataQuality,
+  testEntityId,
+  testShortcode,
+} from "@cubby/schemas/testing";
 import { describe, expect, it } from "vitest";
 
 import { getR2PublicUrl } from "~/server/utils/r2-public-url";
@@ -208,6 +212,7 @@ const activeLocation = {
   notes: null,
   aiDescription: null,
   valuation: null,
+  dataQuality: testCompleteDataQuality(),
 };
 
 const deletedLocation = {
