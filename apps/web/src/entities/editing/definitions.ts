@@ -10,17 +10,25 @@ import {
   canClearExpenseDate,
   EXPENSE_DATE_REQUIRED_MESSAGE,
 } from "@cubby/schemas/expense-fields";
+import { displayGtin, externalIdInput } from "@cubby/schemas/external-id";
 import { fieldResolutionsSchema } from "@cubby/schemas/field-resolution";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
+import { unitMappingInput } from "@cubby/schemas/unitmapping";
 import {
   collectionSlugsFromTags,
   collectionTagFromSlug,
   normalizeCollectionSlug,
 } from "@cubby/shared/collection-tag";
+import { isNutrientKey } from "@cubby/usda-schemas";
 import { isEqual } from "es-toolkit";
 import { z } from "zod";
 
 import { householdLocalDate } from "~/lib/household-date";
+import {
+  isCanonicalPriceMapping,
+  isMoneyUnit,
+} from "~/lib/price-mapping-utils";
+import { wasm } from "~/lib/wasm";
 
 import { readReferenceField } from "../entity-references";
 import {
@@ -41,7 +49,7 @@ import type {
   EntityEditValue,
   EntityEditValueBag,
 } from "./types";
-import { entityEditValueSchema } from "./value-schema";
+import { projectEntityEditRecordValue } from "./value-schema";
 
 const editable: EntityEditAccess = { mode: "editable" };
 
@@ -54,23 +62,50 @@ const valueFor = (record: EntityEditRecord | undefined, id: string) => {
   const candidate = Object.entries(record ?? {}).find(
     ([key]) => key === id,
   )?.[1];
-  return entityEditValueSchema.parse(candidate);
+  // Tolerant: a read projection may nest `Date`s (audit stamps on
+  // `unitMappings`/`externalIds` rows); opening an editor never throws on
+  // one (`value-schema.ts`).
+  return projectEntityEditRecordValue(candidate);
 };
 
-const changed = (
-  record: EntityEditRecord | undefined,
-  id: string,
-  value: EntityEditValue,
-) => !record || !isEqual(valueFor(record, id), value);
+/**
+ * Whether a form value differs from its baseline. `baseline === undefined`
+ * means the record carries no such key. For a write-only field (`readKey:
+ * null`) that is the normal state, and a `null` form value against it is
+ * *unchanged* — otherwise every untouched write-only field would emit
+ * `{ field: null }` on save (product's `upc: null` retires the primary GTIN
+ * through `syncPrimaryGtin`). A nullable *read* field absent from a partial
+ * record still emits `null`: there the absence is an incomplete projection,
+ * not "nothing stored", and an explicit clear must reach the server.
+ */
+const changed = (input: {
+  record: EntityEditRecord | undefined;
+  writeOnly: boolean;
+  baseline: EntityEditValue;
+  value: EntityEditValue;
+}) => {
+  if (!input.record) return true;
+  if (input.writeOnly && input.baseline === undefined && input.value === null)
+    return false;
+  return !isEqual(input.baseline, input.value);
+};
 
 /**
  * The gallery pseudo-fields have no stored twin on the record: `images` is
- * the read shape, and `pendingImageIds`/`removeImageIds`/`imageOrder` are
- * write-only instructions. Their baseline is derived from `images` (order)
- * or is the empty list, and a patch carries them only when they instruct
- * something — an untouched gallery sends none of them.
+ * the read shape, and `pendingImageIds`/`removeImageIds`/`imageOrder`/
+ * `pendingImagePurposes` are write-only instructions. Their baseline is
+ * derived from `images` (order) or is the empty list/map, and a patch
+ * carries them only when they instruct something — an untouched gallery
+ * sends none of them.
  */
 const IMAGE_LIST_FIELDS = new Set(["pendingImageIds", "removeImageIds"]);
+const IMAGE_PURPOSES_FIELD = "pendingImagePurposes";
+const imagePurposeMap = (
+  value: EntityEditValue,
+): Record<string, string> | undefined => {
+  const parsed = z.record(z.string(), z.string()).safeParse(value);
+  return parsed.success ? parsed.data : undefined;
+};
 const recordImageIds = (record: EntityEditRecord | undefined): string[] =>
   z
     .array(z.object({ id: z.string() }).loose())
@@ -134,7 +169,11 @@ interface FieldOptions<E extends EditableEntity> {
    * Override the generic record/create-default `initial` lookup — for an
    * editor-only pseudo field with no model field to read a record value from
    * (e.g. location's `collections`, folded from the stored `tags` at submit
-   * and unfolded back into a list here for edit-mode seeding).
+   * and unfolded back into a list here for edit-mode seeding), or for a
+   * model field whose form shape is a projection of the record's (rows
+   * reduced to their input shape). On update the same projection is the
+   * baseline `toPatch` diffs against, so an untouched projected field emits
+   * nothing and a cleared one emits `null`.
    */
   initial?: EditField<E>["initial"];
 }
@@ -343,6 +382,7 @@ const builderFor = <E extends EditableEntity>(
       if (options?.initial) return options.initial(input);
       const { operation, record, context } = input;
       if (IMAGE_LIST_FIELDS.has(id)) return [];
+      if (id === IMAGE_PURPOSES_FIELD) return {};
       if (id === "imageOrder")
         return operation === "update" ? recordImageIds(record) : [];
       const existing = valueFor(record, id);
@@ -383,10 +423,17 @@ const builderFor = <E extends EditableEntity>(
       }
       return options?.validate?.(input) ?? noIssues();
     },
-    toPatch: ({ value, record }) => {
+    toPatch: (input) => {
+      const { value, record } = input;
       if (IMAGE_LIST_FIELDS.has(id)) {
         const ids = imageIdList(value);
         return ids && ids.length > 0 ? { [id]: ids } : undefined;
+      }
+      if (id === IMAGE_PURPOSES_FIELD) {
+        const purposes = imagePurposeMap(value);
+        return purposes && Object.keys(purposes).length > 0
+          ? { [id]: purposes }
+          : undefined;
       }
       if (id === "imageOrder") {
         const ids = imageIdList(value);
@@ -398,7 +445,23 @@ const builderFor = <E extends EditableEntity>(
       if (resolutionMode !== undefined) {
         return isEqual(value, resolutionMode) ? undefined : { [id]: value };
       }
-      return changed(record, id, value) ? { [id]: value } : undefined;
+      // A field with its own `initial` projection diffs against that
+      // projection, not the raw record — the record's shape (full rows with
+      // audit stamps, a GTIN the editor shows as a UPC) is not what the form
+      // holds, so the raw value would read as changed on every save and a
+      // cleared value could never be told apart from an absent one.
+      const baseline =
+        options?.initial && record
+          ? options.initial(input)
+          : valueFor(record, id);
+      return changed({
+        record,
+        writeOnly: fieldModelByKey.get(id)?.readKey === null,
+        baseline,
+        value,
+      })
+        ? { [id]: value }
+        : undefined;
     },
   });
 
@@ -736,6 +799,163 @@ const fieldsFor = (entity: EditableEntity, semanticIntent: string) =>
   )?.[1] ?? [];
 
 /**
+ * `wasm.isbn_from_gtin` calls the WASM boundary synchronously. Safe here:
+ * `~/lib/wasm`'s module-level `await` resolves before any importer
+ * evaluates, and the product editor is never reachable before that — the
+ * detail page's `detail-field-renderers/product.tsx` already loads the same
+ * module client-side ahead of any edit dialog mounting.
+ */
+const productPrimaryGtinIsbn = (
+  record: EntityEditRecord | undefined,
+): ReturnType<typeof wasm.isbn_from_gtin> | undefined => {
+  const primaryGtin = z
+    .string()
+    .nullable()
+    .catch(null)
+    .parse(record?.primaryGtin);
+  return primaryGtin == null ? undefined : wasm.isbn_from_gtin(primaryGtin);
+};
+
+/**
+ * `upc`/`isbn` are write-only inputs (`readKey: null`); a product's one
+ * stored barcode reads back as `primaryGtin`, split by which display field
+ * it looks like — mirrors the retired `editProductFormDefaults`
+ * (`product-form.tsx`). On create there is no record, so both stay `null`.
+ */
+const productUpcInitial: FieldOptions<"product">["initial"] = ({ record }) => {
+  const primaryGtin = z
+    .string()
+    .nullable()
+    .catch(null)
+    .parse(record?.primaryGtin);
+  return primaryGtin && !productPrimaryGtinIsbn(record)
+    ? displayGtin(primaryGtin)
+    : null;
+};
+const productIsbnInitial: FieldOptions<"product">["initial"] = ({ record }) =>
+  productPrimaryGtinIsbn(record)?.isbn13 ?? null;
+
+/**
+ * `unitMappings`/`externalIds` read back as full rows (audit stamps, unit-
+ * mapping provenance) — projected to their plain input shape so the form
+ * holds exactly what it can resubmit, and an untouched row diffs to nothing.
+ * Both input schemas are non-strict `z.object`s, so parsing a superset row
+ * through them silently drops the extra columns; the `id` each keeps is the
+ * MCP round-trip contract (resending it updates the row in place instead of
+ * delete+recreate).
+ */
+const productUnitMappingsInitial: FieldOptions<"product">["initial"] = ({
+  record,
+}) => z.array(unitMappingInput).catch([]).parse(record?.unitMappings);
+const productExternalIdsInitial: FieldOptions<"product">["initial"] = ({
+  record,
+}) => z.array(externalIdInput).catch([]).parse(record?.externalIds);
+
+/**
+ * The `labelNutrition` mid-edit draft: looser than the stored
+ * `ProductLabelNutrition` so a half-filled form (serving grams entered, no
+ * nutrients yet) is representable while typing. `servingGrams: null` means
+ * "no label". Mirrors the retired `product-form.tsx`'s `labelNutritionDraft`/
+ * `labelNutritionField`, moved here now that the form holds this shape
+ * directly instead of through a zod-resolver preprocess.
+ */
+const productLabelNutritionDraft = z.object({
+  servingGrams: z.number().nullable().optional(),
+  source: z.string().nullable().optional(),
+  nutrients: z.record(z.string(), z.number().nullable().optional()).optional(),
+});
+
+const productLabelNutritionFromDraft = (
+  value: EntityEditValue,
+): EntityEditValue => {
+  const parsed = productLabelNutritionDraft
+    .nullable()
+    .optional()
+    .safeParse(value);
+  if (
+    !parsed.success ||
+    parsed.data == null ||
+    parsed.data.servingGrams == null
+  )
+    return null;
+  const nutrients: Record<string, number> = {};
+  for (const [key, amount] of Object.entries(parsed.data.nutrients ?? {})) {
+    if (amount != null && isNutrientKey(key)) nutrients[key] = amount;
+  }
+  return {
+    servingGrams: parsed.data.servingGrams,
+    nutrients,
+    source: parsed.data.source ?? null,
+  };
+};
+
+/** Surfaces the stored schema's own "serving set, no nutrients" refine
+ * beside the field instead of as a thrown build error. */
+const productLabelNutritionValidate: NonNullable<
+  FieldOptions<"product">["validate"]
+> = ({ value }) => {
+  const parsed = productLabelNutritionDraft
+    .nullable()
+    .optional()
+    .safeParse(value);
+  if (
+    !parsed.success ||
+    parsed.data == null ||
+    parsed.data.servingGrams == null
+  )
+    return noIssues();
+  const hasNutrient = Object.values(parsed.data.nutrients ?? {}).some(
+    (amount) => amount != null,
+  );
+  return hasNutrient
+    ? noIssues()
+    : [
+        {
+          field: "labelNutrition",
+          message: "A label needs at least one nutrient",
+          source: "client",
+        },
+      ];
+};
+
+/** Draft → stored transform, run only when `labelNutrition` actually
+ * changed (an untouched field never enters the patch). */
+const productBuildData = (patch: EntityEditValueBag): EntityEditValueBag => {
+  if (!("labelNutrition" in patch)) return patch;
+  return {
+    ...patch,
+    labelNutrition: productLabelNutritionFromDraft(patch.labelNutrition),
+  };
+};
+
+/**
+ * "1 each = $X" duplicates `product.price` (the scalar valuation column) —
+ * forbidden as a conversion edge, same guard the retired `product-form.tsx`
+ * ran through its zod resolver's `superRefine`. Other money mappings
+ * ("1 quart = $4") stay legitimate conversion edges.
+ */
+const productUnitMappingsValidate: NonNullable<
+  IntentOptions<"product">["validate"]
+> = ({ values }) => {
+  const mappings = z
+    .array(unitMappingInput)
+    .catch([])
+    .parse(values.unitMappings);
+  return mappings.flatMap((mapping, index) => {
+    if (!isCanonicalPriceMapping(mapping)) return [];
+    const moneySide = isMoneyUnit(mapping.b.unit) ? "b" : "a";
+    return [
+      {
+        field: `unitMappings.${index}.${moneySide}.unit`,
+        message:
+          "Use the Price per item field for the per-each price, not a conversion.",
+        source: "client" as const,
+      },
+    ];
+  });
+};
+
+/**
  * The data-only registry of Cubby's standard entity editing semantics.
  *
  * These are field fragments and commands, not form components: desktop pages,
@@ -755,11 +975,33 @@ export const entityEditRegistry: EntityEditRegistry = {
     fields: f.fieldsFrom(["full"]),
   })),
   product: buildDefinition("product", (f) => ({
+    // `quickDetails` is a strict subset of `full`'s field roster.
     fields: f.fieldsFrom(["full"], {
       // The create schema allows omitting a manufacturer, but the form still
       // requires one — not derivable from `requiredOnCreate`.
       manufacturer: { required: true },
+      upc: { initial: productUpcInitial },
+      isbn: { initial: productIsbnInitial },
+      unitMappings: { initial: productUnitMappingsInitial },
+      externalIds: { initial: productExternalIdsInitial },
+      labelNutrition: { validate: productLabelNutritionValidate },
     }),
+    create: {
+      capture: {},
+      full: {
+        buildData: productBuildData,
+        validate: productUnitMappingsValidate,
+      },
+    },
+    update: {
+      full: {
+        buildData: productBuildData,
+        validate: productUnitMappingsValidate,
+      },
+      identity: {},
+      price: {},
+      stock: {},
+    },
   })),
   ingredient: buildDefinition("ingredient", (f) => ({
     fields: f.fieldsFrom(["full"]),

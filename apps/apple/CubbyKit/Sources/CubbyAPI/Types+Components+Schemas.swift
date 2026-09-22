@@ -8593,6 +8593,8 @@ extension Components {
             public var rule: Components.Schemas.FieldExplanationOutput.RulePayload
             /// - Remark: Generated from `#/components/schemas/FieldExplanationOutput/sources`.
             public var sources: [Components.Schemas.FieldExplanationSource]
+            /// - Remark: Generated from `#/components/schemas/FieldExplanationOutput/resolution`.
+            public var resolution: Components.Schemas.FieldResolution?
             /// - Remark: Generated from `#/components/schemas/FieldExplanationOutput/truncated`.
             public var truncated: Swift.Bool
             /// - Remark: Generated from `#/components/schemas/FieldExplanationOutput/evidenceFingerprint`.
@@ -8666,6 +8668,7 @@ extension Components {
             ///   - evaluatedAt:
             ///   - rule:
             ///   - sources:
+            ///   - resolution:
             ///   - truncated:
             ///   - evidenceFingerprint:
             ///   - actions:
@@ -8677,6 +8680,7 @@ extension Components {
                 evaluatedAt: Foundation.Date,
                 rule: Components.Schemas.FieldExplanationOutput.RulePayload,
                 sources: [Components.Schemas.FieldExplanationSource],
+                resolution: Components.Schemas.FieldResolution? = nil,
                 truncated: Swift.Bool,
                 evidenceFingerprint: Swift.String? = nil,
                 actions: Components.Schemas.FieldExplanationOutput.ActionsPayload
@@ -8688,6 +8692,7 @@ extension Components {
                 self.evaluatedAt = evaluatedAt
                 self.rule = rule
                 self.sources = sources
+                self.resolution = resolution
                 self.truncated = truncated
                 self.evidenceFingerprint = evidenceFingerprint
                 self.actions = actions
@@ -8700,6 +8705,7 @@ extension Components {
                 case evaluatedAt
                 case rule
                 case sources
+                case resolution
                 case truncated
                 case evidenceFingerprint
                 case actions
@@ -8734,6 +8740,10 @@ extension Components {
                     [Components.Schemas.FieldExplanationSource].self,
                     forKey: .sources
                 )
+                self.resolution = try container.decodeIfPresent(
+                    Components.Schemas.FieldResolution.self,
+                    forKey: .resolution
+                )
                 self.truncated = try container.decode(
                     Swift.Bool.self,
                     forKey: .truncated
@@ -8754,6 +8764,7 @@ extension Components {
                     "evaluatedAt",
                     "rule",
                     "sources",
+                    "resolution",
                     "truncated",
                     "evidenceFingerprint",
                     "actions"

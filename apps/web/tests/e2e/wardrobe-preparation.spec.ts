@@ -6,6 +6,7 @@ import {
 import {
   expectViewportBounded,
   gotoAuthenticatedPage,
+  openProductFromPalette,
   selectComboboxItem,
   waitForFormHydration,
 } from "./e2e-helpers";
@@ -56,21 +57,20 @@ test("taxonomy edits keep product classification paths and labels separate from 
     page.getByRole("heading", { level: 1, name: renamedType }),
   ).toBeVisible();
 
-  await page.goto("/products/new");
+  await page.goto("/products?create=true");
   await waitForFormHydration(page);
-  await page.getByPlaceholder("Enter product name").fill(productName);
+  const createDialog = page.getByRole("dialog");
+  await createDialog
+    .getByRole("textbox", { name: "Name", exact: true })
+    .fill(productName);
   await selectComboboxItem(
     page,
-    page.getByRole("combobox", { name: "Classification", exact: true }),
+    createDialog.getByRole("combobox", { name: "Classification", exact: true }),
     `${destinationRoot} / ${renamedType}`,
   );
-  await page.getByRole("button", { name: /^Create$/ }).click();
-  await expect(page).toHaveURL(
-    /\/products\/PRD-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}/,
-    {
-      timeout: 15_000,
-    },
-  );
+  await createDialog.getByRole("button", { name: /^Create$/ }).click();
+  await expect(createDialog).not.toBeVisible({ timeout: 15_000 });
+  await openProductFromPalette(page, productName);
   await expect(
     page.getByText(`${destinationRoot} / ${renamedType}`, { exact: true }),
   ).toBeVisible();
@@ -140,9 +140,9 @@ test("taxonomy and hierarchy picker remain bounded on a phone", async ({
     parentId: root.id,
   });
 
-  await page.goto("/products/new");
+  await page.goto("/products?create=true");
   await waitForFormHydration(page);
-  const picker = page.getByRole("combobox", {
+  const picker = page.getByRole("dialog").getByRole("combobox", {
     name: "Classification",
     exact: true,
   });

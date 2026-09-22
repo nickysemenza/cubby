@@ -1,7 +1,11 @@
+import { getErrorMessage } from "@cubby/shared";
 import { isEqual } from "es-toolkit";
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { FieldValues, Path, UseFormReturn } from "react-hook-form";
 import { useForm } from "react-hook-form";
+import { z } from "zod";
+
+import type { UnparsedError } from "~/lib/error-utils";
 
 import { entityEditRegistry } from "./definitions";
 import {
@@ -45,6 +49,30 @@ function isDraftField<T extends object>(
   field: string,
 ): field is Path<T> {
   return field in values;
+}
+
+const NO_ISSUES: readonly EntityEditIssue[] = [];
+
+/**
+ * A build or submit that *throws* (a create/update input schema rejecting a
+ * value the kernel let through, an invariant failure) becomes issues rather
+ * than an unhandled rejection the dialog's submit chain would swallow. Raw
+ * diagnostics, per the product constraint: a Zod failure keeps every issue's
+ * path so it lands beside its control, and the headline is the unmasked
+ * message.
+ */
+function issuesFromThrown(error: UnparsedError): readonly EntityEditIssue[] {
+  if (error instanceof z.ZodError) {
+    return [
+      { message: z.prettifyError(error), source: "client" },
+      ...error.issues.map((issue): EntityEditIssue => ({
+        field: issue.path.map(String).join("."),
+        message: issue.message,
+        source: "client",
+      })),
+    ];
+  }
+  return [{ message: getErrorMessage(error), source: "client" }];
 }
 
 /**
@@ -96,9 +124,13 @@ export function useEntityEditSession<E extends EditableEntity>(
         context: resolved.context,
       })
     : null;
-  const issues = isResolvedEntityEdit(resolved)
-    ? commands.issues
-    : resolved.issues;
+  const [thrownIssues, setThrownIssues] =
+    useState<readonly EntityEditIssue[]>(NO_ISSUES);
+  const issues = !isResolvedEntityEdit(resolved)
+    ? resolved.issues
+    : thrownIssues.length > 0
+      ? thrownIssues
+      : commands.issues;
 
   const applyIssues = useCallback(
     (nextIssues: readonly EntityEditIssue[]) => {
@@ -128,19 +160,27 @@ export function useEntityEditSession<E extends EditableEntity>(
     },
     [form],
   );
-  const reset = useCallback(
-    () => form.reset(initialValues),
-    [form, initialValues],
-  );
+  const reset = useCallback(() => {
+    setThrownIssues(NO_ISSUES);
+    form.reset(initialValues);
+  }, [form, initialValues]);
   const submit = useCallback(async (): Promise<EntityEditResult<E>> => {
     if (!isResolvedEntityEdit(resolved)) {
       applyIssues(resolved.issues);
       return { ok: false, issues: resolved.issues };
     }
-    const values = entityEditValueBagSchema.parse(form.getValues());
-    const result = await commands.commit(
-      buildEntityEdit(resolved, stableRequest, values),
-    );
+    setThrownIssues(NO_ISSUES);
+    let result: EntityEditResult<E>;
+    try {
+      const values = entityEditValueBagSchema.parse(form.getValues());
+      result = await commands.commit(
+        buildEntityEdit(resolved, stableRequest, values),
+      );
+    } catch (error) {
+      const issues = issuesFromThrown(error);
+      setThrownIssues(issues);
+      result = { ok: false, issues };
+    }
     if (!result.ok) applyIssues(result.issues);
     else form.clearErrors();
     return result;

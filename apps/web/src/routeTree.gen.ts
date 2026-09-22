@@ -85,7 +85,6 @@ import { Route as AuthenticatedProductCategoriesIndexRouteImport } from './route
 import { Route as AuthenticatedProductCategoriesShortcodeRouteImport } from './routes/_authenticated/product-categories.$shortcode'
 import { Route as AuthenticatedProductsIndexRouteImport } from './routes/_authenticated/products.index'
 import { Route as AuthenticatedProductsShortcodeRouteImport } from './routes/_authenticated/products.$shortcode'
-import { Route as AuthenticatedProductsNewRouteImport } from './routes/_authenticated/products.new'
 import { Route as AuthenticatedProjectsIndexRouteImport } from './routes/_authenticated/projects.index'
 import { Route as AuthenticatedProjectsShortcodeRouteImport } from './routes/_authenticated/projects.$shortcode'
 import { Route as AuthenticatedProjectsToolsRouteImport } from './routes/_authenticated/projects.tools'
@@ -571,12 +570,6 @@ const AuthenticatedProductsShortcodeRoute =
     path: '/products/$shortcode',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
-const AuthenticatedProductsNewRoute =
-  AuthenticatedProductsNewRouteImport.update({
-    id: '/products/new',
-    path: '/products/new',
-    getParentRoute: () => AuthenticatedRoute,
-  } as any)
 const AuthenticatedProjectsIndexRoute =
   AuthenticatedProjectsIndexRouteImport.update({
     id: '/projects/',
@@ -948,7 +941,6 @@ export interface FileRoutesByFullPath {
   '/plantings/$shortcode': typeof AuthenticatedPlantingsShortcodeRoute
   '/product-categories/$shortcode': typeof AuthenticatedProductCategoriesShortcodeRoute
   '/products/$shortcode': typeof AuthenticatedProductsShortcodeRoute
-  '/products/new': typeof AuthenticatedProductsNewRoute
   '/projects/$shortcode': typeof AuthenticatedProjectsShortcodeRoute
   '/projects/tools': typeof AuthenticatedProjectsToolsRoute
   '/purchase-imports/$publicId': typeof AuthenticatedPurchaseImportsPublicIdRoute
@@ -1080,7 +1072,6 @@ export interface FileRoutesByTo {
   '/plantings/$shortcode': typeof AuthenticatedPlantingsShortcodeRoute
   '/product-categories/$shortcode': typeof AuthenticatedProductCategoriesShortcodeRoute
   '/products/$shortcode': typeof AuthenticatedProductsShortcodeRoute
-  '/products/new': typeof AuthenticatedProductsNewRoute
   '/projects/$shortcode': typeof AuthenticatedProjectsShortcodeRoute
   '/projects/tools': typeof AuthenticatedProjectsToolsRoute
   '/purchase-imports/$publicId': typeof AuthenticatedPurchaseImportsPublicIdRoute
@@ -1215,7 +1206,6 @@ export interface FileRoutesById {
   '/_authenticated/plantings/$shortcode': typeof AuthenticatedPlantingsShortcodeRoute
   '/_authenticated/product-categories/$shortcode': typeof AuthenticatedProductCategoriesShortcodeRoute
   '/_authenticated/products/$shortcode': typeof AuthenticatedProductsShortcodeRoute
-  '/_authenticated/products/new': typeof AuthenticatedProductsNewRoute
   '/_authenticated/projects/$shortcode': typeof AuthenticatedProjectsShortcodeRoute
   '/_authenticated/projects/tools': typeof AuthenticatedProjectsToolsRoute
   '/_authenticated/purchase-imports/$publicId': typeof AuthenticatedPurchaseImportsPublicIdRoute
@@ -1350,7 +1340,6 @@ export interface FileRouteTypes {
     | '/plantings/$shortcode'
     | '/product-categories/$shortcode'
     | '/products/$shortcode'
-    | '/products/new'
     | '/projects/$shortcode'
     | '/projects/tools'
     | '/purchase-imports/$publicId'
@@ -1482,7 +1471,6 @@ export interface FileRouteTypes {
     | '/plantings/$shortcode'
     | '/product-categories/$shortcode'
     | '/products/$shortcode'
-    | '/products/new'
     | '/projects/$shortcode'
     | '/projects/tools'
     | '/purchase-imports/$publicId'
@@ -1616,7 +1604,6 @@ export interface FileRouteTypes {
     | '/_authenticated/plantings/$shortcode'
     | '/_authenticated/product-categories/$shortcode'
     | '/_authenticated/products/$shortcode'
-    | '/_authenticated/products/new'
     | '/_authenticated/projects/$shortcode'
     | '/_authenticated/projects/tools'
     | '/_authenticated/purchase-imports/$publicId'
@@ -2257,13 +2244,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedProductsShortcodeRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
-    '/_authenticated/products/new': {
-      id: '/_authenticated/products/new'
-      path: '/products/new'
-      fullPath: '/products/new'
-      preLoaderRoute: typeof AuthenticatedProductsNewRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
     '/_authenticated/projects/': {
       id: '/_authenticated/projects/'
       path: '/projects'
@@ -2700,7 +2680,6 @@ interface AuthenticatedRouteChildren {
   AuthenticatedPlantingsShortcodeRoute: typeof AuthenticatedPlantingsShortcodeRoute
   AuthenticatedProductCategoriesShortcodeRoute: typeof AuthenticatedProductCategoriesShortcodeRoute
   AuthenticatedProductsShortcodeRoute: typeof AuthenticatedProductsShortcodeRoute
-  AuthenticatedProductsNewRoute: typeof AuthenticatedProductsNewRoute
   AuthenticatedProjectsShortcodeRoute: typeof AuthenticatedProjectsShortcodeRoute
   AuthenticatedProjectsToolsRoute: typeof AuthenticatedProjectsToolsRoute
   AuthenticatedPurchaseImportsPublicIdRoute: typeof AuthenticatedPurchaseImportsPublicIdRoute
@@ -2810,7 +2789,6 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedProductCategoriesShortcodeRoute:
     AuthenticatedProductCategoriesShortcodeRoute,
   AuthenticatedProductsShortcodeRoute: AuthenticatedProductsShortcodeRoute,
-  AuthenticatedProductsNewRoute: AuthenticatedProductsNewRoute,
   AuthenticatedProjectsShortcodeRoute: AuthenticatedProjectsShortcodeRoute,
   AuthenticatedProjectsToolsRoute: AuthenticatedProjectsToolsRoute,
   AuthenticatedPurchaseImportsPublicIdRoute:

@@ -4,6 +4,7 @@ import type {
 } from "@cubby/schemas/ai";
 import { inventoryEntryOut } from "@cubby/schemas/inventory";
 import { productTopLevelOut } from "@cubby/schemas/product";
+import { expenseOut } from "@cubby/schemas/project";
 import { testShortcode } from "@cubby/schemas/testing";
 import {
   act,
@@ -441,6 +442,94 @@ describe("record suggestions", () => {
     expect(calls).toBe(1);
     expect(commands).toHaveLength(0);
     errorSpy.mockRestore();
+  });
+
+  it("accepts a suggestion whose request basis was the union of every visible target, not just the clicked field's own basis (regression: 'Suggestion inputs changed')", async () => {
+    // costType's own suggest basis is only ["name", "productId", "vendor"].
+    // With trade, vendor, and projectId also visible on this row, the
+    // request-building basis additionally picks up "notes", "orderId",
+    // "projectId", and "date" (from trade's and projectId's own bases,
+    // and the expense inheritance-context keys). Accepting the costType
+    // suggestion must re-derive that same wider key set, not silently
+    // narrow to costType's own basis keys, or the fingerprint compare
+    // manufactures a false "inputs changed" refusal.
+    const record = {
+      id: testShortcode("expense", "regression"),
+      name: "Lumber order",
+      lineKind: "principal" as const,
+      costType: "materials" as const,
+      trade: "building" as const,
+      vendor: "Home Depot",
+      notes: null,
+      projectId: null,
+      productId: null,
+      orderId: null,
+      date: null,
+    };
+    const commands: EntityBrowserMutationInput[] = [];
+    const calls: FieldSuggestionsInput[] = [];
+    const operations: EntitySuggestionsOperations = {
+      suggestFields: ai.suggestFields.withTransport(
+        async ({ input }): Promise<FieldSuggestionsOut> => {
+          calls.push(input);
+          if (input.targets.includes("costType")) {
+            return {
+              suggestions: {
+                costType: { ...food, value: "tools", label: "Tools" },
+              },
+            };
+          }
+          return { suggestions: {} };
+        },
+      ),
+    };
+    render(
+      <RecordSuggestionsProvider
+        entity="expense"
+        records={[record]}
+        fieldKeys={[
+          "costType",
+          "trade",
+          "vendor",
+          "notes",
+          "projectId",
+          "productId",
+        ]}
+        operations={operations}
+        readRecord={async () => record}
+        mutationPort={createEntityMutationPort({
+          execute: async (command) => {
+            commands.push(command);
+            return {
+              action: "update",
+              entity: "expense",
+              item: {
+                ...mock(expenseOut, { seed: 1 }),
+                id: record.id,
+                costType: "tools",
+              },
+              sideEffects: { backgroundBatches: [] },
+            };
+          },
+        })}
+      >
+        <RecordFieldSuggestion record={record} field="costType">
+          <span>Materials</span>
+        </RecordFieldSuggestion>
+      </RecordSuggestionsProvider>,
+      { wrapper: harness.wrapper },
+    );
+    await screen.findByText("Suggested: Tools");
+    expect(calls.length).toBeGreaterThan(0);
+    fireEvent.click(screen.getByRole("button", { name: "Use suggestion" }));
+    await waitFor(() => expect(commands).toHaveLength(1));
+    expect(commands[0]).toMatchObject({
+      action: "update",
+      entity: "expense",
+      id: record.id,
+      data: { costType: "tools" },
+    });
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 
   it("resets a redundant override when the proposal matches its inherited fallback", async () => {

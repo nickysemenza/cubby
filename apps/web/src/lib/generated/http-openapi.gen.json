@@ -37133,6 +37133,9 @@
               "$ref": "#/components/schemas/FieldExplanationSource"
             }
           },
+          "resolution": {
+            "$ref": "#/components/schemas/FieldResolution"
+          },
           "truncated": {
             "type": "boolean"
           },

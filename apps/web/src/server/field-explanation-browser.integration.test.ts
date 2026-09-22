@@ -172,4 +172,49 @@ describe("derived field explanations against canonical records", () => {
     expect(linkedExpenses.length).toBeLessThan(31);
     expect(result.truncated).toBe(true);
   });
+
+  it("explains an explicit expense trade override as a typed resolution, not the declared source trio", async () => {
+    const expense = await createExpense(
+      ctx.db,
+      makeExpenseInput({ trade: "electrical" }),
+      ctx.actor,
+    );
+    const explanation = await explainField(context(), {
+      entityType: "expense",
+      entityId: expense.output.id,
+      field: "trade",
+      surface: "detail",
+    });
+    expect(explanation.resolution).toMatchObject({
+      mode: "explicit",
+      storedValue: "electrical",
+      value: "electrical",
+    });
+    expect(explanation.sources).toEqual([]);
+  });
+
+  it("explains an inherited project default trade as a typed resolution with its source project linked", async () => {
+    const parent = await insertWithShortcode(ctx.db, "project", {
+      name: "Explanation parent project",
+      defaultTrade: "building",
+    });
+    const child = await insertWithShortcode(ctx.db, "project", {
+      name: "Explanation child project",
+      parentProjectId: parent.id,
+      defaultTrade: null,
+    });
+    const explanation = await explainField(context(), {
+      entityType: "project",
+      entityId: child.shortcode,
+      field: "defaultTrade",
+      surface: "detail",
+    });
+    expect(explanation.resolution).toMatchObject({
+      mode: "inherit",
+      storedValue: null,
+      value: "building",
+      sourceEntity: { entityType: "project", entityId: parent.shortcode },
+    });
+    expect(explanation.sources).toEqual([]);
+  });
 });

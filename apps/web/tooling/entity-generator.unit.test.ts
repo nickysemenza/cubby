@@ -1379,6 +1379,83 @@ describe("typed entity compiler", () => {
     ).toThrow("must be a date or timestamp field");
   });
 
+  // The native editor renders only the fields a declared `edit.sections`
+  // lists, so a controlled roster field left out of every section would
+  // silently vanish there — the compiler refuses the declaration instead.
+  it("requires declared edit sections to place every controlled roster field", () => {
+    const sectioned = (fields: readonly string[]) =>
+      compileEntityDeclarations([
+        {
+          ...base,
+          model: {
+            ...model,
+            fields: [
+              {
+                key: "name",
+                kind: "text",
+                control: { kind: "text" },
+                validation: {
+                  read: z.string(),
+                  create: z.string().trim().min(1),
+                  update: z.string().trim().min(1).optional(),
+                },
+              },
+              {
+                key: "notes",
+                kind: "text",
+                nullable: true,
+                control: { kind: "textarea" },
+                validation: {
+                  read: z.string().nullable(),
+                  create: z.string().nullable().optional(),
+                  update: z.string().nullable().optional(),
+                },
+              },
+              {
+                key: "pendingImageIds",
+                kind: "text",
+                readKey: null,
+                control: { kind: "text" },
+                provenance: {
+                  kind: "relation",
+                  sources: [{ label: "Images" }],
+                },
+                validation: {
+                  read: null,
+                  create: z.array(z.string()).optional(),
+                  update: z.array(z.string()).optional(),
+                },
+              },
+            ],
+            storage: ["name", "notes"],
+            create: ["name", "notes", "pendingImageIds"],
+            update: ["name", "notes", "pendingImageIds"],
+            output: ["name", "notes"],
+          },
+          presentation: {
+            ...base.presentation,
+            edit: {
+              sections: [
+                { id: "identity", title: "Identity", fields: [...fields] },
+              ],
+            },
+          },
+        },
+      ]);
+    expect(() => sectioned(["name"])).toThrow(
+      "edit.sections leave controlled roster fields unplaced (the native editor drops them): notes",
+    );
+    // The image block owns `pendingImageIds`; it never needs a section.
+    expect(sectioned(["name", "notes"])[0]?.inspector.edit.sections).toEqual([
+      {
+        id: "identity",
+        title: "Identity",
+        fields: ["name", "notes"],
+        collapsed: false,
+      },
+    ]);
+  });
+
   it("compiles a card view for an entity without stored images and preserves captions", () => {
     const [compiled] = compileEntityDeclarations([
       {
@@ -1600,7 +1677,7 @@ describe("typed entity compiler", () => {
       "title: (record) => record.name",
     );
     expect(artifact("entity-routes.gen.ts")).toContain(
-      'product:{basePath:"products",routes:{detail:"/products/$shortcode",list:"/products",create:"page",new:"/products/new"}}',
+      'product:{basePath:"products",routes:{detail:"/products/$shortcode",list:"/products",create:"dialog"}}',
     );
     // Field schemas are read off the declaration BY KEY at load time — never
     // by a positional `definition.model.fields[N]` that a mid-roster insert

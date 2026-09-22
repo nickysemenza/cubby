@@ -95,10 +95,17 @@ export type EntityEditMutationData<
   E extends EditableEntity,
   O extends "create" | "update",
 > = O extends "create" ? EntityEditCreateInput<E> : EntityEditUpdateInput<E>;
-/** The minimum identity every update adapter needs. */
+/**
+ * The minimum identity every update adapter needs. The rest is the entity's
+ * own read projection, which may carry shapes the value bag never accepts
+ * (rows with nested `Date` audit stamps, relation objects) — a field reads
+ * its own key through `projectEntityEditRecordValue` (`value-schema.ts`),
+ * never by trusting the record to be bag-shaped.
+ */
 export interface EntityEditRecord {
   id: string;
-  [field: string]: EntityEditValue;
+  // oxlint-disable-next-line anti-slop/no-unsafe-dictionary-type -- the values are an entity's own already-parsed read projection; the kernel re-parses each key it reads (`projectEntityEditRecordValue`) rather than claiming a bag shape the record does not have.
+  [field: string]: unknown;
 }
 
 /**
@@ -145,12 +152,13 @@ export interface EntityEditField<
   validate(
     input: EntityEditFieldValidationInput<R, V>,
   ): readonly EntityEditIssue[];
-  /** Return undefined for an unchanged value, never an empty patch. */
-  toPatch(input: {
-    value: V;
-    record?: R;
-    context: EntityEditContext;
-  }): P | undefined;
+  /**
+   * Return undefined for an unchanged value, never an empty patch. Receives
+   * the same operation/intent/surface as `initial` so a field can diff
+   * against its own seeded baseline (a projected `initial` value) rather
+   * than the raw record.
+   */
+  toPatch(input: EntityEditFieldInput<R> & { value: V }): P | undefined;
 }
 
 export type EntityEditCommand<

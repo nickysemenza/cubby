@@ -122,7 +122,10 @@ struct EntityFieldControl: View {
     /// Dispatches the generated semantic renderer first. Generic entity-select/money/url
     /// renderers still use the same primitive controls as their `controlKind`; specialized
     /// amount, multi-select, tags, vendor-name, and ledger-attribution controls keep their typed
-    /// behavior.
+    /// behavior. The `default` arm is deliberate, not exhaustive-by-accident: `ControlRendererID`
+    /// is generated from the manifest, so a renderer only web draws (`.structuredField`, the
+    /// image block's `.imageOrder`, any id a future field declares) must compile here and draw
+    /// nothing — `NativePresentationCoverage.control` is what reports it unsupported.
     @ViewBuilder
     private var specialized: some View {
         if let renderer = field.controlRenderer {
@@ -144,7 +147,7 @@ struct EntityFieldControl: View {
             case .ledgerAttributions:
                 LedgerAttributionsControl(
                     field: field, model: model, pickedTitles: $pickedTitles)
-            case .imageOrder, .structuredField:
+            default:
                 EmptyView()
             }
         } else {

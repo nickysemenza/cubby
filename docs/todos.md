@@ -196,11 +196,6 @@ history is the archive. Permanent product constraints live in the
   prefer the project whose other expenses share the line's trade. Feed the
   affinity cells into `renderLine` and re-evaluate on `/ai-usage`.
 
-- **Product edit still opens `ProductForm` in a dialog** instead of the
-  generic editor's `structured-field` renderers, because `unitMappings` and
-  `labelNutrition` have no generic port yet. Port them (see
-  `product-form-fields.tsx`) and delete the dedicated dialog.
-
 - **Make grouped entity lists correct across pagination and sorting.** Grouping
   already reaches the server, but headers count only loaded rows and omit
   groups not yet loaded. Keep grouping primary before pagination, with

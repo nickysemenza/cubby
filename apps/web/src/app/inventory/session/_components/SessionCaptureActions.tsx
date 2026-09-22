@@ -585,9 +585,10 @@ function ManualAdd({ locationId }: { locationId: LocationShortcode }) {
     },
   });
 
-  // Name-only quick-create for unbarcoded garage items: skip the full ProductForm
-  // (manufacturer required) and use the quickCreate endpoint, which defaults the
-  // manufacturer. The created product is selected straight into the picker.
+  // Name-only quick-create for unbarcoded garage items: skip the generic
+  // create dialog (manufacturer required) and use the quickCreate endpoint,
+  // which defaults the manufacturer. The created product is selected
+  // straight into the picker.
   const quickCreateProduct = useMutation(product.quickCreate.mutationOptions());
   const quickCreateMutateRef = useRef(quickCreateProduct.mutateAsync);
   quickCreateMutateRef.current = quickCreateProduct.mutateAsync;
