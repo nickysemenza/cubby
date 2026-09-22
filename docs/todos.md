@@ -27,16 +27,13 @@ history is the archive. Permanent product constraints live in the
 
 ## Easy fixes
 
-- **Silent side-effect failures with no caller channel.** Two best-effort
-  paths swallow a failure the caller cannot see (both annotated `SILENT:` and
-  guarded by the `cubby/no-swallowed-catch` rule): the CalDAV feed dirty-mark
-  in `server/calendar/client.ts` runs after the response is committed, so a
-  failure leaves the feed stale until the next successful write; and the
-  UPC/ISBN cover-photo import in `server/services/product-orchestration.service.ts`
-  (four sites) leaves a product looking finished with no image. Give the
-  product mutation result a `sideEffects`/warnings field the web and MCP
-  surfaces render, and move the feed dirty-mark onto the write's own
-  transaction or a retried queue message.
+- **CalDAV feed dirty-mark can fail silently.** The dirty-mark in
+  `server/calendar/client.ts` (annotated `SILENT:`, guarded by the
+  `cubby/no-swallowed-catch` rule) runs after the response is committed, so a
+  failure leaves the feed stale until the next successful write. Move it onto
+  the write's own transaction or a retried queue message. (Product mutations
+  now carry `sideEffects.warnings` for best-effort failures if a caller-visible
+  channel is wanted instead.)
 
 - **Canvas conformance follow-ups.** The generic pages now render the
   canvas (<https://claude.ai/artifact/A45j5qz24RjRK6KzKmKLWL>): one 44px
@@ -54,21 +51,12 @@ history is the archive. Permanent product constraints live in the
     selected, so nothing is unreachable.
   - The timeline list view keeps its own controls inside the body; the
     ListTimeline artboard draws them as a second 40px band (mode seg, From /
-    To chips, order seg, cohort line); the product read's own cap is the
-    next entry.
+    To chips, order seg, cohort line).
   - The phone band still carries the grouped toggle beside the view seg;
     the artboard's band has only seg · search · Filter — fold it into the
     Filter sheet with sort and columns.
   - The canvas's NEXT SESSION note still describes this pass; retire it on
     the next canvas edit.
-
-- **Cap the product timeline like the default one.** `productTimeline`
-  (`server/repo/product/movement-timeline.ts`) returns one lifecycle row per
-  product in the cohort; an unfiltered `/products?view=timeline` ran 19.6 s
-  and rendered ~7 MB of DOM for 6,085 rows. Apply the default
-  implementation's 500-row cap with the truncation stated in `notes`/`stats`,
-  or page `rows`, and have the list mount refuse to run the read until a
-  filter narrows the cohort.
 
 - **Declare `control.options` on enum fields that lack them.** Product
   `category` and inventory `placement` now declare theirs. Thirteen select
@@ -154,12 +142,6 @@ history is the archive. Permanent product constraints live in the
   client side is ready — the sync plans a whole pass before sending, so it has
   the full pending list in hand.
 
-- **Resolve arrival findings after receiving.** The import writer files
-  `arrived` findings, but the interactive receive flow does not resolve them.
-  Connect successful receiving to the corresponding finding's lifecycle;
-  retain findings for partial receipts and never receive automatically. This
-  closes the [Delivered flow](plans/purchase-import-redesign.md#5-flows).
-
 - **Post-import shelf triage.** After a vendor purchase import every new
   product lands in the `unlocated` saved view (`entities/view-manifest.ts`:
   bought, never sold, held nowhere) and the operator decides each one by hand:
@@ -177,14 +159,6 @@ history is the archive. Permanent product constraints live in the
   (`problem-actions.ts` `start-recount`), optionally scoped to one import run
   (`product-import-runs.tsx` already knows it). Receiving stays explicit
   (purchase-import plan decision 15).
-
-- **Expense project suggestion ignores trade affinity.** The
-  `expense.projectId` roster in `server/ai/field-suggest/registry.ts` is
-  `projectNameOptions` plus each project's date window; the same-trade
-  affinity `rankProjectSuggestions` (`services/project-suggestions.ts`)
-  already computes is not rendered into the roster lines, so Jev cannot
-  prefer the project whose other expenses share the line's trade. Feed the
-  affinity cells into `renderLine` and re-evaluate on `/ai-usage`.
 
 - **Make grouped entity lists correct across pagination and sorting.** Grouping
   already reaches the server, but headers count only loaded rows and omit
@@ -328,13 +302,6 @@ history is the archive. Permanent product constraints live in the
   from a photo pasted into chat. Accept an attached image on the product and
   extract the Nutrition Facts panel into `labelNutrition` with the image as
   provenance.
-
-- **Line-level recipe patch over MCP.** Three one-field edits (onion `1 whole`
-  → `150 g`, basil `1 handful` → `15 g`, pasta 175 → 150 g) each resent all 12
-  lines and 6 instructions because the read projection strips section/line ids
-  and an update without section `id` replaces every section (see the compound
-  ingredient split note). Add `{action: "patchLine", recipeId, lineId, …}`;
-  `explain_recipe_costing` already exposes line ids.
 
 - **USDA search ranking and product-driven suggestion.** `search_usda_foods`
   is phrase/AND matching: `"chicken breast ground raw"` (sr_legacy) → 0,
@@ -929,6 +896,13 @@ history is the archive. Permanent product constraints live in the
   distort the MCP usage dashboard. The batch attributes telemetry to its first item's
   entity because one row has nowhere to put a set; a batch spanning entities
   under-reports the rest.
+
+- **Evaluate trade affinity in expense project suggestions** — Check once the
+  `expense.projectId` roster's per-project trade tallies (`renderLine` in
+  `server/ai/field-suggest/registry.ts`) have served real suggestions in
+  production: compare accept/override rates on `/ai-usage` against the
+  date-window-only roster, and drop the tallies if they add tokens without
+  better picks.
 
 - **Exact nutrition source tracing** — Resume when upstream conversion work is in
   scope. Extend `ingredient-parser` reports to retain actual mapping identities,

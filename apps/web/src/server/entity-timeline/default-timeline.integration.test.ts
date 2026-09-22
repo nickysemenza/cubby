@@ -14,7 +14,7 @@ import {
 import { getDb } from "~/server/repo/database-helpers";
 import { createTestRequestContext } from "~/server/testing/request-context";
 
-import { defaultTimeline, TIMELINE_ROW_CAP } from "./default-timeline";
+import { defaultTimeline } from "./default-timeline";
 
 const createdTask = async (
   context: ReturnType<typeof entityKernelContextSchema.parse>,
@@ -42,10 +42,16 @@ describe("default entity timeline", () => {
     );
   const timeline = (
     window: Parameters<typeof parseEntityTimelineInput<"task">>[1]["window"],
+    pagination = { pageIndex: 0, pageSize: 200 },
   ) =>
     defaultTimeline(
       context(),
-      parseEntityTimelineInput("task", { entity: "task", filters: {}, window }),
+      parseEntityTimelineInput("task", {
+        entity: "task",
+        filters: {},
+        window,
+        pagination,
+      }),
     );
 
   it("emits audit and declared-date events for the scope, ordered and windowed as asked", async () => {
@@ -186,33 +192,47 @@ describe("default entity timeline", () => {
     ]);
   });
 
-  it("caps the scope at the row cap and says so in both notes and stats", async () => {
-    const db = ctx.db;
-    // This exercises timeline capping; one batch avoids spending the test's
-    // time budget on 501 unrelated fixture-creation round trips.
-    await getDb(db)
+  it("pages the scope newest-first with a stable boundary and reports the full count", async () => {
+    // One batch with explicit creation times, so the page order is the
+    // contract under test rather than insert timing.
+    const codes = Array.from({ length: 5 }, (_, index) =>
+      testShortcode("task", `page-${index}`),
+    );
+    await getDb(ctx.db)
       .insert(task)
       .values(
-        Array.from({ length: TIMELINE_ROW_CAP + 1 }, (_, index) => ({
-          shortcode: testShortcode("task", `cap-${index}`),
-          name: `Filler ${index}`,
+        codes.map((shortcode, index) => ({
+          shortcode,
+          name: `Paged ${index}`,
           status: "not_started" as const,
           trade: "other" as const,
+          createdAt: new Date(Date.UTC(2026, 0, 1 + index)),
         })),
       );
-    const out = await timeline({ order: "desc" });
-    expect(out.notes).toEqual([
-      `Showing the newest ${TIMELINE_ROW_CAP} of ${TIMELINE_ROW_CAP + 1} matching records; narrow the filters to see the rest.`,
+    const page = async (pageIndex: number) => {
+      const out = await timeline({ order: "desc" }, { pageIndex, pageSize: 2 });
+      return { out, ids: (out.rows ?? []).map((row) => row.id) };
+    };
+
+    const first = await page(0);
+    const second = await page(1);
+    const last = await page(2);
+    expect([first.ids, second.ids, last.ids]).toEqual([
+      [codes[4], codes[3]],
+      [codes[2], codes[1]],
+      [codes[0]],
     ]);
-    expect(out.stats).toEqual(
+    expect(first.out.meta).toEqual({
+      totalCount: 5,
+      pageIndex: 0,
+      pageSize: 2,
+    });
+    expect(last.out.meta).toEqual({ totalCount: 5, pageIndex: 2, pageSize: 2 });
+    expect(first.out.stats).toEqual(
       expect.arrayContaining([
-        {
-          key: "records",
-          label: "Records",
-          value: `${TIMELINE_ROW_CAP} of ${TIMELINE_ROW_CAP + 1}`,
-        },
+        { key: "records", label: "Records", value: "2 of 5" },
       ]),
     );
-    expect(out.rows).toHaveLength(TIMELINE_ROW_CAP);
+    expect((await page(3)).ids).toEqual([]);
   });
 });

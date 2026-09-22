@@ -20,9 +20,7 @@ import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import { getAuditLog } from "~/server/repo/audit-log";
 import { resolveLiveShortcodes } from "~/server/repo/shortcode-resolver";
 
-/** The list scope is read in one page; a wider cohort is truncated and said so. */
-export const TIMELINE_ROW_CAP = 500;
-/** Audit entries read for the cohort, newest first. */
+/** Audit entries read for the page's records, newest first. */
 const TIMELINE_AUDIT_CAP = 1000;
 const ID_GET_CONCURRENCY = 25;
 
@@ -89,18 +87,26 @@ const recordLink = (entity: TimelineEntity, record: TimelineRecord) => ({
   id: record.id,
 });
 
+/**
+ * One page of the records in scope. The list read is `createdAt` in the
+ * window's order with the list scaffold's id tie-break, so page 1 holds the
+ * records the chosen order shows first and pages are stable; `window.ids`
+ * pages in the order the ids were given.
+ */
 async function loadRecords(
   context: EntityKernelContext,
   input: ParsedEntityTimelineInputByEntity[TimelineEntity],
 ): Promise<{ records: TimelineRecord[]; totalCount: number }> {
-  const { entity, filters, window } = input;
+  const { entity, filters, window, pagination } = input;
   if (window.ids) {
     // A detail page mounts with one id; a batched `get` per id is bounded by
     // the window schema (≤500) and never scans the list.
+    const start = pagination.pageIndex * pagination.pageSize;
+    const pageIds = window.ids.slice(start, start + pagination.pageSize);
     const records: TimelineRecord[] = [];
-    for (let at = 0; at < window.ids.length; at += ID_GET_CONCURRENCY) {
+    for (let at = 0; at < pageIds.length; at += ID_GET_CONCURRENCY) {
       const results = await Promise.all(
-        window.ids.slice(at, at + ID_GET_CONCURRENCY).map((id) =>
+        pageIds.slice(at, at + ID_GET_CONCURRENCY).map((id) =>
           executeEntity(context, {
             action: "get",
             entity,
@@ -116,14 +122,14 @@ async function loadRecords(
           records.push(timelineRowSchema.parse(result.item));
       }
     }
-    return { records, totalCount: records.length };
+    return { records, totalCount: window.ids.length };
   }
   const result = await executeEntity(context, {
     action: "list",
     entity,
     filters,
-    sort: [{ orderBy: "createdAt", direction: "desc" }],
-    pagination: { pageIndex: 0, pageSize: TIMELINE_ROW_CAP },
+    sort: [{ orderBy: "createdAt", direction: window.order }],
+    pagination,
   });
   if (result.action !== "list")
     throw new Error("Entity kernel returned the wrong action");
@@ -328,7 +334,16 @@ export async function defaultTimeline(
   context: EntityKernelContext,
   input: ParsedEntityTimelineInputByEntity[TimelineEntity],
 ): Promise<EntityTimelineOut> {
-  const { entity, window } = input;
+  return (await defaultTimelinePage(context, input)).out;
+}
+
+/** {@link defaultTimeline} plus the live ids of the page's records, for a
+ * custom implementation that decorates the same page. */
+export async function defaultTimelinePage(
+  context: EntityKernelContext,
+  input: ParsedEntityTimelineInputByEntity[TimelineEntity],
+): Promise<{ out: EntityTimelineOut; recordIds: string[] }> {
+  const { entity, window, pagination } = input;
   const declared = entitySummary[entity].list.timeline;
   const lifecycle = declared?.lifecycle ?? null;
   const dateKeys =
@@ -340,12 +355,8 @@ export async function defaultTimeline(
 
   const { records, totalCount } = await loadRecords(context, input);
   const recordById = new Map(records.map((record) => [record.id, record]));
-  const truncated = totalCount > records.length;
+  const paged = totalCount > records.length;
   const notes: string[] = [];
-  if (truncated)
-    notes.push(
-      `Showing the newest ${records.length} of ${totalCount} matching records; narrow the filters to see the rest.`,
-    );
 
   const uuidByCode = await resolveLiveShortcodes(
     context.readDb,
@@ -377,7 +388,7 @@ export async function defaultTimeline(
       {
         key: "records",
         label: "Records",
-        value: truncated
+        value: paged
           ? `${records.length} of ${totalCount}`
           : String(totalCount),
       },
@@ -389,9 +400,10 @@ export async function defaultTimeline(
       },
     ],
     notes,
+    meta: { totalCount, ...pagination },
   };
   if (rows) out.rows = rows;
   const extent = extentOf(events, rows ?? [], window);
   if (extent) out.extent = extent;
-  return out;
+  return { out, recordIds: [...uuidByCode.values()] };
 }

@@ -68,6 +68,7 @@ import {
   TRADE_RULES,
 } from "~/server/ai/vocabularies";
 import type { Database } from "~/server/db";
+import { expenseTradeAffinity } from "~/server/repo/expense/analytics";
 import {
   getLocationPutAwayCandidates,
   type LocationPutAwayCandidate,
@@ -212,15 +213,55 @@ const locationAncestorPath = (
 const renderProjectOption = (candidate: ProjectOptionsOut): string =>
   `${candidate.id} | ${candidate.name}`;
 
+/** A project option plus its per-trade expense history. */
+interface ExpenseProjectOption extends ProjectOptionsOut {
+  tradeAffinity: readonly { trade: Trade; count: number }[];
+}
+
+/**
+ * The expense→project roster carries the same project × trade matrix
+ * `rankProjectSuggestions` weights by. The basis cannot include the
+ * expense's own `trade` (the reverse edge of `expense.trade`'s basis would
+ * be cyclic), so each line lists the project's trade tallies and Jev matches
+ * the expense against them.
+ */
+async function expenseProjectRoster(
+  db: Database,
+): Promise<ExpenseProjectOption[]> {
+  const [projects, affinity] = await Promise.all([
+    projectNameOptions(db),
+    expenseTradeAffinity(db),
+  ]);
+  const byProject = new Map<string, { trade: Trade; count: number }[]>();
+  for (const cell of affinity) {
+    const cells = byProject.get(cell.projectId) ?? [];
+    cells.push({ trade: cell.trade, count: cell.count });
+    byProject.set(cell.projectId, cells);
+  }
+  return projects.map((project) => ({
+    ...project,
+    tradeAffinity: byProject.get(project.id) ?? [],
+  }));
+}
+
+/** Most-charged trade first, so the line leads with the project's strongest
+ * signal. */
+const renderExpenseProjectOption = (candidate: ExpenseProjectOption): string =>
+  candidate.tradeAffinity.length === 0
+    ? renderProjectOption(candidate)
+    : `${renderProjectOption(candidate)} — expenses by trade: ${[
+        ...candidate.tradeAffinity,
+      ]
+        .sort((a, b) => b.count - a.count || a.trade.localeCompare(b.trade))
+        .map(({ trade, count }) => `${TRADE_LABELS[trade]} ${count}`)
+        .join(", ")}`;
+
 /**
  * DEVIATION from the plan's literal `"<id> | <name> (<kind>, <status>)"`
  * line: `projectNameOptions` (the roster this spec reuses) returns only
  * `{id, name, icon, effectiveStart, effectiveEnd}` — no `kind`/`status` — so
  * the detail line shows the effective date window instead, when there is
- * one. `rankProjectSuggestions` affinity hints are not folded in either:
- * they need per-trade expense counts this roster doesn't have, and the
- * plan allows falling back to "plain name" lines when that isn't
- * straightforward.
+ * one.
  */
 const projectOptionDetail = (candidate: ProjectOptionsOut): string | null =>
   candidate.effectiveStart
@@ -521,13 +562,13 @@ export const FIELD_SUGGEST_REGISTRY = {
     rules:
       "You are a project-linking assistant. Given an expense and the household's projects, choose the ONE project it belongs to, or none if it isn't tied to a project.",
     maxCandidates: REFERENCE_ROSTER_CAP,
-    roster: (db) => projectNameOptions(db),
+    roster: expenseProjectRoster,
     idOf: (c) => c.id,
     labelOf: (c) => c.name,
     detailOf: projectOptionDetail,
-    renderLine: renderProjectOption,
+    renderLine: renderExpenseProjectOption,
     subject: (basis) => renderSubject("expense", basis),
-  } satisfies ReferenceSuggestSpec<ProjectOptionsOut>,
+  } satisfies ReferenceSuggestSpec<ExpenseProjectOption>,
   "expense.productId": {
     kind: "reference",
     entity: "product",

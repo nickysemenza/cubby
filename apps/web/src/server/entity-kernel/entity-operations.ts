@@ -1,4 +1,7 @@
-import { EMPTY_MUTATION_SIDE_EFFECTS } from "@cubby/schemas/background-jobs";
+import {
+  EMPTY_MUTATION_SIDE_EFFECTS,
+  mutationSideEffectsWithWarnings,
+} from "@cubby/schemas/background-jobs";
 import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
 import {
   ENTITY_LABEL,
@@ -422,7 +425,7 @@ export const defineEntityOperations = <
             binding.schemas.output,
             created.output,
           ),
-          sideEffects: EMPTY_MUTATION_SIDE_EFFECTS,
+          sideEffects: mutationSideEffectsWithWarnings(created.warnings),
         }),
       ),
     <TInput>(context: EntityKernelContext, input: TInput) => ({
@@ -481,7 +484,7 @@ export const defineEntityOperations = <
             binding.schemas.output,
             updated.output,
           ),
-          sideEffects: EMPTY_MUTATION_SIDE_EFFECTS,
+          sideEffects: mutationSideEffectsWithWarnings(updated.warnings),
         }),
       ),
     <TInput>(context: EntityKernelContext, id: string, data: TInput) => ({

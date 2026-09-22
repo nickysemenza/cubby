@@ -25,18 +25,11 @@ export const productionRecipeImageImportPort: RecipeImageImportPort = {
 };
 
 /**
- * Import an image from UPC lookup and associate it with a product.
+ * Import the UPC lookup's cover image and attach it to the product.
  *
- * This function:
- * 1. Looks up the UPC to get the imageUrl
- * 2. If imageUrl exists, imports the image to R2
- * 3. Associates the image with the product
- *
- * @param db Database client
- * @param upcLookupClient UPC lookup client instance
- * @param upc UPC code to look up
- * @param productId Product ID to associate the image with
- * @returns Object with imageId, or null on failure
+ * Returns null only when the lookup has no image to import; a lookup, fetch,
+ * or storage failure throws so the caller can report it (callers treat the
+ * cover as best-effort and turn the error into a warning or a failed row).
  */
 export const importImageFromUPC = async (
   db: Database,
@@ -44,41 +37,22 @@ export const importImageFromUPC = async (
   upc: string,
   productId: ProductId,
 ): Promise<{ imageId: string } | null> => {
-  try {
-    const upcData = await upcLookupClient.lookup(upc);
+  const upcData = await upcLookupClient.lookup(upc);
+  if (!upcData?.imageUrl) return null;
 
-    if (!upcData?.imageUrl) {
-      return null;
-    }
+  const fullImageUrl = new URL(
+    upcData.imageUrl,
+    env.UPC_LOOKUP_API_URL,
+  ).toString();
+  const imported = await importImageFromUrl(db, {
+    sourceUrl: fullImageUrl,
+    filenamePrefix: `upc-${upc}`,
+  });
+  if (!imported)
+    throw new Error(`No image could be fetched from ${fullImageUrl}`);
 
-    const fullImageUrl = new URL(
-      upcData.imageUrl,
-      env.UPC_LOOKUP_API_URL,
-    ).toString();
-
-    // 3. Import the image to R2 and create image record
-    const imported = await importImageFromUrl(db, {
-      sourceUrl: fullImageUrl,
-      filenamePrefix: `upc-${upc}`,
-    });
-
-    if (!imported) {
-      console.warn(
-        `[importImageFromUPC] Failed to import image for UPC ${upc}`,
-      );
-      return null;
-    }
-
-    await associateImagesWithProduct(db, productId, [imported.imageId]);
-
-    return { imageId: imported.imageId };
-  } catch (error) {
-    console.error(
-      `[importImageFromUPC] Error importing image for UPC ${upc}:`,
-      error,
-    );
-    return null;
-  }
+  await associateImagesWithProduct(db, productId, [imported.imageId]);
+  return { imageId: imported.imageId };
 };
 
 /**

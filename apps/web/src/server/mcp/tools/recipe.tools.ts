@@ -36,6 +36,10 @@ import {
   WRITE_CLOSED,
 } from "./_shared";
 import { fromContract, mcpItemsEnvelope } from "./contract-envelope";
+import {
+  buildRecipeLinePatch,
+  recipeLinePatchFields,
+} from "./recipe-line-patch";
 
 /** `{items}` over `cookbook.list`'s own output — see `mcpItemsEnvelope`. */
 const cookbookSummariesMcpOut = mcpItemsEnvelope(
@@ -111,7 +115,70 @@ export const buildRecipeNutrition = (input: {
   });
 };
 
+const recipeLinePatchInput = z.object({
+  recipeId: idParam("recipe"),
+  // Declared exception: a recipe line has no shortcode; this is the row id
+  // `find_recipes_using_ingredient` (usages[].lineId) and
+  // `explain_recipe_costing` (per-line diagnostics id) return.
+  lineId: z.uuid(),
+  patch: recipeLinePatchFields,
+});
+
+const recipeLinePatchOut = z.object({
+  recipeId: idParam("recipe"),
+  line: z.object({
+    type: z.enum(["ingredient", "recipe"]),
+    ingredientId: idParam("ingredient").nullable(),
+    subRecipeId: idParam("recipe").nullable(),
+    amounts: z.array(z.object({ value: z.number(), unit: z.string() })),
+    rawLine: z.string().nullish(),
+    modifier: z.string().nullish(),
+  }),
+});
+
 export function registerRecipeTools(server: McpServer) {
+  registerMcpTool(server, {
+    name: "patch_recipe_line",
+    description:
+      "Change one recipe ingredient line — its amounts, the ingredient or sub-recipe it points at, or its source text/modifier — without resending the recipe's sections. The line keeps its position and every other line and instruction is left as-is. Get `lineId` from explain_recipe_costing's per-line diagnostics or find_recipes_using_ingredient's usages.",
+    inputSchema: recipeLinePatchInput,
+    outputSchema: recipeLinePatchOut,
+    annotations: WRITE_CLOSED,
+    handler: async (params, extra) => {
+      const context = getEntityKernelContext(extra);
+      const detail = await executeEntity(context, {
+        action: "get",
+        entity: "recipe",
+        id: params.recipeId,
+        missing: "error",
+      });
+      if (detail.action !== "get" || detail.entity !== "recipe" || !detail.item)
+        throw createAppError("RECIPE_NOT_FOUND", "Recipe not found");
+      const { sections, line } = buildRecipeLinePatch(
+        detail.item,
+        params.lineId,
+        params.patch,
+      );
+      await executeEntity(context, {
+        action: "update",
+        entity: "recipe",
+        id: params.recipeId,
+        data: { sections },
+      });
+      return {
+        recipeId: params.recipeId,
+        line: {
+          type: line.type,
+          ingredientId: line.ingredientId,
+          subRecipeId: line.recipeId,
+          amounts: line.amounts,
+          rawLine: line.rawLine,
+          modifier: line.modifier,
+        },
+      };
+    },
+  });
+
   registerMcpTool(server, {
     name: "get_recipe_nutrition",
     description:

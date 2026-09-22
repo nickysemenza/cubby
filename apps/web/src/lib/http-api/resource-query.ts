@@ -1,4 +1,8 @@
-import { entityTimelineWindowFor } from "@cubby/schemas/entity-timeline";
+import {
+  ENTITY_TIMELINE_DEFAULT_PAGE_SIZE,
+  ENTITY_TIMELINE_MAX_PAGE_SIZE,
+  entityTimelineWindowFor,
+} from "@cubby/schemas/entity-timeline";
 import {
   MAX_PAGE_SIZE,
   MAX_SORTS,
@@ -228,16 +232,39 @@ function flatQuery(filters: z.ZodObject, entityControls: z.ZodObject) {
   return query;
 }
 
+/**
+ * A timeline page, spelled like the list's `page`/`pageSize` controls but
+ * bounded by the timeline's own page size.
+ */
+const timelinePagingControls = z.object({
+  page: z
+    .number()
+    .int()
+    .min(1)
+    .optional()
+    .describe("Page number, starting at 1 (default 1)"),
+  pageSize: z
+    .number()
+    .int()
+    .min(1)
+    .max(ENTITY_TIMELINE_MAX_PAGE_SIZE)
+    .optional()
+    .describe(
+      `Records per page (default ${ENTITY_TIMELINE_DEFAULT_PAGE_SIZE}, maximum ${ENTITY_TIMELINE_MAX_PAGE_SIZE})`,
+    ),
+});
+
 export type ResourceTimelineQuery<
   Filters extends z.ZodTypeAny,
   Id extends z.ZodType<string>,
 > = Flat<Json<z.input<Filters>>> &
-  z.input<ReturnType<typeof entityTimelineWindowFor<Id>>>;
+  z.input<ReturnType<typeof entityTimelineWindowFor<Id>>> &
+  z.input<typeof timelinePagingControls>;
 
 /**
  * The wire schema of a resource timeline: the same flat filter parameters as
  * the list plus the timeline window (`ids` repeats its key, `from`/`to` are
- * calendar dates, `order` defaults to newest first).
+ * calendar dates, `order` defaults to newest first) and `page`/`pageSize`.
  */
 export function resourceTimelineQuery<
   Filters extends z.ZodObject,
@@ -249,11 +276,14 @@ export function resourceTimelineQuery<
   ResourceTimelineQuery<Filters, Id>,
   ResourceTimelineQuery<Filters, Id>
 > {
-  const window = toWire(entityTimelineWindowFor(id), "query");
+  const window = toWire(
+    entityTimelineWindowFor(id).extend(timelinePagingControls.shape),
+    "query",
+  );
   if (!(window instanceof z.ZodObject))
     throw new Error("Timeline window must project onto a query object");
-  // SAFETY: as for `resourceListQuery`, with the window in place of the
-  // paging controls.
+  // SAFETY: as for `resourceListQuery`, with the window and paging in place
+  // of the list controls.
   return flatQuery(filters, window) as z.ZodType<
     ResourceTimelineQuery<Filters, Id>,
     ResourceTimelineQuery<Filters, Id>
@@ -284,6 +314,7 @@ const timelineWindowKeys = new Set<string>(
 export interface ResourceTimelineInput {
   filters: Record<string, UnparsedStartOperationData>;
   window: Record<string, UnparsedStartOperationData>;
+  pagination?: { pageIndex: number; pageSize: number };
 }
 
 /** Map a validated resource-timeline query onto the entity timeline input. */
@@ -293,11 +324,25 @@ export function resourceTimelineInputFrom(
 ): ResourceTimelineInput {
   const window: Record<string, UnparsedStartOperationData> = {};
   const rest: Record<string, UnparsedStartOperationData> = {};
+  const { page, pageSize } = timelinePagingControls.parse({
+    page: values.page,
+    pageSize: values.pageSize,
+  });
   for (const [name, value] of Object.entries(values)) {
+    if (Object.hasOwn(timelinePagingControls.shape, name)) continue;
     if (timelineWindowKeys.has(name)) window[name] = value;
     else rest[name] = value;
   }
-  return { filters: resourceListInputFrom(rest, nesting).filters, window };
+  const input: ResourceTimelineInput = {
+    filters: resourceListInputFrom(rest, nesting).filters,
+    window,
+  };
+  if (page !== undefined || pageSize !== undefined)
+    input.pagination = {
+      pageIndex: (page ?? 1) - 1,
+      pageSize: pageSize ?? ENTITY_TIMELINE_DEFAULT_PAGE_SIZE,
+    };
+  return input;
 }
 
 /** Map a validated resource-list query onto the entity list operation input. */

@@ -150,13 +150,15 @@ function requestInput(
           entity,
         };
       case "timeline": {
-        const { filters, window } = resourceTimelineInputFrom(
-          resourceQueryValues.parse(payload),
-          route.query instanceof z.ZodType
-            ? resourceQueryNesting(route.query)
-            : new Map(),
-        );
-        return { entity, filters, window };
+        return {
+          entity,
+          ...resourceTimelineInputFrom(
+            resourceQueryValues.parse(payload),
+            route.query instanceof z.ZodType
+              ? resourceQueryNesting(route.query)
+              : new Map(),
+          ),
+        };
       }
       case "get":
         return { entity, shortcode: id() };

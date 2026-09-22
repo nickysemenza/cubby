@@ -86,6 +86,11 @@ extension PreviewFixtures {
           "extent": {
             "from": "2026-03-02",
             "to": "2026-03-09"
+          },
+          "meta": {
+            "totalCount": 188,
+            "pageIndex": 996,
+            "pageSize": 260
           }
         }
         """#

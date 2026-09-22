@@ -6,7 +6,8 @@ import { plainDate } from "./base-entity";
  * `resources.<entity>.timeline`: the entity's dated history over a list
  * scope. `filters` are the entity's own list filters (flattened onto the
  * query string), `ids` narrows to specific records (a detail page mounts the
- * timeline with `ids: [record.id]`), and `from`/`to` bound the window.
+ * timeline with `ids: [record.id]`), `from`/`to` bound the window, and the
+ * input's `pagination` (beside the window) selects one page of records.
  */
 export const entityTimelineOrder = z.enum(["asc", "desc"]);
 export type EntityTimelineOrder = z.infer<typeof entityTimelineOrder>;
@@ -18,6 +19,30 @@ export const entityTimelineWindowFor = <Id extends z.ZodType<string>>(id: Id) =>
     to: plainDate.optional(),
     order: entityTimelineOrder.default("desc"),
   });
+/** Timeline pages are bounded like list pages; a page is a set of records (rows). */
+export const ENTITY_TIMELINE_MAX_PAGE_SIZE = 500;
+export const ENTITY_TIMELINE_DEFAULT_PAGE_SIZE = 200;
+
+/**
+ * The entity-list kernel's `pagination` shape. Each implementation pages the
+ * records its rows and events come from in a deterministic order, and
+ * reports the full scope in `meta.totalCount`.
+ */
+export const entityTimelinePagination = z
+  .object({
+    pageIndex: z.number().int().min(0).default(0),
+    pageSize: z
+      .number()
+      .int()
+      .min(1)
+      .max(ENTITY_TIMELINE_MAX_PAGE_SIZE)
+      .default(ENTITY_TIMELINE_DEFAULT_PAGE_SIZE),
+  })
+  .prefault({});
+export type EntityTimelinePagination = z.output<
+  typeof entityTimelinePagination
+>;
+
 /** The window with unbranded ids; the generated per-entity inputs brand them. */
 export const entityTimelineWindow = entityTimelineWindowFor(z.string().min(1));
 export type EntityTimelineWindow = z.infer<typeof entityTimelineWindow>;
@@ -79,6 +104,14 @@ export const entityTimelineStat = z.object({
   value: z.string(),
 });
 
+export const entityTimelineMeta = z.object({
+  /** Records in scope across every page. */
+  totalCount: z.number().int().nonnegative(),
+  pageIndex: z.number().int().nonnegative(),
+  pageSize: z.number().int().positive().max(ENTITY_TIMELINE_MAX_PAGE_SIZE),
+});
+export type EntityTimelineMeta = z.infer<typeof entityTimelineMeta>;
+
 export const entityTimelineOut = z.object({
   groups: z.array(entityTimelineGroup),
   /** Present only when the entity declares `list.timeline.lifecycle` or a custom implementation supplies rows. */
@@ -87,5 +120,6 @@ export const entityTimelineOut = z.object({
   /** Human-readable caveats (truncation, inferred bounds). */
   notes: z.array(z.string()),
   extent: z.object({ from: plainDate, to: plainDate }).optional(),
+  meta: entityTimelineMeta,
 });
 export type EntityTimelineOut = z.infer<typeof entityTimelineOut>;

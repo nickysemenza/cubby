@@ -2,11 +2,16 @@ import { expenseCreateInput } from "@cubby/schemas/project";
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
 import type { UPCLookupResponse } from "@cubby/upc-contract";
 import type { FoodSummary } from "@cubby/usda-schemas";
+import { fromPartial } from "@total-typescript/shoehorn";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import type { UpcLookupPort } from "~/server/clients/upc-lookup";
+import type {
+  UPCLookupClient,
+  UpcLookupPort,
+} from "~/server/clients/upc-lookup";
 import type { UsdaFoodLookupPort } from "~/server/clients/usda";
+import { executeEntity } from "~/server/entity-kernel";
 import { createExpense } from "~/server/repo/expense";
 import { quickCreateProduct } from "~/server/repo/product";
 import {
@@ -14,9 +19,11 @@ import {
   makeExpenseInput,
   makeProductInput,
 } from "~/server/repo/repo.fixtures";
+import { requireActor } from "~/server/request-context";
 import { runDiagnostic } from "~/server/services/problem-diagnostics.service";
 import { createProductWriteActions } from "~/server/services/product.service";
 import { RecipeCostingService } from "~/server/services/recipe-costing.service";
+import { createTestRequestContext } from "~/server/testing/request-context";
 
 import {
   applyUpcDataWithSideEffects,
@@ -118,7 +125,11 @@ describe("findOrCreateByUPC", () => {
       ctx.actor,
     );
 
-    expect(result).toEqual({ product: existing, created: false });
+    expect(result).toEqual({
+      product: existing,
+      created: false,
+      sideEffects: { backgroundBatches: [] },
+    });
   });
 
   it("branch 2: creates from a USDA match when no local product exists", async () => {
@@ -161,6 +172,26 @@ describe("findOrCreateByUPC", () => {
     expect(result.product.name).toBe("Widget Deluxe");
     expect(result.product.manufacturer).toBe("Widget Co");
     expect(result.product.price).toBe(4.99);
+  });
+
+  it("reports a failed cover-photo import as a warning without failing the create", async () => {
+    const upc = "035555555555";
+    const result = await findOrCreateByUPC(
+      ctx.db,
+      usdaClient(),
+      upcLookupClient(async () =>
+        upcResponse({ upc, imageUrl: "http://127.0.0.1/cover.jpg" }),
+      ),
+      upc,
+      undefined,
+      ctx.actor,
+    );
+
+    expect(result.created).toBe(true);
+    expect(result.product.name).toBe("Widget Deluxe");
+    expect(result.sideEffects.warnings).toEqual([
+      `Cover photo import for ${upc} failed: External URL points to a private or local host`,
+    ]);
   });
 
   it("branch 4: creates a default product when nothing is found anywhere", async () => {
@@ -270,7 +301,11 @@ describe("findOrCreateByCode", () => {
       { kind: "scan", value: ` ${upc} ` },
       ctx.actor,
     );
-    expect(result).toEqual({ product: existing, created: false });
+    expect(result).toEqual({
+      product: existing,
+      created: false,
+      sideEffects: { backgroundBatches: [] },
+    });
   });
 
   it("refuses a raw scan that names nothing stockable with the scanner's copy", async () => {
@@ -367,5 +402,35 @@ describe("applyUpcDataWithSideEffects", () => {
     );
     expect(diagnostic.items).toEqual([]);
     expect(diagnostic.count).toBe(0);
+  });
+});
+
+describe("product create cover-photo warnings", () => {
+  const ctx = withTestDb();
+
+  it("carries a failed cover import on the entity create result", async () => {
+    const upc = "088888888888";
+    const context = {
+      ...requireActor(
+        createTestRequestContext(ctx.db, {
+          auth: { userId: ctx.actor.userId },
+        }),
+      ),
+      upcLookupClient: fromPartial<UPCLookupClient>(
+        upcLookupClient(async () =>
+          upcResponse({ upc, imageUrl: "http://127.0.0.1/cover.jpg" }),
+        ),
+      ),
+    };
+
+    const result = await executeEntity(context, {
+      action: "create",
+      entity: "product",
+      data: makeProductInput({ name: "Coverless widget", upc }),
+    });
+
+    expect(result.sideEffects.warnings).toEqual([
+      `Cover photo import for ${upc.padStart(14, "0")} failed: External URL points to a private or local host`,
+    ]);
   });
 });

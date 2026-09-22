@@ -5,7 +5,7 @@ import { entityProjectionMaps } from "./index.ts";
 /**
  * `entity-timelines.gen.ts`: the roster of entities with a timeline
  * capability, one branded input schema per entity (the entity's list filters
- * plus the shared window), and the one shared output schema. The timeline
+ * plus the shared window and pagination), and the one shared output schema. The timeline
  * reads the list filters, so the roster is a subset of the list roster.
  */
 export const renderTimelineArtifacts = (
@@ -25,7 +25,7 @@ export const renderTimelineArtifacts = (
   const inputVariants = timelineEntities
     .map(
       ({ key, filterSchema }) =>
-        `z.object({entity:z.literal(${JSON.stringify(key)}),filters:${filterSchema === null ? "z.record(z.string(),z.unknown())" : `z.object(${key}TimelineFilterFields)`},window:entityTimelineWindowFor(shortcodeSchema(${JSON.stringify(key)}))})`,
+        `z.object({entity:z.literal(${JSON.stringify(key)}),filters:${filterSchema === null ? "z.record(z.string(),z.unknown())" : `z.object(${key}TimelineFilterFields)`},window:entityTimelineWindowFor(shortcodeSchema(${JSON.stringify(key)})),pagination:entityTimelinePagination})`,
     )
     .join(",\n  ");
   const modes = Object.fromEntries(
@@ -37,7 +37,7 @@ export const renderTimelineArtifacts = (
       source:
         generatedHeader +
         `${filterImports}\n` +
-        'import { entityTimelineOut, entityTimelineWindowFor } from "@cubby/schemas/entity-timeline";\n' +
+        'import { entityTimelineOut, entityTimelinePagination, entityTimelineWindowFor } from "@cubby/schemas/entity-timeline";\n' +
         'import { shortcodeSchema } from "@cubby/schemas/identifiers";\n' +
         'import { z } from "zod";\n\n' +
         `export const timelineEntities = ${compactLiteral(timelineEntities.map(({ key }) => key))} as const;\n` +

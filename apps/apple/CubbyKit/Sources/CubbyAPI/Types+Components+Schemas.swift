@@ -4596,6 +4596,35 @@ extension Components {
                 case id
             }
         }
+        /// - Remark: Generated from `#/components/schemas/EntityTimelineMeta`.
+        public struct EntityTimelineMeta: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/EntityTimelineMeta/totalCount`.
+            public var totalCount: Swift.Int
+            /// - Remark: Generated from `#/components/schemas/EntityTimelineMeta/pageIndex`.
+            public var pageIndex: Swift.Int
+            /// - Remark: Generated from `#/components/schemas/EntityTimelineMeta/pageSize`.
+            public var pageSize: Swift.Int
+            /// Creates a new `EntityTimelineMeta`.
+            ///
+            /// - Parameters:
+            ///   - totalCount:
+            ///   - pageIndex:
+            ///   - pageSize:
+            public init(
+                totalCount: Swift.Int,
+                pageIndex: Swift.Int,
+                pageSize: Swift.Int
+            ) {
+                self.totalCount = totalCount
+                self.pageIndex = pageIndex
+                self.pageSize = pageSize
+            }
+            public enum CodingKeys: String, CodingKey {
+                case totalCount
+                case pageIndex
+                case pageSize
+            }
+        }
         /// - Remark: Generated from `#/components/schemas/EntityTimelineOut`.
         public struct EntityTimelineOut: Codable, Hashable, Sendable {
             /// - Remark: Generated from `#/components/schemas/EntityTimelineOut/groups`.
@@ -4631,6 +4660,8 @@ extension Components {
             }
             /// - Remark: Generated from `#/components/schemas/EntityTimelineOut/extent`.
             public var extent: Components.Schemas.EntityTimelineOut.ExtentPayload?
+            /// - Remark: Generated from `#/components/schemas/EntityTimelineOut/meta`.
+            public var meta: Components.Schemas.EntityTimelineMeta
             /// Creates a new `EntityTimelineOut`.
             ///
             /// - Parameters:
@@ -4639,18 +4670,21 @@ extension Components {
             ///   - stats:
             ///   - notes:
             ///   - extent:
+            ///   - meta:
             public init(
                 groups: [Components.Schemas.EntityTimelineGroup],
                 rows: [Components.Schemas.EntityTimelineRow]? = nil,
                 stats: [Components.Schemas.EntityTimelineStat],
                 notes: [Swift.String],
-                extent: Components.Schemas.EntityTimelineOut.ExtentPayload? = nil
+                extent: Components.Schemas.EntityTimelineOut.ExtentPayload? = nil,
+                meta: Components.Schemas.EntityTimelineMeta
             ) {
                 self.groups = groups
                 self.rows = rows
                 self.stats = stats
                 self.notes = notes
                 self.extent = extent
+                self.meta = meta
             }
             public enum CodingKeys: String, CodingKey {
                 case groups
@@ -4658,6 +4692,7 @@ extension Components {
                 case stats
                 case notes
                 case extent
+                case meta
             }
         }
         /// - Remark: Generated from `#/components/schemas/EntityTimelineRow`.
@@ -22441,15 +22476,23 @@ extension Components {
         public struct MutationSideEffects: Codable, Hashable, Sendable {
             /// - Remark: Generated from `#/components/schemas/MutationSideEffects/backgroundBatches`.
             public var backgroundBatches: [Components.Schemas.BackgroundBatchRef]
+            /// - Remark: Generated from `#/components/schemas/MutationSideEffects/warnings`.
+            public var warnings: [Swift.String]?
             /// Creates a new `MutationSideEffects`.
             ///
             /// - Parameters:
             ///   - backgroundBatches:
-            public init(backgroundBatches: [Components.Schemas.BackgroundBatchRef]) {
+            ///   - warnings:
+            public init(
+                backgroundBatches: [Components.Schemas.BackgroundBatchRef],
+                warnings: [Swift.String]? = nil
+            ) {
                 self.backgroundBatches = backgroundBatches
+                self.warnings = warnings
             }
             public enum CodingKeys: String, CodingKey {
                 case backgroundBatches
+                case warnings
             }
         }
         /// USDA NDB number
@@ -26638,21 +26681,27 @@ extension Components {
             public var product: Components.Schemas.ProductTopLevelOut
             /// - Remark: Generated from `#/components/schemas/ProductFindOrCreateByUPCOut/created`.
             public var created: Swift.Bool
+            /// - Remark: Generated from `#/components/schemas/ProductFindOrCreateByUPCOut/sideEffects`.
+            public var sideEffects: Components.Schemas.MutationSideEffects
             /// Creates a new `ProductFindOrCreateByUPCOut`.
             ///
             /// - Parameters:
             ///   - product:
             ///   - created:
+            ///   - sideEffects:
             public init(
                 product: Components.Schemas.ProductTopLevelOut,
-                created: Swift.Bool
+                created: Swift.Bool,
+                sideEffects: Components.Schemas.MutationSideEffects
             ) {
                 self.product = product
                 self.created = created
+                self.sideEffects = sideEffects
             }
             public enum CodingKeys: String, CodingKey {
                 case product
                 case created
+                case sideEffects
             }
         }
         /// - Remark: Generated from `#/components/schemas/ProductLabelNutrition`.

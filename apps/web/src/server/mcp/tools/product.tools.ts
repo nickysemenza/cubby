@@ -161,15 +161,25 @@ export function registerProductTools(server: McpServer) {
         .optional()
         .describe("Fallback name if not found in any database"),
     }),
-    outputSchema: productMcpOut,
+    outputSchema: productMcpOut.extend({
+      warnings: z
+        .array(z.string())
+        .optional()
+        .describe(
+          "Best-effort follow-ups that failed after the product was saved, e.g. the cover-photo import.",
+        ),
+    }),
     annotations: WRITE_CLOSED,
     handler: async (params, extra) => {
       const caller = getCaller(extra);
-      const { product } = await caller.product.findOrCreateByUPC({
+      const { product, sideEffects } = await caller.product.findOrCreateByUPC({
         upc: params.upc,
         defaultName: params.defaultName,
       });
-      return respond(product, slimProduct);
+      return {
+        ...respond(product, slimProduct),
+        warnings: sideEffects.warnings,
+      };
     },
   });
 

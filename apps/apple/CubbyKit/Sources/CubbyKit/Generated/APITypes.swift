@@ -146,6 +146,7 @@ public typealias EntityRef = Components.Schemas.EntityRef
 public typealias EntityTimelineEvent = Components.Schemas.EntityTimelineEvent
 public typealias EntityTimelineGroup = Components.Schemas.EntityTimelineGroup
 public typealias EntityTimelineLink = Components.Schemas.EntityTimelineLink
+public typealias EntityTimelineMeta = Components.Schemas.EntityTimelineMeta
 public typealias EntityTimelineOut = Components.Schemas.EntityTimelineOut
 public typealias EntityTimelineRow = Components.Schemas.EntityTimelineRow
 public typealias EntityTimelineStat = Components.Schemas.EntityTimelineStat

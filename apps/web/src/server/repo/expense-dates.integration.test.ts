@@ -129,7 +129,12 @@ describe("unknown expense dates", () => {
         ctx.actor,
       );
     }
-    const input = { ids: [product.id], filters: {}, order: "desc" as const };
+    const input = {
+      ids: [product.id],
+      filters: {},
+      order: "desc" as const,
+      pagination: { pageIndex: 0, pageSize: 200 },
+    };
     const timeline = await getProductMovementTimeline(ctx.db, input);
     expect(timeline.groups.map((group) => group.date)).toEqual([
       "2026-01-02",

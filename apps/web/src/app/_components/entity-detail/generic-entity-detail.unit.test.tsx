@@ -97,6 +97,7 @@ const operations = {
       groups: [],
       stats: [],
       notes: [],
+      meta: { totalCount: 0, pageIndex: 0, pageSize: 200 },
     })),
   },
 };
