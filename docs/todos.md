@@ -188,14 +188,6 @@ history is the archive. Permanent product constraints live in the
   (`product-import-runs.tsx` already knows it). Receiving stays explicit
   (purchase-import plan decision 15).
 
-- **Expense project suggestion ignores trade affinity.** The
-  `expense.projectId` roster in `server/ai/field-suggest/registry.ts` is
-  `projectNameOptions` plus each project's date window; the same-trade
-  affinity `rankProjectSuggestions` (`services/project-suggestions.ts`)
-  already computes is not rendered into the roster lines, so Jev cannot
-  prefer the project whose other expenses share the line's trade. Feed the
-  affinity cells into `renderLine` and re-evaluate on `/ai-usage`.
-
 - **Make grouped entity lists correct across pagination and sorting.** Grouping
   already reaches the server, but headers count only loaded rows and omit
   groups not yet loaded. Keep grouping primary before pagination, with

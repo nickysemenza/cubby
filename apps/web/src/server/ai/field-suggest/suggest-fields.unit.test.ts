@@ -496,6 +496,34 @@ describe("suggestFields", () => {
     expect(spec.maxCandidates).toBe(Number.MAX_SAFE_INTEGER);
   });
 
+  it("renders each expense project's trade history, most-charged first", () => {
+    const spec = FIELD_SUGGEST_REGISTRY["expense.projectId"];
+    expect(spec.kind).toBe("reference");
+    if (spec.kind !== "reference") return;
+
+    const base = {
+      id: testShortcode("project", "PRJ-4K7M"),
+      name: "Bath refresh",
+      icon: null,
+      effectiveStart: "2026-01-05",
+      effectiveEnd: null,
+    };
+    expect(
+      spec.renderLine({
+        ...base,
+        tradeAffinity: [
+          { trade: "electrical", count: 2 },
+          { trade: "plumbing", count: 7 },
+        ],
+      }),
+    ).toBe(
+      "PRJ-4K7M | Bath refresh — expenses by trade: Plumbing 7, Electrical & Lighting 2",
+    );
+    expect(spec.renderLine({ ...base, tradeAffinity: [] })).toBe(
+      "PRJ-4K7M | Bath refresh",
+    );
+  });
+
   it.each(["provided", "suggested"] as const)(
     "runs independent fields concurrently in %s mode",
     async (basisMode) => {
