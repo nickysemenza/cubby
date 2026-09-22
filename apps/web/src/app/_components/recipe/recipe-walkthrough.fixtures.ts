@@ -1,6 +1,10 @@
 import { recipeOut } from "@cubby/schemas/recipe";
 import type { RecipeFlowPlan } from "@cubby/schemas/recipe-flow";
-import { testEntityId, testShortcode } from "@cubby/schemas/testing";
+import {
+  testCompleteDataQuality,
+  testEntityId,
+  testShortcode,
+} from "@cubby/schemas/testing";
 
 const sectionId = testEntityId("recipe", "walkthrough-section");
 const usageId = testEntityId("recipe", "walkthrough-sugar");
@@ -52,6 +56,7 @@ export const walkthroughRecipe = recipeOut.parse({
   ],
   createdAt,
   updatedAt: createdAt,
+  dataQuality: testCompleteDataQuality(),
 });
 
 export const walkthroughPlan: RecipeFlowPlan = {
