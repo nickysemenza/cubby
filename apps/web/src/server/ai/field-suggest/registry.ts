@@ -591,65 +591,6 @@ export const FIELD_SUGGEST_REGISTRY = {
     renderLine: renderProjectOption,
     subject: (basis) => renderSubject("purchase", basis),
   } satisfies ReferenceSuggestSpec<ProjectOptionsOut>,
-  "purchase.displayLabel": {
-    kind: "text",
-    rules:
-      "You are a purchase-label assistant. Given a purchase's vendor, notes, and order id, propose a concise display label that identifies this purchase, or none if the evidence is insufficient.",
-    maxCandidates: 10,
-    roster: async (db, basis) => {
-      const vendorShortcode = basis.vendorId;
-      if (!vendorShortcode) return [];
-      const vendors = await vendorOptions(db);
-      const vendor = vendors.find((v) => v.id === vendorShortcode);
-      if (!vendor) return [];
-      return [vendor.name];
-    },
-    subject: (basis) => renderSubject("purchase", basis),
-  } satisfies TextRosterSuggestSpec,
-  "task.parentTaskId": {
-    kind: "reference",
-    entity: "task",
-    rules:
-      "You are a task-hierarchy assistant. Given a task's name and project, choose the ONE parent task it belongs under, or none if it stands alone.",
-    maxCandidates: REFERENCE_ROSTER_CAP,
-    roster: async (db, basis) => {
-      const projectId = basis.projectId;
-      if (!projectId) return [];
-      const projectUuid = await resolveLiveShortcode(db, projectId, "project");
-      if (!projectUuid) return [];
-      const { task } = await import("~/server/db/schema");
-      const { eq, and, isNull } = await import("drizzle-orm");
-      const { getDb, notDeleted } =
-        await import("~/server/repo/database-helpers");
-      const dbClient = getDb(db);
-      const tasks = await dbClient.query.task.findMany({
-        where: and(
-          eq(task.projectId, projectUuid),
-          notDeleted(task),
-          isNull(task.parentTaskId),
-        ),
-        limit: REFERENCE_ROSTER_CAP,
-      });
-      return tasks.map((t) => ({ id: t.shortcode, name: t.name }));
-    },
-    idOf: (c) => c.id,
-    labelOf: (c) => c.name,
-    renderLine: (c) => `${c.id} | ${c.name}`,
-    subject: (basis) => renderSubject("task", basis),
-  } satisfies ReferenceSuggestSpec<{ id: string; name: string }>,
-  "project.parentProjectId": {
-    kind: "reference",
-    entity: "project",
-    rules:
-      "You are a project-hierarchy assistant. Given a project's name, kind, and notes, choose the ONE parent project it belongs under, or none if it stands alone.",
-    maxCandidates: REFERENCE_ROSTER_CAP,
-    roster: (db) => projectNameOptions(db),
-    idOf: (c) => c.id,
-    labelOf: (c) => c.name,
-    detailOf: projectOptionDetail,
-    renderLine: renderProjectOption,
-    subject: (basis) => renderSubject("project", basis),
-  } satisfies ReferenceSuggestSpec<ProjectOptionsOut>,
   "productCategory.feature": {
     kind: "enum",
     values: productCategoryFeatureValues,

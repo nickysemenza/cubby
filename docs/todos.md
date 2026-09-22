@@ -453,6 +453,21 @@ history is the archive. Permanent product constraints live in the
 
 ## Requires thought or evidence
 
+- **Jev suggestion for `product.ingredientId`.** The manifest and registry
+  already support it (`readKey: null` reference targets work in
+  `scripts/generator/entities/compile.ts` and `readReferenceField` in
+  `entities/entity-references.ts`); the open question is the roster.
+  `findLexicalSearchCandidates` ANDs every prefix term (`buildPrefixTsQuery` in
+  `repo/search-lexical.ts`), so a full product name never matches a short
+  ingredient, and per-word fan-out still misses abbreviations and synonyms.
+  Decide between semantic candidates (`services/semantic-search.service.ts`),
+  the whole ingredient list if it stays small, or lexical fan-out plus aliases.
+  Basis `name, manufacturer, categoryId, notes` — the category lets Jev return
+  none for non-food. Pairs with the `resolve_ingredients` product-link entry.
+  Other fields without `suggest` (`location.parentId`,
+  `productCategory.parentId`, `recipe.cookbookId`, `ledgerParty.kind`,
+  `product.growsIngredientId`) stay manual: rare, deliberate edits.
+
 - **Completeness scores for every entity — exceptions still to come.** Every
   scored household entity now declares `capabilities.dataQuality` in its
   manifest (see `docs/entities.md` → "Data quality") and gets a computed

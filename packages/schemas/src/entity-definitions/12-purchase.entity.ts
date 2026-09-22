@@ -197,7 +197,6 @@ export default defineEntity({
           kind: "text",
           section: "identity",
           placeholder: "e.g. pocket hole jig + bits",
-          suggest: { basis: ["orderId", "notes"] },
         },
         display: { list: true, detail: true, detailOrder: 2 },
         validation: {

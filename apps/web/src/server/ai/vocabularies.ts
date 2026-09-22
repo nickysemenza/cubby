@@ -112,10 +112,10 @@ export const LINE_KIND_RULES = `You are a receipt-line classifier. Given an expe
 Rules:
 1. Names containing "tax", "sales tax", "estimated tax" → tax
 2. Names containing "shipping", "delivery", "freight" → shipping
-3. Names containing "discount", "coupon" → discount
+3. Names containing "discount", "coupon", "credit", "promo", or a negative cost with that wording → discount
 4. Names containing "fee", "processing", "handling" → fee
 5. Names containing "tip", "gratuity" → tip
-6. When multiple hints exist or the name is ambiguous → other_adjustment
+6. An explicit receipt adjustment none of the above covers (rounding, price adjustment) → other_adjustment
 7. Otherwise → principal (the main purchased item/service)`;
 
 export const PROJECT_KIND_DESCRIPTIONS = {
