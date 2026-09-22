@@ -1,4 +1,5 @@
 import { importRunShortcode } from "@cubby/schemas/identifiers";
+import { importRunPurpose } from "@cubby/schemas/purchase-import";
 import { z } from "zod";
 
 export const purchaseAgentConnectionStatus = z.enum([
@@ -15,9 +16,7 @@ export { importRunShortcode };
 
 const importRunSummary = z.object({
   publicId: importRunShortcode,
-  purpose: z
-    .enum(["account_sync", "purchase_validation", "product_enrichment"])
-    .optional(),
+  purpose: importRunPurpose.optional(),
   vendorAccountLabel: z.string().nullable(),
   vendorName: z.string().nullable(),
   trigger: z.string(),
@@ -133,7 +132,7 @@ const importRunFinding = z.object({
 
 const importRunTarget = z.object({
   id: z.string().min(1),
-  targetType: z.enum(["purchase", "product"]),
+  targetType: z.enum(["purchase", "product", "image"]),
   targetShortcode: z.string().min(1).nullable(),
   targetName: z.string().nullable(),
   sourceId: z.string().nullable(),
@@ -168,9 +167,7 @@ const importRunDispatch = z.object({
 /** The browser-facing detail contract. Private UUIDs never cross this boundary. */
 const importRunDetail = z.object({
   publicId: importRunShortcode,
-  purpose: z
-    .enum(["account_sync", "purchase_validation", "product_enrichment"])
-    .optional(),
+  purpose: importRunPurpose.optional(),
   status: z.string().min(1),
   trigger: z.string().min(1),
   startedAt: z.iso.datetime(),
@@ -180,6 +177,7 @@ const importRunDetail = z.object({
   updated: z.number().int().nonnegative(),
   skipped: z.number().int().nonnegative(),
   failureCode: z.string().nullable(),
+  notes: z.string().nullable().optional(),
   predecessorRunPublicId: importRunShortcode.nullable(),
   successorRunPublicId: importRunShortcode.nullable().optional(),
   coordinatorModel: z.string().nullable(),

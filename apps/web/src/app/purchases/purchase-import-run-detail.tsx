@@ -16,6 +16,7 @@ import {
   useSyncExternalStore,
 } from "react";
 
+import { PhotoImportRunView } from "~/app/import-runs/photo-run-detail";
 import { importRunHref } from "~/app/purchases/purchase-import-links";
 import { Badge, type BadgeVariant } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
@@ -1072,6 +1073,12 @@ export function ImportRunDetailPage({ publicId }: { publicId: string }) {
   if (runQuery.isError)
     return <StatusText tone="destructive">{runQuery.error.message}</StatusText>;
   if (!run) return null;
+
+  // A photo-inventory batch has no vendor agent, order or purchase — it is a
+  // worklist of uploaded images, not an account-sync transcript, so it gets
+  // its own view rather than branching every section below.
+  if (run.purpose === "photo_inventory")
+    return <PhotoImportRunView run={run} />;
 
   return (
     <ImportRunContent

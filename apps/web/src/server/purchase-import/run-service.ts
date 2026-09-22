@@ -2762,6 +2762,7 @@ export async function loadImportRunByShortcode(
       updated: importRun.updated,
       skipped: importRun.skipped,
       failureCode: importRun.failureCode,
+      notes: importRun.notes,
       dispatchEventId: importRun.dispatchEventId,
       dispatchAttempts: importRun.dispatchAttempts,
       dispatchError: importRun.dispatchError,
@@ -3074,6 +3075,7 @@ export async function loadImportRunByShortcode(
     updated: run.updated,
     skipped: run.skipped,
     failureCode: run.failureCode,
+    notes: run.notes,
     dispatch: {
       eventId: run.dispatchEventId,
       attempts: run.dispatchAttempts,

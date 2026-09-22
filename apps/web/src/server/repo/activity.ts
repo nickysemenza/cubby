@@ -117,11 +117,20 @@ function runProjection(partyId: string | null): SQL {
       CASE r.purpose
         WHEN 'purchase_validation' THEN 'purchase_validation'
         WHEN 'product_enrichment' THEN 'product_enrichment'
+        WHEN 'photo_inventory' THEN 'photo_inventory'
         ELSE 'purchase_import'
       END AS kind,
       v.shortcode AS "subjectId",
-      coalesce(v.name, 'Purchase agent') AS "subjectName",
-      CASE WHEN v.shortcode IS NOT NULL THEN '/vendors/' || v.shortcode END AS "subjectHref",
+      -- A photo-inventory run has no vendor: name the run itself rather than
+      -- falling into the vendor-agent label every other purpose shares.
+      CASE
+        WHEN r.purpose = 'photo_inventory' THEN 'Photo inventory'
+        ELSE coalesce(v.name, 'Purchase agent')
+      END AS "subjectName",
+      CASE
+        WHEN v.shortcode IS NOT NULL THEN '/vendors/' || v.shortcode
+        WHEN r.purpose = 'photo_inventory' THEN '/import-runs/' || r.shortcode
+      END AS "subjectHref",
       r.status AS state,
       r.status IN ('running', 'paused_auth', 'paused_offline', 'paused_approval') AS active,
       r."startedAt" AS "createdAt",

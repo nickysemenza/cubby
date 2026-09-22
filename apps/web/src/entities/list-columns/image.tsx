@@ -16,8 +16,14 @@ import { useFilenameEditable } from "~/app/_components/hooks/useNameEditable";
 import type { ListQueryOptionsFn } from "~/app/_components/hooks/usePaginatedTableCore";
 import { useImageUpdateMutation } from "~/app/_components/hooks/useUpdateMutation";
 import { ImageAssociationLinks } from "~/app/_components/images/image-associations";
+import { Badge } from "~/components/ui/badge";
 import { labeledFieldProvenance } from "~/entities/field-provenance";
 import { image } from "~/entities/image.functions";
+import {
+  IMPORT_RUN_TARGET_STATE_LABEL,
+  IMPORT_RUN_TARGET_STATE_VARIANT,
+  isImportRunTargetState,
+} from "~/lib/import-run-target-state";
 
 import { defineListOverride } from "./types";
 
@@ -64,6 +70,34 @@ export const imageListOverride = defineListOverride<
                 mobile: { slot: "trailing", priority: 5 },
               },
               cell: ({ getValue }) => <span>{prettyBytes(getValue())}</span>,
+            }),
+          );
+          // Only import-run targets (photo-inventory or a targeted purchase
+          // enrichment) carry this — most images render an empty cell.
+          add(
+            columnHelper.accessor("importTarget", {
+              header: "Import target",
+              meta: {
+                className: "w-32",
+                mobile: { slot: "meta", priority: 25 },
+              },
+              cell: ({ getValue }) => {
+                const state = getValue()?.state;
+                if (!state) return null;
+                return (
+                  <Badge
+                    variant={
+                      isImportRunTargetState(state)
+                        ? IMPORT_RUN_TARGET_STATE_VARIANT[state]
+                        : "outline"
+                    }
+                  >
+                    {isImportRunTargetState(state)
+                      ? IMPORT_RUN_TARGET_STATE_LABEL[state]
+                      : state}
+                  </Badge>
+                );
+              },
             }),
           );
         }),
