@@ -147,8 +147,14 @@ jobs:
       # hosted Apple checks job. `continue-on-error` because another
       # concurrent job racing the same key is a harmless 409, never a
       # reason to fail this one.
-      - name: Save OpenAPI generator cache
+      # Never save an empty generator directory: a run that fails before the
+      # generator is built would otherwise poison the exact key for good.
+      - name: Check OpenAPI generator binary
+        id: generator-built
         if: always() && steps.apple-tools.outputs.openapi-generator-cache-hit != 'true'
+        run: test -x "$CUBBY_OPENAPI_GENERATOR_BIN" && echo "present=true" >> "$GITHUB_OUTPUT" || true
+      - name: Save OpenAPI generator cache
+        if: always() && steps.generator-built.outputs.present == 'true'
         continue-on-error: true
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
