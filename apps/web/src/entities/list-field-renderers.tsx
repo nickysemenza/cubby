@@ -1,6 +1,7 @@
 import type { DataQuality } from "@cubby/schemas/data-quality";
 import type { Entity } from "@cubby/schemas/entity";
 import type { ListRendererId } from "@cubby/schemas/entity-manifest";
+import type { ImageWithEntity } from "@cubby/schemas/image";
 import type { CookbookSummary } from "@cubby/schemas/recipe";
 
 import { renderOptionCell } from "~/app/_components/data-table/columnHelpers";
@@ -35,9 +36,19 @@ type ListRenderer<E extends ListEntity> = (
 /**
  * Entities outside the kernel list roster whose index still builds columns
  * from the manifest through a client-mode override (`list-columns/*.tsx`),
- * keyed to the row type that override pages.
+ * keyed to the row type that override pages. Image has no kernel list
+ * contract (`route.list: null`) but still runs through the generic list
+ * page via its own override source (`entities/list-columns/image.tsx`), so
+ * it needs a coverage entry here the same way cookbook does.
  */
-type ClientListRows = { cookbook: CookbookSummary };
+type ClientListRows = {
+  cookbook: CookbookSummary;
+  // `dataQuality` is optional on `ImageWithEntity` at the schema level (it's
+  // a postprocessed field `imageWithRelationsToAPI`'s callers merge in, like
+  // `representations`/`processingIssue`), but `imageList` — the only
+  // producer this list renderer ever sees rows from — always attaches it.
+  image: ImageWithEntity & { dataQuality: DataQuality };
+};
 
 type ClientListRenderer<TRow extends object> = (
   helper: CubbyColumnHelper<TRow>,
@@ -142,6 +153,11 @@ export const listRendererCoverage = {
   cookbook: {
     "data-quality": implemented<ClientListRenderer<CookbookSummary>>((helper) =>
       dataQualityRenderer(helper),
+    ),
+  },
+  image: {
+    "data-quality": implemented<ClientListRenderer<ClientListRows["image"]>>(
+      (helper) => dataQualityRenderer(helper),
     ),
   },
   location: scoredCoverage<"location">(),

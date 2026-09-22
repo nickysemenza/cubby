@@ -32,6 +32,7 @@ import {
   id,
   imageShortcode,
   importRunShortcode,
+  ledgerPartyShortcode,
   productShortcode,
   projectShortcode,
 } from "./identifiers";
@@ -245,6 +246,14 @@ export const imageFilterFields = {
   targetState: oneOrMany(importRunTargetState)
     .optional()
     .describe("Only images whose import-run target is in one of these states."),
+  // `capturedByPartyId` is declared `idMulti`/`urlOnly` in the manifest (no
+  // `stored` descriptor — it needs shortcode resolution, same as
+  // `importRunId` above), so it is hand-added here rather than generated.
+  capturedByPartyId: entityFilterList(ledgerPartyShortcode)
+    .optional()
+    .describe(
+      "Only images derived-captured by one of these household members.",
+    ),
 };
 
 export const imageListFiltersSchema = z.object(imageFilterFields);
@@ -600,6 +609,12 @@ export const imageWithEntitySchema = z.object({
   capturedByName: generatedImageFieldSchemas.read.capturedByName,
   captureAttribution: generatedImageFieldSchemas.read.captureAttribution,
   provenanceEvidence: generatedImageFieldSchemas.read.provenanceEvidence,
+  // Optional like `processingIssue`/`importTarget`/`analysisSummary` below:
+  // `imageWithRelationsToAPI` builds the base shape and every real producer
+  // (`imageList`, `getImageById`, `getImagesByShortcodes`) merges in the
+  // batch-loaded score, the same "postprocessed field" pattern those three
+  // already use.
+  dataQuality: generatedImageFieldSchemas.read.dataQuality.optional(),
   createdAt: z.date(),
   updatedAt: z.date(),
   entityType: entityImage.nullable(),

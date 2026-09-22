@@ -1,6 +1,5 @@
 import type { ActorContext } from "@cubby/schemas/context";
 import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
-import { generatedEntitySort } from "@cubby/schemas/entity-sort";
 /** Image data boundary: derive association and cascade behavior from INCOMING_EDGES.image. */
 import type {
   EntityRef,
@@ -49,6 +48,7 @@ import {
 import type { PgColumn, PgTable, PgUpdateSetSource } from "drizzle-orm/pg-core";
 import { match } from "ts-pattern";
 
+import { localPhotoAnalysisSchema } from "~/contracts/photo-import.contract";
 import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
 import type {
   IncomingEdgeKey,
@@ -62,6 +62,7 @@ import {
   imageProcessingJob,
 } from "~/server/db/image-processing-schema";
 import {
+  aiAnalysis,
   cookbook,
   gardenEntry,
   gardenEntryImage,
@@ -91,12 +92,13 @@ import {
 } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
 import { logAuditEntry } from "~/server/repo/audit-log";
-import { touchDataQualityTargets } from "~/server/repo/data-quality";
+import {
+  loadDataQualities,
+  touchDataQualityTargets,
+} from "~/server/repo/data-quality";
 import {
   associatePendingImages,
   auditDateWhereConditions,
-  buildOrderBy,
-  buildSearchConditions,
   countWhere,
   eqAny,
   eqAnyRequested,
@@ -114,10 +116,10 @@ import {
   uuidArrayParam,
   withTransaction,
 } from "~/server/repo/database-helpers";
-import { declaredFilterPredicates } from "~/server/repo/declared-filter-predicates";
 import { softDeleteEntitySearchArtifactsTx } from "~/server/repo/entity-embedding-cleanup";
 import { loadImageAnalysisSummaries } from "~/server/repo/image-analysis-summary";
 import { displayableImageWhere } from "~/server/repo/image-displayability";
+import { listScaffold } from "~/server/repo/list-scaffold";
 import {
   resolveAllPresent,
   resolveFilterIds,
@@ -723,6 +725,107 @@ export async function getLiveSightingsForCapture(
   });
 }
 
+/** Only the field `classifyImageProvenance` needs from a `photo-local-analysis` result. */
+const localPhotoAnalysisCapturedAt = localPhotoAnalysisSchema.pick({
+  capturedAt: true,
+});
+
+export interface ImageProvenanceCandidateRow {
+  id: ImageId;
+  filename: string;
+  sourceAssetUrl: string | null;
+  width: number | null;
+  height: number | null;
+}
+
+/**
+ * `classifyImageProvenance`'s candidate rows: only `source = unknown` (never
+ * classified) or a `provenanceEvidence.basis` of `filename` (this same
+ * maintenance op's own prior output, safe to re-evaluate against a changed
+ * rule table). Every other basis — `manual`/`sighting`/`import-url`/`exif` —
+ * outranks a filename heuristic in `image-capture-derivation.ts`'s
+ * precedence and is never selected here, so the classify service never has
+ * to re-check precedence itself.
+ */
+const provenanceClassificationCandidateWhere = and(
+  notDeleted(image),
+  or(
+    eq(image.source, "unknown"),
+    sql`${image.provenanceEvidence}->>'basis' = 'filename'`,
+  ),
+);
+
+export async function selectImagesForProvenanceClassification(
+  db: Database,
+  limit: number,
+): Promise<ImageProvenanceCandidateRow[]> {
+  const rows = await getDb(db)
+    .select({
+      id: image.id,
+      filename: image.filename,
+      sourceAssetUrl: image.sourceAssetUrl,
+      width: image.width,
+      height: image.height,
+    })
+    .from(image)
+    .where(provenanceClassificationCandidateWhere)
+    .orderBy(asc(image.createdAt), asc(image.id))
+    .limit(limit);
+  return rows.map((row) => ({
+    ...row,
+    id: parseEntityId("image", row.id),
+  }));
+}
+
+export async function countImagesForProvenanceClassification(
+  db: Database,
+): Promise<number> {
+  const [row] = await getDb(db)
+    .select({ count: count() })
+    .from(image)
+    .where(provenanceClassificationCandidateWhere);
+  return row?.count ?? 0;
+}
+
+/**
+ * The newest `AiAnalysis(feature="photo-local-analysis")` `capturedAt` for
+ * each requested image, batched. Only images with no `capturedAt` of their
+ * own are worth seeding, but this reads every requested id regardless — the
+ * caller (`classifyImageProvenance`) already scoped its candidate set.
+ */
+export async function loadAnalysisCapturedAtForImages(
+  db: Database,
+  imageIds: readonly ImageId[],
+): Promise<Map<ImageId, Date>> {
+  if (imageIds.length === 0) return new Map();
+  const rows = await getDb(db)
+    .select({
+      entityId: aiAnalysis.entityId,
+      result: aiAnalysis.result,
+    })
+    .from(aiAnalysis)
+    .where(
+      and(
+        eq(aiAnalysis.entityType, "image"),
+        inArray(aiAnalysis.entityId, imageIds),
+        eq(aiAnalysis.feature, "photo-local-analysis"),
+        isNull(aiAnalysis.deletedAt),
+      ),
+    )
+    .orderBy(desc(aiAnalysis.updatedAt));
+  const byImage = new Map<ImageId, Date>();
+  for (const row of rows) {
+    if (!row.entityId) continue;
+    const imageId = parseEntityId("image", row.entityId);
+    if (byImage.has(imageId)) continue;
+    const parsed = localPhotoAnalysisCapturedAt.safeParse(row.result);
+    if (parsed.success && parsed.data.capturedAt !== null) {
+      byImage.set(imageId, new Date(parsed.data.capturedAt));
+    }
+  }
+  return byImage;
+}
+
 /**
  * Transform image with pre-loaded relations to API format.
  * Expects relations to be loaded via `with` clause - no additional queries.
@@ -1142,38 +1245,57 @@ const cullablePendingImageWhere = (db: Database, cutoffDate: Date) =>
   );
 
 /**
- * The `imageList` predicate. Takes `outerImage` as a parameter — not just
- * `image` — because `imageList` below calls this twice: once against the
- * aliased table the relational `findMany` selects through, once against the
- * root table for the plain-count query. Exported so `getEntityCounts` can call
+ * `imageList`'s scaffold: binds the manifest-declared `source`/
+ * `captureAttribution`/`capturedAt` filters and the generated `dataStatus`/
+ * `dataGap` filters and data-quality sort onto ONE canonical table
+ * reference — `listImage`, not the plain `image` export.
+ *
+ * The Drizzle relational query API (`dbClient.query.image.findMany`, used
+ * for rows below) resolves its FROM clause through the schema's own
+ * registered alias for the `image` relation, which is the lowercase
+ * `"image"` key — NOT the table's raw SQL name (`"Image"`, from `image`
+ * unaliased). A WHERE/ORDER BY condition built against plain `image` renders
+ * `"Image"."column"`, which Postgres rejects once the FROM clause has
+ * aliased that same table to `"image"` ("missing FROM-clause entry" /
+ * "perhaps you meant to reference the table alias 'image'"). `listImage =
+ * aliasedTable(image, "image")` mimics that same alias, and — since
+ * `aliasedTable` is also a valid `.from()` target for a plain select — the
+ * count query below uses the SAME `listImage` reference too, so one
+ * canonical table object is correct for both queries at once (no more
+ * building the predicate twice against two different table spellings).
+ */
+const listImage = aliasedTable(image, "image");
+const imageScaffold = listScaffold("image", listImage);
+
+/**
+ * The `imageList` predicate. Exported so `getEntityCounts` can call
  * `buildImageWhere(db, {})` and get the list's REAL population rather than a
  * hand-restated copy that can drift from it.
  *
- * Routed through `buildSearchConditions` (like every other list) rather than a
- * hand-built `and(...)`, which is a deliberate behavior change: the old
- * `buildWhere` here started from an EMPTY conditions array with NO soft-delete
- * predicate at all, so `imageList({})` would have returned soft-deleted images
- * too. `buildSearchConditions` supplies `notDeleted` for free, closing that gap.
- * Verified impact is ZERO rows today (0 of 5738 images have `deletedAt` set,
- * since `deleteImages` hard-deletes rather than soft-deletes) — `Image` is
- * still declared `softDeletedAt()`, so this closes a latent gap rather than
- * changing any observable result.
+ * Routed through `listScaffold`'s `where` (like every other scaffolded list)
+ * rather than a hand-built `and(...)`, which is a deliberate behavior change
+ * versus the pre-scaffold code: the old `buildWhere` here started from an
+ * EMPTY conditions array with NO soft-delete predicate at all, so
+ * `imageList({})` would have returned soft-deleted images too.
+ * `buildSearchConditions` (called inside the scaffold) supplies `notDeleted`
+ * for free, closing that gap. Verified impact is ZERO rows today (0 of 5738
+ * images have `deletedAt` set, since `deleteImages` hard-deletes rather than
+ * soft-deletes) — `Image` is still declared `softDeletedAt()`, so this closes
+ * a latent gap rather than changing any observable result.
+ *
+ * Async (unlike most `buildXWhere` in this repo) because `importRunId` and
+ * `capturedByPartyId` are shortcode filters that must resolve through
+ * `shortcode-resolver` rather than match a raw code in SQL (see
+ * `docs/agents/domain-rules.md`). `getEntityCounts` already tolerates either
+ * arity — see `CountWhere` in `~/server/repo/dashboard`.
  */
-// Not on `listScaffold`: the predicate is built twice against two spellings
-// of the table (`outerImage`), and the scaffold binds one table per entity.
-//
-// Async (unlike most `buildXWhere` in this repo) because `importRunId` is a
-// shortcode filter that must resolve through `shortcode-resolver` rather than
-// match a raw code in SQL (see `docs/agents/domain-rules.md`). `getEntityCounts`
-// already tolerates either arity — see `CountWhere` in `~/server/repo/dashboard`.
 export const buildImageWhere = async (
   db: Database,
   filters: ImageListFilters,
-  outerImage: typeof image = image,
 ): Promise<SQL | undefined> => {
   let referencePresence: SQL | undefined;
   if (filters.referencePresenceFilter) {
-    const referenced = activeImageReferenceCondition(db, outerImage);
+    const referenced = activeImageReferenceCondition(db, listImage);
     referencePresence =
       filters.referencePresenceFilter === "has" ? referenced : not(referenced);
   }
@@ -1181,11 +1303,10 @@ export const buildImageWhere = async (
   // `undefined` here means "not requested"; `[]` means "requested but every
   // code failed to resolve" — `eqAnyRequested` treats those differently
   // (unrestricted vs. matches nothing), see its own doc comment.
-  const importRunIds = await resolveFilterIds(
-    db,
-    "importRun",
-    filters.importRunId,
-  );
+  const [importRunIds, capturedByPartyIds] = await Promise.all([
+    resolveFilterIds(db, "importRun", filters.importRunId),
+    resolveFilterIds(db, "ledgerParty", filters.capturedByPartyId),
+  ]);
   const importTargetCondition =
     importRunIds !== undefined || filters.targetState !== undefined
       ? exists(
@@ -1194,7 +1315,7 @@ export const buildImageWhere = async (
             .from(importRunTarget)
             .where(
               and(
-                eq(importRunTarget.imageId, outerImage.id),
+                eq(importRunTarget.imageId, listImage.id),
                 eqAnyRequested(importRunTarget.runId, importRunIds),
                 eqAny(importRunTarget.state, filters.targetState),
               ),
@@ -1202,23 +1323,20 @@ export const buildImageWhere = async (
         )
       : undefined;
 
-  return buildSearchConditions(
-    outerImage,
-    [],
-    [
-      // `filename` (text) and `status` (multiselect) are declared stored
-      // filters — passed `outerImage` so the aliased-table row query and the
-      // unaliased count query each resolve their own columns.
-      ...declaredFilterPredicates("image", outerImage, filters),
-      ...auditDateWhereConditions(outerImage, filters),
-      referencePresence,
-      importTargetCondition,
-      imageProcessingIssueFilter(outerImage, filters.processingIssue),
-      filters.uploadedAgeHoursMin !== undefined
-        ? sql`${outerImage.createdAt} < now() - (${filters.uploadedAgeHoursMin} * interval '1 hour')`
-        : undefined,
-    ],
-  );
+  return imageScaffold.where(filters, [
+    // `source`/`captureAttribution`/`capturedAt` (stored, manifest-declared)
+    // and the `dataStatus`/`dataGap`/`dataQuality`-sort filters bind inside
+    // `imageScaffold.where` itself; only the resolved-shortcode and
+    // subquery predicates stay hand-written here.
+    ...auditDateWhereConditions(listImage, filters),
+    referencePresence,
+    importTargetCondition,
+    eqAnyRequested(listImage.capturedByPartyId, capturedByPartyIds),
+    imageProcessingIssueFilter(listImage, filters.processingIssue),
+    filters.uploadedAgeHoursMin !== undefined
+      ? sql`${listImage.createdAt} < now() - (${filters.uploadedAgeHoursMin} * interval '1 hour')`
+      : undefined,
+  ]);
 };
 
 /**
@@ -1267,12 +1385,10 @@ export const imageList = async (
   readIntent: ListReadIntent = "page",
 ) => {
   const dbClient = getDb(db);
-  const [whereClause, countWhereClause, importRunIdsForOrder] =
-    await Promise.all([
-      buildImageWhere(db, filters, aliasedTable(image, "image")),
-      buildImageWhere(db, filters, image),
-      resolveFilterIds(db, "importRun", filters.importRunId),
-    ]);
+  const [whereClause, importRunIdsForOrder] = await Promise.all([
+    buildImageWhere(db, filters),
+    resolveFilterIds(db, "importRun", filters.importRunId),
+  ]);
 
   // A photo-inventory run's picker order overrides the caller's own sort:
   // an agent working `filters.importRunId` wants the run's physical capture
@@ -1282,15 +1398,14 @@ export const imageList = async (
       ? [
           sql`(
             SELECT "position" FROM "ImportRunTarget"
-            WHERE "ImportRunTarget"."imageId" = ${image.id}
+            WHERE "ImportRunTarget"."imageId" = ${listImage.id}
               AND "ImportRunTarget"."runId" = ANY(${uuidArrayParam(importRunIdsForOrder)})
           ) asc nulls last`,
-          asc(image.createdAt),
+          asc(listImage.createdAt),
         ]
-      : buildOrderBy(image, sorts, [...generatedEntitySort.image.fields]);
+      : imageScaffold.orderBy(sorts, {}, filters);
 
-  const take = pagination.pageSize;
-  const skip = pagination.pageIndex * pagination.pageSize;
+  const { take, skip } = imageScaffold.page(pagination);
 
   const { data: images, count } = await executeListQueryWithCount({
     kind: readIntent,
@@ -1302,16 +1417,27 @@ export const imageList = async (
         offset: skip,
         with: imageEntityRelations,
       }),
-    count: () => countWhere(db, image, countWhereClause),
+    // Not `countWhere`/`$count`: that helper renders `FROM` from the
+    // table's bare name, which for an `aliasedTable` is just the alias
+    // itself (`FROM "image"`, no real relation) rather than `FROM "Image"
+    // AS "image"`. A plain `.from(listImage)` renders the alias correctly.
+    count: () =>
+      getDb(db)
+        .select({ count: sql<number>`count(*)::int` })
+        .from(listImage)
+        .where(whereClause)
+        .then((rows) => rows[0]?.count ?? 0),
   });
 
   const imageShortcodes = images.map((item) => item.shortcode);
+  const imageIds = images.map((item) => parseEntityId("image", item.id));
   const [
     representations,
     processingIssues,
     importTargets,
     analysisSummaries,
     capturedByParties,
+    dataQualities,
   ] = await Promise.all([
     loadImageRepresentations(db, imageShortcodes),
     loadImageProcessingIssues(db, imageShortcodes),
@@ -1321,6 +1447,7 @@ export const imageList = async (
       db,
       images.map((item) => item.capturedByPartyId),
     ),
+    loadDataQualities(db, "image", imageIds),
   ]);
   const processedImages = images.map((item) => ({
     ...imageWithRelationsToAPI(
@@ -1333,6 +1460,7 @@ export const imageList = async (
     processingIssue: processingIssues.get(item.shortcode) ?? null,
     importTarget: importTargets.get(item.shortcode) ?? null,
     analysisSummary: analysisSummaries.get(item.shortcode) ?? null,
+    dataQuality: dataQualities.get(parseEntityId("image", item.id)),
   }));
 
   return {
@@ -1354,13 +1482,20 @@ export const getImageById = async (
     throw createAppError("IMAGE_NOT_FOUND", "Image not found");
   }
 
-  const [representations, importTargets, analysisSummaries, capturedByParties] =
-    await Promise.all([
-      loadImageRepresentations(db, [imageRecord.shortcode]),
-      loadImportTargets(db, [imageRecord.shortcode]),
-      loadImageAnalysisSummaries(db, [imageRecord.shortcode]),
-      loadCapturedByParties(db, [imageRecord.capturedByPartyId]),
-    ]);
+  const imageRecordId = parseEntityId("image", imageRecord.id);
+  const [
+    representations,
+    importTargets,
+    analysisSummaries,
+    capturedByParties,
+    dataQualities,
+  ] = await Promise.all([
+    loadImageRepresentations(db, [imageRecord.shortcode]),
+    loadImportTargets(db, [imageRecord.shortcode]),
+    loadImageAnalysisSummaries(db, [imageRecord.shortcode]),
+    loadCapturedByParties(db, [imageRecord.capturedByPartyId]),
+    loadDataQualities(db, "image", [imageRecordId]),
+  ]);
   const capturedByParty = imageRecord.capturedByPartyId
     ? (capturedByParties.get(imageRecord.capturedByPartyId) ?? null)
     : null;
@@ -1370,6 +1505,7 @@ export const getImageById = async (
     representations: representations.get(imageRecord.shortcode),
     importTarget: importTargets.get(imageRecord.shortcode) ?? null,
     analysisSummary: analysisSummaries.get(imageRecord.shortcode) ?? null,
+    dataQuality: dataQualities.get(imageRecordId),
   };
 };
 
@@ -1391,13 +1527,22 @@ export const getImagesByShortcodes = async (
     ),
     with: imageEntityRelations,
   });
-  const representations = await loadImageRepresentations(
-    db,
-    records.map((row) => row.shortcode),
-  );
-  const capturedByParties = await loadCapturedByParties(
-    db,
-    records.map((row) => row.capturedByPartyId),
+  const [representations, capturedByParties, dataQualities] = await Promise.all(
+    [
+      loadImageRepresentations(
+        db,
+        records.map((row) => row.shortcode),
+      ),
+      loadCapturedByParties(
+        db,
+        records.map((row) => row.capturedByPartyId),
+      ),
+      loadDataQualities(
+        db,
+        "image",
+        records.map((row) => parseEntityId("image", row.id)),
+      ),
+    ],
   );
   return records.map((row) => ({
     ...imageWithRelationsToAPI(
@@ -1407,6 +1552,7 @@ export const getImagesByShortcodes = async (
         : null,
     ),
     representations: representations.get(row.shortcode),
+    dataQuality: dataQualities.get(parseEntityId("image", row.id)),
   }));
 };
 

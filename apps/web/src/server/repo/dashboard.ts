@@ -99,12 +99,24 @@ export const getEntityCounts = async (db: Database): Promise<EntityCounts> => {
     whereByEntity.set(entity, await COUNT_WHERE[entity](db));
   }
 
+  // `buildImageWhere`'s WHERE clause only resolves against a FROM clause
+  // that aliases `Image` to `"image"` (the Drizzle relational query API
+  // resolves `image`'s FROM through its own registered alias, not the
+  // table's raw SQL name — see the comment on `listImage` in
+  // `~/server/repo/image`). `${table}` from a plain table reference embeds
+  // correctly via `.from()`, but NOT via bare `sql` interpolation the way
+  // this function needs — a raw `${aliasedTable(...)}` fragment renders only
+  // the alias, not a full "Image" AS "image" clause — so `image`'s FROM
+  // fragment is spelled out literally instead of going through
+  // `SHORTCODE_TABLE`.
+  const IMAGE_ALIASED_FROM = sql`"Image" AS "image"`;
   const countCol = (entity: CountableEntity): SQL => {
     const where = whereByEntity.get(entity);
-    const table = SHORTCODE_TABLE[entity];
+    const from =
+      entity === "image" ? IMAGE_ALIASED_FROM : sql`${SHORTCODE_TABLE[entity]}`;
     return where
-      ? sql`(SELECT count(*)::int FROM ${table} WHERE ${where})`
-      : sql`(SELECT count(*)::int FROM ${table})`;
+      ? sql`(SELECT count(*)::int FROM ${from} WHERE ${where})`
+      : sql`(SELECT count(*)::int FROM ${from})`;
   };
 
   const fragments = countableEntities.map(

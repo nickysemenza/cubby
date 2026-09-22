@@ -95,6 +95,16 @@ export default defineEntity({
           ],
         },
         { kind: "slot", id: "associations", title: "Used by" },
+        {
+          kind: "relation",
+          id: "sightings",
+          title: "Sightings",
+          relation: "sightings",
+          filter: { descriptor: "imageId" },
+          columns: ["ledgerPartyName", "deviceName", "capturedAt", "matchKind"],
+          hideWhenEmpty: true,
+          placement: "supporting",
+        },
       ],
     },
     list: { actions: ["delete"] },
@@ -867,6 +877,48 @@ export default defineEntity({
     merge: false,
     operationOwners: { delete: "kernel", merge: null },
     mcp: ["get", "list", "update", "delete"],
+    dataQuality: {
+      checks: [
+        {
+          id: "image_provenance_unknown",
+          facet: "provenance",
+          weight: 3,
+          label: "Source",
+          message: "This image's origin is unknown.",
+        },
+        {
+          id: "image_capture_attribution",
+          facet: "provenance",
+          kind: "defect",
+          weight: 2,
+          label: "Capture attribution",
+          message:
+            "Multiple household members could be the photographer; confirm who captured this.",
+        },
+        {
+          id: "image_capture_date",
+          facet: "content",
+          weight: 1,
+          label: "Capture date",
+          message: "No capture date is recorded for this image.",
+        },
+        {
+          id: "image_dimensions",
+          facet: "integrity",
+          weight: 1,
+          label: "Dimensions",
+          message: "Image width or height is missing.",
+        },
+        {
+          id: "image_sighting_missing",
+          facet: "provenance",
+          weight: 1,
+          label: "Sightings",
+          message:
+            "No live photo-library sighting is recorded for this own-sourced image.",
+        },
+      ],
+    },
   },
   extensions: {
     countFilter: null,
