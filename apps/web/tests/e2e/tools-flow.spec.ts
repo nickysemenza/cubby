@@ -5,7 +5,6 @@ import { expect, test } from "./e2e-test";
 test("tool Flow keeps group order across pagination, jumps to unloaded groups, and reflows around inspection", async ({
   page,
 }, testInfo) => {
-  test.setTimeout(120_000);
   page.setDefaultTimeout(15_000);
   // Keep the first page below the 500px prefetch margin until a section jump.
   await page.setViewportSize({ width: 1600, height: 500 });

@@ -1,5 +1,111 @@
-import { expect, type Locator, type Page } from "@playwright/test";
+import { SHORTCODE_BODY_LENGTH, SHORTCODE_CHARS } from "@cubby/shared";
+import {
+  expect,
+  type Locator,
+  type Page,
+  type Route,
+  type TestInfo,
+} from "@playwright/test";
 import { z } from "zod";
+
+/** A public shortcode body, for composing route and id patterns. */
+export const SHORTCODE = `[${SHORTCODE_CHARS}]{${SHORTCODE_BODY_LENGTH}}`;
+
+export function escapeRegExp(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/**
+ * A record name no other test can produce. A worker keeps one database for
+ * every spec it runs, so which specs share it changes with the shard split; a
+ * literal or faker-picked name then collides with another spec's record (a
+ * strict-mode violation, or a count that includes a stranger's rows).
+ */
+export function uniqueName(testInfo: TestInfo, label: string): string {
+  const token = [
+    testInfo.testId.slice(-4),
+    testInfo.repeatEachIndex.toString(36),
+    testInfo.parallelIndex.toString(36),
+    Date.now().toString(36).slice(-5),
+  ].join("");
+  return `${label} ${token}`;
+}
+
+/**
+ * Assert that `locator` does not move while requests matching `routeGlob`
+ * (and `options.match`) settle — the shape of late content, such as an async
+ * suggestion, shifting a control out from under a tap. Matching requests are
+ * held from before `options.during` (typically the navigation) until the first
+ * measurement, so that measurement always precedes their responses.
+ */
+export async function expectStableLayoutWhile(
+  page: Page,
+  routeGlob: string,
+  locator: Locator,
+  options: {
+    during?: () => Promise<void>;
+    match?: (route: Route) => boolean;
+  } = {},
+) {
+  const held: Route[] = [];
+  let holding = true;
+  const release = () =>
+    Promise.all(held.splice(0).map((route) => route.fallback()));
+  const handler = async (route: Route) => {
+    if (holding && (options.match?.(route) ?? true)) held.push(route);
+    else await route.fallback();
+  };
+  await page.route(routeGlob, handler);
+  try {
+    await options.during?.();
+    await expect(locator).toBeVisible();
+    // Let everything not held settle first, so the comparison below isolates
+    // what the held responses change.
+    let settled = await locator.boundingBox();
+    await expect
+      .poll(async () => {
+        const previous = settled;
+        await page.waitForTimeout(250);
+        settled = await locator.boundingBox();
+        return (
+          settled?.y === previous?.y && settled?.height === previous?.height
+        );
+      })
+      .toBe(true);
+    const before = settled;
+    expect(held.length, `no request matched ${routeGlob}`).toBeGreaterThan(0);
+    holding = false;
+    const responses = held.map((route) => route.request().response());
+    await release();
+    await Promise.all(responses);
+    await page.waitForLoadState("networkidle");
+    // Let React commit what the responses changed before measuring again.
+    await page.evaluate(
+      () =>
+        new Promise((resolve) =>
+          requestAnimationFrame(() => requestAnimationFrame(resolve)),
+        ),
+    );
+    const after = await locator.boundingBox();
+    expect(after?.y).toBeCloseTo(before?.y ?? Number.NaN, 0);
+    expect(after?.height).toBeCloseTo(before?.height ?? Number.NaN, 0);
+  } finally {
+    holding = false;
+    await release();
+    await page.unroute(routeGlob, handler);
+  }
+}
+
+/** Read an expense through the public API, for `expect.poll` after a UI write. */
+export async function readExpense<Schema extends z.ZodType>(
+  page: Page,
+  id: string,
+  schema: Schema,
+): Promise<z.output<Schema>> {
+  const response = await page.request.get(`/api/v1/expenses/${id}`);
+  expect(response.ok(), `GET /api/v1/expenses/${id}`).toBe(true);
+  return schema.parse(await response.json());
+}
 
 /** The `get-session` status observed at a hydration failure, for attribution. */
 async function observedSessionStatus(page: Page): Promise<number | "unknown"> {
@@ -71,22 +177,6 @@ export async function gotoAuthenticatedPage(
   await page.goto(path, { waitUntil: "domcontentloaded" });
   await waitForAppHydration(page);
   if (ready) await expect(ready).toBeVisible({ timeout: 15000 });
-}
-
-/** Fail with the route boundary's real technical message, not a later missing-heading timeout. */
-export async function failOnRouteError(page: Page) {
-  const errorHeading = page.getByRole("heading", {
-    level: 2,
-    name: "Something went wrong",
-  });
-  if (!(await errorHeading.isVisible().catch(() => false))) return;
-
-  await page.getByRole("button", { name: "Technical Details" }).click();
-  const message = await page
-    .getByText("Message:", { exact: true })
-    .locator("..")
-    .textContent();
-  throw new Error(`Route error at ${page.url()}: ${message ?? "unknown"}`);
 }
 
 /**
@@ -179,15 +269,16 @@ export async function selectComboboxItem(
 
   await combobox.fill(itemName);
 
-  // Wait for and click the matching option. The name regex is anchored to the
-  // start: while the debounced search is still loading, the popup shows a
-  // "Create new <label>: <itemName>" button whose accessible name also
-  // contains itemName — an unanchored (substring) match clicks it and opens
-  // the quick-create dialog, wedging the whole form behind aria-hidden.
-  const escapedName = itemName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const option = page.getByRole("option", {
-    name: new RegExp(`^${escapedName}`),
-  });
+  // Wait for and click the option whose label is exactly itemName. An option's
+  // accessible name is its label plus a description and shortcode, so match
+  // the label text exactly (excluding another record whose name merely starts
+  // with itemName) and anchor the name to its start (excluding the "Create new
+  // <label>: <itemName>" item the popup shows while the debounced search is
+  // loading — clicking it opens the quick-create dialog and wedges the form
+  // behind aria-hidden).
+  const option = page
+    .getByRole("option", { name: new RegExp(`^${escapeRegExp(itemName)}`) })
+    .filter({ has: page.getByText(itemName, { exact: true }) });
   await expect(option).toBeVisible({ timeout: 10000 });
 
   // Click, then verify the selection actually registered (popup closed). The
@@ -284,35 +375,6 @@ export async function editListCell(
   }).toPass({ timeout: 30_000 });
 }
 
-export function waitForEntityMutation(page: Page) {
-  return page.waitForResponse(
-    (response) =>
-      response.request().method() === "POST" &&
-      response.url().includes("/_serverFn/") &&
-      response.ok(),
-  );
-}
-
-export async function editDetailCell(
-  page: Page,
-  trigger: Locator,
-  value: string,
-) {
-  const input = cellEditorInput(page);
-  await expect(async () => {
-    await trigger.click();
-    await expect(input).toBeVisible({ timeout: 2_000 });
-    await expect(input).toBeEnabled({ timeout: 2_000 });
-  }).toPass({ timeout: 30_000 });
-
-  // Retrying a save could submit the same mutation twice if the request
-  // succeeded but its portaled editor was slow to close. Only opening the
-  // editor is retried; the commit itself is deliberately issued once.
-  await input.fill(value);
-  await input.press("Enter");
-  await expect(input).toHaveCount(0, { timeout: 10_000 });
-}
-
 /**
  * Open the global command palette via the header "Search" trigger and return
  * its dialog.
@@ -342,11 +404,10 @@ export async function openCommandPalette(page: Page): Promise<Locator> {
 
 /**
  * Find a just-created record through the global command palette and land on
- * its detail page. `/locations`, `/ingredients`, and `/inventory` no longer
- * navigate to the new record on create (the dialog just closes and the list
- * refreshes in place — see `EntityEditDialog`), so this is the addressable
- * way back to a detail URL without depending on list sort order, pagination,
- * or the active list view (gallery vs. table).
+ * its detail page. List create dialogs do not navigate to the new record (the
+ * dialog just closes and the list refreshes in place — see
+ * `EntityEditDialog`), so this is the addressable way back to a detail URL
+ * without depending on list sort order, pagination, or the active list view.
  */
 async function findViaCommandPalette(page: Page, query: string, name: string) {
   const palette = await openCommandPalette(page);
@@ -358,54 +419,11 @@ async function findViaCommandPalette(page: Page, query: string, name: string) {
   await result.click();
 }
 
-export async function createLocation(
-  page: Page,
-  name: string,
-  opts: { parentName?: string; type?: string } = {},
-): Promise<string> {
-  // `/locations/new` is gone; locations are created in the list's dialog,
-  // addressable via `?create=true` (see `CreateDialogAction`).
-  await page.goto("/locations?create=true");
-  await waitForFormHydration(page);
-  const dialog = page.getByRole("dialog");
-  await dialog.getByRole("textbox", { name: "Name", exact: true }).fill(name);
-  if (opts.type) {
-    await dialog.getByPlaceholder("Select a location type").click();
-    await page.getByRole("option", { name: opts.type, exact: true }).click();
-  }
-  if (opts.parentName) {
-    await selectComboboxItem(
-      page,
-      dialog.getByRole("combobox", { name: /parent location/i }),
-      opts.parentName,
-    );
-  }
-  await dialog.getByRole("button", { name: /^Create$/ }).click();
-  // On success the dialog closes and the list refreshes — it does not
-  // navigate to the new location's detail page.
-  await expect(dialog).not.toBeVisible({ timeout: 15000 });
-
-  await findViaCommandPalette(page, `locations:${name}`, name);
-  await expect(page).toHaveURL(
-    /\/locations\/LOC-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}/,
-    {
-      timeout: 15000,
-    },
-  );
-  await expect(page.getByText(name).first()).toBeVisible({ timeout: 10000 });
-  const shortcode = new URL(page.url()).pathname.match(
-    /\/locations\/(LOC-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4})/,
-  )?.[1];
-  if (!shortcode)
-    throw new Error(`Location shortcode missing from ${page.url()}`);
-  return shortcode;
-}
-
 /**
  * Products are created in the list's dialog (`?create=true`, see
  * `CreateDialogAction`) — the `/products/new` page is gone. The dialog closes
  * on success without navigating, so the new product is reached through the
- * command palette, the same shape as `createIngredientViaForm`.
+ * command palette.
  */
 export async function createProduct(
   page: Page,
@@ -432,128 +450,10 @@ export async function createProduct(
 /** Reach a product's detail page by name and assert its URL and heading. */
 export async function openProductFromPalette(page: Page, name: string) {
   await findViaCommandPalette(page, `products:${name}`, name);
-  await expect(page).toHaveURL(
-    /\/products\/PRD-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}/,
-    { timeout: 15000 },
-  );
+  await expect(page).toHaveURL(new RegExp(`/products/PRD-${SHORTCODE}`), {
+    timeout: 15000,
+  });
   await expect(page.getByRole("heading", { level: 1, name })).toBeVisible({
-    timeout: 10000,
-  });
-}
-
-export async function createIngredientViaForm(page: Page, name: string) {
-  // `/ingredients/new` is gone; ingredients are created in the list's
-  // dialog, addressable via `?create=true` (see `CreateDialogAction`).
-  await page.goto("/ingredients?create=true");
-  await waitForFormHydration(page);
-  const dialog = page.getByRole("dialog");
-  await dialog.getByRole("textbox", { name: "Name", exact: true }).fill(name);
-  await dialog.getByRole("button", { name: /^Create$/ }).click();
-  // On success the dialog closes and the list refreshes — it does not
-  // navigate to the new ingredient's detail page.
-  await expect(dialog).not.toBeVisible({ timeout: 15000 });
-
-  await findViaCommandPalette(page, `ingredients:${name}`, name);
-  const ingredientShortcodeRe =
-    /\/ingredients\/ING-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}/;
-  await expect(page).toHaveURL(ingredientShortcodeRe, { timeout: 15000 });
-  await expect(page.getByRole("heading", { level: 1 })).toContainText(name, {
-    timeout: 10000,
-  });
-}
-
-// Create a product linked to an existing ingredient, with two unit→price
-// conversions: 1 cup = $2.50 and 100 g = $1.50. These exact mappings are what
-// the recipe full-flow cost/weight assertions depend on (2 cups → $5.00, and
-// 333 g via the chained cup→g conversion), so don't change them here. Asserts
-// the product detail URL and the <h1> name heading.
-export async function createProductWithIngredientMappings(
-  page: Page,
-  opts: { name: string; manufacturer: string; ingredientName: string },
-) {
-  await page.goto("/products?create=true");
-  await waitForFormHydration(page);
-  const dialog = page.getByRole("dialog");
-  await dialog
-    .getByRole("textbox", { name: "Name", exact: true })
-    .fill(opts.name);
-  await dialog
-    .getByRole("textbox", { name: "Manufacturer", exact: true })
-    .fill(opts.manufacturer);
-
-  // The ingredient link lives in the collapsed Nutrition section.
-  await dialog.getByRole("button", { name: "Nutrition", exact: true }).click();
-  await selectComboboxItem(
-    page,
-    dialog.getByRole("combobox", { name: /ingredient/i }).first(),
-    opts.ingredientName,
-  );
-
-  await dialog.getByRole("button", { name: "Add conversion" }).click();
-  const firstFromUnit = dialog.locator('[id="unitMappings.0.a.unit"]');
-  await expect(firstFromUnit).toBeVisible({ timeout: 10000 });
-  await firstFromUnit.fill("cup");
-  await dialog.locator('[id="unitMappings.0.b.value"]').fill("2.50");
-  await dialog.locator('[id="unitMappings.0.b.unit"]').fill("dollar");
-
-  await dialog.getByRole("button", { name: "Add conversion" }).click();
-  const secondFromValue = dialog.locator('[id="unitMappings.1.a.value"]');
-  await expect(secondFromValue).toBeVisible({ timeout: 10000 });
-  await secondFromValue.fill("100");
-  await dialog.locator('[id="unitMappings.1.a.unit"]').fill("grams");
-  await dialog.locator('[id="unitMappings.1.b.value"]').fill("1.50");
-  await dialog.locator('[id="unitMappings.1.b.unit"]').fill("dollar");
-
-  await dialog.getByRole("button", { name: /^Create$/ }).click();
-  await expect(dialog).not.toBeVisible({ timeout: 15000 });
-  await openProductFromPalette(page, opts.name);
-}
-
-/**
- * Opens the inventory list's create dialog (`?create=true`, see
- * `CreateDialogAction`) and reaches the new entry through the command palette,
- * the same shape as `createLocation` and `createIngredientViaForm`.
- */
-export async function addInventory(
-  page: Page,
-  productName: string,
-  locationName: string,
-  quantity: number,
-  unit: string,
-) {
-  await page.goto("/inventory?create=true");
-  await waitForFormHydration(page);
-  const dialog = page.getByRole("dialog");
-
-  await selectComboboxItem(
-    page,
-    dialog.getByRole("combobox", { name: "Product", exact: true }),
-    productName,
-  );
-
-  await selectComboboxItem(
-    page,
-    dialog.getByRole("combobox", { name: "Location", exact: true }),
-    locationName,
-  );
-
-  await dialog.getByLabel("Amount Value").fill(quantity.toString());
-
-  await dialog.getByRole("textbox", { name: "Amount Unit" }).fill(unit);
-
-  await dialog.getByRole("button", { name: /^Create$/ }).click();
-  // On success the dialog closes and the list refreshes — it does not
-  // navigate to the new inventory entry's detail page.
-  await expect(dialog).not.toBeVisible({ timeout: 15000 });
-
-  await findViaCommandPalette(page, `inventory:${productName}`, productName);
-  await expect(page).toHaveURL(
-    /\/inventory\/INV-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}/,
-    {
-      timeout: 15000,
-    },
-  );
-  await expect(page.getByText(productName).first()).toBeVisible({
     timeout: 10000,
   });
 }

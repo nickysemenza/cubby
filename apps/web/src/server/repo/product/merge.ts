@@ -33,6 +33,7 @@ import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import {
   cookbook,
   device,
+  photoGroupProposal,
   expense,
   inventoryEntry,
   importRunTarget,
@@ -200,6 +201,12 @@ export const PRODUCT_MERGE_EDGE_POLICY = {
     effect: "repoint",
     description:
       "A device whose hardware was merged away re-points onto the survivor, the same plain repoint as a Location or Cookbook.",
+  },
+  "PhotoGroupProposal.productId": {
+    code: "repoint-to-survivor",
+    effect: "repoint",
+    description:
+      "A photo group proposal that chose (or committed to) a merged-away product follows the survivor.",
   },
 } as const satisfies IncomingEdgePolicy<"product", OperationDisposition>;
 
@@ -1639,6 +1646,10 @@ export const mergeProducts = async (
       .where(and(inArray(device.productId, plan.loserIds), notDeleted(device)))
       .returning({ id: device.id });
     summary.devicesMoved = movedDevices.length;
+    await tx
+      .update(photoGroupProposal)
+      .set({ productId: keepId, updatedAt: new Date() })
+      .where(inArray(photoGroupProposal.productId, plan.loserIds));
     await tx
       .update(mealFoodEntry)
       .set({ productId: keepId })

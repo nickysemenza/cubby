@@ -1,6 +1,12 @@
 import CubbyKit
 import SwiftUI
 
+#if os(macOS)
+    import AppKit
+#else
+    import UIKit
+#endif
+
 /// Server and session preferences, presented in a separate Settings scene on macOS.
 struct SettingsView: View {
     @Environment(AppModel.self) private var model
@@ -12,6 +18,7 @@ struct SettingsView: View {
         .rawValue
     @AppStorage("photoAnalysisPaused") private var photoAnalysisPaused = false
     @State private var photoAnalysisSummary: (analysed: Int, total: Int)?
+    @State private var photoStorageSummary: PhotoAnalysisStorageSummary?
     @State private var photosReady = false
     @State private var receiptHunts: [ReceiptHuntSummary] = []
     @State private var selectedReceiptHunt: ReceiptHuntSummary?
@@ -336,12 +343,15 @@ struct SettingsView: View {
             }
             LabeledContent("Analysed") { Text(photoAnalysisSummaryText) }
                 .frame(minHeight: PorcelainTokens.touchTarget - 12)
+            PhotoStorageRows(summary: photoStorageSummary)
         } header: {
             Eyebrow("Photos")
         } footer: {
-            Text("On-device category classification runs quietly while the Photos tab is open.")
-                .font(.porcelainLabel)
-                .foregroundStyle(PorcelainTokens.graphiteSecondary)
+            Text(
+                "On-device category classification runs quietly while the Photos tab is open. This database is an on-device cache Cubby can rebuild at any time."
+            )
+            .font(.porcelainLabel)
+            .foregroundStyle(PorcelainTokens.graphiteSecondary)
         }
     }
 
@@ -366,6 +376,12 @@ struct SettingsView: View {
             (try? await analysisStore.classifiedCount(
                 newerThan: PhotoClassificationSweep.classifyVersion)) ?? 0
         photoAnalysisSummary = (analysed, total)
+        do {
+            photoStorageSummary = try await analysisStore.storageSummary(
+                classifyVersion: PhotoClassificationSweep.classifyVersion)
+        } catch {
+            Diagnostics.report(error, context: "settings.photoStorage")
+        }
     }
 
     private var customServerURL: URL? {
@@ -396,6 +412,52 @@ struct SettingsView: View {
         let server = SettingsServer(baseURL: model.baseURL)
         selectedServer = server
         if server == .custom { draftURL = model.baseURL.absoluteString }
+    }
+}
+
+/// The "Database" / "Size" / "Rows" rows under Settings → Photos, plus the platform reveal action.
+/// Takes a plain value rather than reading `AppModel` directly, so it renders in a `#Preview`
+/// without opening a real on-disk `PhotoAnalysisStore`.
+private struct PhotoStorageRows: View {
+    let summary: PhotoAnalysisStorageSummary?
+
+    var body: some View {
+        if let summary, let url = summary.url {
+            LabeledContent("Database") {
+                VStack(alignment: .trailing, spacing: 2) {
+                    Text(url.lastPathComponent)
+                    Text(url.path(percentEncoded: false))
+                        .font(.porcelainCode)
+                        .foregroundStyle(PorcelainTokens.graphiteSecondary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                        .textSelection(.enabled)
+                }
+            }
+            .frame(minHeight: PorcelainTokens.touchTarget - 12)
+            LabeledContent("Size") {
+                Text(summary.bytesOnDisk, format: .byteCount(style: .file))
+            }
+            .frame(minHeight: PorcelainTokens.touchTarget - 12)
+            LabeledContent("Rows") {
+                Text(
+                    "\(summary.hashedCount.formatted()) hashed · \(summary.classifiedCount.formatted()) classified · \(summary.syncedSightingCount.formatted()) synced"
+                )
+            }
+            .frame(minHeight: PorcelainTokens.touchTarget - 12)
+            #if os(macOS)
+                Button("Show in Finder") {
+                    NSWorkspace.shared.activateFileViewerSelecting([url])
+                }
+            #else
+                Button("Copy path") {
+                    UIPasteboard.general.string = url.path(percentEncoded: false)
+                }
+            #endif
+        } else {
+            LabeledContent("Database") { Text("…") }
+                .frame(minHeight: PorcelainTokens.touchTarget - 12)
+        }
     }
 }
 
@@ -613,4 +675,16 @@ struct DeviceParticipationOnboardingSheet: View {
 
 #Preview(traits: .modifier(SignedInPreview())) {
     NavigationStack { SettingsView() }
+}
+
+#Preview("Photos — storage") {
+    Form {
+        PhotoStorageRows(
+            summary: PhotoAnalysisStorageSummary(
+                url: URL(
+                    fileURLWithPath: "/Users/preview/Library/Application Support/Cubby/PhotoAnalysis.sqlite"),
+                bytesOnDisk: 18_874_368, rowCount: 4200, hashedCount: 4200, classifiedCount: 3980,
+                syncedSightingCount: 1250))
+    }
+    .formStyle(.grouped)
 }

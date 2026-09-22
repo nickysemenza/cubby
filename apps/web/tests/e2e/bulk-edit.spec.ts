@@ -3,7 +3,7 @@ import {
   seedPlantingPrerequisite,
   seedTaskPrerequisite,
 } from "./e2e-fixtures";
-import { waitForAppHydration } from "./e2e-helpers";
+import { gotoAuthenticatedPage } from "./e2e-helpers";
 import { expect, test } from "./e2e-test";
 
 /**
@@ -22,8 +22,7 @@ test("task board multi-select bulk-edits status without touching other fields", 
   const taskOne = await seedTaskPrerequisite(page, { name: taskOneName });
   const taskTwo = await seedTaskPrerequisite(page, { name: taskTwoName });
 
-  await page.goto("/tasks");
-  await waitForAppHydration(page);
+  await gotoAuthenticatedPage(page, "/tasks");
 
   for (const name of [taskOneName, taskTwoName]) {
     const row = page.getByRole("row").filter({ hasText: name });
@@ -68,8 +67,7 @@ test("plantings list bulk-edits status finished plus a date in one write", async
   });
   await seedPlantingPrerequisite(page, { ingredientId: otherCrop.id });
 
-  await page.goto(`/plantings?ingredientId=${crop.id}`);
-  await waitForAppHydration(page);
+  await gotoAuthenticatedPage(page, `/plantings?ingredientId=${crop.id}`);
 
   await expect(
     page.getByRole("button", { name: `Crop: ${cropName}`, exact: true }),

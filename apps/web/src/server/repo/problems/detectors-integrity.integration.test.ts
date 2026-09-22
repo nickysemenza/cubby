@@ -43,6 +43,7 @@ import {
   merchantVendorRule,
   orderMail,
   orderMailAttachment,
+  photoGroupProposal,
   productComponent,
   productConversionCoverage,
   productMatchCandidate,
@@ -642,6 +643,15 @@ const SOURCE_FACTORIES = {
     mkImportRun(db, {
       vendorAccountId: parseEntityId("vendorAccount", targetId),
     }),
+  "PhotoGroupProposal.productId": async (db, targetId) => {
+    const run = await mkImportRun(db);
+    return insertAndReturn(db, photoGroupProposal, {
+      runId: run.id,
+      groupKey: uniq("group"),
+      productKind: "existing",
+      productId: parseEntityId("product", targetId),
+    });
+  },
   "ImportRunTarget.productId": (db, targetId) =>
     mkImportRunTarget(db, { productId: parseEntityId("product", targetId) }),
   "ImportRunTarget.vendorAccountId": (db, targetId) =>
@@ -1087,6 +1097,18 @@ const SOURCE_FACTORIES = {
     });
   },
 
+  "PhotoGroupProposal.inventoryLocationId": async (db, targetId) => {
+    const run = await mkImportRun(db);
+    return insertAndReturn(db, photoGroupProposal, {
+      runId: run.id,
+      groupKey: uniq("group"),
+      productKind: "create",
+      productCreate: { name: uniq("Proposal") },
+      inventoryLocationId: parseEntityId("location", targetId),
+      inventory: { quantity: 1 },
+    });
+  },
+
   "InventoryEntry.locationId": async (db, targetId) => {
     const p = await mkProduct(db);
     return insertWithShortcode(db, "inventory", {
@@ -1416,6 +1438,13 @@ const SOURCE_FACTORIES = {
     mkImportRun(db, {
       predecessorRunId: parseEntityId("importRun", targetId),
     }),
+  "PhotoGroupProposal.runId": (db, targetId) =>
+    insertAndReturn(db, photoGroupProposal, {
+      runId: parseEntityId("importRun", targetId),
+      groupKey: uniq("group"),
+      productKind: "create",
+      productCreate: { name: uniq("Proposal") },
+    }),
   "ImportRunTarget.runId": async (db, targetId) => {
     const product = await mkProduct(db);
     return mkImportRunTarget(db, {
@@ -1622,6 +1651,7 @@ const HARD_DELETE_ONLY_SOURCE_TABLES = new Set([
   "MerchantVendorRule",
   "OrderMail",
   "OrderMailAttachment",
+  "PhotoGroupProposal",
   "ProjectDependency",
   "ProductConversionCoverage",
   "ProductMatchCandidate",
@@ -1665,11 +1695,11 @@ const derivedMustTargetLiveEdges = deriveMustTargetLiveEdges();
 describe("findReferentialLivenessViolations", () => {
   const ctx = withTestDb();
 
-  it("derives 136 must-target-live edges from INCOMING_EDGES × ENTITY_EDGE_SEMANTICS", () => {
+  it("derives 139 must-target-live edges from INCOMING_EDGES × ENTITY_EDGE_SEMANTICS", () => {
     // Mirrors EXPECTED_EDGE_COUNT in detectors-integrity.ts — an independent
     // spot check computed from the same two source-of-truth maps, not from the
     // detector's own (unexported) derivation.
-    expect(derivedMustTargetLiveEdges).toHaveLength(136);
+    expect(derivedMustTargetLiveEdges).toHaveLength(139);
   });
 
   it("the hand-written fixture map covers exactly the derived edges (a new edge fails here, not silently)", () => {

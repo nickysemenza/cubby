@@ -46,6 +46,7 @@ import type { Database, DrizzleClient } from "~/server/db";
 import {
   cookbook,
   device,
+  photoGroupProposal,
   expense,
   image,
   importRunTarget,
@@ -238,6 +239,20 @@ const PRODUCT_RETAINING_NOT_EXISTS = {
         .select({ id: sql`1` })
         .from(device)
         .where(and(eq(device.productId, product.id), notDeleted(device))),
+    ),
+  // Only a still-pending proposal intends to use the Product; a committed
+  // one is history and must not hide an otherwise-orphaned Product forever.
+  "PhotoGroupProposal.productId": (dbClient) =>
+    notExists(
+      dbClient
+        .select({ id: sql`1` })
+        .from(photoGroupProposal)
+        .where(
+          and(
+            eq(photoGroupProposal.productId, product.id),
+            eq(photoGroupProposal.state, "proposed"),
+          ),
+        ),
     ),
 } satisfies Record<ProductRetainingEdgeKey, (dbClient: DrizzleClient) => SQL>;
 

@@ -281,4 +281,10 @@ export const PRODUCT_DELETE_EDGE_POLICY = {
     description:
       "Deleting a product clears any device's hardware link rather than blocking the delete — a device survives as one with no linked hardware.",
   },
+  "PhotoGroupProposal.productId": {
+    code: "clear-proposal-product",
+    effect: "detach",
+    description:
+      "Deleting a product clears a photo group proposal's product choice; a proposed group must then pick another Product before approval.",
+  },
 } as const satisfies IncomingEdgePolicy<"product", ProductDeleteDisposition>;

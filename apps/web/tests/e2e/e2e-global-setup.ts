@@ -41,8 +41,11 @@ async function globalSetup(): Promise<void> {
   );
 
   console.log("[E2E Setup] Preparing shared PostgreSQL template...");
+  const templateStart = performance.now();
   await prepareE2EDatabaseTemplate();
-  console.log("[E2E Setup] Shared PostgreSQL template is ready");
+  console.log(
+    `[E2E Setup] Shared PostgreSQL template is ready ${Math.round(performance.now() - templateStart)}ms`,
+  );
 }
 
 export default globalSetup;

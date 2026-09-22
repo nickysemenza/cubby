@@ -75,6 +75,29 @@ public struct PhotoAssetSnapshot: Sendable, Hashable {
     }
 }
 
+/// Settings-facing snapshot of the on-disk analysis database: where it lives, how big it is, and
+/// what it holds. `url`/`bytesOnDisk` are nil/0 for an in-memory store (previews, tests).
+public struct PhotoAnalysisStorageSummary: Sendable, Equatable {
+    public let url: URL?
+    public let bytesOnDisk: Int64
+    public let rowCount: Int
+    public let hashedCount: Int
+    public let classifiedCount: Int
+    public let syncedSightingCount: Int
+
+    public init(
+        url: URL?, bytesOnDisk: Int64, rowCount: Int, hashedCount: Int, classifiedCount: Int,
+        syncedSightingCount: Int
+    ) {
+        self.url = url
+        self.bytesOnDisk = bytesOnDisk
+        self.rowCount = rowCount
+        self.hashedCount = hashedCount
+        self.classifiedCount = classifiedCount
+        self.syncedSightingCount = syncedSightingCount
+    }
+}
+
 /// A small, actor-isolated SQLite cache for perceptual hashes and local classifications.
 ///
 /// The predecessor SwiftData file remains untouched. It is rebuildable cache data, and opening it
@@ -82,20 +105,30 @@ public struct PhotoAssetSnapshot: Sendable, Hashable {
 public actor PhotoAnalysisStore {
     private static let table = "photo_analysis"
     private let database: DatabaseQueue
+    /// nil for an in-memory store; otherwise the `.sqlite` file backing `database`, for
+    /// `storageSummary()` to report and locate sidecar files against.
+    private let fileURL: URL?
 
-    private init(database: DatabaseQueue) {
+    private init(database: DatabaseQueue, fileURL: URL?) {
         self.database = database
+        self.fileURL = fileURL
     }
 
     public static func make(inMemory: Bool = false) throws -> PhotoAnalysisStore {
+        try make(fileURL: inMemory ? nil : try databaseURL())
+    }
+
+    /// Test-only entry point so a suite can point the store at a temp path instead of the real
+    /// Application Support database. Production code always goes through `make(inMemory:)`.
+    package static func make(fileURL: URL?) throws -> PhotoAnalysisStore {
         let database =
-            if inMemory {
-                try DatabaseQueue()
+            if let fileURL {
+                try DatabaseQueue(path: fileURL.path(percentEncoded: false))
             } else {
-                try DatabaseQueue(path: try databaseURL().path(percentEncoded: false))
+                try DatabaseQueue()
             }
         try migrator.migrate(database)
-        return PhotoAnalysisStore(database: database)
+        return PhotoAnalysisStore(database: database, fileURL: fileURL)
     }
 
     public static func databaseURL() throws -> URL {
@@ -281,13 +314,43 @@ public actor PhotoAnalysisStore {
 
     public func classifiedCount(newerThan classifyVersion: Int) throws -> Int {
         try database.read { db in
-            try Int.fetchOne(
-                db,
-                sql: """
-                    SELECT COUNT(*) FROM photo_analysis
-                    WHERE classify_version >= ? OR full_analysis_version IS NOT NULL
-                    """,
-                arguments: [classifyVersion]) ?? 0
+            try Int.fetchOne(db, sql: Self.classifiedCountSQL, arguments: [classifyVersion]) ?? 0
+        }
+    }
+
+    private static let classifiedCountSQL = """
+        SELECT COUNT(*) FROM photo_analysis
+        WHERE classify_version >= ? OR full_analysis_version IS NOT NULL
+        """
+
+    /// Reads `fileURL`'s on-disk size plus its WAL/SHM/journal sidecars (whichever exist) and the
+    /// row counts Settings shows, in one transaction so they describe the same instant.
+    public func storageSummary(classifyVersion: Int) throws -> PhotoAnalysisStorageSummary {
+        let bytesOnDisk = Self.bytesOnDisk(for: fileURL)
+        return try database.read { db in
+            let rowCount = try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM photo_analysis") ?? 0
+            let hashedCount =
+                try Int.fetchOne(
+                    db, sql: "SELECT COUNT(*) FROM photo_analysis WHERE perceptual_hash IS NOT NULL") ?? 0
+            let classifiedCount =
+                try Int.fetchOne(db, sql: Self.classifiedCountSQL, arguments: [classifyVersion]) ?? 0
+            let syncedSightingCount =
+                try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM library_sighting_sync") ?? 0
+            return PhotoAnalysisStorageSummary(
+                url: fileURL, bytesOnDisk: bytesOnDisk, rowCount: rowCount, hashedCount: hashedCount,
+                classifiedCount: classifiedCount, syncedSightingCount: syncedSightingCount)
+        }
+    }
+
+    private static func bytesOnDisk(for fileURL: URL?) -> Int64 {
+        guard let fileURL else { return 0 }
+        let sidecarSuffixes = ["", "-wal", "-shm", "-journal"]
+        return sidecarSuffixes.reduce(into: Int64(0)) { total, suffix in
+            let path = fileURL.path(percentEncoded: false) + suffix
+            guard
+                let size = try? FileManager.default.attributesOfItem(atPath: path)[.size] as? Int64
+            else { return }
+            total += size
         }
     }
 

@@ -3,6 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "ci:flakes": "node scripts/ci-flakes.ts",
     "agent:setup": "pnpm install --frozen-lockfile && node scripts/ensure-wasm.ts",
     "dev": "pnpm -r dev",
     "build": "pnpm -r build",

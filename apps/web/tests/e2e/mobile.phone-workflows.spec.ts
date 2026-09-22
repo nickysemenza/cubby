@@ -1,9 +1,15 @@
 import {
+  seedConcurrently,
   seedLocationPrerequisite,
   seedProductPrerequisite,
   seedStaplePlanningPrerequisite,
 } from "./e2e-fixtures";
-import { expectViewportBounded, gotoAuthenticatedPage } from "./e2e-helpers";
+import {
+  escapeRegExp,
+  expectViewportBounded,
+  gotoAuthenticatedPage,
+  uniqueName,
+} from "./e2e-helpers";
 import { expect, test } from "./e2e-test";
 
 test("Home Screen manifest opens Today without changing the installed app identity", async ({
@@ -21,16 +27,19 @@ test("Home Screen manifest opens Today without changing the installed app identi
 
 test("search detail Back retains query and does not reopen the input", async ({
   page,
-}) => {
+}, testInfo) => {
   await gotoAuthenticatedPage(page, "/search");
-  const name = "Phone workflow whole wheat flour";
-  for (let index = 0; index < 14; index++) {
-    await seedProductPrerequisite(page, { name: `${name} ${index}` });
-  }
+  const name = uniqueName(testInfo, "Phone workflow whole wheat flour");
+  await seedConcurrently(
+    Array.from({ length: 14 }, (_, index) => index),
+    (index) => seedProductPrerequisite(page, { name: `${name} ${index}` }),
+  );
   const input = page.getByRole("searchbox", { name: "Search Cubby" });
   await input.fill(name);
   await expect(page).toHaveURL(/q=Phone/);
-  const results = page.getByRole("link", { name: new RegExp(name) });
+  const results = page.getByRole("link", {
+    name: new RegExp(escapeRegExp(name)),
+  });
   await expect(results).toHaveCount(14);
   await results.last().scrollIntoViewIfNeeded();
   const scrollBefore = await page.evaluate(() => window.scrollY);
@@ -45,7 +54,7 @@ test("search detail Back retains query and does not reopen the input", async ({
   // Playwright `click()` sends mouse events, so the touchstart intent preload
   // that avoids the skeleton on a real phone does not fire here.
   await expect(
-    page.getByRole("heading", { name: new RegExp(name) }),
+    page.getByRole("heading", { name: new RegExp(escapeRegExp(name)) }),
   ).toBeVisible();
   await page.getByRole("button", { name: "Back", exact: true }).click();
   await expect(input).toHaveValue(name);
@@ -80,11 +89,14 @@ test("direct links fall back to the parent and directories remain reachable thro
   await expectViewportBounded(page);
 });
 
-test("form validation and picker entry remain reachable", async ({ page }) => {
+test("form validation and picker entry remain reachable", async ({
+  page,
+}, testInfo) => {
+  const parentName = uniqueName(testInfo, "Phone parent pantry");
   // Locations are created in the list's dialog; `?create=true` is the
   // addressable way in (see CreateDialogAction).
   await gotoAuthenticatedPage(page, "/locations?create=true");
-  await seedLocationPrerequisite(page, "Phone parent pantry");
+  await seedLocationPrerequisite(page, parentName);
   const dialog = page.getByRole("dialog");
   await dialog.getByRole("button", { name: "Create", exact: true }).click();
   await expect(
@@ -94,9 +106,11 @@ test("form validation and picker entry remain reachable", async ({ page }) => {
     .getByRole("textbox", { name: "Name", exact: true })
     .fill("Phone pantry");
   const picker = dialog.getByRole("combobox", { name: /Parent location/i });
-  await picker.fill("Phone parent");
-  await page.getByRole("option", { name: /Phone parent pantry/ }).click();
-  await expect(picker).toHaveValue("Phone parent pantry — room");
+  await picker.fill(parentName);
+  await page
+    .getByRole("option", { name: new RegExp(`^${escapeRegExp(parentName)}`) })
+    .click();
+  await expect(picker).toHaveValue(`${parentName} — room`);
   const clear = dialog.getByRole("button", {
     name: /^Clear parent location/i,
   });
@@ -108,9 +122,9 @@ test("form validation and picker entry remain reachable", async ({ page }) => {
 
 test("recipe scaling and shopping checkmarks keep their existing behavior", async ({
   page,
-}) => {
-  await gotoAuthenticatedPage(page, "/");
-  const { recipe } = await seedStaplePlanningPrerequisite(page, "Phone oats");
+}, testInfo) => {
+  const staple = uniqueName(testInfo, "Phone oats");
+  const { recipe } = await seedStaplePlanningPrerequisite(page, staple);
   await gotoAuthenticatedPage(page, `/recipes/${recipe.id}`);
   await page.getByRole("button", { name: "Scale 2×", exact: true }).click();
   await expect(page).toHaveURL(/scale=2/);
@@ -120,7 +134,7 @@ test("recipe scaling and shopping checkmarks keep their existing behavior", asyn
     "/meals/shopping-list?from=2026-09-09&to=2026-09-09",
   );
   const check = page.getByRole("checkbox", {
-    name: "Check Phone oats",
+    name: `Check ${staple}`,
     exact: true,
   });
   await check.check();

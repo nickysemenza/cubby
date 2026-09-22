@@ -80,11 +80,18 @@ describe("product retaining edges", () => {
     // vocabulary can actually clear (`effect: "detach"`), so it is excluded
     // from BLOCKING below rather than forcing the delete to fail.
     "Device.productId",
+    // A photo group proposal's chosen Product: retaining for orphan
+    // detection while proposed, but detached (not blocking) on delete.
+    "PhotoGroupProposal.productId",
   ];
 
-  // Every retaining edge except `Device.productId`, which detaches instead of
-  // blocking — see its comment in RETAINING above.
-  const BLOCKING = RETAINING.filter((key) => key !== "Device.productId");
+  // Every retaining edge except the two that detach instead of blocking —
+  // see their comments in RETAINING above.
+  const DETACHING = new Set([
+    "Device.productId",
+    "PhotoGroupProposal.productId",
+  ]);
+  const BLOCKING = RETAINING.filter((key) => !DETACHING.has(key));
 
   it("retains exactly the acquisition, history, association, reference and usage edges", () => {
     expect(
@@ -130,6 +137,7 @@ describe("product retaining edges", () => {
       | "Task.subjectProductId"
       | "WishCandidate.productId"
       | "Device.productId"
+      | "PhotoGroupProposal.productId"
     >();
   });
 });

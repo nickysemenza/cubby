@@ -1,5 +1,9 @@
 import { seedToolFlowPrerequisite } from "./e2e-fixtures";
-import { expectViewportBounded, gotoAuthenticatedPage } from "./e2e-helpers";
+import {
+  escapeRegExp,
+  expectViewportBounded,
+  gotoAuthenticatedPage,
+} from "./e2e-helpers";
 import { expect, test } from "./e2e-test";
 
 test("tool Flow keeps full-width group markers and usable cards at phone widths", async ({
@@ -43,7 +47,7 @@ test("tool Flow keeps full-width group markers and usable cards at phone widths"
   }
 
   const firstCard = flow.getByRole("button", {
-    name: new RegExp(`${prefix} driver`),
+    name: new RegExp(escapeRegExp(`${prefix} driver`)),
   });
   await expect(firstCard).toHaveAttribute(
     "aria-describedby",

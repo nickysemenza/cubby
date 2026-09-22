@@ -2,7 +2,7 @@ import {
   clearNutritionCachePrerequisite,
   seedNutritionPrerequisite,
 } from "./e2e-fixtures";
-import { waitForAppHydration } from "./e2e-helpers";
+import { waitForAppHydration, gotoAuthenticatedPage } from "./e2e-helpers";
 import { expect, test } from "./e2e-test";
 
 test("nutrition matrix shares URL basis, preserves partial ranges and zero, and exposes the catalog", async ({
@@ -10,8 +10,7 @@ test("nutrition matrix shares URL basis, preserves partial ranges and zero, and 
 }, testInfo) => {
   const name = `E2E nutrition ${Date.now()}-${testInfo.workerIndex}`;
   const { recipe, incomplete } = await seedNutritionPrerequisite(page, name);
-  await page.goto(`/recipes/${recipe.id}?view=data`);
-  await waitForAppHydration(page);
+  await gotoAuthenticatedPage(page, `/recipes/${recipe.id}?view=data`);
   const contributions = page.getByTestId("nutrition-contributions");
   const focus = page.getByRole("combobox", { name: "Focused nutrient" });
   const table = page.getByRole("table", { name: "Recipe Ingredients Table" });
@@ -51,32 +50,30 @@ test("nutrition matrix shares URL basis, preserves partial ranges and zero, and 
   )
     .toBeVisible()
     .catch(async (error) => {
-      const details = page.getByRole("button", {
-        name: "Technical details",
-        exact: true,
+      // Failure path only: a route error hides its real message behind
+      // "Technical details"; open it if present and report the page text
+      // instead of a bare missing-button timeout.
+      await page
+        .getByRole("button", { name: "Technical details", exact: true })
+        .click({ timeout: 2000 })
+        .catch(() => undefined);
+      throw new Error(await page.getByRole("main").innerText(), {
+        cause: error,
       });
-      if (await details.isVisible()) {
-        await details.click();
-        throw new Error(await page.getByRole("main").innerText(), {
-          cause: error,
-        });
-      }
-      throw error;
     });
   await page
     .getByRole("button", { name: "Show Zinc (mg)", exact: true })
     .click();
   await page.keyboard.press("Escape");
   await expect(table.getByRole("columnheader", { name: /Zinc/ })).toBeVisible();
-  await page.goto(`/recipes/${recipe.id}?view=data&scale=2`);
-  await waitForAppHydration(page);
+  await gotoAuthenticatedPage(page, `/recipes/${recipe.id}?view=data&scale=2`);
   await expect(contributions).toContainText("300 kcal–500 kcal");
   await page.getByRole("button", { name: "Per serving", exact: true }).click();
   await expect(contributions).toContainText("75 kcal–125 kcal");
-  await page.goto(
+  await gotoAuthenticatedPage(
+    page,
     `/recipes/${recipe.id}?view=data&scale=0.3333&nutritionBasis=serving`,
   );
-  await waitForAppHydration(page);
   await expect(contributions).toContainText("75 kcal–125 kcal");
 });
 
@@ -87,8 +84,7 @@ test("calendar discloses partial planned nutrition and pending cleared totals", 
   const { recipe } = await seedNutritionPrerequisite(page, name, {
     missingCalories: true,
   });
-  await page.goto("/calendar?period=week&date=2026-09-09");
-  await waitForAppHydration(page);
+  await gotoAuthenticatedPage(page, "/calendar?period=week&date=2026-09-09");
   const event = page.getByRole("button", {
     name: `${name} meal, All day`,
     exact: true,

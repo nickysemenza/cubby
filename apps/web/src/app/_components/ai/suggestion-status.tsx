@@ -134,21 +134,24 @@ export function SuggestionStatus({
   if (text === null) return null;
   const showBreakdown = !checking && !unasked && fields.length > 0;
   return (
-    <Description size="xs" as="output" className="flex items-center gap-1">
+    // One line at every width: the settled headline is longer than
+    // "Checking suggestions…", and wrapping it pushed the whole record down
+    // mid-tap on a phone. The popover and accessible name keep the full text.
+    <Description
+      size="xs"
+      as="output"
+      className="flex min-w-0 items-center gap-1"
+    >
       <Popover>
         <PopoverTrigger
           openOnHover
           closeDelay={150}
+          aria-label={text}
+          title={text}
           className="inline-flex min-w-0 items-center gap-1 rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           <Sparkle className="size-3 shrink-0" />
-          {/* The per-field breakdown text can run long ("No suggestions ·
-              0 fields checked · 1 not checked · Some suggestions
-              unavailable"); a single wrapping line would grow the row it
-              sits in on a phone-width page. It stays one line — hover/tap
-              already opens the full breakdown, and clipping the summary
-              costs nothing the popover doesn't restate. */}
-          <span className="min-w-0 truncate">{text}</span>
+          <span className="truncate">{text}</span>
         </PopoverTrigger>
         {showBreakdown ? (
           <PopoverContent

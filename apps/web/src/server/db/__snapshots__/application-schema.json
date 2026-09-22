@@ -18073,6 +18073,228 @@
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false
+    },
+    "public.PhotoGroupProposal": {
+      "name": "PhotoGroupProposal",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "runId": {
+          "name": "runId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "groupKey": {
+          "name": "groupKey",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "state": {
+          "name": "state",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'proposed'"
+        },
+        "images": {
+          "name": "images",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'[]'::jsonb"
+        },
+        "skip": {
+          "name": "skip",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'[]'::jsonb"
+        },
+        "productKind": {
+          "name": "productKind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "productId": {
+          "name": "productId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "productCreate": {
+          "name": "productCreate",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "inventoryLocationId": {
+          "name": "inventoryLocationId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "inventory": {
+          "name": "inventory",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "evidence": {
+          "name": "evidence",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "conflictProductIds": {
+          "name": "conflictProductIds",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "lastError": {
+          "name": "lastError",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "committedAt": {
+          "name": "committedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updatedAt": {
+          "name": "updatedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "PhotoGroupProposal_run_group_key": {
+          "name": "PhotoGroupProposal_run_group_key",
+          "columns": [
+            {
+              "expression": "runId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "groupKey",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "PhotoGroupProposal_product_idx": {
+          "name": "PhotoGroupProposal_product_idx",
+          "columns": [
+            {
+              "expression": "productId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "PhotoGroupProposal_location_idx": {
+          "name": "PhotoGroupProposal_location_idx",
+          "columns": [
+            {
+              "expression": "inventoryLocationId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "PhotoGroupProposal_runId_ImportRun_id_fk": {
+          "name": "PhotoGroupProposal_runId_ImportRun_id_fk",
+          "tableFrom": "PhotoGroupProposal",
+          "tableTo": "ImportRun",
+          "columnsFrom": [
+            "runId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "PhotoGroupProposal_productId_Product_id_fk": {
+          "name": "PhotoGroupProposal_productId_Product_id_fk",
+          "tableFrom": "PhotoGroupProposal",
+          "tableTo": "Product",
+          "columnsFrom": [
+            "productId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "PhotoGroupProposal_inventoryLocationId_Location_id_fk": {
+          "name": "PhotoGroupProposal_inventoryLocationId_Location_id_fk",
+          "tableFrom": "PhotoGroupProposal",
+          "tableTo": "Location",
+          "columnsFrom": [
+            "inventoryLocationId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "PhotoGroupProposal_state_check": {
+          "name": "PhotoGroupProposal_state_check",
+          "value": "\"PhotoGroupProposal\".\"state\" IN ('proposed', 'committed', 'discarded')"
+        },
+        "PhotoGroupProposal_product_kind_check": {
+          "name": "PhotoGroupProposal_product_kind_check",
+          "value": "\"PhotoGroupProposal\".\"productKind\" IN ('existing', 'create')"
+        }
+      },
+      "isRLSEnabled": false
     }
   },
   "enums": {

@@ -107,6 +107,18 @@ const NON_GRAPH_ENTITY_FK_EXEMPTIONS = {
     classification: "metadata",
     reason: "records the Purchase a targeted validation examined",
   },
+  "PhotoGroupProposal.runId": {
+    classification: "ownership",
+    reason: "a photo-inventory run's proposed item groupings",
+  },
+  "PhotoGroupProposal.productId": {
+    classification: "metadata",
+    reason: "the Product a proposed photo group chose or committed to",
+  },
+  "PhotoGroupProposal.inventoryLocationId": {
+    classification: "metadata",
+    reason: "where a proposed photo group's inventory will be received",
+  },
   "ImportRunTarget.productId": {
     classification: "metadata",
     reason: "records the Product a targeted enrichment examined",
