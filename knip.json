@@ -43,6 +43,7 @@
         "scripts/check-client-bundle.ts!",
         "scripts/check-client-bundle.unit.test.ts!",
         "scripts/ensure-db-extensions.ts!",
+        "scripts/generate-apple-preview-fixtures.ts!",
         "tooling/**/*.{ts,tsx}!",
         "drizzle.config.ts!",
         "instrument.server.mjs!"

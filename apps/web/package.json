@@ -38,6 +38,8 @@
     "gen:pwa-icons": "magick -background none public/favicon.svg -resize 192x192 -depth 8 -strip public/icon-192.png && magick -background none public/favicon.svg -resize 512x512 -depth 8 -strip public/icon-512.png && magick -size 512x512 xc:'#f7f9fc' \\( public/icon-512.png -resize 360x360 \\) -gravity center -composite -depth 8 -strip public/icon-512-maskable.png",
     "gen:pwa-splash": "mkdir -p public/splash && for size in 750x1334:192 1125x2436:256 828x1792:256 1170x2532:256 1284x2778:256 1179x2556:256 1290x2796:256 1206x2622:256 1320x2868:256 1620x2160:300 1668x2388:300 2048x2732:360; do dim=${size%%:*}; icon=${size##*:}; magick -size $dim xc:'#f7f9fc' \\( public/icon-512.png -resize ${icon}x${icon} \\) -gravity center -composite -depth 8 -strip public/splash/apple-splash-${dim}.png; done",
     "gen:pwa-assets": "pnpm run gen:apple-icon && pnpm run gen:pwa-icons && pnpm run gen:pwa-splash",
+    "gen:apple-preview-fixtures": "tsx scripts/generate-apple-preview-fixtures.ts",
+    "gen:apple-preview-fixtures:check": "tsx scripts/generate-apple-preview-fixtures.ts --check",
     "test:calendar": "pnpm --dir ../web-worker-tests test:workers"
   },
   "dependencies": {
