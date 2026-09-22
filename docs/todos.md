@@ -161,12 +161,6 @@ history is the archive. Permanent product constraints live in the
 
 ## Ready projects
 
-- **Resolve arrival findings after receiving.** The import writer files
-  `arrived` findings, but the interactive receive flow does not resolve them.
-  Connect successful receiving to the corresponding finding's lifecycle;
-  retain findings for partial receipts and never receive automatically. This
-  closes the [Delivered flow](plans/purchase-import-redesign.md#5-flows).
-
 - **Post-import shelf triage.** After a vendor purchase import every new
   product lands in the `unlocated` saved view (`entities/view-manifest.ts`:
   bought, never sold, held nowhere) and the operator decides each one by hand:
