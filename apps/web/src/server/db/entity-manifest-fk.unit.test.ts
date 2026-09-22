@@ -281,6 +281,14 @@ const NON_GRAPH_ENTITY_FK_EXEMPTIONS = {
     classification: "ownership",
     reason: "derived conversion-coverage state owned by the product",
   },
+  "ProductMatchCandidate.productAId": {
+    classification: "metadata",
+    reason: "review queue state for a candidate same-item pair",
+  },
+  "ProductMatchCandidate.productBId": {
+    classification: "metadata",
+    reason: "review queue state for a candidate same-item pair",
+  },
   "ProductExternalId.productId": {
     classification: "metadata",
     reason: "external provider identifier owned by the product",

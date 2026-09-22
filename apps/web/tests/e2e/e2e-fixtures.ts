@@ -29,11 +29,7 @@ import { z } from "zod";
 
 import { Database } from "~/server/db";
 import * as schema from "~/server/db/schema";
-import { executeEntity } from "~/server/entity-kernel";
-import {
-  type EntityBrowserMutationCommand,
-  entityBrowserMutationCommandSchema,
-} from "~/server/entity-kernel/contracts";
+import type { EntityBrowserMutationCommand } from "~/server/entity-kernel/contracts";
 import {
   attachExistingImageToEntity,
   createUploadedImageRecord,
@@ -43,12 +39,15 @@ import { getDb } from "~/server/repo/database-helpers";
 import { requireActor } from "~/server/request-context";
 import { createTestRequestContext } from "~/server/testing/request-context";
 import { householdDaysFromNow, householdLocalDate } from "~/lib/household-date";
+import {
+  buildKernelContext,
+  createFixtureWithContext,
+} from "../../tooling/scenarios/context";
 
 type CreatedEntity = { id: string };
 const fixtureSessionSchema = z.object({
   user: z.object({ id: z.string().min(1) }).optional(),
 });
-const createdEntitySchema = z.object({ id: z.string().min(1) });
 type FixtureUserId = ReturnType<typeof testUserId>;
 
 let fixtureDb: Database | undefined;
@@ -118,22 +117,8 @@ async function createFixture<Input>(
   entity: Extract<EntityBrowserMutationCommand, { action: "create" }>["entity"],
   input: Input,
 ): Promise<CreatedEntity> {
-  const db = getFixtureDb();
-  const context = requireActor(
-    createTestRequestContext(db, {
-      auth: { userId: await fixtureUserId(page) },
-    }),
-  );
-  const command = entityBrowserMutationCommandSchema.parse({
-    action: "create",
-    entity,
-    data: input,
-  });
-  const result = await executeEntity(context, command);
-  if (result.action !== "create") {
-    throw new Error(`Fixture ${entity}.create returned the wrong action`);
-  }
-  return createdEntitySchema.parse(result.item);
+  const context = buildKernelContext(getFixtureDb(), await fixtureUserId(page));
+  return createFixtureWithContext(context, entity, input);
 }
 
 const productFixtureInput = (

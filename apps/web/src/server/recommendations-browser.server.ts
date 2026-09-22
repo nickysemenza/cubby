@@ -5,6 +5,12 @@ import {
 import { implementOperationDomain } from "~/server/operation-domain.server";
 import { getEntityRecommendations } from "~/server/services/entity-recommendations.service";
 import {
+  dismissProductMatchPair,
+  getProductMatchQueue,
+  mergeProductMatch,
+  proposeProductMatch,
+} from "~/server/services/product-match.service";
+import {
   dismissDuplicateProductRecommendationWorkflow,
   dismissProductRecommendationWorkflow,
   dismissTagPropagationWorkflow,
@@ -52,5 +58,13 @@ export const recommendationsHandlers = implementOperationDomain(
       dismissTagPropagationWorkflow(context.db, input),
     dismissProduct: (context, input) =>
       dismissProductRecommendationWorkflow(context.db, input),
+    productMatches: {
+      run: (context, input) => getProductMatchQueue(context.db, input),
+    },
+    proposeProductMatch: (context, input) =>
+      proposeProductMatch(context.db, input),
+    dismissProductMatch: (context, input) =>
+      dismissProductMatchPair(context.db, input),
+    mergeProductMatch: (context, input) => mergeProductMatch(context, input),
   },
 );
