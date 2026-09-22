@@ -152,8 +152,8 @@ struct PhotoLibraryStagesTests {
 
     @Test func matchingOffTurnsOffMatchAndCategories() {
         let stages = PhotoLibraryStages.derive(inputs(isParticipating: false))
-        #expect(stage(stages, "match").state == .off("Automatic matching is off"))
-        #expect(stage(stages, "categories").state == .off("Automatic matching is off"))
+        #expect(stage(stages, "match").state == .off("Off"))
+        #expect(stage(stages, "categories").state == .off("Off"))
         // Local read and the remote index are device/network state, not the participation
         // switch — they keep reporting normally.
         #expect(stage(stages, "local").state == .done)
@@ -168,13 +168,13 @@ struct PhotoLibraryStagesTests {
     @Test func finishedScanWithUncheckedCloudPhotosIsDone() {
         let stages = PhotoLibraryStages.derive(inputs(checkedCount: 80))
         #expect(stage(stages, "match").state == .done)
-        #expect(stage(stages, "match").caption == "80 of 100 photos")
+        #expect(stage(stages, "match").caption() == "80 / 100 · 80%")
     }
 
     @Test func matchingOffWithNoIndexSettlesTheIndexStage() {
         let stages = PhotoLibraryStages.derive(
             inputs(indexHasIndex: false, indexTotalCount: 0, isParticipating: false))
-        #expect(stage(stages, "index").state == .off("Automatic matching is off"))
+        #expect(stage(stages, "index").state == .off("Off"))
     }
 
     @Test func idleIncompleteSweepSettlesInsteadOfWaiting() {
@@ -182,7 +182,7 @@ struct PhotoLibraryStagesTests {
             inputs(
                 categories: PhotoLibraryStages.CategoriesInput(
                     isRunning: false, analysedCount: 40, totalCount: 100)))
-        #expect(stage(stages, "categories").state == .off("Not running"))
+        #expect(stage(stages, "categories").state == .off("Paused"))
     }
 
     @Test func sweepThatNeverRanIsNotStartedRatherThanDone() {
@@ -195,6 +195,45 @@ struct PhotoLibraryStagesTests {
 
     @Test func noClassificationSweepShowsCategoriesOffRatherThanCrashing() {
         let stages = PhotoLibraryStages.derive(inputs(categories: nil))
-        #expect(stage(stages, "categories").state == .off("Categories are unavailable"))
+        #expect(stage(stages, "categories").state == .off("Unavailable"))
+    }
+}
+
+@Suite("PhotoStageETA")
+struct PhotoStageETATests {
+    private func running(_ count: Int, of total: Int) -> [PhotoLibraryStages.Stage] {
+        [
+            PhotoLibraryStages.Stage(
+                id: "match", label: "Matching", state: .running(value: Double(count), total: Double(total)),
+                count: count, total: total)
+        ]
+    }
+
+    @Test func estimatesFromTheObservedRateAndResetsOnRestart() {
+        let start = Date(timeIntervalSinceReferenceDate: 0)
+        var eta = PhotoStageETA()
+        eta.record(running(0, of: 1_000), at: start)
+        // One sample is not a rate yet.
+        #expect(eta.remaining(for: "match", at: start) == nil)
+        eta.record(running(100, of: 1_000), at: start.addingTimeInterval(10))
+        // 10/s with 900 left.
+        #expect(eta.remaining(for: "match", at: start.addingTimeInterval(10)) == 90)
+        // A count that went backwards is a new run: no estimate until it moves again.
+        eta.record(running(5, of: 1_000), at: start.addingTimeInterval(11))
+        #expect(eta.remaining(for: "match", at: start.addingTimeInterval(11)) == nil)
+    }
+
+    @Test func formatsCoarsely() {
+        #expect(PhotoStageETA.format(0.2) == "~1s")
+        #expect(PhotoStageETA.format(42) == "~42s")
+        #expect(PhotoStageETA.format(125) == "~3m")
+        #expect(PhotoStageETA.format(3_600) == "~1h")
+        #expect(PhotoStageETA.format(3_900) == "~1h 5m")
+    }
+
+    @Test func captionPutsPercentLastAndNeverRoundsUpToDone() {
+        let stage = running(999, of: 1_000)[0]
+        #expect(stage.caption() == "999 / 1,000 · 99%")
+        #expect(stage.caption(eta: "~3m") == "999 / 1,000 · ~3m · 99%")
     }
 }

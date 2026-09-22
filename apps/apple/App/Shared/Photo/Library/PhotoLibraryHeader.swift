@@ -95,9 +95,20 @@ enum PhotoLibraryStages {
         let id: String
         let label: String
         let state: State
-        /// The "x of y" text, `nil` when there's nothing countable to show yet (an `.off` or a
-        /// not-yet-started `.waiting` stage).
-        let caption: String?
+        /// Progress so far and its denominator; `count` is `nil` when there's nothing countable
+        /// to show yet (an `.off` or a not-yet-started `.waiting` stage).
+        let count: Int?
+        let total: Int?
+
+        /// "13,222 / 89,906 · ~3m · 15%" — the ETA only when one is known, the percent last.
+        func caption(eta: String? = nil) -> String? {
+            guard let count else { return nil }
+            guard let total, total > 0 else { return count.formatted() }
+            let percent = count >= total ? 100 : min(99, count * 100 / total)
+            return
+                ([count.formatted() + " / " + total.formatted()] + [eta].compactMap { $0 } + ["\(percent)%"])
+                .joined(separator: " · ")
+        }
     }
 
     struct CategoriesInput: Equatable {
@@ -144,24 +155,18 @@ enum PhotoLibraryStages {
     }
 
     private static func localStage(_ inputs: Inputs) -> Stage {
-        let caption =
-            inputs.totalAssetCount.map {
-                "\(inputs.loadedAssetCount.formatted()) of \($0.formatted()) photos"
-            }
-            ?? "\(inputs.loadedAssetCount.formatted()) photos"
         let state: State =
             inputs.isLoadingLibrary
             ? .running(
                 value: Double(inputs.loadedAssetCount), total: inputs.totalAssetCount.map(Double.init))
             : .done
-        return Stage(id: "local", label: "Local photos", state: state, caption: caption)
+        return Stage(
+            id: "local", label: "Photos", state: state, count: inputs.loadedAssetCount,
+            total: inputs.totalAssetCount ?? (inputs.isLoadingLibrary ? nil : inputs.loadedAssetCount))
     }
 
     private static func indexStage(_ inputs: Inputs, localDone: Bool) -> Stage {
         let checkedSoFar = max(0, inputs.indexTotalCount - inputs.indexRemainingCount)
-        let caption =
-            inputs.indexHasIndex
-            ? "\(checkedSoFar.formatted()) of \(inputs.indexTotalCount.formatted()) images" : nil
         let state: State
         if let indexError = inputs.indexError {
             state = .failed(indexError)
@@ -177,23 +182,23 @@ enum PhotoLibraryStages {
         } else if !inputs.isParticipating {
             // `refresh()` skips the remote index entirely when matching is off, so it would
             // otherwise sit in `.waiting` forever and the panel would never collapse.
-            state = .off("Automatic matching is off")
+            state = .off("Off")
         } else {
             state = .waiting
         }
-        return Stage(id: "index", label: "Cubby index", state: state, caption: caption)
+        return Stage(
+            id: "index", label: "Cubby index", state: state,
+            count: inputs.indexHasIndex ? checkedSoFar : nil, total: inputs.indexTotalCount)
     }
 
     private static func matchStage(_ inputs: Inputs, localDone: Bool) -> Stage {
         guard inputs.isParticipating else {
-            return Stage(
-                id: "match", label: "Match check", state: .off("Automatic matching is off"), caption: nil)
+            return Stage(id: "match", label: "Matching", state: .off("Off"), count: nil, total: nil)
         }
         guard localDone else {
-            return Stage(id: "match", label: "Match check", state: .waiting, caption: nil)
+            return Stage(id: "match", label: "Matching", state: .waiting, count: nil, total: nil)
         }
         let checkedNow = inputs.isScanning ? inputs.scannedCount : inputs.checkedCount
-        let caption = "\(checkedNow.formatted()) of \(inputs.libraryCount.formatted()) photos"
         let state: State
         if inputs.isScanning {
             state = .running(value: Double(inputs.scannedCount), total: Double(inputs.libraryCount))
@@ -205,20 +210,18 @@ enum PhotoLibraryStages {
             // the caption keeps the true "x of y".
             state = .done
         }
-        return Stage(id: "match", label: "Match check", state: state, caption: caption)
+        return Stage(
+            id: "match", label: "Matching", state: state, count: checkedNow, total: inputs.libraryCount)
     }
 
     private static func categoriesStage(_ inputs: Inputs, localDone: Bool) -> Stage {
         guard inputs.isParticipating else {
-            return Stage(
-                id: "categories", label: "Categories", state: .off("Automatic matching is off"), caption: nil)
+            return Stage(id: "categories", label: "Categories", state: .off("Off"), count: nil, total: nil)
         }
         guard let categories = inputs.categories else {
             return Stage(
-                id: "categories", label: "Categories", state: .off("Categories are unavailable"),
-                caption: nil)
+                id: "categories", label: "Categories", state: .off("Unavailable"), count: nil, total: nil)
         }
-        let caption = "\(categories.analysedCount.formatted()) of \(categories.totalCount.formatted()) photos"
         let state: State
         if !localDone {
             state = .waiting
@@ -233,9 +236,12 @@ enum PhotoLibraryStages {
         } else {
             // The sweep pauses (setting, thermal state, Low Power Mode, tab closed) and may not
             // resume this session; settled, so it never pins the panel open.
-            state = .off("Not running")
+            state = .off("Paused")
         }
-        return Stage(id: "categories", label: "Categories", state: state, caption: caption)
+        let started = categories.totalCount > 0
+        return Stage(
+            id: "categories", label: "Categories", state: state,
+            count: started ? categories.analysedCount : nil, total: categories.totalCount)
     }
 }
 
@@ -317,7 +323,7 @@ struct PhotoLibraryHeader: View {
         VStack(alignment: .leading, spacing: PorcelainTokens.Space.sm) {
             filterRow
             PhotoLibraryStagePanel(
-                status: status, stages: stages, loadStartedAt: library.loadingStartedAt,
+                status: status, stages: stages,
                 reduceMotion: reduceMotion, barWidth: barWidth)
             if let footnoteText {
                 Text(footnoteText).font(.caption2).foregroundStyle(.secondary).lineLimit(2)
@@ -387,13 +393,10 @@ struct PhotoLibraryHeader: View {
 private struct PhotoLibraryStagePanel: View {
     let status: PhotoLibraryStatus
     let stages: [PhotoLibraryStages.Stage]
-    /// `Text(_:style: .timer)` re-renders itself once a second on the running Local row — unlike
-    /// formatting `Date.now` in an untracked getter, which only moves when some *other* observed
-    /// property happens to change, and reads as frozen exactly when a stall makes it worth reading.
-    let loadStartedAt: Date?
     let reduceMotion: Bool
     let barWidth: CGFloat
     @State private var expanded = false
+    @State private var eta = PhotoStageETA()
 
     private var allSettled: Bool {
         stages.allSatisfy {
@@ -425,6 +428,7 @@ private struct PhotoLibraryStagePanel: View {
         // row — a VoiceOver user swiping past the header hears the whole picture at once.
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(.updatesFrequently)
+        .onChange(of: stages, initial: true) { _, stages in eta.record(stages, at: .now) }
     }
 
     @ViewBuilder private var collapsedRow: some View {
@@ -495,15 +499,10 @@ private struct PhotoLibraryStagePanel: View {
         case .failed(let message):
             Text(message).font(.caption2).foregroundStyle(PorcelainTokens.destructive).lineLimit(1)
         default:
-            if let caption = stage.caption {
+            if let caption = stage.caption(eta: etaText(for: stage)) {
                 if stage.id == "local" {
-                    HStack(spacing: PorcelainTokens.Space.xs) {
-                        Text(caption).font(.caption).monospacedDigit()
-                        if case .running = stage.state, let loadStartedAt {
-                            Text(loadStartedAt, style: .timer).font(.caption)
-                        }
-                    }
-                    .accessibilityIdentifier("photos.loading.debug")
+                    Text(caption).font(.caption).monospacedDigit()
+                        .accessibilityIdentifier("photos.loading.debug")
                 } else {
                     Text(caption).font(.caption).monospacedDigit()
                 }
@@ -511,10 +510,15 @@ private struct PhotoLibraryStagePanel: View {
         }
     }
 
+    private func etaText(for stage: PhotoLibraryStages.Stage) -> String? {
+        guard case .running = stage.state else { return nil }
+        return eta.remaining(for: stage.id, at: .now).map(PhotoStageETA.format)
+    }
+
     private func stageHelp(_ stage: PhotoLibraryStages.Stage) -> String {
         switch stage.state {
-        case .done: return "\(stage.label): done" + (stage.caption.map { " (\($0))" } ?? "")
-        case .running: return "\(stage.label): in progress" + (stage.caption.map { " (\($0))" } ?? "")
+        case .done: return "\(stage.label): done" + (stage.caption().map { " (\($0))" } ?? "")
+        case .running: return "\(stage.label): in progress" + (stage.caption().map { " (\($0))" } ?? "")
         case .waiting: return "\(stage.label): waiting"
         case .off(let reason): return "\(stage.label): \(reason)"
         case .failed(let message): return "\(stage.label): \(message)"
@@ -595,7 +599,7 @@ private func previewSlice(_ activities: [BackgroundActivity]) -> BackgroundActiv
                 libraryCount: 4_200,
                 categories: PhotoLibraryStages.CategoriesInput(
                     isRunning: false, analysedCount: 0, totalCount: 0))),
-        loadStartedAt: .now, reduceMotion: false, barWidth: 44
+        reduceMotion: false, barWidth: 44
     )
     .padding()
 }
@@ -617,7 +621,7 @@ private func previewSlice(_ activities: [BackgroundActivity]) -> BackgroundActiv
                 checkedCount: 142, libraryCount: 200,
                 categories: PhotoLibraryStages.CategoriesInput(
                     isRunning: true, analysedCount: 80, totalCount: 200))),
-        loadStartedAt: nil, reduceMotion: false, barWidth: 44
+        reduceMotion: false, barWidth: 44
     )
     .padding()
 }
@@ -637,7 +641,7 @@ private func previewSlice(_ activities: [BackgroundActivity]) -> BackgroundActiv
                 checkedCount: 100, libraryCount: 100,
                 categories: PhotoLibraryStages.CategoriesInput(
                     isRunning: false, analysedCount: 100, totalCount: 100))),
-        loadStartedAt: nil, reduceMotion: false, barWidth: 44
+        reduceMotion: false, barWidth: 44
     )
     .padding()
 }
@@ -655,7 +659,7 @@ private func previewSlice(_ activities: [BackgroundActivity]) -> BackgroundActiv
                 indexIsLoading: false, indexHasIndex: true, indexTotalCount: 100, indexRemainingCount: 0,
                 indexError: nil, isParticipating: false, isScanning: false, scannedCount: 0, checkedCount: 0,
                 libraryCount: 100, categories: nil)),
-        loadStartedAt: nil, reduceMotion: false, barWidth: 44
+        reduceMotion: false, barWidth: 44
     )
     .padding()
 }

@@ -323,8 +323,37 @@ final class PhotoLibraryStore: NSObject, PHPhotoLibraryChangeObserver {
             // is missing from this snapshot (e.g. newly added mid-scan).
             let preloadedHashes =
                 (try? await analysisStore.hashes(for: remaining.map(\.localIdentifier))) ?? [:]
+            // Warm path: photos with a still-valid cached fingerprint need no image work, so they
+            // register in large chunks. Each `registerBatch` bumps `matches.revision`, which
+            // invalidates the grid's filter caches — at 32 per batch that was ~2,800 bumps on a
+            // 90k-photo library and most of this stage's time on every launch.
+            var uncached: [PHAsset] = []
+            var warm: [String: HashQuery] = [:]
+            var warmDone = 0
+            @MainActor func flushWarm() async -> Bool {
+                guard !warm.isEmpty else { return true }
+                matches.markChecked(warm.keys)
+                await matches.registerBatch(warm)
+                guard generation == token, !Task.isCancelled else { return false }
+                checked.formUnion(warm.keys)
+                warmDone += warm.count
+                scannedCount = completedCount + warmDone
+                warm = [:]
+                await Task.yield()
+                return true
+            }
+            for asset in remaining where !checked.contains(asset.localIdentifier) {
+                if let record = preloadedHashes[asset.localIdentifier], Self.isCurrent(record, for: asset) {
+                    warm[asset.localIdentifier] = Self.hashQuery(for: asset, hash: record.perceptualHash)
+                    if warm.count >= 2_000, !(await flushWarm()) { return }
+                } else {
+                    uncached.append(asset)
+                }
+            }
+            guard await flushWarm() else { return }
+            let uncachedBase = completedCount + warmDone
             var pending: [String: HashQuery] = [:]
-            for (offset, asset) in remaining.enumerated() {
+            for (offset, asset) in uncached.enumerated() {
                 guard !Task.isCancelled, generation == token else { return }
                 // Visible cells may finish work after this scan's snapshot was taken.
                 if checked.contains(asset.localIdentifier) { continue }
@@ -343,8 +372,8 @@ final class PhotoLibraryStore: NSObject, PHPhotoLibraryChangeObserver {
                     }
                 }
                 // Coalesce progress even when cloud-only assets cannot be fingerprinted.
-                if offset.isMultiple(of: 32) || offset == remaining.count - 1 {
-                    scannedCount = completedCount + offset + 1
+                if offset.isMultiple(of: 32) || offset == uncached.count - 1 {
+                    scannedCount = uncachedBase + offset + 1
                 }
                 if pending.count >= 32 {
                     // Mark checked before the match round trip so a cell's published state
@@ -533,9 +562,7 @@ final class PhotoLibraryStore: NSObject, PHPhotoLibraryChangeObserver {
         let id = asset.localIdentifier
         guard let analysisStore else { throw CancellationError() }
         let hash: PerceptualHash64
-        if let preloaded, preloaded.hashRevision == PerceptualHash64.algorithmRevision,
-            preloaded.modificationDate == asset.modificationDate
-        {
+        if let preloaded, Self.isCurrent(preloaded, for: asset) {
             hash = preloaded.perceptualHash
         } else if preloaded == nil,
             let cached = try? await analysisStore.hash(for: id, modificationDate: asset.modificationDate)
@@ -550,6 +577,15 @@ final class PhotoLibraryStore: NSObject, PHPhotoLibraryChangeObserver {
                 localIdentifier: id, modificationDate: asset.modificationDate, perceptualHash: hash)
         }
         guard !Task.isCancelled, generation == token else { throw CancellationError() }
+        return Self.hashQuery(for: asset, hash: hash)
+    }
+
+    private static func isCurrent(_ record: PhotoHashRecord, for asset: PHAsset) -> Bool {
+        record.hashRevision == PerceptualHash64.algorithmRevision
+            && record.modificationDate == asset.modificationDate
+    }
+
+    private static func hashQuery(for asset: PHAsset, hash: PerceptualHash64) -> HashQuery {
         let ratio =
             Double(max(asset.pixelWidth, asset.pixelHeight))
             / Double(max(1, min(asset.pixelWidth, asset.pixelHeight)))
