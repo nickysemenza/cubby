@@ -134,15 +134,24 @@ export function SuggestionStatus({
   if (text === null) return null;
   const showBreakdown = !checking && !unasked && fields.length > 0;
   return (
-    <Description size="xs" as="output" className="flex items-center gap-1">
+    // One line at every width: the settled headline is longer than
+    // "Checking suggestions…", and wrapping it pushed the whole record down
+    // mid-tap on a phone. The popover and accessible name keep the full text.
+    <Description
+      size="xs"
+      as="output"
+      className="flex min-w-0 items-center gap-1"
+    >
       <Popover>
         <PopoverTrigger
           openOnHover
           closeDelay={150}
-          className="inline-flex items-center gap-1 rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          aria-label={text}
+          title={text}
+          className="inline-flex min-w-0 items-center gap-1 rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
-          <Sparkle className="size-3" />
-          {text}
+          <Sparkle className="size-3 shrink-0" />
+          <span className="truncate">{text}</span>
         </PopoverTrigger>
         {showBreakdown ? (
           <PopoverContent
