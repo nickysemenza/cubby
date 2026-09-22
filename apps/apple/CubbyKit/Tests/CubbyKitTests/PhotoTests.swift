@@ -394,6 +394,11 @@ struct PresignedUploadTests {
         #expect(request.headers["Content-Type"] == "image/jpeg")
         #expect(request.headers["Authorization"] == nil)
         #expect(request.headers["x-api-key"] == nil)
+        // `PresignedUpload` never goes through `CubbyAuthMiddleware`, so it never carries the
+        // identity headers every other request does (apps/apple/AGENTS.md: "Presigned image PUTs
+        // send only Content-Type").
+        #expect(request.headers["User-Agent"] == nil)
+        #expect(request.headers["X-Cubby-Device"] == nil)
         #expect(request.length == bytes.count)
     }
 

@@ -11,11 +11,16 @@ public actor AuthFlow {
 
     public let baseURL: URL
     private let credentials: CredentialProvider
+    private let identity: ClientIdentity
     private let session: URLSession
 
-    public init(baseURL: URL, credentials: CredentialProvider, session: URLSession = .cubbyShared) {
+    public init(
+        baseURL: URL, credentials: CredentialProvider, identity: ClientIdentity = .unknown,
+        session: URLSession = .cubbyShared
+    ) {
         self.baseURL = baseURL
         self.credentials = credentials
+        self.identity = identity
         self.session = session
     }
 
@@ -90,7 +95,7 @@ public actor AuthFlow {
         request.setValue("cubby-mobile://", forHTTPHeaderField: "Origin")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         var fields = HTTPFields()
-        CubbyAuthMiddleware.apply(authentication, to: &fields)
+        CubbyAuthMiddleware.apply(authentication, identity: identity, to: &fields)
         for field in fields {
             request.setValue(field.value, forHTTPHeaderField: field.name.rawName)
         }

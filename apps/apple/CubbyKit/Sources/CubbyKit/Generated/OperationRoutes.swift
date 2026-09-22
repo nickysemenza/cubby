@@ -245,7 +245,7 @@ extension OperationRoute {
         OperationRoute(operationID: "resources.device.create", method: .post, path: "/api/v1/devices", pathParameters: [], queryParameters: [], hasBody: true),
         OperationRoute(operationID: "resources.device.delete", method: .delete, path: "/api/v1/devices/{id}", pathParameters: ["id"], queryParameters: [], hasBody: false),
         OperationRoute(operationID: "resources.device.get", method: .get, path: "/api/v1/devices/{id}", pathParameters: ["id"], queryParameters: [], hasBody: false),
-        OperationRoute(operationID: "resources.device.list", method: .get, path: "/api/v1/devices", pathParameters: [], queryParameters: ["automaticWork", "createdFrom", "createdTo", "dataGap", "dataStatus", "groupBy", "ledgerPartyId", "page", "pageSize", "platform", "remotePaused", "search", "sort", "updatedFrom", "updatedTo"], hasBody: false),
+        OperationRoute(operationID: "resources.device.list", method: .get, path: "/api/v1/devices", pathParameters: [], queryParameters: ["automaticWork", "createdFrom", "createdTo", "dataGap", "dataStatus", "groupBy", "installationId", "ledgerPartyId", "page", "pageSize", "platform", "remotePaused", "search", "sort", "updatedFrom", "updatedTo"], hasBody: false),
         OperationRoute(operationID: "resources.device.update", method: .patch, path: "/api/v1/devices/{id}", pathParameters: ["id"], queryParameters: [], hasBody: true),
         OperationRoute(operationID: "resources.expense.create", method: .post, path: "/api/v1/expenses", pathParameters: [], queryParameters: [], hasBody: true),
         OperationRoute(operationID: "resources.expense.delete", method: .delete, path: "/api/v1/expenses/{id}", pathParameters: ["id"], queryParameters: [], hasBody: false),

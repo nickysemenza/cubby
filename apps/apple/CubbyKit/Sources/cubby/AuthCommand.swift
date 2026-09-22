@@ -22,7 +22,8 @@ extension Auth {
                 let resolvedEmail = try email ?? CLI.readLine(prompt: "Email: ")
                 let password = try CLI.readPassword(prompt: "Password: ")
 
-                let flow = AuthFlow(baseURL: context.baseURL, credentials: context.credentials)
+                let flow = AuthFlow(
+                    baseURL: context.baseURL, credentials: context.credentials, identity: context.identity)
                 _ = try await flow.signIn(email: resolvedEmail, password: password)
 
                 print("Signed in as \(resolvedEmail) (token stored for \(context.host)).")
@@ -64,7 +65,8 @@ extension Auth {
         func run() async throws {
             try await CLI.run {
                 let context = try CLIContext.make(from: global)
-                let flow = AuthFlow(baseURL: context.baseURL, credentials: context.credentials)
+                let flow = AuthFlow(
+                    baseURL: context.baseURL, credentials: context.credentials, identity: context.identity)
                 try await flow.signOut()
                 print("Signed out (credential cleared for \(context.host)).")
             }

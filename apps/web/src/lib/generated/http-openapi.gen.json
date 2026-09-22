@@ -1872,6 +1872,15 @@
             "explode": true
           },
           {
+            "name": "installationId",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
             "name": "platform",
             "in": "query",
             "schema": {

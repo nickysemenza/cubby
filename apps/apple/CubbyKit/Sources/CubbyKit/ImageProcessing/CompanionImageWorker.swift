@@ -12,13 +12,28 @@ public struct CompanionImageWorkerActivity: Sendable, Equatable {
     public let jobID: String?
     public let kind: String?
     public let startedAt: Date?
+    /// The server paused this device's participation from the web (`Device.remotePaused`), for
+    /// this connection. Settings shows "Paused from the web" when this is true.
+    public let remotePaused: Bool
 
-    public init(phase: Phase, jobID: String? = nil, kind: String? = nil, startedAt: Date? = nil) {
+    public init(
+        phase: Phase, jobID: String? = nil, kind: String? = nil, startedAt: Date? = nil,
+        remotePaused: Bool = false
+    ) {
         self.phase = phase
         self.jobID = jobID
         self.kind = kind
         self.startedAt = startedAt
+        self.remotePaused = remotePaused
     }
+}
+
+/// Whether an incoming command should be executed — `false` when the web has paused this
+/// connection (`ImageProcessingServerMessageHelloAck.remotePaused`), same as participation-off.
+/// A tiny pure decision, kept apart from the actor so it is directly unit-testable without a live
+/// socket.
+enum CompanionWorkAcceptance {
+    static func acceptsCommand(remotePaused: Bool) -> Bool { !remotePaused }
 }
 
 public actor CompanionImageWorker {
@@ -34,6 +49,13 @@ public actor CompanionImageWorker {
     private let activityObserver: ActivityObserver?
     private let deviceID: UUID
     private var foreground: Bool
+    /// The master "Automatic work on this device" switch. `false` keeps `start()`/`stop()` working
+    /// normally but never opens a socket (`platformAllowsConnection`); flipping it off mid-session
+    /// closes the socket via `reconcileConnection()`, and flipping it back on reconnects.
+    private var isParticipating: Bool
+    /// Set from `.helloAck(remotePaused)` on the current connection: the server paused this device
+    /// from the web. Reset on every new connection attempt.
+    private var remotePaused = false
     private var shouldRun = false
     private var connectionGeneration = 0
     private var connectionTask: Task<Void, Never>?
@@ -44,6 +66,7 @@ public actor CompanionImageWorker {
         credentials: CredentialProvider,
         deviceID: UUID,
         foreground: Bool,
+        isParticipating: Bool = true,
         outbox: CompanionResultOutbox<ImageProcessingResult>,
         session: URLSession = .cubbyShared,
         executor: CompanionImageCommandExecutor = CompanionImageCommandExecutor(),
@@ -54,6 +77,7 @@ public actor CompanionImageWorker {
         self.credentials = credentials
         self.deviceID = deviceID
         self.foreground = foreground
+        self.isParticipating = isParticipating
         self.outbox = outbox
         self.session = session
         self.executor = executor
@@ -94,11 +118,20 @@ public actor CompanionImageWorker {
         reconcileConnection()
     }
 
+    /// The master "Automatic work on this device" switch. `start()` is still what arms
+    /// `shouldRun` — this only gates whether `reconcileConnection()` is allowed to open a socket,
+    /// so a later flip back on reconnects without a fresh `start()`.
+    public func setParticipating(_ participating: Bool) {
+        isParticipating = participating
+        reconcileConnection()
+    }
+
     private var platformAllowsConnection: Bool {
+        guard isParticipating else { return false }
         #if os(macOS)
-            true
+            return true
         #else
-            foreground
+            return foreground
         #endif
     }
 
@@ -164,11 +197,16 @@ public actor CompanionImageWorker {
         let request = try AuthenticatedSocketSupport.request(
             url: endpoint,
             bearerToken: token,
-            userAgent: "cubby-apple-image-worker/\(CompanionImageProcessingProtocol.version)")
+            userAgent:
+                "cubby-apple-image-worker/\(CompanionImageProcessingProtocol.version) (\(deviceID.uuidString.lowercased()))"
+        )
         let socket = session.webSocketTask(with: request)
         guard generation == connectionGeneration else { throw CancellationError() }
         self.socket = socket
         socket.resume()
+        // Per-connection: a stale pause from a prior connection must not survive a reconnect that
+        // (re)establishes an unpaused session.
+        remotePaused = false
 
         let descriptionAvailable =
             FoundationModelsImageDescriber().availability() == .available
@@ -180,7 +218,7 @@ public actor CompanionImageWorker {
         try await send(
             .companionHello(
                 deviceID: deviceID, foreground: advertisedForeground,
-                imageDescriptionAvailable: descriptionAvailable),
+                imageDescriptionAvailable: descriptionAvailable, automaticWork: isParticipating),
             on: socket)
         activityObserver?(.init(phase: .idle))
         for pending in try await outbox.pending() {
@@ -201,15 +239,17 @@ public actor CompanionImageWorker {
         _ message: ImageProcessingServerMessage, socket: URLSessionWebSocketTask
     ) async throws {
         switch message {
-        case .helloAck:
-            // `remotePaused` becomes actionable once the participation switch
-            // exists on the device; until then the server simply withholds jobs.
-            break
+        case .helloAck(let ack):
+            // The web paused this device (`Device.remotePaused`): treat it like participation-off
+            // for this connection — no work is accepted until a fresh hello reports otherwise.
+            remotePaused = ack.remotePaused
+            activityObserver?(.init(phase: .idle, remotePaused: ack.remotePaused))
         case .acknowledge(let envelope):
             try await outbox.acknowledge(
                 CompanionImageProcessingProtocol.attemptKey(
                     jobID: envelope.jobId, attemptID: envelope.attemptId))
         case .command(let envelope):
+            guard CompanionWorkAcceptance.acceptsCommand(remotePaused: remotePaused) else { return }
             let command = envelope.command
             let key = CompanionImageProcessingProtocol.attemptKey(
                 jobID: command.companionJobID, attemptID: command.companionAttemptID)

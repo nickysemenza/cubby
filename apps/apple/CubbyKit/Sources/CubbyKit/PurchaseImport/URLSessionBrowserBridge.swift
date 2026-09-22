@@ -199,7 +199,9 @@ public actor URLSessionBrowserBridge {
         let request = try AuthenticatedSocketSupport.request(
             url: configuration.url,
             bearerToken: bearerToken,
-            userAgent: "cubby-apple/\(BrowserBridgeProtocol.currentProtocolVersion)")
+            userAgent:
+                "cubby-apple/\(BrowserBridgeProtocol.currentProtocolVersion) (\(configuration.deviceID.uuidString.lowercased()))"
+        )
         let socket = session.webSocketTask(with: request)
         self.socket = socket
         socket.resume()

@@ -250,6 +250,45 @@ struct MiddlewareTests {
         #expect(try store.load(for: "localhost:3000") == .bearer("fine"))
     }
 
+    /// REST identity: `User-Agent` and `X-Cubby-Device` land on every request when an identity is
+    /// supplied.
+    @Test func identityHeadersLandOnEveryOperation() async throws {
+        let (credentials, _) = try provider(with: .bearer("tok.sig"))
+        let installationID = UUID(uuidString: "11111111-1111-4111-8111-111111111111")!
+        let identity = ClientIdentity(
+            product: "cubby-apple", version: "1.2.3", platform: "ios", installationID: installationID)
+        let middleware = CubbyAuthMiddleware(credentials: credentials, identity: identity)
+        _ = try await middleware.intercept(
+            HTTPRequest(method: .get, scheme: nil, authority: nil, path: "/api/v1/products"),
+            body: nil,
+            baseURL: URL(string: "http://localhost:3000")!,
+            operationID: "resources.product.list"
+        ) { request, body, _ in
+            #expect(
+                request.headerFields[.userAgent]
+                    == "cubby-apple/1.2.3 (ios; 11111111-1111-4111-8111-111111111111)")
+            #expect(request.headerFields[.xCubbyDevice] == "11111111-1111-4111-8111-111111111111")
+            return (HTTPResponse(status: .ok), body)
+        }
+    }
+
+    /// A client with no installation id (the CLI) still sends `User-Agent`, just no device header.
+    @Test func identityWithNoInstallationIDOmitsTheDeviceHeader() async throws {
+        let (credentials, _) = try provider(with: nil)
+        let identity = ClientIdentity(product: "cubby-cli", version: "0", platform: "macos")
+        let middleware = CubbyAuthMiddleware(credentials: credentials, identity: identity)
+        _ = try await middleware.intercept(
+            HTTPRequest(method: .get, scheme: nil, authority: nil, path: "/api/v1/products"),
+            body: nil,
+            baseURL: URL(string: "http://localhost:3000")!,
+            operationID: "resources.product.list"
+        ) { request, body, _ in
+            #expect(request.headerFields[.userAgent] == "cubby-cli/0 (macos; none)")
+            #expect(request.headerFields[.xCubbyDevice] == nil)
+            return (HTTPResponse(status: .ok), body)
+        }
+    }
+
     /// Developer overlays layer 6: the installed `RequestObserver` records every request's
     /// operation id, timing, and status — including a decoded error response, whose status is
     /// still known before the middleware throws.

@@ -126,6 +126,9 @@ final class PhotoClassificationSweep {
     @ObservationIgnored private var isTabActive = false
     @ObservationIgnored private var isSceneActive = true
     @ObservationIgnored private var isPaused: Bool
+    /// The master "Automatic work on this device" switch — distinct from `isPaused` (Settings'
+    /// temporary "Pause analysis" toggle within library processing).
+    @ObservationIgnored private var isParticipating: Bool
     @ObservationIgnored private var window: PhotoAnalysisWindow
     @ObservationIgnored private var visibleMonthIDs: Set<Date> = []
     @ObservationIgnored private var runTask: Task<Void, Never>?
@@ -145,6 +148,7 @@ final class PhotoClassificationSweep {
         analysisStore: PhotoAnalysisStore,
         window: PhotoAnalysisWindow = .thisYear,
         paused: Bool = false,
+        isParticipating: Bool = true,
         thermal: any PhotoThermalSource = SystemThermalSource(),
         power: any PhotoPowerSource = SystemPowerSource(),
         candidateProvider: @escaping @MainActor () -> [PhotoSweepScheduler.Candidate],
@@ -153,6 +157,7 @@ final class PhotoClassificationSweep {
         self.analysisStore = analysisStore
         self.window = window
         self.isPaused = paused
+        self.isParticipating = isParticipating
         self.thermal = thermal
         self.power = power
         self.candidateProvider = candidateProvider
@@ -200,6 +205,12 @@ final class PhotoClassificationSweep {
         reconcile()
     }
 
+    /// The master "Automatic work on this device" switch.
+    func setParticipating(_ participating: Bool) {
+        isParticipating = participating
+        reconcile()
+    }
+
     /// The scene phase (foreground/background), separate from tab visibility.
     func setSceneActive(_ active: Bool) {
         isSceneActive = active
@@ -220,17 +231,18 @@ final class PhotoClassificationSweep {
     }
 
     static func shouldRun(
-        isTabActive: Bool, isSceneActive: Bool, isPaused: Bool,
+        isTabActive: Bool, isSceneActive: Bool, isPaused: Bool, isParticipating: Bool = true,
         thermalState: ProcessInfo.ThermalState, isLowPowerModeEnabled: Bool
     ) -> Bool {
-        isTabActive && isSceneActive && !isPaused && !isLowPowerModeEnabled
+        isTabActive && isSceneActive && !isPaused && isParticipating && !isLowPowerModeEnabled
             && thermalState.rawValue < ProcessInfo.ThermalState.serious.rawValue
     }
 
     private var shouldRunNow: Bool {
         Self.shouldRun(
             isTabActive: isTabActive, isSceneActive: isSceneActive, isPaused: isPaused,
-            thermalState: thermal.thermalState, isLowPowerModeEnabled: power.isLowPowerModeEnabled)
+            isParticipating: isParticipating, thermalState: thermal.thermalState,
+            isLowPowerModeEnabled: power.isLowPowerModeEnabled)
     }
 
     /// Re-evaluates whether the sweep should be running against its current candidate source and
@@ -349,10 +361,11 @@ extension PhotoClassificationSweep {
     /// PhotoKit/Vision dependency to stub in tests.
     convenience init(
         analysisStore: PhotoAnalysisStore, library: PhotoLibraryStore,
-        window: PhotoAnalysisWindow = .thisYear, paused: Bool = false
+        window: PhotoAnalysisWindow = .thisYear, paused: Bool = false, isParticipating: Bool = true
     ) {
         self.init(
             analysisStore: analysisStore, window: window, paused: paused,
+            isParticipating: isParticipating,
             candidateProvider: { [weak library] in
                 (library?.months ?? []).flatMap { month in
                     month.assets.map {

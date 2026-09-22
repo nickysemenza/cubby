@@ -129,6 +129,7 @@ extension EntityDescriptor {
                 case "updatedFrom": query.updatedFrom = try value.string(name)
                 case "updatedTo": query.updatedTo = try value.string(name)
                 case "search": query.search = try value.string(name)
+                case "installationId": query.installationId = try value.string(name)
                 case "platform": query.platform = try value.enumCases(name)
                 case "automaticWork": query.automaticWork = try value.bool(name)
                 case "remotePaused": query.remotePaused = try value.bool(name)

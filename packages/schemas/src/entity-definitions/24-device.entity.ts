@@ -364,6 +364,13 @@ export default defineEntity({
         stored: { columns: ["name"] },
       },
       {
+        columnId: "installationId",
+        kind: "text",
+        placeholder: "Filter by installation ID...",
+        deriveSchema: true,
+        stored: true,
+      },
+      {
         columnId: "platform",
         kind: "multiselect",
         placeholder: "Filter by platform...",
