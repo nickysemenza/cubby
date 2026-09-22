@@ -217,7 +217,7 @@ describe("record suggestions", () => {
       </RecordSuggestionsProvider>,
       { wrapper: harness.wrapper },
     );
-    await screen.findByText("Suggested: Workshop");
+    await screen.findByText("Workshop");
     expect(calls).toBe(1);
     fireEvent.click(screen.getByRole("button", { name: "Use suggestion" }));
     expect(
@@ -541,7 +541,7 @@ describe("record suggestions", () => {
       </RecordSuggestionsProvider>,
       { wrapper: harness.wrapper },
     );
-    await screen.findByText("Suggested: Tools");
+    await screen.findByText("Tools");
     expect(calls.length).toBeGreaterThan(0);
     fireEvent.click(screen.getByRole("button", { name: "Use suggestion" }));
     await waitFor(() => expect(commands).toHaveLength(1));
@@ -601,7 +601,7 @@ describe("record suggestions", () => {
       { wrapper: harness.wrapper },
     );
 
-    await screen.findByText("Suggested: Electrical");
+    await screen.findByText("Electrical");
     fireEvent.click(
       screen.getByRole("button", { name: "Use inherited value" }),
     );

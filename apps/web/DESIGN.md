@@ -265,9 +265,11 @@ exceptions, not a general visual vocabulary.
 
 Motion is immediate for high-frequency table operations. Spatial overlays and
 toasts use 120–180ms transform/opacity transitions with
-`cubic-bezier(0.2, 0, 0, 1)`. No spring overshoot, rolling values, ambient
-animation, perpetual shimmer, or chart-drawing theater. Reduced-motion
-preferences reduce transitions to effectively instantaneous state changes.
+`cubic-bezier(0.2, 0, 0, 1)`. Ambient motion is welcome where it says work
+is in flight: small `loading-dev` indicators sized to the glyph they stand in
+for. No spring overshoot, rolling values, or chart-drawing theater.
+Reduced-motion preferences reduce transitions to effectively instantaneous
+state changes.
 
 ### Named Rules
 

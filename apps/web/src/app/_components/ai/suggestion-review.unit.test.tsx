@@ -12,7 +12,10 @@ import {
   SuggestionVisitProvider,
 } from "./suggestion-review";
 
-afterEach(() => vi.restoreAllMocks());
+afterEach(() => {
+  vi.restoreAllMocks();
+  vi.unstubAllGlobals();
+});
 
 const suggestion: FieldSuggestion = {
   value: "tools",
@@ -134,7 +137,7 @@ describe("inline suggestion review", () => {
       />,
     );
     expect(screen.getByText("Materials")).toBeInTheDocument();
-    expect(screen.getByText("Suggested: Tools")).toBeInTheDocument();
+    expect(screen.getByText("Tools")).toBeInTheDocument();
     expect(save).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "Use suggestion" }));
     const alert = await screen.findByRole("alert");
@@ -143,7 +146,7 @@ describe("inline suggestion review", () => {
     expect(errorSpy).toHaveBeenCalledTimes(1);
     fireEvent.click(screen.getByRole("button", { name: "Use suggestion" }));
     await waitFor(() =>
-      expect(screen.queryByText("Suggested: Tools")).not.toBeInTheDocument(),
+      expect(screen.queryByText("Tools")).not.toBeInTheDocument(),
     );
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
     expect(save).toHaveBeenCalledTimes(2);
@@ -167,7 +170,7 @@ describe("inline suggestion review", () => {
     fireEvent.click(screen.getByRole("button", { name: "Materials" }));
     expect(edit).toHaveBeenCalledOnce();
     fireEvent.click(screen.getByRole("button", { name: "Keep current" }));
-    expect(screen.queryByText("Suggested: Tools")).not.toBeInTheDocument();
+    expect(screen.queryByText("Tools")).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Materials" }));
     expect(edit).toHaveBeenCalledTimes(2);
   });
@@ -189,12 +192,12 @@ describe("inline suggestion review", () => {
     fireEvent.click(screen.getByRole("button", { name: "Keep current" }));
     view.rerender(content(null));
     view.rerender(content("first"));
-    expect(screen.queryByText("Suggested: Tools")).not.toBeInTheDocument();
+    expect(screen.queryByText("Tools")).not.toBeInTheDocument();
     view.rerender(content("changed"));
-    expect(screen.getByText("Suggested: Tools")).toBeInTheDocument();
+    expect(screen.getByText("Tools")).toBeInTheDocument();
     view.unmount();
     render(content("first"));
-    expect(screen.getByText("Suggested: Tools")).toBeInTheDocument();
+    expect(screen.getByText("Tools")).toBeInTheDocument();
   });
 });
 
@@ -230,35 +233,49 @@ describe("reviewThreshold", () => {
   );
 });
 
-describe("cell surface", () => {
-  it("keeps children flat and folds the whole review into the mark's popover", async () => {
-    const save = vi.fn().mockResolvedValue(undefined);
-    render(
-      <SuggestionReview
-        suggestion={suggestion}
-        currentValue="materials"
-        currentLabel="Materials"
-        questionKey="cell"
-        onApply={save}
-        surface="cell"
-      >
-        <span>Materials</span>
-      </SuggestionReview>,
-    );
-    // No inline "Suggested: Tools" text and no visible buttons — the review
-    // lives inside the (closed) popover, not the cell's own flow.
-    expect(screen.getByText("Materials")).toBeInTheDocument();
-    expect(screen.queryByText("Suggested: Tools")).not.toBeInTheDocument();
-    expect(
-      screen.queryByRole("button", { name: "Use suggestion" }),
-    ).not.toBeInTheDocument();
+describe("folded review", () => {
+  // Phone inline regression: a review mounted inline after load pushed the
+  // facts below it down mid-tap, so phones fold it like a table cell does.
+  it.each([
+    ["cell", false],
+    ["inline", true],
+  ] as const)(
+    "%s surface (phone=%s) keeps children flat and folds the whole review into the mark's popover",
+    async (surface, phone) => {
+      vi.stubGlobal("matchMedia", (media: string) => ({
+        matches: phone,
+        media,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+      }));
+      const save = vi.fn().mockResolvedValue(undefined);
+      render(
+        <SuggestionReview
+          suggestion={suggestion}
+          currentValue="materials"
+          currentLabel="Materials"
+          questionKey="cell"
+          onApply={save}
+          surface={surface}
+        >
+          <span>Materials</span>
+        </SuggestionReview>,
+      );
+      // No inline "Suggested: Tools" text and no visible buttons — the review
+      // lives inside the (closed) popover, not the cell's own flow.
+      expect(screen.getByText("Materials")).toBeInTheDocument();
+      expect(screen.queryByText("Tools")).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole("button", { name: "Use suggestion" }),
+      ).not.toBeInTheDocument();
 
-    fireEvent.click(
-      screen.getByRole("button", { name: "Suggested Tools · 97%" }),
-    );
-    fireEvent.click(
-      await screen.findByRole("button", { name: "Use suggestion" }),
-    );
-    expect(save).toHaveBeenCalledOnce();
-  });
+      fireEvent.click(
+        screen.getByRole("button", { name: "Suggested Tools · 97%" }),
+      );
+      fireEvent.click(
+        await screen.findByRole("button", { name: "Use suggestion" }),
+      );
+      expect(save).toHaveBeenCalledOnce();
+    },
+  );
 });
