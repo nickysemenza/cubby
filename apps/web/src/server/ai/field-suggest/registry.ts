@@ -12,6 +12,10 @@ import {
   type GeneratedSuggestFieldKey,
 } from "@cubby/schemas/entity-fields";
 import { type CostType, costTypeValues } from "@cubby/schemas/expense-fields";
+import {
+  type ExpenseLineKind,
+  expenseLineKindValues,
+} from "@cubby/schemas/expense-line-kind";
 import { gardenEntryKind, plantingStatus } from "@cubby/schemas/garden-fields";
 import type { ProductId } from "@cubby/schemas/identifiers";
 import { type LocationType, locationType } from "@cubby/schemas/location";
@@ -47,6 +51,8 @@ import { z } from "zod";
 import {
   COST_TYPE_DESCRIPTIONS,
   COST_TYPE_RULES,
+  LINE_KIND_DESCRIPTIONS,
+  LINE_KIND_RULES,
   LOCATION_TYPE_DESCRIPTIONS,
   LOCATION_TYPE_RULES,
   MEAL_KIND_DESCRIPTIONS,
@@ -491,6 +497,13 @@ export const FIELD_SUGGEST_REGISTRY = {
     rules: COST_TYPE_RULES,
     subject: (basis) => renderSubject("expense", basis),
   } satisfies EnumSuggestSpec<CostType>,
+  "expense.lineKind": {
+    kind: "enum",
+    values: expenseLineKindValues,
+    describe: (v) => LINE_KIND_DESCRIPTIONS[v],
+    rules: LINE_KIND_RULES,
+    subject: (basis) => renderSubject("expense", basis),
+  } satisfies EnumSuggestSpec<ExpenseLineKind>,
   "expense.trade": {
     kind: "enum",
     values: tradeValues,
