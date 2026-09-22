@@ -294,7 +294,7 @@ export default defineEntity({
         // changes from "References" to "Source" as an accepted consequence
         // — same as accountId's "Account ID" -> "Account" ripple.
         label: "Source",
-        control: { kind: "specialized", renderer: "structured-field" },
+        control: { kind: "specialized", renderer: "source-refs" },
         display: {
           list: true,
           detail: true,

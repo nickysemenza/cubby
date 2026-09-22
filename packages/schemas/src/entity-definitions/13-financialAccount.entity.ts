@@ -108,7 +108,7 @@ export default defineEntity({
         key: "sourceAliases",
         kind: "json",
         label: "Aliases",
-        control: { kind: "specialized", renderer: "structured-field" },
+        control: { kind: "specialized", renderer: "source-aliases" },
         display: {
           list: true,
           detail: true,
