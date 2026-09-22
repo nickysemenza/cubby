@@ -35,6 +35,8 @@ enum NativePresentationCoverage {
     static func list(_ renderer: ListRendererID) -> Status {
         switch renderer {
         case .recipeSource: .implemented
+        case .dataQuality:
+            .unsupported("Data-quality status and score are available on web.")
         }
     }
 
