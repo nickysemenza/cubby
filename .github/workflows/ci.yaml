@@ -68,6 +68,7 @@ jobs:
               - 'scripts/ensure-apple-ffi.ts'
               - 'scripts/rust-fingerprint.ts'
               - 'scripts/apple-check.sh'
+              - 'scripts/stamp-source-mtimes.ts'
               - 'apps/web/src/lib/generated/http-openapi.gen.json'
               - '.github/workflows/ci.yaml'
               - '.github/actions/setup-apple-ffi/**'
@@ -394,32 +395,47 @@ jobs:
       - uses: ./.github/actions/setup-apple-ffi
         with:
           targets: mac
-      # SPM fetch+resolve was 53s of this job's ~5 minutes; CubbyKit's
-      # Package.resolved pins exact versions, so an exact-key cache of the
-      # checkouts and git-object cache is safe to reuse unchanged.
-      - name: Restore cached SPM checkouts
-        id: spm-checkouts
+      # The whole SwiftPM build directory is cached, not just the checkouts:
+      # 367 tests run in ~3s, the other 2.5-4 minutes was a cold build.
+      # stamp-source-mtimes.ts gives each tracked source an mtime derived
+      # from its blob hash, so unchanged files match the restored build and
+      # only changed ones recompile (measured locally: 76s cold, 41s restored
+      # with fresh-checkout mtimes, 3s restored and stamped, 8s with one
+      # CubbyKit file changed). The key ends in a hash of CubbyKit so main
+      # saves once per Swift change; PRs restore main's newest by prefix.
+      - name: Compute Swift toolchain hash
+        id: swift-version
+        run: echo "hash=$(swift --version 2>&1 | shasum -a 256 | awk '{print $1}')" >> "$GITHUB_OUTPUT"
+      - name: Restore cached SwiftPM build
+        id: spm-build
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
-          path: |
-            apps/apple/CubbyKit/.build/checkouts
-            apps/apple/CubbyKit/.build/repositories
-          key: spm-checkouts-v1-${{ runner.os }}-${{ hashFiles('apps/apple/CubbyKit/Package.resolved') }}
+          path: apps/apple/CubbyKit/.build
+          key: spm-build-v1-${{ runner.os }}-${{ steps.swift-version.outputs.hash }}-${{ hashFiles('apps/apple/CubbyKit/Package.resolved') }}-${{ hashFiles('apps/apple/CubbyKit/**') }}
+          restore-keys: |
+            spm-build-v1-${{ runner.os }}-${{ steps.swift-version.outputs.hash }}-${{ hashFiles('apps/apple/CubbyKit/Package.resolved') }}-
+            spm-build-v1-${{ runner.os }}-${{ steps.swift-version.outputs.hash }}-
+      - name: Stamp source mtimes from content
+        run: node scripts/stamp-source-mtimes.ts apps/apple/CubbyKit
+      # --disable-index-store: nothing reads the index on CI, and it would
+      # otherwise be rebuilt and cached with every module.
       - name: Run CubbyKit Swift tests
-        run: swift test --package-path apps/apple/CubbyKit --force-resolved-versions
+        run: swift test --package-path apps/apple/CubbyKit --force-resolved-versions --disable-index-store
       # Saved here rather than by actions/cache's post step so a red test run
-      # still keeps the checkouts for the next attempt. A concurrent job may
-      # have saved the same key first; that 409 is harmless and must never
-      # fail the check.
-      - name: Save SPM checkouts cache
-        if: always() && steps.spm-checkouts.outputs.cache-hit != 'true'
+      # still keeps the build for the next attempt. Only main saves once a
+      # prefix exists: a PR's cache is private to its ref and a ~1 GB copy
+      # per PR evicts everyone else's caches (the repo sat at 13.4 GB of
+      # 10 GB on 2026-09-22). A concurrent job may have saved the same key
+      # first; that 409 is harmless and must never fail the check.
+      - name: Save SwiftPM build cache
+        if: >-
+          always() && steps.spm-build.outputs.cache-hit != 'true' &&
+          (github.event_name == 'push' || steps.spm-build.outputs.cache-matched-key == '')
         continue-on-error: true
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
-          path: |
-            apps/apple/CubbyKit/.build/checkouts
-            apps/apple/CubbyKit/.build/repositories
-          key: spm-checkouts-v1-${{ runner.os }}-${{ hashFiles('apps/apple/CubbyKit/Package.resolved') }}
+          path: apps/apple/CubbyKit/.build
+          key: ${{ steps.spm-build.outputs.cache-primary-key }}
 
   test-apple:
     name: Apple checks
