@@ -36,7 +36,7 @@ import {
   PURCHASE_IMPORT_PRODUCT_PROMOTION_FEATURE,
   PURCHASE_IMPORT_REVERSAL_KIND_FEATURE,
 } from "~/server/ai/features";
-import { runJevChoice } from "~/server/ai/jev";
+import { runJevChoice, type JevChoiceResult } from "~/server/ai/jev";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
   expense,
@@ -603,6 +603,65 @@ async function decideLineIdentities(
   return decisions;
 }
 
+type ExplicitProductResolution = NonNullable<
+  ImportWriterInput["productResolutions"]
+>[number];
+
+/**
+ * Resolve the explicit `commit_purchase_import` path's caller-supplied
+ * resolutions into the same shape `decideLineIdentities` produces. Adjustment
+ * lines (tax/shipping/discount/etc.) never carry a Product, so the resolution
+ * roster the MCP layer builds is keyed to principal lines only — a missing
+ * resolution is only an error when the line is principal.
+ */
+export async function explicitLineDecisions(
+  lines: readonly ExtractedPurchaseLine[],
+  resolutions: readonly ExplicitProductResolution[],
+  resolveReversal: (
+    index: number,
+    line: ExtractedPurchaseLine,
+  ) => Promise<JevChoiceResult>,
+): Promise<LineIdentityDecision[]> {
+  const decisions: LineIdentityDecision[] = [];
+  for (const [index, line] of lines.entries()) {
+    if (line.lineKind !== "principal") {
+      decisions.push({
+        productId: null,
+        promote: false,
+        variantDoubt: false,
+        probability: 1,
+        unresolvedReason: null,
+        lineKind: line.lineKind,
+        kitKind: "single",
+        reversalKind: null,
+      });
+      continue;
+    }
+    const resolution = resolutions.find((item) => item.lineIndex === index);
+    if (!resolution)
+      throw new Error(`Missing product resolution for line ${index}`);
+    const reversal =
+      line.amount < 0 ? await resolveReversal(index, line) : null;
+    const reversalKind = reversal
+      ? ((["return", "concession", "cancellation", "replacement"] as const)[
+          reversal.selectedIndex ?? 1
+        ] ?? "concession")
+      : null;
+    decisions.push({
+      productId: resolution.kind === "existing" ? resolution.productId : null,
+      promote: resolution.kind === "new",
+      variantDoubt: false,
+      unresolvedReason:
+        resolution.kind === "unresolved" ? resolution.reason : null,
+      probability: 1,
+      lineKind: line.lineKind,
+      kitKind: "single",
+      reversalKind,
+    });
+  }
+  return decisions;
+}
+
 async function resolveLineProduct(
   tx: DrizzleTransaction,
   line: ExtractedPurchaseLine,
@@ -760,25 +819,11 @@ export async function importVendorOrder(
   const identityDecisions = skipsLineWrites
     ? []
     : explicitResolutions
-      ? (input.extraction.candidate?.lines ?? []).map((line, lineIndex) => {
-          const resolution = explicitResolutions.find(
-            (item) => item.lineIndex === lineIndex,
-          );
-          if (!resolution)
-            throw new Error(`Missing product resolution for line ${lineIndex}`);
-          return {
-            productId:
-              resolution.kind === "existing" ? resolution.productId : null,
-            promote: resolution.kind === "new",
-            variantDoubt: false,
-            unresolvedReason:
-              resolution.kind === "unresolved" ? resolution.reason : null,
-            probability: 1,
-            lineKind: line.lineKind,
-            kitKind: "single" as const,
-            reversalKind: null,
-          };
-        })
+      ? await explicitLineDecisions(
+          input.extraction.candidate?.lines ?? [],
+          explicitResolutions,
+          (index, line) => chooseLineStage(db, input, index, line, "reversal"),
+        )
       : await decideLineIdentities(db, input);
   // The callback is the transaction's explicit policy matrix; splitting it
   // would hide the all-or-nothing write boundary.

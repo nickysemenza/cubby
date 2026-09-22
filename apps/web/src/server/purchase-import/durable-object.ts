@@ -92,6 +92,10 @@ export class PurchaseImportDurableObject
     return this.ctx.getWebSockets().length > 0;
   }
 
+  async hasPendingCommands(runID: string): Promise<boolean> {
+    return this.store.hasPendingCommands(runID);
+  }
+
   async notifyRunCompleted(summary: RunCompletionSummary): Promise<void> {
     this.store.saveRunCompletion(summary);
     this.broadcastMessage({

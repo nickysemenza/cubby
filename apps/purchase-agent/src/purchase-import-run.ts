@@ -1,9 +1,11 @@
 "use agent";
 
 import {
+  useAgentFinish,
   useInitialData,
   useMcpConnection,
   useModel,
+  usePersistentState,
   useResponseFinish,
   useResponseStart,
   useSkill,
@@ -63,6 +65,28 @@ export function PurchaseImportRun({ id }: AgentProps) {
     usage: response.usage,
   }));
 
+  // The model may stop talking without a terminal tool call. Tools that
+  // legitimately end a submission (`issue_browser_command` pending,
+  // `report_agent_progress` approval/review, finish, stop) terminate before
+  // this hook runs, so reaching it means the run is still `running` with no
+  // work in flight. Send the model back once per stretch of new tool calls;
+  // if it stops again without doing anything, let the submission settle and
+  // the server's reconcile moves the run to review.
+  const [nudgedAt, setNudgedAt] = usePersistentState(
+    "finishNudgeToolCalls",
+    -1,
+  );
+  useAgentFinish(({ response, append }) => {
+    const calls = response.toolCalls.length;
+    if (calls === nudgedAt) return;
+    setNudgedAt(calls);
+    append({
+      kind: "signal",
+      type: "run_not_finished",
+      body: "The run is still active. Continue the next selected order or hunt, or end it explicitly: call finish_import_run when every item is resolved or exhausted, or stop_import_run_for_review when evidence is ambiguous.",
+    });
+  });
+
   const tools = purchaseImportTools(runId, serviceForCurrentRun);
   useTool(tools[0]);
   useTool(tools[1]);
@@ -84,7 +108,7 @@ Workflow:
 3. Call mcp__cubby__prepare_purchase_import exactly once per logical batch. Every mutation must carry _runExecution with the run public id and stable operation ids. Derive them from durable source identities, keep item ids aligned with their orders, and reuse an id only to replay the identical logical effect.
 4. Report investigating. Use read-only Cubby MCP tools and the product-enrichment skill to investigate every proposed Product resolution. Prefer exact existing Products and verified identifiers; do not create duplicates merely because a title differs.
 5. Preparation itself is bounded and never requires approval. Read the run purpose from the scoped tool result before choosing a terminal action. For account_sync, report committing then call mcp__cubby__commit_purchase_import with the immutable preparation revision and an explicit evidence-backed resolution for every principal line. For purchase_validation, call mcp__cubby__validate_purchase_import instead; it is the only permitted comparison path and must never be replaced with commit_purchase_import. For product_enrichment, use mcp__cubby__commit_product_enrichment only for blank manufacturer, category, or model, proven non-colliding identifiers, and at most one exact-variant image verified by the target's retained browser evidence. Use mcp__cubby__overwrite_product_enrichment for exactly one populated manufacturer, category, model, or cover-image replacement; an image replacement must repeat the exact evidence id, URL, and dimensions and it pauses for typed human approval. Price is never writable. Treat conflicts or unresolved identity as review: call stop_import_run_for_review and do not speculate.
-6. Continue through every selected order and hunt. Persist safe same-domain navigation discoveries with save_navigation_hints. If the vendor proves older history unavailable, call mark_history_expired with the observed boundary. Only after all work is resolved or explicitly exhausted call finish_import_run; it performs the required auditor pass and is the only successful completion path.
+6. Continue through every selected order and hunt. Persist safe same-domain navigation discoveries with save_navigation_hints. If the vendor proves older history unavailable, call mark_history_expired with the observed boundary. Only after all work is resolved or explicitly exhausted call finish_import_run; it performs the required auditor pass and is the only successful completion path. Never end a turn without one of: a pending browser command, awaiting_approval, finish_import_run, or stop_import_run_for_review — a report_agent_progress with phase review stops the run for review the same way stop_import_run_for_review does, and a run left without any of these is moved to review by the server.
 7. If a genuinely necessary generic mutation reports paused_approval, report awaiting_approval with awaitingApproval=true and end the submission. Never self-approve, invent an approval id, or work around review. When a later authorized event resumes the run, read the persisted operation state and approval before continuing.
 
 The server owns member identity, run scope, approval state, idempotency, and all writes. Imported Product and Expense writes must use commit_purchase_import. A generic mutation may be proposed only when genuinely needed outside that import write, must carry stable _runExecution identity, and may pause for exact typed human approval; never bypass, weaken, or rephrase an approval request. Shell, SQL, scripts, and arbitrary browser evaluation are forbidden. Browser commands are read-only and constrained by the server's vendor allowlist. Continue every selected order or hunt until it is imported, explicitly exhausted, awaiting approval, or stopped for review; one successful order does not finish an account scan. Authentication and offline states are resumable server states.`;

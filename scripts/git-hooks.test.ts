@@ -67,6 +67,8 @@ function fixture(t: TestContext) {
     ".oxfmtrc.json",
     "apps/web/src/server/db/schema.ts",
     "apps/web/src/server/db/generated/entity-columns.gen.ts",
+    "scripts/check-outward-text.ts",
+    "packages/shared/src/generated/shortcode-registry.gen.ts",
   ]) {
     mkdirSync(dirname(join(root, path)), { recursive: true });
     cpSync(join(source, path), join(root, path));
@@ -175,5 +177,25 @@ test("ignored, renamed, deleted, and empty selections stay cheap and pushes run 
   assert.equal(
     readFileSync(join(root, "untracked.ts"), "utf8"),
     "export const =\n",
+  );
+});
+
+test("commit messages naming a live entity code are rejected", (t) => {
+  const { git, ok, write } = fixture(t);
+  write("notes.md", "# Fixture\n");
+  ok("add", "--", "notes.md");
+  // The documented example body is the one code a message may name.
+  ok("commit", "-m", "Explain PRD-4K7M lookups");
+  write("notes.md", "# Fixture 2\n");
+  ok("add", "--", "notes.md");
+  const rejected = git("commit", "-m", "Fix PUR-7Q2M reconciliation");
+  assert.notEqual(rejected.status, 0);
+  assert.match(
+    rejected.stderr + rejected.stdout,
+    /live entity codes: PUR-7Q2M/,
+  );
+  assert.equal(
+    ok("log", "--format=%s", "-1").trim(),
+    "Explain PRD-4K7M lookups",
   );
 });
