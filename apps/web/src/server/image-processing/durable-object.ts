@@ -26,7 +26,6 @@ const socketAttachment = z.object({
   userId: z.string().min(1),
   deviceId: z.uuid().optional(),
   connectionId: z.uuid().optional(),
-  deviceName: z.string().optional(),
   appVersion: z.string().optional(),
   osVersion: z.string().optional(),
   platform: z.enum(["macos", "ios"]),
@@ -134,9 +133,7 @@ export class ImageProcessingDurableObject
           executor: {
             kind: "device",
             deviceId: target.attachment.deviceId ?? null,
-            name:
-              target.attachment.deviceName ??
-              (target.attachment.platform === "macos" ? "Mac" : "iOS device"),
+            name: target.attachment.platform === "macos" ? "Mac" : "iOS device",
             platform: target.attachment.platform,
             appVersion: target.attachment.appVersion ?? null,
             osVersion: target.attachment.osVersion ?? null,
@@ -167,18 +164,17 @@ export class ImageProcessingDurableObject
     if (parsed.data.type === "hello") {
       const previous = socketAttachment.parse(socket.deserializeAttachment());
       const hello = parsed.data;
-      const name =
+      const suggestedName =
         hello.deviceName ?? (hello.platform === "macos" ? "Mac" : "iOS device");
       // The `Device` row is the durable half of participation — the
-      // installationId (this hello's `deviceId`) is its unique key. Created on
-      // first contact with `automaticWork` seeded from this hello's own
-      // switch; refreshed (name/versions/lastSeenAt) on every later hello.
+      // installationId (this hello's `deviceId`) is its unique key. The name
+      // is a creation hint; a later hello refreshes versions and liveness.
       const { automaticWork, remotePaused } = await withRequestDbClient(
         this.env.HYPERDRIVE.connectionString,
         () =>
           upsertDeviceFromHello(db, {
             installationId: hello.deviceId,
-            name,
+            name: suggestedName,
             platform: hello.platform,
             appVersion: hello.appVersion,
             osVersion: hello.osVersion ?? null,
@@ -190,7 +186,6 @@ export class ImageProcessingDurableObject
         userId: previous.userId,
         connectionId: previous.connectionId ?? crypto.randomUUID(),
         deviceId: hello.deviceId,
-        deviceName: hello.deviceName,
         appVersion: hello.appVersion,
         osVersion: hello.osVersion,
         platform: hello.platform,

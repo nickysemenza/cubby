@@ -2,6 +2,9 @@ import CubbyKit
 import Foundation
 import Nuke
 import Observation
+#if os(iOS)
+    import UIKit
+#endif
 
 /// Root app state: which server, whether we are signed in, and the clients bound to both.
 ///
@@ -16,6 +19,14 @@ final class AppModel {
     }
 
     private static let baseURLKey = "cubby.baseURL"
+    /// Only a first-registration suggestion; Cubby's edited Device name is authoritative.
+    private static var suggestedDeviceName: String {
+        #if os(iOS)
+            UIDevice.current.model
+        #else
+            ProcessInfo.processInfo.hostName
+        #endif
+    }
     static let productionBaseURL = URL(string: "https://cubby.nickysemenza.com")!
     static let localBaseURL = URL(string: "http://localhost:3000")!
     static let defaultBaseURL = productionBaseURL
@@ -426,7 +437,7 @@ final class AppModel {
             try await DeviceRegistration.sync(
                 .init(
                     installationID: AppInstallationID.current,
-                    name: ProcessInfo.processInfo.hostName,
+                    name: Self.suggestedDeviceName,
                     platform: DevicePlatform.current,
                     appVersion: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString")
                         as? String,
@@ -481,6 +492,7 @@ final class AppModel {
                 baseURL: baseURL,
                 credentials: credentials,
                 deviceID: AppInstallationID.current,
+                deviceName: Self.suggestedDeviceName,
                 foreground: companionSceneActive,
                 isParticipating: participation.automaticWork,
                 outbox: outbox,

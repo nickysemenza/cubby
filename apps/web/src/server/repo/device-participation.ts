@@ -46,9 +46,9 @@ const selectByInstallationId = (
 /**
  * Companion transport surface, not a generic CRUD path. Every native hello
  * lands here: create the row on first contact (using the hello's own
- * `participation.automaticWork`) or refresh the liveness/identity columns and
- * the device-owned `automaticWork` switch on an existing one, and hand back
- * the live participation flags the socket caches for `dispatch()`.
+ * `participation.automaticWork` and suggested name) or refresh liveness and
+ * the device-owned `automaticWork` switch on an existing one. A household edit
+ * owns the saved name after creation.
  */
 export async function upsertDeviceFromHello(
   db: Database,
@@ -108,7 +108,6 @@ export async function upsertDeviceFromHello(
     const [updated] = await tx
       .update(device)
       .set({
-        name: hello.name,
         appVersion: hello.appVersion,
         osVersion: hello.osVersion,
         // The device owns its own switch; the web owns `remotePaused`.
@@ -127,13 +126,14 @@ export async function upsertDeviceFromHello(
 
 /** `assignImageProcessingExecutor` re-reads this inside its own transaction
  * so a `remotePaused`/`automaticWork` flip after hello, but before dispatch,
- * still refuses the assignment. */
+ * still refuses the assignment and new activity uses the saved display name. */
 export async function getDeviceParticipation(
   db: Database | DrizzleTransaction,
   installationId: string,
-): Promise<DeviceParticipation | null> {
+): Promise<(DeviceParticipation & { name: string }) | null> {
   const [row] = await unwrapDb(db)
     .select({
+      name: device.name,
       automaticWork: device.automaticWork,
       remotePaused: device.remotePaused,
     })

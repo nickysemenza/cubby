@@ -35,7 +35,8 @@ public enum DeviceRegistration {
         }
     }
 
-    /// Finds this install's `Device` row by `installationId` and creates or updates it.
+    /// Finds this install's `Device` row by `installationId`. `name` is only a
+    /// creation hint; later syncs preserve the name edited in Cubby.
     /// `resources.device.create` on the first call (`name`, `platform`, `appVersion`, `osVersion`,
     /// `automaticWork`); `resources.device.update` on every later one (`lastSeenAt`, `appVersion`,
     /// `osVersion`, `automaticWork`) — callers report a thrown error via `Diagnostics.report` and
