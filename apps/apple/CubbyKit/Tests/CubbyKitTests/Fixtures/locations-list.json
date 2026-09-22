@@ -14,7 +14,16 @@
       "updatedAt": "2026-01-01T00:00:00Z",
       "children": [],
       "parent": null,
-      "inventoryEntries": []
+      "inventoryEntries": [],
+      "dataQuality": {
+        "status": "complete",
+        "score": 100,
+        "facets": [],
+        "gaps": [],
+        "exceptions": [],
+        "relatedGaps": [],
+        "relatedExceptions": []
+      }
     }
   ],
   "meta": {

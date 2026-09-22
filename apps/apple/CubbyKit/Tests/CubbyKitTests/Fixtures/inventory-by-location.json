@@ -118,7 +118,25 @@
       "images": [],
       "valuation": null,
       "createdAt": "2026-01-01T00:00:00.000Z",
-      "updatedAt": "2026-01-01T00:00:00.000Z"
+      "updatedAt": "2026-01-01T00:00:00.000Z",
+      "dataQuality": {
+        "status": "complete",
+        "score": 100,
+        "facets": [],
+        "gaps": [],
+        "exceptions": [],
+        "relatedGaps": [],
+        "relatedExceptions": []
+      }
+    },
+    "dataQuality": {
+      "status": "complete",
+      "score": 100,
+      "facets": [],
+      "gaps": [],
+      "exceptions": [],
+      "relatedGaps": [],
+      "relatedExceptions": []
     }
   },
   {
@@ -176,7 +194,25 @@
       "images": [],
       "valuation": null,
       "createdAt": "2026-01-01T00:00:00.000Z",
-      "updatedAt": "2026-01-01T00:00:00.000Z"
+      "updatedAt": "2026-01-01T00:00:00.000Z",
+      "dataQuality": {
+        "status": "complete",
+        "score": 100,
+        "facets": [],
+        "gaps": [],
+        "exceptions": [],
+        "relatedGaps": [],
+        "relatedExceptions": []
+      }
+    },
+    "dataQuality": {
+      "status": "complete",
+      "score": 100,
+      "facets": [],
+      "gaps": [],
+      "exceptions": [],
+      "relatedGaps": [],
+      "relatedExceptions": []
     }
   }
 ]
