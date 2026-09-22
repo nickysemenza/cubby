@@ -116,6 +116,7 @@ import {
   merchantVendorRule,
   orderMail,
   orderMailAttachment,
+  photoGroupProposal,
   product,
   productCategory,
   productComponent,
@@ -771,6 +772,14 @@ export const ENTITY_EDGES = {
       description: "A device whose physical hardware is this Product.",
       liveness: { kind: "must-target-live" },
     },
+    "PhotoGroupProposal.productId": {
+      column: photoGroupProposal.productId,
+      role: "reference",
+      label: "photo group proposals",
+      description:
+        "A reviewed photo group that chose, or committed to, this Product.",
+      liveness: { kind: "must-target-live" },
+    },
   }),
   productCategory: edges({
     "ProductCategory.parentId": {
@@ -803,6 +812,14 @@ export const ENTITY_EDGES = {
       role: "media",
       label: "location photos",
       description: "A photo attached to this location.",
+      liveness: { kind: "must-target-live" },
+    },
+    "PhotoGroupProposal.inventoryLocationId": {
+      column: photoGroupProposal.inventoryLocationId,
+      role: "reference",
+      label: "photo group proposals",
+      description:
+        "A reviewed photo group that will receive its inventory entry here.",
       liveness: { kind: "must-target-live" },
     },
     "Location.parentId": {
@@ -1273,6 +1290,14 @@ export const ENTITY_EDGES = {
       role: "owned-child",
       label: "prepared orders",
       description: "Immutable prepared order evidence captured by this run.",
+      liveness: { kind: "must-target-live" },
+    },
+    "PhotoGroupProposal.runId": {
+      column: photoGroupProposal.runId,
+      role: "owned-child",
+      label: "photo group proposals",
+      description:
+        "A proposed item grouping of this photo-inventory run's images.",
       liveness: { kind: "must-target-live" },
     },
     "ImportRunApproval.runId": {

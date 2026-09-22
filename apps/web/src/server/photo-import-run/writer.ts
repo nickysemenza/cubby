@@ -473,7 +473,7 @@ async function markTargets(
   attaches: ResolvedAttach[],
   skips: ResolvedSkip[],
   targetByImageId: Map<ImageId | null, LockedTarget>,
-  productShortcodeStr: string,
+  productShortcodeStr: string | undefined,
   inventoryShortcodeStr: string | undefined,
   now: Date,
 ): Promise<{ id: string; state: string }[]> {
@@ -482,6 +482,9 @@ async function markTargets(
   const images: { id: string; state: string }[] = [];
   for (const entry of attaches) {
     const target = targetByImageId.get(entry.imageId)!;
+    if (!productShortcodeStr) {
+      throw new Error("An attached image needs a resolved Product");
+    }
     const diff: AttachedDiff = {
       groupKey,
       productId: productShortcodeStr,
@@ -629,17 +632,26 @@ async function doCommit(
     );
   }
 
-  const productShortcodeStr = await resolveProduct(txDb, scope, input, actor);
-  const productId = await resolveOrThrow(txDb, "product", productShortcodeStr);
-  const inventoryShortcodeStr = await receiveInventory(
-    txDb,
-    scope,
-    input,
-    productId,
-    actor,
-  );
-
-  await attachImages(txDb, attaches, productShortcodeStr, actor);
+  // A skip-only group (e.g. a discarded proposal) touches no Product: it must
+  // not mint a `create` Product nobody will ever see.
+  let productShortcodeStr: string | undefined;
+  let inventoryShortcodeStr: string | undefined;
+  if (groupTouchesProduct(input)) {
+    productShortcodeStr = await resolveProduct(txDb, scope, input, actor);
+    const productId = await resolveOrThrow(
+      txDb,
+      "product",
+      productShortcodeStr,
+    );
+    inventoryShortcodeStr = await receiveInventory(
+      txDb,
+      scope,
+      input,
+      productId,
+      actor,
+    );
+    await attachImages(txDb, attaches, productShortcodeStr, actor);
+  }
   const now = new Date();
   const images = await markTargets(
     txDb,
@@ -671,6 +683,9 @@ async function doCommit(
   });
 }
 
+const groupTouchesProduct = (input: CommitPhotoGroupInput): boolean =>
+  input.images.length > 0 || input.inventory !== undefined;
+
 export async function commitPhotoGroup(
   db: Database,
   rawInput: z.input<typeof commitPhotoGroupInput>,
@@ -689,7 +704,7 @@ export async function commitPhotoGroup(
   // replay ledger — routing it through `runImportOperation` would either
   // replay the conflict forever (if reported under this operation id) or
   // reject a corrected payload sent under the same groupKey.
-  if (input.product.kind === "create") {
+  if (input.product.kind === "create" && groupTouchesProduct(input)) {
     const conflicts = await findProductNameConflicts(
       db,
       scope.public.runId,
@@ -714,6 +729,10 @@ export async function commitPhotoGroup(
       operationId: `photo-group:${input.groupKey}`,
       kind: "commit_photo_group",
       payload: input,
+      // The whole commit is one transaction, so a failed attempt left no
+      // partial writes: a corrected payload (e.g. an edited proposal) under
+      // the same groupKey may run instead of being refused forever.
+      retryFailedWithChangedInput: true,
     },
     () =>
       withTransactionDatabase(db, (transactionDb) =>

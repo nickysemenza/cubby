@@ -65,36 +65,36 @@ For apparel specifically, load
 [the Apparel taxonomy](references/apparel.md) before naming or classifying —
 it lists the current root/group/type choices and the tag-transcription rules.
 
-## Commit the group
+## Propose the groups
 
-A web review step for proposed groups (`propose_photo_groups` plus human
-approval) is planned but not yet built. Until it lands, present the full
-grouping manifest — each group's photos (item vs. label), its proposed
-Product (new or existing, with match evidence), and its location — to the
-user and get approval before calling `commit_photo_group`.
+Send groups with `propose_photo_groups` `{ runId, groups }` — the same group
+shape `commit_photo_group` takes, minus `runId`, plus optional `evidence`
+(why these photos are one item and why this Product). Nothing is written to
+Products or Inventory yet: the user reviews, edits and approves each group on
+the run page, and approval runs `commit_photo_group` with that payload. Call
+`commit_photo_group` directly only when the user explicitly asks to skip
+review.
 
-Write each group with `commit_photo_group`: `product` is
-`{ kind: "existing", existingId }` or `{ kind: "create", create: {...} }`;
-`images` lists every attached image with `purpose: "item"` or `"label"`;
-`skip` lists every rejected image (duplicate file, unusable frame, video)
-with a reason — every image in the group must appear in exactly one of
-`images` or `skip`. Add `inventory` once ownership and location are settled:
-`ownershipMode: "person"` with the owner (default the run's own
-`ledgerPartyId` unless the photo says otherwise) and a real location — resolve
-one from the run's `notes` (location-by-time-window) or ask; never invent a
-holding location. Omit `inventory` and ask, or leave the group `skip`-only,
-when ownership or location is genuinely unresolved — a group is not forced
-into a guess to stay unblocked.
+Each group: `product` is `{ kind: "existing", existingId }` or
+`{ kind: "create", create: {...} }`; `images` lists every attached image with
+`purpose: "item"` or `"label"`; `skip` lists every rejected image (duplicate
+file, unusable frame, video) with a reason — every image must appear in
+exactly one of `images` or `skip`, across all proposed groups of the run. Add
+`inventory` once ownership and location are settled: `ownershipMode:
+"person"` with the owner (default the run's own `ledgerPartyId` unless the
+photo says otherwise) and a real location — resolve one from the run's
+`notes` (location-by-time-window) or ask; never invent a holding location.
+Omit `inventory` when ownership or location is genuinely unresolved and say
+so in `evidence` — a group is not forced into a guess to stay unblocked.
 
-`commit_photo_group` is idempotent per `(runId, groupKey)`: after a lost
-response, retry the identical call (same `groupKey`, same payload) rather
-than re-sending a changed one — it replays the prior result instead of
-writing again. Use a stable `groupKey` per physical item so a retry is
-recognizable; never reuse a `groupKey` for a different group. A `conflict`
-outcome means an exact case-insensitive name/alias collision: read the
-returned colliding Product ids, then resend with that `existingId` or a
-distinctly different name — never resend the identical `create` expecting a
-different result.
+Use a stable `groupKey` per physical item. Re-proposing a groupKey replaces
+it while it is still `proposed`; `committed`/`discarded` groups are frozen and
+come back in `frozenGroupKeys`; `removeGroupKeys` drops a proposed group.
+Then stop and tell the user the groups are ready to review on the run page.
+Read the outcome with `list_photo_group_proposals`: a group left `proposed`
+with `conflict` hit an exact case-insensitive name/alias collision (re-propose
+with that `existingId` or a distinctly different name); `lastError` is a
+failed approval to fix and re-propose.
 
 Set the Product's `imageOrder` (own item cutout first, verified catalog image
 second, labels last) only when a catalog image is added after the own photo
@@ -105,8 +105,8 @@ group with only its own photos needs no reordering.
 ## Finish
 
 The run is done once `entity list image { filters: { importRunId,
-targetState: ["pending"] } }` returns nothing — `commit_photo_group` marks the
-run `completed` on the same transition automatically. Report items
+targetState: ["pending"] } }` returns nothing — the approval (or discard)
+that settles the last pending image marks the run `completed` automatically. Report items
 committed, images skipped (with reasons), Products matched vs. created,
 inventory received, and every open question (ambiguous ownership, unresolved
 location, an unresolved `conflict`). Then check

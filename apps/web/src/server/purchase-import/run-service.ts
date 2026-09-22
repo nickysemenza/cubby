@@ -185,6 +185,11 @@ export async function runImportOperation<T extends object | null>(
     operationId: string;
     kind: string;
     payload: unknown;
+    /**
+     * Only for `work` that is a single transaction: a `failed` row holds no
+     * partial side effects, so a changed payload may take the operation over.
+     */
+    retryFailedWithChangedInput?: boolean;
   },
   work: () => Promise<T>,
 ): Promise<T> {
@@ -217,7 +222,13 @@ export async function runImportOperation<T extends object | null>(
         ),
       )
       .limit(1);
-    if (!recorded || recorded.inputFingerprint !== fingerprint)
+    const takesOverFailed =
+      input.retryFailedWithChangedInput === true &&
+      recorded?.state === "failed";
+    if (
+      !recorded ||
+      (recorded.inputFingerprint !== fingerprint && !takesOverFailed)
+    )
       throw new Error("Operation id was replayed with different input");
     if (recorded.state === "completed") {
       // SAFETY: the unique operation row is written only by this generic call
@@ -231,7 +242,12 @@ export async function runImportOperation<T extends object | null>(
       throw new Error("Import operation is already in progress");
     await database
       .update(importRunOperation)
-      .set({ state: "started", error: null, updatedAt: new Date() })
+      .set({
+        state: "started",
+        error: null,
+        inputFingerprint: fingerprint,
+        updatedAt: new Date(),
+      })
       .where(
         and(
           eq(importRunOperation.runId, runId),
