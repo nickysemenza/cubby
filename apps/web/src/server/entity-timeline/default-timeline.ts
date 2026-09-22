@@ -88,9 +88,10 @@ const recordLink = (entity: TimelineEntity, record: TimelineRecord) => ({
 });
 
 /**
- * One page of the records in scope. The list read is `createdAt desc` with
- * the list scaffold's id tie-break, so pages are stable; `window.ids` pages
- * in the order the ids were given.
+ * One page of the records in scope. The list read is `createdAt` in the
+ * window's order with the list scaffold's id tie-break, so page 1 holds the
+ * records the chosen order shows first and pages are stable; `window.ids`
+ * pages in the order the ids were given.
  */
 async function loadRecords(
   context: EntityKernelContext,
@@ -127,7 +128,7 @@ async function loadRecords(
     action: "list",
     entity,
     filters,
-    sort: [{ orderBy: "createdAt", direction: "desc" }],
+    sort: [{ orderBy: "createdAt", direction: window.order }],
     pagination,
   });
   if (result.action !== "list")

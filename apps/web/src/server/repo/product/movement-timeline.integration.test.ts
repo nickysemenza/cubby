@@ -11,9 +11,10 @@ import {
 import { getProductMovementTimeline } from "./movement-timeline";
 
 /**
- * The product timeline pages the products that moved, by first movement
- * then id; a page boundary that drifted with the name sort, or a count taken
- * over the page instead of the scope, would still typecheck.
+ * The product timeline pages the products that moved in the window's order
+ * (newest first by latest movement, oldest first by first movement) then id;
+ * a page boundary that drifted with the name sort or ignored the order, or a
+ * count taken over the page instead of the scope, would still typecheck.
  */
 describe("product movement timeline paging", () => {
   const ctx = withTestDb();
@@ -60,13 +61,13 @@ describe("product movement timeline paging", () => {
       pagination: { pageIndex: input.pageIndex, pageSize: 2 },
     });
 
-  it("pages movers by first movement then id and counts the whole scope", async () => {
+  it("pages movers newest first by latest movement and counts the whole scope", async () => {
     const { a, b, c } = await seed();
 
     const first = await read({ pageIndex: 0 });
     const second = await read({ pageIndex: 1 });
-    expect(first.products.map((product) => product.id)).toEqual([b, c]);
-    expect(second.products.map((product) => product.id)).toEqual([a]);
+    expect(first.products.map((product) => product.id)).toEqual([b, a]);
+    expect(second.products.map((product) => product.id)).toEqual([c]);
     expect(first.meta).toEqual({ totalCount: 3, pageIndex: 0, pageSize: 2 });
     expect(first.summary.matchingProducts).toBe(4);
     expect(first.omitted.productsWithoutMovements).toBe(1);
@@ -77,11 +78,20 @@ describe("product movement timeline paging", () => {
           group.movements.map((movement) => movement.productId),
         ),
       ),
-    ).toEqual(new Set([b, c]));
+    ).toEqual(new Set([b, a]));
     expect((await read({ pageIndex: 2 })).products).toEqual([]);
   });
 
-  it("orders and counts by the first movement inside the window", async () => {
+  it("pages oldest first by first movement", async () => {
+    const { a, b, c } = await seed();
+
+    const first = await read({ pageIndex: 0, order: "asc" });
+    const second = await read({ pageIndex: 1, order: "asc" });
+    expect(first.products.map((product) => product.id)).toEqual([b, c]);
+    expect(second.products.map((product) => product.id)).toEqual([a]);
+  });
+
+  it("orders and counts by movements inside the window", async () => {
     const { a, b, c, d } = await seed();
 
     const windowed = await read({
@@ -90,7 +100,7 @@ describe("product movement timeline paging", () => {
       from: "2026-01-15",
       to: "2026-03-15",
     });
-    expect(windowed.products.map((product) => product.id)).toEqual([c, a]);
+    expect(windowed.products.map((product) => product.id)).toEqual([a, c]);
     expect(windowed.meta.totalCount).toBe(2);
     expect(windowed.summary.matchingProducts).toBe(4);
   });

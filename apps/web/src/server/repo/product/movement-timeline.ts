@@ -214,9 +214,10 @@ const movementDates = (db: Database) =>
   ).as("movement_dates");
 
 /**
- * One page of the products that moved inside the window, ordered by their
- * lifecycle start (first movement; undated-only products last) then id, so
- * pages are stable; plus how many products match the filters at all.
+ * One page of the products that moved inside the window, in the window's
+ * order: newest-first pages by latest movement, oldest-first by first
+ * movement (undated-only products last either way), then id so pages are
+ * stable; plus how many products match the filters at all.
  */
 async function loadCohort(
   db: Database,
@@ -238,6 +239,7 @@ async function loadCohort(
     .select({
       productId: moves.productId,
       start: sql<string | null>`min(${moves.date})`.as("start"),
+      latest: sql<string | null>`max(${moves.date})`.as("latest"),
     })
     .from(moves)
     .where(inWindow)
@@ -250,7 +252,12 @@ async function loadCohort(
       .from(product)
       .innerJoin(movers, eq(movers.productId, product.id))
       .where(scope)
-      .orderBy(sql`${movers.start} asc nulls last`, asc(product.id))
+      .orderBy(
+        input.order === "desc"
+          ? sql`${movers.latest} desc nulls last`
+          : sql`${movers.start} asc nulls last`,
+        asc(product.id),
+      )
       .limit(pageSize)
       .offset(pageIndex * pageSize),
     getDb(db)
