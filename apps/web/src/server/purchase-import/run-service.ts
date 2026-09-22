@@ -3052,6 +3052,7 @@ export async function loadImportRunByShortcode(
   const hasMoreUsage = usageRows.length > usageLimit;
   const pageUsage = usageRows.slice(0, usageLimit);
   return {
+    publicId: run.publicId,
     status: run.status,
     purpose: run.purpose,
     trigger: run.trigger,
