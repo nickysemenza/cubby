@@ -75,7 +75,7 @@ describe("shared purchase-import prepare and commit", () => {
     });
     const prepareInput = {
       _runExecution: {
-        runPublicId: run.publicId,
+        runId: run.id,
         operationId: "prepare:amazon-order-1",
         itemOperationIds: ["prepare-item:amazon-order-1"],
       },
@@ -131,7 +131,7 @@ describe("shared purchase-import prepare and commit", () => {
 
     const missingDefaultsInput = commitPurchaseImportInput.parse({
       _runExecution: {
-        runPublicId: run.publicId,
+        runId: run.id,
         operationId: "commit:amazon-order-1",
       },
       prepareOperationId: prepareInput._runExecution.operationId,
@@ -255,7 +255,7 @@ describe("shared purchase-import prepare and commit", () => {
         ctx.db,
         {
           _runExecution: {
-            runPublicId: started.run.publicId,
+            runId: started.run.id,
             operationId: prepareOperationId,
             itemOperationIds: [`item:${currency.toLowerCase()}`],
           },
@@ -302,7 +302,7 @@ describe("shared purchase-import prepare and commit", () => {
         ctx.db,
         validatePurchaseImportInput.parse({
           _runExecution: {
-            runPublicId: started.run.publicId,
+            runId: started.run.id,
             operationId: `validate:${currency.toLowerCase()}`,
           },
           prepareOperationId,
@@ -371,7 +371,7 @@ describe("shared purchase-import prepare and commit", () => {
     });
     const prepareInput = {
       _runExecution: {
-        runPublicId: run.publicId,
+        runId: run.id,
         operationId: "prepare:adjustments-order-1",
         itemOperationIds: ["prepare-item:adjustments-order-1"],
       },
@@ -427,7 +427,7 @@ describe("shared purchase-import prepare and commit", () => {
     // never resolvable to a Product, matching what the MCP layer sends.
     const commitInput = commitPurchaseImportInput.parse({
       _runExecution: {
-        runPublicId: run.publicId,
+        runId: run.id,
         operationId: "commit:adjustments-order-1",
       },
       prepareOperationId: prepareInput._runExecution.operationId,
@@ -491,7 +491,7 @@ describe("shared purchase-import prepare and commit", () => {
     });
     const prepareInput = {
       _runExecution: {
-        runPublicId: run.publicId,
+        runId: run.id,
         operationId: "prepare:failing-order-1",
         itemOperationIds: ["prepare-item:failing-order-1"],
       },
@@ -535,7 +535,7 @@ describe("shared purchase-import prepare and commit", () => {
 
     const operationId = "commit:failing-order-1";
     const commitInput = commitPurchaseImportInput.parse({
-      _runExecution: { runPublicId: run.publicId, operationId },
+      _runExecution: { runId: run.id, operationId },
       prepareOperationId: prepareInput._runExecution.operationId,
       defaultTrade: "other" as const,
       resolutions: [

@@ -56,7 +56,7 @@ describe("TargetedImportLaunchDialog", () => {
               {
                 created: false,
                 run: null,
-                blockingRun: { publicId: "PIR-ABCDE12345", status: "running" },
+                blockingRun: { id: "RUN-4K7M", status: "running" },
               },
             ],
           }),
@@ -82,8 +82,9 @@ describe("TargetedImportLaunchDialog", () => {
     expect(
       await screen.findByText("One account is already busy"),
     ).toBeInTheDocument();
-    expect(
-      screen.getByRole("link", { name: /Open PIR-ABCDE12345/ }),
-    ).toHaveAttribute("href", "/purchase-imports/PIR-ABCDE12345");
+    expect(screen.getByRole("link", { name: /Open RUN-4K7M/ })).toHaveAttribute(
+      "href",
+      "/purchase-imports/RUN-4K7M",
+    );
   });
 });

@@ -90,6 +90,13 @@ import {
   importHunt,
   importPreparedOrder,
   importRun,
+  importRunApproval,
+  importRunControlEvent,
+  importRunEvidence,
+  importRunMutation,
+  importRunOperation,
+  importRunOrderCandidate,
+  importRunProgress,
   importRunTarget,
   importSourceClaim,
   ingredient,
@@ -1116,6 +1123,126 @@ export const ENTITY_EDGES = {
       role: "history",
       label: "import hunts",
       description: "An evidence hunt assigned to this vendor account.",
+      liveness: { kind: "must-target-live" },
+    },
+  }),
+  // The read-only run record itself has no delete/merge operation
+  // (`capabilities.delete: null`), so nothing here ever dispositions these
+  // edges under a purchaseImportRun operation — see entity-incoming-edges.ts's
+  // doc comment. Child rows (target/evidence/mutation/operation/progress/
+  // control-event/approval/prepared-order/order-candidate) exist only as part
+  // of one run, so they're `owned-child`; rows other entities keep about a
+  // run (purchases it touched, claims it advanced, findings it produced) are
+  // `history`, mirroring vendorAccount's own edges above.
+  purchaseImportRun: edges({
+    "Purchase.importRunId": {
+      column: purchase.importRunId,
+      role: "history",
+      label: "purchases",
+      description: "A purchase this run imported or validated.",
+      liveness: { kind: "must-target-live" },
+    },
+    "ImportRun.predecessorRunId": {
+      column: importRun.predecessorRunId,
+      role: "history",
+      label: "successor runs",
+      description: "A later run that continued from this one.",
+      liveness: { kind: "must-target-live" },
+    },
+    "ImportRunTarget.runId": {
+      column: importRunTarget.runId,
+      role: "owned-child",
+      label: "targets",
+      description:
+        "A validation or enrichment target recorded for this run; it has no independent meaning apart from the run.",
+      liveness: { kind: "must-target-live" },
+    },
+    "ImportRunOrderCandidate.runId": {
+      column: importRunOrderCandidate.runId,
+      role: "owned-child",
+      label: "order candidates",
+      description:
+        "An account-sync order-history worklist row belonging to this run.",
+      liveness: { kind: "must-target-live" },
+    },
+    "ImportRunEvidence.runId": {
+      column: importRunEvidence.runId,
+      role: "owned-child",
+      label: "evidence",
+      description: "Captured evidence filed under this run.",
+      liveness: { kind: "must-target-live" },
+    },
+    "ImportRunMutation.runId": {
+      column: importRunMutation.runId,
+      role: "owned-child",
+      label: "mutations",
+      description:
+        "An explicit row mutation attributed to this run, independent of AuditLog's actor shape.",
+      liveness: { kind: "must-target-live" },
+    },
+    "ImportRunOperation.runId": {
+      column: importRunOperation.runId,
+      role: "owned-child",
+      label: "operations",
+      description: "One idempotent operation this run executed.",
+      liveness: { kind: "must-target-live" },
+    },
+    "ImportRunProgress.runId": {
+      column: importRunProgress.runId,
+      role: "owned-child",
+      label: "progress checkpoints",
+      description: "A progress checkpoint recorded during this run.",
+      liveness: { kind: "must-target-live" },
+    },
+    "ImportRunControlEvent.runId": {
+      column: importRunControlEvent.runId,
+      role: "owned-child",
+      label: "control events",
+      description:
+        "A prompt, pause, resume, or other control-plane event for this run.",
+      liveness: { kind: "must-target-live" },
+    },
+    "ImportPreparedOrder.runId": {
+      column: importPreparedOrder.runId,
+      role: "owned-child",
+      label: "prepared orders",
+      description: "Immutable prepared order evidence captured by this run.",
+      liveness: { kind: "must-target-live" },
+    },
+    "ImportRunApproval.runId": {
+      column: importRunApproval.runId,
+      role: "owned-child",
+      label: "approvals",
+      description: "An approval decision recorded against this run.",
+      liveness: { kind: "must-target-live" },
+    },
+    "ImportSourceClaim.firstRunId": {
+      column: importSourceClaim.firstRunId,
+      role: "history",
+      label: "source claims (first seen)",
+      description: "An idempotent source claim first captured by this run.",
+      liveness: { kind: "must-target-live" },
+    },
+    "ImportSourceClaim.lastRunId": {
+      column: importSourceClaim.lastRunId,
+      role: "history",
+      label: "source claims (last seen)",
+      description:
+        "An idempotent source claim most recently confirmed by this run.",
+      liveness: { kind: "must-target-live" },
+    },
+    "ImportFinding.importRunId": {
+      column: importFinding.importRunId,
+      role: "history",
+      label: "findings",
+      description: "An integrity finding this run produced.",
+      liveness: { kind: "must-target-live" },
+    },
+    "ImportHunt.receiptRunId": {
+      column: importHunt.receiptRunId,
+      role: "history",
+      label: "receipt hunts",
+      description: "An evidence hunt whose receipt this run captured.",
       liveness: { kind: "must-target-live" },
     },
   }),

@@ -2,6 +2,7 @@ import { entitySchema, type Entity } from "@cubby/schemas/entity";
 import type { EdgeRole } from "@cubby/schemas/entity-integrity";
 import { entityManifest } from "@cubby/schemas/entity-manifest";
 import { parseEntityId, userId } from "@cubby/schemas/identifiers";
+import { generateShortcode } from "@cubby/shared";
 import { eq, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
@@ -21,6 +22,13 @@ import {
   importHunt,
   importPreparedOrder,
   importRun,
+  importRunApproval,
+  importRunControlEvent,
+  importRunEvidence,
+  importRunMutation,
+  importRunOperation,
+  importRunOrderCandidate,
+  importRunProgress,
   importRunTarget,
   importSourceClaim,
   ledgerParty,
@@ -247,7 +255,7 @@ const mkImportRun = async (
   values: Partial<
     Pick<
       typeof importRun.$inferInsert,
-      "ledgerPartyId" | "vendorAccountId" | "vendorId"
+      "ledgerPartyId" | "vendorAccountId" | "vendorId" | "predecessorRunId"
     >
   > = {},
 ) => {
@@ -266,7 +274,7 @@ const mkImportRun = async (
   ]);
   if (!partySnapshot) throw new Error("Import run party fixture was not found");
   return insertAndReturn(db, importRun, {
-    publicId: `PIR-${crypto.randomUUID().replaceAll("-", "").slice(0, 10).toUpperCase()}`,
+    shortcode: generateShortcode("purchaseImportRun"),
     ledgerPartyId: party,
     actorUserId: userId.parse(actor.id),
     actorName: actor.name,
@@ -276,6 +284,7 @@ const mkImportRun = async (
     actorLedgerPartyKind: partySnapshot.kind,
     vendorAccountId: values.vendorAccountId,
     vendorId: values.vendorId,
+    predecessorRunId: values.predecessorRunId,
     trigger: "manual",
   });
 };
@@ -285,11 +294,11 @@ const mkImportPreparedOrder = async (
   values: Partial<
     Pick<
       typeof importPreparedOrder.$inferInsert,
-      "primaryDocumentImageId" | "screenshotImageId"
+      "primaryDocumentImageId" | "screenshotImageId" | "runId"
     >
   >,
 ) => {
-  const run = await mkImportRun(db);
+  const run = values.runId ? { id: values.runId } : await mkImportRun(db);
   return insertAndReturn(db, importPreparedOrder, {
     runId: run.id,
     prepareOperationId: uniq("prepare-operation"),
@@ -312,11 +321,11 @@ const mkImportRunTarget = async (
   values: Partial<
     Pick<
       typeof importRunTarget.$inferInsert,
-      "purchaseId" | "productId" | "vendorAccountId"
+      "purchaseId" | "productId" | "vendorAccountId" | "runId"
     >
   >,
 ) => {
-  const run = await mkImportRun(db);
+  const run = values.runId ? { id: values.runId } : await mkImportRun(db);
   return insertAndReturn(db, importRunTarget, {
     runId: run.id,
     purchaseId: values.purchaseId,
@@ -331,7 +340,11 @@ const mkImportSourceClaim = async (
   values: Partial<
     Pick<
       typeof importSourceClaim.$inferInsert,
-      "ledgerPartyId" | "vendorAccountId" | "purchaseId"
+      | "ledgerPartyId"
+      | "vendorAccountId"
+      | "purchaseId"
+      | "firstRunId"
+      | "lastRunId"
     >
   > = {},
 ) => {
@@ -344,8 +357,8 @@ const mkImportSourceClaim = async (
     kind: "browser_order",
     externalKey: uniq("source"),
     checksum: uniq("checksum"),
-    firstRunId: run.id,
-    lastRunId: run.id,
+    firstRunId: values.firstRunId ?? run.id,
+    lastRunId: values.lastRunId ?? run.id,
     outputFingerprint: uniq("output"),
   });
 };
@@ -360,6 +373,7 @@ const mkImportHunt = async (
       | "vendorId"
       | "vendorAccountId"
       | "receiptImageId"
+      | "receiptRunId"
     >
   > = {},
 ) => {
@@ -372,6 +386,7 @@ const mkImportHunt = async (
     vendorId: values.vendorId,
     vendorAccountId: values.vendorAccountId,
     receiptImageId: values.receiptImageId,
+    receiptRunId: values.receiptRunId,
     dateFrom: "2026-01-01",
     dateTo: "2026-01-02",
   });
@@ -428,6 +443,7 @@ const TARGET_FACTORIES = {
   financialAccount: mkFinancialAccount,
   financialTransaction: mkFinancialTransaction,
   wish: mkWish,
+  purchaseImportRun: mkImportRun,
 } satisfies Partial<Record<Entity, (db: Database) => Promise<{ id: string }>>>;
 
 /** One factory per must-target-live edge: insert a live SOURCE row whose FK
@@ -577,7 +593,9 @@ const SOURCE_FACTORIES = {
     });
   },
   "ImportRun.vendorAccountId": (db, targetId) =>
-    mkImportRun(db, { vendorAccountId: targetId }),
+    mkImportRun(db, {
+      vendorAccountId: parseEntityId("vendorAccount", targetId),
+    }),
   "ImportRunTarget.productId": (db, targetId) =>
     mkImportRunTarget(db, { productId: parseEntityId("product", targetId) }),
   "ImportRunTarget.vendorAccountId": (db, targetId) =>
@@ -1317,6 +1335,119 @@ const SOURCE_FACTORIES = {
       });
     return { id: targetId };
   },
+
+  "Purchase.importRunId": async (db, targetId) => {
+    const vendor = await mkVendor(db);
+    return insertWithShortcode(db, "purchase", {
+      vendorId: vendor.id,
+      importRunId: parseEntityId("purchaseImportRun", targetId),
+      date: "2024-01-15",
+    });
+  },
+  "ImportRun.predecessorRunId": (db, targetId) =>
+    mkImportRun(db, {
+      predecessorRunId: parseEntityId("purchaseImportRun", targetId),
+    }),
+  "ImportRunTarget.runId": async (db, targetId) => {
+    const product = await mkProduct(db);
+    return mkImportRunTarget(db, {
+      runId: parseEntityId("purchaseImportRun", targetId),
+      productId: product.id,
+    });
+  },
+  "ImportRunOrderCandidate.runId": (db, targetId) =>
+    insertAndReturn(db, importRunOrderCandidate, {
+      runId: parseEntityId("purchaseImportRun", targetId),
+      orderId: uniq("order"),
+    }),
+  "ImportRunEvidence.runId": async (db, targetId) => {
+    const product = await mkProduct(db);
+    const evidenceTarget = await mkImportRunTarget(db, {
+      productId: product.id,
+    });
+    return insertAndReturn(db, importRunEvidence, {
+      runId: parseEntityId("purchaseImportRun", targetId),
+      targetId: evidenceTarget.id,
+      kind: "manual_upload",
+      objectKey: uniq("test/evidence-object"),
+      checksum: uniq("evidence-checksum"),
+      mediaType: "application/pdf",
+    });
+  },
+  "ImportRunMutation.runId": (db, targetId) =>
+    insertAndReturn(db, importRunMutation, {
+      runId: parseEntityId("purchaseImportRun", targetId),
+      targetType: "purchase",
+      targetId: crypto.randomUUID(),
+      mutationKind: "liveness-fixture",
+      postFingerprint: uniq("post-fingerprint"),
+    }),
+  "ImportRunOperation.runId": (db, targetId) =>
+    insertAndReturn(db, importRunOperation, {
+      runId: parseEntityId("purchaseImportRun", targetId),
+      operationId: uniq("operation"),
+      kind: "liveness-fixture",
+      inputFingerprint: uniq("input-fingerprint"),
+    }),
+  "ImportRunProgress.runId": (db, targetId) =>
+    insertAndReturn(db, importRunProgress, {
+      runId: parseEntityId("purchaseImportRun", targetId),
+      eventId: uniq("progress-event"),
+      phase: "liveness-fixture",
+    }),
+  "ImportRunControlEvent.runId": (db, targetId) =>
+    insertAndReturn(db, importRunControlEvent, {
+      runId: parseEntityId("purchaseImportRun", targetId),
+      action: "prompt",
+      controllerUserId: userId.parse(uniq("controller-user")),
+      controllerName: "Liveness fixture controller",
+      controllerEmail: `${uniq("controller")}@example.test`,
+      controllerLedgerPartyId: parseEntityId(
+        "ledgerParty",
+        crypto.randomUUID(),
+      ),
+      controllerLedgerPartyShortcode: uniq("LPY-fixture"),
+      controllerLedgerPartyName: "Liveness fixture party",
+      controllerLedgerPartyKind: "member",
+    }),
+  "ImportPreparedOrder.runId": (db, targetId) =>
+    mkImportPreparedOrder(db, {
+      runId: parseEntityId("purchaseImportRun", targetId),
+    }),
+  "ImportRunApproval.runId": (db, targetId) =>
+    insertAndReturn(db, importRunApproval, {
+      runId: parseEntityId("purchaseImportRun", targetId),
+      operationId: uniq("approval-operation"),
+      operationKind: "liveness-fixture",
+      args: {},
+      argsFingerprint: uniq("args-fingerprint"),
+      targetFingerprint: uniq("target-fingerprint"),
+      evidenceFingerprint: uniq("evidence-fingerprint"),
+    }),
+  "ImportSourceClaim.firstRunId": (db, targetId) =>
+    mkImportSourceClaim(db, {
+      firstRunId: parseEntityId("purchaseImportRun", targetId),
+    }),
+  "ImportSourceClaim.lastRunId": (db, targetId) =>
+    mkImportSourceClaim(db, {
+      lastRunId: parseEntityId("purchaseImportRun", targetId),
+    }),
+  "ImportFinding.importRunId": async (db, targetId) => {
+    const party = await mkLedgerParty(db);
+    return insertAndReturn(db, importFinding, {
+      importRunId: parseEntityId("purchaseImportRun", targetId),
+      ledgerPartyId: party.id,
+      targetType: "purchase",
+      targetId: crypto.randomUUID(),
+      kind: "liveness-fixture",
+      summary: "Liveness fixture",
+      evidenceFingerprint: uniq("finding"),
+    });
+  },
+  "ImportHunt.receiptRunId": (db, targetId) =>
+    mkImportHunt(db, {
+      receiptRunId: parseEntityId("purchaseImportRun", targetId),
+    }),
 } satisfies Record<
   string,
   (db: Database, targetId: string) => Promise<{ id: string }>
@@ -1379,6 +1510,13 @@ const HARD_DELETE_ONLY_SOURCE_TABLES = new Set([
   "ImportHunt",
   "ImportPreparedOrder",
   "ImportRun",
+  "ImportRunApproval",
+  "ImportRunControlEvent",
+  "ImportRunEvidence",
+  "ImportRunMutation",
+  "ImportRunOperation",
+  "ImportRunOrderCandidate",
+  "ImportRunProgress",
   "ImportRunTarget",
   "ImportSourceClaim",
   "ImageProcessingJob",
@@ -1428,11 +1566,11 @@ const derivedMustTargetLiveEdges = deriveMustTargetLiveEdges();
 describe("findReferentialLivenessViolations", () => {
   const ctx = withTestDb();
 
-  it("derives 112 must-target-live edges from INCOMING_EDGES × ENTITY_EDGE_SEMANTICS", () => {
+  it("derives 127 must-target-live edges from INCOMING_EDGES × ENTITY_EDGE_SEMANTICS", () => {
     // Mirrors EXPECTED_EDGE_COUNT in detectors-integrity.ts — an independent
     // spot check computed from the same two source-of-truth maps, not from the
     // detector's own (unexported) derivation.
-    expect(derivedMustTargetLiveEdges).toHaveLength(112);
+    expect(derivedMustTargetLiveEdges).toHaveLength(127);
   });
 
   it("the hand-written fixture map covers exactly the derived edges (a new edge fails here, not silently)", () => {

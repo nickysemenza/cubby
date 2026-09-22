@@ -23,7 +23,10 @@ import type { EditableEntity } from "./types";
 // rendered for them yet and their create/update still go through MCP.
 const editableEntities = allEntities.filter(
   (entity): entity is EditableEntity =>
-    entity !== "image" && entity !== "usda-food" && entity !== "cookbook",
+    entity !== "image" &&
+    entity !== "usda-food" &&
+    entity !== "cookbook" &&
+    entity !== "purchaseImportRun",
 );
 
 // Proves the property `genericCreateDefault` (definitions.ts) relies on:

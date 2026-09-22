@@ -206,7 +206,7 @@ final class MacBrowserCommandExecutor: BrowserCommandExecuting {
                     enhancedEvidence: payload.enhancedEvidence, targetURL: targetURL,
                     evidenceScope: payload.evidenceScope.map {
                         BrowserEvidenceUploadScope(
-                            runPublicID: $0.runPublicId, targetID: $0.targetId)
+                            runID: $0.runId, targetID: $0.targetId)
                     })
                 await returnOwnedWindowToBackground()
                 return .completed(capture: result)

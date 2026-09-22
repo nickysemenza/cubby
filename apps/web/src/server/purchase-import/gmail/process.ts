@@ -1,4 +1,5 @@
-import { parseEntityId } from "@cubby/schemas/identifiers";
+import { parseEntityId, purchaseImportRunId } from "@cubby/schemas/identifiers";
+import { generateShortcode } from "@cubby/shared";
 import { and, eq, gte, inArray, isNotNull, isNull, lte } from "drizzle-orm";
 
 import { classifyOrderMail } from "~/server/agents/purchase-import/extract";
@@ -21,7 +22,6 @@ import { getDb, notDeleted } from "~/server/repo/database-helpers";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 import { attachFileToEntity } from "~/server/services/image-storage.service";
 
-import { mintImportRunPublicId } from "../run-identifiers";
 import { uniqueOrderSubsetForCharge } from "../writer-policy";
 import type { GmailOrderMailAttachment } from "./types";
 
@@ -176,10 +176,10 @@ export async function processOrderMails(
           .limit(1);
         if (!actorSnapshot?.actorUserId)
           throw new Error("Order mail party has no controlling member");
-        const runId = crypto.randomUUID();
+        const runId = purchaseImportRunId.parse(crypto.randomUUID());
         await database.insert(importRun).values({
           id: runId,
-          publicId: mintImportRunPublicId(),
+          shortcode: generateShortcode("purchaseImportRun"),
           ledgerPartyId: mail.ledgerPartyId,
           actorUserId: actorSnapshot.actorUserId,
           actorName: actorSnapshot.actorName,

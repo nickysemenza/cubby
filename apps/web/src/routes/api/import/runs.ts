@@ -76,7 +76,6 @@ export const Route = createFileRoute("/api/import/runs")({
         return Response.json(
           purchaseImportRunsResponse.parse({
             runs: runs.map((run) => ({
-              publicId: run.publicId,
               vendorAccountLabel: run.vendorAccountLabel,
               vendorName: run.vendorName,
               trigger: run.trigger,

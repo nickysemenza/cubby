@@ -178,6 +178,7 @@ describe("getEntityNavGroup", () => {
       expense: "Records",
       vendor: "Records",
       vendorAccount: "Records",
+      purchaseImportRun: "Records",
       purchase: "Records",
       financialAccount: "Records",
       financialTransaction: "Records",

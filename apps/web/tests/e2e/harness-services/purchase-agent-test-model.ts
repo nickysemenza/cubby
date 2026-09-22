@@ -8,7 +8,7 @@ type ResponsesFunctionCall = {
 };
 
 type ModelFixture = {
-  runPublicId: string;
+  runId: string;
   productShortcode: string;
   sourceExternalKey: string;
   evidenceChecksum: string;
@@ -150,7 +150,7 @@ export default {
       return toolResponse(
         call("prepare-1", "mcp__cubby__prepare_purchase_import", {
           _runExecution: {
-            runPublicId: fixture.runPublicId,
+            runId: fixture.runId,
             operationId: "prepare:workerd",
             itemOperationIds: ["prepare-item:workerd"],
           },
@@ -198,7 +198,7 @@ export default {
       return toolResponse(
         call("validate-1", "mcp__cubby__validate_purchase_import", {
           _runExecution: {
-            runPublicId: fixture.runPublicId,
+            runId: fixture.runId,
             operationId: "validate:workerd",
           },
           prepareOperationId: "prepare:workerd",

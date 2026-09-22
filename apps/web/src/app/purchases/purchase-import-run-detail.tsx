@@ -352,7 +352,7 @@ function ManualEvidenceUpload({ run }: { run: PurchaseImportRunDetail }) {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            runPublicId: run.publicId,
+            runId: run.publicId,
             targetId: target.id,
             kind: "manual_upload",
             contentType: file.type || "application/octet-stream",

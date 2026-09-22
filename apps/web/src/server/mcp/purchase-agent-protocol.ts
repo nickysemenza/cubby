@@ -1,5 +1,6 @@
 import { auditEntitySchema } from "@cubby/schemas/audit";
 import type { ActorContext } from "@cubby/schemas/context";
+import { purchaseImportRunId } from "@cubby/schemas/identifiers";
 import { purchaseImportRunExecution } from "@cubby/schemas/purchase-import";
 import { parseShortcode } from "@cubby/shared";
 import { and, desc, eq, inArray } from "drizzle-orm";
@@ -136,16 +137,17 @@ export async function executePurchaseAgentMutation<T>(input: {
   const [run] = await getDb(input.db)
     .select({
       id: importRun.id,
-      publicId: importRun.publicId,
       actorUserId: importRun.actorUserId,
       status: importRun.status,
     })
     .from(importRun)
-    .where(eq(importRun.id, input.trusted.runId))
+    .where(eq(importRun.id, purchaseImportRunId.parse(input.trusted.runId)))
     .limit(1);
+  // The envelope names the run by its private id, the same value the
+  // delegation token was minted for; the public code is never trusted here.
   if (
     !run ||
-    run.publicId !== input.execution.runPublicId ||
+    run.id !== input.execution.runId ||
     run.actorUserId !== input.actor.userId
   )
     throw new Error(

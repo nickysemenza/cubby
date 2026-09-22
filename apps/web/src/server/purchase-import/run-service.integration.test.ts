@@ -14,7 +14,7 @@ import {
   expireStaleImportRuns,
   finishImportRun,
   issueBrowserCommand,
-  loadImportRunByPublicId,
+  loadImportRunByShortcode,
   readBrowserCommandResult,
   reconcileSettledImportRun,
   resumeAuthorizedImportRuns,
@@ -85,7 +85,7 @@ describe("purchase import run admission", () => {
     const { aiUsage } = await import("~/server/db/schema");
     const { getDb } = await import("~/server/repo/database-helpers");
 
-    const empty = await loadImportRunByPublicId(
+    const empty = await loadImportRunByShortcode(
       ctx.db,
       ctx.actor,
       run.publicId,
@@ -103,7 +103,7 @@ describe("purchase import run admission", () => {
       estimatedCost: null,
       durationMs: 1,
     });
-    const withUsage = await loadImportRunByPublicId(
+    const withUsage = await loadImportRunByShortcode(
       ctx.db,
       ctx.actor,
       run.publicId,

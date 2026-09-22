@@ -42,7 +42,7 @@ actor CubbyBrowserEvidenceUploader: BrowserEvidenceUploading {
         }
         let staged = try await client.initiateRunEvidenceUpload(
             InitiateImportRunEvidenceUploadInput(
-                runPublicId: scope.runPublicID, targetId: scope.targetID, kind: .browserCapture,
+                runId: scope.runID, targetId: scope.targetID, kind: .browserCapture,
                 contentType: contentType, byteSize: byteSize, checksum: evidence.checksum,
                 filename: evidence.url.lastPathComponent))
         // Presigned R2 evidence PUTs carry only their declared content type. The initiating

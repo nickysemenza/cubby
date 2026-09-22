@@ -1,9 +1,9 @@
-import { importRunPublicId } from "@cubby/schemas/purchase-import";
+import { importRunShortcode } from "@cubby/schemas/purchase-import";
 import { z } from "zod";
 
 import { getBindingFetcher } from "~/server/cf-env";
 import {
-  loadRunScopeByPublicId,
+  loadRunScopeByShortcode,
   recordImportRunControlEvent,
 } from "~/server/purchase-import/run-service";
 import type {
@@ -40,8 +40,8 @@ export async function proxyPurchaseAgentRequest(input: {
   context: AuthenticatedRequestContext;
   party: CurrentParty;
 }) {
-  const publicId = importRunPublicId.parse(input.publicId);
-  const scope = await loadRunScopeByPublicId(input.context.db, publicId);
+  const publicId = importRunShortcode.parse(input.publicId);
+  const scope = await loadRunScopeByShortcode(input.context.db, publicId);
   const suffix = input.suffix?.replace(/^\/+|\/+$/gu, "") ?? "";
   if (!allowedSuffix.test(suffix)) {
     return Response.json(

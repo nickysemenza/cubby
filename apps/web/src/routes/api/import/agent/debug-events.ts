@@ -1,3 +1,4 @@
+import { purchaseImportRunId } from "@cubby/schemas/identifiers";
 import { createFileRoute } from "@tanstack/react-router";
 import { and, eq, inArray } from "drizzle-orm";
 
@@ -40,14 +41,17 @@ export const Route = createFileRoute("/api/import/agent/debug-events")({
           .from(importRun)
           .where(
             and(
-              inArray(importRun.id, runIds),
+              inArray(
+                importRun.id,
+                runIds.map((id) => purchaseImportRunId.parse(id)),
+              ),
               eq(importRun.ledgerPartyId, party.id),
               // A party peer cannot attach arbitrary device metadata to the
               // run started by another actor.
               eq(importRun.actorUserId, context.auth.userId),
             ),
           );
-        const ownedRunIds = new Set(ownedRuns.map((run) => run.id));
+        const ownedRunIds = new Set<string>(ownedRuns.map((run) => run.id));
         if (runIds.some((runId) => !ownedRunIds.has(runId))) {
           return Response.json(
             { error: "Import run was not found" },

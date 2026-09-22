@@ -1132,6 +1132,16 @@ history is the archive. Permanent product constraints live in the
   derived from date + description + cost; a later export with an edited
   description will not dedupe against the first import.
 
+- **ImportFinding as a manifest entity** — Promote once a second parent needs
+  its list: today findings render as a slot on the run page and through the
+  Problems `importFindings` key. `ImportRun` itself became `purchaseImportRun`
+  (`RUN-`, read-only) in 2026-09; its other children (targets, evidence,
+  operations, approvals, progress) stay internal rows with no life outside a
+  run. A finding is the one child with its own lifecycle (open → applied /
+  dismissed) and a Purchase relation, so it is the natural next promotion —
+  it costs a prefix, a backfill, an `AuditEntityType`, and the delete/resolve
+  disposition decision the StatementRow item below also waits on.
+
 - **StatementRow and StatementImport as manifest entities** — Promote once the
   `supersededByRowId` disposition is decided (block, detach, or cascade for a live
   predecessor pointing at a deleted row); "add an edge policy" is not the decision.

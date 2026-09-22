@@ -1,6 +1,6 @@
+import { purchaseImportRunId } from "@cubby/schemas/identifiers";
 import type { PurchaseAgentEvent } from "@cubby/schemas/purchase-import";
 import { and, eq, inArray, sql } from "drizzle-orm";
-import { z } from "zod";
 
 import type { Database } from "~/server/db";
 import { importRun } from "~/server/db/schema";
@@ -18,7 +18,7 @@ export async function recordImportRunDispatchAttempt(
   db: Database,
   input: { runId: string; eventId: string; error?: string },
 ) {
-  const runId = z.uuid().parse(input.runId);
+  const runId = purchaseImportRunId.parse(input.runId);
   const [run] = await getDb(db)
     .update(importRun)
     .set({

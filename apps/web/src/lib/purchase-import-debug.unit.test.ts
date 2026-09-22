@@ -67,9 +67,9 @@ describe("purchase import debug contract", () => {
   });
 
   it("accepts the public PIR address used by the detail page", () => {
-    expect(
-      purchaseImportRunLogRequest.parse({ publicId: "PIR-ABCDE12345" }),
-    ).toEqual({ publicId: "PIR-ABCDE12345" });
+    expect(purchaseImportRunLogRequest.parse({ publicId: "RUN-4K7M" })).toEqual(
+      { publicId: "RUN-4K7M" },
+    );
     expect(
       purchaseImportRunLogRequest.safeParse({ publicId: validEvent.runId })
         .success,

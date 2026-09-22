@@ -38,7 +38,7 @@ export function listPurchaseImportRuns(
   const query = getDb(db)
     .select({
       id: importRun.id,
-      publicId: importRun.publicId,
+      publicId: importRun.shortcode,
       vendorAccountLabel: vendorAccount.label,
       vendorName: vendor.name,
       trigger: importRun.trigger,
@@ -120,7 +120,7 @@ export function listProductImportRuns(
   const query = getDb(db)
     .select({
       id: importRun.id,
-      publicId: importRun.publicId,
+      publicId: importRun.shortcode,
       vendorAccountLabel: vendorAccount.label,
       vendorName: vendor.name,
       trigger: importRun.trigger,

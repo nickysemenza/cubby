@@ -180,7 +180,7 @@ export function registerBatchTool<
                   toolName: config.name,
                   args: { index, item },
                   execution: {
-                    runPublicId: execution!.runPublicId,
+                    runId: execution!.runId,
                     operationId: execution!.itemOperationIds![index]!,
                   },
                   run: async (transactionExtra) => {

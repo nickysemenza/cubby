@@ -5,8 +5,10 @@ import {
   productId,
   purchaseId,
   userId,
+  purchaseImportRunId,
   vendorAccountId,
   type LedgerPartyId,
+  type PurchaseImportRunId,
   type VendorAccountId,
   type VendorId,
 } from "@cubby/schemas/identifiers";
@@ -14,7 +16,7 @@ import {
   browserBridgeOperation,
   browserBridgeRequest,
   browserCapture,
-  importRunPublicId,
+  importRunShortcode,
   importRunPurpose,
   importRunTrigger,
   importRunTargetState,
@@ -25,6 +27,7 @@ import {
 } from "@cubby/schemas/purchase-import";
 import { vendorAccountCursor } from "@cubby/schemas/vendor-account-fields";
 import { vendorAgentHints } from "@cubby/schemas/vendor-import-fields";
+import { generateShortcode } from "@cubby/shared";
 import {
   and,
   asc,
@@ -82,7 +85,6 @@ import { resolveImportFinding } from "./findings";
 import { attachPendingOrderMailEvidence } from "./gmail/process";
 import { classifyOrderCapture } from "./order-list";
 import { loadReceiptEvidenceForRun } from "./receipt-evidence";
-import { mintImportRunPublicId } from "./run-identifiers";
 import { importVendorOrder } from "./writer";
 
 const ACTIVE_RUN_STATUSES = [
@@ -167,7 +169,7 @@ export async function runImportOperation<T extends object | null>(
   },
   work: () => Promise<T>,
 ): Promise<T> {
-  const runId = z.uuid().parse(input.runId);
+  const runId = purchaseImportRunId.parse(input.runId);
   const fingerprint = await sha256(JSON.stringify(input.payload));
   const database = getDb(db);
   const [inserted] = await database
@@ -326,7 +328,7 @@ export async function startOrResumeImportRun(
     const [existing] = await tx
       .select({
         id: importRun.id,
-        publicId: importRun.publicId,
+        publicId: importRun.shortcode,
         status: importRun.status,
         dispatchEventId: importRun.dispatchEventId,
       })
@@ -339,11 +341,11 @@ export async function startOrResumeImportRun(
       )
       .limit(1);
     if (existing) return { ...existing, created: false };
-    const id = crypto.randomUUID();
+    const id = purchaseImportRunId.parse(crypto.randomUUID());
     const dispatchEventId = crypto.randomUUID();
     let created:
       | {
-          id: string;
+          id: PurchaseImportRunId;
           publicId: string;
           status: string;
           dispatchEventId: string | null;
@@ -354,7 +356,7 @@ export async function startOrResumeImportRun(
         .insert(importRun)
         .values({
           id,
-          publicId: mintImportRunPublicId(),
+          shortcode: generateShortcode("purchaseImportRun"),
           ledgerPartyId: input.ledgerPartyId,
           actorUserId: scope.actorUserId,
           actorName: scope.actorName,
@@ -365,7 +367,7 @@ export async function startOrResumeImportRun(
           vendorAccountId: input.vendorAccountId,
           vendorId: scope.vendorId,
           predecessorRunId: input.predecessorRunId
-            ? z.uuid().parse(input.predecessorRunId)
+            ? purchaseImportRunId.parse(input.predecessorRunId)
             : null,
           trigger,
           coordinatorModel: input.coordinatorModel ?? "gpt-5.6-terra",
@@ -377,7 +379,7 @@ export async function startOrResumeImportRun(
         .onConflictDoNothing()
         .returning({
           id: importRun.id,
-          publicId: importRun.publicId,
+          publicId: importRun.shortcode,
           status: importRun.status,
           dispatchEventId: importRun.dispatchEventId,
         });
@@ -421,7 +423,7 @@ export async function startTargetedImportRun(
       const [blockingRun] = await tx
         .select({
           id: importRun.id,
-          publicId: importRun.publicId,
+          publicId: importRun.shortcode,
           status: importRun.status,
         })
         .from(importRun)
@@ -472,13 +474,13 @@ export async function startTargetedImportRun(
         );
     }
 
-    const id = crypto.randomUUID();
+    const id = purchaseImportRunId.parse(crypto.randomUUID());
     const eventId = crypto.randomUUID();
     const [run] = await tx
       .insert(importRun)
       .values({
         id,
-        publicId: mintImportRunPublicId(),
+        shortcode: generateShortcode("purchaseImportRun"),
         ledgerPartyId: input.ledgerPartyId,
         actorUserId: actor.actorUserId,
         actorName: actor.actorName,
@@ -489,7 +491,7 @@ export async function startTargetedImportRun(
         vendorId: input.vendorId,
         vendorAccountId: input.vendorAccountId ?? null,
         predecessorRunId: input.predecessorRunId
-          ? z.uuid().parse(input.predecessorRunId)
+          ? purchaseImportRunId.parse(input.predecessorRunId)
           : null,
         purpose,
         trigger,
@@ -498,7 +500,7 @@ export async function startTargetedImportRun(
       })
       .returning({
         id: importRun.id,
-        publicId: importRun.publicId,
+        publicId: importRun.shortcode,
         status: importRun.status,
         purpose: importRun.purpose,
         dispatchEventId: importRun.dispatchEventId,
@@ -541,7 +543,7 @@ export async function acknowledgeImportRunCoordinator(
     })
     .where(
       and(
-        eq(importRun.id, z.uuid().parse(input.runId)),
+        eq(importRun.id, purchaseImportRunId.parse(input.runId)),
         eq(importRun.dispatchEventId, input.eventId),
         eq(importRun.status, "running"),
         isNull(importRun.coordinatorStartedAt),
@@ -561,7 +563,7 @@ export async function canDispatchImportRunCoordinator(
     .from(importRun)
     .where(
       and(
-        eq(importRun.id, z.uuid().parse(input.runId)),
+        eq(importRun.id, purchaseImportRunId.parse(input.runId)),
         eq(importRun.dispatchEventId, input.eventId),
         eq(importRun.status, "running"),
         isNull(importRun.coordinatorStartedAt),
@@ -572,11 +574,11 @@ export async function canDispatchImportRunCoordinator(
 }
 
 export async function loadRunScope(db: Database, runId: string) {
-  const parsedRunId = z.uuid().parse(runId);
+  const parsedRunId = purchaseImportRunId.parse(runId);
   const [row] = await getDb(db)
     .select({
       runId: importRun.id,
-      publicId: importRun.publicId,
+      publicId: importRun.shortcode,
       agentId: importRun.agentSessionId,
       trigger: importRun.trigger,
       purpose: importRun.purpose,
@@ -628,7 +630,7 @@ export async function loadRunScope(db: Database, runId: string) {
   return {
     public: purchaseImportRunScope.parse({
       runId: row.runId,
-      publicId: row.publicId,
+      shortcode: row.publicId,
       agentId: row.agentId,
       trigger: row.trigger,
       purpose: row.purpose,
@@ -654,12 +656,12 @@ export async function loadRunScope(db: Database, runId: string) {
   };
 }
 
-export async function loadRunScopeByPublicId(db: Database, publicId: string) {
-  const parsedPublicId = importRunPublicId.parse(publicId);
+export async function loadRunScopeByShortcode(db: Database, publicId: string) {
+  const parsedPublicId = importRunShortcode.parse(publicId);
   const [row] = await getDb(db)
     .select({ id: importRun.id })
     .from(importRun)
-    .where(eq(importRun.publicId, parsedPublicId))
+    .where(eq(importRun.shortcode, parsedPublicId))
     .limit(1);
   if (!row) throw new Error("Purchase import run was not found");
   return loadRunScope(db, row.id);
@@ -705,7 +707,7 @@ export async function listImportRunProgress(db: Database, runId: string) {
       createdAt: importRunProgress.createdAt,
     })
     .from(importRunProgress)
-    .where(eq(importRunProgress.runId, z.uuid().parse(runId)))
+    .where(eq(importRunProgress.runId, purchaseImportRunId.parse(runId)))
     .orderBy(asc(importRunProgress.createdAt), asc(importRunProgress.id));
 }
 
@@ -720,7 +722,7 @@ export async function latestImportRunProgress(db: Database, runId: string) {
       createdAt: importRunProgress.createdAt,
     })
     .from(importRunProgress)
-    .where(eq(importRunProgress.runId, z.uuid().parse(runId)))
+    .where(eq(importRunProgress.runId, purchaseImportRunId.parse(runId)))
     .orderBy(desc(importRunProgress.createdAt), desc(importRunProgress.id))
     .limit(1);
   return latest ?? null;
@@ -735,11 +737,11 @@ export async function pauseImportRunForAuthorization(
     .set({ status: "paused_auth", updatedAt: new Date() })
     .where(
       and(
-        eq(importRun.id, z.uuid().parse(runId)),
+        eq(importRun.id, purchaseImportRunId.parse(runId)),
         eq(importRun.status, "running"),
       ),
     )
-    .returning({ publicId: importRun.publicId });
+    .returning({ publicId: importRun.shortcode });
   return run ?? null;
 }
 
@@ -770,7 +772,7 @@ export async function resumeAuthorizedImportRuns(
       )
       .returning({
         id: importRun.id,
-        publicId: importRun.publicId,
+        publicId: importRun.shortcode,
         purpose: importRun.purpose,
         coordinatorModel: importRun.coordinatorModel,
         eventId: importRun.dispatchEventId,
@@ -778,7 +780,7 @@ export async function resumeAuthorizedImportRuns(
     const interrupted = await tx
       .select({
         id: importRun.id,
-        publicId: importRun.publicId,
+        publicId: importRun.shortcode,
         purpose: importRun.purpose,
         coordinatorModel: importRun.coordinatorModel,
         eventId: importRun.dispatchEventId,
@@ -1236,7 +1238,7 @@ export async function claimNextImportWork(
 async function recordOrderListing(
   db: Database,
   input: {
-    runId: string;
+    runId: PurchaseImportRunId;
     vendorId: VendorId;
     orders: ReadonlyArray<{
       orderId: string;
@@ -1310,7 +1312,7 @@ export async function issueBrowserCommand(
           .from(importRunTarget)
           .where(
             and(
-              eq(importRunTarget.runId, z.uuid().parse(input.runId)),
+              eq(importRunTarget.runId, purchaseImportRunId.parse(input.runId)),
               inArray(importRunTarget.state, [
                 "pending",
                 "prepared",
@@ -1338,7 +1340,7 @@ export async function issueBrowserCommand(
               allowedHosts,
               evidenceScope: captureTarget
                 ? {
-                    runPublicId: scope.public.publicId,
+                    runId: scope.public.shortcode,
                     targetId: captureTarget.id,
                   }
                 : undefined,
@@ -1374,7 +1376,7 @@ export async function issueBrowserCommand(
     .from(importRunOperation)
     .where(
       and(
-        eq(importRunOperation.runId, z.uuid().parse(input.runId)),
+        eq(importRunOperation.runId, purchaseImportRunId.parse(input.runId)),
         eq(importRunOperation.operationId, input.operationId),
       ),
     )
@@ -1401,7 +1403,7 @@ export async function issueBrowserCommand(
       });
   if (!recorded) {
     await database.insert(importRunOperation).values({
-      runId: z.uuid().parse(input.runId),
+      runId: purchaseImportRunId.parse(input.runId),
       operationId: input.operationId,
       kind: "browser_command",
       inputFingerprint: fingerprint,
@@ -1416,7 +1418,7 @@ export async function issueBrowserCommand(
       database
         .update(importRun)
         .set({ status: "paused_offline", updatedAt: new Date() })
-        .where(eq(importRun.id, z.uuid().parse(input.runId))),
+        .where(eq(importRun.id, purchaseImportRunId.parse(input.runId))),
       database
         .update(vendorAccount)
         .set({ status: "paused_offline", updatedAt: new Date() })
@@ -1438,7 +1440,7 @@ export async function issueBrowserCommand(
     })
     .where(
       and(
-        eq(importRunOperation.runId, z.uuid().parse(input.runId)),
+        eq(importRunOperation.runId, purchaseImportRunId.parse(input.runId)),
         eq(importRunOperation.operationId, input.operationId),
       ),
     );
@@ -1458,7 +1460,7 @@ export async function readBrowserCommandResult(
     .from(importRunOperation)
     .where(
       and(
-        eq(importRunOperation.runId, z.uuid().parse(input.runId)),
+        eq(importRunOperation.runId, purchaseImportRunId.parse(input.runId)),
         eq(importRunOperation.operationId, input.operationId),
       ),
     )
@@ -1552,7 +1554,7 @@ export async function importBrowserOrderEvidence(
     .from(importRunOperation)
     .where(
       and(
-        eq(importRunOperation.runId, z.uuid().parse(input.runId)),
+        eq(importRunOperation.runId, purchaseImportRunId.parse(input.runId)),
         eq(importRunOperation.kind, "browser_command"),
       ),
     );
@@ -1587,7 +1589,7 @@ export async function importBrowserOrderEvidence(
       commandRecord.data.command.operation.type === "capture"
         ? commandRecord.data.command.operation.evidenceScope
         : undefined;
-    if (!evidenceScope || evidenceScope.runPublicId !== scope.public.publicId)
+    if (!evidenceScope || evidenceScope.runId !== scope.public.shortcode)
       throw new Error(
         "Browser command has no matching targeted evidence scope",
       );
@@ -1596,7 +1598,7 @@ export async function importBrowserOrderEvidence(
       .from(importRunTarget)
       .where(
         and(
-          eq(importRunTarget.runId, z.uuid().parse(input.runId)),
+          eq(importRunTarget.runId, purchaseImportRunId.parse(input.runId)),
           eq(importRunTarget.id, evidenceScope.targetId),
         ),
       )
@@ -1630,7 +1632,7 @@ export async function importBrowserOrderEvidence(
       .where(
         and(
           inArray(importRunEvidence.id, evidenceIds),
-          eq(importRunEvidence.runId, z.uuid().parse(input.runId)),
+          eq(importRunEvidence.runId, purchaseImportRunId.parse(input.runId)),
           eq(importRunEvidence.targetId, target.id),
           eq(importRunEvidence.kind, "browser_capture"),
         ),
@@ -1703,7 +1705,7 @@ export async function importBrowserOrderEvidence(
         (order) => order.orderedAt !== null && order.orderedAt < newestKnown,
       );
     const seen = await recordOrderListing(db, {
-      runId: z.uuid().parse(input.runId),
+      runId: purchaseImportRunId.parse(input.runId),
       vendorId: scope.vendorId,
       orders: classified.orders,
     });
@@ -1712,7 +1714,10 @@ export async function importBrowserOrderEvidence(
       .from(importRunOrderCandidate)
       .where(
         and(
-          eq(importRunOrderCandidate.runId, z.uuid().parse(input.runId)),
+          eq(
+            importRunOrderCandidate.runId,
+            purchaseImportRunId.parse(input.runId),
+          ),
           eq(importRunOrderCandidate.state, "pending"),
         ),
       );
@@ -1724,7 +1729,7 @@ export async function importBrowserOrderEvidence(
         historyExhaustedAt: nextPageUrl ? null : new Date(),
         updatedAt: new Date(),
       })
-      .where(eq(importRun.id, z.uuid().parse(input.runId)));
+      .where(eq(importRun.id, purchaseImportRunId.parse(input.runId)));
     return {
       kind: "order_list" as const,
       orders: classified.orders,
@@ -1769,7 +1774,7 @@ export async function importBrowserOrderEvidence(
   const writeResult = await importVendorOrder(
     db,
     {
-      runId: z.uuid().parse(input.runId),
+      runId: purchaseImportRunId.parse(input.runId),
       ledgerPartyId: scope.ledgerPartyId,
       vendorId: scope.vendorId,
       vendorAccountId: scope.public.vendorAccountId,
@@ -1809,7 +1814,10 @@ export async function importBrowserOrderEvidence(
       .set({ state: "imported", updatedAt: new Date() })
       .where(
         and(
-          eq(importRunOrderCandidate.runId, z.uuid().parse(input.runId)),
+          eq(
+            importRunOrderCandidate.runId,
+            purchaseImportRunId.parse(input.runId),
+          ),
           eq(importRunOrderCandidate.orderId, extraction.candidate.orderId),
           eq(importRunOrderCandidate.state, "pending"),
         ),
@@ -1933,7 +1941,7 @@ export async function auditImportBatch(
   const scope = await loadRunScope(db, input.runId);
   assertRunActive(scope.public.status);
   if (!scope.actorUserId) throw new Error("Import run actor is unavailable");
-  const runId = z.uuid().parse(input.runId);
+  const runId = purchaseImportRunId.parse(input.runId);
   const importedPurchases = await getDb(db)
     .selectDistinct({
       id: purchase.id,
@@ -2119,7 +2127,7 @@ export async function stopImportRunForReview(
   },
 ) {
   const scope = await loadRunScope(db, input.runId);
-  const runId = z.uuid().parse(input.runId);
+  const runId = purchaseImportRunId.parse(input.runId);
   const summary = z.string().trim().min(1).max(1_000).parse(input.summary);
   const kind = z
     .enum([
@@ -2283,7 +2291,7 @@ export async function finishImportRun(
   input: { runId: string; operationId: string },
 ) {
   const scope = await loadRunScope(db, input.runId);
-  const runId = z.uuid().parse(input.runId);
+  const runId = purchaseImportRunId.parse(input.runId);
   if (scope.public.status !== "completed") {
     assertRunActive(scope.public.status);
     if (scope.public.purpose !== "account_sync") {
@@ -2440,7 +2448,7 @@ export async function markImportRunFailed(
     dispatchEventId?: string;
   },
 ) {
-  const runId = z.uuid().parse(input.runId);
+  const runId = purchaseImportRunId.parse(input.runId);
   const [run] = await getDb(db)
     .update(importRun)
     .set({
@@ -2468,18 +2476,18 @@ export async function markImportRunFailed(
   return { failed: Boolean(run), detail: input.detail ?? null };
 }
 
-export async function loadImportRunByPublicId(
+export async function loadImportRunByShortcode(
   db: Database,
   actor: ActorContext,
   rawPublicId: string,
   options: { usageCursor?: string; usageLimit?: number } = {},
 ) {
-  const publicId = importRunPublicId.parse(rawPublicId);
+  const publicId = importRunShortcode.parse(rawPublicId);
   const database = getDb(db);
   const [run] = await database
     .select({
       id: importRun.id,
-      publicId: importRun.publicId,
+      publicId: importRun.shortcode,
       ledgerPartyId: importRun.ledgerPartyId,
       actorUserId: importRun.actorUserId,
       predecessorRunId: importRun.predecessorRunId,
@@ -2535,7 +2543,7 @@ export async function loadImportRunByPublicId(
       vendor,
       and(eq(vendor.id, vendorAccount.vendorId), notDeleted(vendor)),
     )
-    .where(eq(importRun.publicId, publicId))
+    .where(eq(importRun.shortcode, publicId))
     .limit(1);
   if (!run) throw new Error("Purchase import run was not found");
 
@@ -2565,13 +2573,13 @@ export async function loadImportRunByPublicId(
   ] = await Promise.all([
     run.predecessorRunId
       ? database
-          .select({ publicId: importRun.publicId })
+          .select({ publicId: importRun.shortcode })
           .from(importRun)
           .where(eq(importRun.id, run.predecessorRunId))
           .limit(1)
       : Promise.resolve([]),
     database
-      .select({ publicId: importRun.publicId })
+      .select({ publicId: importRun.shortcode })
       .from(importRun)
       .where(eq(importRun.predecessorRunId, run.id))
       .orderBy(desc(importRun.startedAt))
@@ -2768,7 +2776,6 @@ export async function loadImportRunByPublicId(
   const hasMoreUsage = usageRows.length > usageLimit;
   const pageUsage = usageRows.slice(0, usageLimit);
   return {
-    publicId: run.publicId,
     status: run.status,
     purpose: run.purpose,
     trigger: run.trigger,
@@ -2856,7 +2863,7 @@ export async function loadImportRunByPublicId(
 }
 
 const runControlInput = z.object({
-  runPublicId: importRunPublicId,
+  runPublicId: importRunShortcode,
   action: z.enum([
     "pause",
     "resume",
@@ -2898,9 +2905,9 @@ export async function recordImportRunControlEvent(
   },
 ) {
   const input = z
-    .object({ runPublicId: importRunPublicId, action: importRunControlAction })
+    .object({ runPublicId: importRunShortcode, action: importRunControlAction })
     .parse(rawInput);
-  const scope = await loadRunScopeByPublicId(db, input.runPublicId);
+  const scope = await loadRunScopeByShortcode(db, input.runPublicId);
   const [controller] = await getDb(db)
     .select({
       userId: user.id,
@@ -2952,7 +2959,7 @@ export async function controlImportRun(
   rawInput: z.input<typeof runControlInput>,
 ) {
   const input = runControlInput.parse(rawInput);
-  const scope = await loadRunScopeByPublicId(db, input.runPublicId);
+  const scope = await loadRunScopeByShortcode(db, input.runPublicId);
   const [controller] = await getDb(db)
     .select({
       userId: user.id,
@@ -3104,14 +3111,14 @@ export async function controlImportRun(
         if (sourceTargets.some((target) => !target.purchaseId))
           throw new Error("Purchase validation runs require Purchase targets");
 
-        const successorId = crypto.randomUUID();
+        const successorId = purchaseImportRunId.parse(crypto.randomUUID());
         const isUnavailable = input.action === "no_evidence_available";
         const dispatchEventId = isUnavailable ? null : crypto.randomUUID();
         const [successor] = await tx
           .insert(importRun)
           .values({
             id: successorId,
-            publicId: mintImportRunPublicId(),
+            shortcode: generateShortcode("purchaseImportRun"),
             ledgerPartyId: locked.ledgerPartyId,
             actorUserId: locked.actorUserId,
             actorName: locked.actorName,
@@ -3137,7 +3144,7 @@ export async function controlImportRun(
             agentSessionId: `import-run:${successorId}`,
           })
           .returning({
-            publicId: importRun.publicId,
+            publicId: importRun.shortcode,
             status: importRun.status,
           });
         if (!successor)
@@ -3193,7 +3200,7 @@ export async function controlImportRun(
         const [existingSuccessor] = await tx
           .select({
             id: importRun.id,
-            publicId: importRun.publicId,
+            publicId: importRun.shortcode,
             status: importRun.status,
             coordinatorModel: importRun.coordinatorModel,
           })
@@ -3214,13 +3221,13 @@ export async function controlImportRun(
             created: false,
           };
         }
-        const successorId = crypto.randomUUID();
+        const successorId = purchaseImportRunId.parse(crypto.randomUUID());
         const dispatchEventId = crypto.randomUUID();
         const [successor] = await tx
           .insert(importRun)
           .values({
             id: successorId,
-            publicId: mintImportRunPublicId(),
+            shortcode: generateShortcode("purchaseImportRun"),
             ledgerPartyId: locked.ledgerPartyId,
             actorUserId: locked.actorUserId,
             actorName: locked.actorName,
@@ -3242,7 +3249,7 @@ export async function controlImportRun(
             agentSessionId: `import-run:${successorId}`,
           })
           .returning({
-            publicId: importRun.publicId,
+            publicId: importRun.shortcode,
             status: importRun.status,
           });
         if (!successor) throw new Error("Successor import run was not created");

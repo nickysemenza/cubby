@@ -6,8 +6,10 @@ import { type SQL, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import type { Database } from "~/server/db";
+import { importRun } from "~/server/db/schema";
 import { cookbookListWhere } from "~/server/repo/cookbook";
 import { getDb } from "~/server/repo/database-helpers";
+import { notDeleted } from "~/server/repo/database-helpers/query";
 import { buildExpenseWhereClause } from "~/server/repo/expense/lookup";
 import { buildFinancialAccountWhere } from "~/server/repo/financial-account";
 import { buildFinancialTransactionWhere } from "~/server/repo/financial-transaction";
@@ -71,6 +73,7 @@ const COUNT_WHERE = {
   wish: (db) => buildWishWhere(db, {}),
   planting: () => buildPlantingWhere(),
   gardenEntry: () => buildGardenEntryWhere(),
+  purchaseImportRun: () => notDeleted(importRun),
 } satisfies Record<CountableEntity, CountWhere>;
 
 type EntityCounts = Record<CountableEntity, number>;

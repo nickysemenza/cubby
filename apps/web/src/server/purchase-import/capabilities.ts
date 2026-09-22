@@ -1,9 +1,9 @@
+import { purchaseImportRunId } from "@cubby/schemas/identifiers";
 import {
   importRunPurpose,
   type ImportRunPurpose,
 } from "@cubby/schemas/purchase-import";
 import { eq } from "drizzle-orm";
-import { z } from "zod";
 
 import type { Database } from "~/server/db";
 import { importRun } from "~/server/db/schema";
@@ -79,7 +79,7 @@ export async function assertImportRunCapabilityById(
   const [run] = await getDb(db)
     .select({ purpose: importRun.purpose })
     .from(importRun)
-    .where(eq(importRun.id, z.uuid().parse(runId)))
+    .where(eq(importRun.id, purchaseImportRunId.parse(runId)))
     .limit(1);
   if (!run) throw new Error("Import run was not found");
   const purpose = importRunPurpose.parse(run.purpose);

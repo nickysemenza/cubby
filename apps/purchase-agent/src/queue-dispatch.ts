@@ -12,7 +12,6 @@ export type PurchaseAgentDispatch = (
 
 type PurchaseAgentSignalAttributes = {
   eventId: string;
-  publicId?: string;
   purpose?: "account_sync" | "purchase_validation" | "product_enrichment";
 };
 
@@ -22,12 +21,10 @@ export async function dispatchPurchaseAgentEvent(
 ): Promise<void> {
   const { runId: _privateRunId, ...observableEvent } = event;
   const attributes: PurchaseAgentSignalAttributes = { eventId: event.eventId };
-  if (event.publicId) attributes.publicId = event.publicId;
   await send({
     id: purchaseImportAgentIdentity(event.runId),
     initialData: {
       runId: event.runId,
-      publicId: event.publicId,
       coordinatorModel: event.coordinatorModel,
       purpose: event.purpose,
     },

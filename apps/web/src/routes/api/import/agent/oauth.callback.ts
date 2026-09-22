@@ -122,7 +122,6 @@ async function dispatchResumedRuns(
         await queue.send({
           version: 1,
           runId: run.id,
-          publicId: run.publicId,
           purpose: z
             .enum(["account_sync", "product_enrichment", "purchase_validation"])
             .parse(run.purpose),

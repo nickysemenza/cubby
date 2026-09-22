@@ -1,3 +1,4 @@
+import { purchaseImportRunShortcode } from "@cubby/schemas/identifiers";
 import { z } from "zod";
 
 export const purchaseAgentConnectionStatus = z.enum([
@@ -10,12 +11,10 @@ export type PurchaseAgentConnectionStatus = z.infer<
   typeof purchaseAgentConnectionStatus
 >;
 
-export const importRunPublicId = z
-  .string()
-  .regex(/^PIR-[A-Z0-9]{10}$/u, "Import run was not found");
+export const importRunShortcode = purchaseImportRunShortcode;
 
 const purchaseImportRunSummary = z.object({
-  publicId: importRunPublicId,
+  publicId: importRunShortcode,
   purpose: z
     .enum(["account_sync", "purchase_validation", "product_enrichment"])
     .optional(),
@@ -168,7 +167,7 @@ const importRunDispatch = z.object({
 
 /** The browser-facing detail contract. Private UUIDs never cross this boundary. */
 const purchaseImportRunDetail = z.object({
-  publicId: importRunPublicId,
+  publicId: importRunShortcode,
   purpose: z
     .enum(["account_sync", "purchase_validation", "product_enrichment"])
     .optional(),
@@ -181,8 +180,8 @@ const purchaseImportRunDetail = z.object({
   updated: z.number().int().nonnegative(),
   skipped: z.number().int().nonnegative(),
   failureCode: z.string().nullable(),
-  predecessorRunPublicId: importRunPublicId.nullable(),
-  successorRunPublicId: importRunPublicId.nullable().optional(),
+  predecessorRunPublicId: importRunShortcode.nullable(),
+  successorRunPublicId: importRunShortcode.nullable().optional(),
   coordinatorModel: z.string().nullable(),
   skillRevision: z.string().nullable(),
   runtimeRevision: z.string().nullable(),
@@ -248,7 +247,7 @@ export const purchaseImportRunControlResponse = z.object({
   run: purchaseImportRunDetail,
   successor: z
     .object({
-      publicId: importRunPublicId,
+      publicId: importRunShortcode,
       status: z.string().min(1),
       created: z.boolean(),
     })

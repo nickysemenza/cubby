@@ -1,10 +1,15 @@
 import type { ActorContext } from "@cubby/schemas/context";
 import {
+  purchaseImportRunId,
+  vendorAccountId,
+} from "@cubby/schemas/identifiers";
+import {
   listReceiptHuntsOut,
   submitReceiptEvidenceInput,
   submitReceiptEvidenceOut,
   type SubmitReceiptEvidenceInput,
 } from "@cubby/schemas/purchase-import";
+import { generateShortcode } from "@cubby/shared";
 import { and, eq, inArray, isNotNull, lt, or } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
@@ -26,7 +31,6 @@ import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 import { getR2PublicUrl } from "~/server/utils/r2-public-url";
 
 import { dispatchImportRunEvent } from "./dispatch";
-import { mintImportRunPublicId } from "./run-identifiers";
 
 /**
  * A hunt—not a particular upload—is the durable receipt source. A retry may
@@ -196,9 +200,9 @@ export async function submitReceiptEvidence(
             "Receipt evidence is processing without an import run.",
           );
         const [existingRun] = await tx
-          .select({ id: importRun.id, publicId: importRun.publicId })
+          .select({ id: importRun.id, publicId: importRun.shortcode })
           .from(importRun)
-          .where(eq(importRun.id, row.receiptRunId))
+          .where(eq(importRun.id, purchaseImportRunId.parse(row.receiptRunId)))
           .limit(1);
         if (!existingRun)
           throw new Error("Receipt import run could not be resumed.");
@@ -212,13 +216,13 @@ export async function submitReceiptEvidence(
         };
       }
     }
-    const runId = crypto.randomUUID();
+    const runId = purchaseImportRunId.parse(crypto.randomUUID());
     const dispatchEventId = `receipt:${input.huntId}:${row.imageChecksum}`;
     const [run] = await tx
       .insert(importRun)
       .values({
         id: runId,
-        publicId: mintImportRunPublicId(),
+        shortcode: generateShortcode("purchaseImportRun"),
         ledgerPartyId: row.ledgerPartyId,
         actorUserId: row.actorUserId,
         actorName: row.actorName,
@@ -226,9 +230,13 @@ export async function submitReceiptEvidence(
         actorLedgerPartyShortcode: row.actorLedgerPartyShortcode,
         actorLedgerPartyName: row.actorLedgerPartyName,
         actorLedgerPartyKind: row.actorLedgerPartyKind,
-        vendorAccountId: row.vendorAccountId,
+        vendorAccountId: row.vendorAccountId
+          ? vendorAccountId.parse(row.vendorAccountId)
+          : null,
         vendorId: row.vendorId,
-        predecessorRunId: row.receiptRunId,
+        predecessorRunId: row.receiptRunId
+          ? purchaseImportRunId.parse(row.receiptRunId)
+          : null,
         trigger: "discovery",
         agentSessionId: `import-run:${runId}`,
         dispatchEventId,
@@ -247,7 +255,7 @@ export async function submitReceiptEvidence(
       })
       .where(eq(importHunt.id, row.id));
     const [createdRun] = await tx
-      .select({ publicId: importRun.publicId })
+      .select({ publicId: importRun.shortcode })
       .from(importRun)
       .where(eq(importRun.id, run.id))
       .limit(1);
@@ -276,7 +284,6 @@ export async function submitReceiptEvidence(
   await dispatchImportRunEvent(db, queue, {
     version: 1,
     runId: claimed.runId,
-    publicId: claimed.publicId,
     eventId: claimed.created
       ? (claimed.dispatchEventId ??
         `receipt:${input.huntId}:${claimed.imageChecksum}`)

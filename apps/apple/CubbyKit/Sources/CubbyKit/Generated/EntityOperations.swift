@@ -74,6 +74,7 @@ extension EntityKey {
         case .vendor: [.create, .get, .list, .update]
         case .vendorAccount: [.create, .get, .list, .update]
         case .wish: [.create, .get, .list, .update]
+        default: []
         }
     }
 
@@ -102,6 +103,7 @@ extension EntityKey {
         case .vendor: .resource
         case .vendorAccount: .resource
         case .wish: .resource
+        default: .unavailable
         }
     }
 }

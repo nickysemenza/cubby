@@ -3,7 +3,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { z } from "zod";
 
 import {
-  importRunPublicId,
+  importRunShortcode,
   purchaseImportRunControlInput,
   purchaseImportRunControlResponse,
   purchaseImportRunDetailError,
@@ -13,7 +13,7 @@ import { getPurchaseAgentQueue } from "~/server/cf-env";
 import { recordImportRunDispatchAttempt } from "~/server/purchase-import/dispatch";
 import {
   controlImportRun,
-  loadImportRunByPublicId,
+  loadImportRunByShortcode,
 } from "~/server/purchase-import/run-service";
 import { createRequestContext, requireActor } from "~/server/request-context";
 
@@ -24,9 +24,8 @@ const iso = (value: Date | null) => value?.toISOString() ?? null;
 
 /** Strip internal ids and operation payloads before the browser receives a run. */
 const browserRun = (
-  run: Awaited<ReturnType<typeof loadImportRunByPublicId>>,
+  run: Awaited<ReturnType<typeof loadImportRunByShortcode>>,
 ) => ({
-  publicId: run.publicId,
   status: run.status,
   purpose: run.purpose,
   trigger: run.trigger,
@@ -167,7 +166,7 @@ export const Route = createFileRoute("/api/import/runs/$publicId")({
   server: {
     handlers: {
       GET: async ({ params, request }) => {
-        const publicId = importRunPublicId.safeParse(params.publicId);
+        const publicId = importRunShortcode.safeParse(params.publicId);
         if (!publicId.success) return notFound();
         const context = requireActor(
           await createRequestContext({ headers: request.headers }),
@@ -176,7 +175,7 @@ export const Route = createFileRoute("/api/import/runs/$publicId")({
           "usageCursor",
         );
         try {
-          const run = await loadImportRunByPublicId(
+          const run = await loadImportRunByShortcode(
             context.db,
             context.actorContext,
             publicId.data,
@@ -195,7 +194,7 @@ export const Route = createFileRoute("/api/import/runs/$publicId")({
         }
       },
       PATCH: async ({ params, request }) => {
-        const publicId = importRunPublicId.safeParse(params.publicId);
+        const publicId = importRunShortcode.safeParse(params.publicId);
         const input = purchaseImportRunControlInput.safeParse(
           await request.json(),
         );
@@ -229,7 +228,6 @@ export const Route = createFileRoute("/api/import/runs/$publicId")({
                 await queue.send({
                   version: 1,
                   runId: control.dispatchRunId,
-                  publicId: control.dispatchPublicId,
                   purpose: importRunPurpose.parse(control.dispatchPurpose),
                   coordinatorModel: z
                     .enum(["gpt-5.6-terra", "gpt-5.6-sol"])
@@ -253,7 +251,7 @@ export const Route = createFileRoute("/api/import/runs/$publicId")({
               }
             }
           }
-          const run = await loadImportRunByPublicId(
+          const run = await loadImportRunByShortcode(
             context.db,
             context.actorContext,
             publicId.data,
