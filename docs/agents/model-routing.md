@@ -9,7 +9,7 @@ is host state; these supported pairs are the Cubby routing contract.
 | Targeted search, log extraction, mechanical sanitization | `gpt-6-luna` / low | haiku / default |
 | Bounded implementation, focused tests, docs restructure | `gpt-5.6-terra` / medium | sonnet / medium |
 | Hard diagnosis, cross-subsystem work | `gpt-6-sol` / high | opus / medium |
-| Independent broad or high-risk review | `gpt-6-astra` / high | opus / high |
+| Independent broad or high-risk review | `gpt-6-sol` / high | opus / high |
 
 Escalate when evidence conflicts or a diagnosis has a demonstrated gap. Do not
 escalate just because the repository is large. On Claude, raise effort before
@@ -17,6 +17,11 @@ changing model; use `xhigh`/`max` only where a quality gain was measured. In
 Anthropic's testing Opus 5.5 at medium matched or beat Opus 5 at high, and it
 thinks more per turn at a given level, so a carried-over `high` costs more for
 little.
+
+Use `gpt-6-astra` / high for an independent second review when a Sol review
+leaves an evidenced gap, or for exceptionally consequential changes such as a
+production migration or money and settlement logic. Broad scope alone does not
+require Astra.
 
 Fable is opt-in, not a routine lane: use fable / high only when the user asks,
 for a second review of a production migration, money or settlement logic, or a
