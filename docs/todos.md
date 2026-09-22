@@ -129,6 +129,37 @@ history is the archive. Permanent product constraints live in the
   grouping (`treePickerItems`) is not worth the wiring yet — revisit if
   either roster grows deep nesting.
 
+- **Keep agent match evidence through a product merge.** Merging a Product
+  deletes every `ProductMatchCandidate` row naming it, including an agent pair
+  with a third Product, so its evidence and source links vanish. Repoint those
+  rows onto the survivor (re-canonicalizing the pair order and dropping
+  self-pairs) instead of deleting them
+  (`apps/web/src/server/repo/product-match-candidate.ts`, merge edge policy in
+  `repo/product/merge.ts`).
+
+- **Clean up photo-group proposals whose photos went away.** Deleting a run
+  image hard-deletes its `ImportRunTarget`, but the id stays in
+  `PhotoGroupProposal.images`/`skip`; the review tolerates it and shows a count.
+  Strip the id from `proposed` rows on image delete, and let "Remove group"
+  work on a run that is no longer `running` (it currently goes through
+  `propose_photo_groups`, which refuses)
+  (`apps/web/src/server/photo-import-run/proposals.ts`).
+
+- **Cover the photo-group review's untested guards.** Add regression tests for
+  the photo-groups route's household-member check (404 for a non-member), the
+  `state='proposed'` guard on the approval `lastError` write, and the
+  frozen-group toast after a save into a just-committed group
+  (`apps/web/src/routes/api/import/runs.$publicId.photo-groups.ts`,
+  `apps/web/src/app/import-runs/photo-group-review.tsx`).
+
+- **Sweep exact-count test pins.** Assertions that pin a registry total
+  (operation counts, method counts, path counts) fail on every legitimate
+  addition without guarding behavior; the HTTP contract tests dropped theirs.
+  Find the rest and replace each with the invariant it stood in for
+  (uniqueness, coverage against the source registry) or delete it. Keep
+  one-directional ratchets that caught real regressions (the positional
+  OpenAPI component bound).
+
 ---
 
 ## Ready projects
@@ -313,6 +344,31 @@ history is the archive. Permanent product constraints live in the
   shelf-versus-ledger disagreement worklist so the pass visits the products that
   actually disagree wherever they live.
 
+- **Local passwordless dev sign-in.** Agents cannot type credentials, so
+  browser-pane verification against the seeded local dev database
+  (`pnpm dev:local`) needs a human to sign in. Add a route that mints the
+  synthetic dev user's better-auth session, registered only under `vite dev`
+  with a `DATABASE_URL` that passes `tooling/dev-db-guard.ts`, excluded from
+  the Workers build, same-origin redirects only, and documented next to
+  `pnpm dev:local`.
+
+- **Flue `photo_inventory` coordinator.** A hosted coordinator that works a
+  photo run through `propose_photo_groups` and `propose_product_match` from
+  on-device analysis text (never raw bytes): a coordinator prompt,
+  `claim_next_import_work` support for image targets, and the Flue SSE channel
+  on the run page in place of 3s polling. Photo runs are excluded from dispatch
+  today (`run-service.ts` throws "Photo inventory runs have no dispatchable
+  work").
+
+- **Lift photo-run image bytes straight from the device.** The Apple uploader
+  round-trips every photo through R2 before on-device analysis; hand the
+  analysis the local bytes and upload once
+  (`apps/apple/CubbyKit/Sources/CubbyKit/Photo/PhotoImportRunUploader.swift`).
+
+- **Move the purchase run detail onto generic entity-detail slots.**
+  `ImportRunContent` in `apps/web/src/app/purchases/purchase-import-run-detail.tsx`
+  is hand-written even though `importRun` is a manifest entity.
+
 ---
 
 ## Requires database changes
@@ -405,6 +461,17 @@ history is the archive. Permanent product constraints live in the
   versioned external-state pattern, and render them alongside the
   manifest-defined `presentation.list.views` without creating a second query
   language.
+
+- **Structured location segments for photo runs.** `ImportRun.notes` carries
+  location-by-time-window prose that the agent parses; give photo runs
+  structured time-window → Location segments so proposals default their
+  inventory location without interpretation.
+
+- **Link photo-group proposal category and owner as foreign keys.**
+  `PhotoGroupProposal.productCreate` stores category and owner as shortcodes in
+  JSON, so a merge or delete between proposing and approving is not followed
+  and the approval fails. Product and Location are already FKs with merge
+  repoint.
 
 ---
 
@@ -839,6 +906,32 @@ history is the archive. Permanent product constraints live in the
   Preserve the supported OS 26 path until a floor bump is explicitly chosen. Owners:
   `apps/apple/project.yml`, `apps/apple/App`, and `CubbyKit`.
 
+- **Product match queue recall and cost.** A full queue read makes up to 60
+  vector lookups (top 20 neighbours each), and a photo↔purchase pair is missed
+  when the purchase Product is outside that neighbourhood and shares no name
+  token. Measure misses on real wardrobe imports before widening, caching, or
+  moving detection to write time
+  (`apps/web/src/server/services/product-match.service.ts`).
+
+- **Cross-vendor style-number matching.** Purchase prep reports an exact match
+  for a vendor-sourced `retailer_sku`/`asin` or a GTIN, so a brand style number
+  recorded from a tag matches only the brand's own shop, not a department
+  store selling the same item. Decide whether a manufacturer part-number kind
+  is worth adding or whether barcodes plus the match queue suffice.
+
+- **Receiving an already-photographed purchase.** Purchase import raises a
+  receive finding for every order; receiving an item already stocked from
+  photos double-counts it, and the match card only warns that merge sums both
+  sides. Decide whether the receive finding should check for a pending match
+  pair first.
+
+- **Photo-group approval racing a concurrent save.** A stale approval can
+  commit a photo that a concurrent save moved to another group, which then
+  fails with "inconsistent target state" until removed. The failed-operation
+  retry's compare-and-set takeover also lacks a regression test (it did not
+  interleave reliably on one test connection). Decide whether either needs
+  more than the current recovery path.
+
 ### Waiting for a trigger
 
 - **Follow-ups gated on image provenance landing** (see the
@@ -1233,6 +1326,13 @@ history is the archive. Permanent product constraints live in the
   search pages; reuse `dedupeUsdaFoodsByUpc` in the MCP handler rather than changing
   usda-api pagination semantics.
 
+- **Apparel photo routing and size/color fields.** Photo-import routing
+  categories are plants, food, documents, and home; clothing is grouped by the
+  agent. Size and color live in the Product name and notes, one Product per
+  variant. Revisit an apparel photo category once the hosted coordinator
+  routes photos, and structured size/color once wardrobe filtering by size is
+  actually wanted.
+
 ### Long-term visions
 
 - **Ambient capture.** Accept voice memos, forwarded email, shared photos, and NFC
@@ -1327,16 +1427,10 @@ Deferred from the 2026-09 manifest-rendering PRs; unordered.
   written seasonal plan into Locations, one season Project,
   due-dated Tasks, and planned Plantings by following the skill's playbook.
 
-- **Extend photo-inventory-import past the manual pilot.** Follow-ups
-  deferred from the wardrobe-import planning pass: build the editable photo
-  grouping proposal (`propose_photo_groups` plus a web review page — group
-  edit, a per-photo original/cutout/description table, 3s polling) so a
-  human approves groups before commit instead of the agent presenting a
-  manifest in chat; then add the Flue `photo_inventory` coordinator and its
-  SSE progress channel (a coordinator prompt, `claim_next_import_work`
-  support for image targets, and an analysis-text-only vision path so Flue
-  never needs to view raw bytes); give `ImportRun` structured
-  location-by-time segments instead of free-text `notes`; lift image bytes
-  directly from the uploading device instead of round-tripping through R2;
-  and migrate the purchase run's hand-written detail page onto the generic
-  entity-detail slots now that `importRun` is a manifest entity.
+- **Import the household wardrobe.** One member's clothes per capture session,
+  uploaded from the Apple app into a `photo_inventory` run with that member as
+  owner; an agent proposes groups with `propose_photo_groups` and a human
+  approves them on the run page. Then import the matching vendor orders and
+  work the product match queue (`/recommendations/workbench?kind=product-match`)
+  so photo- and purchase-created Products converge. Playbook:
+  [photo-inventory pilot](runbooks/photo-inventory-pilot.md).
