@@ -7,6 +7,7 @@ import { product } from "~/app/products/product.functions";
 import { ScanWorkbench } from "~/app/scan/ScanWorkbench";
 import { Page } from "~/components/page/Page";
 import { pageTitle } from "~/lib/page-title";
+import { toastMutationWarnings } from "~/lib/recompute-summary";
 import type { ResolvedScanCode } from "~/lib/scan-code";
 
 export const Route = createFileRoute("/_authenticated/scan")({
@@ -34,6 +35,7 @@ function ScanPage() {
       }
 
       const result = await findOrCreate.mutateAsync(value.code);
+      toastMutationWarnings(result.sideEffects);
       await navigate({
         to: "/products/$shortcode",
         params: { shortcode: result.product.id },

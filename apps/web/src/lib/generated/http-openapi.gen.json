@@ -54187,6 +54187,12 @@
             "items": {
               "$ref": "#/components/schemas/BackgroundBatchRef"
             }
+          },
+          "warnings": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         },
         "required": [
@@ -59457,11 +59463,15 @@
           },
           "created": {
             "type": "boolean"
+          },
+          "sideEffects": {
+            "$ref": "#/components/schemas/MutationSideEffects"
           }
         },
         "required": [
           "product",
-          "created"
+          "created",
+          "sideEffects"
         ]
       },
       "ProductFoodSummariesOut": {

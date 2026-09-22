@@ -496,6 +496,7 @@ export { productTopLevelOut };
 export const productFindOrCreateByUPCOut = z.object({
   product: productTopLevelOut,
   created: z.boolean(),
+  sideEffects: mutationSideEffectsSchema,
 });
 
 // What a barcode resolves to, from every source at once and WITHOUT creating

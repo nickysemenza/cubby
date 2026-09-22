@@ -73,6 +73,7 @@ import { problemQuery } from "~/entities/problem-registry";
 import { maintenance } from "~/lib/maintenance.functions";
 import { countLabel } from "~/lib/pluralize";
 import { problems as problemOperations } from "~/lib/problems.functions";
+import { toastMutationWarnings } from "~/lib/recompute-summary";
 import { formatCurrency } from "~/lib/utils";
 import type { ProductWithBetterUpcData } from "~/server/repo/problems";
 
@@ -353,6 +354,7 @@ function UpcApplyAction({ product }: { product: ProductWithBetterUpcData }) {
   const apply = useActionMutation({
     mutationFn: productOperations.applyUpcData.mutationOptions,
     success: `Updated ${product.name} from UPC`,
+    onSuccess: (result) => toastMutationWarnings(result.sideEffects),
     // The whole problems.* path is always invalidated by the hook (which also
     // feeds the navbar badge count); add the product/recipe lists (price feeds
     // cost).

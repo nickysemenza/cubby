@@ -12,6 +12,7 @@ import { toast } from "sonner";
 import { product } from "~/app/products/product.functions";
 import { showErrorToast } from "~/components/feedback/error-details";
 import { getErrorMessage } from "~/lib/error-utils";
+import { toastMutationWarnings } from "~/lib/recompute-summary";
 
 import { useProductLookupInvalidation } from "./useInventoryMutation";
 
@@ -59,10 +60,11 @@ export function useUpcLookup(options: UseUpcLookupOptions = {}) {
       }
 
       try {
-        const { product, created } =
+        const { product, created, sideEffects } =
           await findOrCreateByUPCMutation.mutateAsync({
             upc: parsedUpc.data,
           });
+        toastMutationWarnings(sideEffects);
         options.onSuccess?.(product, created);
         // Preserve the historical return shape (the product) plus the new
         // `created` flag so callers can prompt to link an ingredient.

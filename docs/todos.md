@@ -27,16 +27,13 @@ history is the archive. Permanent product constraints live in the
 
 ## Easy fixes
 
-- **Silent side-effect failures with no caller channel.** Two best-effort
-  paths swallow a failure the caller cannot see (both annotated `SILENT:` and
-  guarded by the `cubby/no-swallowed-catch` rule): the CalDAV feed dirty-mark
-  in `server/calendar/client.ts` runs after the response is committed, so a
-  failure leaves the feed stale until the next successful write; and the
-  UPC/ISBN cover-photo import in `server/services/product-orchestration.service.ts`
-  (four sites) leaves a product looking finished with no image. Give the
-  product mutation result a `sideEffects`/warnings field the web and MCP
-  surfaces render, and move the feed dirty-mark onto the write's own
-  transaction or a retried queue message.
+- **CalDAV feed dirty-mark can fail silently.** The dirty-mark in
+  `server/calendar/client.ts` (annotated `SILENT:`, guarded by the
+  `cubby/no-swallowed-catch` rule) runs after the response is committed, so a
+  failure leaves the feed stale until the next successful write. Move it onto
+  the write's own transaction or a retried queue message. (Product mutations
+  now carry `sideEffects.warnings` for best-effort failures if a caller-visible
+  channel is wanted instead.)
 
 - **Canvas conformance follow-ups.** The generic pages now render the
   canvas (<https://claude.ai/artifact/A45j5qz24RjRK6KzKmKLWL>): one 44px

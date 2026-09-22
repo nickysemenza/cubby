@@ -25,6 +25,7 @@ import {
 } from "~/app/_components/PendingImageUpload";
 import { ResponsiveDialog } from "~/components/ui/responsive-dialog";
 import type { UnparsedError } from "~/lib/error-utils";
+import { toastMutationWarnings } from "~/lib/recompute-summary";
 
 import { entityEditRegistry } from "./definitions";
 import {
@@ -371,6 +372,7 @@ export function EntityEditDialogContent<E extends EditableEntity>({
                 );
               }
               toast.success(presentation.successMessage(result.result));
+              toastMutationWarnings(result.result.sideEffects);
               close();
               onSuccess?.(result.result);
             })

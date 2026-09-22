@@ -82,7 +82,11 @@ export const productEntityAdapter = defineEntityAdapter({
         ctx.actorContext,
       );
       const entityId = await productShortcodes.one(ctx.db, result.id);
-      return { output: result, entityId };
+      return {
+        output: result,
+        entityId,
+        warnings: result.sideEffects.warnings,
+      };
     },
     update: async (ctx, shortcode, data) => {
       const entityId = await productShortcodes.one(ctx.db, shortcode);

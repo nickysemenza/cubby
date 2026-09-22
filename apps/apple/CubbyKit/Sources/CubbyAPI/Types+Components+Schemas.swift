@@ -22441,15 +22441,23 @@ extension Components {
         public struct MutationSideEffects: Codable, Hashable, Sendable {
             /// - Remark: Generated from `#/components/schemas/MutationSideEffects/backgroundBatches`.
             public var backgroundBatches: [Components.Schemas.BackgroundBatchRef]
+            /// - Remark: Generated from `#/components/schemas/MutationSideEffects/warnings`.
+            public var warnings: [Swift.String]?
             /// Creates a new `MutationSideEffects`.
             ///
             /// - Parameters:
             ///   - backgroundBatches:
-            public init(backgroundBatches: [Components.Schemas.BackgroundBatchRef]) {
+            ///   - warnings:
+            public init(
+                backgroundBatches: [Components.Schemas.BackgroundBatchRef],
+                warnings: [Swift.String]? = nil
+            ) {
                 self.backgroundBatches = backgroundBatches
+                self.warnings = warnings
             }
             public enum CodingKeys: String, CodingKey {
                 case backgroundBatches
+                case warnings
             }
         }
         /// USDA NDB number
@@ -26638,21 +26646,27 @@ extension Components {
             public var product: Components.Schemas.ProductTopLevelOut
             /// - Remark: Generated from `#/components/schemas/ProductFindOrCreateByUPCOut/created`.
             public var created: Swift.Bool
+            /// - Remark: Generated from `#/components/schemas/ProductFindOrCreateByUPCOut/sideEffects`.
+            public var sideEffects: Components.Schemas.MutationSideEffects
             /// Creates a new `ProductFindOrCreateByUPCOut`.
             ///
             /// - Parameters:
             ///   - product:
             ///   - created:
+            ///   - sideEffects:
             public init(
                 product: Components.Schemas.ProductTopLevelOut,
-                created: Swift.Bool
+                created: Swift.Bool,
+                sideEffects: Components.Schemas.MutationSideEffects
             ) {
                 self.product = product
                 self.created = created
+                self.sideEffects = sideEffects
             }
             public enum CodingKeys: String, CodingKey {
                 case product
                 case created
+                case sideEffects
             }
         }
         /// - Remark: Generated from `#/components/schemas/ProductLabelNutrition`.

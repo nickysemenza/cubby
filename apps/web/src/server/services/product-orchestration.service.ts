@@ -6,7 +6,11 @@
  * - Batch UPC image backfill
  */
 
-import { EMPTY_MUTATION_SIDE_EFFECTS } from "@cubby/schemas/background-jobs";
+import {
+  EMPTY_MUTATION_SIDE_EFFECTS,
+  type MutationSideEffects,
+  mutationSideEffectsWithWarnings,
+} from "@cubby/schemas/background-jobs";
 import type { ActorContext } from "@cubby/schemas/context";
 import { displayGtin } from "@cubby/schemas/external-id";
 import {
@@ -27,6 +31,7 @@ import type { ScanAtLocationCode } from "@cubby/schemas/scan";
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
 import { uniq } from "es-toolkit";
 
+import { scrubErrorMessage } from "~/lib/error-diagnostics";
 import { getErrorMessage } from "~/lib/error-utils";
 import { isUnspecifiedManufacturer } from "~/lib/manufacturer-utils";
 import { type ResolvedProductCode, resolveProductScan } from "~/lib/scan-code";
@@ -73,6 +78,32 @@ const resolveIngredientEntityId = async (
   return parseEntityId("ingredient", id);
 };
 
+/**
+ * A UPC/ISBN cover photo is best-effort: the product write has already
+ * succeeded, so a failed import becomes a caller-visible warning (raw
+ * diagnostics, credential-scrubbed) instead of failing the write. The
+ * product-enrichment pass remains the repair path.
+ */
+async function importCoverPhoto(
+  db: Database,
+  upcLookupClient: UpcLookupPort,
+  code: string,
+  productId: ProductId,
+  source: string,
+): Promise<string[]> {
+  try {
+    await importImageFromUPC(db, upcLookupClient, code, productId);
+    return [];
+  } catch (error) {
+    console.error(`[${source}] Image import failed:`, error);
+    return [
+      scrubErrorMessage(
+        `Cover photo import for ${code} failed: ${getErrorMessage(error)}`,
+      ),
+    ];
+  }
+}
+
 export async function createProductWithSideEffects(
   services: ProductWriteServices & { upcLookupClient: UpcLookupPort },
   input: ProductCreateInput,
@@ -88,22 +119,15 @@ export async function createProductWithSideEffects(
     source: "product.create",
   });
 
-  if (input.upc) {
-    try {
-      await importImageFromUPC(
+  const warnings = input.upc
+    ? await importCoverPhoto(
         services.db,
         services.upcLookupClient,
         input.upc,
         entityId,
-      );
-    } catch (error) {
-      // SILENT: best-effort cover photo on create; the product still returns
-      // successfully with no image. Known gap — no `sideEffects`/warnings
-      // field exists on this response to carry a caller-visible signal (see
-      // docs/todos.md); the separate product-enrichment pass is the mitigation.
-      console.error(`[product.create] Image import failed:`, error);
-    }
-  }
+        "product.create",
+      )
+    : [];
 
   const ingredientId = product.ingredient?.id;
   if (ingredientId) {
@@ -118,7 +142,7 @@ export async function createProductWithSideEffects(
 
   return {
     ...product,
-    sideEffects: EMPTY_MUTATION_SIDE_EFFECTS,
+    sideEffects: mutationSideEffectsWithWarnings(warnings),
   };
 }
 
@@ -210,22 +234,16 @@ export async function applyUpcDataWithSideEffects(
   // PDF manuals share the images relation — a manual-only product still has
   // no displayable image and should get the UPC-lookup photo.
   const hasDisplayableImage = current.images.some(isDisplayableImageFile);
-  if (!hasDisplayableImage && lookup?.imageUrl) {
-    try {
-      await importImageFromUPC(
-        services.db,
-        services.upcLookupClient,
-        input.upc,
-        input.id,
-      );
-    } catch (error) {
-      // SILENT: best-effort cover photo backfill; the update still returns
-      // successfully with no image. Known gap — no `sideEffects`/warnings
-      // field exists on this response to carry a caller-visible signal (see
-      // docs/todos.md); the separate product-enrichment pass is the mitigation.
-      console.error(`[product.applyUpcData] Image import failed:`, error);
-    }
-  }
+  const warnings =
+    !hasDisplayableImage && lookup?.imageUrl
+      ? await importCoverPhoto(
+          services.db,
+          services.upcLookupClient,
+          input.upc,
+          input.id,
+          "product.applyUpcData",
+        )
+      : [];
 
   const result = await services.product.getProductByID(input.id);
   const ingredientId = result.ingredient?.id;
@@ -240,7 +258,7 @@ export async function applyUpcDataWithSideEffects(
   }
   return {
     ...result,
-    sideEffects: EMPTY_MUTATION_SIDE_EFFECTS,
+    sideEffects: mutationSideEffectsWithWarnings(warnings),
   };
 }
 
@@ -253,7 +271,14 @@ export async function applyUpcDataWithSideEffects(
 export interface FindOrCreateByUPCResult {
   product: ProductTopLevelOut;
   created: boolean;
+  sideEffects: MutationSideEffects;
 }
+
+const matched = (product: ProductTopLevelOut): FindOrCreateByUPCResult => ({
+  product,
+  created: false,
+  sideEffects: EMPTY_MUTATION_SIDE_EFFECTS,
+});
 
 /**
  * The identity a USDA food would give a product created from this barcode.
@@ -344,12 +369,11 @@ export async function findOrCreateByUPC(
   actor: ActorContext,
 ): Promise<FindOrCreateByUPCResult> {
   const existing = await findProductByGtin(db, upc);
-  if (existing) {
-    return { product: existing, created: false };
-  }
+  if (existing) return matched(existing);
 
   const emitCreated = async (
     product: ProductTopLevelOut,
+    warnings: readonly string[] = [],
   ): Promise<FindOrCreateByUPCResult> => {
     const entityId = await resolveCreatedOrInvariant(db, "product", product.id);
     await runMutationSideEffects(db, {
@@ -357,7 +381,11 @@ export async function findOrCreateByUPC(
       entity: { entity: "product", id: entityId },
       source: "product.findOrCreateByUPC",
     });
-    return { product, created: true };
+    return {
+      product,
+      created: true,
+      sideEffects: mutationSideEffectsWithWarnings(warnings),
+    };
   };
 
   // Cascade create with cross-request race recovery. Each quickCreateProduct is
@@ -402,24 +430,17 @@ export async function findOrCreateByUPC(
           actor,
         );
 
-        if (upcLookup.imageUrl) {
-          try {
-            await importImageFromUPC(
+        const warnings = upcLookup.imageUrl
+          ? await importCoverPhoto(
               db,
               upcLookupClient,
               upc,
               await resolveCreatedOrInvariant(db, "product", newProduct.id),
-            );
-          } catch (error) {
-            // SILENT: best-effort cover photo on create; `emitCreated` below
-            // still returns the new product successfully with no image.
-            // Known gap — no field on this response to carry a caller-visible
-            // signal (see docs/todos.md); product-enrichment is the mitigation.
-            console.error(`[findOrCreateByUPC] Image import failed:`, error);
-          }
-        }
+              "findOrCreateByUPC",
+            )
+          : [];
 
-        return await emitCreated(newProduct);
+        return await emitCreated(newProduct, warnings);
       }
 
       // 4. Nothing found anywhere - create with defaults
@@ -440,7 +461,7 @@ export async function findOrCreateByUPC(
     async (error) => {
       const winner = await findProductByGtin(db, upc);
       if (!winner) throw error;
-      return { product: winner, created: false };
+      return matched(winner);
     },
   );
 }
@@ -465,10 +486,11 @@ async function findOrCreateByISBN(
   }
 
   const existing = await findProductByGtin(db, canonicalGtin);
-  if (existing) return { product: existing, created: false };
+  if (existing) return matched(existing);
 
   const emitCreated = async (
     product: ProductTopLevelOut,
+    warnings: readonly string[],
   ): Promise<FindOrCreateByUPCResult> => {
     const entityId = await resolveCreatedOrInvariant(db, "product", product.id);
     await runMutationSideEffects(db, {
@@ -476,7 +498,11 @@ async function findOrCreateByISBN(
       entity: { entity: "product", id: entityId },
       source: "product.findOrCreateByCode",
     });
-    return { product, created: true };
+    return {
+      product,
+      created: true,
+      sideEffects: mutationSideEffectsWithWarnings(warnings),
+    };
   };
 
   return runWithConflictRecovery(
@@ -498,29 +524,22 @@ async function findOrCreateByISBN(
         actor,
       );
 
-      if (external?.imageUrl) {
-        try {
-          await importImageFromUPC(
+      const warnings = external?.imageUrl
+        ? await importCoverPhoto(
             db,
             upcLookupClient,
             normalized.isbn13,
             await resolveCreatedOrInvariant(db, "product", product.id),
-          );
-        } catch (error) {
-          // SILENT: best-effort cover photo on create; `emitCreated` below
-          // still returns the new product successfully with no image. Known
-          // gap — no field on this response to carry a caller-visible signal
-          // (see docs/todos.md); product-enrichment is the mitigation.
-          console.error(`[findOrCreateByISBN] Image import failed:`, error);
-        }
-      }
+            "findOrCreateByISBN",
+          )
+        : [];
 
-      return await emitCreated(product);
+      return await emitCreated(product, warnings);
     },
     async (error) => {
       const winner = await findProductByGtin(db, canonicalGtin);
       if (!winner) throw error;
-      return { product: winner, created: false };
+      return matched(winner);
     },
   );
 }
@@ -550,7 +569,7 @@ const findProductByLabel = async (
       "PRODUCT_NOT_FOUND",
       `No product found for ${shortcode}.`,
     );
-  return { product, created: false };
+  return matched(product);
 };
 
 // `async` so an unrecognized scan rejects instead of throwing synchronously.

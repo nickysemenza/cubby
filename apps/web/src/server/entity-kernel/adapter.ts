@@ -190,6 +190,8 @@ interface EntityRepositoryWriteResult<
   output: ZodOutput<S["output"]>;
   entityId: EntityInternalId<E>;
   detachedImageKeys?: string[];
+  /** Best-effort follow-up failures, surfaced as `sideEffects.warnings`. */
+  warnings?: readonly string[];
 }
 
 type PresentSchemaOutput<S> = ZodOutput<Extract<S, ZodSchema>>;
