@@ -1346,7 +1346,35 @@ export default defineEntity({
     },
     intents: {
       fields: {
-        capture: ["name", "manufacturer"],
+        // The list's "New" dialog and the picker's "Create product" open
+        // `capture`; for product that is the whole editor (as the retired
+        // create page was), so classification, ingredient links, and unit
+        // conversions can be set at creation instead of a second edit.
+        capture: [
+          "name",
+          "aliases",
+          "tags",
+          "manufacturer",
+          "model",
+          "categoryId",
+          "ingredientId",
+          "growsIngredientId",
+          "upc",
+          "isbn",
+          "fdc_id",
+          "expectedQuantity",
+          "price",
+          "stockTracked",
+          "unitMappings",
+          "labelNutrition",
+          "externalIds",
+          "usdaUnavailable",
+          "notes",
+          "pendingImageIds",
+          "pendingImagePurposes",
+          "removeImageIds",
+          "imageOrder",
+        ],
         full: [
           "name",
           "aliases",
