@@ -4,9 +4,11 @@ import { auditSourceSchema } from "@cubby/schemas/context";
 import { useQuery } from "@tanstack/react-query";
 import {
   createFileRoute,
+  Link,
   stripSearchParams,
   useNavigate,
 } from "@tanstack/react-router";
+import { ArrowUpRight } from "lucide-react";
 import { z } from "zod";
 
 import { listChromePage } from "~/app/_components/routing/entity-routes";
@@ -14,8 +16,10 @@ import { ActivityChanges } from "~/app/activity/activity-changes";
 import { ActivityRunDetail } from "~/app/activity/activity-run-detail";
 import { ActivityRuns } from "~/app/activity/activity-runs";
 import { PurchaseImportAgentConnection } from "~/app/activity/purchase-import-agent-connection";
+import { Button } from "~/components/ui/button";
 import { StatusText } from "~/components/ui/status-text";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
+import { entities } from "~/entities/entities";
 import { activity } from "~/lib/activity.functions";
 import { auditLogListOptions } from "~/lib/audit-log.functions";
 import { pageTitle } from "~/lib/page-title";
@@ -231,6 +235,20 @@ function ActivityBody() {
         <PurchaseImportAgentConnection
           feedback={search.purchaseAgent ?? search.agent}
         />
+        <Button
+          variant="ghost"
+          size="sm"
+          nativeButton={false}
+          render={
+            <Link
+              to={entities.device.routes.list}
+              aria-label="Open all devices"
+            />
+          }
+        >
+          Devices
+          <ArrowUpRight />
+        </Button>
       </TabsContent>
     </Tabs>
   );

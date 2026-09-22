@@ -89,6 +89,54 @@ function jevPortAt(choiceIndex: number, probability: number): JevPort {
   });
 }
 
+/** A fake `JevPort` that always answers `none`, at the given per-key
+ * probabilities — for asserting an `evaluated/none` outcome's probability
+ * and ranked alternatives independent of `jevPortPicking`'s fixed winner. */
+function jevPortNone(probabilities: Record<string, number>): JevPort {
+  return vi.fn(async () => ({
+    answers: {
+      selection: {
+        type: "choice" as const,
+        choice: "none",
+        confidence: probabilities.none ?? 0,
+        probabilities,
+      },
+    },
+  }));
+}
+
+/** A fake `JevPort` for `resolvePruneTarget`'s per-tag calls: answers each
+ * survivor's binary "redundant"/"genuine" choice by matching the tag's
+ * value against `input.state` (the rendered subject), so a multi-survivor
+ * test can pin a different answer per tag. */
+function jevPortForTags(
+  responses: Record<string, { choiceIndex: number; probability: number }>,
+): JevPort {
+  return vi.fn(async (input: JevInput) => {
+    const tag = Object.keys(responses).find((t) => input.state.includes(t));
+    if (!tag) throw new Error(`No fake response for state: ${input.state}`);
+    const { choiceIndex, probability } = responses[tag]!;
+    const entries = Object.entries(input.questions.selection.criteria);
+    const [choiceKey] = entries[choiceIndex]!;
+    const rest = entries.filter(([key]) => key !== choiceKey);
+    const each = rest.length > 0 ? (1 - probability) / rest.length : 0;
+    const probabilities = Object.fromEntries([
+      [choiceKey, probability],
+      ...rest.map(([key]) => [key, each] as const),
+    ]);
+    return {
+      answers: {
+        selection: {
+          type: "choice" as const,
+          choice: choiceKey,
+          confidence: probability,
+          probabilities,
+        },
+      },
+    };
+  });
+}
+
 const tagsArraySchema = z.array(z.string());
 
 function rawTagsArray(raw: RawBasis): readonly string[] {
@@ -190,6 +238,14 @@ describe("suggestFields", () => {
         expect(
           out.suggestions.trade?.alternatives.map((a) => a.value),
         ).not.toContain("electrical");
+        // (d) an evaluated/pick outcome's probability matches the suggestion's.
+        expect(out.outcomes?.trade).toEqual({
+          kind: "evaluated",
+          answer: "pick",
+          confidence: "high",
+          probability: out.suggestions.trade?.probability,
+          alternatives: out.suggestions.trade?.alternatives,
+        });
       },
     },
     {
@@ -228,7 +284,61 @@ describe("suggestFields", () => {
       jev: jevPortPicking("food:"),
       assert: (out, jev) => {
         expect(out.suggestions.categoryId).toBeNull();
+        // (a) a basis without signal is never asked.
+        expect(out.outcomes?.categoryId).toEqual({
+          kind: "skipped",
+          reason: "no_signal",
+        });
         expect(jev).not.toHaveBeenCalled();
+      },
+    },
+    {
+      // (b) an empty roster is never asked either — it never reaches Jev.
+      name: "a reference target whose roster is empty skips without calling Jev",
+      entity: "task",
+      targets: ["projectId"],
+      basis: { name: "general upkeep" },
+      jev: jevPortPicking("Kitchen Remodel"),
+      registry: { "task.projectId": fakeProjectSpec([]) },
+      assert: (out, jev) => {
+        expect(out.suggestions.projectId).toBeNull();
+        expect(out.outcomes?.projectId).toEqual({
+          kind: "skipped",
+          reason: "no_candidates",
+        });
+        expect(jev).not.toHaveBeenCalled();
+      },
+    },
+    {
+      // (c) a decline still carries Jev's probability and ranked runners-up.
+      name: "a reference target's Jev decline surfaces as evaluated/none with the ranked runners-up",
+      entity: "task",
+      targets: ["projectId"],
+      basis: { name: "general upkeep" },
+      jev: jevPortNone({ c0: 0.25, c1: 0.15, none: 0.6 }),
+      registry: { "task.projectId": fakeProjectSpec() },
+      assert: (out) => {
+        expect(out.suggestions.projectId).toBeNull();
+        expect(out.outcomes?.projectId).toEqual({
+          kind: "evaluated",
+          answer: "none",
+          confidence: "medium",
+          probability: 0.6,
+          alternatives: [
+            {
+              value: "PRJ-AAAA",
+              label: "Kitchen Remodel",
+              detail: null,
+              probability: 0.25,
+            },
+            {
+              value: "PRJ-BBBB",
+              label: "Deck Build",
+              detail: null,
+              probability: 0.15,
+            },
+          ],
+        });
       },
     },
     {
@@ -265,6 +375,14 @@ describe("suggestFields", () => {
             { value: "acme", probability: 1, reason: "restates manufacturer" },
           ],
         });
+        // (f) deterministic-only removals stay a pick, probability 1.
+        expect(out.outcomes?.tags).toEqual({
+          kind: "evaluated",
+          answer: "pick",
+          confidence: "high",
+          probability: 1,
+          alternatives: [],
+        });
         expect(jev).not.toHaveBeenCalled();
       },
     },
@@ -281,6 +399,46 @@ describe("suggestFields", () => {
       },
     },
     {
+      // (e) every survivor judged genuine: the min P(genuine) and the
+      // survivors ranked by P(redundant), read off Jev's distribution rather
+      // than derived as `1 - p`.
+      name: "a prune target where every survivor is judged genuine reports evaluated/none with the min P(genuine) and ranked P(redundant)",
+      entity: "product",
+      targets: ["tags"],
+      basis: {
+        manufacturer: "Acme",
+        tags: JSON.stringify(["battery", "waterproof"]),
+      },
+      jev: jevPortForTags({
+        battery: { choiceIndex: 1, probability: 0.75 },
+        waterproof: { choiceIndex: 1, probability: 0.5 },
+      }),
+      registry: { "product.tags": fakeTagPruneSpec() },
+      assert: (out) => {
+        expect(out.suggestions.tags).toBeNull();
+        expect(out.outcomes?.tags).toEqual({
+          kind: "evaluated",
+          answer: "none",
+          confidence: "low",
+          probability: 0.5,
+          alternatives: [
+            {
+              value: "waterproof",
+              label: "waterproof",
+              detail: null,
+              probability: 0.5,
+            },
+            {
+              value: "battery",
+              label: "battery",
+              detail: null,
+              probability: 0.25,
+            },
+          ],
+        });
+      },
+    },
+    {
       name: "a prune target with no current entries resolves to null",
       entity: "product",
       targets: ["tags"],
@@ -289,6 +447,10 @@ describe("suggestFields", () => {
       registry: { "product.tags": fakeTagPruneSpec() },
       assert: (out, jev) => {
         expect(out.suggestions.tags).toBeNull();
+        expect(out.outcomes?.tags).toEqual({
+          kind: "skipped",
+          reason: "no_candidates",
+        });
         expect(jev).not.toHaveBeenCalled();
       },
     },
@@ -478,6 +640,7 @@ describe("suggestFields", () => {
 
     expect(result).toEqual({
       suggestions: {},
+      outcomes: { trade: { kind: "skipped", reason: "resolved" } },
       fieldResolutions,
       eligibleTargets: [],
     });
@@ -527,6 +690,11 @@ describe("suggestFields", () => {
     expect(result.eligibleTargets).toEqual(["trade"]);
     expect(result.suggestions.projectId).toBeUndefined();
     expect(result.suggestions.trade?.value).toBe("electrical");
+    // (g) an inheritance-ineligible target is never asked either.
+    expect(result.outcomes?.projectId).toEqual({
+      kind: "skipped",
+      reason: "resolved",
+    });
     expect(jev.mock.calls[0]?.[0].state).toContain("Kitchen Remodel");
   });
 

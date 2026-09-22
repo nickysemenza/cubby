@@ -82,6 +82,7 @@ import {
 } from "./auth.schema";
 import {
   generatedCookbookColumns,
+  generatedDeviceColumns,
   generatedExpenseColumns,
   generatedFinancialAccountColumns,
   generatedFinancialTransactionColumns,
@@ -1323,6 +1324,24 @@ export const vendorAccount = pgTable(
       "VendorAccount_browser_check",
       sql`${table.browser} IN ('chrome', 'safari')`,
     ),
+  ],
+);
+
+/** One install of the native companion app. */
+export const device = pgTable(
+  "Device",
+  generatedDeviceColumns({
+    ledgerParty: (): AnyPgColumn => ledgerParty.id,
+    product: (): AnyPgColumn => product.id,
+  }),
+  (table) => [
+    shortcodeUnique("Device", table.shortcode),
+    uniqueIndex("Device_installationId_key")
+      .on(table.installationId)
+      .where(sql`${table.deletedAt} IS NULL`),
+    index("Device_ledgerPartyId_idx").on(table.ledgerPartyId),
+    index("Device_productId_idx").on(table.productId),
+    check("Device_platform_check", sql`${table.platform} IN ('ios', 'macos')`),
   ],
 );
 

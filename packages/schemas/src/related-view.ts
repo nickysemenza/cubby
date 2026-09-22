@@ -537,6 +537,8 @@ const ENTITIES_WITHOUT_RELATED_VIEWS = {
     "the category tree is rendered through the product-category records page",
   // Not a local entity — remote USDA search results, no local edges.
   "usda-food": "remote USDA records have no local relationships",
+  device:
+    "owner and hardware are rendered as detail fields; nothing yet declares a relation onto a device",
 } as const satisfies Record<Exclude<Entity, RelatedViewSource>, string>;
 
 type RegisteredRelatedView = (typeof relatedViewRegistry)[number];

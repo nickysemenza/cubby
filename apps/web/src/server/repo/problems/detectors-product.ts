@@ -45,6 +45,7 @@ import { getAllUnitMappingsFromProduct } from "~/lib/unit-mapping-utils";
 import type { Database, DrizzleClient } from "~/server/db";
 import {
   cookbook,
+  device,
   expense,
   image,
   importRunTarget,
@@ -230,6 +231,13 @@ const PRODUCT_RETAINING_NOT_EXISTS = {
             notDeleted(productComponent),
           ),
         ),
+    ),
+  "Device.productId": (dbClient) =>
+    notExists(
+      dbClient
+        .select({ id: sql`1` })
+        .from(device)
+        .where(and(eq(device.productId, product.id), notDeleted(device))),
     ),
 } satisfies Record<ProductRetainingEdgeKey, (dbClient: DrizzleClient) => SQL>;
 

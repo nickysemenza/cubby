@@ -201,6 +201,59 @@ describe("generated HTTP OpenAPI document", () => {
     expect(schemas).toHaveProperty("OptionalImageRepresentations");
   });
 
+  it("leaves every response body open and request bodies closed", () => {
+    // Regression: Zod emits `additionalProperties: false` on output objects
+    // and swift-openapi-generator turns that into `ensureNoAdditionalProperties`
+    // in `init(from:)`, so every installed native build rejected a response
+    // the server had gained one field on. Responses are reachable from a
+    // 2xx body; anything with `additionalProperties: false` under one is a
+    // deploy that breaks installed apps.
+    const seen = new Set<string>();
+    const closedIn = (node: SchemaNode, pointer: string): string[] => {
+      if (node.$ref !== undefined) {
+        if (seen.has(node.$ref)) return [];
+        seen.add(node.$ref);
+        return closedIn(resolve(node.$ref).schema, node.$ref);
+      }
+      const children: [unknown, string][] = [
+        ...Object.entries(node.properties ?? {}).map(
+          ([key, value]): [unknown, string] => [
+            value,
+            `${pointer}/properties/${key}`,
+          ],
+        ),
+        [node.items, `${pointer}/items`],
+        [node.additionalProperties, `${pointer}/additionalProperties`],
+        ...(["anyOf", "oneOf", "allOf"] as const).flatMap((keyword) =>
+          (node[keyword] ?? []).map((member, index): [unknown, string] => [
+            member,
+            `${pointer}/${keyword}/${index}`,
+          ]),
+        ),
+      ];
+      return [
+        ...(node.additionalProperties === false ? [pointer] : []),
+        ...children.flatMap(([child, childPointer]) => {
+          const parsed = schemaNode.safeParse(child);
+          return parsed.success ? closedIn(parsed.data, childPointer) : [];
+        }),
+      ];
+    };
+    const offenders: string[] = [];
+    for (const entry of operations)
+      for (const [status, body] of Object.entries(entry.responses)) {
+        const schema = body.content?.["application/json"]?.schema;
+        if (status.startsWith("2") && schema !== undefined)
+          offenders.push(
+            ...closedIn(schema, `${entry.path} ${entry.method} ${status}`),
+          );
+      }
+    expect(offenders).toEqual([]);
+    // A `z.strictObject` input keeps its closed shape (Zod only closes
+    // outputs by default), so a client-side typo is still refused.
+    expect(schemas.CollectionCreateInput?.additionalProperties).toBe(false);
+  });
+
   it("resolves every reference", () => {
     const references = new Set(
       [...text.matchAll(/"\$ref":"([^"]+)"/gu)].map((match) => match[1] ?? ""),
@@ -263,7 +316,7 @@ describe("generated HTTP OpenAPI document", () => {
         "ApiError",
       );
     }
-    expect(operations).toHaveLength(363);
+    expect(operations).toHaveLength(368);
   });
 
   it("carries query parameters as plain form values", () => {
@@ -321,7 +374,7 @@ describe("generated HTTP OpenAPI document", () => {
     for (const entry of operations)
       methods[z.enum(["get", "post", "patch", "delete"]).parse(entry.method)] +=
         1;
-    expect(methods).toEqual({ get: 167, post: 154, patch: 21, delete: 21 });
+    expect(methods).toEqual({ get: 169, post: 155, patch: 22, delete: 22 });
     for (const path of POST_QUERIES) {
       const posted = paths[path]?.post;
       expect(posted).toBeDefined();
@@ -404,7 +457,7 @@ describe("generated HTTP OpenAPI document", () => {
     const pages = Object.entries(schemas).filter(([name]) =>
       name.endsWith("ListPage"),
     );
-    expect(pages).toHaveLength(20);
+    expect(pages).toHaveLength(21);
     for (const [, page] of pages)
       expect(schemaNode.parse(page.properties?.meta).$ref).toBe(
         `${COMPONENT}ListPageMeta`,

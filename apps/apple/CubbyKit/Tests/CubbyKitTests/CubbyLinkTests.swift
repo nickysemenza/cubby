@@ -31,6 +31,18 @@ struct CubbyLinkTests {
         #expect(link("cubby://dev") == .dev)
     }
 
+    @Test func activityOpensTheListOrOneRun() {
+        #expect(link("cubby://activity") == .activity(run: nil))
+        #expect(link("cubby://activity/RUN-EXAMPLE") == .activity(run: "RUN-EXAMPLE"))
+        #expect(link("cubby://activity/IPR-EXAMPLE") == .activity(run: "IPR-EXAMPLE"))
+        // Lowercase input still resolves — printed/typed links are not guaranteed uppercase.
+        #expect(link("cubby://activity/run-example") == .activity(run: "RUN-EXAMPLE"))
+        // Neither a catalog shortcode nor the run-id shape.
+        #expect(link("cubby://activity/PRD-2345") == nil)
+        #expect(link("cubby://activity/RUN-") == nil)
+        #expect(link("cubby://activity/nope") == nil)
+    }
+
     @Test func rejectsWrongSchemeHostOrScope() {
         #expect(link("cubby-mobile://entity/PRD-2345") == nil)
         #expect(link("cubby://entity/XYZ-1") == nil)
@@ -67,6 +79,9 @@ struct CubbyLinkTests {
             .today,
             .search,
             .dev,
+            .activity(run: nil),
+            .activity(run: "RUN-EXAMPLE"),
+            .activity(run: "IPR-EXAMPLE"),
         ]
         for original in links {
             #expect(CubbyLink(url: original.url) == original)

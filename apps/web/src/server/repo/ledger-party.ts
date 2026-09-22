@@ -28,6 +28,7 @@ import { uniq } from "es-toolkit";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import {
+  device,
   expenseAttribution,
   financialAccount,
   inventoryEntry,
@@ -39,7 +40,11 @@ import {
   mealRecipePortion,
 } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
-import { computeChanges, logAuditEntry } from "~/server/repo/audit-log";
+import {
+  computeChanges,
+  logAuditEntries,
+  logAuditEntry,
+} from "~/server/repo/audit-log";
 import {
   dataQualityFilterPredicates,
   dataQualitySortResolver,
@@ -148,6 +153,12 @@ export const LEDGER_PARTY_DELETE_EDGE_POLICY = {
     effect: "block",
     description: "Live meal food entries retain their eater.",
   },
+  "Device.ledgerPartyId": {
+    code: "clear-owner",
+    effect: "detach",
+    description:
+      "Deleting a member clears its devices' owner rather than blocking the delete — a device survives as an unowned install.",
+  },
 } as const satisfies IncomingEdgePolicy<"ledgerParty", OperationDisposition>;
 
 export const LEDGER_PARTY_MERGE_EDGE_POLICY = {
@@ -229,6 +240,11 @@ export const LEDGER_PARTY_MERGE_EDGE_POLICY = {
     effect: "repoint",
     description:
       "Meal food entries move to the surviving party without changing their recorded amounts.",
+  },
+  "Device.ledgerPartyId": {
+    code: "repoint-devices",
+    effect: "repoint",
+    description: "A merged member's devices move to the surviving party.",
   },
 } as const satisfies IncomingEdgePolicy<"ledgerParty", OperationDisposition>;
 
@@ -572,6 +588,29 @@ export async function deleteLedgerParties(
         "LEDGER_PARTY_HAS_EDGES",
         "A ledger party with live attributions, accounts, inventory ownership, transfers, meal portions, or meal food entries cannot be deleted.",
       );
+    // "Device.ledgerPartyId" is a "detach" disposition, not a block: a device
+    // survives its owner's deletion as an unowned install rather than
+    // blocking the member delete or being deleted itself.
+    const detachingDevices = await tx
+      .select({ id: device.id, ledgerPartyId: device.ledgerPartyId })
+      .from(device)
+      .where(and(inArray(device.ledgerPartyId, ids), notDeleted(device)));
+    if (detachingDevices.length > 0) {
+      await tx
+        .update(device)
+        .set({ ledgerPartyId: null })
+        .where(and(inArray(device.ledgerPartyId, ids), notDeleted(device)));
+      await logAuditEntries(
+        tx,
+        actor,
+        detachingDevices.map((row) => ({
+          entityType: "device" as const,
+          entityId: row.id,
+          action: "update" as const,
+          changes: { ledgerPartyId: { from: row.ledgerPartyId, to: null } },
+        })),
+      );
+    }
     const { deleted } = await removeEntity(tx, {
       entity: "ledgerParty",
       ids,
@@ -865,6 +904,7 @@ export async function mergeLedgerParties(
   let transferEdgesRepointed = 0;
   let portionEdgesRepointed = 0;
   let foodEntryEdgesRepointed = 0;
+  let deviceEdgesRepointed = 0;
   await withTransaction(db, async (tx) => {
     const parties = await tx
       .select(columns)
@@ -1002,6 +1042,13 @@ export async function mergeLedgerParties(
           notDeleted(financialAccount),
         ),
       );
+    deviceEdgesRepointed = (
+      await tx
+        .update(device)
+        .set({ ledgerPartyId: keepId })
+        .where(and(inArray(device.ledgerPartyId, loserIds), notDeleted(device)))
+        .returning({ id: device.id })
+    ).length;
     await tx
       .update(ledgerTransfer)
       .set({ fromPartyId: keepId })
@@ -1042,6 +1089,7 @@ export async function mergeLedgerParties(
       transferEdgesRepointed,
       portionEdgesRepointed,
       foodEntryEdgesRepointed,
+      deviceEdgesRepointed,
       carriedFields: [],
     },
   };

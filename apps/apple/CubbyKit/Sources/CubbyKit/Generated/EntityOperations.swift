@@ -22,6 +22,7 @@ extension EntityKey {
     /// generated client carries them (`delete` is exposed but not generated).
     public var httpActions: Set<EntityAction> {
         switch self {
+        case .device: [.create, .delete, .get, .list, .update]
         case .expense: [.create, .delete, .get, .list, .update]
         case .financialAccount: [.create, .delete, .get, .list, .update]
         case .financialTransaction: [.create, .delete, .get, .list, .update]
@@ -52,6 +53,7 @@ extension EntityKey {
     public var nativeActions: Set<EntityAction> {
         switch self {
         case .cookbook: [.get, .list]
+        case .device: [.create, .get, .list, .update]
         case .expense: [.create, .get, .list, .update]
         case .financialAccount: [.create, .get, .list, .update]
         case .financialTransaction: [.create, .get, .list, .update]
@@ -81,6 +83,7 @@ extension EntityKey {
     public var nativeReadKind: NativeReadKind {
         switch self {
         case .cookbook: .cookbook
+        case .device: .resource
         case .expense: .resource
         case .financialAccount: .resource
         case .financialTransaction: .resource
@@ -116,6 +119,31 @@ extension EntityDescriptor {
         client: Client, page: Int, pageSize: Int, sort: String?, filters: EntityFilterState
     ) async throws -> ListPage<JSONValue> {
         switch key {
+        case .device:
+            var query = Operations.Resources_device_list.Input.Query(page: page, pageSize: pageSize, sort: sort)
+            for name in filters.names {
+                guard let value = filters[name] else { continue }
+                switch name {
+                case "createdFrom": query.createdFrom = try value.string(name)
+                case "createdTo": query.createdTo = try value.string(name)
+                case "updatedFrom": query.updatedFrom = try value.string(name)
+                case "updatedTo": query.updatedTo = try value.string(name)
+                case "search": query.search = try value.string(name)
+                case "platform": query.platform = try value.enumCases(name)
+                case "automaticWork": query.automaticWork = try value.bool(name)
+                case "remotePaused": query.remotePaused = try value.bool(name)
+                case "dataStatus": query.dataStatus = try value.enumCases(name)
+                case "dataGap": query.dataGap = try value.enumCases(name)
+                case "ledgerPartyId": query.ledgerPartyId = value.strings.map { .init(value1: $0) }
+                case "groupBy": query.groupBy = try value.enumCase(name)
+                default: throw EntityFilterError.unknownParameter(.device, name)
+                }
+            }
+            let page = try await client.resources_device_list(query: query).ok.body.json
+            return ListPage(
+                items: try page.items.map(JSONValue.init(encoding:)),
+                meta: page.meta
+            )
         case .expense:
             var query = Operations.Resources_expense_list.Input.Query(page: page, pageSize: pageSize, sort: sort)
             for name in filters.names {
@@ -928,6 +956,14 @@ extension EntityDescriptor {
     /// nil (the server supplies them); nil when `wireKey` is not an enum parameter.
     public func filterValues(for wireKey: String) -> [String]? {
         switch key {
+        case .device:
+            switch wireKey {
+                case "platform": ["ios", "macos"]
+                case "dataStatus": ["complete", "needs_data", "defect"]
+                case "dataGap": ["device_owner_missing", "device_stale"]
+                case "groupBy": ["name", "lastSeenAt", "updatedAt"]
+                default: nil
+            }
         case .expense:
             switch wireKey {
                 case "financialTransactionPresenceFilter": ["has", "none"]
@@ -1425,6 +1461,8 @@ extension EntityDescriptor {
     /// One row by id, as the dynamic projection `EntityRow` reads.
     func getRow(client: Client, id: String) async throws -> JSONValue {
         switch key {
+        case .device:
+            return try JSONValue(encoding: try await client.resources_device_get(path: .init(id: id)).ok.body.json)
         case .expense:
             return try JSONValue(encoding: try await client.resources_expense_get(path: .init(id: id)).ok.body.json)
         case .financialAccount:
@@ -1474,6 +1512,9 @@ extension EntityDescriptor {
     /// before any request is sent.
     func create(_ body: JSONValue, client: Client) async throws -> String {
         switch key {
+        case .device:
+            let created = try await client.resources_device_create(body: .json(try body.decoded())).created.body.json
+            return try createdID(created.item)
         case .expense:
             let created = try await client.resources_expense_create(body: .json(try body.decoded())).created.body.json
             return try createdID(created.item)
@@ -1541,6 +1582,8 @@ extension EntityDescriptor {
     /// `resources.<key>.update` with `body` decoded into the typed update payload.
     func update(_ body: JSONValue, id: String, client: Client) async throws {
         switch key {
+        case .device:
+            _ = try await client.resources_device_update(path: .init(id: id), body: .json(try body.decoded())).ok
         case .expense:
             _ = try await client.resources_expense_update(path: .init(id: id), body: .json(try body.decoded())).ok
         case .financialAccount:

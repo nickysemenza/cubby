@@ -71,51 +71,6 @@ extension Components {
                 case resultJson
                 case error
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.number = try container.decode(
-                    Swift.Int.self,
-                    forKey: .number
-                )
-                self.state = try container.decode(
-                    Swift.String.self,
-                    forKey: .state
-                )
-                self.startedAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .startedAt
-                )
-                self.completedAt = try container.decodeIfPresent(
-                    Foundation.Date.self,
-                    forKey: .completedAt
-                )
-                self.executor = try container.decodeIfPresent(
-                    Components.Schemas.ActivityExecutor.self,
-                    forKey: .executor
-                )
-                self.diagnosticsJson = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .diagnosticsJson
-                )
-                self.resultJson = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .resultJson
-                )
-                self.error = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .error
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "number",
-                    "state",
-                    "startedAt",
-                    "completedAt",
-                    "executor",
-                    "diagnosticsJson",
-                    "resultJson",
-                    "error"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/ActivityDetailOutput`.
         public struct ActivityDetailOutput: Codable, Hashable, Sendable {
@@ -145,26 +100,6 @@ extension Components {
                 case attempts
                 case nextAttemptCursor
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.run = try container.decode(
-                    Components.Schemas.ActivityRun.self,
-                    forKey: .run
-                )
-                self.attempts = try container.decode(
-                    [Components.Schemas.ActivityAttempt].self,
-                    forKey: .attempts
-                )
-                self.nextAttemptCursor = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .nextAttemptCursor
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "run",
-                    "attempts",
-                    "nextAttemptCursor"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/ActivityDevicesOutput`.
         public struct ActivityDevicesOutput: Codable, Hashable, Sendable {
@@ -179,16 +114,6 @@ extension Components {
             }
             public enum CodingKeys: String, CodingKey {
                 case items
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.items = try container.decode(
-                    [Components.Schemas.ActivityExecutor].self,
-                    forKey: .items
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "items"
-                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/ActivityEvent`.
@@ -255,46 +180,6 @@ extension Components {
                 case attempt
                 case detailsJson
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.id = try container.decode(
-                    Swift.String.self,
-                    forKey: .id
-                )
-                self.occurredAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .occurredAt
-                )
-                self.source = try container.decode(
-                    Components.Schemas.ActivityEvent.SourcePayload.self,
-                    forKey: .source
-                )
-                self.event = try container.decode(
-                    Swift.String.self,
-                    forKey: .event
-                )
-                self.level = try container.decode(
-                    Components.Schemas.ActivityEvent.LevelPayload.self,
-                    forKey: .level
-                )
-                self.attempt = try container.decodeIfPresent(
-                    Swift.Int.self,
-                    forKey: .attempt
-                )
-                self.detailsJson = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .detailsJson
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "id",
-                    "occurredAt",
-                    "source",
-                    "event",
-                    "level",
-                    "attempt",
-                    "detailsJson"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/ActivityEventsOutput`.
         public struct ActivityEventsOutput: Codable, Hashable, Sendable {
@@ -317,21 +202,6 @@ extension Components {
             public enum CodingKeys: String, CodingKey {
                 case items
                 case nextCursor
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.items = try container.decode(
-                    [Components.Schemas.ActivityEvent].self,
-                    forKey: .items
-                )
-                self.nextCursor = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .nextCursor
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "items",
-                    "nextCursor"
-                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/ActivityExecutor`.
@@ -391,41 +261,6 @@ extension Components {
                 case appVersion
                 case osVersion
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.kind = try container.decode(
-                    Components.Schemas.ActivityExecutor.KindPayload.self,
-                    forKey: .kind
-                )
-                self.deviceId = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .deviceId
-                )
-                self.name = try container.decode(
-                    Swift.String.self,
-                    forKey: .name
-                )
-                self.platform = try container.decode(
-                    Components.Schemas.ActivityExecutor.PlatformPayload.self,
-                    forKey: .platform
-                )
-                self.appVersion = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .appVersion
-                )
-                self.osVersion = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .osVersion
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "kind",
-                    "deviceId",
-                    "name",
-                    "platform",
-                    "appVersion",
-                    "osVersion"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/ActivityKind`.
         @frozen public enum ActivityKind: String, Codable, Hashable, Sendable, CaseIterable {
@@ -462,26 +297,6 @@ extension Components {
                 case items
                 case total
                 case nextCursor
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.items = try container.decode(
-                    [Components.Schemas.ActivityRun].self,
-                    forKey: .items
-                )
-                self.total = try container.decode(
-                    Swift.Int.self,
-                    forKey: .total
-                )
-                self.nextCursor = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .nextCursor
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "items",
-                    "total",
-                    "nextCursor"
-                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/ActivityRun`.
@@ -590,91 +405,6 @@ extension Components {
                 case hasDiagnostics
                 case canRetry
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.id = try container.decode(
-                    Components.Schemas.ActivityRunId.self,
-                    forKey: .id
-                )
-                self.kind = try container.decode(
-                    Components.Schemas.ActivityKind.self,
-                    forKey: .kind
-                )
-                self.subjectId = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .subjectId
-                )
-                self.subjectName = try container.decode(
-                    Swift.String.self,
-                    forKey: .subjectName
-                )
-                self.subjectHref = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .subjectHref
-                )
-                self.state = try container.decode(
-                    Swift.String.self,
-                    forKey: .state
-                )
-                self.active = try container.decode(
-                    Swift.Bool.self,
-                    forKey: .active
-                )
-                self.createdAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .createdAt
-                )
-                self.completedAt = try container.decodeIfPresent(
-                    Foundation.Date.self,
-                    forKey: .completedAt
-                )
-                self.durationMs = try container.decodeIfPresent(
-                    Swift.Double.self,
-                    forKey: .durationMs
-                )
-                self.attempts = try container.decode(
-                    Swift.Int.self,
-                    forKey: .attempts
-                )
-                self.executors = try container.decode(
-                    [Components.Schemas.ActivityExecutor].self,
-                    forKey: .executors
-                )
-                self.estimatedCost = try container.decodeIfPresent(
-                    Swift.Double.self,
-                    forKey: .estimatedCost
-                )
-                self.error = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .error
-                )
-                self.hasDiagnostics = try container.decode(
-                    Swift.Bool.self,
-                    forKey: .hasDiagnostics
-                )
-                self.canRetry = try container.decode(
-                    Swift.Bool.self,
-                    forKey: .canRetry
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "id",
-                    "kind",
-                    "subjectId",
-                    "subjectName",
-                    "subjectHref",
-                    "state",
-                    "active",
-                    "createdAt",
-                    "completedAt",
-                    "durationMs",
-                    "attempts",
-                    "executors",
-                    "estimatedCost",
-                    "error",
-                    "hasDiagnostics",
-                    "canRetry"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/ActivityRunId`.
         public typealias ActivityRunId = Swift.String
@@ -756,66 +486,6 @@ extension Components {
                 case remaining
                 case estimatedCost
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.id = try container.decode(
-                    Components.Schemas.ActivitySubmissionId.self,
-                    forKey: .id
-                )
-                self.createdAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .createdAt
-                )
-                self.total = try container.decode(
-                    Swift.Int.self,
-                    forKey: .total
-                )
-                self.newlyQueued = try container.decode(
-                    Swift.Int.self,
-                    forKey: .newlyQueued
-                )
-                self.reused = try container.decode(
-                    Swift.Int.self,
-                    forKey: .reused
-                )
-                self.alreadyRunning = try container.decode(
-                    Swift.Int.self,
-                    forKey: .alreadyRunning
-                )
-                self.completed = try container.decode(
-                    Swift.Int.self,
-                    forKey: .completed
-                )
-                self.skipped = try container.decode(
-                    Swift.Int.self,
-                    forKey: .skipped
-                )
-                self.failed = try container.decode(
-                    Swift.Int.self,
-                    forKey: .failed
-                )
-                self.remaining = try container.decode(
-                    Swift.Int.self,
-                    forKey: .remaining
-                )
-                self.estimatedCost = try container.decodeIfPresent(
-                    Swift.Double.self,
-                    forKey: .estimatedCost
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "id",
-                    "createdAt",
-                    "total",
-                    "newlyQueued",
-                    "reused",
-                    "alreadyRunning",
-                    "completed",
-                    "skipped",
-                    "failed",
-                    "remaining",
-                    "estimatedCost"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/Amount`.
         public struct Amount: Codable, Hashable, Sendable {
@@ -844,26 +514,6 @@ extension Components {
                 case value
                 case unit
                 case upperValue
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.value = try container.decode(
-                    Swift.Double.self,
-                    forKey: .value
-                )
-                self.unit = try container.decode(
-                    Swift.String.self,
-                    forKey: .unit
-                )
-                self.upperValue = try container.decodeIfPresent(
-                    Swift.Double.self,
-                    forKey: .upperValue
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "value",
-                    "unit",
-                    "upperValue"
-                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/ApiError`.
@@ -933,31 +583,6 @@ extension Components {
                         case message
                         case code
                         case status
-                    }
-                    public init(from decoder: any Swift.Decoder) throws {
-                        let container = try decoder.container(keyedBy: CodingKeys.self)
-                        self.name = try container.decode(
-                            Swift.String.self,
-                            forKey: .name
-                        )
-                        self.message = try container.decode(
-                            Swift.String.self,
-                            forKey: .message
-                        )
-                        self.code = try container.decodeIfPresent(
-                            Swift.String.self,
-                            forKey: .code
-                        )
-                        self.status = try container.decodeIfPresent(
-                            Swift.Double.self,
-                            forKey: .status
-                        )
-                        try decoder.ensureNoAdditionalProperties(knownKeys: [
-                            "name",
-                            "message",
-                            "code",
-                            "status"
-                        ])
                     }
                 }
                 /// - Remark: Generated from `#/components/schemas/ApiError/diagnostics/causes`.
@@ -1036,71 +661,6 @@ extension Components {
                     case cfRayId
                     case cloudflareUrl
                 }
-                public init(from decoder: any Swift.Decoder) throws {
-                    let container = try decoder.container(keyedBy: CodingKeys.self)
-                    self.origin = try container.decode(
-                        Components.Schemas.ApiError.DiagnosticsPayload.OriginPayload.self,
-                        forKey: .origin
-                    )
-                    self.operation = try container.decode(
-                        Swift.String.self,
-                        forKey: .operation
-                    )
-                    self.entity = try container.decodeIfPresent(
-                        Swift.String.self,
-                        forKey: .entity
-                    )
-                    self.module = try container.decodeIfPresent(
-                        Swift.String.self,
-                        forKey: .module
-                    )
-                    self.stage = try container.decode(
-                        Components.Schemas.ApiError.DiagnosticsPayload.StagePayload.self,
-                        forKey: .stage
-                    )
-                    self.causes = try container.decode(
-                        Components.Schemas.ApiError.DiagnosticsPayload.CausesPayload.self,
-                        forKey: .causes
-                    )
-                    self.truncated = try container.decodeIfPresent(
-                        Swift.Bool.self,
-                        forKey: .truncated
-                    )
-                    self.batchIndex = try container.decodeIfPresent(
-                        Swift.Int.self,
-                        forKey: .batchIndex
-                    )
-                    self.sentryEventId = try container.decodeIfPresent(
-                        Swift.String.self,
-                        forKey: .sentryEventId
-                    )
-                    self.sentryUrl = try container.decodeIfPresent(
-                        Swift.String.self,
-                        forKey: .sentryUrl
-                    )
-                    self.cfRayId = try container.decodeIfPresent(
-                        Swift.String.self,
-                        forKey: .cfRayId
-                    )
-                    self.cloudflareUrl = try container.decodeIfPresent(
-                        Components.Schemas.ApiError.DiagnosticsPayload.CloudflareUrlPayload.self,
-                        forKey: .cloudflareUrl
-                    )
-                    try decoder.ensureNoAdditionalProperties(knownKeys: [
-                        "origin",
-                        "operation",
-                        "entity",
-                        "module",
-                        "stage",
-                        "causes",
-                        "truncated",
-                        "batchIndex",
-                        "sentryEventId",
-                        "sentryUrl",
-                        "cfRayId",
-                        "cloudflareUrl"
-                    ])
-                }
             }
             /// - Remark: Generated from `#/components/schemas/ApiError/diagnostics`.
             public var diagnostics: Components.Schemas.ApiError.DiagnosticsPayload?
@@ -1133,26 +693,6 @@ extension Components {
                     case code
                     case path
                     case message
-                }
-                public init(from decoder: any Swift.Decoder) throws {
-                    let container = try decoder.container(keyedBy: CodingKeys.self)
-                    self.code = try container.decode(
-                        Swift.String.self,
-                        forKey: .code
-                    )
-                    self.path = try container.decode(
-                        [Swift.String].self,
-                        forKey: .path
-                    )
-                    self.message = try container.decode(
-                        Swift.String.self,
-                        forKey: .message
-                    )
-                    try decoder.ensureNoAdditionalProperties(knownKeys: [
-                        "code",
-                        "path",
-                        "message"
-                    ])
                 }
             }
             /// - Remark: Generated from `#/components/schemas/ApiError/validationIssues`.
@@ -1195,46 +735,6 @@ extension Components {
                 case blockers
                 case validationIssues
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.message = try container.decode(
-                    Swift.String.self,
-                    forKey: .message
-                )
-                self.code = try container.decode(
-                    Swift.String.self,
-                    forKey: .code
-                )
-                self.reason = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .reason
-                )
-                self.requestId = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .requestId
-                )
-                self.diagnostics = try container.decodeIfPresent(
-                    Components.Schemas.ApiError.DiagnosticsPayload.self,
-                    forKey: .diagnostics
-                )
-                self.blockers = try container.decodeIfPresent(
-                    [Components.Schemas.ImpactItem].self,
-                    forKey: .blockers
-                )
-                self.validationIssues = try container.decodeIfPresent(
-                    Components.Schemas.ApiError.ValidationIssuesPayload.self,
-                    forKey: .validationIssues
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "message",
-                    "code",
-                    "reason",
-                    "requestId",
-                    "diagnostics",
-                    "blockers",
-                    "validationIssues"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/AttachableImageEntityId`.
         public typealias AttachableImageEntityId = Swift.String
@@ -1251,16 +751,6 @@ extension Components {
             }
             public enum CodingKeys: String, CodingKey {
                 case id
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.id = try container.decode(
-                    Swift.String.self,
-                    forKey: .id
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "id"
-                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/BaseKind`.
@@ -1310,26 +800,6 @@ extension Components {
                     case servingSizeUnit = "serving_size_unit"
                     case householdServingFulltext = "household_serving_fulltext"
                 }
-                public init(from decoder: any Swift.Decoder) throws {
-                    let container = try decoder.container(keyedBy: CodingKeys.self)
-                    self.servingSize = try container.decodeIfPresent(
-                        Swift.Double.self,
-                        forKey: .servingSize
-                    )
-                    self.servingSizeUnit = try container.decodeIfPresent(
-                        Swift.String.self,
-                        forKey: .servingSizeUnit
-                    )
-                    self.householdServingFulltext = try container.decodeIfPresent(
-                        Swift.String.self,
-                        forKey: .householdServingFulltext
-                    )
-                    try decoder.ensureNoAdditionalProperties(knownKeys: [
-                        "serving_size",
-                        "serving_size_unit",
-                        "household_serving_fulltext"
-                    ])
-                }
             }
             /// - Remark: Generated from `#/components/schemas/BrandedFoodInfo/serving`.
             public var serving: Components.Schemas.BrandedFoodInfo.ServingPayload
@@ -1365,41 +835,6 @@ extension Components {
                 case ingredients
                 case serving
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.brandOwner = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .brandOwner
-                )
-                self.brandName = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .brandName
-                )
-                self.brandedFoodCategory = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .brandedFoodCategory
-                )
-                self.gtinUpc = try container.decode(
-                    Components.Schemas.Upc.self,
-                    forKey: .gtinUpc
-                )
-                self.ingredients = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .ingredients
-                )
-                self.serving = try container.decode(
-                    Components.Schemas.BrandedFoodInfo.ServingPayload.self,
-                    forKey: .serving
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "brand_owner",
-                    "brand_name",
-                    "branded_food_category",
-                    "gtin_upc",
-                    "ingredients",
-                    "serving"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/BrowserBridgeCapabilities`.
         public struct BrowserBridgeCapabilities: Codable, Hashable, Sendable {
@@ -1428,26 +863,6 @@ extension Components {
                 case fixedCaptureVersion
                 case enhancedScreenshot
                 case renderedPDF
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.fixedCaptureVersion = try container.decode(
-                    Swift.Int.self,
-                    forKey: .fixedCaptureVersion
-                )
-                self.enhancedScreenshot = try container.decode(
-                    Swift.Bool.self,
-                    forKey: .enhancedScreenshot
-                )
-                self.renderedPDF = try container.decode(
-                    Swift.Bool.self,
-                    forKey: .renderedPDF
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "fixedCaptureVersion",
-                    "enhancedScreenshot",
-                    "renderedPDF"
-                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/BrowserBridgeClientMessage`.
@@ -1547,36 +962,6 @@ extension Components {
                 case browser
                 case capabilities
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.protocolVersion = try container.decode(
-                    Components.Schemas.BrowserBridgeClientMessageHello.ProtocolVersionPayload.self,
-                    forKey: .protocolVersion
-                )
-                self._type = try container.decode(
-                    Components.Schemas.BrowserBridgeClientMessageHello._TypePayload.self,
-                    forKey: ._type
-                )
-                self.deviceID = try container.decode(
-                    Swift.String.self,
-                    forKey: .deviceID
-                )
-                self.browser = try container.decode(
-                    Components.Schemas.BrowserChoice.self,
-                    forKey: .browser
-                )
-                self.capabilities = try container.decode(
-                    Components.Schemas.BrowserBridgeCapabilities.self,
-                    forKey: .capabilities
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "protocolVersion",
-                    "type",
-                    "deviceID",
-                    "browser",
-                    "capabilities"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/BrowserBridgeClientMessagePong`.
         public struct BrowserBridgeClientMessagePong: Codable, Hashable, Sendable {
@@ -1613,26 +998,6 @@ extension Components {
                 case protocolVersion
                 case _type = "type"
                 case timestamp
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.protocolVersion = try container.decode(
-                    Components.Schemas.BrowserBridgeClientMessagePong.ProtocolVersionPayload.self,
-                    forKey: .protocolVersion
-                )
-                self._type = try container.decode(
-                    Components.Schemas.BrowserBridgeClientMessagePong._TypePayload.self,
-                    forKey: ._type
-                )
-                self.timestamp = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .timestamp
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "protocolVersion",
-                    "type",
-                    "timestamp"
-                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/BrowserBridgeClientMessageResult`.
@@ -1671,26 +1036,6 @@ extension Components {
                 case _type = "type"
                 case result
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.protocolVersion = try container.decode(
-                    Components.Schemas.BrowserBridgeClientMessageResult.ProtocolVersionPayload.self,
-                    forKey: .protocolVersion
-                )
-                self._type = try container.decode(
-                    Components.Schemas.BrowserBridgeClientMessageResult._TypePayload.self,
-                    forKey: ._type
-                )
-                self.result = try container.decode(
-                    Components.Schemas.BrowserBridgeResult.self,
-                    forKey: .result
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "protocolVersion",
-                    "type",
-                    "result"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/BrowserBridgeClientMessageRunCompletedAck`.
         public struct BrowserBridgeClientMessageRunCompletedAck: Codable, Hashable, Sendable {
@@ -1727,26 +1072,6 @@ extension Components {
                 case protocolVersion
                 case _type = "type"
                 case runID
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.protocolVersion = try container.decode(
-                    Components.Schemas.BrowserBridgeClientMessageRunCompletedAck.ProtocolVersionPayload.self,
-                    forKey: .protocolVersion
-                )
-                self._type = try container.decode(
-                    Components.Schemas.BrowserBridgeClientMessageRunCompletedAck._TypePayload.self,
-                    forKey: ._type
-                )
-                self.runID = try container.decode(
-                    Swift.String.self,
-                    forKey: .runID
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "protocolVersion",
-                    "type",
-                    "runID"
-                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/BrowserBridgeCommandOutcome`.
@@ -1812,21 +1137,6 @@ extension Components {
                 case status
                 case capture
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.status = try container.decode(
-                    Components.Schemas.BrowserBridgeCommandOutcomeCompleted.StatusPayload.self,
-                    forKey: .status
-                )
-                self.capture = try container.decodeIfPresent(
-                    Components.Schemas.BrowserPageCapture.self,
-                    forKey: .capture
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "status",
-                    "capture"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/BrowserBridgeCommandOutcomeFailed`.
         public struct BrowserBridgeCommandOutcomeFailed: Codable, Hashable, Sendable {
@@ -1865,31 +1175,6 @@ extension Components {
                 case code
                 case message
                 case retryable
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.status = try container.decode(
-                    Components.Schemas.BrowserBridgeCommandOutcomeFailed.StatusPayload.self,
-                    forKey: .status
-                )
-                self.code = try container.decode(
-                    Components.Schemas.BrowserBridgeFailureCode.self,
-                    forKey: .code
-                )
-                self.message = try container.decode(
-                    Swift.String.self,
-                    forKey: .message
-                )
-                self.retryable = try container.decode(
-                    Swift.Bool.self,
-                    forKey: .retryable
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "status",
-                    "code",
-                    "message",
-                    "retryable"
-                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/BrowserBridgeFailureCode`.
@@ -1991,21 +1276,6 @@ extension Components {
                     case runId
                     case targetId
                 }
-                public init(from decoder: any Swift.Decoder) throws {
-                    let container = try decoder.container(keyedBy: CodingKeys.self)
-                    self.runId = try container.decode(
-                        Components.Schemas.ImportRunShortcode.self,
-                        forKey: .runId
-                    )
-                    self.targetId = try container.decode(
-                        Swift.String.self,
-                        forKey: .targetId
-                    )
-                    try decoder.ensureNoAdditionalProperties(knownKeys: [
-                        "runId",
-                        "targetId"
-                    ])
-                }
             }
             /// - Remark: Generated from `#/components/schemas/BrowserBridgeOperationCapture/evidenceScope`.
             public var evidenceScope: Components.Schemas.BrowserBridgeOperationCapture.EvidenceScopePayload?
@@ -2036,36 +1306,6 @@ extension Components {
                 case enhancedEvidence
                 case recoveryURL
                 case evidenceScope
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self._type = try container.decode(
-                    Components.Schemas.BrowserBridgeOperationCapture._TypePayload.self,
-                    forKey: ._type
-                )
-                self.allowedHosts = try container.decode(
-                    Components.Schemas.InputSchema172.self,
-                    forKey: .allowedHosts
-                )
-                self.enhancedEvidence = try container.decode(
-                    Swift.Bool.self,
-                    forKey: .enhancedEvidence
-                )
-                self.recoveryURL = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .recoveryURL
-                )
-                self.evidenceScope = try container.decodeIfPresent(
-                    Components.Schemas.BrowserBridgeOperationCapture.EvidenceScopePayload.self,
-                    forKey: .evidenceScope
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "type",
-                    "allowedHosts",
-                    "enhancedEvidence",
-                    "recoveryURL",
-                    "evidenceScope"
-                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/BrowserBridgeOperationFollowCapturedLink`.
@@ -2100,26 +1340,6 @@ extension Components {
                 case linkID
                 case allowedHosts
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self._type = try container.decode(
-                    Components.Schemas.BrowserBridgeOperationFollowCapturedLink._TypePayload.self,
-                    forKey: ._type
-                )
-                self.linkID = try container.decode(
-                    Swift.String.self,
-                    forKey: .linkID
-                )
-                self.allowedHosts = try container.decode(
-                    Components.Schemas.InputSchema172.self,
-                    forKey: .allowedHosts
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "type",
-                    "linkID",
-                    "allowedHosts"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/BrowserBridgeOperationNavigate`.
         public struct BrowserBridgeOperationNavigate: Codable, Hashable, Sendable {
@@ -2153,26 +1373,6 @@ extension Components {
                 case url
                 case allowedHosts
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self._type = try container.decode(
-                    Components.Schemas.BrowserBridgeOperationNavigate._TypePayload.self,
-                    forKey: ._type
-                )
-                self.url = try container.decode(
-                    Swift.String.self,
-                    forKey: .url
-                )
-                self.allowedHosts = try container.decode(
-                    Components.Schemas.InputSchema172.self,
-                    forKey: .allowedHosts
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "type",
-                    "url",
-                    "allowedHosts"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/BrowserBridgeOperationScroll`.
         public struct BrowserBridgeOperationScroll: Codable, Hashable, Sendable {
@@ -2199,21 +1399,6 @@ extension Components {
             public enum CodingKeys: String, CodingKey {
                 case _type = "type"
                 case pageCount
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self._type = try container.decode(
-                    Components.Schemas.BrowserBridgeOperationScroll._TypePayload.self,
-                    forKey: ._type
-                )
-                self.pageCount = try container.decode(
-                    Swift.Int.self,
-                    forKey: .pageCount
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "type",
-                    "pageCount"
-                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/BrowserBridgeRequest`.
@@ -2266,41 +1451,6 @@ extension Components {
                 case deadline
                 case operation
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.protocolVersion = try container.decode(
-                    Components.Schemas.BrowserBridgeRequest.ProtocolVersionPayload.self,
-                    forKey: .protocolVersion
-                )
-                self.id = try container.decode(
-                    Swift.String.self,
-                    forKey: .id
-                )
-                self.operationId = try container.decode(
-                    Swift.String.self,
-                    forKey: .operationId
-                )
-                self.runID = try container.decode(
-                    Swift.String.self,
-                    forKey: .runID
-                )
-                self.deadline = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .deadline
-                )
-                self.operation = try container.decode(
-                    Components.Schemas.BrowserBridgeOperation.self,
-                    forKey: .operation
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "protocolVersion",
-                    "id",
-                    "operationId",
-                    "runID",
-                    "deadline",
-                    "operation"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/BrowserBridgeResult`.
         public struct BrowserBridgeResult: Codable, Hashable, Sendable {
@@ -2351,41 +1501,6 @@ extension Components {
                 case runID
                 case completedAt
                 case outcome
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.protocolVersion = try container.decode(
-                    Components.Schemas.BrowserBridgeResult.ProtocolVersionPayload.self,
-                    forKey: .protocolVersion
-                )
-                self.commandID = try container.decode(
-                    Swift.String.self,
-                    forKey: .commandID
-                )
-                self.operationID = try container.decode(
-                    Swift.String.self,
-                    forKey: .operationID
-                )
-                self.runID = try container.decode(
-                    Swift.String.self,
-                    forKey: .runID
-                )
-                self.completedAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .completedAt
-                )
-                self.outcome = try container.decode(
-                    Components.Schemas.BrowserBridgeCommandOutcome.self,
-                    forKey: .outcome
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "protocolVersion",
-                    "commandID",
-                    "operationID",
-                    "runID",
-                    "completedAt",
-                    "outcome"
-                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/BrowserBridgeRunCompletion`.
@@ -2446,46 +1561,6 @@ extension Components {
                 case updated
                 case skipped
                 case findingCount
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.runID = try container.decode(
-                    Swift.String.self,
-                    forKey: .runID
-                )
-                self.terminalStatus = try container.decode(
-                    Components.Schemas.BrowserBridgeRunCompletion.TerminalStatusPayload.self,
-                    forKey: .terminalStatus
-                )
-                self.outcome = try container.decodeIfPresent(
-                    Components.Schemas.ImportRunTargetOutcome.self,
-                    forKey: .outcome
-                )
-                self.imported = try container.decode(
-                    Swift.Int.self,
-                    forKey: .imported
-                )
-                self.updated = try container.decode(
-                    Swift.Int.self,
-                    forKey: .updated
-                )
-                self.skipped = try container.decode(
-                    Swift.Int.self,
-                    forKey: .skipped
-                )
-                self.findingCount = try container.decode(
-                    Swift.Int.self,
-                    forKey: .findingCount
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "runID",
-                    "terminalStatus",
-                    "outcome",
-                    "imported",
-                    "updated",
-                    "skipped",
-                    "findingCount"
-                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/BrowserBridgeServerMessage`.
@@ -2585,26 +1660,6 @@ extension Components {
                 case _type = "type"
                 case commandID
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.protocolVersion = try container.decode(
-                    Components.Schemas.BrowserBridgeServerMessageAcknowledge.ProtocolVersionPayload.self,
-                    forKey: .protocolVersion
-                )
-                self._type = try container.decode(
-                    Components.Schemas.BrowserBridgeServerMessageAcknowledge._TypePayload.self,
-                    forKey: ._type
-                )
-                self.commandID = try container.decode(
-                    Swift.String.self,
-                    forKey: .commandID
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "protocolVersion",
-                    "type",
-                    "commandID"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/BrowserBridgeServerMessageCancel`.
         public struct BrowserBridgeServerMessageCancel: Codable, Hashable, Sendable {
@@ -2641,26 +1696,6 @@ extension Components {
                 case protocolVersion
                 case _type = "type"
                 case commandID
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.protocolVersion = try container.decode(
-                    Components.Schemas.BrowserBridgeServerMessageCancel.ProtocolVersionPayload.self,
-                    forKey: .protocolVersion
-                )
-                self._type = try container.decode(
-                    Components.Schemas.BrowserBridgeServerMessageCancel._TypePayload.self,
-                    forKey: ._type
-                )
-                self.commandID = try container.decode(
-                    Swift.String.self,
-                    forKey: .commandID
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "protocolVersion",
-                    "type",
-                    "commandID"
-                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/BrowserBridgeServerMessageCommand`.
@@ -2699,26 +1734,6 @@ extension Components {
                 case _type = "type"
                 case command
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.protocolVersion = try container.decode(
-                    Components.Schemas.BrowserBridgeServerMessageCommand.ProtocolVersionPayload.self,
-                    forKey: .protocolVersion
-                )
-                self._type = try container.decode(
-                    Components.Schemas.BrowserBridgeServerMessageCommand._TypePayload.self,
-                    forKey: ._type
-                )
-                self.command = try container.decode(
-                    Components.Schemas.BrowserBridgeRequest.self,
-                    forKey: .command
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "protocolVersion",
-                    "type",
-                    "command"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/BrowserBridgeServerMessagePing`.
         public struct BrowserBridgeServerMessagePing: Codable, Hashable, Sendable {
@@ -2756,26 +1771,6 @@ extension Components {
                 case _type = "type"
                 case timestamp
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.protocolVersion = try container.decode(
-                    Components.Schemas.BrowserBridgeServerMessagePing.ProtocolVersionPayload.self,
-                    forKey: .protocolVersion
-                )
-                self._type = try container.decode(
-                    Components.Schemas.BrowserBridgeServerMessagePing._TypePayload.self,
-                    forKey: ._type
-                )
-                self.timestamp = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .timestamp
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "protocolVersion",
-                    "type",
-                    "timestamp"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/BrowserBridgeServerMessageRaiseAuthWindow`.
         public struct BrowserBridgeServerMessageRaiseAuthWindow: Codable, Hashable, Sendable {
@@ -2812,26 +1807,6 @@ extension Components {
                 case protocolVersion
                 case _type = "type"
                 case runID
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.protocolVersion = try container.decode(
-                    Components.Schemas.BrowserBridgeServerMessageRaiseAuthWindow.ProtocolVersionPayload.self,
-                    forKey: .protocolVersion
-                )
-                self._type = try container.decode(
-                    Components.Schemas.BrowserBridgeServerMessageRaiseAuthWindow._TypePayload.self,
-                    forKey: ._type
-                )
-                self.runID = try container.decode(
-                    Swift.String.self,
-                    forKey: .runID
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "protocolVersion",
-                    "type",
-                    "runID"
-                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/BrowserBridgeServerMessageRunCompleted`.
@@ -2913,56 +1888,6 @@ extension Components {
                 case skipped
                 case findingCount
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.protocolVersion = try container.decode(
-                    Components.Schemas.BrowserBridgeServerMessageRunCompleted.ProtocolVersionPayload.self,
-                    forKey: .protocolVersion
-                )
-                self._type = try container.decode(
-                    Components.Schemas.BrowserBridgeServerMessageRunCompleted._TypePayload.self,
-                    forKey: ._type
-                )
-                self.runID = try container.decode(
-                    Swift.String.self,
-                    forKey: .runID
-                )
-                self.terminalStatus = try container.decode(
-                    Components.Schemas.BrowserBridgeServerMessageRunCompleted.TerminalStatusPayload.self,
-                    forKey: .terminalStatus
-                )
-                self.outcome = try container.decodeIfPresent(
-                    Components.Schemas.ImportRunTargetOutcome.self,
-                    forKey: .outcome
-                )
-                self.imported = try container.decode(
-                    Swift.Int.self,
-                    forKey: .imported
-                )
-                self.updated = try container.decode(
-                    Swift.Int.self,
-                    forKey: .updated
-                )
-                self.skipped = try container.decode(
-                    Swift.Int.self,
-                    forKey: .skipped
-                )
-                self.findingCount = try container.decode(
-                    Swift.Int.self,
-                    forKey: .findingCount
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "protocolVersion",
-                    "type",
-                    "runID",
-                    "terminalStatus",
-                    "outcome",
-                    "imported",
-                    "updated",
-                    "skipped",
-                    "findingCount"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/BrowserCapturedImage`.
         public struct BrowserCapturedImage: Codable, Hashable, Sendable {
@@ -3004,36 +1929,6 @@ extension Components {
                 case naturalHeight
                 case highResolutionUrl
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.url = try container.decode(
-                    Swift.String.self,
-                    forKey: .url
-                )
-                self.alt = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .alt
-                )
-                self.naturalWidth = try container.decodeIfPresent(
-                    Swift.Int.self,
-                    forKey: .naturalWidth
-                )
-                self.naturalHeight = try container.decodeIfPresent(
-                    Swift.Int.self,
-                    forKey: .naturalHeight
-                )
-                self.highResolutionUrl = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .highResolutionUrl
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "url",
-                    "alt",
-                    "naturalWidth",
-                    "naturalHeight",
-                    "highResolutionUrl"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/BrowserCapturedLink`.
         public struct BrowserCapturedLink: Codable, Hashable, Sendable {
@@ -3062,26 +1957,6 @@ extension Components {
                 case id
                 case url
                 case label
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.id = try container.decode(
-                    Swift.String.self,
-                    forKey: .id
-                )
-                self.url = try container.decode(
-                    Swift.String.self,
-                    forKey: .url
-                )
-                self.label = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .label
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "id",
-                    "url",
-                    "label"
-                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/BrowserChoice`.
@@ -3128,31 +2003,6 @@ extension Components {
                 case kind
                 case checksum
                 case contentType
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.id = try container.decode(
-                    Swift.String.self,
-                    forKey: .id
-                )
-                self.kind = try container.decode(
-                    Components.Schemas.BrowserEvidenceKind.self,
-                    forKey: .kind
-                )
-                self.checksum = try container.decode(
-                    Swift.String.self,
-                    forKey: .checksum
-                )
-                self.contentType = try container.decode(
-                    Swift.String.self,
-                    forKey: .contentType
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "id",
-                    "kind",
-                    "checksum",
-                    "contentType"
-                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/BrowserPageCapture`.
@@ -3243,76 +2093,6 @@ extension Components {
                 case paymentEvidence
                 case evidence
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.sourceURL = try container.decode(
-                    Swift.String.self,
-                    forKey: .sourceURL
-                )
-                self.canonicalUrl = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .canonicalUrl
-                )
-                self.requestedAmazonAsin = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .requestedAmazonAsin
-                )
-                self.servedAmazonAsin = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .servedAmazonAsin
-                )
-                self.variantMarkers = try container.decode(
-                    [Swift.String].self,
-                    forKey: .variantMarkers
-                )
-                self.title = try container.decode(
-                    Swift.String.self,
-                    forKey: .title
-                )
-                self.capturedAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .capturedAt
-                )
-                self.captureVersion = try container.decode(
-                    Swift.Int.self,
-                    forKey: .captureVersion
-                )
-                self.readableText = try container.decode(
-                    Swift.String.self,
-                    forKey: .readableText
-                )
-                self.links = try container.decode(
-                    [Components.Schemas.BrowserCapturedLink].self,
-                    forKey: .links
-                )
-                self.images = try container.decode(
-                    [Components.Schemas.BrowserCapturedImage].self,
-                    forKey: .images
-                )
-                self.paymentEvidence = try container.decode(
-                    [Components.Schemas.BrowserPaymentEvidence].self,
-                    forKey: .paymentEvidence
-                )
-                self.evidence = try container.decode(
-                    [Components.Schemas.BrowserEvidenceReference].self,
-                    forKey: .evidence
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "sourceURL",
-                    "canonicalUrl",
-                    "requestedAmazonAsin",
-                    "servedAmazonAsin",
-                    "variantMarkers",
-                    "title",
-                    "capturedAt",
-                    "captureVersion",
-                    "readableText",
-                    "links",
-                    "images",
-                    "paymentEvidence",
-                    "evidence"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/BrowserPaymentEvidence`.
         public struct BrowserPaymentEvidence: Codable, Hashable, Sendable {
@@ -3341,26 +2121,6 @@ extension Components {
                 case methodLabel
                 case lastFour
                 case amountText
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.methodLabel = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .methodLabel
-                )
-                self.lastFour = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .lastFour
-                )
-                self.amountText = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .amountText
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "methodLabel",
-                    "lastFour",
-                    "amountText"
-                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/CollectionProductOut`.
@@ -3410,26 +2170,6 @@ extension Components {
                     case id
                     case locationId
                     case amount
-                }
-                public init(from decoder: any Swift.Decoder) throws {
-                    let container = try decoder.container(keyedBy: CodingKeys.self)
-                    self.id = try container.decode(
-                        Components.Schemas.InventoryShortcode.self,
-                        forKey: .id
-                    )
-                    self.locationId = try container.decode(
-                        Components.Schemas.LocationShortcode.self,
-                        forKey: .locationId
-                    )
-                    self.amount = try container.decode(
-                        Components.Schemas.Amount.self,
-                        forKey: .amount
-                    )
-                    try decoder.ensureNoAdditionalProperties(knownKeys: [
-                        "id",
-                        "locationId",
-                        "amount"
-                    ])
                 }
             }
             /// - Remark: Generated from `#/components/schemas/CollectionProductOut/inventory`.
@@ -3484,61 +2224,6 @@ extension Components {
                 case purchases
                 case inventory
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.id = try container.decode(
-                    Components.Schemas.ProductShortcode.self,
-                    forKey: .id
-                )
-                self.name = try container.decode(
-                    Swift.String.self,
-                    forKey: .name
-                )
-                self.manufacturer = try container.decode(
-                    Swift.String.self,
-                    forKey: .manufacturer
-                )
-                self.imageUrl = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .imageUrl
-                )
-                self.direct = try container.decode(
-                    Swift.Bool.self,
-                    forKey: .direct
-                )
-                self.inherited = try container.decode(
-                    Swift.Bool.self,
-                    forKey: .inherited
-                )
-                self.matches = try container.decodeIfPresent(
-                    [Components.Schemas.SmartCollectionMatch].self,
-                    forKey: .matches
-                )
-                self.placements = try container.decode(
-                    [Components.Schemas.CollectionProductPlacementOut].self,
-                    forKey: .placements
-                )
-                self.purchases = try container.decode(
-                    [Components.Schemas.CollectionProductPurchaseOut].self,
-                    forKey: .purchases
-                )
-                self.inventory = try container.decodeIfPresent(
-                    Components.Schemas.CollectionProductOut.InventoryPayload.self,
-                    forKey: .inventory
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "id",
-                    "name",
-                    "manufacturer",
-                    "imageUrl",
-                    "direct",
-                    "inherited",
-                    "matches",
-                    "placements",
-                    "purchases",
-                    "inventory"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/CollectionProductPlacementOut`.
         public struct CollectionProductPlacementOut: Codable, Hashable, Sendable {
@@ -3567,26 +2252,6 @@ extension Components {
                 case id
                 case name
                 case path
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.id = try container.decode(
-                    Components.Schemas.LocationShortcode.self,
-                    forKey: .id
-                )
-                self.name = try container.decode(
-                    Swift.String.self,
-                    forKey: .name
-                )
-                self.path = try container.decode(
-                    [Swift.String].self,
-                    forKey: .path
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "id",
-                    "name",
-                    "path"
-                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/CollectionProductPurchaseOut`.
@@ -3634,41 +2299,6 @@ extension Components {
                 case date
                 case vendorName
                 case trades
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.id = try container.decode(
-                    Components.Schemas.PurchaseShortcode.self,
-                    forKey: .id
-                )
-                self.orderId = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .orderId
-                )
-                self.displayLabel = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .displayLabel
-                )
-                self.date = try container.decode(
-                    Components.Schemas.PlainDate.self,
-                    forKey: .date
-                )
-                self.vendorName = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .vendorName
-                )
-                self.trades = try container.decode(
-                    [Components.Schemas.Trade].self,
-                    forKey: .trades
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "id",
-                    "orderId",
-                    "displayLabel",
-                    "date",
-                    "vendorName",
-                    "trades"
-                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/ConfirmInventoryOwnershipInput`.
@@ -3727,26 +2357,6 @@ extension Components {
                 case id
                 case name
                 case coverUrl
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.id = try container.decode(
-                    Components.Schemas.ProductShortcode.self,
-                    forKey: .id
-                )
-                self.name = try container.decode(
-                    Swift.String.self,
-                    forKey: .name
-                )
-                self.coverUrl = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .coverUrl
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "id",
-                    "name",
-                    "coverUrl"
-                ])
             }
         }
         /// cookbook shortcode, e.g. CKB-4K7M
@@ -3830,66 +2440,6 @@ extension Components {
                 case product
                 case dataQuality
                 case displayImages
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.id = try container.decode(
-                    Components.Schemas.CookbookShortcode.self,
-                    forKey: .id
-                )
-                self.book = try container.decode(
-                    Swift.String.self,
-                    forKey: .book
-                )
-                self.author = try container.decode(
-                    [Swift.String].self,
-                    forKey: .author
-                )
-                self.subjects = try container.decode(
-                    [Swift.String].self,
-                    forKey: .subjects
-                )
-                self.recipeCount = try container.decode(
-                    Swift.Int.self,
-                    forKey: .recipeCount
-                )
-                self.coverUrl = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .coverUrl
-                )
-                self.sourceRecipeCount = try container.decode(
-                    Swift.Int.self,
-                    forKey: .sourceRecipeCount
-                )
-                self.needsReextract = try container.decode(
-                    Swift.Bool.self,
-                    forKey: .needsReextract
-                )
-                self.product = try container.decodeIfPresent(
-                    Components.Schemas.CookbookProductSummary.self,
-                    forKey: .product
-                )
-                self.dataQuality = try container.decode(
-                    Components.Schemas.DataQuality.self,
-                    forKey: .dataQuality
-                )
-                self.displayImages = try container.decode(
-                    Components.Schemas.DisplayImagesField.self,
-                    forKey: .displayImages
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "id",
-                    "book",
-                    "author",
-                    "subjects",
-                    "recipeCount",
-                    "coverUrl",
-                    "sourceRecipeCount",
-                    "needsReextract",
-                    "product",
-                    "dataQuality",
-                    "displayImages"
-                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/CostType`.
@@ -4028,111 +2578,6 @@ extension Components {
                 case importRun
                 case usdaFoods
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.product = try container.decode(
-                    Swift.Int.self,
-                    forKey: .product
-                )
-                self.recipe = try container.decode(
-                    Swift.Int.self,
-                    forKey: .recipe
-                )
-                self.ingredient = try container.decode(
-                    Swift.Int.self,
-                    forKey: .ingredient
-                )
-                self.cookbook = try container.decode(
-                    Swift.Int.self,
-                    forKey: .cookbook
-                )
-                self.location = try container.decode(
-                    Swift.Int.self,
-                    forKey: .location
-                )
-                self.inventory = try container.decode(
-                    Swift.Int.self,
-                    forKey: .inventory
-                )
-                self.meal = try container.decode(
-                    Swift.Int.self,
-                    forKey: .meal
-                )
-                self.project = try container.decode(
-                    Swift.Int.self,
-                    forKey: .project
-                )
-                self.task = try container.decode(
-                    Swift.Int.self,
-                    forKey: .task
-                )
-                self.vendor = try container.decode(
-                    Swift.Int.self,
-                    forKey: .vendor
-                )
-                self.purchase = try container.decode(
-                    Swift.Int.self,
-                    forKey: .purchase
-                )
-                self.financialAccount = try container.decode(
-                    Swift.Int.self,
-                    forKey: .financialAccount
-                )
-                self.financialTransaction = try container.decode(
-                    Swift.Int.self,
-                    forKey: .financialTransaction
-                )
-                self.wish = try container.decode(
-                    Swift.Int.self,
-                    forKey: .wish
-                )
-                self.expense = try container.decode(
-                    Swift.Int.self,
-                    forKey: .expense
-                )
-                self.image = try container.decode(
-                    Swift.Int.self,
-                    forKey: .image
-                )
-                self.planting = try container.decode(
-                    Swift.Int.self,
-                    forKey: .planting
-                )
-                self.gardenEntry = try container.decode(
-                    Swift.Int.self,
-                    forKey: .gardenEntry
-                )
-                self.importRun = try container.decode(
-                    Swift.Int.self,
-                    forKey: .importRun
-                )
-                self.usdaFoods = try container.decode(
-                    Swift.Int.self,
-                    forKey: .usdaFoods
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "product",
-                    "recipe",
-                    "ingredient",
-                    "cookbook",
-                    "location",
-                    "inventory",
-                    "meal",
-                    "project",
-                    "task",
-                    "vendor",
-                    "purchase",
-                    "financialAccount",
-                    "financialTransaction",
-                    "wish",
-                    "expense",
-                    "image",
-                    "planting",
-                    "gardenEntry",
-                    "importRun",
-                    "usdaFoods"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/DataExceptionReason`.
         @frozen public enum DataExceptionReason: String, Codable, Hashable, Sendable, CaseIterable {
@@ -4195,46 +2640,6 @@ extension Components {
                 case relatedGaps
                 case relatedExceptions
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.status = try container.decode(
-                    Components.Schemas.DataQualityStatus.self,
-                    forKey: .status
-                )
-                self.score = try container.decode(
-                    Swift.Double.self,
-                    forKey: .score
-                )
-                self.facets = try container.decode(
-                    [Components.Schemas.DataQualityFacet].self,
-                    forKey: .facets
-                )
-                self.gaps = try container.decode(
-                    [Components.Schemas.DataQualityGap].self,
-                    forKey: .gaps
-                )
-                self.exceptions = try container.decode(
-                    [Components.Schemas.DataQualityException].self,
-                    forKey: .exceptions
-                )
-                self.relatedGaps = try container.decode(
-                    [Components.Schemas.DataQualityGap].self,
-                    forKey: .relatedGaps
-                )
-                self.relatedExceptions = try container.decode(
-                    [Components.Schemas.DataQualityException].self,
-                    forKey: .relatedExceptions
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "status",
-                    "score",
-                    "facets",
-                    "gaps",
-                    "exceptions",
-                    "relatedGaps",
-                    "relatedExceptions"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/DataQualityCheckKind`.
         @frozen public enum DataQualityCheckKind: String, Codable, Hashable, Sendable, CaseIterable {
@@ -4292,41 +2697,6 @@ extension Components {
                 case targetId
                 case state
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.check = try container.decode(
-                    Swift.String.self,
-                    forKey: .check
-                )
-                self.reason = try container.decode(
-                    Components.Schemas.DataExceptionReason.self,
-                    forKey: .reason
-                )
-                self.note = try container.decode(
-                    Swift.String.self,
-                    forKey: .note
-                )
-                self.targetType = try container.decode(
-                    Swift.String.self,
-                    forKey: .targetType
-                )
-                self.targetId = try container.decode(
-                    Swift.String.self,
-                    forKey: .targetId
-                )
-                self.state = try container.decode(
-                    Components.Schemas.DataQualityException.StatePayload.self,
-                    forKey: .state
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "check",
-                    "reason",
-                    "note",
-                    "targetType",
-                    "targetId",
-                    "state"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/DataQualityFacet`.
         public struct DataQualityFacet: Codable, Hashable, Sendable {
@@ -4355,26 +2725,6 @@ extension Components {
                 case name
                 case status
                 case gaps
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.name = try container.decode(
-                    Components.Schemas.DataQualityFacetName.self,
-                    forKey: .name
-                )
-                self.status = try container.decode(
-                    Components.Schemas.DataQualityStatus.self,
-                    forKey: .status
-                )
-                self.gaps = try container.decode(
-                    [Components.Schemas.DataQualityGap].self,
-                    forKey: .gaps
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "name",
-                    "status",
-                    "gaps"
-                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/DataQualityFacetName`.
@@ -4434,41 +2784,6 @@ extension Components {
                 case targetId
                 case message
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.check = try container.decode(
-                    Swift.String.self,
-                    forKey: .check
-                )
-                self.facet = try container.decode(
-                    Components.Schemas.DataQualityFacetName.self,
-                    forKey: .facet
-                )
-                self.kind = try container.decode(
-                    Components.Schemas.DataQualityCheckKind.self,
-                    forKey: .kind
-                )
-                self.targetType = try container.decode(
-                    Swift.String.self,
-                    forKey: .targetType
-                )
-                self.targetId = try container.decode(
-                    Swift.String.self,
-                    forKey: .targetId
-                )
-                self.message = try container.decode(
-                    Swift.String.self,
-                    forKey: .message
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "check",
-                    "facet",
-                    "kind",
-                    "targetType",
-                    "targetId",
-                    "message"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/DataQualityStatus`.
         @frozen public enum DataQualityStatus: String, Codable, Hashable, Sendable, CaseIterable {
@@ -4487,6 +2802,501 @@ extension Components {
             case srLegacyFood = "sr_legacy_food"
             case subSampleFood = "sub_sample_food"
             case surveyFnddsFood = "survey_fndds_food"
+        }
+        /// - Remark: Generated from `#/components/schemas/DeviceCreateInput`.
+        public struct DeviceCreateInput: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/DeviceCreateInput/installationId`.
+            public var installationId: Swift.String
+            /// - Remark: Generated from `#/components/schemas/DeviceCreateInput/name`.
+            public var name: Swift.String
+            /// - Remark: Generated from `#/components/schemas/DeviceCreateInput/platform`.
+            public var platform: Components.Schemas.DevicePlatform
+            /// - Remark: Generated from `#/components/schemas/DeviceCreateInput/appVersion`.
+            public var appVersion: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/DeviceCreateInput/osVersion`.
+            public var osVersion: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/DeviceCreateInput/automaticWork`.
+            public var automaticWork: Swift.Bool?
+            /// - Remark: Generated from `#/components/schemas/DeviceCreateInput/remotePaused`.
+            public var remotePaused: Swift.Bool?
+            /// - Remark: Generated from `#/components/schemas/DeviceCreateInput/ledgerPartyId`.
+            public var ledgerPartyId: Components.Schemas.LedgerPartyShortcode?
+            /// - Remark: Generated from `#/components/schemas/DeviceCreateInput/productId`.
+            public var productId: Components.Schemas.ProductShortcode?
+            /// Creates a new `DeviceCreateInput`.
+            ///
+            /// - Parameters:
+            ///   - installationId:
+            ///   - name:
+            ///   - platform:
+            ///   - appVersion:
+            ///   - osVersion:
+            ///   - automaticWork:
+            ///   - remotePaused:
+            ///   - ledgerPartyId:
+            ///   - productId:
+            public init(
+                installationId: Swift.String,
+                name: Swift.String,
+                platform: Components.Schemas.DevicePlatform,
+                appVersion: Swift.String? = nil,
+                osVersion: Swift.String? = nil,
+                automaticWork: Swift.Bool? = nil,
+                remotePaused: Swift.Bool? = nil,
+                ledgerPartyId: Components.Schemas.LedgerPartyShortcode? = nil,
+                productId: Components.Schemas.ProductShortcode? = nil
+            ) {
+                self.installationId = installationId
+                self.name = name
+                self.platform = platform
+                self.appVersion = appVersion
+                self.osVersion = osVersion
+                self.automaticWork = automaticWork
+                self.remotePaused = remotePaused
+                self.ledgerPartyId = ledgerPartyId
+                self.productId = productId
+            }
+            public enum CodingKeys: String, CodingKey {
+                case installationId
+                case name
+                case platform
+                case appVersion
+                case osVersion
+                case automaticWork
+                case remotePaused
+                case ledgerPartyId
+                case productId
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/DeviceDetail`.
+        public struct DeviceDetail: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/DeviceDetail/id`.
+            public var id: Components.Schemas.DeviceShortcode
+            /// - Remark: Generated from `#/components/schemas/DeviceDetail/installationId`.
+            public var installationId: Swift.String
+            /// - Remark: Generated from `#/components/schemas/DeviceDetail/name`.
+            public var name: Swift.String
+            /// - Remark: Generated from `#/components/schemas/DeviceDetail/platform`.
+            public var platform: Components.Schemas.DevicePlatform
+            /// - Remark: Generated from `#/components/schemas/DeviceDetail/appVersion`.
+            public var appVersion: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/DeviceDetail/osVersion`.
+            public var osVersion: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/DeviceDetail/lastSeenAt`.
+            public var lastSeenAt: Foundation.Date?
+            /// - Remark: Generated from `#/components/schemas/DeviceDetail/automaticWork`.
+            public var automaticWork: Swift.Bool
+            /// - Remark: Generated from `#/components/schemas/DeviceDetail/remotePaused`.
+            public var remotePaused: Swift.Bool
+            /// - Remark: Generated from `#/components/schemas/DeviceDetail/ledgerPartyId`.
+            public var ledgerPartyId: Components.Schemas.LedgerPartyShortcode?
+            /// - Remark: Generated from `#/components/schemas/DeviceDetail/productId`.
+            public var productId: Components.Schemas.ProductShortcode?
+            /// - Remark: Generated from `#/components/schemas/DeviceDetail/ledgerPartyName`.
+            public var ledgerPartyName: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/DeviceDetail/productName`.
+            public var productName: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/DeviceDetail/createdAt`.
+            public var createdAt: Foundation.Date
+            /// - Remark: Generated from `#/components/schemas/DeviceDetail/updatedAt`.
+            public var updatedAt: Foundation.Date
+            /// - Remark: Generated from `#/components/schemas/DeviceDetail/dataQuality`.
+            public var dataQuality: Components.Schemas.DataQuality
+            /// - Remark: Generated from `#/components/schemas/DeviceDetail/displayImages`.
+            public var displayImages: Components.Schemas.DisplayImagesField
+            /// - Remark: Generated from `#/components/schemas/DeviceDetail/attachments`.
+            public var attachments: Components.Schemas.OutputSchema450
+            /// Creates a new `DeviceDetail`.
+            ///
+            /// - Parameters:
+            ///   - id:
+            ///   - installationId:
+            ///   - name:
+            ///   - platform:
+            ///   - appVersion:
+            ///   - osVersion:
+            ///   - lastSeenAt:
+            ///   - automaticWork:
+            ///   - remotePaused:
+            ///   - ledgerPartyId:
+            ///   - productId:
+            ///   - ledgerPartyName:
+            ///   - productName:
+            ///   - createdAt:
+            ///   - updatedAt:
+            ///   - dataQuality:
+            ///   - displayImages:
+            ///   - attachments:
+            public init(
+                id: Components.Schemas.DeviceShortcode,
+                installationId: Swift.String,
+                name: Swift.String,
+                platform: Components.Schemas.DevicePlatform,
+                appVersion: Swift.String? = nil,
+                osVersion: Swift.String? = nil,
+                lastSeenAt: Foundation.Date? = nil,
+                automaticWork: Swift.Bool,
+                remotePaused: Swift.Bool,
+                ledgerPartyId: Components.Schemas.LedgerPartyShortcode? = nil,
+                productId: Components.Schemas.ProductShortcode? = nil,
+                ledgerPartyName: Swift.String? = nil,
+                productName: Swift.String? = nil,
+                createdAt: Foundation.Date,
+                updatedAt: Foundation.Date,
+                dataQuality: Components.Schemas.DataQuality,
+                displayImages: Components.Schemas.DisplayImagesField,
+                attachments: Components.Schemas.OutputSchema450
+            ) {
+                self.id = id
+                self.installationId = installationId
+                self.name = name
+                self.platform = platform
+                self.appVersion = appVersion
+                self.osVersion = osVersion
+                self.lastSeenAt = lastSeenAt
+                self.automaticWork = automaticWork
+                self.remotePaused = remotePaused
+                self.ledgerPartyId = ledgerPartyId
+                self.productId = productId
+                self.ledgerPartyName = ledgerPartyName
+                self.productName = productName
+                self.createdAt = createdAt
+                self.updatedAt = updatedAt
+                self.dataQuality = dataQuality
+                self.displayImages = displayImages
+                self.attachments = attachments
+            }
+            public enum CodingKeys: String, CodingKey {
+                case id
+                case installationId
+                case name
+                case platform
+                case appVersion
+                case osVersion
+                case lastSeenAt
+                case automaticWork
+                case remotePaused
+                case ledgerPartyId
+                case productId
+                case ledgerPartyName
+                case productName
+                case createdAt
+                case updatedAt
+                case dataQuality
+                case displayImages
+                case attachments
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/DeviceListItem`.
+        public struct DeviceListItem: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/DeviceListItem/id`.
+            public var id: Components.Schemas.DeviceShortcode
+            /// - Remark: Generated from `#/components/schemas/DeviceListItem/installationId`.
+            public var installationId: Swift.String
+            /// - Remark: Generated from `#/components/schemas/DeviceListItem/name`.
+            public var name: Swift.String
+            /// - Remark: Generated from `#/components/schemas/DeviceListItem/platform`.
+            public var platform: Components.Schemas.DevicePlatform
+            /// - Remark: Generated from `#/components/schemas/DeviceListItem/appVersion`.
+            public var appVersion: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/DeviceListItem/osVersion`.
+            public var osVersion: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/DeviceListItem/lastSeenAt`.
+            public var lastSeenAt: Foundation.Date?
+            /// - Remark: Generated from `#/components/schemas/DeviceListItem/automaticWork`.
+            public var automaticWork: Swift.Bool
+            /// - Remark: Generated from `#/components/schemas/DeviceListItem/remotePaused`.
+            public var remotePaused: Swift.Bool
+            /// - Remark: Generated from `#/components/schemas/DeviceListItem/ledgerPartyId`.
+            public var ledgerPartyId: Components.Schemas.LedgerPartyShortcode?
+            /// - Remark: Generated from `#/components/schemas/DeviceListItem/productId`.
+            public var productId: Components.Schemas.ProductShortcode?
+            /// - Remark: Generated from `#/components/schemas/DeviceListItem/ledgerPartyName`.
+            public var ledgerPartyName: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/DeviceListItem/productName`.
+            public var productName: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/DeviceListItem/createdAt`.
+            public var createdAt: Foundation.Date
+            /// - Remark: Generated from `#/components/schemas/DeviceListItem/updatedAt`.
+            public var updatedAt: Foundation.Date
+            /// - Remark: Generated from `#/components/schemas/DeviceListItem/dataQuality`.
+            public var dataQuality: Components.Schemas.DataQuality
+            /// - Remark: Generated from `#/components/schemas/DeviceListItem/displayImages`.
+            public var displayImages: Components.Schemas.DisplayImagesField
+            /// Creates a new `DeviceListItem`.
+            ///
+            /// - Parameters:
+            ///   - id:
+            ///   - installationId:
+            ///   - name:
+            ///   - platform:
+            ///   - appVersion:
+            ///   - osVersion:
+            ///   - lastSeenAt:
+            ///   - automaticWork:
+            ///   - remotePaused:
+            ///   - ledgerPartyId:
+            ///   - productId:
+            ///   - ledgerPartyName:
+            ///   - productName:
+            ///   - createdAt:
+            ///   - updatedAt:
+            ///   - dataQuality:
+            ///   - displayImages:
+            public init(
+                id: Components.Schemas.DeviceShortcode,
+                installationId: Swift.String,
+                name: Swift.String,
+                platform: Components.Schemas.DevicePlatform,
+                appVersion: Swift.String? = nil,
+                osVersion: Swift.String? = nil,
+                lastSeenAt: Foundation.Date? = nil,
+                automaticWork: Swift.Bool,
+                remotePaused: Swift.Bool,
+                ledgerPartyId: Components.Schemas.LedgerPartyShortcode? = nil,
+                productId: Components.Schemas.ProductShortcode? = nil,
+                ledgerPartyName: Swift.String? = nil,
+                productName: Swift.String? = nil,
+                createdAt: Foundation.Date,
+                updatedAt: Foundation.Date,
+                dataQuality: Components.Schemas.DataQuality,
+                displayImages: Components.Schemas.DisplayImagesField
+            ) {
+                self.id = id
+                self.installationId = installationId
+                self.name = name
+                self.platform = platform
+                self.appVersion = appVersion
+                self.osVersion = osVersion
+                self.lastSeenAt = lastSeenAt
+                self.automaticWork = automaticWork
+                self.remotePaused = remotePaused
+                self.ledgerPartyId = ledgerPartyId
+                self.productId = productId
+                self.ledgerPartyName = ledgerPartyName
+                self.productName = productName
+                self.createdAt = createdAt
+                self.updatedAt = updatedAt
+                self.dataQuality = dataQuality
+                self.displayImages = displayImages
+            }
+            public enum CodingKeys: String, CodingKey {
+                case id
+                case installationId
+                case name
+                case platform
+                case appVersion
+                case osVersion
+                case lastSeenAt
+                case automaticWork
+                case remotePaused
+                case ledgerPartyId
+                case productId
+                case ledgerPartyName
+                case productName
+                case createdAt
+                case updatedAt
+                case dataQuality
+                case displayImages
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/DeviceListPage`.
+        public struct DeviceListPage: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/DeviceListPage/items`.
+            public var items: [Components.Schemas.DeviceListItem]
+            /// - Remark: Generated from `#/components/schemas/DeviceListPage/meta`.
+            public var meta: Components.Schemas.ListPageMeta
+            /// Creates a new `DeviceListPage`.
+            ///
+            /// - Parameters:
+            ///   - items:
+            ///   - meta:
+            public init(
+                items: [Components.Schemas.DeviceListItem],
+                meta: Components.Schemas.ListPageMeta
+            ) {
+                self.items = items
+                self.meta = meta
+            }
+            public enum CodingKeys: String, CodingKey {
+                case items
+                case meta
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/DeviceOut`.
+        public struct DeviceOut: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/DeviceOut/id`.
+            public var id: Components.Schemas.DeviceShortcode
+            /// - Remark: Generated from `#/components/schemas/DeviceOut/installationId`.
+            public var installationId: Swift.String
+            /// - Remark: Generated from `#/components/schemas/DeviceOut/name`.
+            public var name: Swift.String
+            /// - Remark: Generated from `#/components/schemas/DeviceOut/platform`.
+            public var platform: Components.Schemas.DevicePlatform
+            /// - Remark: Generated from `#/components/schemas/DeviceOut/appVersion`.
+            public var appVersion: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/DeviceOut/osVersion`.
+            public var osVersion: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/DeviceOut/lastSeenAt`.
+            public var lastSeenAt: Foundation.Date?
+            /// - Remark: Generated from `#/components/schemas/DeviceOut/automaticWork`.
+            public var automaticWork: Swift.Bool
+            /// - Remark: Generated from `#/components/schemas/DeviceOut/remotePaused`.
+            public var remotePaused: Swift.Bool
+            /// - Remark: Generated from `#/components/schemas/DeviceOut/ledgerPartyId`.
+            public var ledgerPartyId: Components.Schemas.LedgerPartyShortcode?
+            /// - Remark: Generated from `#/components/schemas/DeviceOut/productId`.
+            public var productId: Components.Schemas.ProductShortcode?
+            /// - Remark: Generated from `#/components/schemas/DeviceOut/ledgerPartyName`.
+            public var ledgerPartyName: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/DeviceOut/productName`.
+            public var productName: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/DeviceOut/createdAt`.
+            public var createdAt: Foundation.Date
+            /// - Remark: Generated from `#/components/schemas/DeviceOut/updatedAt`.
+            public var updatedAt: Foundation.Date
+            /// - Remark: Generated from `#/components/schemas/DeviceOut/dataQuality`.
+            public var dataQuality: Components.Schemas.DataQuality
+            /// Creates a new `DeviceOut`.
+            ///
+            /// - Parameters:
+            ///   - id:
+            ///   - installationId:
+            ///   - name:
+            ///   - platform:
+            ///   - appVersion:
+            ///   - osVersion:
+            ///   - lastSeenAt:
+            ///   - automaticWork:
+            ///   - remotePaused:
+            ///   - ledgerPartyId:
+            ///   - productId:
+            ///   - ledgerPartyName:
+            ///   - productName:
+            ///   - createdAt:
+            ///   - updatedAt:
+            ///   - dataQuality:
+            public init(
+                id: Components.Schemas.DeviceShortcode,
+                installationId: Swift.String,
+                name: Swift.String,
+                platform: Components.Schemas.DevicePlatform,
+                appVersion: Swift.String? = nil,
+                osVersion: Swift.String? = nil,
+                lastSeenAt: Foundation.Date? = nil,
+                automaticWork: Swift.Bool,
+                remotePaused: Swift.Bool,
+                ledgerPartyId: Components.Schemas.LedgerPartyShortcode? = nil,
+                productId: Components.Schemas.ProductShortcode? = nil,
+                ledgerPartyName: Swift.String? = nil,
+                productName: Swift.String? = nil,
+                createdAt: Foundation.Date,
+                updatedAt: Foundation.Date,
+                dataQuality: Components.Schemas.DataQuality
+            ) {
+                self.id = id
+                self.installationId = installationId
+                self.name = name
+                self.platform = platform
+                self.appVersion = appVersion
+                self.osVersion = osVersion
+                self.lastSeenAt = lastSeenAt
+                self.automaticWork = automaticWork
+                self.remotePaused = remotePaused
+                self.ledgerPartyId = ledgerPartyId
+                self.productId = productId
+                self.ledgerPartyName = ledgerPartyName
+                self.productName = productName
+                self.createdAt = createdAt
+                self.updatedAt = updatedAt
+                self.dataQuality = dataQuality
+            }
+            public enum CodingKeys: String, CodingKey {
+                case id
+                case installationId
+                case name
+                case platform
+                case appVersion
+                case osVersion
+                case lastSeenAt
+                case automaticWork
+                case remotePaused
+                case ledgerPartyId
+                case productId
+                case ledgerPartyName
+                case productName
+                case createdAt
+                case updatedAt
+                case dataQuality
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/DevicePlatform`.
+        @frozen public enum DevicePlatform: String, Codable, Hashable, Sendable, CaseIterable {
+            case ios = "ios"
+            case macos = "macos"
+        }
+        /// device shortcode, e.g. DEV-4K7M
+        ///
+        /// - Remark: Generated from `#/components/schemas/DeviceShortcode`.
+        public typealias DeviceShortcode = Swift.String
+        /// - Remark: Generated from `#/components/schemas/DeviceUpdateData`.
+        public struct DeviceUpdateData: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/DeviceUpdateData/name`.
+            public var name: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/DeviceUpdateData/appVersion`.
+            public var appVersion: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/DeviceUpdateData/osVersion`.
+            public var osVersion: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/DeviceUpdateData/lastSeenAt`.
+            public var lastSeenAt: Foundation.Date?
+            /// - Remark: Generated from `#/components/schemas/DeviceUpdateData/automaticWork`.
+            public var automaticWork: Swift.Bool?
+            /// - Remark: Generated from `#/components/schemas/DeviceUpdateData/remotePaused`.
+            public var remotePaused: Swift.Bool?
+            /// - Remark: Generated from `#/components/schemas/DeviceUpdateData/ledgerPartyId`.
+            public var ledgerPartyId: Components.Schemas.LedgerPartyShortcode?
+            /// - Remark: Generated from `#/components/schemas/DeviceUpdateData/productId`.
+            public var productId: Components.Schemas.ProductShortcode?
+            /// Creates a new `DeviceUpdateData`.
+            ///
+            /// - Parameters:
+            ///   - name:
+            ///   - appVersion:
+            ///   - osVersion:
+            ///   - lastSeenAt:
+            ///   - automaticWork:
+            ///   - remotePaused:
+            ///   - ledgerPartyId:
+            ///   - productId:
+            public init(
+                name: Swift.String? = nil,
+                appVersion: Swift.String? = nil,
+                osVersion: Swift.String? = nil,
+                lastSeenAt: Foundation.Date? = nil,
+                automaticWork: Swift.Bool? = nil,
+                remotePaused: Swift.Bool? = nil,
+                ledgerPartyId: Components.Schemas.LedgerPartyShortcode? = nil,
+                productId: Components.Schemas.ProductShortcode? = nil
+            ) {
+                self.name = name
+                self.appVersion = appVersion
+                self.osVersion = osVersion
+                self.lastSeenAt = lastSeenAt
+                self.automaticWork = automaticWork
+                self.remotePaused = remotePaused
+                self.ledgerPartyId = ledgerPartyId
+                self.productId = productId
+            }
+            public enum CodingKeys: String, CodingKey {
+                case name
+                case appVersion
+                case osVersion
+                case lastSeenAt
+                case automaticWork
+                case remotePaused
+                case ledgerPartyId
+                case productId
+            }
         }
         /// - Remark: Generated from `#/components/schemas/DisplayImagesField`.
         public typealias DisplayImagesField = [Components.Schemas.DisplayImageSummary]
@@ -4517,26 +3327,6 @@ extension Components {
                 case id
                 case url
                 case representations
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.id = try container.decode(
-                    Components.Schemas.ImageShortcode.self,
-                    forKey: .id
-                )
-                self.url = try container.decode(
-                    Swift.String.self,
-                    forKey: .url
-                )
-                self.representations = try container.decodeIfPresent(
-                    Components.Schemas.ImageRepresentations.self,
-                    forKey: .representations
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "id",
-                    "url",
-                    "representations"
-                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/DuplicateUniqueProduct`.
@@ -4571,21 +3361,6 @@ extension Components {
                     case id
                     case name
                 }
-                public init(from decoder: any Swift.Decoder) throws {
-                    let container = try decoder.container(keyedBy: CodingKeys.self)
-                    self.id = try container.decode(
-                        Components.Schemas.LocationShortcode.self,
-                        forKey: .id
-                    )
-                    self.name = try container.decode(
-                        Swift.String.self,
-                        forKey: .name
-                    )
-                    try decoder.ensureNoAdditionalProperties(knownKeys: [
-                        "id",
-                        "name"
-                    ])
-                }
             }
             /// - Remark: Generated from `#/components/schemas/DuplicateUniqueProduct/locations`.
             public typealias LocationsPayload = [Components.Schemas.DuplicateUniqueProduct.LocationsPayloadPayload]
@@ -4618,36 +3393,6 @@ extension Components {
                 case manufacturer
                 case expectedQuantity
                 case locations
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.id = try container.decode(
-                    Components.Schemas.ProductShortcode.self,
-                    forKey: .id
-                )
-                self.name = try container.decode(
-                    Swift.String.self,
-                    forKey: .name
-                )
-                self.manufacturer = try container.decode(
-                    Swift.String.self,
-                    forKey: .manufacturer
-                )
-                self.expectedQuantity = try container.decodeIfPresent(
-                    Swift.Double.self,
-                    forKey: .expectedQuantity
-                )
-                self.locations = try container.decode(
-                    Components.Schemas.DuplicateUniqueProduct.LocationsPayload.self,
-                    forKey: .locations
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "id",
-                    "name",
-                    "manufacturer",
-                    "expectedQuantity",
-                    "locations"
-                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/EdgeKey`.
@@ -4713,51 +3458,6 @@ extension Components {
                 case evidence
                 case evidenceFingerprint
                 case matchesInheritedOwner
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.mode = try container.decode(
-                    Components.Schemas.InventoryOwnershipMode.self,
-                    forKey: .mode
-                )
-                self.explicitOwner = try container.decodeIfPresent(
-                    Components.Schemas.InventoryOwner.self,
-                    forKey: .explicitOwner
-                )
-                self.effectiveOwner = try container.decodeIfPresent(
-                    Components.Schemas.InventoryOwner.self,
-                    forKey: .effectiveOwner
-                )
-                self.source = try container.decode(
-                    Components.Schemas.InventoryOwnershipSource.self,
-                    forKey: .source
-                )
-                self.basis = try container.decodeIfPresent(
-                    Components.Schemas.EffectiveInventoryOwnership.BasisPayload.self,
-                    forKey: .basis
-                )
-                self.evidence = try container.decodeIfPresent(
-                    Components.Schemas.InventoryOwnershipEvidence.self,
-                    forKey: .evidence
-                )
-                self.evidenceFingerprint = try container.decode(
-                    Swift.String.self,
-                    forKey: .evidenceFingerprint
-                )
-                self.matchesInheritedOwner = try container.decode(
-                    Swift.Bool.self,
-                    forKey: .matchesInheritedOwner
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "mode",
-                    "explicitOwner",
-                    "effectiveOwner",
-                    "source",
-                    "basis",
-                    "evidence",
-                    "evidenceFingerprint",
-                    "matchesInheritedOwner"
-                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/EmbeddingReadiness`.
@@ -4929,131 +3629,6 @@ extension Components {
                 case role
                 case position
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.representations = try container.decodeIfPresent(
-                    Components.Schemas.OptionalImageRepresentations.self,
-                    forKey: .representations
-                )
-                self.id = try container.decode(
-                    Components.Schemas.ImageShortcode.self,
-                    forKey: .id
-                )
-                self.url = try container.decode(
-                    Swift.String.self,
-                    forKey: .url
-                )
-                self.key = try container.decode(
-                    Swift.String.self,
-                    forKey: .key
-                )
-                self.filename = try container.decode(
-                    Swift.String.self,
-                    forKey: .filename
-                )
-                self.size = try container.decode(
-                    Swift.Int.self,
-                    forKey: .size
-                )
-                self.contentType = try container.decode(
-                    Swift.String.self,
-                    forKey: .contentType
-                )
-                self.status = try container.decode(
-                    Components.Schemas.ImageStatus.self,
-                    forKey: .status
-                )
-                self.width = try container.decodeIfPresent(
-                    Swift.Int.self,
-                    forKey: .width
-                )
-                self.height = try container.decodeIfPresent(
-                    Swift.Int.self,
-                    forKey: .height
-                )
-                self.detectedContentType = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .detectedContentType
-                )
-                self.sha256 = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .sha256
-                )
-                self.renderStatus = try container.decodeIfPresent(
-                    Components.Schemas.ImageRenderStatus.self,
-                    forKey: .renderStatus
-                )
-                self.storageStatus = try container.decodeIfPresent(
-                    Components.Schemas.ImageStorageStatus.self,
-                    forKey: .storageStatus
-                )
-                self.source = try container.decode(
-                    Components.Schemas.EntityAttachmentRead.SourcePayload.self,
-                    forKey: .source
-                )
-                self.sourcePageUrl = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .sourcePageUrl
-                )
-                self.sourceAssetUrl = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .sourceAssetUrl
-                )
-                self.sourceName = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .sourceName
-                )
-                self.useOriginal = try container.decode(
-                    Swift.Bool.self,
-                    forKey: .useOriginal
-                )
-                self.verifiedAt = try container.decodeIfPresent(
-                    Foundation.Date.self,
-                    forKey: .verifiedAt
-                )
-                self.createdAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .createdAt
-                )
-                self.updatedAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .updatedAt
-                )
-                self.role = try container.decode(
-                    Components.Schemas.EntityAttachmentRole.self,
-                    forKey: .role
-                )
-                self.position = try container.decode(
-                    Swift.Int.self,
-                    forKey: .position
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "representations",
-                    "id",
-                    "url",
-                    "key",
-                    "filename",
-                    "size",
-                    "contentType",
-                    "status",
-                    "width",
-                    "height",
-                    "detectedContentType",
-                    "sha256",
-                    "renderStatus",
-                    "storageStatus",
-                    "source",
-                    "sourcePageUrl",
-                    "sourceAssetUrl",
-                    "sourceName",
-                    "useOriginal",
-                    "verifiedAt",
-                    "createdAt",
-                    "updatedAt",
-                    "role",
-                    "position"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/EntityAttachmentRole`.
         @frozen public enum EntityAttachmentRole: String, Codable, Hashable, Sendable, CaseIterable {
@@ -5119,51 +3694,6 @@ extension Components {
                 case items
                 case edgeIds
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.root = try container.decode(
-                    Components.Schemas.EntityRef.self,
-                    forKey: .root
-                )
-                self.relationshipKey = try container.decode(
-                    Swift.String.self,
-                    forKey: .relationshipKey
-                )
-                self.label = try container.decode(
-                    Swift.String.self,
-                    forKey: .label
-                )
-                self.target = try container.decode(
-                    Components.Schemas.Entity.self,
-                    forKey: .target
-                )
-                self.totalCount = try container.decode(
-                    Swift.Int.self,
-                    forKey: .totalCount
-                )
-                self.nextOffset = try container.decodeIfPresent(
-                    Swift.Int.self,
-                    forKey: .nextOffset
-                )
-                self.items = try container.decode(
-                    [Components.Schemas.EntityRef].self,
-                    forKey: .items
-                )
-                self.edgeIds = try container.decode(
-                    [Swift.String].self,
-                    forKey: .edgeIds
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "root",
-                    "relationshipKey",
-                    "label",
-                    "target",
-                    "totalCount",
-                    "nextOffset",
-                    "items",
-                    "edgeIds"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/EntityGraphBranches`.
         public typealias EntityGraphBranches = [Components.Schemas.EntityGraphBranch]
@@ -5219,46 +3749,6 @@ extension Components {
                 case sourceKey
                 case provenance
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.id = try container.decode(
-                    Swift.String.self,
-                    forKey: .id
-                )
-                self.source = try container.decode(
-                    Components.Schemas.EntityRef.self,
-                    forKey: .source
-                )
-                self.target = try container.decode(
-                    Components.Schemas.EntityRef.self,
-                    forKey: .target
-                )
-                self.relationshipKey = try container.decode(
-                    Swift.String.self,
-                    forKey: .relationshipKey
-                )
-                self.label = try container.decode(
-                    Swift.String.self,
-                    forKey: .label
-                )
-                self.sourceKey = try container.decode(
-                    Swift.String.self,
-                    forKey: .sourceKey
-                )
-                self.provenance = try container.decode(
-                    [Swift.String].self,
-                    forKey: .provenance
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "id",
-                    "source",
-                    "target",
-                    "relationshipKey",
-                    "label",
-                    "sourceKey",
-                    "provenance"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/EntityGraphEdges`.
         public typealias EntityGraphEdges = [Components.Schemas.EntityGraphEdge]
@@ -5296,26 +3786,6 @@ extension Components {
                 case status
                 case requestedDepth
                 case reachedDepth
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.status = try container.decode(
-                    Components.Schemas.EntityGraphExploreCompletion.StatusPayload.self,
-                    forKey: .status
-                )
-                self.requestedDepth = try container.decode(
-                    Swift.Int.self,
-                    forKey: .requestedDepth
-                )
-                self.reachedDepth = try container.decode(
-                    Swift.Int.self,
-                    forKey: .reachedDepth
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "status",
-                    "requestedDepth",
-                    "reachedDepth"
-                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/EntityGraphExploreInput`.
@@ -5458,41 +3928,6 @@ extension Components {
                 case paths
                 case completion
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.nodes = try container.decode(
-                    Components.Schemas.EntityGraphNodes.self,
-                    forKey: .nodes
-                )
-                self.edges = try container.decode(
-                    Components.Schemas.EntityGraphEdges.self,
-                    forKey: .edges
-                )
-                self.branches = try container.decode(
-                    Components.Schemas.EntityGraphBranches.self,
-                    forKey: .branches
-                )
-                self.truncated = try container.decode(
-                    Swift.Bool.self,
-                    forKey: .truncated
-                )
-                self.paths = try container.decode(
-                    [Components.Schemas.EntityGraphPath].self,
-                    forKey: .paths
-                )
-                self.completion = try container.decode(
-                    Components.Schemas.EntityGraphExploreCompletion.self,
-                    forKey: .completion
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "nodes",
-                    "edges",
-                    "branches",
-                    "truncated",
-                    "paths",
-                    "completion"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/EntityGraphInput`.
         public struct EntityGraphInput: Codable, Hashable, Sendable {
@@ -5593,36 +4028,6 @@ extension Components {
                 case metadata
                 case image
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.entityType = try container.decode(
-                    Components.Schemas.Entity.self,
-                    forKey: .entityType
-                )
-                self.entityId = try container.decode(
-                    Swift.String.self,
-                    forKey: .entityId
-                )
-                self.label = try container.decode(
-                    Swift.String.self,
-                    forKey: .label
-                )
-                self.metadata = try container.decode(
-                    Components.Schemas.EntityGraphNode.MetadataPayload.self,
-                    forKey: .metadata
-                )
-                self.image = try container.decodeIfPresent(
-                    Components.Schemas.ImageUrlSummary.self,
-                    forKey: .image
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "entityType",
-                    "entityId",
-                    "label",
-                    "metadata",
-                    "image"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/EntityGraphNodes`.
         public typealias EntityGraphNodes = [Components.Schemas.EntityGraphNode]
@@ -5660,31 +4065,6 @@ extension Components {
                 case branches
                 case truncated
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.nodes = try container.decode(
-                    Components.Schemas.EntityGraphNodes.self,
-                    forKey: .nodes
-                )
-                self.edges = try container.decode(
-                    Components.Schemas.EntityGraphEdges.self,
-                    forKey: .edges
-                )
-                self.branches = try container.decode(
-                    Components.Schemas.EntityGraphBranches.self,
-                    forKey: .branches
-                )
-                self.truncated = try container.decode(
-                    Swift.Bool.self,
-                    forKey: .truncated
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "nodes",
-                    "edges",
-                    "branches",
-                    "truncated"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/EntityGraphPath`.
         public struct EntityGraphPath: Codable, Hashable, Sendable {
@@ -5707,21 +4087,6 @@ extension Components {
             public enum CodingKeys: String, CodingKey {
                 case nodeRefs
                 case edgeIds
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.nodeRefs = try container.decode(
-                    [Components.Schemas.EntityRef].self,
-                    forKey: .nodeRefs
-                )
-                self.edgeIds = try container.decode(
-                    [Swift.String].self,
-                    forKey: .edgeIds
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "nodeRefs",
-                    "edgeIds"
-                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/EntityGraphPathsInput`.
@@ -5793,36 +4158,6 @@ extension Components {
                 case completion
                 case shortestPathCertain
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.nodes = try container.decode(
-                    [Components.Schemas.EntityGraphNode].self,
-                    forKey: .nodes
-                )
-                self.edges = try container.decode(
-                    [Components.Schemas.EntityGraphEdge].self,
-                    forKey: .edges
-                )
-                self.paths = try container.decode(
-                    [Components.Schemas.EntityGraphPath].self,
-                    forKey: .paths
-                )
-                self.completion = try container.decode(
-                    Components.Schemas.EntityGraphPathsOutput.CompletionPayload.self,
-                    forKey: .completion
-                )
-                self.shortestPathCertain = try container.decode(
-                    Swift.Bool.self,
-                    forKey: .shortestPathCertain
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "nodes",
-                    "edges",
-                    "paths",
-                    "completion",
-                    "shortestPathCertain"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/EntityGraphRoot`.
         public struct EntityGraphRoot: Codable, Hashable, Sendable {
@@ -5845,21 +4180,6 @@ extension Components {
             public enum CodingKeys: String, CodingKey {
                 case entityType
                 case entityId
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.entityType = try container.decode(
-                    Components.Schemas.Entity.self,
-                    forKey: .entityType
-                )
-                self.entityId = try container.decode(
-                    Swift.String.self,
-                    forKey: .entityId
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "entityType",
-                    "entityId"
-                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/EntityGraphRootInput`.
@@ -5978,31 +4298,6 @@ extension Components {
                 case currentTarget
                 case proposals
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.kind = try container.decode(
-                    Components.Schemas.EntityRecommendationGroupExpenseProject.KindPayload.self,
-                    forKey: .kind
-                )
-                self.status = try container.decode(
-                    Components.Schemas.EmbeddingReadiness.self,
-                    forKey: .status
-                )
-                self.currentTarget = try container.decodeIfPresent(
-                    Components.Schemas.RecommendationProjectTarget.self,
-                    forKey: .currentTarget
-                )
-                self.proposals = try container.decode(
-                    [Components.Schemas.ExpenseProjectProposal].self,
-                    forKey: .proposals
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "kind",
-                    "status",
-                    "currentTarget",
-                    "proposals"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/EntityRecommendationGroupInventoryPlacement`.
         public struct EntityRecommendationGroupInventoryPlacement: Codable, Hashable, Sendable {
@@ -6042,31 +4337,6 @@ extension Components {
                 case currentTarget
                 case proposals
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.kind = try container.decode(
-                    Components.Schemas.EntityRecommendationGroupInventoryPlacement.KindPayload.self,
-                    forKey: .kind
-                )
-                self.status = try container.decode(
-                    Components.Schemas.EmbeddingReadiness.self,
-                    forKey: .status
-                )
-                self.currentTarget = try container.decodeIfPresent(
-                    Components.Schemas.RecommendationLocationTarget.self,
-                    forKey: .currentTarget
-                )
-                self.proposals = try container.decode(
-                    [Components.Schemas.InventoryPlacementProposal].self,
-                    forKey: .proposals
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "kind",
-                    "status",
-                    "currentTarget",
-                    "proposals"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/EntityRecommendationGroupProductRelated`.
         public struct EntityRecommendationGroupProductRelated: Codable, Hashable, Sendable {
@@ -6100,26 +4370,6 @@ extension Components {
                 case status
                 case proposals
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.kind = try container.decode(
-                    Components.Schemas.EntityRecommendationGroupProductRelated.KindPayload.self,
-                    forKey: .kind
-                )
-                self.status = try container.decode(
-                    Components.Schemas.EmbeddingReadiness.self,
-                    forKey: .status
-                )
-                self.proposals = try container.decode(
-                    [Components.Schemas.ProductRelatedProposal].self,
-                    forKey: .proposals
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "kind",
-                    "status",
-                    "proposals"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/EntityRecommendationsOut`.
         public struct EntityRecommendationsOut: Codable, Hashable, Sendable {
@@ -6149,26 +4399,6 @@ extension Components {
                 case basisKey
                 case groups
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.source = try container.decode(
-                    Components.Schemas.EntityGraphRoot.self,
-                    forKey: .source
-                )
-                self.basisKey = try container.decode(
-                    Swift.String.self,
-                    forKey: .basisKey
-                )
-                self.groups = try container.decode(
-                    [Components.Schemas.EntityRecommendationGroup].self,
-                    forKey: .groups
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "source",
-                    "basisKey",
-                    "groups"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/EntityRef`.
         public struct EntityRef: Codable, Hashable, Sendable {
@@ -6191,21 +4421,6 @@ extension Components {
             public enum CodingKeys: String, CodingKey {
                 case entityType
                 case entityId
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.entityType = try container.decode(
-                    Components.Schemas.Entity.self,
-                    forKey: .entityType
-                )
-                self.entityId = try container.decode(
-                    Swift.String.self,
-                    forKey: .entityId
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "entityType",
-                    "entityId"
-                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/EntityTimelineEvent`.
@@ -6254,41 +4469,6 @@ extension Components {
                 case link
                 case detail
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.id = try container.decode(
-                    Swift.String.self,
-                    forKey: .id
-                )
-                self.kind = try container.decode(
-                    Swift.String.self,
-                    forKey: .kind
-                )
-                self.label = try container.decode(
-                    Swift.String.self,
-                    forKey: .label
-                )
-                self.amount = try container.decodeIfPresent(
-                    Swift.Double.self,
-                    forKey: .amount
-                )
-                self.link = try container.decodeIfPresent(
-                    Components.Schemas.EntityTimelineLink.self,
-                    forKey: .link
-                )
-                self.detail = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .detail
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "id",
-                    "kind",
-                    "label",
-                    "amount",
-                    "link",
-                    "detail"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/EntityTimelineGroup`.
         public struct EntityTimelineGroup: Codable, Hashable, Sendable {
@@ -6330,36 +4510,6 @@ extension Components {
                 case link
                 case events
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.key = try container.decode(
-                    Swift.String.self,
-                    forKey: .key
-                )
-                self.date = try container.decodeIfPresent(
-                    Components.Schemas.PlainDate.self,
-                    forKey: .date
-                )
-                self.label = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .label
-                )
-                self.link = try container.decodeIfPresent(
-                    Components.Schemas.EntityTimelineLink.self,
-                    forKey: .link
-                )
-                self.events = try container.decode(
-                    [Components.Schemas.EntityTimelineEvent].self,
-                    forKey: .events
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "key",
-                    "date",
-                    "label",
-                    "link",
-                    "events"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/EntityTimelineLink`.
         public struct EntityTimelineLink: Codable, Hashable, Sendable {
@@ -6382,21 +4532,6 @@ extension Components {
             public enum CodingKeys: String, CodingKey {
                 case entity
                 case id
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.entity = try container.decode(
-                    Swift.String.self,
-                    forKey: .entity
-                )
-                self.id = try container.decode(
-                    Swift.String.self,
-                    forKey: .id
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "entity",
-                    "id"
-                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/EntityTimelineOut`.
@@ -6431,21 +4566,6 @@ extension Components {
                     case from
                     case to
                 }
-                public init(from decoder: any Swift.Decoder) throws {
-                    let container = try decoder.container(keyedBy: CodingKeys.self)
-                    self.from = try container.decode(
-                        Components.Schemas.PlainDate.self,
-                        forKey: .from
-                    )
-                    self.to = try container.decode(
-                        Components.Schemas.PlainDate.self,
-                        forKey: .to
-                    )
-                    try decoder.ensureNoAdditionalProperties(knownKeys: [
-                        "from",
-                        "to"
-                    ])
-                }
             }
             /// - Remark: Generated from `#/components/schemas/EntityTimelineOut/extent`.
             public var extent: Components.Schemas.EntityTimelineOut.ExtentPayload?
@@ -6476,36 +4596,6 @@ extension Components {
                 case stats
                 case notes
                 case extent
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.groups = try container.decode(
-                    [Components.Schemas.EntityTimelineGroup].self,
-                    forKey: .groups
-                )
-                self.rows = try container.decodeIfPresent(
-                    [Components.Schemas.EntityTimelineRow].self,
-                    forKey: .rows
-                )
-                self.stats = try container.decode(
-                    [Components.Schemas.EntityTimelineStat].self,
-                    forKey: .stats
-                )
-                self.notes = try container.decode(
-                    [Swift.String].self,
-                    forKey: .notes
-                )
-                self.extent = try container.decodeIfPresent(
-                    Components.Schemas.EntityTimelineOut.ExtentPayload.self,
-                    forKey: .extent
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "groups",
-                    "rows",
-                    "stats",
-                    "notes",
-                    "extent"
-                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/EntityTimelineRow`.
@@ -6546,26 +4636,6 @@ extension Components {
                     case end
                     case confident
                 }
-                public init(from decoder: any Swift.Decoder) throws {
-                    let container = try decoder.container(keyedBy: CodingKeys.self)
-                    self.start = try container.decode(
-                        Components.Schemas.PlainDate.self,
-                        forKey: .start
-                    )
-                    self.end = try container.decodeIfPresent(
-                        Components.Schemas.PlainDate.self,
-                        forKey: .end
-                    )
-                    self.confident = try container.decode(
-                        Swift.Bool.self,
-                        forKey: .confident
-                    )
-                    try decoder.ensureNoAdditionalProperties(knownKeys: [
-                        "start",
-                        "end",
-                        "confident"
-                    ])
-                }
             }
             /// - Remark: Generated from `#/components/schemas/EntityTimelineRow/intervals`.
             public typealias IntervalsPayload = [Components.Schemas.EntityTimelineRow.IntervalsPayloadPayload]
@@ -6598,26 +4668,6 @@ extension Components {
                     case date
                     case kind
                     case link
-                }
-                public init(from decoder: any Swift.Decoder) throws {
-                    let container = try decoder.container(keyedBy: CodingKeys.self)
-                    self.date = try container.decode(
-                        Components.Schemas.PlainDate.self,
-                        forKey: .date
-                    )
-                    self.kind = try container.decode(
-                        Swift.String.self,
-                        forKey: .kind
-                    )
-                    self.link = try container.decodeIfPresent(
-                        Components.Schemas.EntityTimelineLink.self,
-                        forKey: .link
-                    )
-                    try decoder.ensureNoAdditionalProperties(knownKeys: [
-                        "date",
-                        "kind",
-                        "link"
-                    ])
                 }
             }
             /// - Remark: Generated from `#/components/schemas/EntityTimelineRow/markers`.
@@ -6656,41 +4706,6 @@ extension Components {
                 case intervals
                 case markers
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.id = try container.decode(
-                    Swift.String.self,
-                    forKey: .id
-                )
-                self.name = try container.decode(
-                    Swift.String.self,
-                    forKey: .name
-                )
-                self.link = try container.decodeIfPresent(
-                    Components.Schemas.EntityTimelineLink.self,
-                    forKey: .link
-                )
-                self.imageUrl = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .imageUrl
-                )
-                self.intervals = try container.decode(
-                    Components.Schemas.EntityTimelineRow.IntervalsPayload.self,
-                    forKey: .intervals
-                )
-                self.markers = try container.decode(
-                    Components.Schemas.EntityTimelineRow.MarkersPayload.self,
-                    forKey: .markers
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "id",
-                    "name",
-                    "link",
-                    "imageUrl",
-                    "intervals",
-                    "markers"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/EntityTimelineStat`.
         public struct EntityTimelineStat: Codable, Hashable, Sendable {
@@ -6719,26 +4734,6 @@ extension Components {
                 case key
                 case label
                 case value
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.key = try container.decode(
-                    Swift.String.self,
-                    forKey: .key
-                )
-                self.label = try container.decode(
-                    Swift.String.self,
-                    forKey: .label
-                )
-                self.value = try container.decode(
-                    Swift.String.self,
-                    forKey: .value
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "key",
-                    "label",
-                    "value"
-                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/EvaluateAppleImageDescriptionInput`.
@@ -6769,16 +4764,6 @@ extension Components {
             }
             public enum CodingKeys: String, CodingKey {
                 case jobId
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.jobId = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .jobId
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "jobId"
-                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/ExpenseCreateInput`.
@@ -6925,9 +4910,9 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/ExpenseDetail/date`.
             public var date: Components.Schemas.PlainDate?
             /// - Remark: Generated from `#/components/schemas/ExpenseDetail/lineKind`.
-            public var lineKind: Components.Schemas.OutputSchema342
+            public var lineKind: Components.Schemas.OutputSchema355
             /// - Remark: Generated from `#/components/schemas/ExpenseDetail/lineBasis`.
-            public var lineBasis: Components.Schemas.OutputSchema343
+            public var lineBasis: Components.Schemas.OutputSchema356
             /// - Remark: Generated from `#/components/schemas/ExpenseDetail/costType`.
             public var costType: Components.Schemas.CostType
             /// - Remark: Generated from `#/components/schemas/ExpenseDetail/trade`.
@@ -6981,7 +4966,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/ExpenseDetail/displayImages`.
             public var displayImages: Components.Schemas.DisplayImagesField
             /// - Remark: Generated from `#/components/schemas/ExpenseDetail/attachments`.
-            public var attachments: Components.Schemas.OutputSchema437
+            public var attachments: Components.Schemas.OutputSchema450
             /// Creates a new `ExpenseDetail`.
             ///
             /// - Parameters:
@@ -7026,8 +5011,8 @@ extension Components {
                 name: Swift.String,
                 cost: Components.Schemas.WholeCentAmount? = nil,
                 date: Components.Schemas.PlainDate? = nil,
-                lineKind: Components.Schemas.OutputSchema342,
-                lineBasis: Components.Schemas.OutputSchema343,
+                lineKind: Components.Schemas.OutputSchema355,
+                lineBasis: Components.Schemas.OutputSchema356,
                 costType: Components.Schemas.CostType,
                 trade: Components.Schemas.Trade? = nil,
                 url: Swift.String? = nil,
@@ -7053,7 +5038,7 @@ extension Components {
                 updatedAt: Foundation.Date,
                 dataQuality: Components.Schemas.DataQuality,
                 displayImages: Components.Schemas.DisplayImagesField,
-                attachments: Components.Schemas.OutputSchema437
+                attachments: Components.Schemas.OutputSchema450
             ) {
                 self.fieldResolutions = fieldResolutions
                 self.projectAllocations = projectAllocations
@@ -7126,181 +5111,6 @@ extension Components {
                 case displayImages
                 case attachments
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.fieldResolutions = try container.decodeIfPresent(
-                    Components.Schemas.OptionalFieldResolutions.self,
-                    forKey: .fieldResolutions
-                )
-                self.projectAllocations = try container.decodeIfPresent(
-                    Components.Schemas.OptionalProjectAllocations.self,
-                    forKey: .projectAllocations
-                )
-                self.id = try container.decode(
-                    Components.Schemas.ExpenseShortcode.self,
-                    forKey: .id
-                )
-                self.name = try container.decode(
-                    Swift.String.self,
-                    forKey: .name
-                )
-                self.cost = try container.decodeIfPresent(
-                    Components.Schemas.WholeCentAmount.self,
-                    forKey: .cost
-                )
-                self.date = try container.decodeIfPresent(
-                    Components.Schemas.PlainDate.self,
-                    forKey: .date
-                )
-                self.lineKind = try container.decode(
-                    Components.Schemas.OutputSchema342.self,
-                    forKey: .lineKind
-                )
-                self.lineBasis = try container.decode(
-                    Components.Schemas.OutputSchema343.self,
-                    forKey: .lineBasis
-                )
-                self.costType = try container.decode(
-                    Components.Schemas.CostType.self,
-                    forKey: .costType
-                )
-                self.trade = try container.decodeIfPresent(
-                    Components.Schemas.Trade.self,
-                    forKey: .trade
-                )
-                self.url = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .url
-                )
-                self.notes = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .notes
-                )
-                self.future = try container.decode(
-                    Swift.Bool.self,
-                    forKey: .future
-                )
-                self.projectId = try container.decodeIfPresent(
-                    Components.Schemas.ProjectShortcode.self,
-                    forKey: .projectId
-                )
-                self.productId = try container.decodeIfPresent(
-                    Components.Schemas.ProductShortcode.self,
-                    forKey: .productId
-                )
-                self.productQuantity = try container.decodeIfPresent(
-                    Components.Schemas.SignedProductQuantity.self,
-                    forKey: .productQuantity
-                )
-                self.vendor = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .vendor
-                )
-                self.orderId = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .orderId
-                )
-                self.purchaseId = try container.decodeIfPresent(
-                    Components.Schemas.PurchaseShortcode.self,
-                    forKey: .purchaseId
-                )
-                self.purchaseDate = try container.decodeIfPresent(
-                    Components.Schemas.PlainDate.self,
-                    forKey: .purchaseDate
-                )
-                self.purchaseDisplayLabel = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .purchaseDisplayLabel
-                )
-                self.vendorId = try container.decodeIfPresent(
-                    Components.Schemas.VendorShortcode.self,
-                    forKey: .vendorId
-                )
-                self.vendorLogo = try container.decodeIfPresent(
-                    Components.Schemas.ImageUrlSummary.self,
-                    forKey: .vendorLogo
-                )
-                self.orderUrl = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .orderUrl
-                )
-                self.projectName = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .projectName
-                )
-                self.productName = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .productName
-                )
-                self.beneficiaries = try container.decode(
-                    Components.Schemas.LedgerAttributions.self,
-                    forKey: .beneficiaries
-                )
-                self.funders = try container.decode(
-                    Components.Schemas.LedgerAttributions.self,
-                    forKey: .funders
-                )
-                self.sourceClaims = try container.decode(
-                    Components.Schemas.LedgerSourceClaimsOut.self,
-                    forKey: .sourceClaims
-                )
-                self.createdAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .createdAt
-                )
-                self.updatedAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .updatedAt
-                )
-                self.dataQuality = try container.decode(
-                    Components.Schemas.DataQuality.self,
-                    forKey: .dataQuality
-                )
-                self.displayImages = try container.decode(
-                    Components.Schemas.DisplayImagesField.self,
-                    forKey: .displayImages
-                )
-                self.attachments = try container.decode(
-                    Components.Schemas.OutputSchema437.self,
-                    forKey: .attachments
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "fieldResolutions",
-                    "projectAllocations",
-                    "id",
-                    "name",
-                    "cost",
-                    "date",
-                    "lineKind",
-                    "lineBasis",
-                    "costType",
-                    "trade",
-                    "url",
-                    "notes",
-                    "future",
-                    "projectId",
-                    "productId",
-                    "productQuantity",
-                    "vendor",
-                    "orderId",
-                    "purchaseId",
-                    "purchaseDate",
-                    "purchaseDisplayLabel",
-                    "vendorId",
-                    "vendorLogo",
-                    "orderUrl",
-                    "projectName",
-                    "productName",
-                    "beneficiaries",
-                    "funders",
-                    "sourceClaims",
-                    "createdAt",
-                    "updatedAt",
-                    "dataQuality",
-                    "displayImages",
-                    "attachments"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/ExpenseLineBasis`.
         @frozen public enum ExpenseLineBasis: String, Codable, Hashable, Sendable, CaseIterable {
@@ -7334,9 +5144,9 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/ExpenseListItem/date`.
             public var date: Components.Schemas.PlainDate?
             /// - Remark: Generated from `#/components/schemas/ExpenseListItem/lineKind`.
-            public var lineKind: Components.Schemas.OutputSchema342
+            public var lineKind: Components.Schemas.OutputSchema355
             /// - Remark: Generated from `#/components/schemas/ExpenseListItem/lineBasis`.
-            public var lineBasis: Components.Schemas.OutputSchema343
+            public var lineBasis: Components.Schemas.OutputSchema356
             /// - Remark: Generated from `#/components/schemas/ExpenseListItem/costType`.
             public var costType: Components.Schemas.CostType
             /// - Remark: Generated from `#/components/schemas/ExpenseListItem/trade`.
@@ -7432,8 +5242,8 @@ extension Components {
                 name: Swift.String,
                 cost: Components.Schemas.WholeCentAmount? = nil,
                 date: Components.Schemas.PlainDate? = nil,
-                lineKind: Components.Schemas.OutputSchema342,
-                lineBasis: Components.Schemas.OutputSchema343,
+                lineKind: Components.Schemas.OutputSchema355,
+                lineBasis: Components.Schemas.OutputSchema356,
                 costType: Components.Schemas.CostType,
                 trade: Components.Schemas.Trade? = nil,
                 url: Swift.String? = nil,
@@ -7529,176 +5339,6 @@ extension Components {
                 case dataQuality
                 case displayImages
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.fieldResolutions = try container.decodeIfPresent(
-                    Components.Schemas.OptionalFieldResolutions.self,
-                    forKey: .fieldResolutions
-                )
-                self.projectAllocations = try container.decodeIfPresent(
-                    Components.Schemas.OptionalProjectAllocations.self,
-                    forKey: .projectAllocations
-                )
-                self.id = try container.decode(
-                    Components.Schemas.ExpenseShortcode.self,
-                    forKey: .id
-                )
-                self.name = try container.decode(
-                    Swift.String.self,
-                    forKey: .name
-                )
-                self.cost = try container.decodeIfPresent(
-                    Components.Schemas.WholeCentAmount.self,
-                    forKey: .cost
-                )
-                self.date = try container.decodeIfPresent(
-                    Components.Schemas.PlainDate.self,
-                    forKey: .date
-                )
-                self.lineKind = try container.decode(
-                    Components.Schemas.OutputSchema342.self,
-                    forKey: .lineKind
-                )
-                self.lineBasis = try container.decode(
-                    Components.Schemas.OutputSchema343.self,
-                    forKey: .lineBasis
-                )
-                self.costType = try container.decode(
-                    Components.Schemas.CostType.self,
-                    forKey: .costType
-                )
-                self.trade = try container.decodeIfPresent(
-                    Components.Schemas.Trade.self,
-                    forKey: .trade
-                )
-                self.url = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .url
-                )
-                self.notes = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .notes
-                )
-                self.future = try container.decode(
-                    Swift.Bool.self,
-                    forKey: .future
-                )
-                self.projectId = try container.decodeIfPresent(
-                    Components.Schemas.ProjectShortcode.self,
-                    forKey: .projectId
-                )
-                self.productId = try container.decodeIfPresent(
-                    Components.Schemas.ProductShortcode.self,
-                    forKey: .productId
-                )
-                self.productQuantity = try container.decodeIfPresent(
-                    Components.Schemas.SignedProductQuantity.self,
-                    forKey: .productQuantity
-                )
-                self.vendor = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .vendor
-                )
-                self.orderId = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .orderId
-                )
-                self.purchaseId = try container.decodeIfPresent(
-                    Components.Schemas.PurchaseShortcode.self,
-                    forKey: .purchaseId
-                )
-                self.purchaseDate = try container.decodeIfPresent(
-                    Components.Schemas.PlainDate.self,
-                    forKey: .purchaseDate
-                )
-                self.purchaseDisplayLabel = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .purchaseDisplayLabel
-                )
-                self.vendorId = try container.decodeIfPresent(
-                    Components.Schemas.VendorShortcode.self,
-                    forKey: .vendorId
-                )
-                self.vendorLogo = try container.decodeIfPresent(
-                    Components.Schemas.ImageUrlSummary.self,
-                    forKey: .vendorLogo
-                )
-                self.orderUrl = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .orderUrl
-                )
-                self.projectName = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .projectName
-                )
-                self.productName = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .productName
-                )
-                self.beneficiaries = try container.decode(
-                    Components.Schemas.LedgerAttributions.self,
-                    forKey: .beneficiaries
-                )
-                self.funders = try container.decode(
-                    Components.Schemas.LedgerAttributions.self,
-                    forKey: .funders
-                )
-                self.sourceClaims = try container.decode(
-                    Components.Schemas.LedgerSourceClaimsOut.self,
-                    forKey: .sourceClaims
-                )
-                self.createdAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .createdAt
-                )
-                self.updatedAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .updatedAt
-                )
-                self.dataQuality = try container.decode(
-                    Components.Schemas.DataQuality.self,
-                    forKey: .dataQuality
-                )
-                self.displayImages = try container.decode(
-                    Components.Schemas.DisplayImagesField.self,
-                    forKey: .displayImages
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "fieldResolutions",
-                    "projectAllocations",
-                    "id",
-                    "name",
-                    "cost",
-                    "date",
-                    "lineKind",
-                    "lineBasis",
-                    "costType",
-                    "trade",
-                    "url",
-                    "notes",
-                    "future",
-                    "projectId",
-                    "productId",
-                    "productQuantity",
-                    "vendor",
-                    "orderId",
-                    "purchaseId",
-                    "purchaseDate",
-                    "purchaseDisplayLabel",
-                    "vendorId",
-                    "vendorLogo",
-                    "orderUrl",
-                    "projectName",
-                    "productName",
-                    "beneficiaries",
-                    "funders",
-                    "sourceClaims",
-                    "createdAt",
-                    "updatedAt",
-                    "dataQuality",
-                    "displayImages"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/ExpenseListPage`.
         public struct ExpenseListPage: Codable, Hashable, Sendable {
@@ -7722,21 +5362,6 @@ extension Components {
                 case items
                 case meta
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.items = try container.decode(
-                    [Components.Schemas.ExpenseListItem].self,
-                    forKey: .items
-                )
-                self.meta = try container.decode(
-                    Components.Schemas.ListPageMeta.self,
-                    forKey: .meta
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "items",
-                    "meta"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/ExpenseOut`.
         public struct ExpenseOut: Codable, Hashable, Sendable {
@@ -7755,9 +5380,9 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/ExpenseOut/date`.
             public var date: Components.Schemas.PlainDate?
             /// - Remark: Generated from `#/components/schemas/ExpenseOut/lineKind`.
-            public var lineKind: Components.Schemas.OutputSchema342
+            public var lineKind: Components.Schemas.OutputSchema355
             /// - Remark: Generated from `#/components/schemas/ExpenseOut/lineBasis`.
-            public var lineBasis: Components.Schemas.OutputSchema343
+            public var lineBasis: Components.Schemas.OutputSchema356
             /// - Remark: Generated from `#/components/schemas/ExpenseOut/costType`.
             public var costType: Components.Schemas.CostType
             /// - Remark: Generated from `#/components/schemas/ExpenseOut/trade`.
@@ -7850,8 +5475,8 @@ extension Components {
                 name: Swift.String,
                 cost: Components.Schemas.WholeCentAmount? = nil,
                 date: Components.Schemas.PlainDate? = nil,
-                lineKind: Components.Schemas.OutputSchema342,
-                lineBasis: Components.Schemas.OutputSchema343,
+                lineKind: Components.Schemas.OutputSchema355,
+                lineBasis: Components.Schemas.OutputSchema356,
                 costType: Components.Schemas.CostType,
                 trade: Components.Schemas.Trade? = nil,
                 url: Swift.String? = nil,
@@ -7944,171 +5569,6 @@ extension Components {
                 case updatedAt
                 case dataQuality
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.fieldResolutions = try container.decodeIfPresent(
-                    Components.Schemas.OptionalFieldResolutions.self,
-                    forKey: .fieldResolutions
-                )
-                self.projectAllocations = try container.decodeIfPresent(
-                    Components.Schemas.OptionalProjectAllocations.self,
-                    forKey: .projectAllocations
-                )
-                self.id = try container.decode(
-                    Components.Schemas.ExpenseShortcode.self,
-                    forKey: .id
-                )
-                self.name = try container.decode(
-                    Swift.String.self,
-                    forKey: .name
-                )
-                self.cost = try container.decodeIfPresent(
-                    Components.Schemas.WholeCentAmount.self,
-                    forKey: .cost
-                )
-                self.date = try container.decodeIfPresent(
-                    Components.Schemas.PlainDate.self,
-                    forKey: .date
-                )
-                self.lineKind = try container.decode(
-                    Components.Schemas.OutputSchema342.self,
-                    forKey: .lineKind
-                )
-                self.lineBasis = try container.decode(
-                    Components.Schemas.OutputSchema343.self,
-                    forKey: .lineBasis
-                )
-                self.costType = try container.decode(
-                    Components.Schemas.CostType.self,
-                    forKey: .costType
-                )
-                self.trade = try container.decodeIfPresent(
-                    Components.Schemas.Trade.self,
-                    forKey: .trade
-                )
-                self.url = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .url
-                )
-                self.notes = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .notes
-                )
-                self.future = try container.decode(
-                    Swift.Bool.self,
-                    forKey: .future
-                )
-                self.projectId = try container.decodeIfPresent(
-                    Components.Schemas.ProjectShortcode.self,
-                    forKey: .projectId
-                )
-                self.productId = try container.decodeIfPresent(
-                    Components.Schemas.ProductShortcode.self,
-                    forKey: .productId
-                )
-                self.productQuantity = try container.decodeIfPresent(
-                    Components.Schemas.SignedProductQuantity.self,
-                    forKey: .productQuantity
-                )
-                self.vendor = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .vendor
-                )
-                self.orderId = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .orderId
-                )
-                self.purchaseId = try container.decodeIfPresent(
-                    Components.Schemas.PurchaseShortcode.self,
-                    forKey: .purchaseId
-                )
-                self.purchaseDate = try container.decodeIfPresent(
-                    Components.Schemas.PlainDate.self,
-                    forKey: .purchaseDate
-                )
-                self.purchaseDisplayLabel = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .purchaseDisplayLabel
-                )
-                self.vendorId = try container.decodeIfPresent(
-                    Components.Schemas.VendorShortcode.self,
-                    forKey: .vendorId
-                )
-                self.vendorLogo = try container.decodeIfPresent(
-                    Components.Schemas.ImageUrlSummary.self,
-                    forKey: .vendorLogo
-                )
-                self.orderUrl = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .orderUrl
-                )
-                self.projectName = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .projectName
-                )
-                self.productName = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .productName
-                )
-                self.beneficiaries = try container.decode(
-                    Components.Schemas.LedgerAttributions.self,
-                    forKey: .beneficiaries
-                )
-                self.funders = try container.decode(
-                    Components.Schemas.LedgerAttributions.self,
-                    forKey: .funders
-                )
-                self.sourceClaims = try container.decode(
-                    Components.Schemas.LedgerSourceClaimsOut.self,
-                    forKey: .sourceClaims
-                )
-                self.createdAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .createdAt
-                )
-                self.updatedAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .updatedAt
-                )
-                self.dataQuality = try container.decode(
-                    Components.Schemas.DataQuality.self,
-                    forKey: .dataQuality
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "fieldResolutions",
-                    "projectAllocations",
-                    "id",
-                    "name",
-                    "cost",
-                    "date",
-                    "lineKind",
-                    "lineBasis",
-                    "costType",
-                    "trade",
-                    "url",
-                    "notes",
-                    "future",
-                    "projectId",
-                    "productId",
-                    "productQuantity",
-                    "vendor",
-                    "orderId",
-                    "purchaseId",
-                    "purchaseDate",
-                    "purchaseDisplayLabel",
-                    "vendorId",
-                    "vendorLogo",
-                    "orderUrl",
-                    "projectName",
-                    "productName",
-                    "beneficiaries",
-                    "funders",
-                    "sourceClaims",
-                    "createdAt",
-                    "updatedAt",
-                    "dataQuality"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/ExpenseProjectProposal`.
         public struct ExpenseProjectProposal: Codable, Hashable, Sendable {
@@ -8177,56 +5637,6 @@ extension Components {
                 case exactProductCount
                 case supportingExpenses
                 case reasons
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.kind = try container.decode(
-                    Components.Schemas.ExpenseProjectProposal.KindPayload.self,
-                    forKey: .kind
-                )
-                self.expenseId = try container.decode(
-                    Components.Schemas.ExpenseShortcode.self,
-                    forKey: .expenseId
-                )
-                self.target = try container.decode(
-                    Components.Schemas.RecommendationProjectTarget.self,
-                    forKey: .target
-                )
-                self.effectiveStart = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .effectiveStart
-                )
-                self.effectiveEnd = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .effectiveEnd
-                )
-                self.sameTradeCount = try container.decode(
-                    Swift.Int.self,
-                    forKey: .sameTradeCount
-                )
-                self.exactProductCount = try container.decode(
-                    Swift.Int.self,
-                    forKey: .exactProductCount
-                )
-                self.supportingExpenses = try container.decode(
-                    [Components.Schemas.RecommendationSupportingExpense].self,
-                    forKey: .supportingExpenses
-                )
-                self.reasons = try container.decode(
-                    [Swift.String].self,
-                    forKey: .reasons
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "kind",
-                    "expenseId",
-                    "target",
-                    "effectiveStart",
-                    "effectiveEnd",
-                    "sameTradeCount",
-                    "exactProductCount",
-                    "supportingExpenses",
-                    "reasons"
-                ])
             }
         }
         /// expense shortcode, e.g. EXP-4K7M
@@ -8487,51 +5897,6 @@ extension Components {
                 case createdAt
                 case updatedAt
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.id = try container.decode(
-                    Swift.String.self,
-                    forKey: .id
-                )
-                self.source = try container.decode(
-                    Components.Schemas.ExternalIdSource.self,
-                    forKey: .source
-                )
-                self.kind = try container.decode(
-                    Components.Schemas.ExternalIdKind.self,
-                    forKey: .kind
-                )
-                self.externalId = try container.decode(
-                    Swift.String.self,
-                    forKey: .externalId
-                )
-                self.url = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .url
-                )
-                self.isPrimary = try container.decode(
-                    Swift.Bool.self,
-                    forKey: .isPrimary
-                )
-                self.createdAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .createdAt
-                )
-                self.updatedAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .updatedAt
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "id",
-                    "source",
-                    "kind",
-                    "externalId",
-                    "url",
-                    "isPrimary",
-                    "createdAt",
-                    "updatedAt"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/ExternalIdSource`.
         public typealias ExternalIdSource = Swift.String
@@ -8579,26 +5944,6 @@ extension Components {
                     case revision
                     case description
                 }
-                public init(from decoder: any Swift.Decoder) throws {
-                    let container = try decoder.container(keyedBy: CodingKeys.self)
-                    self.id = try container.decode(
-                        Swift.String.self,
-                        forKey: .id
-                    )
-                    self.revision = try container.decode(
-                        Swift.Int.self,
-                        forKey: .revision
-                    )
-                    self.description = try container.decode(
-                        Swift.String.self,
-                        forKey: .description
-                    )
-                    try decoder.ensureNoAdditionalProperties(knownKeys: [
-                        "id",
-                        "revision",
-                        "description"
-                    ])
-                }
             }
             /// - Remark: Generated from `#/components/schemas/FieldExplanationOutput/rule`.
             public var rule: Components.Schemas.FieldExplanationOutput.RulePayload
@@ -8643,26 +5988,6 @@ extension Components {
                     case kind
                     case label
                     case target
-                }
-                public init(from decoder: any Swift.Decoder) throws {
-                    let container = try decoder.container(keyedBy: CodingKeys.self)
-                    self.kind = try container.decode(
-                        Components.Schemas.FieldExplanationOutput.ActionsPayloadPayload.KindPayload.self,
-                        forKey: .kind
-                    )
-                    self.label = try container.decode(
-                        Swift.String.self,
-                        forKey: .label
-                    )
-                    self.target = try container.decode(
-                        Components.Schemas.EntityRef.self,
-                        forKey: .target
-                    )
-                    try decoder.ensureNoAdditionalProperties(knownKeys: [
-                        "kind",
-                        "label",
-                        "target"
-                    ])
                 }
             }
             /// - Remark: Generated from `#/components/schemas/FieldExplanationOutput/actions`.
@@ -8721,66 +6046,6 @@ extension Components {
                 case evidenceFingerprint
                 case actions
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.subject = try container.decode(
-                    Components.Schemas.EntityRef.self,
-                    forKey: .subject
-                )
-                self.field = try container.decode(
-                    Swift.String.self,
-                    forKey: .field
-                )
-                self.label = try container.decode(
-                    Swift.String.self,
-                    forKey: .label
-                )
-                self.value = try container.decode(
-                    Components.Schemas.JsonValue.self,
-                    forKey: .value
-                )
-                self.evaluatedAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .evaluatedAt
-                )
-                self.rule = try container.decode(
-                    Components.Schemas.FieldExplanationOutput.RulePayload.self,
-                    forKey: .rule
-                )
-                self.sources = try container.decode(
-                    [Components.Schemas.FieldExplanationSource].self,
-                    forKey: .sources
-                )
-                self.resolution = try container.decodeIfPresent(
-                    Components.Schemas.FieldResolution.self,
-                    forKey: .resolution
-                )
-                self.truncated = try container.decode(
-                    Swift.Bool.self,
-                    forKey: .truncated
-                )
-                self.evidenceFingerprint = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .evidenceFingerprint
-                )
-                self.actions = try container.decode(
-                    Components.Schemas.FieldExplanationOutput.ActionsPayload.self,
-                    forKey: .actions
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "subject",
-                    "field",
-                    "label",
-                    "value",
-                    "evaluatedAt",
-                    "rule",
-                    "sources",
-                    "resolution",
-                    "truncated",
-                    "evidenceFingerprint",
-                    "actions"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/FieldExplanationSource`.
         public struct FieldExplanationSource: Codable, Hashable, Sendable {
@@ -8809,26 +6074,6 @@ extension Components {
                 case label
                 case entity
                 case value
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.label = try container.decode(
-                    Swift.String.self,
-                    forKey: .label
-                )
-                self.entity = try container.decodeIfPresent(
-                    Components.Schemas.EntityRef.self,
-                    forKey: .entity
-                )
-                self.value = try container.decode(
-                    Components.Schemas.JsonValue.self,
-                    forKey: .value
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "label",
-                    "entity",
-                    "value"
-                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/FieldResolution`.
@@ -8896,51 +6141,6 @@ extension Components {
                 case matchesFallback
                 case canReset
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.mode = try container.decode(
-                    Components.Schemas.FieldResolution.ModePayload.self,
-                    forKey: .mode
-                )
-                self.storedValue = try container.decode(
-                    Components.Schemas.JsonValue.self,
-                    forKey: .storedValue
-                )
-                self.value = try container.decode(
-                    Components.Schemas.JsonValue.self,
-                    forKey: .value
-                )
-                self.fallbackValue = try container.decode(
-                    Components.Schemas.JsonValue.self,
-                    forKey: .fallbackValue
-                )
-                self.source = try container.decode(
-                    Swift.String.self,
-                    forKey: .source
-                )
-                self.sourceEntity = try container.decodeIfPresent(
-                    Components.Schemas.FieldResolutionSource.self,
-                    forKey: .sourceEntity
-                )
-                self.matchesFallback = try container.decode(
-                    Swift.Bool.self,
-                    forKey: .matchesFallback
-                )
-                self.canReset = try container.decode(
-                    Swift.Bool.self,
-                    forKey: .canReset
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "mode",
-                    "storedValue",
-                    "value",
-                    "fallbackValue",
-                    "source",
-                    "sourceEntity",
-                    "matchesFallback",
-                    "canReset"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/FieldResolutions`.
         public struct FieldResolutions: Codable, Hashable, Sendable {
@@ -8988,21 +6188,6 @@ extension Components {
                 case entityType
                 case entityId
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.entityType = try container.decode(
-                    Components.Schemas.FieldResolutionSource.EntityTypePayload.self,
-                    forKey: .entityType
-                )
-                self.entityId = try container.decode(
-                    Swift.String.self,
-                    forKey: .entityId
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "entityType",
-                    "entityId"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/FinancialAccountCardNumber`.
         public struct FinancialAccountCardNumber: Codable, Hashable, Sendable {
@@ -9043,36 +6228,6 @@ extension Components {
                 case validFrom
                 case validTo
                 case note
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.last4 = try container.decode(
-                    Components.Schemas.FinancialAccountLast4.self,
-                    forKey: .last4
-                )
-                self.kind = try container.decode(
-                    Components.Schemas.FinancialAccountCardNumberKind.self,
-                    forKey: .kind
-                )
-                self.validFrom = try container.decodeIfPresent(
-                    Components.Schemas.PlainDate.self,
-                    forKey: .validFrom
-                )
-                self.validTo = try container.decodeIfPresent(
-                    Components.Schemas.PlainDate.self,
-                    forKey: .validTo
-                )
-                self.note = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .note
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "last4",
-                    "kind",
-                    "validFrom",
-                    "validTo",
-                    "note"
-                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/FinancialAccountCardNumberInput`.
@@ -9250,7 +6405,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/FinancialAccountDetail/displayImages`.
             public var displayImages: Components.Schemas.DisplayImagesField
             /// - Remark: Generated from `#/components/schemas/FinancialAccountDetail/attachments`.
-            public var attachments: Components.Schemas.OutputSchema437
+            public var attachments: Components.Schemas.OutputSchema450
             /// Creates a new `FinancialAccountDetail`.
             ///
             /// - Parameters:
@@ -9286,7 +6441,7 @@ extension Components {
                 updatedAt: Foundation.Date,
                 dataQuality: Components.Schemas.DataQuality,
                 displayImages: Components.Schemas.DisplayImagesField,
-                attachments: Components.Schemas.OutputSchema437
+                attachments: Components.Schemas.OutputSchema450
             ) {
                 self.id = id
                 self.name = name
@@ -9322,91 +6477,6 @@ extension Components {
                 case dataQuality
                 case displayImages
                 case attachments
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.id = try container.decode(
-                    Components.Schemas.FinancialAccountShortcode.self,
-                    forKey: .id
-                )
-                self.name = try container.decode(
-                    Swift.String.self,
-                    forKey: .name
-                )
-                self.identity = try container.decode(
-                    Components.Schemas.FinancialAccountIdentity.self,
-                    forKey: .identity
-                )
-                self.provisional = try container.decode(
-                    Swift.Bool.self,
-                    forKey: .provisional
-                )
-                self.sourceAliases = try container.decode(
-                    Components.Schemas.FinancialAccountSourceAliases.self,
-                    forKey: .sourceAliases
-                )
-                self.cardNumbers = try container.decode(
-                    Components.Schemas.FinancialAccountCardNumbers.self,
-                    forKey: .cardNumbers
-                )
-                self.ledgerPartyId = try container.decodeIfPresent(
-                    Components.Schemas.LedgerPartyShortcode.self,
-                    forKey: .ledgerPartyId
-                )
-                self.inventoryOwnerDefaultEnabled = try container.decode(
-                    Swift.Bool.self,
-                    forKey: .inventoryOwnerDefaultEnabled
-                )
-                self.notes = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .notes
-                )
-                self.ledgerPartyName = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .ledgerPartyName
-                )
-                self.transactionCount = try container.decode(
-                    Swift.Int.self,
-                    forKey: .transactionCount
-                )
-                self.createdAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .createdAt
-                )
-                self.updatedAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .updatedAt
-                )
-                self.dataQuality = try container.decode(
-                    Components.Schemas.DataQuality.self,
-                    forKey: .dataQuality
-                )
-                self.displayImages = try container.decode(
-                    Components.Schemas.DisplayImagesField.self,
-                    forKey: .displayImages
-                )
-                self.attachments = try container.decode(
-                    Components.Schemas.OutputSchema437.self,
-                    forKey: .attachments
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "id",
-                    "name",
-                    "identity",
-                    "provisional",
-                    "sourceAliases",
-                    "cardNumbers",
-                    "ledgerPartyId",
-                    "inventoryOwnerDefaultEnabled",
-                    "notes",
-                    "ledgerPartyName",
-                    "transactionCount",
-                    "createdAt",
-                    "updatedAt",
-                    "dataQuality",
-                    "displayImages",
-                    "attachments"
-                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/FinancialAccountIdentity`.
@@ -9503,26 +6573,6 @@ extension Components {
                 case institution
                 case accountType
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.kind = try container.decode(
-                    Components.Schemas.FinancialAccountIdentityBankAccount.KindPayload.self,
-                    forKey: .kind
-                )
-                self.institution = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .institution
-                )
-                self.accountType = try container.decode(
-                    Components.Schemas.FinancialAccountIdentityBankAccount.AccountTypePayload.self,
-                    forKey: .accountType
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "kind",
-                    "institution",
-                    "accountType"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/FinancialAccountIdentityBankAccountInput`.
         public struct FinancialAccountIdentityBankAccountInput: Codable, Hashable, Sendable {
@@ -9602,16 +6652,6 @@ extension Components {
             public enum CodingKeys: String, CodingKey {
                 case kind
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.kind = try container.decode(
-                    Components.Schemas.FinancialAccountIdentityCash.KindPayload.self,
-                    forKey: .kind
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "kind"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/FinancialAccountIdentityCashInput`.
         public struct FinancialAccountIdentityCashInput: Codable, Hashable, Sendable {
@@ -9681,26 +6721,6 @@ extension Components {
                 case kind
                 case issuer
                 case network
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.kind = try container.decode(
-                    Components.Schemas.FinancialAccountIdentityCreditCard.KindPayload.self,
-                    forKey: .kind
-                )
-                self.issuer = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .issuer
-                )
-                self.network = try container.decodeIfPresent(
-                    Components.Schemas.FinancialAccountIdentityCreditCard.NetworkPayload.self,
-                    forKey: .network
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "kind",
-                    "issuer",
-                    "network"
-                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/FinancialAccountIdentityCreditCardInput`.
@@ -9845,21 +6865,6 @@ extension Components {
                 case kind
                 case institution
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.kind = try container.decode(
-                    Components.Schemas.FinancialAccountIdentityOther.KindPayload.self,
-                    forKey: .kind
-                )
-                self.institution = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .institution
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "kind",
-                    "institution"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/FinancialAccountIdentityOtherInput`.
         public struct FinancialAccountIdentityOtherInput: Codable, Hashable, Sendable {
@@ -9928,21 +6933,6 @@ extension Components {
             public enum CodingKeys: String, CodingKey {
                 case kind
                 case provider
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.kind = try container.decode(
-                    Components.Schemas.FinancialAccountIdentityStoredValue.KindPayload.self,
-                    forKey: .kind
-                )
-                self.provider = try container.decode(
-                    Swift.String.self,
-                    forKey: .provider
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "kind",
-                    "provider"
-                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/FinancialAccountIdentityStoredValueInput`.
@@ -10089,86 +7079,6 @@ extension Components {
                 case dataQuality
                 case displayImages
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.id = try container.decode(
-                    Components.Schemas.FinancialAccountShortcode.self,
-                    forKey: .id
-                )
-                self.name = try container.decode(
-                    Swift.String.self,
-                    forKey: .name
-                )
-                self.identity = try container.decode(
-                    Components.Schemas.FinancialAccountIdentity.self,
-                    forKey: .identity
-                )
-                self.provisional = try container.decode(
-                    Swift.Bool.self,
-                    forKey: .provisional
-                )
-                self.sourceAliases = try container.decode(
-                    Components.Schemas.FinancialAccountSourceAliases.self,
-                    forKey: .sourceAliases
-                )
-                self.cardNumbers = try container.decode(
-                    Components.Schemas.FinancialAccountCardNumbers.self,
-                    forKey: .cardNumbers
-                )
-                self.ledgerPartyId = try container.decodeIfPresent(
-                    Components.Schemas.LedgerPartyShortcode.self,
-                    forKey: .ledgerPartyId
-                )
-                self.inventoryOwnerDefaultEnabled = try container.decode(
-                    Swift.Bool.self,
-                    forKey: .inventoryOwnerDefaultEnabled
-                )
-                self.notes = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .notes
-                )
-                self.ledgerPartyName = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .ledgerPartyName
-                )
-                self.transactionCount = try container.decode(
-                    Swift.Int.self,
-                    forKey: .transactionCount
-                )
-                self.createdAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .createdAt
-                )
-                self.updatedAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .updatedAt
-                )
-                self.dataQuality = try container.decode(
-                    Components.Schemas.DataQuality.self,
-                    forKey: .dataQuality
-                )
-                self.displayImages = try container.decode(
-                    Components.Schemas.DisplayImagesField.self,
-                    forKey: .displayImages
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "id",
-                    "name",
-                    "identity",
-                    "provisional",
-                    "sourceAliases",
-                    "cardNumbers",
-                    "ledgerPartyId",
-                    "inventoryOwnerDefaultEnabled",
-                    "notes",
-                    "ledgerPartyName",
-                    "transactionCount",
-                    "createdAt",
-                    "updatedAt",
-                    "dataQuality",
-                    "displayImages"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/FinancialAccountListPage`.
         public struct FinancialAccountListPage: Codable, Hashable, Sendable {
@@ -10191,21 +7101,6 @@ extension Components {
             public enum CodingKeys: String, CodingKey {
                 case items
                 case meta
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.items = try container.decode(
-                    [Components.Schemas.FinancialAccountListItem].self,
-                    forKey: .items
-                )
-                self.meta = try container.decode(
-                    Components.Schemas.ListPageMeta.self,
-                    forKey: .meta
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "items",
-                    "meta"
-                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/FinancialAccountOut`.
@@ -10302,81 +7197,6 @@ extension Components {
                 case updatedAt
                 case dataQuality
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.id = try container.decode(
-                    Components.Schemas.FinancialAccountShortcode.self,
-                    forKey: .id
-                )
-                self.name = try container.decode(
-                    Swift.String.self,
-                    forKey: .name
-                )
-                self.identity = try container.decode(
-                    Components.Schemas.FinancialAccountIdentity.self,
-                    forKey: .identity
-                )
-                self.provisional = try container.decode(
-                    Swift.Bool.self,
-                    forKey: .provisional
-                )
-                self.sourceAliases = try container.decode(
-                    Components.Schemas.FinancialAccountSourceAliases.self,
-                    forKey: .sourceAliases
-                )
-                self.cardNumbers = try container.decode(
-                    Components.Schemas.FinancialAccountCardNumbers.self,
-                    forKey: .cardNumbers
-                )
-                self.ledgerPartyId = try container.decodeIfPresent(
-                    Components.Schemas.LedgerPartyShortcode.self,
-                    forKey: .ledgerPartyId
-                )
-                self.inventoryOwnerDefaultEnabled = try container.decode(
-                    Swift.Bool.self,
-                    forKey: .inventoryOwnerDefaultEnabled
-                )
-                self.notes = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .notes
-                )
-                self.ledgerPartyName = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .ledgerPartyName
-                )
-                self.transactionCount = try container.decode(
-                    Swift.Int.self,
-                    forKey: .transactionCount
-                )
-                self.createdAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .createdAt
-                )
-                self.updatedAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .updatedAt
-                )
-                self.dataQuality = try container.decode(
-                    Components.Schemas.DataQuality.self,
-                    forKey: .dataQuality
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "id",
-                    "name",
-                    "identity",
-                    "provisional",
-                    "sourceAliases",
-                    "cardNumbers",
-                    "ledgerPartyId",
-                    "inventoryOwnerDefaultEnabled",
-                    "notes",
-                    "ledgerPartyName",
-                    "transactionCount",
-                    "createdAt",
-                    "updatedAt",
-                    "dataQuality"
-                ])
-            }
         }
         /// financialAccount shortcode, e.g. FAC-4K7M
         ///
@@ -10409,26 +7229,6 @@ extension Components {
                 case source
                 case alias
                 case externalAccountId
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.source = try container.decode(
-                    Swift.String.self,
-                    forKey: .source
-                )
-                self.alias = try container.decode(
-                    Swift.String.self,
-                    forKey: .alias
-                )
-                self.externalAccountId = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .externalAccountId
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "source",
-                    "alias",
-                    "externalAccountId"
-                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/FinancialAccountSourceAliases`.
@@ -10608,51 +7408,6 @@ extension Components {
                 case postedRefundTotal
                 case delta
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.status = try container.decode(
-                    Components.Schemas.FinancialReconciliationStatus.self,
-                    forKey: .status
-                )
-                self.transactionCount = try container.decode(
-                    Swift.Int.self,
-                    forKey: .transactionCount
-                )
-                self.postedTransactionCount = try container.decode(
-                    Swift.Int.self,
-                    forKey: .postedTransactionCount
-                )
-                self.outstandingTransactionCount = try container.decode(
-                    Swift.Int.self,
-                    forKey: .outstandingTransactionCount
-                )
-                self.postedTotal = try container.decode(
-                    Components.Schemas.Money.self,
-                    forKey: .postedTotal
-                )
-                self.projectedTotal = try container.decode(
-                    Components.Schemas.Money.self,
-                    forKey: .projectedTotal
-                )
-                self.postedRefundTotal = try container.decode(
-                    Components.Schemas.Money.self,
-                    forKey: .postedRefundTotal
-                )
-                self.delta = try container.decodeIfPresent(
-                    Components.Schemas.Money.self,
-                    forKey: .delta
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "status",
-                    "transactionCount",
-                    "postedTransactionCount",
-                    "outstandingTransactionCount",
-                    "postedTotal",
-                    "projectedTotal",
-                    "postedRefundTotal",
-                    "delta"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/FinancialTransactionAllocationInput`.
         public struct FinancialTransactionAllocationInput: Codable, Hashable, Sendable {
@@ -10675,21 +7430,6 @@ extension Components {
             public enum CodingKeys: String, CodingKey {
                 case purchaseId
                 case amount
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.purchaseId = try container.decode(
-                    Components.Schemas.PurchaseShortcode.self,
-                    forKey: .purchaseId
-                )
-                self.amount = try container.decode(
-                    Components.Schemas.WholeCentAmount.self,
-                    forKey: .amount
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "purchaseId",
-                    "amount"
-                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/FinancialTransactionAllocationInputRequest`.
@@ -10965,7 +7705,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/FinancialTransactionDetail/displayImages`.
             public var displayImages: Components.Schemas.DisplayImagesField
             /// - Remark: Generated from `#/components/schemas/FinancialTransactionDetail/attachments`.
-            public var attachments: Components.Schemas.OutputSchema437
+            public var attachments: Components.Schemas.OutputSchema450
             /// Creates a new `FinancialTransactionDetail`.
             ///
             /// - Parameters:
@@ -11015,7 +7755,7 @@ extension Components {
                 updatedAt: Foundation.Date,
                 dataQuality: Components.Schemas.DataQuality,
                 displayImages: Components.Schemas.DisplayImagesField,
-                attachments: Components.Schemas.OutputSchema437
+                attachments: Components.Schemas.OutputSchema450
             ) {
                 self.id = id
                 self.accountId = accountId
@@ -11065,126 +7805,6 @@ extension Components {
                 case dataQuality
                 case displayImages
                 case attachments
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.id = try container.decode(
-                    Components.Schemas.FinancialTransactionShortcode.self,
-                    forKey: .id
-                )
-                self.accountId = try container.decode(
-                    Components.Schemas.FinancialAccountShortcode.self,
-                    forKey: .accountId
-                )
-                self.purchaseId = try container.decodeIfPresent(
-                    Components.Schemas.PurchaseShortcode.self,
-                    forKey: .purchaseId
-                )
-                self.kind = try container.decode(
-                    Components.Schemas.FinancialTransactionDetail.KindPayload.self,
-                    forKey: .kind
-                )
-                self.status = try container.decode(
-                    Components.Schemas.FinancialTransactionDetail.StatusPayload.self,
-                    forKey: .status
-                )
-                self.amount = try container.decode(
-                    Components.Schemas.FinancialTransactionNonZeroAmount.self,
-                    forKey: .amount
-                )
-                self.transactionDate = try container.decodeIfPresent(
-                    Components.Schemas.PlainDate.self,
-                    forKey: .transactionDate
-                )
-                self.postedDate = try container.decodeIfPresent(
-                    Components.Schemas.PlainDate.self,
-                    forKey: .postedDate
-                )
-                self.merchant = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .merchant
-                )
-                self.rawDescription = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .rawDescription
-                )
-                self.sourceCategory = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .sourceCategory
-                )
-                self.sourceRefs = try container.decode(
-                    Components.Schemas.FinancialTransactionSourceRefs.self,
-                    forKey: .sourceRefs
-                )
-                self.notes = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .notes
-                )
-                self.allocations = try container.decode(
-                    Components.Schemas.FinancialTransactionAllocations.self,
-                    forKey: .allocations
-                )
-                self.ledgerTransferId = try container.decodeIfPresent(
-                    Components.Schemas.LedgerTransferShortcode.self,
-                    forKey: .ledgerTransferId
-                )
-                self.accountName = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .accountName
-                )
-                self.vendorInference = try container.decodeIfPresent(
-                    Components.Schemas.MerchantVendorInference.self,
-                    forKey: .vendorInference
-                )
-                self.displayName = try container.decode(
-                    Swift.String.self,
-                    forKey: .displayName
-                )
-                self.createdAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .createdAt
-                )
-                self.updatedAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .updatedAt
-                )
-                self.dataQuality = try container.decode(
-                    Components.Schemas.DataQuality.self,
-                    forKey: .dataQuality
-                )
-                self.displayImages = try container.decode(
-                    Components.Schemas.DisplayImagesField.self,
-                    forKey: .displayImages
-                )
-                self.attachments = try container.decode(
-                    Components.Schemas.OutputSchema437.self,
-                    forKey: .attachments
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "id",
-                    "accountId",
-                    "purchaseId",
-                    "kind",
-                    "status",
-                    "amount",
-                    "transactionDate",
-                    "postedDate",
-                    "merchant",
-                    "rawDescription",
-                    "sourceCategory",
-                    "sourceRefs",
-                    "notes",
-                    "allocations",
-                    "ledgerTransferId",
-                    "accountName",
-                    "vendorInference",
-                    "displayName",
-                    "createdAt",
-                    "updatedAt",
-                    "dataQuality",
-                    "displayImages",
-                    "attachments"
-                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/FinancialTransactionListItem`.
@@ -11350,121 +7970,6 @@ extension Components {
                 case dataQuality
                 case displayImages
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.id = try container.decode(
-                    Components.Schemas.FinancialTransactionShortcode.self,
-                    forKey: .id
-                )
-                self.accountId = try container.decode(
-                    Components.Schemas.FinancialAccountShortcode.self,
-                    forKey: .accountId
-                )
-                self.purchaseId = try container.decodeIfPresent(
-                    Components.Schemas.PurchaseShortcode.self,
-                    forKey: .purchaseId
-                )
-                self.kind = try container.decode(
-                    Components.Schemas.FinancialTransactionListItem.KindPayload.self,
-                    forKey: .kind
-                )
-                self.status = try container.decode(
-                    Components.Schemas.FinancialTransactionListItem.StatusPayload.self,
-                    forKey: .status
-                )
-                self.amount = try container.decode(
-                    Components.Schemas.FinancialTransactionNonZeroAmount.self,
-                    forKey: .amount
-                )
-                self.transactionDate = try container.decodeIfPresent(
-                    Components.Schemas.PlainDate.self,
-                    forKey: .transactionDate
-                )
-                self.postedDate = try container.decodeIfPresent(
-                    Components.Schemas.PlainDate.self,
-                    forKey: .postedDate
-                )
-                self.merchant = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .merchant
-                )
-                self.rawDescription = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .rawDescription
-                )
-                self.sourceCategory = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .sourceCategory
-                )
-                self.sourceRefs = try container.decode(
-                    Components.Schemas.FinancialTransactionSourceRefs.self,
-                    forKey: .sourceRefs
-                )
-                self.notes = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .notes
-                )
-                self.allocations = try container.decode(
-                    Components.Schemas.FinancialTransactionAllocations.self,
-                    forKey: .allocations
-                )
-                self.ledgerTransferId = try container.decodeIfPresent(
-                    Components.Schemas.LedgerTransferShortcode.self,
-                    forKey: .ledgerTransferId
-                )
-                self.accountName = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .accountName
-                )
-                self.vendorInference = try container.decodeIfPresent(
-                    Components.Schemas.MerchantVendorInference.self,
-                    forKey: .vendorInference
-                )
-                self.displayName = try container.decode(
-                    Swift.String.self,
-                    forKey: .displayName
-                )
-                self.createdAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .createdAt
-                )
-                self.updatedAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .updatedAt
-                )
-                self.dataQuality = try container.decode(
-                    Components.Schemas.DataQuality.self,
-                    forKey: .dataQuality
-                )
-                self.displayImages = try container.decode(
-                    Components.Schemas.DisplayImagesField.self,
-                    forKey: .displayImages
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "id",
-                    "accountId",
-                    "purchaseId",
-                    "kind",
-                    "status",
-                    "amount",
-                    "transactionDate",
-                    "postedDate",
-                    "merchant",
-                    "rawDescription",
-                    "sourceCategory",
-                    "sourceRefs",
-                    "notes",
-                    "allocations",
-                    "ledgerTransferId",
-                    "accountName",
-                    "vendorInference",
-                    "displayName",
-                    "createdAt",
-                    "updatedAt",
-                    "dataQuality",
-                    "displayImages"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/FinancialTransactionListPage`.
         public struct FinancialTransactionListPage: Codable, Hashable, Sendable {
@@ -11487,21 +7992,6 @@ extension Components {
             public enum CodingKeys: String, CodingKey {
                 case items
                 case meta
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.items = try container.decode(
-                    [Components.Schemas.FinancialTransactionListItem].self,
-                    forKey: .items
-                )
-                self.meta = try container.decode(
-                    Components.Schemas.ListPageMeta.self,
-                    forKey: .meta
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "items",
-                    "meta"
-                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/FinancialTransactionNonZeroAmount`.
@@ -11663,116 +8153,6 @@ extension Components {
                 case updatedAt
                 case dataQuality
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.id = try container.decode(
-                    Components.Schemas.FinancialTransactionShortcode.self,
-                    forKey: .id
-                )
-                self.accountId = try container.decode(
-                    Components.Schemas.FinancialAccountShortcode.self,
-                    forKey: .accountId
-                )
-                self.purchaseId = try container.decodeIfPresent(
-                    Components.Schemas.PurchaseShortcode.self,
-                    forKey: .purchaseId
-                )
-                self.kind = try container.decode(
-                    Components.Schemas.FinancialTransactionOut.KindPayload.self,
-                    forKey: .kind
-                )
-                self.status = try container.decode(
-                    Components.Schemas.FinancialTransactionOut.StatusPayload.self,
-                    forKey: .status
-                )
-                self.amount = try container.decode(
-                    Components.Schemas.FinancialTransactionNonZeroAmount.self,
-                    forKey: .amount
-                )
-                self.transactionDate = try container.decodeIfPresent(
-                    Components.Schemas.PlainDate.self,
-                    forKey: .transactionDate
-                )
-                self.postedDate = try container.decodeIfPresent(
-                    Components.Schemas.PlainDate.self,
-                    forKey: .postedDate
-                )
-                self.merchant = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .merchant
-                )
-                self.rawDescription = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .rawDescription
-                )
-                self.sourceCategory = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .sourceCategory
-                )
-                self.sourceRefs = try container.decode(
-                    Components.Schemas.FinancialTransactionSourceRefs.self,
-                    forKey: .sourceRefs
-                )
-                self.notes = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .notes
-                )
-                self.allocations = try container.decode(
-                    Components.Schemas.FinancialTransactionAllocations.self,
-                    forKey: .allocations
-                )
-                self.ledgerTransferId = try container.decodeIfPresent(
-                    Components.Schemas.LedgerTransferShortcode.self,
-                    forKey: .ledgerTransferId
-                )
-                self.accountName = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .accountName
-                )
-                self.vendorInference = try container.decodeIfPresent(
-                    Components.Schemas.MerchantVendorInference.self,
-                    forKey: .vendorInference
-                )
-                self.displayName = try container.decode(
-                    Swift.String.self,
-                    forKey: .displayName
-                )
-                self.createdAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .createdAt
-                )
-                self.updatedAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .updatedAt
-                )
-                self.dataQuality = try container.decode(
-                    Components.Schemas.DataQuality.self,
-                    forKey: .dataQuality
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "id",
-                    "accountId",
-                    "purchaseId",
-                    "kind",
-                    "status",
-                    "amount",
-                    "transactionDate",
-                    "postedDate",
-                    "merchant",
-                    "rawDescription",
-                    "sourceCategory",
-                    "sourceRefs",
-                    "notes",
-                    "allocations",
-                    "ledgerTransferId",
-                    "accountName",
-                    "vendorInference",
-                    "displayName",
-                    "createdAt",
-                    "updatedAt",
-                    "dataQuality"
-                ])
-            }
         }
         /// financialTransaction shortcode, e.g. FTX-4K7M
         ///
@@ -11799,21 +8179,6 @@ extension Components {
             public enum CodingKeys: String, CodingKey {
                 case source
                 case externalId
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.source = try container.decode(
-                    Swift.String.self,
-                    forKey: .source
-                )
-                self.externalId = try container.decode(
-                    Swift.String.self,
-                    forKey: .externalId
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "source",
-                    "externalId"
-                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/FinancialTransactionSourceRefInput`.
@@ -12060,21 +8425,6 @@ extension Components {
                 case dataType = "data_type"
                 case description
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.dataType = try container.decode(
-                    Components.Schemas.DataTypeEnum.self,
-                    forKey: .dataType
-                )
-                self.description = try container.decode(
-                    Swift.String.self,
-                    forKey: .description
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "data_type",
-                    "description"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/FoodPortion`.
         public struct FoodPortion: Codable, Hashable, Sendable {
@@ -12103,26 +8453,6 @@ extension Components {
                 case amount
                 case modifier
                 case gramWeight = "gram_weight"
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.amount = try container.decode(
-                    Swift.Double.self,
-                    forKey: .amount
-                )
-                self.modifier = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .modifier
-                )
-                self.gramWeight = try container.decode(
-                    Swift.Double.self,
-                    forKey: .gramWeight
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "amount",
-                    "modifier",
-                    "gram_weight"
-                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/FoodSummary`.
@@ -12170,41 +8500,6 @@ extension Components {
                 case legacyFoodInfo
                 case nutritionInfo
                 case portionInfoRaw
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.fdcId = try container.decode(
-                    Components.Schemas.FdcId.self,
-                    forKey: .fdcId
-                )
-                self.brandedFoodInfo = try container.decodeIfPresent(
-                    Components.Schemas.BrandedFoodInfo.self,
-                    forKey: .brandedFoodInfo
-                )
-                self.foodInfo = try container.decode(
-                    Components.Schemas.FoodInfo.self,
-                    forKey: .foodInfo
-                )
-                self.legacyFoodInfo = try container.decodeIfPresent(
-                    Components.Schemas.LegacyFoodInfo.self,
-                    forKey: .legacyFoodInfo
-                )
-                self.nutritionInfo = try container.decode(
-                    Components.Schemas.NutritionInfo.self,
-                    forKey: .nutritionInfo
-                )
-                self.portionInfoRaw = try container.decode(
-                    [Components.Schemas.FoodPortion].self,
-                    forKey: .portionInfoRaw
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "fdc_id",
-                    "brandedFoodInfo",
-                    "foodInfo",
-                    "legacyFoodInfo",
-                    "nutritionInfo",
-                    "portionInfoRaw"
-                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/FoodSummaryWithLinkedProducts`.
@@ -12271,56 +8566,6 @@ extension Components {
                 case inferredUnitMappings
                 case linkedProducts
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.fdcId = try container.decode(
-                    Components.Schemas.FdcId.self,
-                    forKey: .fdcId
-                )
-                self.description = try container.decode(
-                    Swift.String.self,
-                    forKey: .description
-                )
-                self.brandedFoodInfo = try container.decodeIfPresent(
-                    Components.Schemas.BrandedFoodInfo.self,
-                    forKey: .brandedFoodInfo
-                )
-                self.foodInfo = try container.decode(
-                    Components.Schemas.FoodInfo.self,
-                    forKey: .foodInfo
-                )
-                self.legacyFoodInfo = try container.decodeIfPresent(
-                    Components.Schemas.LegacyFoodInfo.self,
-                    forKey: .legacyFoodInfo
-                )
-                self.nutritionInfo = try container.decode(
-                    Components.Schemas.NutritionInfo.self,
-                    forKey: .nutritionInfo
-                )
-                self.portionInfoRaw = try container.decode(
-                    [Components.Schemas.FoodPortion].self,
-                    forKey: .portionInfoRaw
-                )
-                self.inferredUnitMappings = try container.decode(
-                    [Components.Schemas.UnitMappingWithMetadata].self,
-                    forKey: .inferredUnitMappings
-                )
-                self.linkedProducts = try container.decode(
-                    [Components.Schemas.ProductTopLevelOut].self,
-                    forKey: .linkedProducts
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "fdc_id",
-                    "description",
-                    "brandedFoodInfo",
-                    "foodInfo",
-                    "legacyFoodInfo",
-                    "nutritionInfo",
-                    "portionInfoRaw",
-                    "inferredUnitMappings",
-                    "linkedProducts"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/GardenEntryCreateInput`.
         public struct GardenEntryCreateInput: Codable, Hashable, Sendable {
@@ -12382,7 +8627,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/GardenEntryDetail/locationId`.
             public var locationId: Components.Schemas.LocationShortcode
             /// - Remark: Generated from `#/components/schemas/GardenEntryDetail/plantingIds`.
-            public var plantingIds: Components.Schemas.OutputSchema131
+            public var plantingIds: Components.Schemas.OutputSchema144
             /// - Remark: Generated from `#/components/schemas/GardenEntryDetail/kind`.
             public var kind: Components.Schemas.GardenEntryKind
             /// - Remark: Generated from `#/components/schemas/GardenEntryDetail/observedOn`.
@@ -12392,13 +8637,13 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/GardenEntryDetail/harvestAmount`.
             public var harvestAmount: Swift.String?
             /// - Remark: Generated from `#/components/schemas/GardenEntryDetail/images`.
-            public var images: Components.Schemas.OutputSchema133
+            public var images: Components.Schemas.OutputSchema146
             /// - Remark: Generated from `#/components/schemas/GardenEntryDetail/displayName`.
             public var displayName: Swift.String
             /// - Remark: Generated from `#/components/schemas/GardenEntryDetail/locationName`.
             public var locationName: Swift.String
             /// - Remark: Generated from `#/components/schemas/GardenEntryDetail/plantings`.
-            public var plantings: Components.Schemas.OutputSchema136
+            public var plantings: Components.Schemas.OutputSchema149
             /// - Remark: Generated from `#/components/schemas/GardenEntryDetail/createdAt`.
             public var createdAt: Foundation.Date
             /// - Remark: Generated from `#/components/schemas/GardenEntryDetail/updatedAt`.
@@ -12408,7 +8653,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/GardenEntryDetail/displayImages`.
             public var displayImages: Components.Schemas.DisplayImagesField
             /// - Remark: Generated from `#/components/schemas/GardenEntryDetail/attachments`.
-            public var attachments: Components.Schemas.OutputSchema437
+            public var attachments: Components.Schemas.OutputSchema450
             /// Creates a new `GardenEntryDetail`.
             ///
             /// - Parameters:
@@ -12431,20 +8676,20 @@ extension Components {
             public init(
                 id: Components.Schemas.GardenEntryShortcode,
                 locationId: Components.Schemas.LocationShortcode,
-                plantingIds: Components.Schemas.OutputSchema131,
+                plantingIds: Components.Schemas.OutputSchema144,
                 kind: Components.Schemas.GardenEntryKind,
                 observedOn: Components.Schemas.PlainDate,
                 note: Swift.String? = nil,
                 harvestAmount: Swift.String? = nil,
-                images: Components.Schemas.OutputSchema133,
+                images: Components.Schemas.OutputSchema146,
                 displayName: Swift.String,
                 locationName: Swift.String,
-                plantings: Components.Schemas.OutputSchema136,
+                plantings: Components.Schemas.OutputSchema149,
                 createdAt: Foundation.Date,
                 updatedAt: Foundation.Date,
                 dataQuality: Components.Schemas.DataQuality,
                 displayImages: Components.Schemas.DisplayImagesField,
-                attachments: Components.Schemas.OutputSchema437
+                attachments: Components.Schemas.OutputSchema450
             ) {
                 self.id = id
                 self.locationId = locationId
@@ -12481,91 +8726,6 @@ extension Components {
                 case displayImages
                 case attachments
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.id = try container.decode(
-                    Components.Schemas.GardenEntryShortcode.self,
-                    forKey: .id
-                )
-                self.locationId = try container.decode(
-                    Components.Schemas.LocationShortcode.self,
-                    forKey: .locationId
-                )
-                self.plantingIds = try container.decode(
-                    Components.Schemas.OutputSchema131.self,
-                    forKey: .plantingIds
-                )
-                self.kind = try container.decode(
-                    Components.Schemas.GardenEntryKind.self,
-                    forKey: .kind
-                )
-                self.observedOn = try container.decode(
-                    Components.Schemas.PlainDate.self,
-                    forKey: .observedOn
-                )
-                self.note = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .note
-                )
-                self.harvestAmount = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .harvestAmount
-                )
-                self.images = try container.decode(
-                    Components.Schemas.OutputSchema133.self,
-                    forKey: .images
-                )
-                self.displayName = try container.decode(
-                    Swift.String.self,
-                    forKey: .displayName
-                )
-                self.locationName = try container.decode(
-                    Swift.String.self,
-                    forKey: .locationName
-                )
-                self.plantings = try container.decode(
-                    Components.Schemas.OutputSchema136.self,
-                    forKey: .plantings
-                )
-                self.createdAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .createdAt
-                )
-                self.updatedAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .updatedAt
-                )
-                self.dataQuality = try container.decode(
-                    Components.Schemas.DataQuality.self,
-                    forKey: .dataQuality
-                )
-                self.displayImages = try container.decode(
-                    Components.Schemas.DisplayImagesField.self,
-                    forKey: .displayImages
-                )
-                self.attachments = try container.decode(
-                    Components.Schemas.OutputSchema437.self,
-                    forKey: .attachments
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "id",
-                    "locationId",
-                    "plantingIds",
-                    "kind",
-                    "observedOn",
-                    "note",
-                    "harvestAmount",
-                    "images",
-                    "displayName",
-                    "locationName",
-                    "plantings",
-                    "createdAt",
-                    "updatedAt",
-                    "dataQuality",
-                    "displayImages",
-                    "attachments"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/GardenEntryKind`.
         @frozen public enum GardenEntryKind: String, Codable, Hashable, Sendable, CaseIterable {
@@ -12579,7 +8739,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/GardenEntryListItem/locationId`.
             public var locationId: Components.Schemas.LocationShortcode
             /// - Remark: Generated from `#/components/schemas/GardenEntryListItem/plantingIds`.
-            public var plantingIds: Components.Schemas.OutputSchema131
+            public var plantingIds: Components.Schemas.OutputSchema144
             /// - Remark: Generated from `#/components/schemas/GardenEntryListItem/kind`.
             public var kind: Components.Schemas.GardenEntryKind
             /// - Remark: Generated from `#/components/schemas/GardenEntryListItem/observedOn`.
@@ -12589,13 +8749,13 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/GardenEntryListItem/harvestAmount`.
             public var harvestAmount: Swift.String?
             /// - Remark: Generated from `#/components/schemas/GardenEntryListItem/images`.
-            public var images: Components.Schemas.OutputSchema133
+            public var images: Components.Schemas.OutputSchema146
             /// - Remark: Generated from `#/components/schemas/GardenEntryListItem/displayName`.
             public var displayName: Swift.String
             /// - Remark: Generated from `#/components/schemas/GardenEntryListItem/locationName`.
             public var locationName: Swift.String
             /// - Remark: Generated from `#/components/schemas/GardenEntryListItem/plantings`.
-            public var plantings: Components.Schemas.OutputSchema136
+            public var plantings: Components.Schemas.OutputSchema149
             /// - Remark: Generated from `#/components/schemas/GardenEntryListItem/createdAt`.
             public var createdAt: Foundation.Date
             /// - Remark: Generated from `#/components/schemas/GardenEntryListItem/updatedAt`.
@@ -12625,15 +8785,15 @@ extension Components {
             public init(
                 id: Components.Schemas.GardenEntryShortcode,
                 locationId: Components.Schemas.LocationShortcode,
-                plantingIds: Components.Schemas.OutputSchema131,
+                plantingIds: Components.Schemas.OutputSchema144,
                 kind: Components.Schemas.GardenEntryKind,
                 observedOn: Components.Schemas.PlainDate,
                 note: Swift.String? = nil,
                 harvestAmount: Swift.String? = nil,
-                images: Components.Schemas.OutputSchema133,
+                images: Components.Schemas.OutputSchema146,
                 displayName: Swift.String,
                 locationName: Swift.String,
-                plantings: Components.Schemas.OutputSchema136,
+                plantings: Components.Schemas.OutputSchema149,
                 createdAt: Foundation.Date,
                 updatedAt: Foundation.Date,
                 dataQuality: Components.Schemas.DataQuality,
@@ -12672,86 +8832,6 @@ extension Components {
                 case dataQuality
                 case displayImages
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.id = try container.decode(
-                    Components.Schemas.GardenEntryShortcode.self,
-                    forKey: .id
-                )
-                self.locationId = try container.decode(
-                    Components.Schemas.LocationShortcode.self,
-                    forKey: .locationId
-                )
-                self.plantingIds = try container.decode(
-                    Components.Schemas.OutputSchema131.self,
-                    forKey: .plantingIds
-                )
-                self.kind = try container.decode(
-                    Components.Schemas.GardenEntryKind.self,
-                    forKey: .kind
-                )
-                self.observedOn = try container.decode(
-                    Components.Schemas.PlainDate.self,
-                    forKey: .observedOn
-                )
-                self.note = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .note
-                )
-                self.harvestAmount = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .harvestAmount
-                )
-                self.images = try container.decode(
-                    Components.Schemas.OutputSchema133.self,
-                    forKey: .images
-                )
-                self.displayName = try container.decode(
-                    Swift.String.self,
-                    forKey: .displayName
-                )
-                self.locationName = try container.decode(
-                    Swift.String.self,
-                    forKey: .locationName
-                )
-                self.plantings = try container.decode(
-                    Components.Schemas.OutputSchema136.self,
-                    forKey: .plantings
-                )
-                self.createdAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .createdAt
-                )
-                self.updatedAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .updatedAt
-                )
-                self.dataQuality = try container.decode(
-                    Components.Schemas.DataQuality.self,
-                    forKey: .dataQuality
-                )
-                self.displayImages = try container.decode(
-                    Components.Schemas.DisplayImagesField.self,
-                    forKey: .displayImages
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "id",
-                    "locationId",
-                    "plantingIds",
-                    "kind",
-                    "observedOn",
-                    "note",
-                    "harvestAmount",
-                    "images",
-                    "displayName",
-                    "locationName",
-                    "plantings",
-                    "createdAt",
-                    "updatedAt",
-                    "dataQuality",
-                    "displayImages"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/GardenEntryListPage`.
         public struct GardenEntryListPage: Codable, Hashable, Sendable {
@@ -12775,21 +8855,6 @@ extension Components {
                 case items
                 case meta
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.items = try container.decode(
-                    [Components.Schemas.GardenEntryListItem].self,
-                    forKey: .items
-                )
-                self.meta = try container.decode(
-                    Components.Schemas.ListPageMeta.self,
-                    forKey: .meta
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "items",
-                    "meta"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/GardenEntryOut`.
         public struct GardenEntryOut: Codable, Hashable, Sendable {
@@ -12798,7 +8863,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/GardenEntryOut/locationId`.
             public var locationId: Components.Schemas.LocationShortcode
             /// - Remark: Generated from `#/components/schemas/GardenEntryOut/plantingIds`.
-            public var plantingIds: Components.Schemas.OutputSchema131
+            public var plantingIds: Components.Schemas.OutputSchema144
             /// - Remark: Generated from `#/components/schemas/GardenEntryOut/kind`.
             public var kind: Components.Schemas.GardenEntryKind
             /// - Remark: Generated from `#/components/schemas/GardenEntryOut/observedOn`.
@@ -12808,13 +8873,13 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/GardenEntryOut/harvestAmount`.
             public var harvestAmount: Swift.String?
             /// - Remark: Generated from `#/components/schemas/GardenEntryOut/images`.
-            public var images: Components.Schemas.OutputSchema133
+            public var images: Components.Schemas.OutputSchema146
             /// - Remark: Generated from `#/components/schemas/GardenEntryOut/displayName`.
             public var displayName: Swift.String
             /// - Remark: Generated from `#/components/schemas/GardenEntryOut/locationName`.
             public var locationName: Swift.String
             /// - Remark: Generated from `#/components/schemas/GardenEntryOut/plantings`.
-            public var plantings: Components.Schemas.OutputSchema136
+            public var plantings: Components.Schemas.OutputSchema149
             /// - Remark: Generated from `#/components/schemas/GardenEntryOut/createdAt`.
             public var createdAt: Foundation.Date
             /// - Remark: Generated from `#/components/schemas/GardenEntryOut/updatedAt`.
@@ -12841,15 +8906,15 @@ extension Components {
             public init(
                 id: Components.Schemas.GardenEntryShortcode,
                 locationId: Components.Schemas.LocationShortcode,
-                plantingIds: Components.Schemas.OutputSchema131,
+                plantingIds: Components.Schemas.OutputSchema144,
                 kind: Components.Schemas.GardenEntryKind,
                 observedOn: Components.Schemas.PlainDate,
                 note: Swift.String? = nil,
                 harvestAmount: Swift.String? = nil,
-                images: Components.Schemas.OutputSchema133,
+                images: Components.Schemas.OutputSchema146,
                 displayName: Swift.String,
                 locationName: Swift.String,
-                plantings: Components.Schemas.OutputSchema136,
+                plantings: Components.Schemas.OutputSchema149,
                 createdAt: Foundation.Date,
                 updatedAt: Foundation.Date,
                 dataQuality: Components.Schemas.DataQuality
@@ -12884,81 +8949,6 @@ extension Components {
                 case createdAt
                 case updatedAt
                 case dataQuality
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.id = try container.decode(
-                    Components.Schemas.GardenEntryShortcode.self,
-                    forKey: .id
-                )
-                self.locationId = try container.decode(
-                    Components.Schemas.LocationShortcode.self,
-                    forKey: .locationId
-                )
-                self.plantingIds = try container.decode(
-                    Components.Schemas.OutputSchema131.self,
-                    forKey: .plantingIds
-                )
-                self.kind = try container.decode(
-                    Components.Schemas.GardenEntryKind.self,
-                    forKey: .kind
-                )
-                self.observedOn = try container.decode(
-                    Components.Schemas.PlainDate.self,
-                    forKey: .observedOn
-                )
-                self.note = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .note
-                )
-                self.harvestAmount = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .harvestAmount
-                )
-                self.images = try container.decode(
-                    Components.Schemas.OutputSchema133.self,
-                    forKey: .images
-                )
-                self.displayName = try container.decode(
-                    Swift.String.self,
-                    forKey: .displayName
-                )
-                self.locationName = try container.decode(
-                    Swift.String.self,
-                    forKey: .locationName
-                )
-                self.plantings = try container.decode(
-                    Components.Schemas.OutputSchema136.self,
-                    forKey: .plantings
-                )
-                self.createdAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .createdAt
-                )
-                self.updatedAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .updatedAt
-                )
-                self.dataQuality = try container.decode(
-                    Components.Schemas.DataQuality.self,
-                    forKey: .dataQuality
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "id",
-                    "locationId",
-                    "plantingIds",
-                    "kind",
-                    "observedOn",
-                    "note",
-                    "harvestAmount",
-                    "images",
-                    "displayName",
-                    "locationName",
-                    "plantings",
-                    "createdAt",
-                    "updatedAt",
-                    "dataQuality"
-                ])
             }
         }
         /// gardenEntry shortcode, e.g. GDE-4K7M
@@ -13030,6 +9020,49 @@ extension Components {
                 case imageOrder
             }
         }
+        /// - Remark: Generated from `#/components/schemas/GeneratedEntityMutationCreateResultDevice`.
+        public struct GeneratedEntityMutationCreateResultDevice: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/GeneratedEntityMutationCreateResultDevice/action`.
+            @frozen public enum ActionPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                case create = "create"
+            }
+            /// - Remark: Generated from `#/components/schemas/GeneratedEntityMutationCreateResultDevice/action`.
+            public var action: Components.Schemas.GeneratedEntityMutationCreateResultDevice.ActionPayload
+            /// - Remark: Generated from `#/components/schemas/GeneratedEntityMutationCreateResultDevice/entity`.
+            @frozen public enum EntityPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                case device = "device"
+            }
+            /// - Remark: Generated from `#/components/schemas/GeneratedEntityMutationCreateResultDevice/entity`.
+            public var entity: Components.Schemas.GeneratedEntityMutationCreateResultDevice.EntityPayload
+            /// - Remark: Generated from `#/components/schemas/GeneratedEntityMutationCreateResultDevice/item`.
+            public var item: Components.Schemas.DeviceOut
+            /// - Remark: Generated from `#/components/schemas/GeneratedEntityMutationCreateResultDevice/sideEffects`.
+            public var sideEffects: Components.Schemas.MutationSideEffects
+            /// Creates a new `GeneratedEntityMutationCreateResultDevice`.
+            ///
+            /// - Parameters:
+            ///   - action:
+            ///   - entity:
+            ///   - item:
+            ///   - sideEffects:
+            public init(
+                action: Components.Schemas.GeneratedEntityMutationCreateResultDevice.ActionPayload,
+                entity: Components.Schemas.GeneratedEntityMutationCreateResultDevice.EntityPayload,
+                item: Components.Schemas.DeviceOut,
+                sideEffects: Components.Schemas.MutationSideEffects
+            ) {
+                self.action = action
+                self.entity = entity
+                self.item = item
+                self.sideEffects = sideEffects
+            }
+            public enum CodingKeys: String, CodingKey {
+                case action
+                case entity
+                case item
+                case sideEffects
+            }
+        }
         /// - Remark: Generated from `#/components/schemas/GeneratedEntityMutationCreateResultExpense`.
         public struct GeneratedEntityMutationCreateResultExpense: Codable, Hashable, Sendable {
             /// - Remark: Generated from `#/components/schemas/GeneratedEntityMutationCreateResultExpense/action`.
@@ -13071,31 +9104,6 @@ extension Components {
                 case entity
                 case item
                 case sideEffects
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.action = try container.decode(
-                    Components.Schemas.GeneratedEntityMutationCreateResultExpense.ActionPayload.self,
-                    forKey: .action
-                )
-                self.entity = try container.decode(
-                    Components.Schemas.GeneratedEntityMutationCreateResultExpense.EntityPayload.self,
-                    forKey: .entity
-                )
-                self.item = try container.decode(
-                    Components.Schemas.ExpenseOut.self,
-                    forKey: .item
-                )
-                self.sideEffects = try container.decode(
-                    Components.Schemas.MutationSideEffects.self,
-                    forKey: .sideEffects
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "action",
-                    "entity",
-                    "item",
-                    "sideEffects"
-                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/GeneratedEntityMutationCreateResultFinancialAccount`.
@@ -13140,31 +9148,6 @@ extension Components {
                 case item
                 case sideEffects
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.action = try container.decode(
-                    Components.Schemas.GeneratedEntityMutationCreateResultFinancialAccount.ActionPayload.self,
-                    forKey: .action
-                )
-                self.entity = try container.decode(
-                    Components.Schemas.GeneratedEntityMutationCreateResultFinancialAccount.EntityPayload.self,
-                    forKey: .entity
-                )
-                self.item = try container.decode(
-                    Components.Schemas.FinancialAccountOut.self,
-                    forKey: .item
-                )
-                self.sideEffects = try container.decode(
-                    Components.Schemas.MutationSideEffects.self,
-                    forKey: .sideEffects
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "action",
-                    "entity",
-                    "item",
-                    "sideEffects"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/GeneratedEntityMutationCreateResultFinancialTransaction`.
         public struct GeneratedEntityMutationCreateResultFinancialTransaction: Codable, Hashable, Sendable {
@@ -13207,31 +9190,6 @@ extension Components {
                 case entity
                 case item
                 case sideEffects
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.action = try container.decode(
-                    Components.Schemas.GeneratedEntityMutationCreateResultFinancialTransaction.ActionPayload.self,
-                    forKey: .action
-                )
-                self.entity = try container.decode(
-                    Components.Schemas.GeneratedEntityMutationCreateResultFinancialTransaction.EntityPayload.self,
-                    forKey: .entity
-                )
-                self.item = try container.decode(
-                    Components.Schemas.FinancialTransactionOut.self,
-                    forKey: .item
-                )
-                self.sideEffects = try container.decode(
-                    Components.Schemas.MutationSideEffects.self,
-                    forKey: .sideEffects
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "action",
-                    "entity",
-                    "item",
-                    "sideEffects"
-                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/GeneratedEntityMutationCreateResultGardenEntry`.
@@ -13276,31 +9234,6 @@ extension Components {
                 case item
                 case sideEffects
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.action = try container.decode(
-                    Components.Schemas.GeneratedEntityMutationCreateResultGardenEntry.ActionPayload.self,
-                    forKey: .action
-                )
-                self.entity = try container.decode(
-                    Components.Schemas.GeneratedEntityMutationCreateResultGardenEntry.EntityPayload.self,
-                    forKey: .entity
-                )
-                self.item = try container.decode(
-                    Components.Schemas.GardenEntryOut.self,
-                    forKey: .item
-                )
-                self.sideEffects = try container.decode(
-                    Components.Schemas.MutationSideEffects.self,
-                    forKey: .sideEffects
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "action",
-                    "entity",
-                    "item",
-                    "sideEffects"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/GeneratedEntityMutationCreateResultIngredient`.
         public struct GeneratedEntityMutationCreateResultIngredient: Codable, Hashable, Sendable {
@@ -13343,31 +9276,6 @@ extension Components {
                 case entity
                 case item
                 case sideEffects
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.action = try container.decode(
-                    Components.Schemas.GeneratedEntityMutationCreateResultIngredient.ActionPayload.self,
-                    forKey: .action
-                )
-                self.entity = try container.decode(
-                    Components.Schemas.GeneratedEntityMutationCreateResultIngredient.EntityPayload.self,
-                    forKey: .entity
-                )
-                self.item = try container.decode(
-                    Components.Schemas.IngredientOut.self,
-                    forKey: .item
-                )
-                self.sideEffects = try container.decode(
-                    Components.Schemas.MutationSideEffects.self,
-                    forKey: .sideEffects
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "action",
-                    "entity",
-                    "item",
-                    "sideEffects"
-                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/GeneratedEntityMutationCreateResultInventory`.
@@ -13412,31 +9320,6 @@ extension Components {
                 case item
                 case sideEffects
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.action = try container.decode(
-                    Components.Schemas.GeneratedEntityMutationCreateResultInventory.ActionPayload.self,
-                    forKey: .action
-                )
-                self.entity = try container.decode(
-                    Components.Schemas.GeneratedEntityMutationCreateResultInventory.EntityPayload.self,
-                    forKey: .entity
-                )
-                self.item = try container.decode(
-                    Components.Schemas.InventoryEntryOut.self,
-                    forKey: .item
-                )
-                self.sideEffects = try container.decode(
-                    Components.Schemas.MutationSideEffects.self,
-                    forKey: .sideEffects
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "action",
-                    "entity",
-                    "item",
-                    "sideEffects"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/GeneratedEntityMutationCreateResultLedgerParty`.
         public struct GeneratedEntityMutationCreateResultLedgerParty: Codable, Hashable, Sendable {
@@ -13479,31 +9362,6 @@ extension Components {
                 case entity
                 case item
                 case sideEffects
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.action = try container.decode(
-                    Components.Schemas.GeneratedEntityMutationCreateResultLedgerParty.ActionPayload.self,
-                    forKey: .action
-                )
-                self.entity = try container.decode(
-                    Components.Schemas.GeneratedEntityMutationCreateResultLedgerParty.EntityPayload.self,
-                    forKey: .entity
-                )
-                self.item = try container.decode(
-                    Components.Schemas.LedgerPartyOut.self,
-                    forKey: .item
-                )
-                self.sideEffects = try container.decode(
-                    Components.Schemas.MutationSideEffects.self,
-                    forKey: .sideEffects
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "action",
-                    "entity",
-                    "item",
-                    "sideEffects"
-                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/GeneratedEntityMutationCreateResultLedgerTransfer`.
@@ -13548,31 +9406,6 @@ extension Components {
                 case item
                 case sideEffects
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.action = try container.decode(
-                    Components.Schemas.GeneratedEntityMutationCreateResultLedgerTransfer.ActionPayload.self,
-                    forKey: .action
-                )
-                self.entity = try container.decode(
-                    Components.Schemas.GeneratedEntityMutationCreateResultLedgerTransfer.EntityPayload.self,
-                    forKey: .entity
-                )
-                self.item = try container.decode(
-                    Components.Schemas.LedgerTransferOut.self,
-                    forKey: .item
-                )
-                self.sideEffects = try container.decode(
-                    Components.Schemas.MutationSideEffects.self,
-                    forKey: .sideEffects
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "action",
-                    "entity",
-                    "item",
-                    "sideEffects"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/GeneratedEntityMutationCreateResultLocation`.
         public struct GeneratedEntityMutationCreateResultLocation: Codable, Hashable, Sendable {
@@ -13615,31 +9448,6 @@ extension Components {
                 case entity
                 case item
                 case sideEffects
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.action = try container.decode(
-                    Components.Schemas.GeneratedEntityMutationCreateResultLocation.ActionPayload.self,
-                    forKey: .action
-                )
-                self.entity = try container.decode(
-                    Components.Schemas.GeneratedEntityMutationCreateResultLocation.EntityPayload.self,
-                    forKey: .entity
-                )
-                self.item = try container.decode(
-                    Components.Schemas.LocationOut.self,
-                    forKey: .item
-                )
-                self.sideEffects = try container.decode(
-                    Components.Schemas.MutationSideEffects.self,
-                    forKey: .sideEffects
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "action",
-                    "entity",
-                    "item",
-                    "sideEffects"
-                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/GeneratedEntityMutationCreateResultMeal`.
@@ -13684,31 +9492,6 @@ extension Components {
                 case item
                 case sideEffects
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.action = try container.decode(
-                    Components.Schemas.GeneratedEntityMutationCreateResultMeal.ActionPayload.self,
-                    forKey: .action
-                )
-                self.entity = try container.decode(
-                    Components.Schemas.GeneratedEntityMutationCreateResultMeal.EntityPayload.self,
-                    forKey: .entity
-                )
-                self.item = try container.decode(
-                    Components.Schemas.MealOut.self,
-                    forKey: .item
-                )
-                self.sideEffects = try container.decode(
-                    Components.Schemas.MutationSideEffects.self,
-                    forKey: .sideEffects
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "action",
-                    "entity",
-                    "item",
-                    "sideEffects"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/GeneratedEntityMutationCreateResultPlanting`.
         public struct GeneratedEntityMutationCreateResultPlanting: Codable, Hashable, Sendable {
@@ -13751,31 +9534,6 @@ extension Components {
                 case entity
                 case item
                 case sideEffects
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.action = try container.decode(
-                    Components.Schemas.GeneratedEntityMutationCreateResultPlanting.ActionPayload.self,
-                    forKey: .action
-                )
-                self.entity = try container.decode(
-                    Components.Schemas.GeneratedEntityMutationCreateResultPlanting.EntityPayload.self,
-                    forKey: .entity
-                )
-                self.item = try container.decode(
-                    Components.Schemas.PlantingOut.self,
-                    forKey: .item
-                )
-                self.sideEffects = try container.decode(
-                    Components.Schemas.MutationSideEffects.self,
-                    forKey: .sideEffects
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "action",
-                    "entity",
-                    "item",
-                    "sideEffects"
-                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/GeneratedEntityMutationCreateResultProduct`.
@@ -13820,31 +9578,6 @@ extension Components {
                 case item
                 case sideEffects
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.action = try container.decode(
-                    Components.Schemas.GeneratedEntityMutationCreateResultProduct.ActionPayload.self,
-                    forKey: .action
-                )
-                self.entity = try container.decode(
-                    Components.Schemas.GeneratedEntityMutationCreateResultProduct.EntityPayload.self,
-                    forKey: .entity
-                )
-                self.item = try container.decode(
-                    Components.Schemas.ProductTopLevelOut.self,
-                    forKey: .item
-                )
-                self.sideEffects = try container.decode(
-                    Components.Schemas.MutationSideEffects.self,
-                    forKey: .sideEffects
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "action",
-                    "entity",
-                    "item",
-                    "sideEffects"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/GeneratedEntityMutationCreateResultProductCategory`.
         public struct GeneratedEntityMutationCreateResultProductCategory: Codable, Hashable, Sendable {
@@ -13887,31 +9620,6 @@ extension Components {
                 case entity
                 case item
                 case sideEffects
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.action = try container.decode(
-                    Components.Schemas.GeneratedEntityMutationCreateResultProductCategory.ActionPayload.self,
-                    forKey: .action
-                )
-                self.entity = try container.decode(
-                    Components.Schemas.GeneratedEntityMutationCreateResultProductCategory.EntityPayload.self,
-                    forKey: .entity
-                )
-                self.item = try container.decode(
-                    Components.Schemas.ProductCategoryOut.self,
-                    forKey: .item
-                )
-                self.sideEffects = try container.decode(
-                    Components.Schemas.MutationSideEffects.self,
-                    forKey: .sideEffects
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "action",
-                    "entity",
-                    "item",
-                    "sideEffects"
-                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/GeneratedEntityMutationCreateResultProject`.
@@ -13956,31 +9664,6 @@ extension Components {
                 case item
                 case sideEffects
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.action = try container.decode(
-                    Components.Schemas.GeneratedEntityMutationCreateResultProject.ActionPayload.self,
-                    forKey: .action
-                )
-                self.entity = try container.decode(
-                    Components.Schemas.GeneratedEntityMutationCreateResultProject.EntityPayload.self,
-                    forKey: .entity
-                )
-                self.item = try container.decode(
-                    Components.Schemas.ProjectOut.self,
-                    forKey: .item
-                )
-                self.sideEffects = try container.decode(
-                    Components.Schemas.MutationSideEffects.self,
-                    forKey: .sideEffects
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "action",
-                    "entity",
-                    "item",
-                    "sideEffects"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/GeneratedEntityMutationCreateResultPurchase`.
         public struct GeneratedEntityMutationCreateResultPurchase: Codable, Hashable, Sendable {
@@ -14023,31 +9706,6 @@ extension Components {
                 case entity
                 case item
                 case sideEffects
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.action = try container.decode(
-                    Components.Schemas.GeneratedEntityMutationCreateResultPurchase.ActionPayload.self,
-                    forKey: .action
-                )
-                self.entity = try container.decode(
-                    Components.Schemas.GeneratedEntityMutationCreateResultPurchase.EntityPayload.self,
-                    forKey: .entity
-                )
-                self.item = try container.decode(
-                    Components.Schemas.PurchaseOut.self,
-                    forKey: .item
-                )
-                self.sideEffects = try container.decode(
-                    Components.Schemas.MutationSideEffects.self,
-                    forKey: .sideEffects
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "action",
-                    "entity",
-                    "item",
-                    "sideEffects"
-                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/GeneratedEntityMutationCreateResultRecipe`.
@@ -14092,31 +9750,6 @@ extension Components {
                 case item
                 case sideEffects
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.action = try container.decode(
-                    Components.Schemas.GeneratedEntityMutationCreateResultRecipe.ActionPayload.self,
-                    forKey: .action
-                )
-                self.entity = try container.decode(
-                    Components.Schemas.GeneratedEntityMutationCreateResultRecipe.EntityPayload.self,
-                    forKey: .entity
-                )
-                self.item = try container.decode(
-                    Components.Schemas.RecipeDetailMcpOut.self,
-                    forKey: .item
-                )
-                self.sideEffects = try container.decode(
-                    Components.Schemas.MutationSideEffects.self,
-                    forKey: .sideEffects
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "action",
-                    "entity",
-                    "item",
-                    "sideEffects"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/GeneratedEntityMutationCreateResultTask`.
         public struct GeneratedEntityMutationCreateResultTask: Codable, Hashable, Sendable {
@@ -14159,31 +9792,6 @@ extension Components {
                 case entity
                 case item
                 case sideEffects
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.action = try container.decode(
-                    Components.Schemas.GeneratedEntityMutationCreateResultTask.ActionPayload.self,
-                    forKey: .action
-                )
-                self.entity = try container.decode(
-                    Components.Schemas.GeneratedEntityMutationCreateResultTask.EntityPayload.self,
-                    forKey: .entity
-                )
-                self.item = try container.decode(
-                    Components.Schemas.TaskOut.self,
-                    forKey: .item
-                )
-                self.sideEffects = try container.decode(
-                    Components.Schemas.MutationSideEffects.self,
-                    forKey: .sideEffects
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "action",
-                    "entity",
-                    "item",
-                    "sideEffects"
-                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/GeneratedEntityMutationCreateResultVendor`.
@@ -14228,31 +9836,6 @@ extension Components {
                 case item
                 case sideEffects
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.action = try container.decode(
-                    Components.Schemas.GeneratedEntityMutationCreateResultVendor.ActionPayload.self,
-                    forKey: .action
-                )
-                self.entity = try container.decode(
-                    Components.Schemas.GeneratedEntityMutationCreateResultVendor.EntityPayload.self,
-                    forKey: .entity
-                )
-                self.item = try container.decode(
-                    Components.Schemas.VendorOut.self,
-                    forKey: .item
-                )
-                self.sideEffects = try container.decode(
-                    Components.Schemas.MutationSideEffects.self,
-                    forKey: .sideEffects
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "action",
-                    "entity",
-                    "item",
-                    "sideEffects"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/GeneratedEntityMutationCreateResultVendorAccount`.
         public struct GeneratedEntityMutationCreateResultVendorAccount: Codable, Hashable, Sendable {
@@ -14295,31 +9878,6 @@ extension Components {
                 case entity
                 case item
                 case sideEffects
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.action = try container.decode(
-                    Components.Schemas.GeneratedEntityMutationCreateResultVendorAccount.ActionPayload.self,
-                    forKey: .action
-                )
-                self.entity = try container.decode(
-                    Components.Schemas.GeneratedEntityMutationCreateResultVendorAccount.EntityPayload.self,
-                    forKey: .entity
-                )
-                self.item = try container.decode(
-                    Components.Schemas.VendorAccountOut.self,
-                    forKey: .item
-                )
-                self.sideEffects = try container.decode(
-                    Components.Schemas.MutationSideEffects.self,
-                    forKey: .sideEffects
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "action",
-                    "entity",
-                    "item",
-                    "sideEffects"
-                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/GeneratedEntityMutationCreateResultWish`.
@@ -14364,30 +9922,48 @@ extension Components {
                 case item
                 case sideEffects
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.action = try container.decode(
-                    Components.Schemas.GeneratedEntityMutationCreateResultWish.ActionPayload.self,
-                    forKey: .action
-                )
-                self.entity = try container.decode(
-                    Components.Schemas.GeneratedEntityMutationCreateResultWish.EntityPayload.self,
-                    forKey: .entity
-                )
-                self.item = try container.decode(
-                    Components.Schemas.WishOut.self,
-                    forKey: .item
-                )
-                self.sideEffects = try container.decode(
-                    Components.Schemas.MutationSideEffects.self,
-                    forKey: .sideEffects
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "action",
-                    "entity",
-                    "item",
-                    "sideEffects"
-                ])
+        }
+        /// - Remark: Generated from `#/components/schemas/GeneratedEntityMutationUpdateResultDevice`.
+        public struct GeneratedEntityMutationUpdateResultDevice: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/GeneratedEntityMutationUpdateResultDevice/action`.
+            @frozen public enum ActionPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                case update = "update"
+            }
+            /// - Remark: Generated from `#/components/schemas/GeneratedEntityMutationUpdateResultDevice/action`.
+            public var action: Components.Schemas.GeneratedEntityMutationUpdateResultDevice.ActionPayload
+            /// - Remark: Generated from `#/components/schemas/GeneratedEntityMutationUpdateResultDevice/entity`.
+            @frozen public enum EntityPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                case device = "device"
+            }
+            /// - Remark: Generated from `#/components/schemas/GeneratedEntityMutationUpdateResultDevice/entity`.
+            public var entity: Components.Schemas.GeneratedEntityMutationUpdateResultDevice.EntityPayload
+            /// - Remark: Generated from `#/components/schemas/GeneratedEntityMutationUpdateResultDevice/item`.
+            public var item: Components.Schemas.DeviceOut
+            /// - Remark: Generated from `#/components/schemas/GeneratedEntityMutationUpdateResultDevice/sideEffects`.
+            public var sideEffects: Components.Schemas.MutationSideEffects
+            /// Creates a new `GeneratedEntityMutationUpdateResultDevice`.
+            ///
+            /// - Parameters:
+            ///   - action:
+            ///   - entity:
+            ///   - item:
+            ///   - sideEffects:
+            public init(
+                action: Components.Schemas.GeneratedEntityMutationUpdateResultDevice.ActionPayload,
+                entity: Components.Schemas.GeneratedEntityMutationUpdateResultDevice.EntityPayload,
+                item: Components.Schemas.DeviceOut,
+                sideEffects: Components.Schemas.MutationSideEffects
+            ) {
+                self.action = action
+                self.entity = entity
+                self.item = item
+                self.sideEffects = sideEffects
+            }
+            public enum CodingKeys: String, CodingKey {
+                case action
+                case entity
+                case item
+                case sideEffects
             }
         }
         /// - Remark: Generated from `#/components/schemas/GeneratedEntityMutationUpdateResultExpense`.
@@ -14432,31 +10008,6 @@ extension Components {
                 case item
                 case sideEffects
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.action = try container.decode(
-                    Components.Schemas.GeneratedEntityMutationUpdateResultExpense.ActionPayload.self,
-                    forKey: .action
-                )
-                self.entity = try container.decode(
-                    Components.Schemas.GeneratedEntityMutationUpdateResultExpense.EntityPayload.self,
-                    forKey: .entity
-                )
-                self.item = try container.decode(
-                    Components.Schemas.ExpenseOut.self,
-                    forKey: .item
-                )
-                self.sideEffects = try container.decode(
-                    Components.Schemas.MutationSideEffects.self,
-                    forKey: .sideEffects
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "action",
-                    "entity",
-                    "item",
-                    "sideEffects"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/GeneratedEntityMutationUpdateResultFinancialAccount`.
         public struct GeneratedEntityMutationUpdateResultFinancialAccount: Codable, Hashable, Sendable {
@@ -14499,31 +10050,6 @@ extension Components {
                 case entity
                 case item
                 case sideEffects
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.action = try container.decode(
-                    Components.Schemas.GeneratedEntityMutationUpdateResultFinancialAccount.ActionPayload.self,
-                    forKey: .action
-                )
-                self.entity = try container.decode(
-                    Components.Schemas.GeneratedEntityMutationUpdateResultFinancialAccount.EntityPayload.self,
-                    forKey: .entity
-                )
-                self.item = try container.decode(
-                    Components.Schemas.FinancialAccountOut.self,
-                    forKey: .item
-                )
-                self.sideEffects = try container.decode(
-                    Components.Schemas.MutationSideEffects.self,
-                    forKey: .sideEffects
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "action",
-                    "entity",
-                    "item",
-                    "sideEffects"
-                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/GeneratedEntityMutationUpdateResultFinancialTransaction`.
@@ -14568,31 +10094,6 @@ extension Components {
                 case item
                 case sideEffects
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.action = try container.decode(
-                    Components.Schemas.GeneratedEntityMutationUpdateResultFinancialTransaction.ActionPayload.self,
-                    forKey: .action
-                )
-                self.entity = try container.decode(
-                    Components.Schemas.GeneratedEntityMutationUpdateResultFinancialTransaction.EntityPayload.self,
-                    forKey: .entity
-                )
-                self.item = try container.decode(
-                    Components.Schemas.FinancialTransactionOut.self,
-                    forKey: .item
-                )
-                self.sideEffects = try container.decode(
-                    Components.Schemas.MutationSideEffects.self,
-                    forKey: .sideEffects
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "action",
-                    "entity",
-                    "item",
-                    "sideEffects"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/GeneratedEntityMutationUpdateResultGardenEntry`.
         public struct GeneratedEntityMutationUpdateResultGardenEntry: Codable, Hashable, Sendable {
@@ -14635,31 +10136,6 @@ extension Components {
                 case entity
                 case item
                 case sideEffects
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.action = try container.decode(
-                    Components.Schemas.GeneratedEntityMutationUpdateResultGardenEntry.ActionPayload.self,
-                    forKey: .action
-                )
-                self.entity = try container.decode(
-                    Components.Schemas.GeneratedEntityMutationUpdateResultGardenEntry.EntityPayload.self,
-                    forKey: .entity
-                )
-                self.item = try container.decode(
-                    Components.Schemas.GardenEntryOut.self,
-                    forKey: .item
-                )
-                self.sideEffects = try container.decode(
-                    Components.Schemas.MutationSideEffects.self,
-                    forKey: .sideEffects
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "action",
-                    "entity",
-                    "item",
-                    "sideEffects"
-                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/GeneratedEntityMutationUpdateResultImage`.
@@ -14704,31 +10180,6 @@ extension Components {
                 case item
                 case sideEffects
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.action = try container.decode(
-                    Components.Schemas.GeneratedEntityMutationUpdateResultImage.ActionPayload.self,
-                    forKey: .action
-                )
-                self.entity = try container.decode(
-                    Components.Schemas.GeneratedEntityMutationUpdateResultImage.EntityPayload.self,
-                    forKey: .entity
-                )
-                self.item = try container.decode(
-                    Components.Schemas.ImageOut.self,
-                    forKey: .item
-                )
-                self.sideEffects = try container.decode(
-                    Components.Schemas.MutationSideEffects.self,
-                    forKey: .sideEffects
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "action",
-                    "entity",
-                    "item",
-                    "sideEffects"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/GeneratedEntityMutationUpdateResultIngredient`.
         public struct GeneratedEntityMutationUpdateResultIngredient: Codable, Hashable, Sendable {
@@ -14771,31 +10222,6 @@ extension Components {
                 case entity
                 case item
                 case sideEffects
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.action = try container.decode(
-                    Components.Schemas.GeneratedEntityMutationUpdateResultIngredient.ActionPayload.self,
-                    forKey: .action
-                )
-                self.entity = try container.decode(
-                    Components.Schemas.GeneratedEntityMutationUpdateResultIngredient.EntityPayload.self,
-                    forKey: .entity
-                )
-                self.item = try container.decode(
-                    Components.Schemas.IngredientOut.self,
-                    forKey: .item
-                )
-                self.sideEffects = try container.decode(
-                    Components.Schemas.MutationSideEffects.self,
-                    forKey: .sideEffects
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "action",
-                    "entity",
-                    "item",
-                    "sideEffects"
-                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/GeneratedEntityMutationUpdateResultInventory`.
@@ -14840,31 +10266,6 @@ extension Components {
                 case item
                 case sideEffects
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.action = try container.decode(
-                    Components.Schemas.GeneratedEntityMutationUpdateResultInventory.ActionPayload.self,
-                    forKey: .action
-                )
-                self.entity = try container.decode(
-                    Components.Schemas.GeneratedEntityMutationUpdateResultInventory.EntityPayload.self,
-                    forKey: .entity
-                )
-                self.item = try container.decode(
-                    Components.Schemas.InventoryEntryOut.self,
-                    forKey: .item
-                )
-                self.sideEffects = try container.decode(
-                    Components.Schemas.MutationSideEffects.self,
-                    forKey: .sideEffects
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "action",
-                    "entity",
-                    "item",
-                    "sideEffects"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/GeneratedEntityMutationUpdateResultLedgerParty`.
         public struct GeneratedEntityMutationUpdateResultLedgerParty: Codable, Hashable, Sendable {
@@ -14907,31 +10308,6 @@ extension Components {
                 case entity
                 case item
                 case sideEffects
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.action = try container.decode(
-                    Components.Schemas.GeneratedEntityMutationUpdateResultLedgerParty.ActionPayload.self,
-                    forKey: .action
-                )
-                self.entity = try container.decode(
-                    Components.Schemas.GeneratedEntityMutationUpdateResultLedgerParty.EntityPayload.self,
-                    forKey: .entity
-                )
-                self.item = try container.decode(
-                    Components.Schemas.LedgerPartyOut.self,
-                    forKey: .item
-                )
-                self.sideEffects = try container.decode(
-                    Components.Schemas.MutationSideEffects.self,
-                    forKey: .sideEffects
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "action",
-                    "entity",
-                    "item",
-                    "sideEffects"
-                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/GeneratedEntityMutationUpdateResultLedgerTransfer`.
@@ -14976,31 +10352,6 @@ extension Components {
                 case item
                 case sideEffects
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.action = try container.decode(
-                    Components.Schemas.GeneratedEntityMutationUpdateResultLedgerTransfer.ActionPayload.self,
-                    forKey: .action
-                )
-                self.entity = try container.decode(
-                    Components.Schemas.GeneratedEntityMutationUpdateResultLedgerTransfer.EntityPayload.self,
-                    forKey: .entity
-                )
-                self.item = try container.decode(
-                    Components.Schemas.LedgerTransferOut.self,
-                    forKey: .item
-                )
-                self.sideEffects = try container.decode(
-                    Components.Schemas.MutationSideEffects.self,
-                    forKey: .sideEffects
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "action",
-                    "entity",
-                    "item",
-                    "sideEffects"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/GeneratedEntityMutationUpdateResultLocation`.
         public struct GeneratedEntityMutationUpdateResultLocation: Codable, Hashable, Sendable {
@@ -15043,31 +10394,6 @@ extension Components {
                 case entity
                 case item
                 case sideEffects
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.action = try container.decode(
-                    Components.Schemas.GeneratedEntityMutationUpdateResultLocation.ActionPayload.self,
-                    forKey: .action
-                )
-                self.entity = try container.decode(
-                    Components.Schemas.GeneratedEntityMutationUpdateResultLocation.EntityPayload.self,
-                    forKey: .entity
-                )
-                self.item = try container.decode(
-                    Components.Schemas.LocationOut.self,
-                    forKey: .item
-                )
-                self.sideEffects = try container.decode(
-                    Components.Schemas.MutationSideEffects.self,
-                    forKey: .sideEffects
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "action",
-                    "entity",
-                    "item",
-                    "sideEffects"
-                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/GeneratedEntityMutationUpdateResultMeal`.
@@ -15112,31 +10438,6 @@ extension Components {
                 case item
                 case sideEffects
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.action = try container.decode(
-                    Components.Schemas.GeneratedEntityMutationUpdateResultMeal.ActionPayload.self,
-                    forKey: .action
-                )
-                self.entity = try container.decode(
-                    Components.Schemas.GeneratedEntityMutationUpdateResultMeal.EntityPayload.self,
-                    forKey: .entity
-                )
-                self.item = try container.decode(
-                    Components.Schemas.MealOut.self,
-                    forKey: .item
-                )
-                self.sideEffects = try container.decode(
-                    Components.Schemas.MutationSideEffects.self,
-                    forKey: .sideEffects
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "action",
-                    "entity",
-                    "item",
-                    "sideEffects"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/GeneratedEntityMutationUpdateResultPlanting`.
         public struct GeneratedEntityMutationUpdateResultPlanting: Codable, Hashable, Sendable {
@@ -15179,31 +10480,6 @@ extension Components {
                 case entity
                 case item
                 case sideEffects
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.action = try container.decode(
-                    Components.Schemas.GeneratedEntityMutationUpdateResultPlanting.ActionPayload.self,
-                    forKey: .action
-                )
-                self.entity = try container.decode(
-                    Components.Schemas.GeneratedEntityMutationUpdateResultPlanting.EntityPayload.self,
-                    forKey: .entity
-                )
-                self.item = try container.decode(
-                    Components.Schemas.PlantingOut.self,
-                    forKey: .item
-                )
-                self.sideEffects = try container.decode(
-                    Components.Schemas.MutationSideEffects.self,
-                    forKey: .sideEffects
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "action",
-                    "entity",
-                    "item",
-                    "sideEffects"
-                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/GeneratedEntityMutationUpdateResultProduct`.
@@ -15248,31 +10524,6 @@ extension Components {
                 case item
                 case sideEffects
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.action = try container.decode(
-                    Components.Schemas.GeneratedEntityMutationUpdateResultProduct.ActionPayload.self,
-                    forKey: .action
-                )
-                self.entity = try container.decode(
-                    Components.Schemas.GeneratedEntityMutationUpdateResultProduct.EntityPayload.self,
-                    forKey: .entity
-                )
-                self.item = try container.decode(
-                    Components.Schemas.ProductTopLevelOut.self,
-                    forKey: .item
-                )
-                self.sideEffects = try container.decode(
-                    Components.Schemas.MutationSideEffects.self,
-                    forKey: .sideEffects
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "action",
-                    "entity",
-                    "item",
-                    "sideEffects"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/GeneratedEntityMutationUpdateResultProductCategory`.
         public struct GeneratedEntityMutationUpdateResultProductCategory: Codable, Hashable, Sendable {
@@ -15315,31 +10566,6 @@ extension Components {
                 case entity
                 case item
                 case sideEffects
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.action = try container.decode(
-                    Components.Schemas.GeneratedEntityMutationUpdateResultProductCategory.ActionPayload.self,
-                    forKey: .action
-                )
-                self.entity = try container.decode(
-                    Components.Schemas.GeneratedEntityMutationUpdateResultProductCategory.EntityPayload.self,
-                    forKey: .entity
-                )
-                self.item = try container.decode(
-                    Components.Schemas.ProductCategoryOut.self,
-                    forKey: .item
-                )
-                self.sideEffects = try container.decode(
-                    Components.Schemas.MutationSideEffects.self,
-                    forKey: .sideEffects
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "action",
-                    "entity",
-                    "item",
-                    "sideEffects"
-                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/GeneratedEntityMutationUpdateResultProject`.
@@ -15384,31 +10610,6 @@ extension Components {
                 case item
                 case sideEffects
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.action = try container.decode(
-                    Components.Schemas.GeneratedEntityMutationUpdateResultProject.ActionPayload.self,
-                    forKey: .action
-                )
-                self.entity = try container.decode(
-                    Components.Schemas.GeneratedEntityMutationUpdateResultProject.EntityPayload.self,
-                    forKey: .entity
-                )
-                self.item = try container.decode(
-                    Components.Schemas.ProjectOut.self,
-                    forKey: .item
-                )
-                self.sideEffects = try container.decode(
-                    Components.Schemas.MutationSideEffects.self,
-                    forKey: .sideEffects
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "action",
-                    "entity",
-                    "item",
-                    "sideEffects"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/GeneratedEntityMutationUpdateResultPurchase`.
         public struct GeneratedEntityMutationUpdateResultPurchase: Codable, Hashable, Sendable {
@@ -15451,31 +10652,6 @@ extension Components {
                 case entity
                 case item
                 case sideEffects
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.action = try container.decode(
-                    Components.Schemas.GeneratedEntityMutationUpdateResultPurchase.ActionPayload.self,
-                    forKey: .action
-                )
-                self.entity = try container.decode(
-                    Components.Schemas.GeneratedEntityMutationUpdateResultPurchase.EntityPayload.self,
-                    forKey: .entity
-                )
-                self.item = try container.decode(
-                    Components.Schemas.PurchaseOut.self,
-                    forKey: .item
-                )
-                self.sideEffects = try container.decode(
-                    Components.Schemas.MutationSideEffects.self,
-                    forKey: .sideEffects
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "action",
-                    "entity",
-                    "item",
-                    "sideEffects"
-                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/GeneratedEntityMutationUpdateResultRecipe`.
@@ -15520,31 +10696,6 @@ extension Components {
                 case item
                 case sideEffects
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.action = try container.decode(
-                    Components.Schemas.GeneratedEntityMutationUpdateResultRecipe.ActionPayload.self,
-                    forKey: .action
-                )
-                self.entity = try container.decode(
-                    Components.Schemas.GeneratedEntityMutationUpdateResultRecipe.EntityPayload.self,
-                    forKey: .entity
-                )
-                self.item = try container.decode(
-                    Components.Schemas.RecipeDetailMcpOut.self,
-                    forKey: .item
-                )
-                self.sideEffects = try container.decode(
-                    Components.Schemas.MutationSideEffects.self,
-                    forKey: .sideEffects
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "action",
-                    "entity",
-                    "item",
-                    "sideEffects"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/GeneratedEntityMutationUpdateResultTask`.
         public struct GeneratedEntityMutationUpdateResultTask: Codable, Hashable, Sendable {
@@ -15587,31 +10738,6 @@ extension Components {
                 case entity
                 case item
                 case sideEffects
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.action = try container.decode(
-                    Components.Schemas.GeneratedEntityMutationUpdateResultTask.ActionPayload.self,
-                    forKey: .action
-                )
-                self.entity = try container.decode(
-                    Components.Schemas.GeneratedEntityMutationUpdateResultTask.EntityPayload.self,
-                    forKey: .entity
-                )
-                self.item = try container.decode(
-                    Components.Schemas.TaskOut.self,
-                    forKey: .item
-                )
-                self.sideEffects = try container.decode(
-                    Components.Schemas.MutationSideEffects.self,
-                    forKey: .sideEffects
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "action",
-                    "entity",
-                    "item",
-                    "sideEffects"
-                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/GeneratedEntityMutationUpdateResultVendor`.
@@ -15656,31 +10782,6 @@ extension Components {
                 case item
                 case sideEffects
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.action = try container.decode(
-                    Components.Schemas.GeneratedEntityMutationUpdateResultVendor.ActionPayload.self,
-                    forKey: .action
-                )
-                self.entity = try container.decode(
-                    Components.Schemas.GeneratedEntityMutationUpdateResultVendor.EntityPayload.self,
-                    forKey: .entity
-                )
-                self.item = try container.decode(
-                    Components.Schemas.VendorOut.self,
-                    forKey: .item
-                )
-                self.sideEffects = try container.decode(
-                    Components.Schemas.MutationSideEffects.self,
-                    forKey: .sideEffects
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "action",
-                    "entity",
-                    "item",
-                    "sideEffects"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/GeneratedEntityMutationUpdateResultVendorAccount`.
         public struct GeneratedEntityMutationUpdateResultVendorAccount: Codable, Hashable, Sendable {
@@ -15724,31 +10825,6 @@ extension Components {
                 case item
                 case sideEffects
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.action = try container.decode(
-                    Components.Schemas.GeneratedEntityMutationUpdateResultVendorAccount.ActionPayload.self,
-                    forKey: .action
-                )
-                self.entity = try container.decode(
-                    Components.Schemas.GeneratedEntityMutationUpdateResultVendorAccount.EntityPayload.self,
-                    forKey: .entity
-                )
-                self.item = try container.decode(
-                    Components.Schemas.VendorAccountOut.self,
-                    forKey: .item
-                )
-                self.sideEffects = try container.decode(
-                    Components.Schemas.MutationSideEffects.self,
-                    forKey: .sideEffects
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "action",
-                    "entity",
-                    "item",
-                    "sideEffects"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/GeneratedEntityMutationUpdateResultWish`.
         public struct GeneratedEntityMutationUpdateResultWish: Codable, Hashable, Sendable {
@@ -15791,31 +10867,6 @@ extension Components {
                 case entity
                 case item
                 case sideEffects
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.action = try container.decode(
-                    Components.Schemas.GeneratedEntityMutationUpdateResultWish.ActionPayload.self,
-                    forKey: .action
-                )
-                self.entity = try container.decode(
-                    Components.Schemas.GeneratedEntityMutationUpdateResultWish.EntityPayload.self,
-                    forKey: .entity
-                )
-                self.item = try container.decode(
-                    Components.Schemas.WishOut.self,
-                    forKey: .item
-                )
-                self.sideEffects = try container.decode(
-                    Components.Schemas.MutationSideEffects.self,
-                    forKey: .sideEffects
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "action",
-                    "entity",
-                    "item",
-                    "sideEffects"
-                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/GetImageById`.
@@ -15901,46 +10952,6 @@ extension Components {
                     case rawResultJson
                     case reason
                 }
-                public init(from decoder: any Swift.Decoder) throws {
-                    let container = try decoder.container(keyedBy: CodingKeys.self)
-                    self.provider = try container.decodeIfPresent(
-                        Swift.String.self,
-                        forKey: .provider
-                    )
-                    self.model = try container.decodeIfPresent(
-                        Swift.String.self,
-                        forKey: .model
-                    )
-                    self.promptVersion = try container.decode(
-                        Swift.String.self,
-                        forKey: .promptVersion
-                    )
-                    self.resultSchemaRevision = try container.decodeIfPresent(
-                        Swift.Int.self,
-                        forKey: .resultSchemaRevision
-                    )
-                    self.createdAt = try container.decode(
-                        Foundation.Date.self,
-                        forKey: .createdAt
-                    )
-                    self.rawResultJson = try container.decode(
-                        Swift.String.self,
-                        forKey: .rawResultJson
-                    )
-                    self.reason = try container.decode(
-                        Swift.String.self,
-                        forKey: .reason
-                    )
-                    try decoder.ensureNoAdditionalProperties(knownKeys: [
-                        "provider",
-                        "model",
-                        "promptVersion",
-                        "resultSchemaRevision",
-                        "createdAt",
-                        "rawResultJson",
-                        "reason"
-                    ])
-                }
             }
             /// - Remark: Generated from `#/components/schemas/ImageAnalysisHistoryOutput/unparsed`.
             public typealias UnparsedPayload = [Components.Schemas.ImageAnalysisHistoryOutput.UnparsedPayloadPayload]
@@ -15973,31 +10984,6 @@ extension Components {
                 case unparsed
                 case nextCursor
                 case total
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.items = try container.decode(
-                    [Components.Schemas.ImageDescriptionAnalysis].self,
-                    forKey: .items
-                )
-                self.unparsed = try container.decode(
-                    Components.Schemas.ImageAnalysisHistoryOutput.UnparsedPayload.self,
-                    forKey: .unparsed
-                )
-                self.nextCursor = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .nextCursor
-                )
-                self.total = try container.decode(
-                    Swift.Int.self,
-                    forKey: .total
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "items",
-                    "unparsed",
-                    "nextCursor",
-                    "total"
-                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/ImageAnalysisOutput`.
@@ -16038,21 +11024,6 @@ extension Components {
                     case identifier
                     case confidence
                 }
-                public init(from decoder: any Swift.Decoder) throws {
-                    let container = try decoder.container(keyedBy: CodingKeys.self)
-                    self.identifier = try container.decode(
-                        Swift.String.self,
-                        forKey: .identifier
-                    )
-                    self.confidence = try container.decode(
-                        Swift.Double.self,
-                        forKey: .confidence
-                    )
-                    try decoder.ensureNoAdditionalProperties(knownKeys: [
-                        "identifier",
-                        "confidence"
-                    ])
-                }
             }
             /// - Remark: Generated from `#/components/schemas/ImageAnalysisOutput/classifications`.
             public typealias ClassificationsPayload = [Components.Schemas.ImageAnalysisOutput.ClassificationsPayloadPayload]
@@ -16080,21 +11051,6 @@ extension Components {
                     case text
                     case confidence
                 }
-                public init(from decoder: any Swift.Decoder) throws {
-                    let container = try decoder.container(keyedBy: CodingKeys.self)
-                    self.text = try container.decode(
-                        Swift.String.self,
-                        forKey: .text
-                    )
-                    self.confidence = try container.decode(
-                        Swift.Double.self,
-                        forKey: .confidence
-                    )
-                    try decoder.ensureNoAdditionalProperties(knownKeys: [
-                        "text",
-                        "confidence"
-                    ])
-                }
             }
             /// - Remark: Generated from `#/components/schemas/ImageAnalysisOutput/recognizedText`.
             public typealias RecognizedTextPayload = [Components.Schemas.ImageAnalysisOutput.RecognizedTextPayloadPayload]
@@ -16121,21 +11077,6 @@ extension Components {
                 public enum CodingKeys: String, CodingKey {
                     case revision
                     case data
-                }
-                public init(from decoder: any Swift.Decoder) throws {
-                    let container = try decoder.container(keyedBy: CodingKeys.self)
-                    self.revision = try container.decode(
-                        Swift.String.self,
-                        forKey: .revision
-                    )
-                    self.data = try container.decode(
-                        Swift.String.self,
-                        forKey: .data
-                    )
-                    try decoder.ensureNoAdditionalProperties(knownKeys: [
-                        "revision",
-                        "data"
-                    ])
                 }
             }
             /// - Remark: Generated from `#/components/schemas/ImageAnalysisOutput/featurePrint`.
@@ -16174,26 +11115,6 @@ extension Components {
                     case source
                     case localIdentifier
                     case filename
-                }
-                public init(from decoder: any Swift.Decoder) throws {
-                    let container = try decoder.container(keyedBy: CodingKeys.self)
-                    self.source = try container.decode(
-                        Components.Schemas.ImageAnalysisOutput.ProvenancePayload.SourcePayload.self,
-                        forKey: .source
-                    )
-                    self.localIdentifier = try container.decodeIfPresent(
-                        Swift.String.self,
-                        forKey: .localIdentifier
-                    )
-                    self.filename = try container.decode(
-                        Swift.String.self,
-                        forKey: .filename
-                    )
-                    try decoder.ensureNoAdditionalProperties(knownKeys: [
-                        "source",
-                        "localIdentifier",
-                        "filename"
-                    ])
                 }
             }
             /// - Remark: Generated from `#/components/schemas/ImageAnalysisOutput/provenance`.
@@ -16250,66 +11171,6 @@ extension Components {
                 case featurePrint
                 case provenance
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.analysisVersion = try container.decode(
-                    Swift.Int.self,
-                    forKey: .analysisVersion
-                )
-                self.analyzedAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .analyzedAt
-                )
-                self.sha256 = try container.decode(
-                    Swift.String.self,
-                    forKey: .sha256
-                )
-                self.capturedAt = try container.decodeIfPresent(
-                    Foundation.Date.self,
-                    forKey: .capturedAt
-                )
-                self.contentType = try container.decode(
-                    Swift.String.self,
-                    forKey: .contentType
-                )
-                self.width = try container.decode(
-                    Swift.Int.self,
-                    forKey: .width
-                )
-                self.height = try container.decode(
-                    Swift.Int.self,
-                    forKey: .height
-                )
-                self.classifications = try container.decode(
-                    Components.Schemas.ImageAnalysisOutput.ClassificationsPayload.self,
-                    forKey: .classifications
-                )
-                self.recognizedText = try container.decode(
-                    Components.Schemas.ImageAnalysisOutput.RecognizedTextPayload.self,
-                    forKey: .recognizedText
-                )
-                self.featurePrint = try container.decode(
-                    Components.Schemas.ImageAnalysisOutput.FeaturePrintPayload.self,
-                    forKey: .featurePrint
-                )
-                self.provenance = try container.decode(
-                    Components.Schemas.ImageAnalysisOutput.ProvenancePayload.self,
-                    forKey: .provenance
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "analysisVersion",
-                    "analyzedAt",
-                    "sha256",
-                    "capturedAt",
-                    "contentType",
-                    "width",
-                    "height",
-                    "classifications",
-                    "recognizedText",
-                    "featurePrint",
-                    "provenance"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/ImageAssociation`.
         public struct ImageAssociation: Codable, Hashable, Sendable {
@@ -16344,31 +11205,6 @@ extension Components {
                 case entityId
                 case entityName
                 case role
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.entityType = try container.decode(
-                    Components.Schemas.ImageAssociationEntity.self,
-                    forKey: .entityType
-                )
-                self.entityId = try container.decode(
-                    Swift.String.self,
-                    forKey: .entityId
-                )
-                self.entityName = try container.decode(
-                    Swift.String.self,
-                    forKey: .entityName
-                )
-                self.role = try container.decode(
-                    Components.Schemas.ImageAssociationRole.self,
-                    forKey: .role
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "entityType",
-                    "entityId",
-                    "entityName",
-                    "role"
-                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/ImageAssociationEntity`.
@@ -16502,21 +11338,6 @@ extension Components {
                 case meta
                 case items
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.meta = try container.decode(
-                    Components.Schemas.ListPageMeta.self,
-                    forKey: .meta
-                )
-                self.items = try container.decode(
-                    [Components.Schemas.ImageWithEntity].self,
-                    forKey: .items
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "meta",
-                    "items"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/ImageCutoutEligibility`.
         @frozen public enum ImageCutoutEligibility: String, Codable, Hashable, Sendable, CaseIterable {
@@ -16614,56 +11435,6 @@ extension Components {
                 case createdAt
                 case preferred
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.provider = try container.decode(
-                    Swift.String.self,
-                    forKey: .provider
-                )
-                self.model = try container.decode(
-                    Swift.String.self,
-                    forKey: .model
-                )
-                self.promptRevision = try container.decode(
-                    Swift.Int.self,
-                    forKey: .promptRevision
-                )
-                self.resultSchemaRevision = try container.decode(
-                    Swift.Int.self,
-                    forKey: .resultSchemaRevision
-                )
-                self.inputFingerprint = try container.decode(
-                    Swift.String.self,
-                    forKey: .inputFingerprint
-                )
-                self.result = try container.decode(
-                    Components.Schemas.ImageDescriptionResult.self,
-                    forKey: .result
-                )
-                self.runtime = try container.decodeIfPresent(
-                    Components.Schemas.ImageDescriptionAnalysis.RuntimePayload.self,
-                    forKey: .runtime
-                )
-                self.createdAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .createdAt
-                )
-                self.preferred = try container.decode(
-                    Swift.Bool.self,
-                    forKey: .preferred
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "provider",
-                    "model",
-                    "promptRevision",
-                    "resultSchemaRevision",
-                    "inputFingerprint",
-                    "result",
-                    "runtime",
-                    "createdAt",
-                    "preferred"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/ImageDescriptionClaim`.
         public struct ImageDescriptionClaim: Codable, Hashable, Sendable {
@@ -16698,26 +11469,6 @@ extension Components {
                 case text
                 case evidenceKind
                 case imageId
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.text = try container.decode(
-                    Swift.String.self,
-                    forKey: .text
-                )
-                self.evidenceKind = try container.decode(
-                    Components.Schemas.ImageDescriptionClaim.EvidenceKindPayload.self,
-                    forKey: .evidenceKind
-                )
-                self.imageId = try container.decodeIfPresent(
-                    Components.Schemas.ImageShortcode.self,
-                    forKey: .imageId
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "text",
-                    "evidenceKind",
-                    "imageId"
-                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/ImageDescriptionClaimInput`.
@@ -16777,21 +11528,6 @@ extension Components {
                 case description
                 case confirmedAt
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.description = try container.decode(
-                    Swift.String.self,
-                    forKey: .description
-                )
-                self.confirmedAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .confirmedAt
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "description",
-                    "confirmedAt"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/ImageDescriptionCorrectionInput`.
         public struct ImageDescriptionCorrectionInput: Codable, Hashable, Sendable {
@@ -16830,16 +11566,6 @@ extension Components {
             public enum CodingKeys: String, CodingKey {
                 case saved
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.saved = try container.decode(
-                    Swift.Bool.self,
-                    forKey: .saved
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "saved"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/ImageDescriptionResult`.
         public struct ImageDescriptionResult: Codable, Hashable, Sendable {
@@ -16868,26 +11594,6 @@ extension Components {
                 case description
                 case cutoutEligibility
                 case claims
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.description = try container.decode(
-                    Swift.String.self,
-                    forKey: .description
-                )
-                self.cutoutEligibility = try container.decode(
-                    Components.Schemas.ImageCutoutEligibility.self,
-                    forKey: .cutoutEligibility
-                )
-                self.claims = try container.decode(
-                    [Components.Schemas.ImageDescriptionClaim].self,
-                    forKey: .claims
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "description",
-                    "cutoutEligibility",
-                    "claims"
-                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/ImageDescriptionResultInput`.
@@ -16951,21 +11657,6 @@ extension Components {
                     case id
                     case url
                 }
-                public init(from decoder: any Swift.Decoder) throws {
-                    let container = try decoder.container(keyedBy: CodingKeys.self)
-                    self.id = try container.decode(
-                        Components.Schemas.ImageShortcode.self,
-                        forKey: .id
-                    )
-                    self.url = try container.decode(
-                        Swift.String.self,
-                        forKey: .url
-                    )
-                    try decoder.ensureNoAdditionalProperties(knownKeys: [
-                        "id",
-                        "url"
-                    ])
-                }
             }
             /// - Remark: Generated from `#/components/schemas/ImageHashIndex/repair`.
             public typealias RepairPayload = [Components.Schemas.ImageHashIndex.RepairPayloadPayload]
@@ -16990,26 +11681,6 @@ extension Components {
                 case algorithmRevision
                 case items
                 case repair
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.algorithmRevision = try container.decode(
-                    Components.Schemas.ImageHashIndex.AlgorithmRevisionPayload.self,
-                    forKey: .algorithmRevision
-                )
-                self.items = try container.decode(
-                    [Components.Schemas.ImageHashIndexItem].self,
-                    forKey: .items
-                )
-                self.repair = try container.decode(
-                    Components.Schemas.ImageHashIndex.RepairPayload.self,
-                    forKey: .repair
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "algorithmRevision",
-                    "items",
-                    "repair"
-                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/ImageHashIndexItem`.
@@ -17057,41 +11728,6 @@ extension Components {
                 case width
                 case height
                 case directOwnerShortcodes
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.id = try container.decode(
-                    Components.Schemas.ImageShortcode.self,
-                    forKey: .id
-                )
-                self.perceptualHash = try container.decodeIfPresent(
-                    Components.Schemas.PerceptualHash.self,
-                    forKey: .perceptualHash
-                )
-                self.sourceFingerprint = try container.decodeIfPresent(
-                    Components.Schemas.ImageSourceFingerprint.self,
-                    forKey: .sourceFingerprint
-                )
-                self.width = try container.decodeIfPresent(
-                    Swift.Int.self,
-                    forKey: .width
-                )
-                self.height = try container.decodeIfPresent(
-                    Swift.Int.self,
-                    forKey: .height
-                )
-                self.directOwnerShortcodes = try container.decode(
-                    [Swift.String].self,
-                    forKey: .directOwnerShortcodes
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "id",
-                    "perceptualHash",
-                    "sourceFingerprint",
-                    "width",
-                    "height",
-                    "directOwnerShortcodes"
-                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/ImageListFilters`.
@@ -17321,121 +11957,6 @@ extension Components {
                 case verifiedAt
                 case createdAt
                 case updatedAt
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.representations = try container.decodeIfPresent(
-                    Components.Schemas.OptionalImageRepresentations.self,
-                    forKey: .representations
-                )
-                self.id = try container.decode(
-                    Components.Schemas.ImageShortcode.self,
-                    forKey: .id
-                )
-                self.url = try container.decode(
-                    Swift.String.self,
-                    forKey: .url
-                )
-                self.key = try container.decode(
-                    Swift.String.self,
-                    forKey: .key
-                )
-                self.filename = try container.decode(
-                    Swift.String.self,
-                    forKey: .filename
-                )
-                self.size = try container.decode(
-                    Swift.Int.self,
-                    forKey: .size
-                )
-                self.contentType = try container.decode(
-                    Swift.String.self,
-                    forKey: .contentType
-                )
-                self.status = try container.decode(
-                    Components.Schemas.ImageStatus.self,
-                    forKey: .status
-                )
-                self.width = try container.decodeIfPresent(
-                    Swift.Int.self,
-                    forKey: .width
-                )
-                self.height = try container.decodeIfPresent(
-                    Swift.Int.self,
-                    forKey: .height
-                )
-                self.detectedContentType = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .detectedContentType
-                )
-                self.sha256 = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .sha256
-                )
-                self.renderStatus = try container.decodeIfPresent(
-                    Components.Schemas.ImageRenderStatus.self,
-                    forKey: .renderStatus
-                )
-                self.storageStatus = try container.decodeIfPresent(
-                    Components.Schemas.ImageStorageStatus.self,
-                    forKey: .storageStatus
-                )
-                self.source = try container.decode(
-                    Components.Schemas.ImageOut.SourcePayload.self,
-                    forKey: .source
-                )
-                self.sourcePageUrl = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .sourcePageUrl
-                )
-                self.sourceAssetUrl = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .sourceAssetUrl
-                )
-                self.sourceName = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .sourceName
-                )
-                self.useOriginal = try container.decode(
-                    Swift.Bool.self,
-                    forKey: .useOriginal
-                )
-                self.verifiedAt = try container.decodeIfPresent(
-                    Foundation.Date.self,
-                    forKey: .verifiedAt
-                )
-                self.createdAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .createdAt
-                )
-                self.updatedAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .updatedAt
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "representations",
-                    "id",
-                    "url",
-                    "key",
-                    "filename",
-                    "size",
-                    "contentType",
-                    "status",
-                    "width",
-                    "height",
-                    "detectedContentType",
-                    "sha256",
-                    "renderStatus",
-                    "storageStatus",
-                    "source",
-                    "sourcePageUrl",
-                    "sourceAssetUrl",
-                    "sourceName",
-                    "useOriginal",
-                    "verifiedAt",
-                    "createdAt",
-                    "updatedAt"
-                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/ImageProcessingCapabilities`.
@@ -17688,46 +12209,6 @@ extension Components {
                 case promptRevision
                 case resultSchemaRevision
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.jobId = try container.decode(
-                    Swift.String.self,
-                    forKey: .jobId
-                )
-                self.attemptId = try container.decode(
-                    Swift.String.self,
-                    forKey: .attemptId
-                )
-                self.deadline = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .deadline
-                )
-                self.source = try container.decode(
-                    Components.Schemas.ImageProcessingSource.self,
-                    forKey: .source
-                )
-                self.kind = try container.decode(
-                    Components.Schemas.ImageProcessingCommandDescribeImage.KindPayload.self,
-                    forKey: .kind
-                )
-                self.promptRevision = try container.decode(
-                    Components.Schemas.ImageProcessingCommandDescribeImage.PromptRevisionPayload.self,
-                    forKey: .promptRevision
-                )
-                self.resultSchemaRevision = try container.decode(
-                    Components.Schemas.ImageProcessingCommandDescribeImage.ResultSchemaRevisionPayload.self,
-                    forKey: .resultSchemaRevision
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "jobId",
-                    "attemptId",
-                    "deadline",
-                    "source",
-                    "kind",
-                    "promptRevision",
-                    "resultSchemaRevision"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/ImageProcessingCommandSubjectLift`.
         public struct ImageProcessingCommandSubjectLift: Codable, Hashable, Sendable {
@@ -17777,26 +12258,6 @@ extension Components {
                     case uploadUrl
                     case contentType
                 }
-                public init(from decoder: any Swift.Decoder) throws {
-                    let container = try decoder.container(keyedBy: CodingKeys.self)
-                    self.key = try container.decode(
-                        Swift.String.self,
-                        forKey: .key
-                    )
-                    self.uploadUrl = try container.decode(
-                        Swift.String.self,
-                        forKey: .uploadUrl
-                    )
-                    self.contentType = try container.decode(
-                        Components.Schemas.ImageProcessingCommandSubjectLift.OutputPayload.ContentTypePayload.self,
-                        forKey: .contentType
-                    )
-                    try decoder.ensureNoAdditionalProperties(knownKeys: [
-                        "key",
-                        "uploadUrl",
-                        "contentType"
-                    ])
-                }
             }
             /// - Remark: Generated from `#/components/schemas/ImageProcessingCommandSubjectLift/output`.
             public var output: Components.Schemas.ImageProcessingCommandSubjectLift.OutputPayload
@@ -17831,41 +12292,6 @@ extension Components {
                 case source
                 case kind
                 case output
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.jobId = try container.decode(
-                    Swift.String.self,
-                    forKey: .jobId
-                )
-                self.attemptId = try container.decode(
-                    Swift.String.self,
-                    forKey: .attemptId
-                )
-                self.deadline = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .deadline
-                )
-                self.source = try container.decode(
-                    Components.Schemas.ImageProcessingSource.self,
-                    forKey: .source
-                )
-                self.kind = try container.decode(
-                    Components.Schemas.ImageProcessingCommandSubjectLift.KindPayload.self,
-                    forKey: .kind
-                )
-                self.output = try container.decode(
-                    Components.Schemas.ImageProcessingCommandSubjectLift.OutputPayload.self,
-                    forKey: .output
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "jobId",
-                    "attemptId",
-                    "deadline",
-                    "source",
-                    "kind",
-                    "output"
-                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/ImageProcessingCompletedOutcome`.
@@ -18177,6 +12603,8 @@ extension Components {
             public var osVersion: Swift.String?
             /// - Remark: Generated from `#/components/schemas/ImageProcessingHello/capabilities`.
             public var capabilities: Components.Schemas.ImageProcessingCapabilities
+            /// - Remark: Generated from `#/components/schemas/ImageProcessingHello/participation`.
+            public var participation: Components.Schemas.ImageProcessingParticipation
             /// Creates a new `ImageProcessingHello`.
             ///
             /// - Parameters:
@@ -18188,6 +12616,7 @@ extension Components {
             ///   - deviceName:
             ///   - osVersion:
             ///   - capabilities:
+            ///   - participation:
             public init(
                 protocolVersion: Components.Schemas.ImageProcessingHello.ProtocolVersionPayload,
                 _type: Components.Schemas.ImageProcessingHello._TypePayload,
@@ -18196,7 +12625,8 @@ extension Components {
                 appVersion: Swift.String,
                 deviceName: Swift.String? = nil,
                 osVersion: Swift.String? = nil,
-                capabilities: Components.Schemas.ImageProcessingCapabilities
+                capabilities: Components.Schemas.ImageProcessingCapabilities,
+                participation: Components.Schemas.ImageProcessingParticipation
             ) {
                 self.protocolVersion = protocolVersion
                 self._type = _type
@@ -18206,6 +12636,7 @@ extension Components {
                 self.deviceName = deviceName
                 self.osVersion = osVersion
                 self.capabilities = capabilities
+                self.participation = participation
             }
             public enum CodingKeys: String, CodingKey {
                 case protocolVersion
@@ -18216,6 +12647,7 @@ extension Components {
                 case deviceName
                 case osVersion
                 case capabilities
+                case participation
             }
         }
         /// - Remark: Generated from `#/components/schemas/ImageProcessingIssue`.
@@ -18240,6 +12672,21 @@ extension Components {
             case ready = "ready"
             case skipped = "skipped"
             case failed = "failed"
+        }
+        /// - Remark: Generated from `#/components/schemas/ImageProcessingParticipation`.
+        public struct ImageProcessingParticipation: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ImageProcessingParticipation/automaticWork`.
+            public var automaticWork: Swift.Bool
+            /// Creates a new `ImageProcessingParticipation`.
+            ///
+            /// - Parameters:
+            ///   - automaticWork:
+            public init(automaticWork: Swift.Bool) {
+                self.automaticWork = automaticWork
+            }
+            public enum CodingKeys: String, CodingKey {
+                case automaticWork
+            }
         }
         /// - Remark: Generated from `#/components/schemas/ImageProcessingResult`.
         public struct ImageProcessingResult: Codable, Hashable, Sendable {
@@ -18345,6 +12792,8 @@ extension Components {
             case acknowledge(Components.Schemas.ImageProcessingServerMessageAcknowledge)
             /// - Remark: Generated from `#/components/schemas/ImageProcessingServerMessage/ImageProcessingServerMessageCommand`.
             case command(Components.Schemas.ImageProcessingServerMessageCommand)
+            /// - Remark: Generated from `#/components/schemas/ImageProcessingServerMessage/ImageProcessingServerMessageHelloAck`.
+            case helloAck(Components.Schemas.ImageProcessingServerMessageHelloAck)
             public enum CodingKeys: String, CodingKey {
                 case _type = "type"
             }
@@ -18359,6 +12808,8 @@ extension Components {
                     self = .acknowledge(try .init(from: decoder))
                 case "command":
                     self = .command(try .init(from: decoder))
+                case "helloAck":
+                    self = .helloAck(try .init(from: decoder))
                 default:
                     throw Swift.DecodingError.unknownOneOfDiscriminator(
                         discriminatorKey: CodingKeys._type,
@@ -18372,6 +12823,8 @@ extension Components {
                 case let .acknowledge(value):
                     try value.encode(to: encoder)
                 case let .command(value):
+                    try value.encode(to: encoder)
+                case let .helloAck(value):
                     try value.encode(to: encoder)
                 }
             }
@@ -18418,31 +12871,6 @@ extension Components {
                 case jobId
                 case attemptId
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.protocolVersion = try container.decode(
-                    Components.Schemas.ImageProcessingServerMessageAcknowledge.ProtocolVersionPayload.self,
-                    forKey: .protocolVersion
-                )
-                self._type = try container.decode(
-                    Components.Schemas.ImageProcessingServerMessageAcknowledge._TypePayload.self,
-                    forKey: ._type
-                )
-                self.jobId = try container.decode(
-                    Swift.String.self,
-                    forKey: .jobId
-                )
-                self.attemptId = try container.decode(
-                    Swift.String.self,
-                    forKey: .attemptId
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "protocolVersion",
-                    "type",
-                    "jobId",
-                    "attemptId"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/ImageProcessingServerMessageCommand`.
         public struct ImageProcessingServerMessageCommand: Codable, Hashable, Sendable {
@@ -18480,25 +12908,42 @@ extension Components {
                 case _type = "type"
                 case command
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.protocolVersion = try container.decode(
-                    Components.Schemas.ImageProcessingServerMessageCommand.ProtocolVersionPayload.self,
-                    forKey: .protocolVersion
-                )
-                self._type = try container.decode(
-                    Components.Schemas.ImageProcessingServerMessageCommand._TypePayload.self,
-                    forKey: ._type
-                )
-                self.command = try container.decode(
-                    Components.Schemas.ImageProcessingCommand.self,
-                    forKey: .command
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "protocolVersion",
-                    "type",
-                    "command"
-                ])
+        }
+        /// - Remark: Generated from `#/components/schemas/ImageProcessingServerMessageHelloAck`.
+        public struct ImageProcessingServerMessageHelloAck: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ImageProcessingServerMessageHelloAck/protocolVersion`.
+            @frozen public enum ProtocolVersionPayload: Int, Codable, Hashable, Sendable, CaseIterable {
+                case _1 = 1
+            }
+            /// - Remark: Generated from `#/components/schemas/ImageProcessingServerMessageHelloAck/protocolVersion`.
+            public var protocolVersion: Components.Schemas.ImageProcessingServerMessageHelloAck.ProtocolVersionPayload
+            /// - Remark: Generated from `#/components/schemas/ImageProcessingServerMessageHelloAck/type`.
+            @frozen public enum _TypePayload: String, Codable, Hashable, Sendable, CaseIterable {
+                case helloAck = "helloAck"
+            }
+            /// - Remark: Generated from `#/components/schemas/ImageProcessingServerMessageHelloAck/type`.
+            public var _type: Components.Schemas.ImageProcessingServerMessageHelloAck._TypePayload
+            /// - Remark: Generated from `#/components/schemas/ImageProcessingServerMessageHelloAck/remotePaused`.
+            public var remotePaused: Swift.Bool
+            /// Creates a new `ImageProcessingServerMessageHelloAck`.
+            ///
+            /// - Parameters:
+            ///   - protocolVersion:
+            ///   - _type:
+            ///   - remotePaused:
+            public init(
+                protocolVersion: Components.Schemas.ImageProcessingServerMessageHelloAck.ProtocolVersionPayload,
+                _type: Components.Schemas.ImageProcessingServerMessageHelloAck._TypePayload,
+                remotePaused: Swift.Bool
+            ) {
+                self.protocolVersion = protocolVersion
+                self._type = _type
+                self.remotePaused = remotePaused
+            }
+            public enum CodingKeys: String, CodingKey {
+                case protocolVersion
+                case _type = "type"
+                case remotePaused
             }
         }
         /// - Remark: Generated from `#/components/schemas/ImageProcessingSkippedOutcome`.
@@ -18576,26 +13021,6 @@ extension Components {
                 case sha256
                 case contentType
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.url = try container.decode(
-                    Swift.String.self,
-                    forKey: .url
-                )
-                self.sha256 = try container.decode(
-                    Swift.String.self,
-                    forKey: .sha256
-                )
-                self.contentType = try container.decode(
-                    Components.Schemas.ImageProcessingSource.ContentTypePayload.self,
-                    forKey: .contentType
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "url",
-                    "sha256",
-                    "contentType"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/ImageProcessingStatus`.
         public struct ImageProcessingStatus: Codable, Hashable, Sendable {
@@ -18618,21 +13043,6 @@ extension Components {
             public enum CodingKeys: String, CodingKey {
                 case cutout
                 case description
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.cutout = try container.decodeIfPresent(
-                    Components.Schemas.ImageDerivativeStatus.self,
-                    forKey: .cutout
-                )
-                self.description = try container.decodeIfPresent(
-                    Components.Schemas.ImageProcessingJobState.self,
-                    forKey: .description
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "cutout",
-                    "description"
-                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/ImageProcessingStatusOutput`.
@@ -18668,31 +13078,6 @@ extension Components {
                 case status
                 case analyses
                 case correction
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.representations = try container.decode(
-                    Components.Schemas.ImageRepresentations.self,
-                    forKey: .representations
-                )
-                self.status = try container.decode(
-                    Components.Schemas.ImageProcessingStatus.self,
-                    forKey: .status
-                )
-                self.analyses = try container.decode(
-                    [Components.Schemas.ImageDescriptionAnalysis].self,
-                    forKey: .analyses
-                )
-                self.correction = try container.decodeIfPresent(
-                    Components.Schemas.ImageDescriptionCorrection.self,
-                    forKey: .correction
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "representations",
-                    "status",
-                    "analyses",
-                    "correction"
-                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/ImageRecordAnalysisInput`.
@@ -18918,16 +13303,6 @@ extension Components {
             public enum CodingKeys: String, CodingKey {
                 case saved
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.saved = try container.decode(
-                    Swift.Bool.self,
-                    forKey: .saved
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "saved"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/ImageRenderStatus`.
         @frozen public enum ImageRenderStatus: String, Codable, Hashable, Sendable, CaseIterable {
@@ -18974,31 +13349,6 @@ extension Components {
                 case preferred
                 case preferredKind
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.original = try container.decode(
-                    Swift.String.self,
-                    forKey: .original
-                )
-                self.transparent = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .transparent
-                )
-                self.preferred = try container.decode(
-                    Swift.String.self,
-                    forKey: .preferred
-                )
-                self.preferredKind = try container.decode(
-                    Components.Schemas.ImageRepresentations.PreferredKindPayload.self,
-                    forKey: .preferredKind
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "original",
-                    "transparent",
-                    "preferred",
-                    "preferredKind"
-                ])
-            }
         }
         /// image shortcode, e.g. IMG-4K7M
         ///
@@ -19025,21 +13375,6 @@ extension Components {
             public enum CodingKeys: String, CodingKey {
                 case hash
                 case aspectRatio
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.hash = try container.decode(
-                    Components.Schemas.PerceptualHash.self,
-                    forKey: .hash
-                )
-                self.aspectRatio = try container.decode(
-                    Swift.Double.self,
-                    forKey: .aspectRatio
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "hash",
-                    "aspectRatio"
-                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/ImageSourceFingerprintInput`.
@@ -19152,21 +13487,6 @@ extension Components {
             public enum CodingKeys: String, CodingKey {
                 case url
                 case representations
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.url = try container.decode(
-                    Swift.String.self,
-                    forKey: .url
-                )
-                self.representations = try container.decodeIfPresent(
-                    Components.Schemas.OptionalImageRepresentations.self,
-                    forKey: .representations
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "url",
-                    "representations"
-                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/ImageWithEntity`.
@@ -19347,146 +13667,6 @@ extension Components {
                 case associations
                 case processingIssue
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.id = try container.decode(
-                    Components.Schemas.ImageShortcode.self,
-                    forKey: .id
-                )
-                self.url = try container.decode(
-                    Swift.String.self,
-                    forKey: .url
-                )
-                self.key = try container.decode(
-                    Swift.String.self,
-                    forKey: .key
-                )
-                self.filename = try container.decode(
-                    Swift.String.self,
-                    forKey: .filename
-                )
-                self.size = try container.decode(
-                    Swift.Int.self,
-                    forKey: .size
-                )
-                self.contentType = try container.decode(
-                    Swift.String.self,
-                    forKey: .contentType
-                )
-                self.status = try container.decode(
-                    Components.Schemas.ImageStatus.self,
-                    forKey: .status
-                )
-                self.width = try container.decodeIfPresent(
-                    Swift.Int.self,
-                    forKey: .width
-                )
-                self.height = try container.decodeIfPresent(
-                    Swift.Int.self,
-                    forKey: .height
-                )
-                self.detectedContentType = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .detectedContentType
-                )
-                self.sha256 = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .sha256
-                )
-                self.renderStatus = try container.decodeIfPresent(
-                    Components.Schemas.ImageRenderStatus.self,
-                    forKey: .renderStatus
-                )
-                self.storageStatus = try container.decodeIfPresent(
-                    Components.Schemas.ImageStorageStatus.self,
-                    forKey: .storageStatus
-                )
-                self.source = try container.decode(
-                    Components.Schemas.ImageWithEntity.SourcePayload.self,
-                    forKey: .source
-                )
-                self.sourcePageUrl = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .sourcePageUrl
-                )
-                self.sourceAssetUrl = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .sourceAssetUrl
-                )
-                self.sourceName = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .sourceName
-                )
-                self.useOriginal = try container.decode(
-                    Swift.Bool.self,
-                    forKey: .useOriginal
-                )
-                self.representations = try container.decodeIfPresent(
-                    Components.Schemas.OptionalImageRepresentations.self,
-                    forKey: .representations
-                )
-                self.verifiedAt = try container.decodeIfPresent(
-                    Foundation.Date.self,
-                    forKey: .verifiedAt
-                )
-                self.createdAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .createdAt
-                )
-                self.updatedAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .updatedAt
-                )
-                self.entityType = try container.decodeIfPresent(
-                    Components.Schemas.EntityImage.self,
-                    forKey: .entityType
-                )
-                self.entityId = try container.decodeIfPresent(
-                    Components.Schemas.AttachableImageEntityId.self,
-                    forKey: .entityId
-                )
-                self.entityName = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .entityName
-                )
-                self.associations = try container.decode(
-                    [Components.Schemas.ImageAssociation].self,
-                    forKey: .associations
-                )
-                self.processingIssue = try container.decodeIfPresent(
-                    Components.Schemas.ImageProcessingIssue.self,
-                    forKey: .processingIssue
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "id",
-                    "url",
-                    "key",
-                    "filename",
-                    "size",
-                    "contentType",
-                    "status",
-                    "width",
-                    "height",
-                    "detectedContentType",
-                    "sha256",
-                    "renderStatus",
-                    "storageStatus",
-                    "source",
-                    "sourcePageUrl",
-                    "sourceAssetUrl",
-                    "sourceName",
-                    "useOriginal",
-                    "representations",
-                    "verifiedAt",
-                    "createdAt",
-                    "updatedAt",
-                    "entityType",
-                    "entityId",
-                    "entityName",
-                    "associations",
-                    "processingIssue"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/ImpactItem`.
         public struct ImpactItem: Codable, Hashable, Sendable {
@@ -19558,46 +13738,6 @@ extension Components {
                 case total
                 case byTargetId
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.code = try container.decode(
-                    Swift.String.self,
-                    forKey: .code
-                )
-                self.effect = try container.decode(
-                    Components.Schemas.OperationEffect.self,
-                    forKey: .effect
-                )
-                self.edgeKey = try container.decodeIfPresent(
-                    Components.Schemas.EdgeKey.self,
-                    forKey: .edgeKey
-                )
-                self.label = try container.decode(
-                    Swift.String.self,
-                    forKey: .label
-                )
-                self.description = try container.decode(
-                    Swift.String.self,
-                    forKey: .description
-                )
-                self.total = try container.decode(
-                    Swift.Int.self,
-                    forKey: .total
-                )
-                self.byTargetId = try container.decode(
-                    Components.Schemas.ImpactItem.ByTargetIdPayload.self,
-                    forKey: .byTargetId
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "code",
-                    "effect",
-                    "edgeKey",
-                    "label",
-                    "description",
-                    "total",
-                    "byTargetId"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/ImportRunEvidenceKind`.
         @frozen public enum ImportRunEvidenceKind: String, Codable, Hashable, Sendable, CaseIterable {
@@ -19646,7 +13786,7 @@ extension Components {
                 }
             }
             /// - Remark: Generated from `#/components/schemas/InfLocation/tags`.
-            public var tags: Components.Schemas.OutputSchema177? {
+            public var tags: Components.Schemas.OutputSchema190? {
                 get  {
                     self.storage.value.tags
                 }
@@ -19700,7 +13840,7 @@ extension Components {
                 }
             }
             /// - Remark: Generated from `#/components/schemas/InfLocation/images`.
-            public var images: Components.Schemas.OutputSchema133 {
+            public var images: Components.Schemas.OutputSchema146 {
                 get  {
                     self.storage.value.images
                 }
@@ -19745,7 +13885,7 @@ extension Components {
                 }
             }
             /// - Remark: Generated from `#/components/schemas/InfLocation/children`.
-            public var children: Components.Schemas.OutputSchema202? {
+            public var children: Components.Schemas.OutputSchema215? {
                 get  {
                     self.storage.value.children
                 }
@@ -19754,7 +13894,7 @@ extension Components {
                 }
             }
             /// - Remark: Generated from `#/components/schemas/InfLocation/parent`.
-            public var parent: Components.Schemas.OutputSchema203? {
+            public var parent: Components.Schemas.OutputSchema216? {
                 get  {
                     self.storage.value.parent
                 }
@@ -19790,7 +13930,7 @@ extension Components {
                 }
             }
             /// - Remark: Generated from `#/components/schemas/InfLocation/inventoryItems`.
-            public var inventoryItems: Components.Schemas.OutputSchema207? {
+            public var inventoryItems: Components.Schemas.OutputSchema220? {
                 get  {
                     self.storage.value.inventoryItems
                 }
@@ -19825,23 +13965,23 @@ extension Components {
                 id: Components.Schemas.LocationShortcode,
                 name: Swift.String,
                 aliases: Components.Schemas.InputSchema56,
-                tags: Components.Schemas.OutputSchema177? = nil,
+                tags: Components.Schemas.OutputSchema190? = nil,
                 _type: Components.Schemas.LocationType? = nil,
                 notes: Swift.String? = nil,
                 product: Components.Schemas.LocationIdentityProductOut? = nil,
                 lastBulkInventory: Foundation.Date? = nil,
                 aiDescription: Swift.String? = nil,
-                images: Components.Schemas.OutputSchema133,
+                images: Components.Schemas.OutputSchema146,
                 valuation: Components.Schemas.LocationValuation? = nil,
                 createdAt: Foundation.Date,
                 updatedAt: Foundation.Date,
                 dataQuality: Components.Schemas.DataQuality,
-                children: Components.Schemas.OutputSchema202? = nil,
-                parent: Components.Schemas.OutputSchema203? = nil,
+                children: Components.Schemas.OutputSchema215? = nil,
+                parent: Components.Schemas.OutputSchema216? = nil,
                 childCount: Swift.Int? = nil,
                 directItemCount: Swift.Int? = nil,
                 totalItemCount: Swift.Int? = nil,
-                inventoryItems: Components.Schemas.OutputSchema207? = nil
+                inventoryItems: Components.Schemas.OutputSchema220? = nil
             ) {
                 self.storage = .init(value: .init(
                     id: id,
@@ -19906,7 +14046,7 @@ extension Components {
                 /// - Remark: Generated from `#/components/schemas/InfLocation/aliases`.
                 var aliases: Components.Schemas.InputSchema56
                 /// - Remark: Generated from `#/components/schemas/InfLocation/tags`.
-                var tags: Components.Schemas.OutputSchema177?
+                var tags: Components.Schemas.OutputSchema190?
                 /// - Remark: Generated from `#/components/schemas/InfLocation/type`.
                 var _type: Components.Schemas.LocationType?
                 /// - Remark: Generated from `#/components/schemas/InfLocation/notes`.
@@ -19918,7 +14058,7 @@ extension Components {
                 /// - Remark: Generated from `#/components/schemas/InfLocation/aiDescription`.
                 var aiDescription: Swift.String?
                 /// - Remark: Generated from `#/components/schemas/InfLocation/images`.
-                var images: Components.Schemas.OutputSchema133
+                var images: Components.Schemas.OutputSchema146
                 /// - Remark: Generated from `#/components/schemas/InfLocation/valuation`.
                 var valuation: Components.Schemas.LocationValuation?
                 /// - Remark: Generated from `#/components/schemas/InfLocation/createdAt`.
@@ -19928,9 +14068,9 @@ extension Components {
                 /// - Remark: Generated from `#/components/schemas/InfLocation/dataQuality`.
                 var dataQuality: Components.Schemas.DataQuality
                 /// - Remark: Generated from `#/components/schemas/InfLocation/children`.
-                var children: Components.Schemas.OutputSchema202?
+                var children: Components.Schemas.OutputSchema215?
                 /// - Remark: Generated from `#/components/schemas/InfLocation/parent`.
-                var parent: Components.Schemas.OutputSchema203?
+                var parent: Components.Schemas.OutputSchema216?
                 /// - Remark: Generated from `#/components/schemas/InfLocation/childCount`.
                 var childCount: Swift.Int?
                 /// - Remark: Generated from `#/components/schemas/InfLocation/directItemCount`.
@@ -19938,28 +14078,28 @@ extension Components {
                 /// - Remark: Generated from `#/components/schemas/InfLocation/totalItemCount`.
                 var totalItemCount: Swift.Int?
                 /// - Remark: Generated from `#/components/schemas/InfLocation/inventoryItems`.
-                var inventoryItems: Components.Schemas.OutputSchema207?
+                var inventoryItems: Components.Schemas.OutputSchema220?
                 init(
                     id: Components.Schemas.LocationShortcode,
                     name: Swift.String,
                     aliases: Components.Schemas.InputSchema56,
-                    tags: Components.Schemas.OutputSchema177? = nil,
+                    tags: Components.Schemas.OutputSchema190? = nil,
                     _type: Components.Schemas.LocationType? = nil,
                     notes: Swift.String? = nil,
                     product: Components.Schemas.LocationIdentityProductOut? = nil,
                     lastBulkInventory: Foundation.Date? = nil,
                     aiDescription: Swift.String? = nil,
-                    images: Components.Schemas.OutputSchema133,
+                    images: Components.Schemas.OutputSchema146,
                     valuation: Components.Schemas.LocationValuation? = nil,
                     createdAt: Foundation.Date,
                     updatedAt: Foundation.Date,
                     dataQuality: Components.Schemas.DataQuality,
-                    children: Components.Schemas.OutputSchema202? = nil,
-                    parent: Components.Schemas.OutputSchema203? = nil,
+                    children: Components.Schemas.OutputSchema215? = nil,
+                    parent: Components.Schemas.OutputSchema216? = nil,
                     childCount: Swift.Int? = nil,
                     directItemCount: Swift.Int? = nil,
                     totalItemCount: Swift.Int? = nil,
-                    inventoryItems: Components.Schemas.OutputSchema207? = nil
+                    inventoryItems: Components.Schemas.OutputSchema220? = nil
                 ) {
                     self.id = id
                     self.name = name
@@ -19983,111 +14123,6 @@ extension Components {
                     self.inventoryItems = inventoryItems
                 }
                 typealias CodingKeys = Components.Schemas.InfLocation.CodingKeys
-                init(from decoder: any Swift.Decoder) throws {
-                    let container = try decoder.container(keyedBy: CodingKeys.self)
-                    self.id = try container.decode(
-                        Components.Schemas.LocationShortcode.self,
-                        forKey: .id
-                    )
-                    self.name = try container.decode(
-                        Swift.String.self,
-                        forKey: .name
-                    )
-                    self.aliases = try container.decode(
-                        Components.Schemas.InputSchema56.self,
-                        forKey: .aliases
-                    )
-                    self.tags = try container.decodeIfPresent(
-                        Components.Schemas.OutputSchema177.self,
-                        forKey: .tags
-                    )
-                    self._type = try container.decodeIfPresent(
-                        Components.Schemas.LocationType.self,
-                        forKey: ._type
-                    )
-                    self.notes = try container.decodeIfPresent(
-                        Swift.String.self,
-                        forKey: .notes
-                    )
-                    self.product = try container.decodeIfPresent(
-                        Components.Schemas.LocationIdentityProductOut.self,
-                        forKey: .product
-                    )
-                    self.lastBulkInventory = try container.decodeIfPresent(
-                        Foundation.Date.self,
-                        forKey: .lastBulkInventory
-                    )
-                    self.aiDescription = try container.decodeIfPresent(
-                        Swift.String.self,
-                        forKey: .aiDescription
-                    )
-                    self.images = try container.decode(
-                        Components.Schemas.OutputSchema133.self,
-                        forKey: .images
-                    )
-                    self.valuation = try container.decodeIfPresent(
-                        Components.Schemas.LocationValuation.self,
-                        forKey: .valuation
-                    )
-                    self.createdAt = try container.decode(
-                        Foundation.Date.self,
-                        forKey: .createdAt
-                    )
-                    self.updatedAt = try container.decode(
-                        Foundation.Date.self,
-                        forKey: .updatedAt
-                    )
-                    self.dataQuality = try container.decode(
-                        Components.Schemas.DataQuality.self,
-                        forKey: .dataQuality
-                    )
-                    self.children = try container.decodeIfPresent(
-                        Components.Schemas.OutputSchema202.self,
-                        forKey: .children
-                    )
-                    self.parent = try container.decodeIfPresent(
-                        Components.Schemas.OutputSchema203.self,
-                        forKey: .parent
-                    )
-                    self.childCount = try container.decodeIfPresent(
-                        Swift.Int.self,
-                        forKey: .childCount
-                    )
-                    self.directItemCount = try container.decodeIfPresent(
-                        Swift.Int.self,
-                        forKey: .directItemCount
-                    )
-                    self.totalItemCount = try container.decodeIfPresent(
-                        Swift.Int.self,
-                        forKey: .totalItemCount
-                    )
-                    self.inventoryItems = try container.decodeIfPresent(
-                        Components.Schemas.OutputSchema207.self,
-                        forKey: .inventoryItems
-                    )
-                    try decoder.ensureNoAdditionalProperties(knownKeys: [
-                        "id",
-                        "name",
-                        "aliases",
-                        "tags",
-                        "type",
-                        "notes",
-                        "product",
-                        "lastBulkInventory",
-                        "aiDescription",
-                        "images",
-                        "valuation",
-                        "createdAt",
-                        "updatedAt",
-                        "dataQuality",
-                        "children",
-                        "parent",
-                        "childCount",
-                        "directItemCount",
-                        "totalItemCount",
-                        "inventoryItems"
-                    ])
-                }
             }
         }
         /// - Remark: Generated from `#/components/schemas/InfLocationListOut`.
@@ -20192,7 +14227,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/IngredientDetail/aliases`.
             public var aliases: Components.Schemas.InputSchema56
             /// - Remark: Generated from `#/components/schemas/IngredientDetail/naKinds`.
-            public var naKinds: Components.Schemas.OutputSchema144
+            public var naKinds: Components.Schemas.OutputSchema157
             /// - Remark: Generated from `#/components/schemas/IngredientDetail/usuallyOnHand`.
             public var usuallyOnHand: Swift.Bool
             /// - Remark: Generated from `#/components/schemas/IngredientDetail/gardenGuideKey`.
@@ -20254,15 +14289,15 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/IngredientDetail/recipe`.
             public var recipe: Components.Schemas.RecipeTopLevel?
             /// - Remark: Generated from `#/components/schemas/IngredientDetail/recipeUsages`.
-            public var recipeUsages: Components.Schemas.OutputSchema163
+            public var recipeUsages: Components.Schemas.OutputSchema176
             /// - Remark: Generated from `#/components/schemas/IngredientDetail/appearsInRecipes`.
-            public var appearsInRecipes: Components.Schemas.OutputSchema164
+            public var appearsInRecipes: Components.Schemas.OutputSchema177
             /// - Remark: Generated from `#/components/schemas/IngredientDetail/product`.
-            public var product: Components.Schemas.OutputSchema165
+            public var product: Components.Schemas.OutputSchema178
             /// - Remark: Generated from `#/components/schemas/IngredientDetail/displayImages`.
             public var displayImages: Components.Schemas.DisplayImagesField
             /// - Remark: Generated from `#/components/schemas/IngredientDetail/attachments`.
-            public var attachments: Components.Schemas.OutputSchema437
+            public var attachments: Components.Schemas.OutputSchema450
             /// Creates a new `IngredientDetail`.
             ///
             /// - Parameters:
@@ -20287,7 +14322,7 @@ extension Components {
                 id: Components.Schemas.IngredientShortcode,
                 name: Swift.String,
                 aliases: Components.Schemas.InputSchema56,
-                naKinds: Components.Schemas.OutputSchema144,
+                naKinds: Components.Schemas.OutputSchema157,
                 usuallyOnHand: Swift.Bool,
                 gardenGuideKey: Components.Schemas.IngredientDetail.GardenGuideKeyPayload? = nil,
                 guideSowWindow: Swift.String? = nil,
@@ -20296,11 +14331,11 @@ extension Components {
                 updatedAt: Foundation.Date,
                 dataQuality: Components.Schemas.DataQuality,
                 recipe: Components.Schemas.RecipeTopLevel? = nil,
-                recipeUsages: Components.Schemas.OutputSchema163,
-                appearsInRecipes: Components.Schemas.OutputSchema164,
-                product: Components.Schemas.OutputSchema165,
+                recipeUsages: Components.Schemas.OutputSchema176,
+                appearsInRecipes: Components.Schemas.OutputSchema177,
+                product: Components.Schemas.OutputSchema178,
                 displayImages: Components.Schemas.DisplayImagesField,
-                attachments: Components.Schemas.OutputSchema437
+                attachments: Components.Schemas.OutputSchema450
             ) {
                 self.id = id
                 self.name = name
@@ -20339,96 +14374,6 @@ extension Components {
                 case displayImages
                 case attachments
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.id = try container.decode(
-                    Components.Schemas.IngredientShortcode.self,
-                    forKey: .id
-                )
-                self.name = try container.decode(
-                    Swift.String.self,
-                    forKey: .name
-                )
-                self.aliases = try container.decode(
-                    Components.Schemas.InputSchema56.self,
-                    forKey: .aliases
-                )
-                self.naKinds = try container.decode(
-                    Components.Schemas.OutputSchema144.self,
-                    forKey: .naKinds
-                )
-                self.usuallyOnHand = try container.decode(
-                    Swift.Bool.self,
-                    forKey: .usuallyOnHand
-                )
-                self.gardenGuideKey = try container.decodeIfPresent(
-                    Components.Schemas.IngredientDetail.GardenGuideKeyPayload.self,
-                    forKey: .gardenGuideKey
-                )
-                self.guideSowWindow = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .guideSowWindow
-                )
-                self.guideTransplantWindow = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .guideTransplantWindow
-                )
-                self.createdAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .createdAt
-                )
-                self.updatedAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .updatedAt
-                )
-                self.dataQuality = try container.decode(
-                    Components.Schemas.DataQuality.self,
-                    forKey: .dataQuality
-                )
-                self.recipe = try container.decodeIfPresent(
-                    Components.Schemas.RecipeTopLevel.self,
-                    forKey: .recipe
-                )
-                self.recipeUsages = try container.decode(
-                    Components.Schemas.OutputSchema163.self,
-                    forKey: .recipeUsages
-                )
-                self.appearsInRecipes = try container.decode(
-                    Components.Schemas.OutputSchema164.self,
-                    forKey: .appearsInRecipes
-                )
-                self.product = try container.decode(
-                    Components.Schemas.OutputSchema165.self,
-                    forKey: .product
-                )
-                self.displayImages = try container.decode(
-                    Components.Schemas.DisplayImagesField.self,
-                    forKey: .displayImages
-                )
-                self.attachments = try container.decode(
-                    Components.Schemas.OutputSchema437.self,
-                    forKey: .attachments
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "id",
-                    "name",
-                    "aliases",
-                    "naKinds",
-                    "usuallyOnHand",
-                    "gardenGuideKey",
-                    "guideSowWindow",
-                    "guideTransplantWindow",
-                    "createdAt",
-                    "updatedAt",
-                    "dataQuality",
-                    "recipe",
-                    "recipeUsages",
-                    "appearsInRecipes",
-                    "product",
-                    "displayImages",
-                    "attachments"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/IngredientListItem`.
         public struct IngredientListItem: Codable, Hashable, Sendable {
@@ -20441,7 +14386,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/IngredientListItem/aliases`.
             public var aliases: Components.Schemas.InputSchema56
             /// - Remark: Generated from `#/components/schemas/IngredientListItem/naKinds`.
-            public var naKinds: Components.Schemas.OutputSchema144
+            public var naKinds: Components.Schemas.OutputSchema157
             /// - Remark: Generated from `#/components/schemas/IngredientListItem/usuallyOnHand`.
             public var usuallyOnHand: Swift.Bool
             /// - Remark: Generated from `#/components/schemas/IngredientListItem/gardenGuideKey`.
@@ -20530,7 +14475,7 @@ extension Components {
                 id: Components.Schemas.IngredientShortcode,
                 name: Swift.String,
                 aliases: Components.Schemas.InputSchema56,
-                naKinds: Components.Schemas.OutputSchema144,
+                naKinds: Components.Schemas.OutputSchema157,
                 usuallyOnHand: Swift.Bool,
                 gardenGuideKey: Components.Schemas.IngredientListItem.GardenGuideKeyPayload? = nil,
                 guideSowWindow: Swift.String? = nil,
@@ -20576,86 +14521,6 @@ extension Components {
                 case appearsInRecipes
                 case ownRecipeCount
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.id = try container.decode(
-                    Components.Schemas.IngredientShortcode.self,
-                    forKey: .id
-                )
-                self.name = try container.decode(
-                    Swift.String.self,
-                    forKey: .name
-                )
-                self.aliases = try container.decode(
-                    Components.Schemas.InputSchema56.self,
-                    forKey: .aliases
-                )
-                self.naKinds = try container.decode(
-                    Components.Schemas.OutputSchema144.self,
-                    forKey: .naKinds
-                )
-                self.usuallyOnHand = try container.decode(
-                    Swift.Bool.self,
-                    forKey: .usuallyOnHand
-                )
-                self.gardenGuideKey = try container.decodeIfPresent(
-                    Components.Schemas.IngredientListItem.GardenGuideKeyPayload.self,
-                    forKey: .gardenGuideKey
-                )
-                self.guideSowWindow = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .guideSowWindow
-                )
-                self.guideTransplantWindow = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .guideTransplantWindow
-                )
-                self.createdAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .createdAt
-                )
-                self.updatedAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .updatedAt
-                )
-                self.dataQuality = try container.decode(
-                    Components.Schemas.DataQuality.self,
-                    forKey: .dataQuality
-                )
-                self.displayImages = try container.decode(
-                    Components.Schemas.DisplayImagesField.self,
-                    forKey: .displayImages
-                )
-                self.product = try container.decode(
-                    [Components.Schemas.ProductWithMappingsOut].self,
-                    forKey: .product
-                )
-                self.appearsInRecipes = try container.decode(
-                    [Components.Schemas.RecipeRefOut].self,
-                    forKey: .appearsInRecipes
-                )
-                self.ownRecipeCount = try container.decode(
-                    Swift.Int.self,
-                    forKey: .ownRecipeCount
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "id",
-                    "name",
-                    "aliases",
-                    "naKinds",
-                    "usuallyOnHand",
-                    "gardenGuideKey",
-                    "guideSowWindow",
-                    "guideTransplantWindow",
-                    "createdAt",
-                    "updatedAt",
-                    "dataQuality",
-                    "displayImages",
-                    "product",
-                    "appearsInRecipes",
-                    "ownRecipeCount"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/IngredientListPage`.
         public struct IngredientListPage: Codable, Hashable, Sendable {
@@ -20679,21 +14544,6 @@ extension Components {
                 case items
                 case meta
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.items = try container.decode(
-                    [Components.Schemas.IngredientListItem].self,
-                    forKey: .items
-                )
-                self.meta = try container.decode(
-                    Components.Schemas.ListPageMeta.self,
-                    forKey: .meta
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "items",
-                    "meta"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/IngredientOut`.
         public struct IngredientOut: Codable, Hashable, Sendable {
@@ -20706,7 +14556,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/IngredientOut/aliases`.
             public var aliases: Components.Schemas.InputSchema56
             /// - Remark: Generated from `#/components/schemas/IngredientOut/naKinds`.
-            public var naKinds: Components.Schemas.OutputSchema144
+            public var naKinds: Components.Schemas.OutputSchema157
             /// - Remark: Generated from `#/components/schemas/IngredientOut/usuallyOnHand`.
             public var usuallyOnHand: Swift.Bool
             /// - Remark: Generated from `#/components/schemas/IngredientOut/gardenGuideKey`.
@@ -20783,7 +14633,7 @@ extension Components {
                 id: Components.Schemas.IngredientShortcode,
                 name: Swift.String,
                 aliases: Components.Schemas.InputSchema56,
-                naKinds: Components.Schemas.OutputSchema144,
+                naKinds: Components.Schemas.OutputSchema157,
                 usuallyOnHand: Swift.Bool,
                 gardenGuideKey: Components.Schemas.IngredientOut.GardenGuideKeyPayload? = nil,
                 guideSowWindow: Swift.String? = nil,
@@ -20816,66 +14666,6 @@ extension Components {
                 case createdAt
                 case updatedAt
                 case dataQuality
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.id = try container.decode(
-                    Components.Schemas.IngredientShortcode.self,
-                    forKey: .id
-                )
-                self.name = try container.decode(
-                    Swift.String.self,
-                    forKey: .name
-                )
-                self.aliases = try container.decode(
-                    Components.Schemas.InputSchema56.self,
-                    forKey: .aliases
-                )
-                self.naKinds = try container.decode(
-                    Components.Schemas.OutputSchema144.self,
-                    forKey: .naKinds
-                )
-                self.usuallyOnHand = try container.decode(
-                    Swift.Bool.self,
-                    forKey: .usuallyOnHand
-                )
-                self.gardenGuideKey = try container.decodeIfPresent(
-                    Components.Schemas.IngredientOut.GardenGuideKeyPayload.self,
-                    forKey: .gardenGuideKey
-                )
-                self.guideSowWindow = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .guideSowWindow
-                )
-                self.guideTransplantWindow = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .guideTransplantWindow
-                )
-                self.createdAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .createdAt
-                )
-                self.updatedAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .updatedAt
-                )
-                self.dataQuality = try container.decode(
-                    Components.Schemas.DataQuality.self,
-                    forKey: .dataQuality
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "id",
-                    "name",
-                    "aliases",
-                    "naKinds",
-                    "usuallyOnHand",
-                    "gardenGuideKey",
-                    "guideSowWindow",
-                    "guideTransplantWindow",
-                    "createdAt",
-                    "updatedAt",
-                    "dataQuality"
-                ])
             }
         }
         /// ingredient shortcode, e.g. ING-4K7M
@@ -21166,31 +14956,6 @@ extension Components {
                 case uploadUrl
                 case expiresAt
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.evidenceId = try container.decode(
-                    Swift.String.self,
-                    forKey: .evidenceId
-                )
-                self.objectKey = try container.decode(
-                    Swift.String.self,
-                    forKey: .objectKey
-                )
-                self.uploadUrl = try container.decode(
-                    Swift.String.self,
-                    forKey: .uploadUrl
-                )
-                self.expiresAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .expiresAt
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "evidenceId",
-                    "objectKey",
-                    "uploadUrl",
-                    "expiresAt"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/InitiateUploadWithoutEntity`.
         public struct InitiateUploadWithoutEntity: Codable, Hashable, Sendable {
@@ -21333,31 +15098,6 @@ extension Components {
                 case imageId
                 case key
                 case url
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.uploadUrl = try container.decode(
-                    Swift.String.self,
-                    forKey: .uploadUrl
-                )
-                self.imageId = try container.decode(
-                    Components.Schemas.ImageShortcode.self,
-                    forKey: .imageId
-                )
-                self.key = try container.decode(
-                    Swift.String.self,
-                    forKey: .key
-                )
-                self.url = try container.decode(
-                    Swift.String.self,
-                    forKey: .url
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "uploadUrl",
-                    "imageId",
-                    "key",
-                    "url"
-                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/input_schema172`.
@@ -21640,7 +15380,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/InventoryDetail/id`.
             public var id: Components.Schemas.InventoryShortcode
             /// - Remark: Generated from `#/components/schemas/InventoryDetail/amount`.
-            public var amount: Components.Schemas.OutputSchema166
+            public var amount: Components.Schemas.OutputSchema179
             /// Manual per-item valuation/replacement-price override; null resumes the Expense-derived fallback.
             ///
             /// - Remark: Generated from `#/components/schemas/InventoryDetail/valuation`.
@@ -21648,7 +15388,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/InventoryDetail/verifiedAt`.
             public var verifiedAt: Foundation.Date?
             /// - Remark: Generated from `#/components/schemas/InventoryDetail/placement`.
-            public var placement: Components.Schemas.OutputSchema170
+            public var placement: Components.Schemas.OutputSchema183
             /// - Remark: Generated from `#/components/schemas/InventoryDetail/ownershipMode`.
             public var ownershipMode: Components.Schemas.InventoryOwnershipMode
             /// - Remark: Generated from `#/components/schemas/InventoryDetail/ownerLedgerPartyId`.
@@ -21670,7 +15410,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/InventoryDetail/displayImages`.
             public var displayImages: Components.Schemas.DisplayImagesField
             /// - Remark: Generated from `#/components/schemas/InventoryDetail/attachments`.
-            public var attachments: Components.Schemas.OutputSchema437
+            public var attachments: Components.Schemas.OutputSchema450
             /// Creates a new `InventoryDetail`.
             ///
             /// - Parameters:
@@ -21692,10 +15432,10 @@ extension Components {
             ///   - attachments:
             public init(
                 id: Components.Schemas.InventoryShortcode,
-                amount: Components.Schemas.OutputSchema166,
+                amount: Components.Schemas.OutputSchema179,
                 valuation: Components.Schemas.Money? = nil,
                 verifiedAt: Foundation.Date? = nil,
-                placement: Components.Schemas.OutputSchema170,
+                placement: Components.Schemas.OutputSchema183,
                 ownershipMode: Components.Schemas.InventoryOwnershipMode,
                 ownerLedgerPartyId: Components.Schemas.LedgerPartyShortcode? = nil,
                 effectiveOwnership: Components.Schemas.EffectiveInventoryOwnership,
@@ -21706,7 +15446,7 @@ extension Components {
                 location: Components.Schemas.LocationOut,
                 displayName: Swift.String,
                 displayImages: Components.Schemas.DisplayImagesField,
-                attachments: Components.Schemas.OutputSchema437
+                attachments: Components.Schemas.OutputSchema450
             ) {
                 self.id = id
                 self.amount = amount
@@ -21742,91 +15482,6 @@ extension Components {
                 case displayName
                 case displayImages
                 case attachments
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.id = try container.decode(
-                    Components.Schemas.InventoryShortcode.self,
-                    forKey: .id
-                )
-                self.amount = try container.decode(
-                    Components.Schemas.OutputSchema166.self,
-                    forKey: .amount
-                )
-                self.valuation = try container.decodeIfPresent(
-                    Components.Schemas.Money.self,
-                    forKey: .valuation
-                )
-                self.verifiedAt = try container.decodeIfPresent(
-                    Foundation.Date.self,
-                    forKey: .verifiedAt
-                )
-                self.placement = try container.decode(
-                    Components.Schemas.OutputSchema170.self,
-                    forKey: .placement
-                )
-                self.ownershipMode = try container.decode(
-                    Components.Schemas.InventoryOwnershipMode.self,
-                    forKey: .ownershipMode
-                )
-                self.ownerLedgerPartyId = try container.decodeIfPresent(
-                    Components.Schemas.LedgerPartyShortcode.self,
-                    forKey: .ownerLedgerPartyId
-                )
-                self.effectiveOwnership = try container.decode(
-                    Components.Schemas.EffectiveInventoryOwnership.self,
-                    forKey: .effectiveOwnership
-                )
-                self.createdAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .createdAt
-                )
-                self.updatedAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .updatedAt
-                )
-                self.dataQuality = try container.decode(
-                    Components.Schemas.DataQuality.self,
-                    forKey: .dataQuality
-                )
-                self.product = try container.decode(
-                    Components.Schemas.InventoryDetailProductOut.self,
-                    forKey: .product
-                )
-                self.location = try container.decode(
-                    Components.Schemas.LocationOut.self,
-                    forKey: .location
-                )
-                self.displayName = try container.decode(
-                    Swift.String.self,
-                    forKey: .displayName
-                )
-                self.displayImages = try container.decode(
-                    Components.Schemas.DisplayImagesField.self,
-                    forKey: .displayImages
-                )
-                self.attachments = try container.decode(
-                    Components.Schemas.OutputSchema437.self,
-                    forKey: .attachments
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "id",
-                    "amount",
-                    "valuation",
-                    "verifiedAt",
-                    "placement",
-                    "ownershipMode",
-                    "ownerLedgerPartyId",
-                    "effectiveOwnership",
-                    "createdAt",
-                    "updatedAt",
-                    "dataQuality",
-                    "product",
-                    "location",
-                    "displayName",
-                    "displayImages",
-                    "attachments"
-                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/InventoryDetailProductOut`.
@@ -21935,91 +15590,6 @@ extension Components {
                 case externalIds
                 case unitMappings
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.id = try container.decode(
-                    Components.Schemas.ProductShortcode.self,
-                    forKey: .id
-                )
-                self.name = try container.decode(
-                    Swift.String.self,
-                    forKey: .name
-                )
-                self.primaryGtin = try container.decodeIfPresent(
-                    Components.Schemas.Gtin.self,
-                    forKey: .primaryGtin
-                )
-                self.fdcId = try container.decodeIfPresent(
-                    Components.Schemas.FdcId.self,
-                    forKey: .fdcId
-                )
-                self.manufacturer = try container.decode(
-                    Swift.String.self,
-                    forKey: .manufacturer
-                )
-                self.model = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .model
-                )
-                self.notes = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .notes
-                )
-                self.expectedQuantity = try container.decodeIfPresent(
-                    Swift.Int.self,
-                    forKey: .expectedQuantity
-                )
-                self.category = try container.decodeIfPresent(
-                    Components.Schemas.ProductCategorySummary.self,
-                    forKey: .category
-                )
-                self.price = try container.decodeIfPresent(
-                    Components.Schemas.Money.self,
-                    forKey: .price
-                )
-                self.usdaUnavailable = try container.decodeIfPresent(
-                    Swift.Bool.self,
-                    forKey: .usdaUnavailable
-                )
-                self.createdAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .createdAt
-                )
-                self.updatedAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .updatedAt
-                )
-                self.images = try container.decode(
-                    [Components.Schemas.ImageOut].self,
-                    forKey: .images
-                )
-                self.externalIds = try container.decode(
-                    [Components.Schemas.ExternalIdOut].self,
-                    forKey: .externalIds
-                )
-                self.unitMappings = try container.decode(
-                    [Components.Schemas.UnitMappingOut].self,
-                    forKey: .unitMappings
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "id",
-                    "name",
-                    "primaryGtin",
-                    "fdc_id",
-                    "manufacturer",
-                    "model",
-                    "notes",
-                    "expectedQuantity",
-                    "category",
-                    "price",
-                    "usdaUnavailable",
-                    "createdAt",
-                    "updatedAt",
-                    "images",
-                    "externalIds",
-                    "unitMappings"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/InventoryDuplicateUniqueProductsOut`.
         public typealias InventoryDuplicateUniqueProductsOut = [Components.Schemas.DuplicateUniqueProduct]
@@ -22028,7 +15598,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/InventoryEntryOut/id`.
             public var id: Components.Schemas.InventoryShortcode
             /// - Remark: Generated from `#/components/schemas/InventoryEntryOut/amount`.
-            public var amount: Components.Schemas.OutputSchema166
+            public var amount: Components.Schemas.OutputSchema179
             /// Manual per-item valuation/replacement-price override; null resumes the Expense-derived fallback.
             ///
             /// - Remark: Generated from `#/components/schemas/InventoryEntryOut/valuation`.
@@ -22036,7 +15606,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/InventoryEntryOut/verifiedAt`.
             public var verifiedAt: Foundation.Date?
             /// - Remark: Generated from `#/components/schemas/InventoryEntryOut/placement`.
-            public var placement: Components.Schemas.OutputSchema170
+            public var placement: Components.Schemas.OutputSchema183
             /// - Remark: Generated from `#/components/schemas/InventoryEntryOut/ownershipMode`.
             public var ownershipMode: Components.Schemas.InventoryOwnershipMode
             /// - Remark: Generated from `#/components/schemas/InventoryEntryOut/ownerLedgerPartyId`.
@@ -22065,10 +15635,10 @@ extension Components {
             ///   - dataQuality:
             public init(
                 id: Components.Schemas.InventoryShortcode,
-                amount: Components.Schemas.OutputSchema166,
+                amount: Components.Schemas.OutputSchema179,
                 valuation: Components.Schemas.Money? = nil,
                 verifiedAt: Foundation.Date? = nil,
-                placement: Components.Schemas.OutputSchema170,
+                placement: Components.Schemas.OutputSchema183,
                 ownershipMode: Components.Schemas.InventoryOwnershipMode,
                 ownerLedgerPartyId: Components.Schemas.LedgerPartyShortcode? = nil,
                 effectiveOwnership: Components.Schemas.EffectiveInventoryOwnership,
@@ -22101,73 +15671,13 @@ extension Components {
                 case updatedAt
                 case dataQuality
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.id = try container.decode(
-                    Components.Schemas.InventoryShortcode.self,
-                    forKey: .id
-                )
-                self.amount = try container.decode(
-                    Components.Schemas.OutputSchema166.self,
-                    forKey: .amount
-                )
-                self.valuation = try container.decodeIfPresent(
-                    Components.Schemas.Money.self,
-                    forKey: .valuation
-                )
-                self.verifiedAt = try container.decodeIfPresent(
-                    Foundation.Date.self,
-                    forKey: .verifiedAt
-                )
-                self.placement = try container.decode(
-                    Components.Schemas.OutputSchema170.self,
-                    forKey: .placement
-                )
-                self.ownershipMode = try container.decode(
-                    Components.Schemas.InventoryOwnershipMode.self,
-                    forKey: .ownershipMode
-                )
-                self.ownerLedgerPartyId = try container.decodeIfPresent(
-                    Components.Schemas.LedgerPartyShortcode.self,
-                    forKey: .ownerLedgerPartyId
-                )
-                self.effectiveOwnership = try container.decode(
-                    Components.Schemas.EffectiveInventoryOwnership.self,
-                    forKey: .effectiveOwnership
-                )
-                self.createdAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .createdAt
-                )
-                self.updatedAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .updatedAt
-                )
-                self.dataQuality = try container.decode(
-                    Components.Schemas.DataQuality.self,
-                    forKey: .dataQuality
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "id",
-                    "amount",
-                    "valuation",
-                    "verifiedAt",
-                    "placement",
-                    "ownershipMode",
-                    "ownerLedgerPartyId",
-                    "effectiveOwnership",
-                    "createdAt",
-                    "updatedAt",
-                    "dataQuality"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/InventoryListItem`.
         public struct InventoryListItem: Codable, Hashable, Sendable {
             /// - Remark: Generated from `#/components/schemas/InventoryListItem/id`.
             public var id: Components.Schemas.InventoryShortcode
             /// - Remark: Generated from `#/components/schemas/InventoryListItem/amount`.
-            public var amount: Components.Schemas.OutputSchema166
+            public var amount: Components.Schemas.OutputSchema179
             /// Manual per-item valuation/replacement-price override; null resumes the Expense-derived fallback.
             ///
             /// - Remark: Generated from `#/components/schemas/InventoryListItem/valuation`.
@@ -22175,7 +15685,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/InventoryListItem/verifiedAt`.
             public var verifiedAt: Foundation.Date?
             /// - Remark: Generated from `#/components/schemas/InventoryListItem/placement`.
-            public var placement: Components.Schemas.OutputSchema170
+            public var placement: Components.Schemas.OutputSchema183
             /// - Remark: Generated from `#/components/schemas/InventoryListItem/ownershipMode`.
             public var ownershipMode: Components.Schemas.InventoryOwnershipMode
             /// - Remark: Generated from `#/components/schemas/InventoryListItem/ownerLedgerPartyId`.
@@ -22216,10 +15726,10 @@ extension Components {
             ///   - displayName:
             public init(
                 id: Components.Schemas.InventoryShortcode,
-                amount: Components.Schemas.OutputSchema166,
+                amount: Components.Schemas.OutputSchema179,
                 valuation: Components.Schemas.Money? = nil,
                 verifiedAt: Foundation.Date? = nil,
-                placement: Components.Schemas.OutputSchema170,
+                placement: Components.Schemas.OutputSchema183,
                 ownershipMode: Components.Schemas.InventoryOwnershipMode,
                 ownerLedgerPartyId: Components.Schemas.LedgerPartyShortcode? = nil,
                 effectiveOwnership: Components.Schemas.EffectiveInventoryOwnership,
@@ -22264,86 +15774,6 @@ extension Components {
                 case location
                 case displayName
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.id = try container.decode(
-                    Components.Schemas.InventoryShortcode.self,
-                    forKey: .id
-                )
-                self.amount = try container.decode(
-                    Components.Schemas.OutputSchema166.self,
-                    forKey: .amount
-                )
-                self.valuation = try container.decodeIfPresent(
-                    Components.Schemas.Money.self,
-                    forKey: .valuation
-                )
-                self.verifiedAt = try container.decodeIfPresent(
-                    Foundation.Date.self,
-                    forKey: .verifiedAt
-                )
-                self.placement = try container.decode(
-                    Components.Schemas.OutputSchema170.self,
-                    forKey: .placement
-                )
-                self.ownershipMode = try container.decode(
-                    Components.Schemas.InventoryOwnershipMode.self,
-                    forKey: .ownershipMode
-                )
-                self.ownerLedgerPartyId = try container.decodeIfPresent(
-                    Components.Schemas.LedgerPartyShortcode.self,
-                    forKey: .ownerLedgerPartyId
-                )
-                self.effectiveOwnership = try container.decode(
-                    Components.Schemas.EffectiveInventoryOwnership.self,
-                    forKey: .effectiveOwnership
-                )
-                self.createdAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .createdAt
-                )
-                self.updatedAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .updatedAt
-                )
-                self.dataQuality = try container.decode(
-                    Components.Schemas.DataQuality.self,
-                    forKey: .dataQuality
-                )
-                self.displayImages = try container.decode(
-                    Components.Schemas.DisplayImagesField.self,
-                    forKey: .displayImages
-                )
-                self.product = try container.decode(
-                    Components.Schemas.InventoryListProductOut.self,
-                    forKey: .product
-                )
-                self.location = try container.decode(
-                    Components.Schemas.InventoryListLocationOut.self,
-                    forKey: .location
-                )
-                self.displayName = try container.decode(
-                    Swift.String.self,
-                    forKey: .displayName
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "id",
-                    "amount",
-                    "valuation",
-                    "verifiedAt",
-                    "placement",
-                    "ownershipMode",
-                    "ownerLedgerPartyId",
-                    "effectiveOwnership",
-                    "createdAt",
-                    "updatedAt",
-                    "dataQuality",
-                    "displayImages",
-                    "product",
-                    "location",
-                    "displayName"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/InventoryListLocationOut`.
         public struct InventoryListLocationOut: Codable, Hashable, Sendable {
@@ -22373,26 +15803,6 @@ extension Components {
                 case name
                 case _type = "type"
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.id = try container.decode(
-                    Components.Schemas.LocationShortcode.self,
-                    forKey: .id
-                )
-                self.name = try container.decode(
-                    Swift.String.self,
-                    forKey: .name
-                )
-                self._type = try container.decodeIfPresent(
-                    Components.Schemas.LocationType.self,
-                    forKey: ._type
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "id",
-                    "name",
-                    "type"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/InventoryListPage`.
         public struct InventoryListPage: Codable, Hashable, Sendable {
@@ -22415,21 +15825,6 @@ extension Components {
             public enum CodingKeys: String, CodingKey {
                 case items
                 case meta
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.items = try container.decode(
-                    [Components.Schemas.InventoryListItem].self,
-                    forKey: .items
-                )
-                self.meta = try container.decode(
-                    Components.Schemas.ListPageMeta.self,
-                    forKey: .meta
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "items",
-                    "meta"
-                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/InventoryListProductOut`.
@@ -22502,61 +15897,6 @@ extension Components {
                 case price
                 case usdaUnavailable
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.id = try container.decode(
-                    Components.Schemas.ProductShortcode.self,
-                    forKey: .id
-                )
-                self.name = try container.decode(
-                    Swift.String.self,
-                    forKey: .name
-                )
-                self.manufacturer = try container.decode(
-                    Swift.String.self,
-                    forKey: .manufacturer
-                )
-                self.primaryGtin = try container.decodeIfPresent(
-                    Components.Schemas.Gtin.self,
-                    forKey: .primaryGtin
-                )
-                self.fdcId = try container.decodeIfPresent(
-                    Components.Schemas.FdcId.self,
-                    forKey: .fdcId
-                )
-                self.category = try container.decodeIfPresent(
-                    Components.Schemas.ProductCategorySummary.self,
-                    forKey: .category
-                )
-                self.expectedQuantity = try container.decodeIfPresent(
-                    Swift.Int.self,
-                    forKey: .expectedQuantity
-                )
-                self.model = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .model
-                )
-                self.price = try container.decodeIfPresent(
-                    Components.Schemas.Money.self,
-                    forKey: .price
-                )
-                self.usdaUnavailable = try container.decodeIfPresent(
-                    Swift.Bool.self,
-                    forKey: .usdaUnavailable
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "id",
-                    "name",
-                    "manufacturer",
-                    "primaryGtin",
-                    "fdc_id",
-                    "category",
-                    "expectedQuantity",
-                    "model",
-                    "price",
-                    "usdaUnavailable"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/InventoryLocationSnapshotOut`.
         public struct InventoryLocationSnapshotOut: Codable, Hashable, Sendable {
@@ -22579,21 +15919,6 @@ extension Components {
             public enum CodingKeys: String, CodingKey {
                 case items
                 case snapshotToken
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.items = try container.decode(
-                    Components.Schemas.InventoryWithLocationAndProductListOut.self,
-                    forKey: .items
-                )
-                self.snapshotToken = try container.decode(
-                    Swift.String.self,
-                    forKey: .snapshotToken
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "items",
-                    "snapshotToken"
-                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/InventoryOwner`.
@@ -22629,26 +15954,6 @@ extension Components {
                 case name
                 case kind
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.id = try container.decode(
-                    Components.Schemas.LedgerPartyShortcode.self,
-                    forKey: .id
-                )
-                self.name = try container.decode(
-                    Swift.String.self,
-                    forKey: .name
-                )
-                self.kind = try container.decode(
-                    Components.Schemas.InventoryOwner.KindPayload.self,
-                    forKey: .kind
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "id",
-                    "name",
-                    "kind"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/InventoryOwnershipEvidence`.
         public struct InventoryOwnershipEvidence: Codable, Hashable, Sendable {
@@ -22678,26 +15983,6 @@ extension Components {
                 case expenseIds
                 case acquisitionKey
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.purchaseId = try container.decodeIfPresent(
-                    Components.Schemas.PurchaseShortcode.self,
-                    forKey: .purchaseId
-                )
-                self.expenseIds = try container.decode(
-                    [Components.Schemas.ExpenseShortcode].self,
-                    forKey: .expenseIds
-                )
-                self.acquisitionKey = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .acquisitionKey
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "purchaseId",
-                    "expenseIds",
-                    "acquisitionKey"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/InventoryOwnershipMode`.
         @frozen public enum InventoryOwnershipMode: String, Codable, Hashable, Sendable, CaseIterable {
@@ -22718,16 +16003,6 @@ extension Components {
             }
             public enum CodingKeys: String, CodingKey {
                 case entries
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.entries = try container.decode(
-                    [Components.Schemas.InventoryShortcode].self,
-                    forKey: .entries
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "entries"
-                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/InventoryOwnershipSelection`.
@@ -22893,31 +16168,6 @@ extension Components {
                 case inventoryId
                 case target
                 case reasons
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.kind = try container.decode(
-                    Components.Schemas.InventoryPlacementProposal.KindPayload.self,
-                    forKey: .kind
-                )
-                self.inventoryId = try container.decode(
-                    Components.Schemas.InventoryShortcode.self,
-                    forKey: .inventoryId
-                )
-                self.target = try container.decode(
-                    Components.Schemas.RecommendationLocationTarget.self,
-                    forKey: .target
-                )
-                self.reasons = try container.decode(
-                    [Swift.String].self,
-                    forKey: .reasons
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "kind",
-                    "inventoryId",
-                    "target",
-                    "reasons"
-                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/InventorySessionResolution`.
@@ -23164,21 +16414,6 @@ extension Components {
                 case items
                 case sideEffects
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.items = try container.decode(
-                    Components.Schemas.InventoryWithLocationAndProductListOut.self,
-                    forKey: .items
-                )
-                self.sideEffects = try container.decode(
-                    Components.Schemas.MutationSideEffects.self,
-                    forKey: .sideEffects
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "items",
-                    "sideEffects"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/InventoryWithLocationAndProductListOut`.
         public typealias InventoryWithLocationAndProductListOut = [Components.Schemas.InventoryWithLocationAndProductOut]
@@ -23187,7 +16422,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/InventoryWithLocationAndProductOut/id`.
             public var id: Components.Schemas.InventoryShortcode
             /// - Remark: Generated from `#/components/schemas/InventoryWithLocationAndProductOut/amount`.
-            public var amount: Components.Schemas.OutputSchema166
+            public var amount: Components.Schemas.OutputSchema179
             /// Manual per-item valuation/replacement-price override; null resumes the Expense-derived fallback.
             ///
             /// - Remark: Generated from `#/components/schemas/InventoryWithLocationAndProductOut/valuation`.
@@ -23195,7 +16430,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/InventoryWithLocationAndProductOut/verifiedAt`.
             public var verifiedAt: Foundation.Date?
             /// - Remark: Generated from `#/components/schemas/InventoryWithLocationAndProductOut/placement`.
-            public var placement: Components.Schemas.OutputSchema170
+            public var placement: Components.Schemas.OutputSchema183
             /// - Remark: Generated from `#/components/schemas/InventoryWithLocationAndProductOut/ownershipMode`.
             public var ownershipMode: Components.Schemas.InventoryOwnershipMode
             /// - Remark: Generated from `#/components/schemas/InventoryWithLocationAndProductOut/ownerLedgerPartyId`.
@@ -23233,10 +16468,10 @@ extension Components {
             ///   - displayName:
             public init(
                 id: Components.Schemas.InventoryShortcode,
-                amount: Components.Schemas.OutputSchema166,
+                amount: Components.Schemas.OutputSchema179,
                 valuation: Components.Schemas.Money? = nil,
                 verifiedAt: Foundation.Date? = nil,
-                placement: Components.Schemas.OutputSchema170,
+                placement: Components.Schemas.OutputSchema183,
                 ownershipMode: Components.Schemas.InventoryOwnershipMode,
                 ownerLedgerPartyId: Components.Schemas.LedgerPartyShortcode? = nil,
                 effectiveOwnership: Components.Schemas.EffectiveInventoryOwnership,
@@ -23278,81 +16513,6 @@ extension Components {
                 case location
                 case displayName
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.id = try container.decode(
-                    Components.Schemas.InventoryShortcode.self,
-                    forKey: .id
-                )
-                self.amount = try container.decode(
-                    Components.Schemas.OutputSchema166.self,
-                    forKey: .amount
-                )
-                self.valuation = try container.decodeIfPresent(
-                    Components.Schemas.Money.self,
-                    forKey: .valuation
-                )
-                self.verifiedAt = try container.decodeIfPresent(
-                    Foundation.Date.self,
-                    forKey: .verifiedAt
-                )
-                self.placement = try container.decode(
-                    Components.Schemas.OutputSchema170.self,
-                    forKey: .placement
-                )
-                self.ownershipMode = try container.decode(
-                    Components.Schemas.InventoryOwnershipMode.self,
-                    forKey: .ownershipMode
-                )
-                self.ownerLedgerPartyId = try container.decodeIfPresent(
-                    Components.Schemas.LedgerPartyShortcode.self,
-                    forKey: .ownerLedgerPartyId
-                )
-                self.effectiveOwnership = try container.decode(
-                    Components.Schemas.EffectiveInventoryOwnership.self,
-                    forKey: .effectiveOwnership
-                )
-                self.createdAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .createdAt
-                )
-                self.updatedAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .updatedAt
-                )
-                self.dataQuality = try container.decode(
-                    Components.Schemas.DataQuality.self,
-                    forKey: .dataQuality
-                )
-                self.product = try container.decode(
-                    Components.Schemas.InventoryDetailProductOut.self,
-                    forKey: .product
-                )
-                self.location = try container.decode(
-                    Components.Schemas.LocationOut.self,
-                    forKey: .location
-                )
-                self.displayName = try container.decode(
-                    Swift.String.self,
-                    forKey: .displayName
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "id",
-                    "amount",
-                    "valuation",
-                    "verifiedAt",
-                    "placement",
-                    "ownershipMode",
-                    "ownerLedgerPartyId",
-                    "effectiveOwnership",
-                    "createdAt",
-                    "updatedAt",
-                    "dataQuality",
-                    "product",
-                    "location",
-                    "displayName"
-                ])
-            }
         }
         /// Any JSON value: a string, number, boolean, null, array or object.
         ///
@@ -23379,21 +16539,6 @@ extension Components {
             public enum CodingKeys: String, CodingKey {
                 case partyId
                 case weight
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.partyId = try container.decodeIfPresent(
-                    Components.Schemas.LedgerPartyShortcode.self,
-                    forKey: .partyId
-                )
-                self.weight = try container.decode(
-                    Swift.Int.self,
-                    forKey: .weight
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "partyId",
-                    "weight"
-                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/LedgerAttributionInputRequest`.
@@ -23486,7 +16631,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/LedgerPartyDetail/displayImages`.
             public var displayImages: Components.Schemas.DisplayImagesField
             /// - Remark: Generated from `#/components/schemas/LedgerPartyDetail/attachments`.
-            public var attachments: Components.Schemas.OutputSchema437
+            public var attachments: Components.Schemas.OutputSchema450
             /// Creates a new `LedgerPartyDetail`.
             ///
             /// - Parameters:
@@ -23508,7 +16653,7 @@ extension Components {
                 updatedAt: Foundation.Date,
                 dataQuality: Components.Schemas.DataQuality,
                 displayImages: Components.Schemas.DisplayImagesField,
-                attachments: Components.Schemas.OutputSchema437
+                attachments: Components.Schemas.OutputSchema450
             ) {
                 self.id = id
                 self.name = name
@@ -23530,56 +16675,6 @@ extension Components {
                 case dataQuality
                 case displayImages
                 case attachments
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.id = try container.decode(
-                    Components.Schemas.LedgerPartyShortcode.self,
-                    forKey: .id
-                )
-                self.name = try container.decode(
-                    Swift.String.self,
-                    forKey: .name
-                )
-                self.kind = try container.decode(
-                    Components.Schemas.LedgerPartyKind.self,
-                    forKey: .kind
-                )
-                self.notes = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .notes
-                )
-                self.createdAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .createdAt
-                )
-                self.updatedAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .updatedAt
-                )
-                self.dataQuality = try container.decode(
-                    Components.Schemas.DataQuality.self,
-                    forKey: .dataQuality
-                )
-                self.displayImages = try container.decode(
-                    Components.Schemas.DisplayImagesField.self,
-                    forKey: .displayImages
-                )
-                self.attachments = try container.decode(
-                    Components.Schemas.OutputSchema437.self,
-                    forKey: .attachments
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "id",
-                    "name",
-                    "kind",
-                    "notes",
-                    "createdAt",
-                    "updatedAt",
-                    "dataQuality",
-                    "displayImages",
-                    "attachments"
-                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/LedgerPartyKind`.
@@ -23646,51 +16741,6 @@ extension Components {
                 case dataQuality
                 case displayImages
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.id = try container.decode(
-                    Components.Schemas.LedgerPartyShortcode.self,
-                    forKey: .id
-                )
-                self.name = try container.decode(
-                    Swift.String.self,
-                    forKey: .name
-                )
-                self.kind = try container.decode(
-                    Components.Schemas.LedgerPartyKind.self,
-                    forKey: .kind
-                )
-                self.notes = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .notes
-                )
-                self.createdAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .createdAt
-                )
-                self.updatedAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .updatedAt
-                )
-                self.dataQuality = try container.decode(
-                    Components.Schemas.DataQuality.self,
-                    forKey: .dataQuality
-                )
-                self.displayImages = try container.decode(
-                    Components.Schemas.DisplayImagesField.self,
-                    forKey: .displayImages
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "id",
-                    "name",
-                    "kind",
-                    "notes",
-                    "createdAt",
-                    "updatedAt",
-                    "dataQuality",
-                    "displayImages"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/LedgerPartyListPage`.
         public struct LedgerPartyListPage: Codable, Hashable, Sendable {
@@ -23713,21 +16763,6 @@ extension Components {
             public enum CodingKeys: String, CodingKey {
                 case items
                 case meta
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.items = try container.decode(
-                    [Components.Schemas.LedgerPartyListItem].self,
-                    forKey: .items
-                )
-                self.meta = try container.decode(
-                    Components.Schemas.ListPageMeta.self,
-                    forKey: .meta
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "items",
-                    "meta"
-                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/LedgerPartyOut`.
@@ -23781,46 +16816,6 @@ extension Components {
                 case createdAt
                 case updatedAt
                 case dataQuality
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.id = try container.decode(
-                    Components.Schemas.LedgerPartyShortcode.self,
-                    forKey: .id
-                )
-                self.name = try container.decode(
-                    Swift.String.self,
-                    forKey: .name
-                )
-                self.kind = try container.decode(
-                    Components.Schemas.LedgerPartyKind.self,
-                    forKey: .kind
-                )
-                self.notes = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .notes
-                )
-                self.createdAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .createdAt
-                )
-                self.updatedAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .updatedAt
-                )
-                self.dataQuality = try container.decode(
-                    Components.Schemas.DataQuality.self,
-                    forKey: .dataQuality
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "id",
-                    "name",
-                    "kind",
-                    "notes",
-                    "createdAt",
-                    "updatedAt",
-                    "dataQuality"
-                ])
             }
         }
         /// ledgerParty shortcode, e.g. LPY-4K7M
@@ -23958,36 +16953,6 @@ extension Components {
                 case context
                 case disambiguator
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.amount = try container.decode(
-                    Components.Schemas.WholeCentAmount.self,
-                    forKey: .amount
-                )
-                self.occurredOn = try container.decodeIfPresent(
-                    Components.Schemas.PlainDate.self,
-                    forKey: .occurredOn
-                )
-                self.description = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .description
-                )
-                self.context = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .context
-                )
-                self.disambiguator = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .disambiguator
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "amount",
-                    "occurredOn",
-                    "description",
-                    "context",
-                    "disambiguator"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/LedgerSourceClaimNormalizedEvidenceInput`.
         public struct LedgerSourceClaimNormalizedEvidenceInput: Codable, Hashable, Sendable {
@@ -24118,51 +17083,6 @@ extension Components {
                 case createdAt
                 case updatedAt
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.source = try container.decode(
-                    Components.Schemas.LedgerSource.self,
-                    forKey: .source
-                )
-                self.normalizedEvidence = try container.decode(
-                    Components.Schemas.LedgerSourceClaimNormalizedEvidence.self,
-                    forKey: .normalizedEvidence
-                )
-                self.reconciliation = try container.decode(
-                    Components.Schemas.LedgerSourceClaimReconciliation.self,
-                    forKey: .reconciliation
-                )
-                self.sourceKey = try container.decode(
-                    Swift.String.self,
-                    forKey: .sourceKey
-                )
-                self.sourceKeyVersion = try container.decode(
-                    Swift.Int.self,
-                    forKey: .sourceKeyVersion
-                )
-                self.targetAmountAtClaim = try container.decode(
-                    Components.Schemas.WholeCentAmount.self,
-                    forKey: .targetAmountAtClaim
-                )
-                self.createdAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .createdAt
-                )
-                self.updatedAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .updatedAt
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "source",
-                    "normalizedEvidence",
-                    "reconciliation",
-                    "sourceKey",
-                    "sourceKeyVersion",
-                    "targetAmountAtClaim",
-                    "createdAt",
-                    "updatedAt"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/LedgerSourceClaimReconciliation`.
         @frozen public enum LedgerSourceClaimReconciliation: Codable, Hashable, Sendable {
@@ -24227,21 +17147,6 @@ extension Components {
                 case decision
                 case note
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.decision = try container.decode(
-                    Components.Schemas.LedgerSourceClaimReconciliationAcceptTargetAmount.DecisionPayload.self,
-                    forKey: .decision
-                )
-                self.note = try container.decode(
-                    Swift.String.self,
-                    forKey: .note
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "decision",
-                    "note"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/LedgerSourceClaimReconciliationAcceptTargetAmountInput`.
         public struct LedgerSourceClaimReconciliationAcceptTargetAmountInput: Codable, Hashable, Sendable {
@@ -24302,16 +17207,6 @@ extension Components {
             }
             public enum CodingKeys: String, CodingKey {
                 case decision
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.decision = try container.decode(
-                    Components.Schemas.LedgerSourceClaimReconciliationAmountsMatch.DecisionPayload.self,
-                    forKey: .decision
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "decision"
-                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/LedgerSourceClaimReconciliationAmountsMatchInput`.
@@ -24469,7 +17364,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/LedgerTransferDetail/sourceClaims`.
             public var sourceClaims: Components.Schemas.LedgerSourceClaimsOut
             /// - Remark: Generated from `#/components/schemas/LedgerTransferDetail/evidenceTransactionIds`.
-            public var evidenceTransactionIds: Components.Schemas.OutputSchema199
+            public var evidenceTransactionIds: Components.Schemas.OutputSchema212
             /// - Remark: Generated from `#/components/schemas/LedgerTransferDetail/createdAt`.
             public var createdAt: Foundation.Date
             /// - Remark: Generated from `#/components/schemas/LedgerTransferDetail/updatedAt`.
@@ -24479,7 +17374,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/LedgerTransferDetail/displayImages`.
             public var displayImages: Components.Schemas.DisplayImagesField
             /// - Remark: Generated from `#/components/schemas/LedgerTransferDetail/attachments`.
-            public var attachments: Components.Schemas.OutputSchema437
+            public var attachments: Components.Schemas.OutputSchema450
             /// Creates a new `LedgerTransferDetail`.
             ///
             /// - Parameters:
@@ -24510,12 +17405,12 @@ extension Components {
                 notes: Swift.String? = nil,
                 classification: Components.Schemas.LedgerTransferClassification,
                 sourceClaims: Components.Schemas.LedgerSourceClaimsOut,
-                evidenceTransactionIds: Components.Schemas.OutputSchema199,
+                evidenceTransactionIds: Components.Schemas.OutputSchema212,
                 createdAt: Foundation.Date,
                 updatedAt: Foundation.Date,
                 dataQuality: Components.Schemas.DataQuality,
                 displayImages: Components.Schemas.DisplayImagesField,
-                attachments: Components.Schemas.OutputSchema437
+                attachments: Components.Schemas.OutputSchema450
             ) {
                 self.id = id
                 self.fromPartyId = fromPartyId
@@ -24552,91 +17447,6 @@ extension Components {
                 case displayImages
                 case attachments
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.id = try container.decode(
-                    Components.Schemas.LedgerTransferShortcode.self,
-                    forKey: .id
-                )
-                self.fromPartyId = try container.decode(
-                    Components.Schemas.LedgerPartyShortcode.self,
-                    forKey: .fromPartyId
-                )
-                self.toPartyId = try container.decode(
-                    Components.Schemas.LedgerPartyShortcode.self,
-                    forKey: .toPartyId
-                )
-                self.fromPartyName = try container.decode(
-                    Swift.String.self,
-                    forKey: .fromPartyName
-                )
-                self.toPartyName = try container.decode(
-                    Swift.String.self,
-                    forKey: .toPartyName
-                )
-                self.amount = try container.decode(
-                    Components.Schemas.WholeCentAmount.self,
-                    forKey: .amount
-                )
-                self.date = try container.decode(
-                    Components.Schemas.PlainDate.self,
-                    forKey: .date
-                )
-                self.notes = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .notes
-                )
-                self.classification = try container.decode(
-                    Components.Schemas.LedgerTransferClassification.self,
-                    forKey: .classification
-                )
-                self.sourceClaims = try container.decode(
-                    Components.Schemas.LedgerSourceClaimsOut.self,
-                    forKey: .sourceClaims
-                )
-                self.evidenceTransactionIds = try container.decode(
-                    Components.Schemas.OutputSchema199.self,
-                    forKey: .evidenceTransactionIds
-                )
-                self.createdAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .createdAt
-                )
-                self.updatedAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .updatedAt
-                )
-                self.dataQuality = try container.decode(
-                    Components.Schemas.DataQuality.self,
-                    forKey: .dataQuality
-                )
-                self.displayImages = try container.decode(
-                    Components.Schemas.DisplayImagesField.self,
-                    forKey: .displayImages
-                )
-                self.attachments = try container.decode(
-                    Components.Schemas.OutputSchema437.self,
-                    forKey: .attachments
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "id",
-                    "fromPartyId",
-                    "toPartyId",
-                    "fromPartyName",
-                    "toPartyName",
-                    "amount",
-                    "date",
-                    "notes",
-                    "classification",
-                    "sourceClaims",
-                    "evidenceTransactionIds",
-                    "createdAt",
-                    "updatedAt",
-                    "dataQuality",
-                    "displayImages",
-                    "attachments"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/LedgerTransferEvidenceTransactionIds`.
         public typealias LedgerTransferEvidenceTransactionIds = [Components.Schemas.FinancialTransactionShortcode]
@@ -24663,7 +17473,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/LedgerTransferListItem/sourceClaims`.
             public var sourceClaims: Components.Schemas.LedgerSourceClaimsOut
             /// - Remark: Generated from `#/components/schemas/LedgerTransferListItem/evidenceTransactionIds`.
-            public var evidenceTransactionIds: Components.Schemas.OutputSchema199
+            public var evidenceTransactionIds: Components.Schemas.OutputSchema212
             /// - Remark: Generated from `#/components/schemas/LedgerTransferListItem/createdAt`.
             public var createdAt: Foundation.Date
             /// - Remark: Generated from `#/components/schemas/LedgerTransferListItem/updatedAt`.
@@ -24701,7 +17511,7 @@ extension Components {
                 notes: Swift.String? = nil,
                 classification: Components.Schemas.LedgerTransferClassification,
                 sourceClaims: Components.Schemas.LedgerSourceClaimsOut,
-                evidenceTransactionIds: Components.Schemas.OutputSchema199,
+                evidenceTransactionIds: Components.Schemas.OutputSchema212,
                 createdAt: Foundation.Date,
                 updatedAt: Foundation.Date,
                 dataQuality: Components.Schemas.DataQuality,
@@ -24740,86 +17550,6 @@ extension Components {
                 case dataQuality
                 case displayImages
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.id = try container.decode(
-                    Components.Schemas.LedgerTransferShortcode.self,
-                    forKey: .id
-                )
-                self.fromPartyId = try container.decode(
-                    Components.Schemas.LedgerPartyShortcode.self,
-                    forKey: .fromPartyId
-                )
-                self.toPartyId = try container.decode(
-                    Components.Schemas.LedgerPartyShortcode.self,
-                    forKey: .toPartyId
-                )
-                self.fromPartyName = try container.decode(
-                    Swift.String.self,
-                    forKey: .fromPartyName
-                )
-                self.toPartyName = try container.decode(
-                    Swift.String.self,
-                    forKey: .toPartyName
-                )
-                self.amount = try container.decode(
-                    Components.Schemas.WholeCentAmount.self,
-                    forKey: .amount
-                )
-                self.date = try container.decode(
-                    Components.Schemas.PlainDate.self,
-                    forKey: .date
-                )
-                self.notes = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .notes
-                )
-                self.classification = try container.decode(
-                    Components.Schemas.LedgerTransferClassification.self,
-                    forKey: .classification
-                )
-                self.sourceClaims = try container.decode(
-                    Components.Schemas.LedgerSourceClaimsOut.self,
-                    forKey: .sourceClaims
-                )
-                self.evidenceTransactionIds = try container.decode(
-                    Components.Schemas.OutputSchema199.self,
-                    forKey: .evidenceTransactionIds
-                )
-                self.createdAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .createdAt
-                )
-                self.updatedAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .updatedAt
-                )
-                self.dataQuality = try container.decode(
-                    Components.Schemas.DataQuality.self,
-                    forKey: .dataQuality
-                )
-                self.displayImages = try container.decode(
-                    Components.Schemas.DisplayImagesField.self,
-                    forKey: .displayImages
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "id",
-                    "fromPartyId",
-                    "toPartyId",
-                    "fromPartyName",
-                    "toPartyName",
-                    "amount",
-                    "date",
-                    "notes",
-                    "classification",
-                    "sourceClaims",
-                    "evidenceTransactionIds",
-                    "createdAt",
-                    "updatedAt",
-                    "dataQuality",
-                    "displayImages"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/LedgerTransferListPage`.
         public struct LedgerTransferListPage: Codable, Hashable, Sendable {
@@ -24842,21 +17572,6 @@ extension Components {
             public enum CodingKeys: String, CodingKey {
                 case items
                 case meta
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.items = try container.decode(
-                    [Components.Schemas.LedgerTransferListItem].self,
-                    forKey: .items
-                )
-                self.meta = try container.decode(
-                    Components.Schemas.ListPageMeta.self,
-                    forKey: .meta
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "items",
-                    "meta"
-                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/LedgerTransferOut`.
@@ -24882,7 +17597,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/LedgerTransferOut/sourceClaims`.
             public var sourceClaims: Components.Schemas.LedgerSourceClaimsOut
             /// - Remark: Generated from `#/components/schemas/LedgerTransferOut/evidenceTransactionIds`.
-            public var evidenceTransactionIds: Components.Schemas.OutputSchema199
+            public var evidenceTransactionIds: Components.Schemas.OutputSchema212
             /// - Remark: Generated from `#/components/schemas/LedgerTransferOut/createdAt`.
             public var createdAt: Foundation.Date
             /// - Remark: Generated from `#/components/schemas/LedgerTransferOut/updatedAt`.
@@ -24917,7 +17632,7 @@ extension Components {
                 notes: Swift.String? = nil,
                 classification: Components.Schemas.LedgerTransferClassification,
                 sourceClaims: Components.Schemas.LedgerSourceClaimsOut,
-                evidenceTransactionIds: Components.Schemas.OutputSchema199,
+                evidenceTransactionIds: Components.Schemas.OutputSchema212,
                 createdAt: Foundation.Date,
                 updatedAt: Foundation.Date,
                 dataQuality: Components.Schemas.DataQuality
@@ -24952,81 +17667,6 @@ extension Components {
                 case createdAt
                 case updatedAt
                 case dataQuality
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.id = try container.decode(
-                    Components.Schemas.LedgerTransferShortcode.self,
-                    forKey: .id
-                )
-                self.fromPartyId = try container.decode(
-                    Components.Schemas.LedgerPartyShortcode.self,
-                    forKey: .fromPartyId
-                )
-                self.toPartyId = try container.decode(
-                    Components.Schemas.LedgerPartyShortcode.self,
-                    forKey: .toPartyId
-                )
-                self.fromPartyName = try container.decode(
-                    Swift.String.self,
-                    forKey: .fromPartyName
-                )
-                self.toPartyName = try container.decode(
-                    Swift.String.self,
-                    forKey: .toPartyName
-                )
-                self.amount = try container.decode(
-                    Components.Schemas.WholeCentAmount.self,
-                    forKey: .amount
-                )
-                self.date = try container.decode(
-                    Components.Schemas.PlainDate.self,
-                    forKey: .date
-                )
-                self.notes = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .notes
-                )
-                self.classification = try container.decode(
-                    Components.Schemas.LedgerTransferClassification.self,
-                    forKey: .classification
-                )
-                self.sourceClaims = try container.decode(
-                    Components.Schemas.LedgerSourceClaimsOut.self,
-                    forKey: .sourceClaims
-                )
-                self.evidenceTransactionIds = try container.decode(
-                    Components.Schemas.OutputSchema199.self,
-                    forKey: .evidenceTransactionIds
-                )
-                self.createdAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .createdAt
-                )
-                self.updatedAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .updatedAt
-                )
-                self.dataQuality = try container.decode(
-                    Components.Schemas.DataQuality.self,
-                    forKey: .dataQuality
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "id",
-                    "fromPartyId",
-                    "toPartyId",
-                    "fromPartyName",
-                    "toPartyName",
-                    "amount",
-                    "date",
-                    "notes",
-                    "classification",
-                    "sourceClaims",
-                    "evidenceTransactionIds",
-                    "createdAt",
-                    "updatedAt",
-                    "dataQuality"
-                ])
             }
         }
         /// ledgerTransfer shortcode, e.g. LTR-4K7M
@@ -25100,16 +17740,6 @@ extension Components {
             public enum CodingKeys: String, CodingKey {
                 case ndbNumber = "ndb_number"
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.ndbNumber = try container.decode(
-                    Components.Schemas.Ndb.self,
-                    forKey: .ndbNumber
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "ndb_number"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/ListPageMeta`.
         public struct ListPageMeta: Codable, Hashable, Sendable {
@@ -25163,31 +17793,6 @@ extension Components {
                 case totalCount
                 case sums
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.pageIndex = try container.decode(
-                    Swift.Int.self,
-                    forKey: .pageIndex
-                )
-                self.pageSize = try container.decode(
-                    Swift.Int.self,
-                    forKey: .pageSize
-                )
-                self.totalCount = try container.decode(
-                    Swift.Int.self,
-                    forKey: .totalCount
-                )
-                self.sums = try container.decodeIfPresent(
-                    Components.Schemas.ListPageMeta.SumsPayload.self,
-                    forKey: .sums
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "pageIndex",
-                    "pageSize",
-                    "totalCount",
-                    "sums"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/ListReceiptHuntsOut`.
         public struct ListReceiptHuntsOut: Codable, Hashable, Sendable {
@@ -25225,31 +17830,6 @@ extension Components {
                     case merchant
                     case amountInCents
                 }
-                public init(from decoder: any Swift.Decoder) throws {
-                    let container = try decoder.container(keyedBy: CodingKeys.self)
-                    self.id = try container.decode(
-                        Swift.String.self,
-                        forKey: .id
-                    )
-                    self.transactionDate = try container.decode(
-                        Swift.String.self,
-                        forKey: .transactionDate
-                    )
-                    self.merchant = try container.decodeIfPresent(
-                        Swift.String.self,
-                        forKey: .merchant
-                    )
-                    self.amountInCents = try container.decode(
-                        Swift.Int.self,
-                        forKey: .amountInCents
-                    )
-                    try decoder.ensureNoAdditionalProperties(knownKeys: [
-                        "id",
-                        "transactionDate",
-                        "merchant",
-                        "amountInCents"
-                    ])
-                }
             }
             /// - Remark: Generated from `#/components/schemas/ListReceiptHuntsOut/items`.
             public typealias ItemsPayload = [Components.Schemas.ListReceiptHuntsOut.ItemsPayloadPayload]
@@ -25264,16 +17844,6 @@ extension Components {
             }
             public enum CodingKeys: String, CodingKey {
                 case items
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.items = try container.decode(
-                    Components.Schemas.ListReceiptHuntsOut.ItemsPayload.self,
-                    forKey: .items
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "items"
-                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/LocationBulkUpdateParentInput`.
@@ -25312,16 +17882,6 @@ extension Components {
             }
             public enum CodingKeys: String, CodingKey {
                 case updated
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.updated = try container.decode(
-                    Swift.Int.self,
-                    forKey: .updated
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "updated"
-                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/LocationCreateInput`.
@@ -25398,7 +17958,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/LocationDetail/aliases`.
             public var aliases: Components.Schemas.InputSchema56
             /// - Remark: Generated from `#/components/schemas/LocationDetail/tags`.
-            public var tags: Components.Schemas.OutputSchema177?
+            public var tags: Components.Schemas.OutputSchema190?
             /// - Remark: Generated from `#/components/schemas/LocationDetail/type`.
             public var _type: Components.Schemas.LocationType?
             /// - Remark: Generated from `#/components/schemas/LocationDetail/notes`.
@@ -25410,7 +17970,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/LocationDetail/aiDescription`.
             public var aiDescription: Swift.String?
             /// - Remark: Generated from `#/components/schemas/LocationDetail/images`.
-            public var images: Components.Schemas.OutputSchema133
+            public var images: Components.Schemas.OutputSchema146
             /// - Remark: Generated from `#/components/schemas/LocationDetail/valuation`.
             public var valuation: Components.Schemas.LocationValuation?
             /// - Remark: Generated from `#/components/schemas/LocationDetail/createdAt`.
@@ -25420,9 +17980,9 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/LocationDetail/dataQuality`.
             public var dataQuality: Components.Schemas.DataQuality
             /// - Remark: Generated from `#/components/schemas/LocationDetail/children`.
-            public var children: Components.Schemas.OutputSchema202?
+            public var children: Components.Schemas.OutputSchema215?
             /// - Remark: Generated from `#/components/schemas/LocationDetail/parent`.
-            public var parent: Components.Schemas.OutputSchema203?
+            public var parent: Components.Schemas.OutputSchema216?
             /// - Remark: Generated from `#/components/schemas/LocationDetail/childCount`.
             public var childCount: Swift.Int?
             /// - Remark: Generated from `#/components/schemas/LocationDetail/directItemCount`.
@@ -25430,11 +17990,11 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/LocationDetail/totalItemCount`.
             public var totalItemCount: Swift.Int?
             /// - Remark: Generated from `#/components/schemas/LocationDetail/inventoryItems`.
-            public var inventoryItems: Components.Schemas.OutputSchema207?
+            public var inventoryItems: Components.Schemas.OutputSchema220?
             /// - Remark: Generated from `#/components/schemas/LocationDetail/displayImages`.
             public var displayImages: Components.Schemas.DisplayImagesField
             /// - Remark: Generated from `#/components/schemas/LocationDetail/attachments`.
-            public var attachments: Components.Schemas.OutputSchema437
+            public var attachments: Components.Schemas.OutputSchema450
             /// Creates a new `LocationDetail`.
             ///
             /// - Parameters:
@@ -25464,25 +18024,25 @@ extension Components {
                 id: Components.Schemas.LocationShortcode,
                 name: Swift.String,
                 aliases: Components.Schemas.InputSchema56,
-                tags: Components.Schemas.OutputSchema177? = nil,
+                tags: Components.Schemas.OutputSchema190? = nil,
                 _type: Components.Schemas.LocationType? = nil,
                 notes: Swift.String? = nil,
                 product: Components.Schemas.LocationIdentityProductOut? = nil,
                 lastBulkInventory: Foundation.Date? = nil,
                 aiDescription: Swift.String? = nil,
-                images: Components.Schemas.OutputSchema133,
+                images: Components.Schemas.OutputSchema146,
                 valuation: Components.Schemas.LocationValuation? = nil,
                 createdAt: Foundation.Date,
                 updatedAt: Foundation.Date,
                 dataQuality: Components.Schemas.DataQuality,
-                children: Components.Schemas.OutputSchema202? = nil,
-                parent: Components.Schemas.OutputSchema203? = nil,
+                children: Components.Schemas.OutputSchema215? = nil,
+                parent: Components.Schemas.OutputSchema216? = nil,
                 childCount: Swift.Int? = nil,
                 directItemCount: Swift.Int? = nil,
                 totalItemCount: Swift.Int? = nil,
-                inventoryItems: Components.Schemas.OutputSchema207? = nil,
+                inventoryItems: Components.Schemas.OutputSchema220? = nil,
                 displayImages: Components.Schemas.DisplayImagesField,
-                attachments: Components.Schemas.OutputSchema437
+                attachments: Components.Schemas.OutputSchema450
             ) {
                 self.id = id
                 self.name = name
@@ -25530,121 +18090,6 @@ extension Components {
                 case inventoryItems
                 case displayImages
                 case attachments
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.id = try container.decode(
-                    Components.Schemas.LocationShortcode.self,
-                    forKey: .id
-                )
-                self.name = try container.decode(
-                    Swift.String.self,
-                    forKey: .name
-                )
-                self.aliases = try container.decode(
-                    Components.Schemas.InputSchema56.self,
-                    forKey: .aliases
-                )
-                self.tags = try container.decodeIfPresent(
-                    Components.Schemas.OutputSchema177.self,
-                    forKey: .tags
-                )
-                self._type = try container.decodeIfPresent(
-                    Components.Schemas.LocationType.self,
-                    forKey: ._type
-                )
-                self.notes = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .notes
-                )
-                self.product = try container.decodeIfPresent(
-                    Components.Schemas.LocationIdentityProductOut.self,
-                    forKey: .product
-                )
-                self.lastBulkInventory = try container.decodeIfPresent(
-                    Foundation.Date.self,
-                    forKey: .lastBulkInventory
-                )
-                self.aiDescription = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .aiDescription
-                )
-                self.images = try container.decode(
-                    Components.Schemas.OutputSchema133.self,
-                    forKey: .images
-                )
-                self.valuation = try container.decodeIfPresent(
-                    Components.Schemas.LocationValuation.self,
-                    forKey: .valuation
-                )
-                self.createdAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .createdAt
-                )
-                self.updatedAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .updatedAt
-                )
-                self.dataQuality = try container.decode(
-                    Components.Schemas.DataQuality.self,
-                    forKey: .dataQuality
-                )
-                self.children = try container.decodeIfPresent(
-                    Components.Schemas.OutputSchema202.self,
-                    forKey: .children
-                )
-                self.parent = try container.decodeIfPresent(
-                    Components.Schemas.OutputSchema203.self,
-                    forKey: .parent
-                )
-                self.childCount = try container.decodeIfPresent(
-                    Swift.Int.self,
-                    forKey: .childCount
-                )
-                self.directItemCount = try container.decodeIfPresent(
-                    Swift.Int.self,
-                    forKey: .directItemCount
-                )
-                self.totalItemCount = try container.decodeIfPresent(
-                    Swift.Int.self,
-                    forKey: .totalItemCount
-                )
-                self.inventoryItems = try container.decodeIfPresent(
-                    Components.Schemas.OutputSchema207.self,
-                    forKey: .inventoryItems
-                )
-                self.displayImages = try container.decode(
-                    Components.Schemas.DisplayImagesField.self,
-                    forKey: .displayImages
-                )
-                self.attachments = try container.decode(
-                    Components.Schemas.OutputSchema437.self,
-                    forKey: .attachments
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "id",
-                    "name",
-                    "aliases",
-                    "tags",
-                    "type",
-                    "notes",
-                    "product",
-                    "lastBulkInventory",
-                    "aiDescription",
-                    "images",
-                    "valuation",
-                    "createdAt",
-                    "updatedAt",
-                    "dataQuality",
-                    "children",
-                    "parent",
-                    "childCount",
-                    "directItemCount",
-                    "totalItemCount",
-                    "inventoryItems",
-                    "displayImages",
-                    "attachments"
-                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/LocationEnsureGlobalUnknownInput`.
@@ -25707,46 +18152,6 @@ extension Components {
                 case coverImage
                 case price
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.id = try container.decode(
-                    Components.Schemas.ProductShortcode.self,
-                    forKey: .id
-                )
-                self.name = try container.decode(
-                    Swift.String.self,
-                    forKey: .name
-                )
-                self.manufacturer = try container.decode(
-                    Swift.String.self,
-                    forKey: .manufacturer
-                )
-                self.model = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .model
-                )
-                self.category = try container.decodeIfPresent(
-                    Components.Schemas.ProductCategorySummary.self,
-                    forKey: .category
-                )
-                self.coverImage = try container.decodeIfPresent(
-                    Components.Schemas.ImageOut.self,
-                    forKey: .coverImage
-                )
-                self.price = try container.decodeIfPresent(
-                    Components.Schemas.Money.self,
-                    forKey: .price
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "id",
-                    "name",
-                    "manufacturer",
-                    "model",
-                    "category",
-                    "coverImage",
-                    "price"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/LocationListItem`.
         public struct LocationListItem: Codable, Hashable, Sendable {
@@ -25759,7 +18164,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/LocationListItem/aliases`.
             public var aliases: Components.Schemas.InputSchema56
             /// - Remark: Generated from `#/components/schemas/LocationListItem/tags`.
-            public var tags: Components.Schemas.OutputSchema177?
+            public var tags: Components.Schemas.OutputSchema190?
             /// - Remark: Generated from `#/components/schemas/LocationListItem/type`.
             public var _type: Components.Schemas.LocationType?
             /// - Remark: Generated from `#/components/schemas/LocationListItem/notes`.
@@ -25771,7 +18176,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/LocationListItem/aiDescription`.
             public var aiDescription: Swift.String?
             /// - Remark: Generated from `#/components/schemas/LocationListItem/images`.
-            public var images: Components.Schemas.OutputSchema133
+            public var images: Components.Schemas.OutputSchema146
             /// - Remark: Generated from `#/components/schemas/LocationListItem/valuation`.
             public var valuation: Components.Schemas.LocationValuation?
             /// - Remark: Generated from `#/components/schemas/LocationListItem/createdAt`.
@@ -25886,76 +18291,6 @@ extension Components {
                         case createdAt
                         case updatedAt
                     }
-                    public init(from decoder: any Swift.Decoder) throws {
-                        let container = try decoder.container(keyedBy: CodingKeys.self)
-                        self.id = try container.decode(
-                            Components.Schemas.ProductShortcode.self,
-                            forKey: .id
-                        )
-                        self.name = try container.decode(
-                            Swift.String.self,
-                            forKey: .name
-                        )
-                        self.primaryGtin = try container.decodeIfPresent(
-                            Components.Schemas.Gtin.self,
-                            forKey: .primaryGtin
-                        )
-                        self.fdcId = try container.decodeIfPresent(
-                            Components.Schemas.FdcId.self,
-                            forKey: .fdcId
-                        )
-                        self.manufacturer = try container.decode(
-                            Swift.String.self,
-                            forKey: .manufacturer
-                        )
-                        self.model = try container.decodeIfPresent(
-                            Swift.String.self,
-                            forKey: .model
-                        )
-                        self.notes = try container.decodeIfPresent(
-                            Swift.String.self,
-                            forKey: .notes
-                        )
-                        self.expectedQuantity = try container.decodeIfPresent(
-                            Swift.Int.self,
-                            forKey: .expectedQuantity
-                        )
-                        self.category = try container.decodeIfPresent(
-                            Components.Schemas.ProductCategorySummary.self,
-                            forKey: .category
-                        )
-                        self.price = try container.decodeIfPresent(
-                            Components.Schemas.Money.self,
-                            forKey: .price
-                        )
-                        self.usdaUnavailable = try container.decodeIfPresent(
-                            Swift.Bool.self,
-                            forKey: .usdaUnavailable
-                        )
-                        self.createdAt = try container.decode(
-                            Foundation.Date.self,
-                            forKey: .createdAt
-                        )
-                        self.updatedAt = try container.decode(
-                            Foundation.Date.self,
-                            forKey: .updatedAt
-                        )
-                        try decoder.ensureNoAdditionalProperties(knownKeys: [
-                            "id",
-                            "name",
-                            "primaryGtin",
-                            "fdc_id",
-                            "manufacturer",
-                            "model",
-                            "notes",
-                            "expectedQuantity",
-                            "category",
-                            "price",
-                            "usdaUnavailable",
-                            "createdAt",
-                            "updatedAt"
-                        ])
-                    }
                 }
                 /// - Remark: Generated from `#/components/schemas/LocationListItem/InventoryEntriesPayload/product`.
                 public var product: Components.Schemas.LocationListItem.InventoryEntriesPayloadPayload.ProductPayload
@@ -25991,41 +18326,6 @@ extension Components {
                     case updatedAt
                     case product
                 }
-                public init(from decoder: any Swift.Decoder) throws {
-                    let container = try decoder.container(keyedBy: CodingKeys.self)
-                    self.id = try container.decode(
-                        Components.Schemas.InventoryShortcode.self,
-                        forKey: .id
-                    )
-                    self.amount = try container.decode(
-                        Components.Schemas.Amount.self,
-                        forKey: .amount
-                    )
-                    self.valuation = try container.decodeIfPresent(
-                        Components.Schemas.Money.self,
-                        forKey: .valuation
-                    )
-                    self.createdAt = try container.decode(
-                        Foundation.Date.self,
-                        forKey: .createdAt
-                    )
-                    self.updatedAt = try container.decode(
-                        Foundation.Date.self,
-                        forKey: .updatedAt
-                    )
-                    self.product = try container.decode(
-                        Components.Schemas.LocationListItem.InventoryEntriesPayloadPayload.ProductPayload.self,
-                        forKey: .product
-                    )
-                    try decoder.ensureNoAdditionalProperties(knownKeys: [
-                        "id",
-                        "amount",
-                        "valuation",
-                        "createdAt",
-                        "updatedAt",
-                        "product"
-                    ])
-                }
             }
             /// - Remark: Generated from `#/components/schemas/LocationListItem/inventoryEntries`.
             public typealias InventoryEntriesPayload = [Components.Schemas.LocationListItem.InventoryEntriesPayloadPayload]
@@ -26056,13 +18356,13 @@ extension Components {
                 id: Components.Schemas.LocationShortcode,
                 name: Swift.String,
                 aliases: Components.Schemas.InputSchema56,
-                tags: Components.Schemas.OutputSchema177? = nil,
+                tags: Components.Schemas.OutputSchema190? = nil,
                 _type: Components.Schemas.LocationType? = nil,
                 notes: Swift.String? = nil,
                 product: Components.Schemas.LocationIdentityProductOut? = nil,
                 lastBulkInventory: Foundation.Date? = nil,
                 aiDescription: Swift.String? = nil,
-                images: Components.Schemas.OutputSchema133,
+                images: Components.Schemas.OutputSchema146,
                 valuation: Components.Schemas.LocationValuation? = nil,
                 createdAt: Foundation.Date,
                 updatedAt: Foundation.Date,
@@ -26111,101 +18411,6 @@ extension Components {
                 case parent
                 case inventoryEntries
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.id = try container.decode(
-                    Components.Schemas.LocationShortcode.self,
-                    forKey: .id
-                )
-                self.name = try container.decode(
-                    Swift.String.self,
-                    forKey: .name
-                )
-                self.aliases = try container.decode(
-                    Components.Schemas.InputSchema56.self,
-                    forKey: .aliases
-                )
-                self.tags = try container.decodeIfPresent(
-                    Components.Schemas.OutputSchema177.self,
-                    forKey: .tags
-                )
-                self._type = try container.decodeIfPresent(
-                    Components.Schemas.LocationType.self,
-                    forKey: ._type
-                )
-                self.notes = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .notes
-                )
-                self.product = try container.decodeIfPresent(
-                    Components.Schemas.LocationIdentityProductOut.self,
-                    forKey: .product
-                )
-                self.lastBulkInventory = try container.decodeIfPresent(
-                    Foundation.Date.self,
-                    forKey: .lastBulkInventory
-                )
-                self.aiDescription = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .aiDescription
-                )
-                self.images = try container.decode(
-                    Components.Schemas.OutputSchema133.self,
-                    forKey: .images
-                )
-                self.valuation = try container.decodeIfPresent(
-                    Components.Schemas.LocationValuation.self,
-                    forKey: .valuation
-                )
-                self.createdAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .createdAt
-                )
-                self.updatedAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .updatedAt
-                )
-                self.dataQuality = try container.decode(
-                    Components.Schemas.DataQuality.self,
-                    forKey: .dataQuality
-                )
-                self.displayImages = try container.decode(
-                    Components.Schemas.DisplayImagesField.self,
-                    forKey: .displayImages
-                )
-                self.children = try container.decode(
-                    [Components.Schemas.LocationListRefOut].self,
-                    forKey: .children
-                )
-                self.parent = try container.decodeIfPresent(
-                    Components.Schemas.LocationListRefOut.self,
-                    forKey: .parent
-                )
-                self.inventoryEntries = try container.decode(
-                    Components.Schemas.LocationListItem.InventoryEntriesPayload.self,
-                    forKey: .inventoryEntries
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "id",
-                    "name",
-                    "aliases",
-                    "tags",
-                    "type",
-                    "notes",
-                    "product",
-                    "lastBulkInventory",
-                    "aiDescription",
-                    "images",
-                    "valuation",
-                    "createdAt",
-                    "updatedAt",
-                    "dataQuality",
-                    "displayImages",
-                    "children",
-                    "parent",
-                    "inventoryEntries"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/LocationListPage`.
         public struct LocationListPage: Codable, Hashable, Sendable {
@@ -26228,21 +18433,6 @@ extension Components {
             public enum CodingKeys: String, CodingKey {
                 case items
                 case meta
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.items = try container.decode(
-                    [Components.Schemas.LocationListItem].self,
-                    forKey: .items
-                )
-                self.meta = try container.decode(
-                    Components.Schemas.ListPageMeta.self,
-                    forKey: .meta
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "items",
-                    "meta"
-                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/LocationListRefOut`.
@@ -26273,26 +18463,6 @@ extension Components {
                 case name
                 case _type = "type"
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.id = try container.decode(
-                    Components.Schemas.LocationShortcode.self,
-                    forKey: .id
-                )
-                self.name = try container.decode(
-                    Swift.String.self,
-                    forKey: .name
-                )
-                self._type = try container.decodeIfPresent(
-                    Components.Schemas.LocationType.self,
-                    forKey: ._type
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "id",
-                    "name",
-                    "type"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/LocationOut`.
         public struct LocationOut: Codable, Hashable, Sendable {
@@ -26305,7 +18475,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/LocationOut/aliases`.
             public var aliases: Components.Schemas.InputSchema56
             /// - Remark: Generated from `#/components/schemas/LocationOut/tags`.
-            public var tags: Components.Schemas.OutputSchema177?
+            public var tags: Components.Schemas.OutputSchema190?
             /// - Remark: Generated from `#/components/schemas/LocationOut/type`.
             public var _type: Components.Schemas.LocationType?
             /// - Remark: Generated from `#/components/schemas/LocationOut/notes`.
@@ -26317,7 +18487,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/LocationOut/aiDescription`.
             public var aiDescription: Swift.String?
             /// - Remark: Generated from `#/components/schemas/LocationOut/images`.
-            public var images: Components.Schemas.OutputSchema133
+            public var images: Components.Schemas.OutputSchema146
             /// - Remark: Generated from `#/components/schemas/LocationOut/valuation`.
             public var valuation: Components.Schemas.LocationValuation?
             /// - Remark: Generated from `#/components/schemas/LocationOut/createdAt`.
@@ -26347,13 +18517,13 @@ extension Components {
                 id: Components.Schemas.LocationShortcode,
                 name: Swift.String,
                 aliases: Components.Schemas.InputSchema56,
-                tags: Components.Schemas.OutputSchema177? = nil,
+                tags: Components.Schemas.OutputSchema190? = nil,
                 _type: Components.Schemas.LocationType? = nil,
                 notes: Swift.String? = nil,
                 product: Components.Schemas.LocationIdentityProductOut? = nil,
                 lastBulkInventory: Foundation.Date? = nil,
                 aiDescription: Swift.String? = nil,
-                images: Components.Schemas.OutputSchema133,
+                images: Components.Schemas.OutputSchema146,
                 valuation: Components.Schemas.LocationValuation? = nil,
                 createdAt: Foundation.Date,
                 updatedAt: Foundation.Date,
@@ -26389,81 +18559,6 @@ extension Components {
                 case createdAt
                 case updatedAt
                 case dataQuality
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.id = try container.decode(
-                    Components.Schemas.LocationShortcode.self,
-                    forKey: .id
-                )
-                self.name = try container.decode(
-                    Swift.String.self,
-                    forKey: .name
-                )
-                self.aliases = try container.decode(
-                    Components.Schemas.InputSchema56.self,
-                    forKey: .aliases
-                )
-                self.tags = try container.decodeIfPresent(
-                    Components.Schemas.OutputSchema177.self,
-                    forKey: .tags
-                )
-                self._type = try container.decodeIfPresent(
-                    Components.Schemas.LocationType.self,
-                    forKey: ._type
-                )
-                self.notes = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .notes
-                )
-                self.product = try container.decodeIfPresent(
-                    Components.Schemas.LocationIdentityProductOut.self,
-                    forKey: .product
-                )
-                self.lastBulkInventory = try container.decodeIfPresent(
-                    Foundation.Date.self,
-                    forKey: .lastBulkInventory
-                )
-                self.aiDescription = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .aiDescription
-                )
-                self.images = try container.decode(
-                    Components.Schemas.OutputSchema133.self,
-                    forKey: .images
-                )
-                self.valuation = try container.decodeIfPresent(
-                    Components.Schemas.LocationValuation.self,
-                    forKey: .valuation
-                )
-                self.createdAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .createdAt
-                )
-                self.updatedAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .updatedAt
-                )
-                self.dataQuality = try container.decode(
-                    Components.Schemas.DataQuality.self,
-                    forKey: .dataQuality
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "id",
-                    "name",
-                    "aliases",
-                    "tags",
-                    "type",
-                    "notes",
-                    "product",
-                    "lastBulkInventory",
-                    "aiDescription",
-                    "images",
-                    "valuation",
-                    "createdAt",
-                    "updatedAt",
-                    "dataQuality"
-                ])
             }
         }
         /// location shortcode, e.g. LOC-4K7M
@@ -26575,9 +18670,9 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/LocationValuation/totalItemCount`.
             public var totalItemCount: Swift.Int
             /// - Remark: Generated from `#/components/schemas/LocationValuation/direct`.
-            public var direct: Components.Schemas.OutputSchema186
+            public var direct: Components.Schemas.OutputSchema199
             /// - Remark: Generated from `#/components/schemas/LocationValuation/total`.
-            public var total: Components.Schemas.OutputSchema186
+            public var total: Components.Schemas.OutputSchema199
             /// - Remark: Generated from `#/components/schemas/LocationValuation/installed`.
             public struct InstalledPayload: Codable, Hashable, Sendable {
                 /// - Remark: Generated from `#/components/schemas/LocationValuation/installed/directValuation`.
@@ -26611,31 +18706,6 @@ extension Components {
                     case totalValuation
                     case directItemCount
                     case totalItemCount
-                }
-                public init(from decoder: any Swift.Decoder) throws {
-                    let container = try decoder.container(keyedBy: CodingKeys.self)
-                    self.directValuation = try container.decode(
-                        Components.Schemas.Money.self,
-                        forKey: .directValuation
-                    )
-                    self.totalValuation = try container.decode(
-                        Components.Schemas.Money.self,
-                        forKey: .totalValuation
-                    )
-                    self.directItemCount = try container.decode(
-                        Swift.Int.self,
-                        forKey: .directItemCount
-                    )
-                    self.totalItemCount = try container.decode(
-                        Swift.Int.self,
-                        forKey: .totalItemCount
-                    )
-                    try decoder.ensureNoAdditionalProperties(knownKeys: [
-                        "directValuation",
-                        "totalValuation",
-                        "directItemCount",
-                        "totalItemCount"
-                    ])
                 }
             }
             /// - Remark: Generated from `#/components/schemas/LocationValuation/installed`.
@@ -26674,31 +18744,6 @@ extension Components {
                     case directItemCount
                     case totalItemCount
                 }
-                public init(from decoder: any Swift.Decoder) throws {
-                    let container = try decoder.container(keyedBy: CodingKeys.self)
-                    self.directValuation = try container.decode(
-                        Components.Schemas.Money.self,
-                        forKey: .directValuation
-                    )
-                    self.totalValuation = try container.decode(
-                        Components.Schemas.Money.self,
-                        forKey: .totalValuation
-                    )
-                    self.directItemCount = try container.decode(
-                        Swift.Int.self,
-                        forKey: .directItemCount
-                    )
-                    self.totalItemCount = try container.decode(
-                        Swift.Int.self,
-                        forKey: .totalItemCount
-                    )
-                    try decoder.ensureNoAdditionalProperties(knownKeys: [
-                        "directValuation",
-                        "totalValuation",
-                        "directItemCount",
-                        "totalItemCount"
-                    ])
-                }
             }
             /// - Remark: Generated from `#/components/schemas/LocationValuation/container`.
             public var container: Components.Schemas.LocationValuation.ContainerPayload?
@@ -26718,8 +18763,8 @@ extension Components {
                 totalValuation: Components.Schemas.Money,
                 directItemCount: Swift.Int,
                 totalItemCount: Swift.Int,
-                direct: Components.Schemas.OutputSchema186,
-                total: Components.Schemas.OutputSchema186,
+                direct: Components.Schemas.OutputSchema199,
+                total: Components.Schemas.OutputSchema199,
                 installed: Components.Schemas.LocationValuation.InstalledPayload? = nil,
                 container: Components.Schemas.LocationValuation.ContainerPayload? = nil
             ) {
@@ -26741,51 +18786,6 @@ extension Components {
                 case total
                 case installed
                 case container
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.directValuation = try container.decode(
-                    Components.Schemas.Money.self,
-                    forKey: .directValuation
-                )
-                self.totalValuation = try container.decode(
-                    Components.Schemas.Money.self,
-                    forKey: .totalValuation
-                )
-                self.directItemCount = try container.decode(
-                    Swift.Int.self,
-                    forKey: .directItemCount
-                )
-                self.totalItemCount = try container.decode(
-                    Swift.Int.self,
-                    forKey: .totalItemCount
-                )
-                self.direct = try container.decode(
-                    Components.Schemas.OutputSchema186.self,
-                    forKey: .direct
-                )
-                self.total = try container.decode(
-                    Components.Schemas.OutputSchema186.self,
-                    forKey: .total
-                )
-                self.installed = try container.decodeIfPresent(
-                    Components.Schemas.LocationValuation.InstalledPayload.self,
-                    forKey: .installed
-                )
-                self.container = try container.decodeIfPresent(
-                    Components.Schemas.LocationValuation.ContainerPayload.self,
-                    forKey: .container
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "directValuation",
-                    "totalValuation",
-                    "directItemCount",
-                    "totalItemCount",
-                    "direct",
-                    "total",
-                    "installed",
-                    "container"
-                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/MacroSummary`.
@@ -26827,36 +18827,6 @@ extension Components {
                 case carbs
                 case fat
                 case partial
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.calories = try container.decode(
-                    Components.Schemas.MeasureEstimate.self,
-                    forKey: .calories
-                )
-                self.protein = try container.decode(
-                    Components.Schemas.MeasureEstimate.self,
-                    forKey: .protein
-                )
-                self.carbs = try container.decode(
-                    Components.Schemas.MeasureEstimate.self,
-                    forKey: .carbs
-                )
-                self.fat = try container.decode(
-                    Components.Schemas.MeasureEstimate.self,
-                    forKey: .fat
-                )
-                self.partial = try container.decode(
-                    Swift.Bool.self,
-                    forKey: .partial
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "calories",
-                    "protein",
-                    "carbs",
-                    "fat",
-                    "partial"
-                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/MealCreateInput`.
@@ -26931,11 +18901,11 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/MealDetail/mealKind`.
             public var mealKind: Components.Schemas.MealKind
             /// - Remark: Generated from `#/components/schemas/MealDetail/recipes`.
-            public var recipes: Components.Schemas.OutputSchema231
+            public var recipes: Components.Schemas.OutputSchema244
             /// - Remark: Generated from `#/components/schemas/MealDetail/totals`.
             public var totals: Components.Schemas.MealTotals
             /// - Remark: Generated from `#/components/schemas/MealDetail/images`.
-            public var images: Components.Schemas.OutputSchema133
+            public var images: Components.Schemas.OutputSchema146
             /// - Remark: Generated from `#/components/schemas/MealDetail/displayName`.
             public var displayName: Swift.String
             /// - Remark: Generated from `#/components/schemas/MealDetail/recipeNames`.
@@ -26949,7 +18919,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/MealDetail/displayImages`.
             public var displayImages: Components.Schemas.DisplayImagesField
             /// - Remark: Generated from `#/components/schemas/MealDetail/attachments`.
-            public var attachments: Components.Schemas.OutputSchema437
+            public var attachments: Components.Schemas.OutputSchema450
             /// Creates a new `MealDetail`.
             ///
             /// - Parameters:
@@ -26976,16 +18946,16 @@ extension Components {
                 sortOrder: Swift.Int? = nil,
                 mealType: Components.Schemas.MealType? = nil,
                 mealKind: Components.Schemas.MealKind,
-                recipes: Components.Schemas.OutputSchema231,
+                recipes: Components.Schemas.OutputSchema244,
                 totals: Components.Schemas.MealTotals,
-                images: Components.Schemas.OutputSchema133,
+                images: Components.Schemas.OutputSchema146,
                 displayName: Swift.String,
                 recipeNames: Components.Schemas.InputSchema56,
                 createdAt: Foundation.Date,
                 updatedAt: Foundation.Date,
                 dataQuality: Components.Schemas.DataQuality,
                 displayImages: Components.Schemas.DisplayImagesField,
-                attachments: Components.Schemas.OutputSchema437
+                attachments: Components.Schemas.OutputSchema450
             ) {
                 self.id = id
                 self.date = date
@@ -27022,91 +18992,6 @@ extension Components {
                 case displayImages
                 case attachments
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.id = try container.decode(
-                    Components.Schemas.MealShortcode.self,
-                    forKey: .id
-                )
-                self.date = try container.decode(
-                    Components.Schemas.PlainDate.self,
-                    forKey: .date
-                )
-                self.name = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .name
-                )
-                self.sortOrder = try container.decodeIfPresent(
-                    Swift.Int.self,
-                    forKey: .sortOrder
-                )
-                self.mealType = try container.decodeIfPresent(
-                    Components.Schemas.MealType.self,
-                    forKey: .mealType
-                )
-                self.mealKind = try container.decode(
-                    Components.Schemas.MealKind.self,
-                    forKey: .mealKind
-                )
-                self.recipes = try container.decode(
-                    Components.Schemas.OutputSchema231.self,
-                    forKey: .recipes
-                )
-                self.totals = try container.decode(
-                    Components.Schemas.MealTotals.self,
-                    forKey: .totals
-                )
-                self.images = try container.decode(
-                    Components.Schemas.OutputSchema133.self,
-                    forKey: .images
-                )
-                self.displayName = try container.decode(
-                    Swift.String.self,
-                    forKey: .displayName
-                )
-                self.recipeNames = try container.decode(
-                    Components.Schemas.InputSchema56.self,
-                    forKey: .recipeNames
-                )
-                self.createdAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .createdAt
-                )
-                self.updatedAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .updatedAt
-                )
-                self.dataQuality = try container.decode(
-                    Components.Schemas.DataQuality.self,
-                    forKey: .dataQuality
-                )
-                self.displayImages = try container.decode(
-                    Components.Schemas.DisplayImagesField.self,
-                    forKey: .displayImages
-                )
-                self.attachments = try container.decode(
-                    Components.Schemas.OutputSchema437.self,
-                    forKey: .attachments
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "id",
-                    "date",
-                    "name",
-                    "sortOrder",
-                    "mealType",
-                    "mealKind",
-                    "recipes",
-                    "totals",
-                    "images",
-                    "displayName",
-                    "recipeNames",
-                    "createdAt",
-                    "updatedAt",
-                    "dataQuality",
-                    "displayImages",
-                    "attachments"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/MealFoodAmount`.
         public struct MealFoodAmount: Codable, Hashable, Sendable {
@@ -27129,21 +19014,6 @@ extension Components {
             public enum CodingKeys: String, CodingKey {
                 case value
                 case unit
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.value = try container.decode(
-                    Swift.Double.self,
-                    forKey: .value
-                )
-                self.unit = try container.decode(
-                    Swift.String.self,
-                    forKey: .unit
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "value",
-                    "unit"
-                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/MealFoodEntryId`.
@@ -27189,11 +19059,11 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/MealListItem/mealKind`.
             public var mealKind: Components.Schemas.MealKind
             /// - Remark: Generated from `#/components/schemas/MealListItem/recipes`.
-            public var recipes: Components.Schemas.OutputSchema231
+            public var recipes: Components.Schemas.OutputSchema244
             /// - Remark: Generated from `#/components/schemas/MealListItem/totals`.
             public var totals: Components.Schemas.MealTotals
             /// - Remark: Generated from `#/components/schemas/MealListItem/images`.
-            public var images: Components.Schemas.OutputSchema133
+            public var images: Components.Schemas.OutputSchema146
             /// - Remark: Generated from `#/components/schemas/MealListItem/displayName`.
             public var displayName: Swift.String
             /// - Remark: Generated from `#/components/schemas/MealListItem/recipeNames`.
@@ -27231,9 +19101,9 @@ extension Components {
                 sortOrder: Swift.Int? = nil,
                 mealType: Components.Schemas.MealType? = nil,
                 mealKind: Components.Schemas.MealKind,
-                recipes: Components.Schemas.OutputSchema231,
+                recipes: Components.Schemas.OutputSchema244,
                 totals: Components.Schemas.MealTotals,
-                images: Components.Schemas.OutputSchema133,
+                images: Components.Schemas.OutputSchema146,
                 displayName: Swift.String,
                 recipeNames: Components.Schemas.InputSchema56,
                 createdAt: Foundation.Date,
@@ -27274,86 +19144,6 @@ extension Components {
                 case dataQuality
                 case displayImages
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.id = try container.decode(
-                    Components.Schemas.MealShortcode.self,
-                    forKey: .id
-                )
-                self.date = try container.decode(
-                    Components.Schemas.PlainDate.self,
-                    forKey: .date
-                )
-                self.name = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .name
-                )
-                self.sortOrder = try container.decodeIfPresent(
-                    Swift.Int.self,
-                    forKey: .sortOrder
-                )
-                self.mealType = try container.decodeIfPresent(
-                    Components.Schemas.MealType.self,
-                    forKey: .mealType
-                )
-                self.mealKind = try container.decode(
-                    Components.Schemas.MealKind.self,
-                    forKey: .mealKind
-                )
-                self.recipes = try container.decode(
-                    Components.Schemas.OutputSchema231.self,
-                    forKey: .recipes
-                )
-                self.totals = try container.decode(
-                    Components.Schemas.MealTotals.self,
-                    forKey: .totals
-                )
-                self.images = try container.decode(
-                    Components.Schemas.OutputSchema133.self,
-                    forKey: .images
-                )
-                self.displayName = try container.decode(
-                    Swift.String.self,
-                    forKey: .displayName
-                )
-                self.recipeNames = try container.decode(
-                    Components.Schemas.InputSchema56.self,
-                    forKey: .recipeNames
-                )
-                self.createdAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .createdAt
-                )
-                self.updatedAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .updatedAt
-                )
-                self.dataQuality = try container.decode(
-                    Components.Schemas.DataQuality.self,
-                    forKey: .dataQuality
-                )
-                self.displayImages = try container.decode(
-                    Components.Schemas.DisplayImagesField.self,
-                    forKey: .displayImages
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "id",
-                    "date",
-                    "name",
-                    "sortOrder",
-                    "mealType",
-                    "mealKind",
-                    "recipes",
-                    "totals",
-                    "images",
-                    "displayName",
-                    "recipeNames",
-                    "createdAt",
-                    "updatedAt",
-                    "dataQuality",
-                    "displayImages"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/MealListPage`.
         public struct MealListPage: Codable, Hashable, Sendable {
@@ -27376,21 +19166,6 @@ extension Components {
             public enum CodingKeys: String, CodingKey {
                 case items
                 case meta
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.items = try container.decode(
-                    [Components.Schemas.MealListItem].self,
-                    forKey: .items
-                )
-                self.meta = try container.decode(
-                    Components.Schemas.ListPageMeta.self,
-                    forKey: .meta
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "items",
-                    "meta"
-                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/MealNutritionFood`.
@@ -27516,61 +19291,6 @@ extension Components {
                 case id
                 case ingredientId
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.meal = try container.decode(
-                    Components.Schemas.NutritionMeal.self,
-                    forKey: .meal
-                )
-                self.name = try container.decode(
-                    Swift.String.self,
-                    forKey: .name
-                )
-                self.amount = try container.decodeIfPresent(
-                    Components.Schemas.MealFoodAmount.self,
-                    forKey: .amount
-                )
-                self.grams = try container.decodeIfPresent(
-                    Swift.Double.self,
-                    forKey: .grams
-                )
-                self.weight = try container.decode(
-                    Components.Schemas.MeasureEstimate.self,
-                    forKey: .weight
-                )
-                self.batchShare = try container.decode(
-                    Components.Schemas.MeasureEstimate.self,
-                    forKey: .batchShare
-                )
-                self.totals = try container.decode(
-                    Components.Schemas.MealTotals.self,
-                    forKey: .totals
-                )
-                self.sourceKind = try container.decode(
-                    Components.Schemas.MealNutritionFoodIngredient.SourceKindPayload.self,
-                    forKey: .sourceKind
-                )
-                self.id = try container.decode(
-                    Components.Schemas.MealFoodEntryId.self,
-                    forKey: .id
-                )
-                self.ingredientId = try container.decode(
-                    Components.Schemas.IngredientShortcode.self,
-                    forKey: .ingredientId
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "meal",
-                    "name",
-                    "amount",
-                    "grams",
-                    "weight",
-                    "batchShare",
-                    "totals",
-                    "sourceKind",
-                    "id",
-                    "ingredientId"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/MealNutritionFoodManual`.
         public struct MealNutritionFoodManual: Codable, Hashable, Sendable {
@@ -27646,61 +19366,6 @@ extension Components {
                 case id
                 case nutrients
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.meal = try container.decode(
-                    Components.Schemas.NutritionMeal.self,
-                    forKey: .meal
-                )
-                self.name = try container.decode(
-                    Swift.String.self,
-                    forKey: .name
-                )
-                self.amount = try container.decodeIfPresent(
-                    Components.Schemas.MealFoodAmount.self,
-                    forKey: .amount
-                )
-                self.grams = try container.decodeIfPresent(
-                    Swift.Double.self,
-                    forKey: .grams
-                )
-                self.weight = try container.decode(
-                    Components.Schemas.MeasureEstimate.self,
-                    forKey: .weight
-                )
-                self.batchShare = try container.decode(
-                    Components.Schemas.MeasureEstimate.self,
-                    forKey: .batchShare
-                )
-                self.totals = try container.decode(
-                    Components.Schemas.MealTotals.self,
-                    forKey: .totals
-                )
-                self.sourceKind = try container.decode(
-                    Components.Schemas.MealNutritionFoodManual.SourceKindPayload.self,
-                    forKey: .sourceKind
-                )
-                self.id = try container.decode(
-                    Components.Schemas.MealFoodEntryId.self,
-                    forKey: .id
-                )
-                self.nutrients = try container.decode(
-                    Components.Schemas.MealFoodNutrients.self,
-                    forKey: .nutrients
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "meal",
-                    "name",
-                    "amount",
-                    "grams",
-                    "weight",
-                    "batchShare",
-                    "totals",
-                    "sourceKind",
-                    "id",
-                    "nutrients"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/MealNutritionFoodProduct`.
         public struct MealNutritionFoodProduct: Codable, Hashable, Sendable {
@@ -27775,61 +19440,6 @@ extension Components {
                 case sourceKind
                 case id
                 case productId
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.meal = try container.decode(
-                    Components.Schemas.NutritionMeal.self,
-                    forKey: .meal
-                )
-                self.name = try container.decode(
-                    Swift.String.self,
-                    forKey: .name
-                )
-                self.amount = try container.decodeIfPresent(
-                    Components.Schemas.MealFoodAmount.self,
-                    forKey: .amount
-                )
-                self.grams = try container.decodeIfPresent(
-                    Swift.Double.self,
-                    forKey: .grams
-                )
-                self.weight = try container.decode(
-                    Components.Schemas.MeasureEstimate.self,
-                    forKey: .weight
-                )
-                self.batchShare = try container.decode(
-                    Components.Schemas.MeasureEstimate.self,
-                    forKey: .batchShare
-                )
-                self.totals = try container.decode(
-                    Components.Schemas.MealTotals.self,
-                    forKey: .totals
-                )
-                self.sourceKind = try container.decode(
-                    Components.Schemas.MealNutritionFoodProduct.SourceKindPayload.self,
-                    forKey: .sourceKind
-                )
-                self.id = try container.decode(
-                    Components.Schemas.MealFoodEntryId.self,
-                    forKey: .id
-                )
-                self.productId = try container.decode(
-                    Components.Schemas.ProductShortcode.self,
-                    forKey: .productId
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "meal",
-                    "name",
-                    "amount",
-                    "grams",
-                    "weight",
-                    "batchShare",
-                    "totals",
-                    "sourceKind",
-                    "id",
-                    "productId"
-                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/MealNutritionFoodRecipe`.
@@ -27911,66 +19521,6 @@ extension Components {
                 case mealRecipeId
                 case recipeId
                 case sourceMealId
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.meal = try container.decode(
-                    Components.Schemas.NutritionMeal.self,
-                    forKey: .meal
-                )
-                self.name = try container.decode(
-                    Swift.String.self,
-                    forKey: .name
-                )
-                self.amount = try container.decodeIfPresent(
-                    Components.Schemas.MealFoodAmount.self,
-                    forKey: .amount
-                )
-                self.grams = try container.decodeIfPresent(
-                    Swift.Double.self,
-                    forKey: .grams
-                )
-                self.weight = try container.decode(
-                    Components.Schemas.MeasureEstimate.self,
-                    forKey: .weight
-                )
-                self.batchShare = try container.decode(
-                    Components.Schemas.MeasureEstimate.self,
-                    forKey: .batchShare
-                )
-                self.totals = try container.decode(
-                    Components.Schemas.MealTotals.self,
-                    forKey: .totals
-                )
-                self.sourceKind = try container.decode(
-                    Components.Schemas.MealNutritionFoodRecipe.SourceKindPayload.self,
-                    forKey: .sourceKind
-                )
-                self.mealRecipeId = try container.decode(
-                    Components.Schemas.MealRecipeId.self,
-                    forKey: .mealRecipeId
-                )
-                self.recipeId = try container.decode(
-                    Components.Schemas.RecipeShortcode.self,
-                    forKey: .recipeId
-                )
-                self.sourceMealId = try container.decode(
-                    Components.Schemas.MealShortcode.self,
-                    forKey: .sourceMealId
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "meal",
-                    "name",
-                    "amount",
-                    "grams",
-                    "weight",
-                    "batchShare",
-                    "totals",
-                    "sourceKind",
-                    "mealRecipeId",
-                    "recipeId",
-                    "sourceMealId"
-                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/MealNutritionInput`.
@@ -28070,21 +19620,6 @@ extension Components {
                 case meals
                 case people
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.meals = try container.decode(
-                    [Components.Schemas.NutritionMeal].self,
-                    forKey: .meals
-                )
-                self.people = try container.decode(
-                    [Components.Schemas.MealNutritionPerson].self,
-                    forKey: .people
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "meals",
-                    "people"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/MealNutritionPerson`.
         public struct MealNutritionPerson: Codable, Hashable, Sendable {
@@ -28109,21 +19644,6 @@ extension Components {
                 public enum CodingKeys: String, CodingKey {
                     case id
                     case name
-                }
-                public init(from decoder: any Swift.Decoder) throws {
-                    let container = try decoder.container(keyedBy: CodingKeys.self)
-                    self.id = try container.decode(
-                        Components.Schemas.LedgerPartyShortcode.self,
-                        forKey: .id
-                    )
-                    self.name = try container.decode(
-                        Swift.String.self,
-                        forKey: .name
-                    )
-                    try decoder.ensureNoAdditionalProperties(knownKeys: [
-                        "id",
-                        "name"
-                    ])
                 }
             }
             /// - Remark: Generated from `#/components/schemas/MealNutritionPerson/eater`.
@@ -28151,21 +19671,6 @@ extension Components {
                 public enum CodingKeys: String, CodingKey {
                     case meal
                     case totals
-                }
-                public init(from decoder: any Swift.Decoder) throws {
-                    let container = try decoder.container(keyedBy: CodingKeys.self)
-                    self.meal = try container.decode(
-                        Components.Schemas.NutritionMeal.self,
-                        forKey: .meal
-                    )
-                    self.totals = try container.decode(
-                        Components.Schemas.MealTotals.self,
-                        forKey: .totals
-                    )
-                    try decoder.ensureNoAdditionalProperties(knownKeys: [
-                        "meal",
-                        "totals"
-                    ])
                 }
             }
             /// - Remark: Generated from `#/components/schemas/MealNutritionPerson/meals`.
@@ -28198,31 +19703,6 @@ extension Components {
                 case meals
                 case foods
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.eater = try container.decode(
-                    Components.Schemas.MealNutritionPerson.EaterPayload.self,
-                    forKey: .eater
-                )
-                self.totals = try container.decode(
-                    Components.Schemas.MealTotals.self,
-                    forKey: .totals
-                )
-                self.meals = try container.decode(
-                    Components.Schemas.MealNutritionPerson.MealsPayload.self,
-                    forKey: .meals
-                )
-                self.foods = try container.decode(
-                    [Components.Schemas.MealNutritionFood].self,
-                    forKey: .foods
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "eater",
-                    "totals",
-                    "meals",
-                    "foods"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/MealOut`.
         public struct MealOut: Codable, Hashable, Sendable {
@@ -28239,11 +19719,11 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/MealOut/mealKind`.
             public var mealKind: Components.Schemas.MealKind
             /// - Remark: Generated from `#/components/schemas/MealOut/recipes`.
-            public var recipes: Components.Schemas.OutputSchema231
+            public var recipes: Components.Schemas.OutputSchema244
             /// - Remark: Generated from `#/components/schemas/MealOut/totals`.
             public var totals: Components.Schemas.MealTotals
             /// - Remark: Generated from `#/components/schemas/MealOut/images`.
-            public var images: Components.Schemas.OutputSchema133
+            public var images: Components.Schemas.OutputSchema146
             /// - Remark: Generated from `#/components/schemas/MealOut/displayName`.
             public var displayName: Swift.String
             /// - Remark: Generated from `#/components/schemas/MealOut/recipeNames`.
@@ -28278,9 +19758,9 @@ extension Components {
                 sortOrder: Swift.Int? = nil,
                 mealType: Components.Schemas.MealType? = nil,
                 mealKind: Components.Schemas.MealKind,
-                recipes: Components.Schemas.OutputSchema231,
+                recipes: Components.Schemas.OutputSchema244,
                 totals: Components.Schemas.MealTotals,
-                images: Components.Schemas.OutputSchema133,
+                images: Components.Schemas.OutputSchema146,
                 displayName: Swift.String,
                 recipeNames: Components.Schemas.InputSchema56,
                 createdAt: Foundation.Date,
@@ -28317,81 +19797,6 @@ extension Components {
                 case createdAt
                 case updatedAt
                 case dataQuality
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.id = try container.decode(
-                    Components.Schemas.MealShortcode.self,
-                    forKey: .id
-                )
-                self.date = try container.decode(
-                    Components.Schemas.PlainDate.self,
-                    forKey: .date
-                )
-                self.name = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .name
-                )
-                self.sortOrder = try container.decodeIfPresent(
-                    Swift.Int.self,
-                    forKey: .sortOrder
-                )
-                self.mealType = try container.decodeIfPresent(
-                    Components.Schemas.MealType.self,
-                    forKey: .mealType
-                )
-                self.mealKind = try container.decode(
-                    Components.Schemas.MealKind.self,
-                    forKey: .mealKind
-                )
-                self.recipes = try container.decode(
-                    Components.Schemas.OutputSchema231.self,
-                    forKey: .recipes
-                )
-                self.totals = try container.decode(
-                    Components.Schemas.MealTotals.self,
-                    forKey: .totals
-                )
-                self.images = try container.decode(
-                    Components.Schemas.OutputSchema133.self,
-                    forKey: .images
-                )
-                self.displayName = try container.decode(
-                    Swift.String.self,
-                    forKey: .displayName
-                )
-                self.recipeNames = try container.decode(
-                    Components.Schemas.InputSchema56.self,
-                    forKey: .recipeNames
-                )
-                self.createdAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .createdAt
-                )
-                self.updatedAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .updatedAt
-                )
-                self.dataQuality = try container.decode(
-                    Components.Schemas.DataQuality.self,
-                    forKey: .dataQuality
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "id",
-                    "date",
-                    "name",
-                    "sortOrder",
-                    "mealType",
-                    "mealKind",
-                    "recipes",
-                    "totals",
-                    "images",
-                    "displayName",
-                    "recipeNames",
-                    "createdAt",
-                    "updatedAt",
-                    "dataQuality"
-                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/MealRecipeId`.
@@ -28507,66 +19912,6 @@ extension Components {
                 case createdAt
                 case updatedAt
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.id = try container.decode(
-                    Components.Schemas.MealRecipeId.self,
-                    forKey: .id
-                )
-                self.mealId = try container.decode(
-                    Components.Schemas.MealShortcode.self,
-                    forKey: .mealId
-                )
-                self.recipeId = try container.decode(
-                    Components.Schemas.RecipeShortcode.self,
-                    forKey: .recipeId
-                )
-                self.recipe = try container.decode(
-                    Components.Schemas.MealRecipeSummary.self,
-                    forKey: .recipe
-                )
-                self.scale = try container.decode(
-                    Components.Schemas.MealScale.self,
-                    forKey: .scale
-                )
-                self.sortOrder = try container.decodeIfPresent(
-                    Swift.Int.self,
-                    forKey: .sortOrder
-                )
-                self.estimatedYieldGrams = try container.decodeIfPresent(
-                    Components.Schemas.MealYieldGrams.self,
-                    forKey: .estimatedYieldGrams
-                )
-                self.actualYieldGrams = try container.decodeIfPresent(
-                    Components.Schemas.MealYieldGrams.self,
-                    forKey: .actualYieldGrams
-                )
-                self.scaledTotals = try container.decode(
-                    Components.Schemas.MealTotals.self,
-                    forKey: .scaledTotals
-                )
-                self.createdAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .createdAt
-                )
-                self.updatedAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .updatedAt
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "id",
-                    "mealId",
-                    "recipeId",
-                    "recipe",
-                    "scale",
-                    "sortOrder",
-                    "estimatedYieldGrams",
-                    "actualYieldGrams",
-                    "scaledTotals",
-                    "createdAt",
-                    "updatedAt"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/MealRecipeSummary`.
         public struct MealRecipeSummary: Codable, Hashable, Sendable {
@@ -28608,36 +19953,6 @@ extension Components {
                 case _yield = "yield"
                 case totals
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.id = try container.decode(
-                    Components.Schemas.RecipeShortcode.self,
-                    forKey: .id
-                )
-                self.name = try container.decode(
-                    Swift.String.self,
-                    forKey: .name
-                )
-                self.servings = try container.decodeIfPresent(
-                    Swift.Double.self,
-                    forKey: .servings
-                )
-                self._yield = try container.decodeIfPresent(
-                    Components.Schemas.PositiveAmount.self,
-                    forKey: ._yield
-                )
-                self.totals = try container.decodeIfPresent(
-                    Components.Schemas.MealTotals.self,
-                    forKey: .totals
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "id",
-                    "name",
-                    "servings",
-                    "yield",
-                    "totals"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/MealScale`.
         public typealias MealScale = Swift.Double
@@ -28672,26 +19987,6 @@ extension Components {
                 case cost
                 case nutrition
                 case macros
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.cost = try container.decode(
-                    Components.Schemas.MeasureEstimate.self,
-                    forKey: .cost
-                )
-                self.nutrition = try container.decode(
-                    Components.Schemas.NutritionEstimate.self,
-                    forKey: .nutrition
-                )
-                self.macros = try container.decode(
-                    Components.Schemas.MacroSummary.self,
-                    forKey: .macros
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "cost",
-                    "nutrition",
-                    "macros"
-                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/MealType`.
@@ -28855,31 +20150,6 @@ extension Components {
                 case upper
                 case coverage
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.status = try container.decode(
-                    Components.Schemas.MeasureEstimateComplete.StatusPayload.self,
-                    forKey: .status
-                )
-                self.lower = try container.decode(
-                    Swift.Double.self,
-                    forKey: .lower
-                )
-                self.upper = try container.decodeIfPresent(
-                    Swift.Double.self,
-                    forKey: .upper
-                )
-                self.coverage = try container.decode(
-                    Components.Schemas.OutputSchema68.self,
-                    forKey: .coverage
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "status",
-                    "lower",
-                    "upper",
-                    "coverage"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/MeasureEstimatePartial`.
         public struct MeasureEstimatePartial: Codable, Hashable, Sendable {
@@ -28919,31 +20189,6 @@ extension Components {
                 case upper
                 case coverage
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.status = try container.decode(
-                    Components.Schemas.MeasureEstimatePartial.StatusPayload.self,
-                    forKey: .status
-                )
-                self.lower = try container.decode(
-                    Swift.Double.self,
-                    forKey: .lower
-                )
-                self.upper = try container.decodeIfPresent(
-                    Swift.Double.self,
-                    forKey: .upper
-                )
-                self.coverage = try container.decode(
-                    Components.Schemas.OutputSchema68.self,
-                    forKey: .coverage
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "status",
-                    "lower",
-                    "upper",
-                    "coverage"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/MeasureEstimatePending`.
         public struct MeasureEstimatePending: Codable, Hashable, Sendable {
@@ -28975,21 +20220,6 @@ extension Components {
             public enum CodingKeys: String, CodingKey {
                 case status
                 case reason
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.status = try container.decode(
-                    Components.Schemas.MeasureEstimatePending.StatusPayload.self,
-                    forKey: .status
-                )
-                self.reason = try container.decode(
-                    Components.Schemas.MeasureEstimatePending.ReasonPayload.self,
-                    forKey: .reason
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "status",
-                    "reason"
-                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/MeasureEstimateUnavailable`.
@@ -29030,26 +20260,6 @@ extension Components {
                 case reason
                 case coverage
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.status = try container.decode(
-                    Components.Schemas.MeasureEstimateUnavailable.StatusPayload.self,
-                    forKey: .status
-                )
-                self.reason = try container.decode(
-                    Components.Schemas.MeasureEstimateUnavailable.ReasonPayload.self,
-                    forKey: .reason
-                )
-                self.coverage = try container.decodeIfPresent(
-                    Components.Schemas.OutputSchema68.self,
-                    forKey: .coverage
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "status",
-                    "reason",
-                    "coverage"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/MerchantVendorCandidate`.
         public struct MerchantVendorCandidate: Codable, Hashable, Sendable {
@@ -29084,31 +20294,6 @@ extension Components {
                 case vendorName
                 case supportingTransactionCount
                 case lastSeenDate
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.vendorId = try container.decode(
-                    Components.Schemas.VendorShortcode.self,
-                    forKey: .vendorId
-                )
-                self.vendorName = try container.decode(
-                    Swift.String.self,
-                    forKey: .vendorName
-                )
-                self.supportingTransactionCount = try container.decode(
-                    Swift.Int.self,
-                    forKey: .supportingTransactionCount
-                )
-                self.lastSeenDate = try container.decodeIfPresent(
-                    Components.Schemas.PlainDate.self,
-                    forKey: .lastSeenDate
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "vendorId",
-                    "vendorName",
-                    "supportingTransactionCount",
-                    "lastSeenDate"
-                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/MerchantVendorInference`.
@@ -29186,21 +20371,6 @@ extension Components {
                 case status
                 case candidates
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.status = try container.decode(
-                    Components.Schemas.MerchantVendorInferenceAmbiguous.StatusPayload.self,
-                    forKey: .status
-                )
-                self.candidates = try container.decode(
-                    [Components.Schemas.MerchantVendorCandidate].self,
-                    forKey: .candidates
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "status",
-                    "candidates"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/MerchantVendorInferenceInsufficientHistory`.
         public struct MerchantVendorInferenceInsufficientHistory: Codable, Hashable, Sendable {
@@ -29227,21 +20397,6 @@ extension Components {
             public enum CodingKeys: String, CodingKey {
                 case status
                 case candidates
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.status = try container.decode(
-                    Components.Schemas.MerchantVendorInferenceInsufficientHistory.StatusPayload.self,
-                    forKey: .status
-                )
-                self.candidates = try container.decode(
-                    OpenAPIRuntime.OpenAPIArrayContainer.self,
-                    forKey: .candidates
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "status",
-                    "candidates"
-                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/MerchantVendorInferenceNone`.
@@ -29270,21 +20425,6 @@ extension Components {
                 case status
                 case candidates
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.status = try container.decode(
-                    Components.Schemas.MerchantVendorInferenceNone.StatusPayload.self,
-                    forKey: .status
-                )
-                self.candidates = try container.decode(
-                    OpenAPIRuntime.OpenAPIArrayContainer.self,
-                    forKey: .candidates
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "status",
-                    "candidates"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/MerchantVendorInferenceSuggested`.
         public struct MerchantVendorInferenceSuggested: Codable, Hashable, Sendable {
@@ -29311,21 +20451,6 @@ extension Components {
             public enum CodingKeys: String, CodingKey {
                 case status
                 case candidates
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.status = try container.decode(
-                    Components.Schemas.MerchantVendorInferenceSuggested.StatusPayload.self,
-                    forKey: .status
-                )
-                self.candidates = try container.decode(
-                    OpenAPIRuntime.OpenAPIArrayContainer.self,
-                    forKey: .candidates
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "status",
-                    "candidates"
-                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/Money`.
@@ -29390,16 +20515,6 @@ extension Components {
             public enum CodingKeys: String, CodingKey {
                 case backgroundBatches
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.backgroundBatches = try container.decode(
-                    [Components.Schemas.BackgroundBatchRef].self,
-                    forKey: .backgroundBatches
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "backgroundBatches"
-                ])
-            }
         }
         /// USDA NDB number
         ///
@@ -29452,26 +20567,6 @@ extension Components {
                 case amount
                 case name
                 case unit
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.amount = try container.decode(
-                    Swift.Double.self,
-                    forKey: .amount
-                )
-                self.name = try container.decode(
-                    Swift.String.self,
-                    forKey: .name
-                )
-                self.unit = try container.decode(
-                    Components.Schemas.NutrientUnitName.self,
-                    forKey: .unit
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "amount",
-                    "name",
-                    "unit"
-                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/NutrientUnitName`.
@@ -29529,21 +20624,6 @@ extension Components {
                 case nutrientSummary
                 case nutrientsPer100
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.nutrientSummary = try container.decode(
-                    [Components.Schemas.NutrientSummary].self,
-                    forKey: .nutrientSummary
-                )
-                self.nutrientsPer100 = try container.decode(
-                    Components.Schemas.NutrientsPer100.self,
-                    forKey: .nutrientsPer100
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "nutrientSummary",
-                    "nutrientsPer100"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/NutritionMeal`.
         public struct NutritionMeal: Codable, Hashable, Sendable {
@@ -29579,31 +20659,6 @@ extension Components {
                 case name
                 case mealType
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.id = try container.decode(
-                    Components.Schemas.MealShortcode.self,
-                    forKey: .id
-                )
-                self.date = try container.decode(
-                    Components.Schemas.PlainDate.self,
-                    forKey: .date
-                )
-                self.name = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .name
-                )
-                self.mealType = try container.decodeIfPresent(
-                    Components.Schemas.MealType.self,
-                    forKey: .mealType
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "id",
-                    "date",
-                    "name",
-                    "mealType"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/OperationEffect`.
         @frozen public enum OperationEffect: String, Codable, Hashable, Sendable, CaseIterable {
@@ -29621,17 +20676,17 @@ extension Components {
         public typealias OptionalImageRepresentations = Components.Schemas.ImageRepresentations
         /// - Remark: Generated from `#/components/schemas/OptionalProjectAllocations`.
         public typealias OptionalProjectAllocations = Components.Schemas.ProjectAllocations
-        /// - Remark: Generated from `#/components/schemas/output_schema131`.
-        public typealias OutputSchema131 = [Components.Schemas.PlantingShortcode]
-        /// - Remark: Generated from `#/components/schemas/output_schema133`.
-        public typealias OutputSchema133 = [Components.Schemas.ImageOut]
-        /// - Remark: Generated from `#/components/schemas/OutputSchema136`.
-        public struct OutputSchema136Payload: Codable, Hashable, Sendable {
-            /// - Remark: Generated from `#/components/schemas/OutputSchema136/id`.
+        /// - Remark: Generated from `#/components/schemas/output_schema144`.
+        public typealias OutputSchema144 = [Components.Schemas.PlantingShortcode]
+        /// - Remark: Generated from `#/components/schemas/output_schema146`.
+        public typealias OutputSchema146 = [Components.Schemas.ImageOut]
+        /// - Remark: Generated from `#/components/schemas/OutputSchema149`.
+        public struct OutputSchema149Payload: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/OutputSchema149/id`.
             public var id: Components.Schemas.PlantingShortcode
-            /// - Remark: Generated from `#/components/schemas/OutputSchema136/name`.
+            /// - Remark: Generated from `#/components/schemas/OutputSchema149/name`.
             public var name: Swift.String
-            /// Creates a new `OutputSchema136Payload`.
+            /// Creates a new `OutputSchema149Payload`.
             ///
             /// - Parameters:
             ///   - id:
@@ -29647,43 +20702,28 @@ extension Components {
                 case id
                 case name
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.id = try container.decode(
-                    Components.Schemas.PlantingShortcode.self,
-                    forKey: .id
-                )
-                self.name = try container.decode(
-                    Swift.String.self,
-                    forKey: .name
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "id",
-                    "name"
-                ])
-            }
         }
-        /// - Remark: Generated from `#/components/schemas/output_schema136`.
-        public typealias OutputSchema136 = [Components.Schemas.OutputSchema136Payload]
-        /// - Remark: Generated from `#/components/schemas/output_schema144`.
-        public typealias OutputSchema144 = [Components.Schemas.BaseKind]
-        /// - Remark: Generated from `#/components/schemas/output_schema163`.
-        public typealias OutputSchema163 = [Components.Schemas.RecipeUsageOut]
-        /// - Remark: Generated from `#/components/schemas/output_schema164`.
-        public typealias OutputSchema164 = [Components.Schemas.RecipeTopLevel]
-        /// - Remark: Generated from `#/components/schemas/output_schema165`.
-        public typealias OutputSchema165 = [Components.Schemas.ProductWithMappingsAndFoodOut]
+        /// - Remark: Generated from `#/components/schemas/output_schema149`.
+        public typealias OutputSchema149 = [Components.Schemas.OutputSchema149Payload]
+        /// - Remark: Generated from `#/components/schemas/output_schema157`.
+        public typealias OutputSchema157 = [Components.Schemas.BaseKind]
+        /// - Remark: Generated from `#/components/schemas/output_schema176`.
+        public typealias OutputSchema176 = [Components.Schemas.RecipeUsageOut]
+        /// - Remark: Generated from `#/components/schemas/output_schema177`.
+        public typealias OutputSchema177 = [Components.Schemas.RecipeTopLevel]
+        /// - Remark: Generated from `#/components/schemas/output_schema178`.
+        public typealias OutputSchema178 = [Components.Schemas.ProductWithMappingsAndFoodOut]
         /// Quantity on hand
         ///
-        /// - Remark: Generated from `#/components/schemas/output_schema166`.
-        public struct OutputSchema166: Codable, Hashable, Sendable {
-            /// - Remark: Generated from `#/components/schemas/output_schema166/value`.
+        /// - Remark: Generated from `#/components/schemas/output_schema179`.
+        public struct OutputSchema179: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/output_schema179/value`.
             public var value: Swift.Double
-            /// - Remark: Generated from `#/components/schemas/output_schema166/unit`.
+            /// - Remark: Generated from `#/components/schemas/output_schema179/unit`.
             public var unit: Swift.String
-            /// - Remark: Generated from `#/components/schemas/output_schema166/upperValue`.
+            /// - Remark: Generated from `#/components/schemas/output_schema179/upperValue`.
             public var upperValue: Swift.Double?
-            /// Creates a new `OutputSchema166`.
+            /// Creates a new `OutputSchema179`.
             ///
             /// - Parameters:
             ///   - value:
@@ -29703,35 +20743,7 @@ extension Components {
                 case unit
                 case upperValue
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.value = try container.decode(
-                    Swift.Double.self,
-                    forKey: .value
-                )
-                self.unit = try container.decode(
-                    Swift.String.self,
-                    forKey: .unit
-                )
-                self.upperValue = try container.decodeIfPresent(
-                    Swift.Double.self,
-                    forKey: .upperValue
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "value",
-                    "unit",
-                    "upperValue"
-                ])
-            }
         }
-        /// 'stock' = movable stock; 'installed' = a fixed installation, kept as a record but excluded from browsing, counting and audits
-        ///
-        /// - Remark: Generated from `#/components/schemas/output_schema170`.
-        public typealias OutputSchema170 = Components.Schemas.InventoryPlacement
-        /// Namespaced Collection tags assigned directly to this location
-        ///
-        /// - Remark: Generated from `#/components/schemas/output_schema177`.
-        public typealias OutputSchema177 = Components.Schemas.InputSchema56
         /// - Remark: Generated from `#/components/schemas/output_schema18`.
         @frozen public enum OutputSchema18: Codable, Hashable, Sendable {
             /// - Remark: Generated from `#/components/schemas/output_schema18/UnitMappingWithMetadataFood`.
@@ -29775,15 +20787,23 @@ extension Components {
                 }
             }
         }
-        /// - Remark: Generated from `#/components/schemas/output_schema186`.
-        public struct OutputSchema186: Codable, Hashable, Sendable {
-            /// - Remark: Generated from `#/components/schemas/output_schema186/priced`.
+        /// 'stock' = movable stock; 'installed' = a fixed installation, kept as a record but excluded from browsing, counting and audits
+        ///
+        /// - Remark: Generated from `#/components/schemas/output_schema183`.
+        public typealias OutputSchema183 = Components.Schemas.InventoryPlacement
+        /// Namespaced Collection tags assigned directly to this location
+        ///
+        /// - Remark: Generated from `#/components/schemas/output_schema190`.
+        public typealias OutputSchema190 = Components.Schemas.InputSchema56
+        /// - Remark: Generated from `#/components/schemas/output_schema199`.
+        public struct OutputSchema199: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/output_schema199/priced`.
             public var priced: Swift.Int
-            /// - Remark: Generated from `#/components/schemas/output_schema186/missingPricing`.
+            /// - Remark: Generated from `#/components/schemas/output_schema199/missingPricing`.
             public var missingPricing: Swift.Int
-            /// - Remark: Generated from `#/components/schemas/output_schema186/miscNoPrice`.
+            /// - Remark: Generated from `#/components/schemas/output_schema199/miscNoPrice`.
             public var miscNoPrice: Swift.Int
-            /// Creates a new `OutputSchema186`.
+            /// Creates a new `OutputSchema199`.
             ///
             /// - Parameters:
             ///   - priced:
@@ -29803,44 +20823,24 @@ extension Components {
                 case missingPricing
                 case miscNoPrice
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.priced = try container.decode(
-                    Swift.Int.self,
-                    forKey: .priced
-                )
-                self.missingPricing = try container.decode(
-                    Swift.Int.self,
-                    forKey: .missingPricing
-                )
-                self.miscNoPrice = try container.decode(
-                    Swift.Int.self,
-                    forKey: .miscNoPrice
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "priced",
-                    "missingPricing",
-                    "miscNoPrice"
-                ])
-            }
         }
-        /// - Remark: Generated from `#/components/schemas/output_schema199`.
-        public typealias OutputSchema199 = [Components.Schemas.FinancialTransactionShortcode]
-        /// - Remark: Generated from `#/components/schemas/output_schema202`.
-        public typealias OutputSchema202 = [Components.Schemas.InfLocation]
-        /// - Remark: Generated from `#/components/schemas/output_schema203`.
-        public typealias OutputSchema203 = Components.Schemas.InfLocation
-        /// - Remark: Generated from `#/components/schemas/OutputSchema207`.
-        public struct OutputSchema207Payload: Codable, Hashable, Sendable {
-            /// - Remark: Generated from `#/components/schemas/OutputSchema207/id`.
+        /// - Remark: Generated from `#/components/schemas/output_schema212`.
+        public typealias OutputSchema212 = [Components.Schemas.FinancialTransactionShortcode]
+        /// - Remark: Generated from `#/components/schemas/output_schema215`.
+        public typealias OutputSchema215 = [Components.Schemas.InfLocation]
+        /// - Remark: Generated from `#/components/schemas/output_schema216`.
+        public typealias OutputSchema216 = Components.Schemas.InfLocation
+        /// - Remark: Generated from `#/components/schemas/OutputSchema220`.
+        public struct OutputSchema220Payload: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/OutputSchema220/id`.
             public var id: Components.Schemas.InventoryShortcode
-            /// - Remark: Generated from `#/components/schemas/OutputSchema207/amount`.
+            /// - Remark: Generated from `#/components/schemas/OutputSchema220/amount`.
             public var amount: Components.Schemas.Amount
-            /// - Remark: Generated from `#/components/schemas/OutputSchema207/productName`.
+            /// - Remark: Generated from `#/components/schemas/OutputSchema220/productName`.
             public var productName: Swift.String
-            /// - Remark: Generated from `#/components/schemas/OutputSchema207/productId`.
+            /// - Remark: Generated from `#/components/schemas/OutputSchema220/productId`.
             public var productId: Components.Schemas.ProductShortcode
-            /// Creates a new `OutputSchema207Payload`.
+            /// Creates a new `OutputSchema220Payload`.
             ///
             /// - Parameters:
             ///   - id:
@@ -29864,55 +20864,30 @@ extension Components {
                 case productName
                 case productId
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.id = try container.decode(
-                    Components.Schemas.InventoryShortcode.self,
-                    forKey: .id
-                )
-                self.amount = try container.decode(
-                    Components.Schemas.Amount.self,
-                    forKey: .amount
-                )
-                self.productName = try container.decode(
-                    Swift.String.self,
-                    forKey: .productName
-                )
-                self.productId = try container.decode(
-                    Components.Schemas.ProductShortcode.self,
-                    forKey: .productId
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "id",
-                    "amount",
-                    "productName",
-                    "productId"
-                ])
-            }
         }
-        /// - Remark: Generated from `#/components/schemas/output_schema207`.
-        public typealias OutputSchema207 = [Components.Schemas.OutputSchema207Payload]
-        /// - Remark: Generated from `#/components/schemas/output_schema219`.
-        public typealias OutputSchema219 = [Components.Schemas.Amount]
-        /// - Remark: Generated from `#/components/schemas/output_schema231`.
-        public typealias OutputSchema231 = [Components.Schemas.MealRecipeOut]
-        /// - Remark: Generated from `#/components/schemas/output_schema273`.
-        public typealias OutputSchema273 = [Components.Schemas.UnitMappingOut]
-        /// - Remark: Generated from `#/components/schemas/output_schema280`.
-        public struct OutputSchema280: Codable, Hashable, Sendable {
-            /// - Remark: Generated from `#/components/schemas/output_schema280/id`.
+        /// - Remark: Generated from `#/components/schemas/output_schema220`.
+        public typealias OutputSchema220 = [Components.Schemas.OutputSchema220Payload]
+        /// - Remark: Generated from `#/components/schemas/output_schema232`.
+        public typealias OutputSchema232 = [Components.Schemas.Amount]
+        /// - Remark: Generated from `#/components/schemas/output_schema244`.
+        public typealias OutputSchema244 = [Components.Schemas.MealRecipeOut]
+        /// - Remark: Generated from `#/components/schemas/output_schema286`.
+        public typealias OutputSchema286 = [Components.Schemas.UnitMappingOut]
+        /// - Remark: Generated from `#/components/schemas/output_schema293`.
+        public struct OutputSchema293: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/output_schema293/id`.
             public var id: Components.Schemas.IngredientShortcode
-            /// - Remark: Generated from `#/components/schemas/output_schema280/name`.
+            /// - Remark: Generated from `#/components/schemas/output_schema293/name`.
             public var name: Swift.String
-            /// - Remark: Generated from `#/components/schemas/output_schema280/aliases`.
+            /// - Remark: Generated from `#/components/schemas/output_schema293/aliases`.
             public var aliases: [Swift.String]
-            /// - Remark: Generated from `#/components/schemas/output_schema280/naKinds`.
+            /// - Remark: Generated from `#/components/schemas/output_schema293/naKinds`.
             public var naKinds: [Components.Schemas.BaseKind]
-            /// - Remark: Generated from `#/components/schemas/output_schema280/createdAt`.
+            /// - Remark: Generated from `#/components/schemas/output_schema293/createdAt`.
             public var createdAt: Foundation.Date
-            /// - Remark: Generated from `#/components/schemas/output_schema280/updatedAt`.
+            /// - Remark: Generated from `#/components/schemas/output_schema293/updatedAt`.
             public var updatedAt: Foundation.Date
-            /// Creates a new `OutputSchema280`.
+            /// Creates a new `OutputSchema293`.
             ///
             /// - Parameters:
             ///   - id:
@@ -29944,99 +20919,66 @@ extension Components {
                 case createdAt
                 case updatedAt
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.id = try container.decode(
-                    Components.Schemas.IngredientShortcode.self,
-                    forKey: .id
-                )
-                self.name = try container.decode(
-                    Swift.String.self,
-                    forKey: .name
-                )
-                self.aliases = try container.decode(
-                    [Swift.String].self,
-                    forKey: .aliases
-                )
-                self.naKinds = try container.decode(
-                    [Components.Schemas.BaseKind].self,
-                    forKey: .naKinds
-                )
-                self.createdAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .createdAt
-                )
-                self.updatedAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .updatedAt
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "id",
-                    "name",
-                    "aliases",
-                    "naKinds",
-                    "createdAt",
-                    "updatedAt"
-                ])
-            }
         }
-        /// - Remark: Generated from `#/components/schemas/output_schema281`.
-        public typealias OutputSchema281 = [Components.Schemas.ProductListInventoryEntryOut]
-        /// - Remark: Generated from `#/components/schemas/output_schema287`.
-        public struct OutputSchema287: Codable, Hashable, Sendable {
-            /// - Remark: Generated from `#/components/schemas/output_schema287/id`.
+        /// - Remark: Generated from `#/components/schemas/output_schema294`.
+        public typealias OutputSchema294 = [Components.Schemas.ProductListInventoryEntryOut]
+        /// - Remark: Generated from `#/components/schemas/output_schema30`.
+        public typealias OutputSchema30 = [Components.Schemas.OutputSchema31]
+        /// - Remark: Generated from `#/components/schemas/output_schema300`.
+        public struct OutputSchema300: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/output_schema300/id`.
             public var id: Components.Schemas.InventoryShortcode
-            /// - Remark: Generated from `#/components/schemas/output_schema287/amount`.
+            /// - Remark: Generated from `#/components/schemas/output_schema300/amount`.
             public var amount: Components.Schemas.Amount
-            /// - Remark: Generated from `#/components/schemas/output_schema287/valuation`.
+            /// - Remark: Generated from `#/components/schemas/output_schema300/valuation`.
             public var valuation: Components.Schemas.Money?
-            /// - Remark: Generated from `#/components/schemas/output_schema287/verifiedAt`.
+            /// - Remark: Generated from `#/components/schemas/output_schema300/verifiedAt`.
             public var verifiedAt: Foundation.Date?
-            /// - Remark: Generated from `#/components/schemas/output_schema287/placement`.
+            /// - Remark: Generated from `#/components/schemas/output_schema300/placement`.
             @frozen public enum PlacementPayload: String, Codable, Hashable, Sendable, CaseIterable {
                 case stock = "stock"
                 case installed = "installed"
             }
-            /// - Remark: Generated from `#/components/schemas/output_schema287/placement`.
-            public var placement: Components.Schemas.OutputSchema287.PlacementPayload
-            /// - Remark: Generated from `#/components/schemas/output_schema287/createdAt`.
+            /// - Remark: Generated from `#/components/schemas/output_schema300/placement`.
+            public var placement: Components.Schemas.OutputSchema300.PlacementPayload
+            /// - Remark: Generated from `#/components/schemas/output_schema300/createdAt`.
             public var createdAt: Foundation.Date
-            /// - Remark: Generated from `#/components/schemas/output_schema287/updatedAt`.
+            /// - Remark: Generated from `#/components/schemas/output_schema300/updatedAt`.
             public var updatedAt: Foundation.Date
-            /// - Remark: Generated from `#/components/schemas/output_schema287/location`.
+            /// - Remark: Generated from `#/components/schemas/output_schema300/location`.
             public struct LocationPayload: Codable, Hashable, Sendable {
-                /// - Remark: Generated from `#/components/schemas/output_schema287/location/id`.
+                /// - Remark: Generated from `#/components/schemas/output_schema300/location/id`.
                 public var id: Components.Schemas.LocationShortcode
                 /// name of location
                 ///
-                /// - Remark: Generated from `#/components/schemas/output_schema287/location/name`.
+                /// - Remark: Generated from `#/components/schemas/output_schema300/location/name`.
                 public var name: Swift.String
-                /// - Remark: Generated from `#/components/schemas/output_schema287/location/aliases`.
+                /// - Remark: Generated from `#/components/schemas/output_schema300/location/aliases`.
                 public var aliases: Components.Schemas.InputSchema56
-                /// - Remark: Generated from `#/components/schemas/output_schema287/location/tags`.
-                public var tags: Components.Schemas.OutputSchema177?
-                /// - Remark: Generated from `#/components/schemas/output_schema287/location/type`.
+                /// - Remark: Generated from `#/components/schemas/output_schema300/location/tags`.
+                public var tags: Components.Schemas.OutputSchema190?
+                /// - Remark: Generated from `#/components/schemas/output_schema300/location/type`.
                 public var _type: Components.Schemas.LocationType?
-                /// - Remark: Generated from `#/components/schemas/output_schema287/location/notes`.
+                /// - Remark: Generated from `#/components/schemas/output_schema300/location/notes`.
                 public var notes: Swift.String?
-                /// - Remark: Generated from `#/components/schemas/output_schema287/location/product`.
+                /// - Remark: Generated from `#/components/schemas/output_schema300/location/product`.
                 public var product: Components.Schemas.LocationIdentityProductOut?
-                /// - Remark: Generated from `#/components/schemas/output_schema287/location/lastBulkInventory`.
+                /// - Remark: Generated from `#/components/schemas/output_schema300/location/lastBulkInventory`.
                 public var lastBulkInventory: Foundation.Date?
-                /// - Remark: Generated from `#/components/schemas/output_schema287/location/aiDescription`.
+                /// - Remark: Generated from `#/components/schemas/output_schema300/location/aiDescription`.
                 public var aiDescription: Swift.String?
-                /// - Remark: Generated from `#/components/schemas/output_schema287/location/images`.
-                public var images: Components.Schemas.OutputSchema133
-                /// - Remark: Generated from `#/components/schemas/output_schema287/location/valuation`.
+                /// - Remark: Generated from `#/components/schemas/output_schema300/location/images`.
+                public var images: Components.Schemas.OutputSchema146
+                /// - Remark: Generated from `#/components/schemas/output_schema300/location/valuation`.
                 public var valuation: Components.Schemas.LocationValuation?
-                /// - Remark: Generated from `#/components/schemas/output_schema287/location/createdAt`.
+                /// - Remark: Generated from `#/components/schemas/output_schema300/location/createdAt`.
                 public var createdAt: Foundation.Date
-                /// - Remark: Generated from `#/components/schemas/output_schema287/location/updatedAt`.
+                /// - Remark: Generated from `#/components/schemas/output_schema300/location/updatedAt`.
                 public var updatedAt: Foundation.Date
-                /// - Remark: Generated from `#/components/schemas/output_schema287/location/displayImage`.
+                /// - Remark: Generated from `#/components/schemas/output_schema300/location/displayImage`.
                 public var displayImage: Components.Schemas.ImageUrlSummary?
-                /// - Remark: Generated from `#/components/schemas/output_schema287/location/ancestors`.
-                public var ancestors: [Components.Schemas.OutputSchema288]
+                /// - Remark: Generated from `#/components/schemas/output_schema300/location/ancestors`.
+                public var ancestors: [Components.Schemas.OutputSchema301]
                 /// Creates a new `LocationPayload`.
                 ///
                 /// - Parameters:
@@ -30059,18 +21001,18 @@ extension Components {
                     id: Components.Schemas.LocationShortcode,
                     name: Swift.String,
                     aliases: Components.Schemas.InputSchema56,
-                    tags: Components.Schemas.OutputSchema177? = nil,
+                    tags: Components.Schemas.OutputSchema190? = nil,
                     _type: Components.Schemas.LocationType? = nil,
                     notes: Swift.String? = nil,
                     product: Components.Schemas.LocationIdentityProductOut? = nil,
                     lastBulkInventory: Foundation.Date? = nil,
                     aiDescription: Swift.String? = nil,
-                    images: Components.Schemas.OutputSchema133,
+                    images: Components.Schemas.OutputSchema146,
                     valuation: Components.Schemas.LocationValuation? = nil,
                     createdAt: Foundation.Date,
                     updatedAt: Foundation.Date,
                     displayImage: Components.Schemas.ImageUrlSummary? = nil,
-                    ancestors: [Components.Schemas.OutputSchema288]
+                    ancestors: [Components.Schemas.OutputSchema301]
                 ) {
                     self.id = id
                     self.name = name
@@ -30105,90 +21047,10 @@ extension Components {
                     case displayImage
                     case ancestors
                 }
-                public init(from decoder: any Swift.Decoder) throws {
-                    let container = try decoder.container(keyedBy: CodingKeys.self)
-                    self.id = try container.decode(
-                        Components.Schemas.LocationShortcode.self,
-                        forKey: .id
-                    )
-                    self.name = try container.decode(
-                        Swift.String.self,
-                        forKey: .name
-                    )
-                    self.aliases = try container.decode(
-                        Components.Schemas.InputSchema56.self,
-                        forKey: .aliases
-                    )
-                    self.tags = try container.decodeIfPresent(
-                        Components.Schemas.OutputSchema177.self,
-                        forKey: .tags
-                    )
-                    self._type = try container.decodeIfPresent(
-                        Components.Schemas.LocationType.self,
-                        forKey: ._type
-                    )
-                    self.notes = try container.decodeIfPresent(
-                        Swift.String.self,
-                        forKey: .notes
-                    )
-                    self.product = try container.decodeIfPresent(
-                        Components.Schemas.LocationIdentityProductOut.self,
-                        forKey: .product
-                    )
-                    self.lastBulkInventory = try container.decodeIfPresent(
-                        Foundation.Date.self,
-                        forKey: .lastBulkInventory
-                    )
-                    self.aiDescription = try container.decodeIfPresent(
-                        Swift.String.self,
-                        forKey: .aiDescription
-                    )
-                    self.images = try container.decode(
-                        Components.Schemas.OutputSchema133.self,
-                        forKey: .images
-                    )
-                    self.valuation = try container.decodeIfPresent(
-                        Components.Schemas.LocationValuation.self,
-                        forKey: .valuation
-                    )
-                    self.createdAt = try container.decode(
-                        Foundation.Date.self,
-                        forKey: .createdAt
-                    )
-                    self.updatedAt = try container.decode(
-                        Foundation.Date.self,
-                        forKey: .updatedAt
-                    )
-                    self.displayImage = try container.decodeIfPresent(
-                        Components.Schemas.ImageUrlSummary.self,
-                        forKey: .displayImage
-                    )
-                    self.ancestors = try container.decode(
-                        [Components.Schemas.OutputSchema288].self,
-                        forKey: .ancestors
-                    )
-                    try decoder.ensureNoAdditionalProperties(knownKeys: [
-                        "id",
-                        "name",
-                        "aliases",
-                        "tags",
-                        "type",
-                        "notes",
-                        "product",
-                        "lastBulkInventory",
-                        "aiDescription",
-                        "images",
-                        "valuation",
-                        "createdAt",
-                        "updatedAt",
-                        "displayImage",
-                        "ancestors"
-                    ])
-                }
             }
-            /// - Remark: Generated from `#/components/schemas/output_schema287/location`.
-            public var location: Components.Schemas.OutputSchema287.LocationPayload
-            /// Creates a new `OutputSchema287`.
+            /// - Remark: Generated from `#/components/schemas/output_schema300/location`.
+            public var location: Components.Schemas.OutputSchema300.LocationPayload
+            /// Creates a new `OutputSchema300`.
             ///
             /// - Parameters:
             ///   - id:
@@ -30204,10 +21066,10 @@ extension Components {
                 amount: Components.Schemas.Amount,
                 valuation: Components.Schemas.Money? = nil,
                 verifiedAt: Foundation.Date? = nil,
-                placement: Components.Schemas.OutputSchema287.PlacementPayload,
+                placement: Components.Schemas.OutputSchema300.PlacementPayload,
                 createdAt: Foundation.Date,
                 updatedAt: Foundation.Date,
-                location: Components.Schemas.OutputSchema287.LocationPayload
+                location: Components.Schemas.OutputSchema300.LocationPayload
             ) {
                 self.id = id
                 self.amount = amount
@@ -30228,63 +21090,18 @@ extension Components {
                 case updatedAt
                 case location
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.id = try container.decode(
-                    Components.Schemas.InventoryShortcode.self,
-                    forKey: .id
-                )
-                self.amount = try container.decode(
-                    Components.Schemas.Amount.self,
-                    forKey: .amount
-                )
-                self.valuation = try container.decodeIfPresent(
-                    Components.Schemas.Money.self,
-                    forKey: .valuation
-                )
-                self.verifiedAt = try container.decodeIfPresent(
-                    Foundation.Date.self,
-                    forKey: .verifiedAt
-                )
-                self.placement = try container.decode(
-                    Components.Schemas.OutputSchema287.PlacementPayload.self,
-                    forKey: .placement
-                )
-                self.createdAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .createdAt
-                )
-                self.updatedAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .updatedAt
-                )
-                self.location = try container.decode(
-                    Components.Schemas.OutputSchema287.LocationPayload.self,
-                    forKey: .location
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "id",
-                    "amount",
-                    "valuation",
-                    "verifiedAt",
-                    "placement",
-                    "createdAt",
-                    "updatedAt",
-                    "location"
-                ])
-            }
         }
-        /// - Remark: Generated from `#/components/schemas/output_schema288`.
-        public struct OutputSchema288: Codable, Hashable, Sendable {
-            /// - Remark: Generated from `#/components/schemas/output_schema288/id`.
+        /// - Remark: Generated from `#/components/schemas/output_schema301`.
+        public struct OutputSchema301: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/output_schema301/id`.
             public var id: Components.Schemas.LocationShortcode
-            /// - Remark: Generated from `#/components/schemas/output_schema288/name`.
+            /// - Remark: Generated from `#/components/schemas/output_schema301/name`.
             public var name: Swift.String
-            /// - Remark: Generated from `#/components/schemas/output_schema288/type`.
+            /// - Remark: Generated from `#/components/schemas/output_schema301/type`.
             public var _type: Components.Schemas.LocationType?
-            /// - Remark: Generated from `#/components/schemas/output_schema288/displayImage`.
+            /// - Remark: Generated from `#/components/schemas/output_schema301/displayImage`.
             public var displayImage: Components.Schemas.ImageUrlSummary?
-            /// Creates a new `OutputSchema288`.
+            /// Creates a new `OutputSchema301`.
             ///
             /// - Parameters:
             ///   - id:
@@ -30308,45 +21125,20 @@ extension Components {
                 case _type = "type"
                 case displayImage
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.id = try container.decode(
-                    Components.Schemas.LocationShortcode.self,
-                    forKey: .id
-                )
-                self.name = try container.decode(
-                    Swift.String.self,
-                    forKey: .name
-                )
-                self._type = try container.decodeIfPresent(
-                    Components.Schemas.LocationType.self,
-                    forKey: ._type
-                )
-                self.displayImage = try container.decodeIfPresent(
-                    Components.Schemas.ImageUrlSummary.self,
-                    forKey: .displayImage
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "id",
-                    "name",
-                    "type",
-                    "displayImage"
-                ])
-            }
         }
-        /// - Remark: Generated from `#/components/schemas/output_schema289`.
-        public struct OutputSchema289: Codable, Hashable, Sendable {
-            /// - Remark: Generated from `#/components/schemas/output_schema289/id`.
+        /// - Remark: Generated from `#/components/schemas/output_schema302`.
+        public struct OutputSchema302: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/output_schema302/id`.
             public var id: Components.Schemas.LocationShortcode
-            /// - Remark: Generated from `#/components/schemas/output_schema289/name`.
+            /// - Remark: Generated from `#/components/schemas/output_schema302/name`.
             public var name: Swift.String
-            /// - Remark: Generated from `#/components/schemas/output_schema289/type`.
+            /// - Remark: Generated from `#/components/schemas/output_schema302/type`.
             public var _type: Components.Schemas.LocationType?
-            /// - Remark: Generated from `#/components/schemas/output_schema289/displayImage`.
+            /// - Remark: Generated from `#/components/schemas/output_schema302/displayImage`.
             public var displayImage: Components.Schemas.ImageUrlSummary?
-            /// - Remark: Generated from `#/components/schemas/output_schema289/ancestors`.
-            public var ancestors: [Components.Schemas.OutputSchema288]
-            /// Creates a new `OutputSchema289`.
+            /// - Remark: Generated from `#/components/schemas/output_schema302/ancestors`.
+            public var ancestors: [Components.Schemas.OutputSchema301]
+            /// Creates a new `OutputSchema302`.
             ///
             /// - Parameters:
             ///   - id:
@@ -30359,7 +21151,7 @@ extension Components {
                 name: Swift.String,
                 _type: Components.Schemas.LocationType? = nil,
                 displayImage: Components.Schemas.ImageUrlSummary? = nil,
-                ancestors: [Components.Schemas.OutputSchema288]
+                ancestors: [Components.Schemas.OutputSchema301]
             ) {
                 self.id = id
                 self.name = name
@@ -30374,79 +21166,7 @@ extension Components {
                 case displayImage
                 case ancestors
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.id = try container.decode(
-                    Components.Schemas.LocationShortcode.self,
-                    forKey: .id
-                )
-                self.name = try container.decode(
-                    Swift.String.self,
-                    forKey: .name
-                )
-                self._type = try container.decodeIfPresent(
-                    Components.Schemas.LocationType.self,
-                    forKey: ._type
-                )
-                self.displayImage = try container.decodeIfPresent(
-                    Components.Schemas.ImageUrlSummary.self,
-                    forKey: .displayImage
-                )
-                self.ancestors = try container.decode(
-                    [Components.Schemas.OutputSchema288].self,
-                    forKey: .ancestors
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "id",
-                    "name",
-                    "type",
-                    "displayImage",
-                    "ancestors"
-                ])
-            }
         }
-        /// - Remark: Generated from `#/components/schemas/OutputSchema297`.
-        public struct OutputSchema297Payload: Codable, Hashable, Sendable {
-            /// - Remark: Generated from `#/components/schemas/OutputSchema297/id`.
-            public var id: Components.Schemas.ProductCategoryShortcode
-            /// - Remark: Generated from `#/components/schemas/OutputSchema297/name`.
-            public var name: Swift.String
-            /// Creates a new `OutputSchema297Payload`.
-            ///
-            /// - Parameters:
-            ///   - id:
-            ///   - name:
-            public init(
-                id: Components.Schemas.ProductCategoryShortcode,
-                name: Swift.String
-            ) {
-                self.id = id
-                self.name = name
-            }
-            public enum CodingKeys: String, CodingKey {
-                case id
-                case name
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.id = try container.decode(
-                    Components.Schemas.ProductCategoryShortcode.self,
-                    forKey: .id
-                )
-                self.name = try container.decode(
-                    Swift.String.self,
-                    forKey: .name
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "id",
-                    "name"
-                ])
-            }
-        }
-        /// - Remark: Generated from `#/components/schemas/output_schema297`.
-        public typealias OutputSchema297 = [Components.Schemas.OutputSchema297Payload]
-        /// - Remark: Generated from `#/components/schemas/output_schema30`.
-        public typealias OutputSchema30 = [Components.Schemas.OutputSchema31]
         /// - Remark: Generated from `#/components/schemas/output_schema31`.
         public struct OutputSchema31: Codable, Hashable, Sendable {
             /// - Remark: Generated from `#/components/schemas/output_schema31/representations`.
@@ -30606,143 +21326,48 @@ extension Components {
                 case updatedAt
                 case purpose
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.representations = try container.decodeIfPresent(
-                    Components.Schemas.OptionalImageRepresentations.self,
-                    forKey: .representations
-                )
-                self.id = try container.decode(
-                    Components.Schemas.ImageShortcode.self,
-                    forKey: .id
-                )
-                self.url = try container.decode(
-                    Swift.String.self,
-                    forKey: .url
-                )
-                self.key = try container.decode(
-                    Swift.String.self,
-                    forKey: .key
-                )
-                self.filename = try container.decode(
-                    Swift.String.self,
-                    forKey: .filename
-                )
-                self.size = try container.decode(
-                    Swift.Int.self,
-                    forKey: .size
-                )
-                self.contentType = try container.decode(
-                    Swift.String.self,
-                    forKey: .contentType
-                )
-                self.status = try container.decode(
-                    Components.Schemas.ImageStatus.self,
-                    forKey: .status
-                )
-                self.width = try container.decodeIfPresent(
-                    Swift.Int.self,
-                    forKey: .width
-                )
-                self.height = try container.decodeIfPresent(
-                    Swift.Int.self,
-                    forKey: .height
-                )
-                self.detectedContentType = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .detectedContentType
-                )
-                self.sha256 = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .sha256
-                )
-                self.renderStatus = try container.decodeIfPresent(
-                    Components.Schemas.ImageRenderStatus.self,
-                    forKey: .renderStatus
-                )
-                self.storageStatus = try container.decodeIfPresent(
-                    Components.Schemas.ImageStorageStatus.self,
-                    forKey: .storageStatus
-                )
-                self.source = try container.decode(
-                    Components.Schemas.OutputSchema31.SourcePayload.self,
-                    forKey: .source
-                )
-                self.sourcePageUrl = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .sourcePageUrl
-                )
-                self.sourceAssetUrl = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .sourceAssetUrl
-                )
-                self.sourceName = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .sourceName
-                )
-                self.useOriginal = try container.decode(
-                    Swift.Bool.self,
-                    forKey: .useOriginal
-                )
-                self.verifiedAt = try container.decodeIfPresent(
-                    Foundation.Date.self,
-                    forKey: .verifiedAt
-                )
-                self.createdAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .createdAt
-                )
-                self.updatedAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .updatedAt
-                )
-                self.purpose = try container.decodeIfPresent(
-                    Components.Schemas.OutputSchema31.PurposePayload.self,
-                    forKey: .purpose
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "representations",
-                    "id",
-                    "url",
-                    "key",
-                    "filename",
-                    "size",
-                    "contentType",
-                    "status",
-                    "width",
-                    "height",
-                    "detectedContentType",
-                    "sha256",
-                    "renderStatus",
-                    "storageStatus",
-                    "source",
-                    "sourcePageUrl",
-                    "sourceAssetUrl",
-                    "sourceName",
-                    "useOriginal",
-                    "verifiedAt",
-                    "createdAt",
-                    "updatedAt",
-                    "purpose"
-                ])
+        }
+        /// - Remark: Generated from `#/components/schemas/OutputSchema310`.
+        public struct OutputSchema310Payload: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/OutputSchema310/id`.
+            public var id: Components.Schemas.ProductCategoryShortcode
+            /// - Remark: Generated from `#/components/schemas/OutputSchema310/name`.
+            public var name: Swift.String
+            /// Creates a new `OutputSchema310Payload`.
+            ///
+            /// - Parameters:
+            ///   - id:
+            ///   - name:
+            public init(
+                id: Components.Schemas.ProductCategoryShortcode,
+                name: Swift.String
+            ) {
+                self.id = id
+                self.name = name
+            }
+            public enum CodingKeys: String, CodingKey {
+                case id
+                case name
             }
         }
-        /// - Remark: Generated from `#/components/schemas/output_schema311`.
-        public typealias OutputSchema311 = [Components.Schemas.TaskShortcode]
-        /// - Remark: Generated from `#/components/schemas/output_schema332`.
-        public typealias OutputSchema332 = [Components.Schemas.ProjectShortcode]
+        /// - Remark: Generated from `#/components/schemas/output_schema310`.
+        public typealias OutputSchema310 = [Components.Schemas.OutputSchema310Payload]
+        /// - Remark: Generated from `#/components/schemas/output_schema324`.
+        public typealias OutputSchema324 = [Components.Schemas.TaskShortcode]
+        /// - Remark: Generated from `#/components/schemas/output_schema345`.
+        public typealias OutputSchema345 = [Components.Schemas.ProjectShortcode]
         /// Receipt role. Principal lines are the purchased item/service; every other value is a purchase-level adjustment.
         ///
-        /// - Remark: Generated from `#/components/schemas/output_schema342`.
-        public typealias OutputSchema342 = Components.Schemas.ExpenseLineKind
+        /// - Remark: Generated from `#/components/schemas/output_schema355`.
+        public typealias OutputSchema355 = Components.Schemas.ExpenseLineKind
         /// Whether this row is a line item or a slice of a total that was never itemized. 'allocation' means the money was cut by payment schedule (a deposit and a balance on one order) or by an estimated materials/labor split of a lump-sum contract — such a row can never carry a productId, and its costType may be an estimate rather than a vendor-stated fact.
         ///
-        /// - Remark: Generated from `#/components/schemas/output_schema343`.
-        public typealias OutputSchema343 = Components.Schemas.ExpenseLineBasis
-        /// - Remark: Generated from `#/components/schemas/output_schema431`.
-        public typealias OutputSchema431 = [Components.Schemas.WishCandidateOut]
-        /// - Remark: Generated from `#/components/schemas/output_schema437`.
-        public typealias OutputSchema437 = [Components.Schemas.EntityAttachmentRead]
+        /// - Remark: Generated from `#/components/schemas/output_schema356`.
+        public typealias OutputSchema356 = Components.Schemas.ExpenseLineBasis
+        /// - Remark: Generated from `#/components/schemas/output_schema444`.
+        public typealias OutputSchema444 = [Components.Schemas.WishCandidateOut]
+        /// - Remark: Generated from `#/components/schemas/output_schema450`.
+        public typealias OutputSchema450 = [Components.Schemas.EntityAttachmentRead]
         /// - Remark: Generated from `#/components/schemas/output_schema51`.
         public typealias OutputSchema51 = [Components.Schemas.ExternalIdOut]
         /// - Remark: Generated from `#/components/schemas/output_schema68`.
@@ -30766,21 +21391,6 @@ extension Components {
             public enum CodingKeys: String, CodingKey {
                 case covered
                 case total
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.covered = try container.decode(
-                    Swift.Int.self,
-                    forKey: .covered
-                )
-                self.total = try container.decode(
-                    Swift.Int.self,
-                    forKey: .total
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "covered",
-                    "total"
-                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/PerceptualHash`.
@@ -30824,6 +21434,7 @@ extension Components {
                         case vendorAccount = "vendorAccount"
                         case productCategory = "productCategory"
                         case importRun = "importRun"
+                        case device = "device"
                     }
                     /// - Remark: Generated from `#/components/schemas/PhotoImportCommitInput/ImagesPayload/source/entity`.
                     public var entity: Components.Schemas.PhotoImportCommitInput.ImagesPayloadPayload.SourcePayload.EntityPayload
@@ -31302,26 +21913,6 @@ extension Components {
                     case routeId
                     case id
                 }
-                public init(from decoder: any Swift.Decoder) throws {
-                    let container = try decoder.container(keyedBy: CodingKeys.self)
-                    self.draftId = try container.decode(
-                        Swift.String.self,
-                        forKey: .draftId
-                    )
-                    self.routeId = try container.decode(
-                        Swift.String.self,
-                        forKey: .routeId
-                    )
-                    self.id = try container.decode(
-                        Swift.String.self,
-                        forKey: .id
-                    )
-                    try decoder.ensureNoAdditionalProperties(knownKeys: [
-                        "draftId",
-                        "routeId",
-                        "id"
-                    ])
-                }
             }
             /// - Remark: Generated from `#/components/schemas/PhotoImportCommitOutput/createdDestinations`.
             public typealias CreatedDestinationsPayload = [Components.Schemas.PhotoImportCommitOutput.CreatedDestinationsPayloadPayload]
@@ -31348,26 +21939,6 @@ extension Components {
                 case committedPhotoIds
                 case createdDestinations
                 case committedAt
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.committedPhotoIds = try container.decode(
-                    [Components.Schemas.ImageShortcode].self,
-                    forKey: .committedPhotoIds
-                )
-                self.createdDestinations = try container.decode(
-                    Components.Schemas.PhotoImportCommitOutput.CreatedDestinationsPayload.self,
-                    forKey: .createdDestinations
-                )
-                self.committedAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .committedAt
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "committedPhotoIds",
-                    "createdDestinations",
-                    "committedAt"
-                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/PhotoImportReconcileInput`.
@@ -31415,26 +21986,6 @@ extension Components {
                     case status
                     case associations
                 }
-                public init(from decoder: any Swift.Decoder) throws {
-                    let container = try decoder.container(keyedBy: CodingKeys.self)
-                    self.imageId = try container.decode(
-                        Components.Schemas.ImageShortcode.self,
-                        forKey: .imageId
-                    )
-                    self.status = try container.decode(
-                        Components.Schemas.ImageStatus.self,
-                        forKey: .status
-                    )
-                    self.associations = try container.decode(
-                        [Components.Schemas.ImageAssociation].self,
-                        forKey: .associations
-                    )
-                    try decoder.ensureNoAdditionalProperties(knownKeys: [
-                        "imageId",
-                        "status",
-                        "associations"
-                    ])
-                }
             }
             /// - Remark: Generated from `#/components/schemas/PhotoImportReconcileOutput/items`.
             public typealias ItemsPayload = [Components.Schemas.PhotoImportReconcileOutput.ItemsPayloadPayload]
@@ -31457,21 +22008,6 @@ extension Components {
             public enum CodingKeys: String, CodingKey {
                 case items
                 case missing
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.items = try container.decode(
-                    Components.Schemas.PhotoImportReconcileOutput.ItemsPayload.self,
-                    forKey: .items
-                )
-                self.missing = try container.decode(
-                    [Components.Schemas.ImageShortcode].self,
-                    forKey: .missing
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "items",
-                    "missing"
-                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/PhotoImportStageInput`.
@@ -31630,26 +22166,6 @@ extension Components {
                         case clientId
                         case imageId
                     }
-                    public init(from decoder: any Swift.Decoder) throws {
-                        let container = try decoder.container(keyedBy: CodingKeys.self)
-                        self.kind = try container.decode(
-                            Components.Schemas.PhotoImportStageOutput.ItemsPayloadPayload.Value1Payload.KindPayload.self,
-                            forKey: .kind
-                        )
-                        self.clientId = try container.decode(
-                            Swift.String.self,
-                            forKey: .clientId
-                        )
-                        self.imageId = try container.decode(
-                            Components.Schemas.ImageShortcode.self,
-                            forKey: .imageId
-                        )
-                        try decoder.ensureNoAdditionalProperties(knownKeys: [
-                            "kind",
-                            "clientId",
-                            "imageId"
-                        ])
-                    }
                 }
                 /// - Remark: Generated from `#/components/schemas/PhotoImportStageOutput/ItemsPayload/value1`.
                 public var value1: Components.Schemas.PhotoImportStageOutput.ItemsPayloadPayload.Value1Payload?
@@ -31703,41 +22219,6 @@ extension Components {
                         case key
                         case url
                     }
-                    public init(from decoder: any Swift.Decoder) throws {
-                        let container = try decoder.container(keyedBy: CodingKeys.self)
-                        self.kind = try container.decode(
-                            Components.Schemas.PhotoImportStageOutput.ItemsPayloadPayload.Value2Payload.KindPayload.self,
-                            forKey: .kind
-                        )
-                        self.clientId = try container.decode(
-                            Swift.String.self,
-                            forKey: .clientId
-                        )
-                        self.imageId = try container.decode(
-                            Components.Schemas.ImageShortcode.self,
-                            forKey: .imageId
-                        )
-                        self.uploadUrl = try container.decode(
-                            Swift.String.self,
-                            forKey: .uploadUrl
-                        )
-                        self.key = try container.decode(
-                            Swift.String.self,
-                            forKey: .key
-                        )
-                        self.url = try container.decode(
-                            Swift.String.self,
-                            forKey: .url
-                        )
-                        try decoder.ensureNoAdditionalProperties(knownKeys: [
-                            "kind",
-                            "clientId",
-                            "imageId",
-                            "uploadUrl",
-                            "key",
-                            "url"
-                        ])
-                    }
                 }
                 /// - Remark: Generated from `#/components/schemas/PhotoImportStageOutput/ItemsPayload/value2`.
                 public var value2: Components.Schemas.PhotoImportStageOutput.ItemsPayloadPayload.Value2Payload?
@@ -31772,26 +22253,6 @@ extension Components {
                         case kind
                         case clientId
                         case retryable
-                    }
-                    public init(from decoder: any Swift.Decoder) throws {
-                        let container = try decoder.container(keyedBy: CodingKeys.self)
-                        self.kind = try container.decode(
-                            Components.Schemas.PhotoImportStageOutput.ItemsPayloadPayload.Value3Payload.KindPayload.self,
-                            forKey: .kind
-                        )
-                        self.clientId = try container.decode(
-                            Swift.String.self,
-                            forKey: .clientId
-                        )
-                        self.retryable = try container.decode(
-                            Swift.Bool.self,
-                            forKey: .retryable
-                        )
-                        try decoder.ensureNoAdditionalProperties(knownKeys: [
-                            "kind",
-                            "clientId",
-                            "retryable"
-                        ])
                     }
                 }
                 /// - Remark: Generated from `#/components/schemas/PhotoImportStageOutput/ItemsPayload/value3`.
@@ -31858,16 +22319,6 @@ extension Components {
             }
             public enum CodingKeys: String, CodingKey {
                 case items
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.items = try container.decode(
-                    Components.Schemas.PhotoImportStageOutput.ItemsPayload.self,
-                    forKey: .items
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "items"
-                ])
             }
         }
         /// Calendar day as "YYYY-MM-DD"
@@ -32008,7 +22459,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/PlantingDetail/displayImages`.
             public var displayImages: Components.Schemas.DisplayImagesField
             /// - Remark: Generated from `#/components/schemas/PlantingDetail/attachments`.
-            public var attachments: Components.Schemas.OutputSchema437
+            public var attachments: Components.Schemas.OutputSchema450
             /// Creates a new `PlantingDetail`.
             ///
             /// - Parameters:
@@ -32062,7 +22513,7 @@ extension Components {
                 updatedAt: Foundation.Date,
                 dataQuality: Components.Schemas.DataQuality,
                 displayImages: Components.Schemas.DisplayImagesField,
-                attachments: Components.Schemas.OutputSchema437
+                attachments: Components.Schemas.OutputSchema450
             ) {
                 self.id = id
                 self.ingredientId = ingredientId
@@ -32116,136 +22567,6 @@ extension Components {
                 case dataQuality
                 case displayImages
                 case attachments
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.id = try container.decode(
-                    Components.Schemas.PlantingShortcode.self,
-                    forKey: .id
-                )
-                self.ingredientId = try container.decode(
-                    Components.Schemas.IngredientShortcode.self,
-                    forKey: .ingredientId
-                )
-                self.sourceProductId = try container.decodeIfPresent(
-                    Components.Schemas.ProductShortcode.self,
-                    forKey: .sourceProductId
-                )
-                self.locationId = try container.decodeIfPresent(
-                    Components.Schemas.LocationShortcode.self,
-                    forKey: .locationId
-                )
-                self.taskId = try container.decodeIfPresent(
-                    Components.Schemas.TaskShortcode.self,
-                    forKey: .taskId
-                )
-                self.status = try container.decode(
-                    Components.Schemas.PlantingStatus.self,
-                    forKey: .status
-                )
-                self.variety = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .variety
-                )
-                self.quantity = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .quantity
-                )
-                self.notes = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .notes
-                )
-                self.plannedWindow = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .plannedWindow
-                )
-                self.sowedOn = try container.decodeIfPresent(
-                    Components.Schemas.PlainDate.self,
-                    forKey: .sowedOn
-                )
-                self.transplantedOn = try container.decodeIfPresent(
-                    Components.Schemas.PlainDate.self,
-                    forKey: .transplantedOn
-                )
-                self.finishedOn = try container.decodeIfPresent(
-                    Components.Schemas.PlainDate.self,
-                    forKey: .finishedOn
-                )
-                self.displayName = try container.decode(
-                    Swift.String.self,
-                    forKey: .displayName
-                )
-                self.ingredientName = try container.decode(
-                    Swift.String.self,
-                    forKey: .ingredientName
-                )
-                self.sourceProductName = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .sourceProductName
-                )
-                self.locationName = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .locationName
-                )
-                self.taskName = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .taskName
-                )
-                self.guideSowWindow = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .guideSowWindow
-                )
-                self.guideTransplantWindow = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .guideTransplantWindow
-                )
-                self.createdAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .createdAt
-                )
-                self.updatedAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .updatedAt
-                )
-                self.dataQuality = try container.decode(
-                    Components.Schemas.DataQuality.self,
-                    forKey: .dataQuality
-                )
-                self.displayImages = try container.decode(
-                    Components.Schemas.DisplayImagesField.self,
-                    forKey: .displayImages
-                )
-                self.attachments = try container.decode(
-                    Components.Schemas.OutputSchema437.self,
-                    forKey: .attachments
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "id",
-                    "ingredientId",
-                    "sourceProductId",
-                    "locationId",
-                    "taskId",
-                    "status",
-                    "variety",
-                    "quantity",
-                    "notes",
-                    "plannedWindow",
-                    "sowedOn",
-                    "transplantedOn",
-                    "finishedOn",
-                    "displayName",
-                    "ingredientName",
-                    "sourceProductName",
-                    "locationName",
-                    "taskName",
-                    "guideSowWindow",
-                    "guideTransplantWindow",
-                    "createdAt",
-                    "updatedAt",
-                    "dataQuality",
-                    "displayImages",
-                    "attachments"
-                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/PlantingListItem`.
@@ -32402,131 +22723,6 @@ extension Components {
                 case dataQuality
                 case displayImages
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.id = try container.decode(
-                    Components.Schemas.PlantingShortcode.self,
-                    forKey: .id
-                )
-                self.ingredientId = try container.decode(
-                    Components.Schemas.IngredientShortcode.self,
-                    forKey: .ingredientId
-                )
-                self.sourceProductId = try container.decodeIfPresent(
-                    Components.Schemas.ProductShortcode.self,
-                    forKey: .sourceProductId
-                )
-                self.locationId = try container.decodeIfPresent(
-                    Components.Schemas.LocationShortcode.self,
-                    forKey: .locationId
-                )
-                self.taskId = try container.decodeIfPresent(
-                    Components.Schemas.TaskShortcode.self,
-                    forKey: .taskId
-                )
-                self.status = try container.decode(
-                    Components.Schemas.PlantingStatus.self,
-                    forKey: .status
-                )
-                self.variety = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .variety
-                )
-                self.quantity = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .quantity
-                )
-                self.notes = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .notes
-                )
-                self.plannedWindow = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .plannedWindow
-                )
-                self.sowedOn = try container.decodeIfPresent(
-                    Components.Schemas.PlainDate.self,
-                    forKey: .sowedOn
-                )
-                self.transplantedOn = try container.decodeIfPresent(
-                    Components.Schemas.PlainDate.self,
-                    forKey: .transplantedOn
-                )
-                self.finishedOn = try container.decodeIfPresent(
-                    Components.Schemas.PlainDate.self,
-                    forKey: .finishedOn
-                )
-                self.displayName = try container.decode(
-                    Swift.String.self,
-                    forKey: .displayName
-                )
-                self.ingredientName = try container.decode(
-                    Swift.String.self,
-                    forKey: .ingredientName
-                )
-                self.sourceProductName = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .sourceProductName
-                )
-                self.locationName = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .locationName
-                )
-                self.taskName = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .taskName
-                )
-                self.guideSowWindow = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .guideSowWindow
-                )
-                self.guideTransplantWindow = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .guideTransplantWindow
-                )
-                self.createdAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .createdAt
-                )
-                self.updatedAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .updatedAt
-                )
-                self.dataQuality = try container.decode(
-                    Components.Schemas.DataQuality.self,
-                    forKey: .dataQuality
-                )
-                self.displayImages = try container.decode(
-                    Components.Schemas.DisplayImagesField.self,
-                    forKey: .displayImages
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "id",
-                    "ingredientId",
-                    "sourceProductId",
-                    "locationId",
-                    "taskId",
-                    "status",
-                    "variety",
-                    "quantity",
-                    "notes",
-                    "plannedWindow",
-                    "sowedOn",
-                    "transplantedOn",
-                    "finishedOn",
-                    "displayName",
-                    "ingredientName",
-                    "sourceProductName",
-                    "locationName",
-                    "taskName",
-                    "guideSowWindow",
-                    "guideTransplantWindow",
-                    "createdAt",
-                    "updatedAt",
-                    "dataQuality",
-                    "displayImages"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/PlantingListPage`.
         public struct PlantingListPage: Codable, Hashable, Sendable {
@@ -32549,21 +22745,6 @@ extension Components {
             public enum CodingKeys: String, CodingKey {
                 case items
                 case meta
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.items = try container.decode(
-                    [Components.Schemas.PlantingListItem].self,
-                    forKey: .items
-                )
-                self.meta = try container.decode(
-                    Components.Schemas.ListPageMeta.self,
-                    forKey: .meta
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "items",
-                    "meta"
-                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/PlantingOut`.
@@ -32714,126 +22895,6 @@ extension Components {
                 case updatedAt
                 case dataQuality
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.id = try container.decode(
-                    Components.Schemas.PlantingShortcode.self,
-                    forKey: .id
-                )
-                self.ingredientId = try container.decode(
-                    Components.Schemas.IngredientShortcode.self,
-                    forKey: .ingredientId
-                )
-                self.sourceProductId = try container.decodeIfPresent(
-                    Components.Schemas.ProductShortcode.self,
-                    forKey: .sourceProductId
-                )
-                self.locationId = try container.decodeIfPresent(
-                    Components.Schemas.LocationShortcode.self,
-                    forKey: .locationId
-                )
-                self.taskId = try container.decodeIfPresent(
-                    Components.Schemas.TaskShortcode.self,
-                    forKey: .taskId
-                )
-                self.status = try container.decode(
-                    Components.Schemas.PlantingStatus.self,
-                    forKey: .status
-                )
-                self.variety = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .variety
-                )
-                self.quantity = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .quantity
-                )
-                self.notes = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .notes
-                )
-                self.plannedWindow = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .plannedWindow
-                )
-                self.sowedOn = try container.decodeIfPresent(
-                    Components.Schemas.PlainDate.self,
-                    forKey: .sowedOn
-                )
-                self.transplantedOn = try container.decodeIfPresent(
-                    Components.Schemas.PlainDate.self,
-                    forKey: .transplantedOn
-                )
-                self.finishedOn = try container.decodeIfPresent(
-                    Components.Schemas.PlainDate.self,
-                    forKey: .finishedOn
-                )
-                self.displayName = try container.decode(
-                    Swift.String.self,
-                    forKey: .displayName
-                )
-                self.ingredientName = try container.decode(
-                    Swift.String.self,
-                    forKey: .ingredientName
-                )
-                self.sourceProductName = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .sourceProductName
-                )
-                self.locationName = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .locationName
-                )
-                self.taskName = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .taskName
-                )
-                self.guideSowWindow = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .guideSowWindow
-                )
-                self.guideTransplantWindow = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .guideTransplantWindow
-                )
-                self.createdAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .createdAt
-                )
-                self.updatedAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .updatedAt
-                )
-                self.dataQuality = try container.decode(
-                    Components.Schemas.DataQuality.self,
-                    forKey: .dataQuality
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "id",
-                    "ingredientId",
-                    "sourceProductId",
-                    "locationId",
-                    "taskId",
-                    "status",
-                    "variety",
-                    "quantity",
-                    "notes",
-                    "plannedWindow",
-                    "sowedOn",
-                    "transplantedOn",
-                    "finishedOn",
-                    "displayName",
-                    "ingredientName",
-                    "sourceProductName",
-                    "locationName",
-                    "taskName",
-                    "guideSowWindow",
-                    "guideTransplantWindow",
-                    "createdAt",
-                    "updatedAt",
-                    "dataQuality"
-                ])
-            }
         }
         /// planting shortcode, e.g. PLT-4K7M
         ///
@@ -32955,26 +23016,6 @@ extension Components {
                 case value
                 case unit
                 case upperValue
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.value = try container.decode(
-                    Swift.Double.self,
-                    forKey: .value
-                )
-                self.unit = try container.decode(
-                    Swift.String.self,
-                    forKey: .unit
-                )
-                self.upperValue = try container.decodeIfPresent(
-                    Swift.Double.self,
-                    forKey: .upperValue
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "value",
-                    "unit",
-                    "upperValue"
-                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/PositiveAmountInput`.
@@ -33342,276 +23383,6 @@ extension Components {
                     case unusedIngredientsWithProduct
                     case unusedIngredientsWithoutProduct
                 }
-                public init(from decoder: any Swift.Decoder) throws {
-                    let container = try decoder.container(keyedBy: CodingKeys.self)
-                    self.importFindings = try container.decode(
-                        Swift.Double.self,
-                        forKey: .importFindings
-                    )
-                    self.duplicateInventory = try container.decode(
-                        Swift.Double.self,
-                        forKey: .duplicateInventory
-                    )
-                    self.duplicateProductIdentities = try container.decode(
-                        Swift.Double.self,
-                        forKey: .duplicateProductIdentities
-                    )
-                    self.orphanedProducts = try container.decode(
-                        Swift.Double.self,
-                        forKey: .orphanedProducts
-                    )
-                    self.partiallyImportedCookbooks = try container.decode(
-                        Swift.Double.self,
-                        forKey: .partiallyImportedCookbooks
-                    )
-                    self.soldButStillStocked = try container.decode(
-                        Swift.Double.self,
-                        forKey: .soldButStillStocked
-                    )
-                    self.kitsCountedTwice = try container.decode(
-                        Swift.Double.self,
-                        forKey: .kitsCountedTwice
-                    )
-                    self.unlinkedExitExpenses = try container.decode(
-                        Swift.Double.self,
-                        forKey: .unlinkedExitExpenses
-                    )
-                    self.purchaselessExitExpenses = try container.decode(
-                        Swift.Double.self,
-                        forKey: .purchaselessExitExpenses
-                    )
-                    self.toolsUsedOutsideOwnership = try container.decode(
-                        Swift.Double.self,
-                        forKey: .toolsUsedOutsideOwnership
-                    )
-                    self.productsWithNoImages = try container.decode(
-                        Swift.Double.self,
-                        forKey: .productsWithNoImages
-                    )
-                    self.imageProcessingIssues = try container.decode(
-                        Swift.Double.self,
-                        forKey: .imageProcessingIssues
-                    )
-                    self.entitiesMissingEmbeddings = try container.decode(
-                        Swift.Double.self,
-                        forKey: .entitiesMissingEmbeddings
-                    )
-                    self.staleParentRecipes = try container.decode(
-                        Swift.Double.self,
-                        forKey: .staleParentRecipes
-                    )
-                    self.understatedCostMeals = try container.decode(
-                        Swift.Double.self,
-                        forKey: .understatedCostMeals
-                    )
-                    self.unknownParkedItems = try container.decode(
-                        Swift.Double.self,
-                        forKey: .unknownParkedItems
-                    )
-                    self.inventoryWithoutPricePath = try container.decode(
-                        Swift.Double.self,
-                        forKey: .inventoryWithoutPricePath
-                    )
-                    self.weightSoldProducts = try container.decode(
-                        Swift.Double.self,
-                        forKey: .weightSoldProducts
-                    )
-                    self.manufacturerSpellingVariants = try container.decode(
-                        Swift.Double.self,
-                        forKey: .manufacturerSpellingVariants
-                    )
-                    self.duplicateVendors = try container.decode(
-                        Swift.Double.self,
-                        forKey: .duplicateVendors
-                    )
-                    self.vendorsWithoutLogos = try container.decode(
-                        Swift.Double.self,
-                        forKey: .vendorsWithoutLogos
-                    )
-                    self.purchasesNotReconciling = try container.decode(
-                        Swift.Double.self,
-                        forKey: .purchasesNotReconciling
-                    )
-                    self.purchaseFinancialSettlementMismatches = try container.decode(
-                        Swift.Double.self,
-                        forKey: .purchaseFinancialSettlementMismatches
-                    )
-                    self.duplicateSpendCandidates = try container.decode(
-                        Swift.Double.self,
-                        forKey: .duplicateSpendCandidates
-                    )
-                    self.duplicateFinancialTransactionSourceRefs = try container.decode(
-                        Swift.Double.self,
-                        forKey: .duplicateFinancialTransactionSourceRefs
-                    )
-                    self.duplicateFinancialAccountSourceAliases = try container.decode(
-                        Swift.Double.self,
-                        forKey: .duplicateFinancialAccountSourceAliases
-                    )
-                    self.financialTransactionAllocationDefects = try container.decode(
-                        Swift.Double.self,
-                        forKey: .financialTransactionAllocationDefects
-                    )
-                    self.invalidFinancialJson = try container.decode(
-                        Swift.Double.self,
-                        forKey: .invalidFinancialJson
-                    )
-                    self.referentialLivenessViolations = try container.decode(
-                        Swift.Double.self,
-                        forKey: .referentialLivenessViolations
-                    )
-                    self.dependencyCycles = try container.decode(
-                        Swift.Double.self,
-                        forKey: .dependencyCycles
-                    )
-                    self.incompleteStatementImports = try container.decode(
-                        Swift.Double.self,
-                        forKey: .incompleteStatementImports
-                    )
-                    self.ingredientsWithPartialCoverage = try container.decode(
-                        Swift.Double.self,
-                        forKey: .ingredientsWithPartialCoverage
-                    )
-                    self.productsWithIslandedMappings = try container.decode(
-                        Swift.Double.self,
-                        forKey: .productsWithIslandedMappings
-                    )
-                    self.productsWithTitleDerivableSize = try container.decode(
-                        Swift.Double.self,
-                        forKey: .productsWithTitleDerivableSize
-                    )
-                    self.productsWithBetterUpcData = try container.decode(
-                        Swift.Double.self,
-                        forKey: .productsWithBetterUpcData
-                    )
-                    self.overdueTasks = try container.decode(
-                        Swift.Double.self,
-                        forKey: .overdueTasks
-                    )
-                    self.stalledProjects = try container.decode(
-                        Swift.Double.self,
-                        forKey: .stalledProjects
-                    )
-                    self.projectsMissingBudget = try container.decode(
-                        Swift.Double.self,
-                        forKey: .projectsMissingBudget
-                    )
-                    self.pastDuePlannedExpenses = try container.decode(
-                        Swift.Double.self,
-                        forKey: .pastDuePlannedExpenses
-                    )
-                    self.unclassifiedExpenses = try container.decode(
-                        Swift.Double.self,
-                        forKey: .unclassifiedExpenses
-                    )
-                    self.blockedWorkProjects = try container.decode(
-                        Swift.Double.self,
-                        forKey: .blockedWorkProjects
-                    )
-                    self.projectsWithDateDrift = try container.decode(
-                        Swift.Double.self,
-                        forKey: .projectsWithDateDrift
-                    )
-                    self.ingredientsWithoutProduct = try container.decode(
-                        Swift.Double.self,
-                        forKey: .ingredientsWithoutProduct
-                    )
-                    self.staleLocations = try container.decode(
-                        Swift.Double.self,
-                        forKey: .staleLocations
-                    )
-                    self.productsWithoutMappings = try container.decode(
-                        Swift.Double.self,
-                        forKey: .productsWithoutMappings
-                    )
-                    self.productsMissingPrice = try container.decode(
-                        Swift.Double.self,
-                        forKey: .productsMissingPrice
-                    )
-                    self.unvaluedBucketProducts = try container.decode(
-                        Swift.Double.self,
-                        forKey: .unvaluedBucketProducts
-                    )
-                    self.neverVerifiedInventory = try container.decode(
-                        Swift.Double.self,
-                        forKey: .neverVerifiedInventory
-                    )
-                    self.locationsWithoutAiDescription = try container.decode(
-                        Swift.Double.self,
-                        forKey: .locationsWithoutAiDescription
-                    )
-                    self.emptyLocations = try container.decode(
-                        Swift.Double.self,
-                        forKey: .emptyLocations
-                    )
-                    self.negativeExpectedQuantity = try container.decode(
-                        Swift.Double.self,
-                        forKey: .negativeExpectedQuantity
-                    )
-                    self.unusedIngredientsWithProduct = try container.decode(
-                        Swift.Double.self,
-                        forKey: .unusedIngredientsWithProduct
-                    )
-                    self.unusedIngredientsWithoutProduct = try container.decode(
-                        Swift.Double.self,
-                        forKey: .unusedIngredientsWithoutProduct
-                    )
-                    try decoder.ensureNoAdditionalProperties(knownKeys: [
-                        "importFindings",
-                        "duplicateInventory",
-                        "duplicateProductIdentities",
-                        "orphanedProducts",
-                        "partiallyImportedCookbooks",
-                        "soldButStillStocked",
-                        "kitsCountedTwice",
-                        "unlinkedExitExpenses",
-                        "purchaselessExitExpenses",
-                        "toolsUsedOutsideOwnership",
-                        "productsWithNoImages",
-                        "imageProcessingIssues",
-                        "entitiesMissingEmbeddings",
-                        "staleParentRecipes",
-                        "understatedCostMeals",
-                        "unknownParkedItems",
-                        "inventoryWithoutPricePath",
-                        "weightSoldProducts",
-                        "manufacturerSpellingVariants",
-                        "duplicateVendors",
-                        "vendorsWithoutLogos",
-                        "purchasesNotReconciling",
-                        "purchaseFinancialSettlementMismatches",
-                        "duplicateSpendCandidates",
-                        "duplicateFinancialTransactionSourceRefs",
-                        "duplicateFinancialAccountSourceAliases",
-                        "financialTransactionAllocationDefects",
-                        "invalidFinancialJson",
-                        "referentialLivenessViolations",
-                        "dependencyCycles",
-                        "incompleteStatementImports",
-                        "ingredientsWithPartialCoverage",
-                        "productsWithIslandedMappings",
-                        "productsWithTitleDerivableSize",
-                        "productsWithBetterUpcData",
-                        "overdueTasks",
-                        "stalledProjects",
-                        "projectsMissingBudget",
-                        "pastDuePlannedExpenses",
-                        "unclassifiedExpenses",
-                        "blockedWorkProjects",
-                        "projectsWithDateDrift",
-                        "ingredientsWithoutProduct",
-                        "staleLocations",
-                        "productsWithoutMappings",
-                        "productsMissingPrice",
-                        "unvaluedBucketProducts",
-                        "neverVerifiedInventory",
-                        "locationsWithoutAiDescription",
-                        "emptyLocations",
-                        "negativeExpectedQuantity",
-                        "unusedIngredientsWithProduct",
-                        "unusedIngredientsWithoutProduct"
-                    ])
-                }
             }
             /// - Remark: Generated from `#/components/schemas/ProblemsCount/byType`.
             public var byType: Components.Schemas.ProblemsCount.ByTypePayload
@@ -33634,26 +23405,6 @@ extension Components {
                 case total
                 case coverageTotal
                 case byType
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.total = try container.decode(
-                    Swift.Int.self,
-                    forKey: .total
-                )
-                self.coverageTotal = try container.decode(
-                    Swift.Int.self,
-                    forKey: .coverageTotal
-                )
-                self.byType = try container.decode(
-                    Components.Schemas.ProblemsCount.ByTypePayload.self,
-                    forKey: .byType
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "total",
-                    "coverageTotal",
-                    "byType"
-                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/ProductCategoryCreateInput`.
@@ -33722,7 +23473,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/ProductCategoryDetail/parentName`.
             public var parentName: Swift.String?
             /// - Remark: Generated from `#/components/schemas/ProductCategoryDetail/path`.
-            public var path: Components.Schemas.OutputSchema297
+            public var path: Components.Schemas.OutputSchema310
             /// - Remark: Generated from `#/components/schemas/ProductCategoryDetail/createdAt`.
             public var createdAt: Foundation.Date
             /// - Remark: Generated from `#/components/schemas/ProductCategoryDetail/updatedAt`.
@@ -33732,7 +23483,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/ProductCategoryDetail/displayImages`.
             public var displayImages: Components.Schemas.DisplayImagesField
             /// - Remark: Generated from `#/components/schemas/ProductCategoryDetail/attachments`.
-            public var attachments: Components.Schemas.OutputSchema437
+            public var attachments: Components.Schemas.OutputSchema450
             /// Creates a new `ProductCategoryDetail`.
             ///
             /// - Parameters:
@@ -33759,12 +23510,12 @@ extension Components {
                 sortOrder: Swift.Int,
                 feature: Components.Schemas.ProductCategoryFeature? = nil,
                 parentName: Swift.String? = nil,
-                path: Components.Schemas.OutputSchema297,
+                path: Components.Schemas.OutputSchema310,
                 createdAt: Foundation.Date,
                 updatedAt: Foundation.Date,
                 dataQuality: Components.Schemas.DataQuality,
                 displayImages: Components.Schemas.DisplayImagesField,
-                attachments: Components.Schemas.OutputSchema437
+                attachments: Components.Schemas.OutputSchema450
             ) {
                 self.id = id
                 self.name = name
@@ -33796,81 +23547,6 @@ extension Components {
                 case dataQuality
                 case displayImages
                 case attachments
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.id = try container.decode(
-                    Components.Schemas.ProductCategoryShortcode.self,
-                    forKey: .id
-                )
-                self.name = try container.decode(
-                    Swift.String.self,
-                    forKey: .name
-                )
-                self.aliases = try container.decode(
-                    Components.Schemas.InputSchema56.self,
-                    forKey: .aliases
-                )
-                self.description = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .description
-                )
-                self.parentId = try container.decodeIfPresent(
-                    Components.Schemas.ProductCategoryShortcode.self,
-                    forKey: .parentId
-                )
-                self.sortOrder = try container.decode(
-                    Swift.Int.self,
-                    forKey: .sortOrder
-                )
-                self.feature = try container.decodeIfPresent(
-                    Components.Schemas.ProductCategoryFeature.self,
-                    forKey: .feature
-                )
-                self.parentName = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .parentName
-                )
-                self.path = try container.decode(
-                    Components.Schemas.OutputSchema297.self,
-                    forKey: .path
-                )
-                self.createdAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .createdAt
-                )
-                self.updatedAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .updatedAt
-                )
-                self.dataQuality = try container.decode(
-                    Components.Schemas.DataQuality.self,
-                    forKey: .dataQuality
-                )
-                self.displayImages = try container.decode(
-                    Components.Schemas.DisplayImagesField.self,
-                    forKey: .displayImages
-                )
-                self.attachments = try container.decode(
-                    Components.Schemas.OutputSchema437.self,
-                    forKey: .attachments
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "id",
-                    "name",
-                    "aliases",
-                    "description",
-                    "parentId",
-                    "sortOrder",
-                    "feature",
-                    "parentName",
-                    "path",
-                    "createdAt",
-                    "updatedAt",
-                    "dataQuality",
-                    "displayImages",
-                    "attachments"
-                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/ProductCategoryFeature`.
@@ -33907,7 +23583,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/ProductCategoryListItem/parentName`.
             public var parentName: Swift.String?
             /// - Remark: Generated from `#/components/schemas/ProductCategoryListItem/path`.
-            public var path: Components.Schemas.OutputSchema297
+            public var path: Components.Schemas.OutputSchema310
             /// - Remark: Generated from `#/components/schemas/ProductCategoryListItem/createdAt`.
             public var createdAt: Foundation.Date
             /// - Remark: Generated from `#/components/schemas/ProductCategoryListItem/updatedAt`.
@@ -33941,7 +23617,7 @@ extension Components {
                 sortOrder: Swift.Int,
                 feature: Components.Schemas.ProductCategoryFeature? = nil,
                 parentName: Swift.String? = nil,
-                path: Components.Schemas.OutputSchema297,
+                path: Components.Schemas.OutputSchema310,
                 createdAt: Foundation.Date,
                 updatedAt: Foundation.Date,
                 dataQuality: Components.Schemas.DataQuality,
@@ -33976,76 +23652,6 @@ extension Components {
                 case dataQuality
                 case displayImages
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.id = try container.decode(
-                    Components.Schemas.ProductCategoryShortcode.self,
-                    forKey: .id
-                )
-                self.name = try container.decode(
-                    Swift.String.self,
-                    forKey: .name
-                )
-                self.aliases = try container.decode(
-                    Components.Schemas.InputSchema56.self,
-                    forKey: .aliases
-                )
-                self.description = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .description
-                )
-                self.parentId = try container.decodeIfPresent(
-                    Components.Schemas.ProductCategoryShortcode.self,
-                    forKey: .parentId
-                )
-                self.sortOrder = try container.decode(
-                    Swift.Int.self,
-                    forKey: .sortOrder
-                )
-                self.feature = try container.decodeIfPresent(
-                    Components.Schemas.ProductCategoryFeature.self,
-                    forKey: .feature
-                )
-                self.parentName = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .parentName
-                )
-                self.path = try container.decode(
-                    Components.Schemas.OutputSchema297.self,
-                    forKey: .path
-                )
-                self.createdAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .createdAt
-                )
-                self.updatedAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .updatedAt
-                )
-                self.dataQuality = try container.decode(
-                    Components.Schemas.DataQuality.self,
-                    forKey: .dataQuality
-                )
-                self.displayImages = try container.decode(
-                    Components.Schemas.DisplayImagesField.self,
-                    forKey: .displayImages
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "id",
-                    "name",
-                    "aliases",
-                    "description",
-                    "parentId",
-                    "sortOrder",
-                    "feature",
-                    "parentName",
-                    "path",
-                    "createdAt",
-                    "updatedAt",
-                    "dataQuality",
-                    "displayImages"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/ProductCategoryListPage`.
         public struct ProductCategoryListPage: Codable, Hashable, Sendable {
@@ -34069,21 +23675,6 @@ extension Components {
                 case items
                 case meta
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.items = try container.decode(
-                    [Components.Schemas.ProductCategoryListItem].self,
-                    forKey: .items
-                )
-                self.meta = try container.decode(
-                    Components.Schemas.ListPageMeta.self,
-                    forKey: .meta
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "items",
-                    "meta"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/ProductCategoryOut`.
         public struct ProductCategoryOut: Codable, Hashable, Sendable {
@@ -34104,7 +23695,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/ProductCategoryOut/parentName`.
             public var parentName: Swift.String?
             /// - Remark: Generated from `#/components/schemas/ProductCategoryOut/path`.
-            public var path: Components.Schemas.OutputSchema297
+            public var path: Components.Schemas.OutputSchema310
             /// - Remark: Generated from `#/components/schemas/ProductCategoryOut/createdAt`.
             public var createdAt: Foundation.Date
             /// - Remark: Generated from `#/components/schemas/ProductCategoryOut/updatedAt`.
@@ -34135,7 +23726,7 @@ extension Components {
                 sortOrder: Swift.Int,
                 feature: Components.Schemas.ProductCategoryFeature? = nil,
                 parentName: Swift.String? = nil,
-                path: Components.Schemas.OutputSchema297,
+                path: Components.Schemas.OutputSchema310,
                 createdAt: Foundation.Date,
                 updatedAt: Foundation.Date,
                 dataQuality: Components.Schemas.DataQuality
@@ -34167,71 +23758,6 @@ extension Components {
                 case updatedAt
                 case dataQuality
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.id = try container.decode(
-                    Components.Schemas.ProductCategoryShortcode.self,
-                    forKey: .id
-                )
-                self.name = try container.decode(
-                    Swift.String.self,
-                    forKey: .name
-                )
-                self.aliases = try container.decode(
-                    Components.Schemas.InputSchema56.self,
-                    forKey: .aliases
-                )
-                self.description = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .description
-                )
-                self.parentId = try container.decodeIfPresent(
-                    Components.Schemas.ProductCategoryShortcode.self,
-                    forKey: .parentId
-                )
-                self.sortOrder = try container.decode(
-                    Swift.Int.self,
-                    forKey: .sortOrder
-                )
-                self.feature = try container.decodeIfPresent(
-                    Components.Schemas.ProductCategoryFeature.self,
-                    forKey: .feature
-                )
-                self.parentName = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .parentName
-                )
-                self.path = try container.decode(
-                    Components.Schemas.OutputSchema297.self,
-                    forKey: .path
-                )
-                self.createdAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .createdAt
-                )
-                self.updatedAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .updatedAt
-                )
-                self.dataQuality = try container.decode(
-                    Components.Schemas.DataQuality.self,
-                    forKey: .dataQuality
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "id",
-                    "name",
-                    "aliases",
-                    "description",
-                    "parentId",
-                    "sortOrder",
-                    "feature",
-                    "parentName",
-                    "path",
-                    "createdAt",
-                    "updatedAt",
-                    "dataQuality"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/ProductCategoryPathNode`.
         public struct ProductCategoryPathNode: Codable, Hashable, Sendable {
@@ -34254,21 +23780,6 @@ extension Components {
             public enum CodingKeys: String, CodingKey {
                 case id
                 case name
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.id = try container.decode(
-                    Components.Schemas.ProductCategoryShortcode.self,
-                    forKey: .id
-                )
-                self.name = try container.decode(
-                    Swift.String.self,
-                    forKey: .name
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "id",
-                    "name"
-                ])
             }
         }
         /// productCategory shortcode, e.g. CAT-4K7M
@@ -34308,31 +23819,6 @@ extension Components {
                 case name
                 case path
                 case feature
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.id = try container.decode(
-                    Components.Schemas.ProductCategoryShortcode.self,
-                    forKey: .id
-                )
-                self.name = try container.decode(
-                    Swift.String.self,
-                    forKey: .name
-                )
-                self.path = try container.decode(
-                    [Components.Schemas.ProductCategoryPathNode].self,
-                    forKey: .path
-                )
-                self.feature = try container.decodeIfPresent(
-                    Components.Schemas.ProductCategoryFeature.self,
-                    forKey: .feature
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "id",
-                    "name",
-                    "path",
-                    "feature"
-                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/ProductCategoryUpdateData`.
@@ -34409,26 +23895,6 @@ extension Components {
                 case id
                 case name
                 case recipeCount
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.id = try container.decode(
-                    Components.Schemas.CookbookShortcode.self,
-                    forKey: .id
-                )
-                self.name = try container.decode(
-                    Swift.String.self,
-                    forKey: .name
-                )
-                self.recipeCount = try container.decode(
-                    Swift.Int.self,
-                    forKey: .recipeCount
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "id",
-                    "name",
-                    "recipeCount"
-                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/ProductCreateInput`.
@@ -34671,13 +24137,13 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/ProductDetail/coverImageUrl`.
             public var coverImageUrl: Swift.String?
             /// - Remark: Generated from `#/components/schemas/ProductDetail/ingredient`.
-            public var ingredient: Components.Schemas.OutputSchema280?
+            public var ingredient: Components.Schemas.OutputSchema293?
             /// - Remark: Generated from `#/components/schemas/ProductDetail/unitMappings`.
             public var unitMappings: [Components.Schemas.UnitMappingOut]
             /// - Remark: Generated from `#/components/schemas/ProductDetail/inventoryEntry`.
-            public var inventoryEntry: [Components.Schemas.OutputSchema287]
+            public var inventoryEntry: [Components.Schemas.OutputSchema300]
             /// - Remark: Generated from `#/components/schemas/ProductDetail/servingAsLocations`.
-            public var servingAsLocations: [Components.Schemas.OutputSchema289]
+            public var servingAsLocations: [Components.Schemas.OutputSchema302]
             /// - Remark: Generated from `#/components/schemas/ProductDetail/componentCount`.
             public var componentCount: Swift.Int
             /// - Remark: Generated from `#/components/schemas/ProductDetail/food`.
@@ -34695,7 +24161,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/ProductDetail/displayImages`.
             public var displayImages: Components.Schemas.DisplayImagesField
             /// - Remark: Generated from `#/components/schemas/ProductDetail/attachments`.
-            public var attachments: Components.Schemas.OutputSchema437
+            public var attachments: Components.Schemas.OutputSchema450
             /// Creates a new `ProductDetail`.
             ///
             /// - Parameters:
@@ -34769,10 +24235,10 @@ extension Components {
                 classificationEvidence: Swift.String,
                 dataQuality: Components.Schemas.DataQuality,
                 coverImageUrl: Swift.String? = nil,
-                ingredient: Components.Schemas.OutputSchema280? = nil,
+                ingredient: Components.Schemas.OutputSchema293? = nil,
                 unitMappings: [Components.Schemas.UnitMappingOut],
-                inventoryEntry: [Components.Schemas.OutputSchema287],
-                servingAsLocations: [Components.Schemas.OutputSchema289],
+                inventoryEntry: [Components.Schemas.OutputSchema300],
+                servingAsLocations: [Components.Schemas.OutputSchema302],
                 componentCount: Swift.Int,
                 food: Components.Schemas.FoodSummary? = nil,
                 recipeUsages: [Components.Schemas.RecipeUsageOut],
@@ -34781,7 +24247,7 @@ extension Components {
                 onHandUnits: Swift.Double? = nil,
                 quantityVariance: Swift.Double? = nil,
                 displayImages: Components.Schemas.DisplayImagesField,
-                attachments: Components.Schemas.OutputSchema437
+                attachments: Components.Schemas.OutputSchema450
             ) {
                 self.id = id
                 self.name = name
@@ -34867,216 +24333,6 @@ extension Components {
                 case quantityVariance
                 case displayImages
                 case attachments
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.id = try container.decode(
-                    Components.Schemas.ProductShortcode.self,
-                    forKey: .id
-                )
-                self.name = try container.decode(
-                    Swift.String.self,
-                    forKey: .name
-                )
-                self.aliases = try container.decode(
-                    Components.Schemas.InputSchema56.self,
-                    forKey: .aliases
-                )
-                self.tags = try container.decode(
-                    Components.Schemas.InputSchema56.self,
-                    forKey: .tags
-                )
-                self.primaryGtin = try container.decodeIfPresent(
-                    Components.Schemas.Gtin.self,
-                    forKey: .primaryGtin
-                )
-                self.fdcId = try container.decodeIfPresent(
-                    Components.Schemas.FdcId.self,
-                    forKey: .fdcId
-                )
-                self.manufacturer = try container.decode(
-                    Swift.String.self,
-                    forKey: .manufacturer
-                )
-                self.model = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .model
-                )
-                self.notes = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .notes
-                )
-                self.expectedQuantity = try container.decodeIfPresent(
-                    Swift.Double.self,
-                    forKey: .expectedQuantity
-                )
-                self.categoryId = try container.decodeIfPresent(
-                    Components.Schemas.ProductCategoryShortcode.self,
-                    forKey: .categoryId
-                )
-                self.growsIngredientId = try container.decodeIfPresent(
-                    Components.Schemas.IngredientShortcode.self,
-                    forKey: .growsIngredientId
-                )
-                self.images = try container.decode(
-                    Components.Schemas.OutputSchema30.self,
-                    forKey: .images
-                )
-                self.externalIds = try container.decode(
-                    Components.Schemas.OutputSchema51.self,
-                    forKey: .externalIds
-                )
-                self.price = try container.decodeIfPresent(
-                    Components.Schemas.Money.self,
-                    forKey: .price
-                )
-                self.pricing = try container.decode(
-                    Components.Schemas.ProductPricingOut.self,
-                    forKey: .pricing
-                )
-                self.usdaUnavailable = try container.decodeIfPresent(
-                    Swift.Bool.self,
-                    forKey: .usdaUnavailable
-                )
-                self.stockTracked = try container.decodeIfPresent(
-                    Swift.Bool.self,
-                    forKey: .stockTracked
-                )
-                self.labelNutrition = try container.decodeIfPresent(
-                    Components.Schemas.ProductLabelNutrition.self,
-                    forKey: .labelNutrition
-                )
-                self.createdAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .createdAt
-                )
-                self.updatedAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .updatedAt
-                )
-                self.category = try container.decodeIfPresent(
-                    Components.Schemas.ProductCategorySummary.self,
-                    forKey: .category
-                )
-                self.itemImageCount = try container.decode(
-                    Swift.Int.self,
-                    forKey: .itemImageCount
-                )
-                self.labelImageCount = try container.decode(
-                    Swift.Int.self,
-                    forKey: .labelImageCount
-                )
-                self.labelImages = try container.decode(
-                    Components.Schemas.OutputSchema30.self,
-                    forKey: .labelImages
-                )
-                self.classificationEvidence = try container.decode(
-                    Swift.String.self,
-                    forKey: .classificationEvidence
-                )
-                self.dataQuality = try container.decode(
-                    Components.Schemas.DataQuality.self,
-                    forKey: .dataQuality
-                )
-                self.coverImageUrl = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .coverImageUrl
-                )
-                self.ingredient = try container.decodeIfPresent(
-                    Components.Schemas.OutputSchema280.self,
-                    forKey: .ingredient
-                )
-                self.unitMappings = try container.decode(
-                    [Components.Schemas.UnitMappingOut].self,
-                    forKey: .unitMappings
-                )
-                self.inventoryEntry = try container.decode(
-                    [Components.Schemas.OutputSchema287].self,
-                    forKey: .inventoryEntry
-                )
-                self.servingAsLocations = try container.decode(
-                    [Components.Schemas.OutputSchema289].self,
-                    forKey: .servingAsLocations
-                )
-                self.componentCount = try container.decode(
-                    Swift.Int.self,
-                    forKey: .componentCount
-                )
-                self.food = try container.decodeIfPresent(
-                    Components.Schemas.FoodSummary.self,
-                    forKey: .food
-                )
-                self.recipeUsages = try container.decode(
-                    [Components.Schemas.RecipeUsageOut].self,
-                    forKey: .recipeUsages
-                )
-                self.cookbooks = try container.decode(
-                    [Components.Schemas.ProductCookbookRefOut].self,
-                    forKey: .cookbooks
-                )
-                self.quantityLedger = try container.decode(
-                    Components.Schemas.ProductQuantityLedgerOut.self,
-                    forKey: .quantityLedger
-                )
-                self.onHandUnits = try container.decodeIfPresent(
-                    Swift.Double.self,
-                    forKey: .onHandUnits
-                )
-                self.quantityVariance = try container.decodeIfPresent(
-                    Swift.Double.self,
-                    forKey: .quantityVariance
-                )
-                self.displayImages = try container.decode(
-                    Components.Schemas.DisplayImagesField.self,
-                    forKey: .displayImages
-                )
-                self.attachments = try container.decode(
-                    Components.Schemas.OutputSchema437.self,
-                    forKey: .attachments
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "id",
-                    "name",
-                    "aliases",
-                    "tags",
-                    "primaryGtin",
-                    "fdc_id",
-                    "manufacturer",
-                    "model",
-                    "notes",
-                    "expectedQuantity",
-                    "categoryId",
-                    "growsIngredientId",
-                    "images",
-                    "externalIds",
-                    "price",
-                    "pricing",
-                    "usdaUnavailable",
-                    "stockTracked",
-                    "labelNutrition",
-                    "createdAt",
-                    "updatedAt",
-                    "category",
-                    "itemImageCount",
-                    "labelImageCount",
-                    "labelImages",
-                    "classificationEvidence",
-                    "dataQuality",
-                    "coverImageUrl",
-                    "ingredient",
-                    "unitMappings",
-                    "inventoryEntry",
-                    "servingAsLocations",
-                    "componentCount",
-                    "food",
-                    "recipeUsages",
-                    "cookbooks",
-                    "quantityLedger",
-                    "onHandUnits",
-                    "quantityVariance",
-                    "displayImages",
-                    "attachments"
-                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/ProductFindOrCreateByCodeInput`.
@@ -35248,21 +24504,6 @@ extension Components {
                 case product
                 case created
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.product = try container.decode(
-                    Components.Schemas.ProductTopLevelOut.self,
-                    forKey: .product
-                )
-                self.created = try container.decode(
-                    Swift.Bool.self,
-                    forKey: .created
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "product",
-                    "created"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/ProductLabelNutrition`.
         public struct ProductLabelNutrition: Codable, Hashable, Sendable {
@@ -35309,26 +24550,6 @@ extension Components {
                 case servingGrams
                 case nutrients
                 case source
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.servingGrams = try container.decode(
-                    Swift.Double.self,
-                    forKey: .servingGrams
-                )
-                self.nutrients = try container.decode(
-                    Components.Schemas.ProductLabelNutrition.NutrientsPayload.self,
-                    forKey: .nutrients
-                )
-                self.source = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .source
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "servingGrams",
-                    "nutrients",
-                    "source"
-                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/ProductLabelNutritionInput`.
@@ -35441,51 +24662,6 @@ extension Components {
                 case updatedAt
                 case location
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.id = try container.decode(
-                    Components.Schemas.InventoryShortcode.self,
-                    forKey: .id
-                )
-                self.amount = try container.decode(
-                    Components.Schemas.Amount.self,
-                    forKey: .amount
-                )
-                self.valuation = try container.decodeIfPresent(
-                    Components.Schemas.Money.self,
-                    forKey: .valuation
-                )
-                self.verifiedAt = try container.decodeIfPresent(
-                    Foundation.Date.self,
-                    forKey: .verifiedAt
-                )
-                self.placement = try container.decode(
-                    Components.Schemas.ProductListInventoryEntryOut.PlacementPayload.self,
-                    forKey: .placement
-                )
-                self.createdAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .createdAt
-                )
-                self.updatedAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .updatedAt
-                )
-                self.location = try container.decode(
-                    Components.Schemas.LocationListRefOut.self,
-                    forKey: .location
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "id",
-                    "amount",
-                    "valuation",
-                    "verifiedAt",
-                    "placement",
-                    "createdAt",
-                    "updatedAt",
-                    "location"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/ProductListItem`.
         public struct ProductListItem: Codable, Hashable, Sendable {
@@ -35550,7 +24726,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/ProductListItem/displayImages`.
             public var displayImages: Components.Schemas.DisplayImagesField
             /// - Remark: Generated from `#/components/schemas/ProductListItem/unitMappings`.
-            public var unitMappings: Components.Schemas.OutputSchema273
+            public var unitMappings: Components.Schemas.OutputSchema286
             /// - Remark: Generated from `#/components/schemas/ProductListItem/unitPriceMappings`.
             public var unitPriceMappings: Components.Schemas.ProductUnitPriceMappings
             /// - Remark: Generated from `#/components/schemas/ProductListItem/unitPrice`.
@@ -35577,21 +24753,6 @@ extension Components {
                         case price
                         case unit
                     }
-                    public init(from decoder: any Swift.Decoder) throws {
-                        let container = try decoder.container(keyedBy: CodingKeys.self)
-                        self.price = try container.decode(
-                            Swift.Double.self,
-                            forKey: .price
-                        )
-                        self.unit = try container.decode(
-                            Swift.String.self,
-                            forKey: .unit
-                        )
-                        try decoder.ensureNoAdditionalProperties(knownKeys: [
-                            "price",
-                            "unit"
-                        ])
-                    }
                 }
                 /// - Remark: Generated from `#/components/schemas/ProductListItem/unitPrice/natural`.
                 public var natural: Components.Schemas.ProductListItem.UnitPricePayload.NaturalPayload?
@@ -35613,21 +24774,6 @@ extension Components {
                     case natural
                     case perGram
                 }
-                public init(from decoder: any Swift.Decoder) throws {
-                    let container = try decoder.container(keyedBy: CodingKeys.self)
-                    self.natural = try container.decodeIfPresent(
-                        Components.Schemas.ProductListItem.UnitPricePayload.NaturalPayload.self,
-                        forKey: .natural
-                    )
-                    self.perGram = try container.decodeIfPresent(
-                        Swift.Double.self,
-                        forKey: .perGram
-                    )
-                    try decoder.ensureNoAdditionalProperties(knownKeys: [
-                        "natural",
-                        "perGram"
-                    ])
-                }
             }
             /// - Remark: Generated from `#/components/schemas/ProductListItem/unitPrice`.
             public var unitPrice: Components.Schemas.ProductListItem.UnitPricePayload?
@@ -35642,9 +24788,9 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/ProductListItem/dataGaps`.
             public var dataGaps: Components.Schemas.ProductDataGaps
             /// - Remark: Generated from `#/components/schemas/ProductListItem/ingredient`.
-            public var ingredient: Components.Schemas.OutputSchema280?
+            public var ingredient: Components.Schemas.OutputSchema293?
             /// - Remark: Generated from `#/components/schemas/ProductListItem/inventoryEntry`.
-            public var inventoryEntry: Components.Schemas.OutputSchema281
+            public var inventoryEntry: Components.Schemas.OutputSchema294
             /// - Remark: Generated from `#/components/schemas/ProductListItem/expenseCount`.
             public var expenseCount: Swift.Int
             /// - Remark: Generated from `#/components/schemas/ProductListItem/componentCount`.
@@ -35736,7 +24882,7 @@ extension Components {
                 classificationEvidence: Swift.String,
                 dataQuality: Components.Schemas.DataQuality,
                 displayImages: Components.Schemas.DisplayImagesField,
-                unitMappings: Components.Schemas.OutputSchema273,
+                unitMappings: Components.Schemas.OutputSchema286,
                 unitPriceMappings: Components.Schemas.ProductUnitPriceMappings,
                 unitPrice: Components.Schemas.ProductListItem.UnitPricePayload? = nil,
                 food: Components.Schemas.FoodSummary? = nil,
@@ -35744,8 +24890,8 @@ extension Components {
                 upcPresence: Swift.Bool,
                 notesPresence: Swift.Bool,
                 dataGaps: Components.Schemas.ProductDataGaps,
-                ingredient: Components.Schemas.OutputSchema280? = nil,
-                inventoryEntry: Components.Schemas.OutputSchema281,
+                ingredient: Components.Schemas.OutputSchema293? = nil,
+                inventoryEntry: Components.Schemas.OutputSchema294,
                 expenseCount: Swift.Int,
                 componentCount: Swift.Int,
                 expenseTotal: Components.Schemas.Money,
@@ -35847,236 +24993,6 @@ extension Components {
                 case onHandUnits
                 case quantityVariance
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.id = try container.decode(
-                    Components.Schemas.ProductShortcode.self,
-                    forKey: .id
-                )
-                self.name = try container.decode(
-                    Swift.String.self,
-                    forKey: .name
-                )
-                self.aliases = try container.decode(
-                    Components.Schemas.InputSchema56.self,
-                    forKey: .aliases
-                )
-                self.tags = try container.decode(
-                    Components.Schemas.InputSchema56.self,
-                    forKey: .tags
-                )
-                self.primaryGtin = try container.decodeIfPresent(
-                    Components.Schemas.Gtin.self,
-                    forKey: .primaryGtin
-                )
-                self.fdcId = try container.decodeIfPresent(
-                    Components.Schemas.FdcId.self,
-                    forKey: .fdcId
-                )
-                self.manufacturer = try container.decode(
-                    Swift.String.self,
-                    forKey: .manufacturer
-                )
-                self.model = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .model
-                )
-                self.notes = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .notes
-                )
-                self.expectedQuantity = try container.decodeIfPresent(
-                    Swift.Double.self,
-                    forKey: .expectedQuantity
-                )
-                self.categoryId = try container.decodeIfPresent(
-                    Components.Schemas.ProductCategoryShortcode.self,
-                    forKey: .categoryId
-                )
-                self.growsIngredientId = try container.decodeIfPresent(
-                    Components.Schemas.IngredientShortcode.self,
-                    forKey: .growsIngredientId
-                )
-                self.images = try container.decode(
-                    Components.Schemas.OutputSchema30.self,
-                    forKey: .images
-                )
-                self.externalIds = try container.decode(
-                    Components.Schemas.OutputSchema51.self,
-                    forKey: .externalIds
-                )
-                self.price = try container.decodeIfPresent(
-                    Components.Schemas.Money.self,
-                    forKey: .price
-                )
-                self.pricing = try container.decode(
-                    Components.Schemas.ProductPricingOut.self,
-                    forKey: .pricing
-                )
-                self.usdaUnavailable = try container.decodeIfPresent(
-                    Swift.Bool.self,
-                    forKey: .usdaUnavailable
-                )
-                self.stockTracked = try container.decodeIfPresent(
-                    Swift.Bool.self,
-                    forKey: .stockTracked
-                )
-                self.labelNutrition = try container.decodeIfPresent(
-                    Components.Schemas.ProductLabelNutrition.self,
-                    forKey: .labelNutrition
-                )
-                self.createdAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .createdAt
-                )
-                self.updatedAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .updatedAt
-                )
-                self.category = try container.decodeIfPresent(
-                    Components.Schemas.ProductCategorySummary.self,
-                    forKey: .category
-                )
-                self.itemImageCount = try container.decode(
-                    Swift.Int.self,
-                    forKey: .itemImageCount
-                )
-                self.labelImageCount = try container.decode(
-                    Swift.Int.self,
-                    forKey: .labelImageCount
-                )
-                self.labelImages = try container.decode(
-                    Components.Schemas.OutputSchema30.self,
-                    forKey: .labelImages
-                )
-                self.classificationEvidence = try container.decode(
-                    Swift.String.self,
-                    forKey: .classificationEvidence
-                )
-                self.dataQuality = try container.decode(
-                    Components.Schemas.DataQuality.self,
-                    forKey: .dataQuality
-                )
-                self.displayImages = try container.decode(
-                    Components.Schemas.DisplayImagesField.self,
-                    forKey: .displayImages
-                )
-                self.unitMappings = try container.decode(
-                    Components.Schemas.OutputSchema273.self,
-                    forKey: .unitMappings
-                )
-                self.unitPriceMappings = try container.decode(
-                    Components.Schemas.ProductUnitPriceMappings.self,
-                    forKey: .unitPriceMappings
-                )
-                self.unitPrice = try container.decodeIfPresent(
-                    Components.Schemas.ProductListItem.UnitPricePayload.self,
-                    forKey: .unitPrice
-                )
-                self.food = try container.decodeIfPresent(
-                    Components.Schemas.FoodSummary.self,
-                    forKey: .food
-                )
-                self.modelPresence = try container.decode(
-                    Swift.Bool.self,
-                    forKey: .modelPresence
-                )
-                self.upcPresence = try container.decode(
-                    Swift.Bool.self,
-                    forKey: .upcPresence
-                )
-                self.notesPresence = try container.decode(
-                    Swift.Bool.self,
-                    forKey: .notesPresence
-                )
-                self.dataGaps = try container.decode(
-                    Components.Schemas.ProductDataGaps.self,
-                    forKey: .dataGaps
-                )
-                self.ingredient = try container.decodeIfPresent(
-                    Components.Schemas.OutputSchema280.self,
-                    forKey: .ingredient
-                )
-                self.inventoryEntry = try container.decode(
-                    Components.Schemas.OutputSchema281.self,
-                    forKey: .inventoryEntry
-                )
-                self.expenseCount = try container.decode(
-                    Swift.Int.self,
-                    forKey: .expenseCount
-                )
-                self.componentCount = try container.decode(
-                    Swift.Int.self,
-                    forKey: .componentCount
-                )
-                self.expenseTotal = try container.decode(
-                    Components.Schemas.Money.self,
-                    forKey: .expenseTotal
-                )
-                self.purchaseDate = try container.decodeIfPresent(
-                    Components.Schemas.PlainDate.self,
-                    forKey: .purchaseDate
-                )
-                self.quantityLedger = try container.decode(
-                    Components.Schemas.ProductQuantityLedgerOut.self,
-                    forKey: .quantityLedger
-                )
-                self.onHandUnits = try container.decodeIfPresent(
-                    Swift.Double.self,
-                    forKey: .onHandUnits
-                )
-                self.quantityVariance = try container.decodeIfPresent(
-                    Swift.Double.self,
-                    forKey: .quantityVariance
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "id",
-                    "name",
-                    "aliases",
-                    "tags",
-                    "primaryGtin",
-                    "fdc_id",
-                    "manufacturer",
-                    "model",
-                    "notes",
-                    "expectedQuantity",
-                    "categoryId",
-                    "growsIngredientId",
-                    "images",
-                    "externalIds",
-                    "price",
-                    "pricing",
-                    "usdaUnavailable",
-                    "stockTracked",
-                    "labelNutrition",
-                    "createdAt",
-                    "updatedAt",
-                    "category",
-                    "itemImageCount",
-                    "labelImageCount",
-                    "labelImages",
-                    "classificationEvidence",
-                    "dataQuality",
-                    "displayImages",
-                    "unitMappings",
-                    "unitPriceMappings",
-                    "unitPrice",
-                    "food",
-                    "modelPresence",
-                    "upcPresence",
-                    "notesPresence",
-                    "dataGaps",
-                    "ingredient",
-                    "inventoryEntry",
-                    "expenseCount",
-                    "componentCount",
-                    "expenseTotal",
-                    "purchaseDate",
-                    "quantityLedger",
-                    "onHandUnits",
-                    "quantityVariance"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/ProductListPage`.
         public struct ProductListPage: Codable, Hashable, Sendable {
@@ -36099,21 +25015,6 @@ extension Components {
             public enum CodingKeys: String, CodingKey {
                 case items
                 case meta
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.items = try container.decode(
-                    [Components.Schemas.ProductListItem].self,
-                    forKey: .items
-                )
-                self.meta = try container.decode(
-                    Components.Schemas.ListPageMeta.self,
-                    forKey: .meta
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "items",
-                    "meta"
-                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/ProductPricingOut`.
@@ -36174,46 +25075,6 @@ extension Components {
                 case knownUnitCount
                 case partial
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.derivedPrice = try container.decodeIfPresent(
-                    Components.Schemas.Money.self,
-                    forKey: .derivedPrice
-                )
-                self.effectivePrice = try container.decodeIfPresent(
-                    Components.Schemas.Money.self,
-                    forKey: .effectivePrice
-                )
-                self.source = try container.decode(
-                    Components.Schemas.ProductPricingOut.SourcePayload.self,
-                    forKey: .source
-                )
-                self.knownExpenseCount = try container.decode(
-                    Swift.Int.self,
-                    forKey: .knownExpenseCount
-                )
-                self.unknownExpenseCount = try container.decode(
-                    Swift.Int.self,
-                    forKey: .unknownExpenseCount
-                )
-                self.knownUnitCount = try container.decode(
-                    Swift.Int.self,
-                    forKey: .knownUnitCount
-                )
-                self.partial = try container.decode(
-                    Swift.Bool.self,
-                    forKey: .partial
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "derivedPrice",
-                    "effectivePrice",
-                    "source",
-                    "knownExpenseCount",
-                    "unknownExpenseCount",
-                    "knownUnitCount",
-                    "partial"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/ProductQuantityLedgerOut`.
         public struct ProductQuantityLedgerOut: Codable, Hashable, Sendable {
@@ -36261,41 +25122,6 @@ extension Components {
                 case unknownExitLines
                 case locationCount
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.acquiredUnits = try container.decode(
-                    Swift.Double.self,
-                    forKey: .acquiredUnits
-                )
-                self.exitedUnits = try container.decode(
-                    Swift.Double.self,
-                    forKey: .exitedUnits
-                )
-                self.expectedQuantity = try container.decode(
-                    Swift.Double.self,
-                    forKey: .expectedQuantity
-                )
-                self.unknownAcquisitionLines = try container.decode(
-                    Swift.Int.self,
-                    forKey: .unknownAcquisitionLines
-                )
-                self.unknownExitLines = try container.decode(
-                    Swift.Int.self,
-                    forKey: .unknownExitLines
-                )
-                self.locationCount = try container.decode(
-                    Swift.Int.self,
-                    forKey: .locationCount
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "acquiredUnits",
-                    "exitedUnits",
-                    "expectedQuantity",
-                    "unknownAcquisitionLines",
-                    "unknownExitLines",
-                    "locationCount"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/ProductRelatedProposal`.
         public struct ProductRelatedProposal: Codable, Hashable, Sendable {
@@ -36327,21 +25153,6 @@ extension Components {
                     case id
                     case name
                 }
-                public init(from decoder: any Swift.Decoder) throws {
-                    let container = try decoder.container(keyedBy: CodingKeys.self)
-                    self.id = try container.decode(
-                        Components.Schemas.ProductShortcode.self,
-                        forKey: .id
-                    )
-                    self.name = try container.decode(
-                        Swift.String.self,
-                        forKey: .name
-                    )
-                    try decoder.ensureNoAdditionalProperties(knownKeys: [
-                        "id",
-                        "name"
-                    ])
-                }
             }
             /// - Remark: Generated from `#/components/schemas/ProductRelatedProposal/target`.
             public var target: Components.Schemas.ProductRelatedProposal.TargetPayload
@@ -36372,31 +25183,6 @@ extension Components {
                 case target
                 case score
                 case evidence
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.kind = try container.decode(
-                    Components.Schemas.ProductRelatedProposal.KindPayload.self,
-                    forKey: .kind
-                )
-                self.target = try container.decode(
-                    Components.Schemas.ProductRelatedProposal.TargetPayload.self,
-                    forKey: .target
-                )
-                self.score = try container.decode(
-                    Swift.Double.self,
-                    forKey: .score
-                )
-                self.evidence = try container.decode(
-                    [Components.Schemas.RelatednessEvidence].self,
-                    forKey: .evidence
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "kind",
-                    "target",
-                    "score",
-                    "evidence"
-                ])
             }
         }
         /// product shortcode, e.g. PRD-4K7M
@@ -36584,151 +25370,6 @@ extension Components {
                 case classificationEvidence
                 case dataQuality
                 case coverImageUrl
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.id = try container.decode(
-                    Components.Schemas.ProductShortcode.self,
-                    forKey: .id
-                )
-                self.name = try container.decode(
-                    Swift.String.self,
-                    forKey: .name
-                )
-                self.aliases = try container.decode(
-                    Components.Schemas.InputSchema56.self,
-                    forKey: .aliases
-                )
-                self.tags = try container.decode(
-                    Components.Schemas.InputSchema56.self,
-                    forKey: .tags
-                )
-                self.primaryGtin = try container.decodeIfPresent(
-                    Components.Schemas.Gtin.self,
-                    forKey: .primaryGtin
-                )
-                self.fdcId = try container.decodeIfPresent(
-                    Components.Schemas.FdcId.self,
-                    forKey: .fdcId
-                )
-                self.manufacturer = try container.decode(
-                    Swift.String.self,
-                    forKey: .manufacturer
-                )
-                self.model = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .model
-                )
-                self.notes = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .notes
-                )
-                self.expectedQuantity = try container.decodeIfPresent(
-                    Swift.Double.self,
-                    forKey: .expectedQuantity
-                )
-                self.categoryId = try container.decodeIfPresent(
-                    Components.Schemas.ProductCategoryShortcode.self,
-                    forKey: .categoryId
-                )
-                self.growsIngredientId = try container.decodeIfPresent(
-                    Components.Schemas.IngredientShortcode.self,
-                    forKey: .growsIngredientId
-                )
-                self.images = try container.decode(
-                    Components.Schemas.OutputSchema30.self,
-                    forKey: .images
-                )
-                self.externalIds = try container.decode(
-                    Components.Schemas.OutputSchema51.self,
-                    forKey: .externalIds
-                )
-                self.price = try container.decodeIfPresent(
-                    Components.Schemas.Money.self,
-                    forKey: .price
-                )
-                self.pricing = try container.decode(
-                    Components.Schemas.ProductPricingOut.self,
-                    forKey: .pricing
-                )
-                self.usdaUnavailable = try container.decodeIfPresent(
-                    Swift.Bool.self,
-                    forKey: .usdaUnavailable
-                )
-                self.stockTracked = try container.decodeIfPresent(
-                    Swift.Bool.self,
-                    forKey: .stockTracked
-                )
-                self.labelNutrition = try container.decodeIfPresent(
-                    Components.Schemas.ProductLabelNutrition.self,
-                    forKey: .labelNutrition
-                )
-                self.createdAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .createdAt
-                )
-                self.updatedAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .updatedAt
-                )
-                self.category = try container.decodeIfPresent(
-                    Components.Schemas.ProductCategorySummary.self,
-                    forKey: .category
-                )
-                self.itemImageCount = try container.decode(
-                    Swift.Int.self,
-                    forKey: .itemImageCount
-                )
-                self.labelImageCount = try container.decode(
-                    Swift.Int.self,
-                    forKey: .labelImageCount
-                )
-                self.labelImages = try container.decode(
-                    Components.Schemas.OutputSchema30.self,
-                    forKey: .labelImages
-                )
-                self.classificationEvidence = try container.decode(
-                    Swift.String.self,
-                    forKey: .classificationEvidence
-                )
-                self.dataQuality = try container.decode(
-                    Components.Schemas.DataQuality.self,
-                    forKey: .dataQuality
-                )
-                self.coverImageUrl = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .coverImageUrl
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "id",
-                    "name",
-                    "aliases",
-                    "tags",
-                    "primaryGtin",
-                    "fdc_id",
-                    "manufacturer",
-                    "model",
-                    "notes",
-                    "expectedQuantity",
-                    "categoryId",
-                    "growsIngredientId",
-                    "images",
-                    "externalIds",
-                    "price",
-                    "pricing",
-                    "usdaUnavailable",
-                    "stockTracked",
-                    "labelNutrition",
-                    "createdAt",
-                    "updatedAt",
-                    "category",
-                    "itemImageCount",
-                    "labelImageCount",
-                    "labelImages",
-                    "classificationEvidence",
-                    "dataQuality",
-                    "coverImageUrl"
-                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/ProductUnitPriceMappings`.
@@ -37103,161 +25744,6 @@ extension Components {
                 case unitMappings
                 case food
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.id = try container.decode(
-                    Components.Schemas.ProductShortcode.self,
-                    forKey: .id
-                )
-                self.name = try container.decode(
-                    Swift.String.self,
-                    forKey: .name
-                )
-                self.aliases = try container.decode(
-                    Components.Schemas.InputSchema56.self,
-                    forKey: .aliases
-                )
-                self.tags = try container.decode(
-                    Components.Schemas.InputSchema56.self,
-                    forKey: .tags
-                )
-                self.primaryGtin = try container.decodeIfPresent(
-                    Components.Schemas.Gtin.self,
-                    forKey: .primaryGtin
-                )
-                self.fdcId = try container.decodeIfPresent(
-                    Components.Schemas.FdcId.self,
-                    forKey: .fdcId
-                )
-                self.manufacturer = try container.decode(
-                    Swift.String.self,
-                    forKey: .manufacturer
-                )
-                self.model = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .model
-                )
-                self.notes = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .notes
-                )
-                self.expectedQuantity = try container.decodeIfPresent(
-                    Swift.Double.self,
-                    forKey: .expectedQuantity
-                )
-                self.categoryId = try container.decodeIfPresent(
-                    Components.Schemas.ProductCategoryShortcode.self,
-                    forKey: .categoryId
-                )
-                self.growsIngredientId = try container.decodeIfPresent(
-                    Components.Schemas.IngredientShortcode.self,
-                    forKey: .growsIngredientId
-                )
-                self.images = try container.decode(
-                    Components.Schemas.OutputSchema30.self,
-                    forKey: .images
-                )
-                self.externalIds = try container.decode(
-                    Components.Schemas.OutputSchema51.self,
-                    forKey: .externalIds
-                )
-                self.price = try container.decodeIfPresent(
-                    Components.Schemas.Money.self,
-                    forKey: .price
-                )
-                self.pricing = try container.decode(
-                    Components.Schemas.ProductPricingOut.self,
-                    forKey: .pricing
-                )
-                self.usdaUnavailable = try container.decodeIfPresent(
-                    Swift.Bool.self,
-                    forKey: .usdaUnavailable
-                )
-                self.stockTracked = try container.decodeIfPresent(
-                    Swift.Bool.self,
-                    forKey: .stockTracked
-                )
-                self.labelNutrition = try container.decodeIfPresent(
-                    Components.Schemas.ProductLabelNutrition.self,
-                    forKey: .labelNutrition
-                )
-                self.createdAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .createdAt
-                )
-                self.updatedAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .updatedAt
-                )
-                self.category = try container.decodeIfPresent(
-                    Components.Schemas.ProductCategorySummary.self,
-                    forKey: .category
-                )
-                self.itemImageCount = try container.decode(
-                    Swift.Int.self,
-                    forKey: .itemImageCount
-                )
-                self.labelImageCount = try container.decode(
-                    Swift.Int.self,
-                    forKey: .labelImageCount
-                )
-                self.labelImages = try container.decode(
-                    Components.Schemas.OutputSchema30.self,
-                    forKey: .labelImages
-                )
-                self.classificationEvidence = try container.decode(
-                    Swift.String.self,
-                    forKey: .classificationEvidence
-                )
-                self.dataQuality = try container.decode(
-                    Components.Schemas.DataQuality.self,
-                    forKey: .dataQuality
-                )
-                self.coverImageUrl = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .coverImageUrl
-                )
-                self.unitMappings = try container.decode(
-                    [Components.Schemas.UnitMappingOut].self,
-                    forKey: .unitMappings
-                )
-                self.food = try container.decodeIfPresent(
-                    Components.Schemas.FoodSummary.self,
-                    forKey: .food
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "id",
-                    "name",
-                    "aliases",
-                    "tags",
-                    "primaryGtin",
-                    "fdc_id",
-                    "manufacturer",
-                    "model",
-                    "notes",
-                    "expectedQuantity",
-                    "categoryId",
-                    "growsIngredientId",
-                    "images",
-                    "externalIds",
-                    "price",
-                    "pricing",
-                    "usdaUnavailable",
-                    "stockTracked",
-                    "labelNutrition",
-                    "createdAt",
-                    "updatedAt",
-                    "category",
-                    "itemImageCount",
-                    "labelImageCount",
-                    "labelImages",
-                    "classificationEvidence",
-                    "dataQuality",
-                    "coverImageUrl",
-                    "unitMappings",
-                    "food"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/ProductWithMappingsOut`.
         public struct ProductWithMappingsOut: Codable, Hashable, Sendable {
@@ -37447,156 +25933,6 @@ extension Components {
                 case coverImageUrl
                 case unitMappings
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.id = try container.decode(
-                    Components.Schemas.ProductShortcode.self,
-                    forKey: .id
-                )
-                self.name = try container.decode(
-                    Swift.String.self,
-                    forKey: .name
-                )
-                self.aliases = try container.decode(
-                    Components.Schemas.InputSchema56.self,
-                    forKey: .aliases
-                )
-                self.tags = try container.decode(
-                    Components.Schemas.InputSchema56.self,
-                    forKey: .tags
-                )
-                self.primaryGtin = try container.decodeIfPresent(
-                    Components.Schemas.Gtin.self,
-                    forKey: .primaryGtin
-                )
-                self.fdcId = try container.decodeIfPresent(
-                    Components.Schemas.FdcId.self,
-                    forKey: .fdcId
-                )
-                self.manufacturer = try container.decode(
-                    Swift.String.self,
-                    forKey: .manufacturer
-                )
-                self.model = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .model
-                )
-                self.notes = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .notes
-                )
-                self.expectedQuantity = try container.decodeIfPresent(
-                    Swift.Double.self,
-                    forKey: .expectedQuantity
-                )
-                self.categoryId = try container.decodeIfPresent(
-                    Components.Schemas.ProductCategoryShortcode.self,
-                    forKey: .categoryId
-                )
-                self.growsIngredientId = try container.decodeIfPresent(
-                    Components.Schemas.IngredientShortcode.self,
-                    forKey: .growsIngredientId
-                )
-                self.images = try container.decode(
-                    Components.Schemas.OutputSchema30.self,
-                    forKey: .images
-                )
-                self.externalIds = try container.decode(
-                    Components.Schemas.OutputSchema51.self,
-                    forKey: .externalIds
-                )
-                self.price = try container.decodeIfPresent(
-                    Components.Schemas.Money.self,
-                    forKey: .price
-                )
-                self.pricing = try container.decode(
-                    Components.Schemas.ProductPricingOut.self,
-                    forKey: .pricing
-                )
-                self.usdaUnavailable = try container.decodeIfPresent(
-                    Swift.Bool.self,
-                    forKey: .usdaUnavailable
-                )
-                self.stockTracked = try container.decodeIfPresent(
-                    Swift.Bool.self,
-                    forKey: .stockTracked
-                )
-                self.labelNutrition = try container.decodeIfPresent(
-                    Components.Schemas.ProductLabelNutrition.self,
-                    forKey: .labelNutrition
-                )
-                self.createdAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .createdAt
-                )
-                self.updatedAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .updatedAt
-                )
-                self.category = try container.decodeIfPresent(
-                    Components.Schemas.ProductCategorySummary.self,
-                    forKey: .category
-                )
-                self.itemImageCount = try container.decode(
-                    Swift.Int.self,
-                    forKey: .itemImageCount
-                )
-                self.labelImageCount = try container.decode(
-                    Swift.Int.self,
-                    forKey: .labelImageCount
-                )
-                self.labelImages = try container.decode(
-                    Components.Schemas.OutputSchema30.self,
-                    forKey: .labelImages
-                )
-                self.classificationEvidence = try container.decode(
-                    Swift.String.self,
-                    forKey: .classificationEvidence
-                )
-                self.dataQuality = try container.decode(
-                    Components.Schemas.DataQuality.self,
-                    forKey: .dataQuality
-                )
-                self.coverImageUrl = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .coverImageUrl
-                )
-                self.unitMappings = try container.decode(
-                    [Components.Schemas.UnitMappingOut].self,
-                    forKey: .unitMappings
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "id",
-                    "name",
-                    "aliases",
-                    "tags",
-                    "primaryGtin",
-                    "fdc_id",
-                    "manufacturer",
-                    "model",
-                    "notes",
-                    "expectedQuantity",
-                    "categoryId",
-                    "growsIngredientId",
-                    "images",
-                    "externalIds",
-                    "price",
-                    "pricing",
-                    "usdaUnavailable",
-                    "stockTracked",
-                    "labelNutrition",
-                    "createdAt",
-                    "updatedAt",
-                    "category",
-                    "itemImageCount",
-                    "labelImageCount",
-                    "labelImages",
-                    "classificationEvidence",
-                    "dataQuality",
-                    "coverImageUrl",
-                    "unitMappings"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/ProjectAllocation`.
         public struct ProjectAllocation: Codable, Hashable, Sendable {
@@ -37643,36 +25979,6 @@ extension Components {
                 case amount
                 case basis
                 case incomplete
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.projectId = try container.decodeIfPresent(
-                    Components.Schemas.ProjectShortcode.self,
-                    forKey: .projectId
-                )
-                self.projectName = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .projectName
-                )
-                self.amount = try container.decodeIfPresent(
-                    Swift.Double.self,
-                    forKey: .amount
-                )
-                self.basis = try container.decode(
-                    Components.Schemas.ProjectAllocation.BasisPayload.self,
-                    forKey: .basis
-                )
-                self.incomplete = try container.decode(
-                    Swift.Bool.self,
-                    forKey: .incomplete
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "projectId",
-                    "projectName",
-                    "amount",
-                    "basis",
-                    "incomplete"
-                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/ProjectAllocations`.
@@ -37830,11 +26136,11 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/ProjectDetail/parentProjectName`.
             public var parentProjectName: Swift.String?
             /// - Remark: Generated from `#/components/schemas/ProjectDetail/childProjectIds`.
-            public var childProjectIds: Components.Schemas.OutputSchema332
+            public var childProjectIds: Components.Schemas.OutputSchema345
             /// - Remark: Generated from `#/components/schemas/ProjectDetail/blockedByIds`.
-            public var blockedByIds: Components.Schemas.OutputSchema332
+            public var blockedByIds: Components.Schemas.OutputSchema345
             /// - Remark: Generated from `#/components/schemas/ProjectDetail/blockingIds`.
-            public var blockingIds: Components.Schemas.OutputSchema332
+            public var blockingIds: Components.Schemas.OutputSchema345
             /// - Remark: Generated from `#/components/schemas/ProjectDetail/createdAt`.
             public var createdAt: Foundation.Date
             /// - Remark: Generated from `#/components/schemas/ProjectDetail/updatedAt`.
@@ -37848,7 +26154,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/ProjectDetail/displayImages`.
             public var displayImages: Components.Schemas.DisplayImagesField
             /// - Remark: Generated from `#/components/schemas/ProjectDetail/attachments`.
-            public var attachments: Components.Schemas.OutputSchema437
+            public var attachments: Components.Schemas.OutputSchema450
             /// Creates a new `ProjectDetail`.
             ///
             /// - Parameters:
@@ -37895,16 +26201,16 @@ extension Components {
                 googleDriveFolderUrl: Swift.String? = nil,
                 notionPageUrl: Swift.String? = nil,
                 parentProjectName: Swift.String? = nil,
-                childProjectIds: Components.Schemas.OutputSchema332,
-                blockedByIds: Components.Schemas.OutputSchema332,
-                blockingIds: Components.Schemas.OutputSchema332,
+                childProjectIds: Components.Schemas.OutputSchema345,
+                blockedByIds: Components.Schemas.OutputSchema345,
+                blockingIds: Components.Schemas.OutputSchema345,
                 createdAt: Foundation.Date,
                 updatedAt: Foundation.Date,
                 rollup: Components.Schemas.ProjectOutputFieldsProjectRollup,
                 dates: Components.Schemas.ProjectOutputFieldsProjectDateWindow,
                 dataQuality: Components.Schemas.DataQuality,
                 displayImages: Components.Schemas.DisplayImagesField,
-                attachments: Components.Schemas.OutputSchema437
+                attachments: Components.Schemas.OutputSchema450
             ) {
                 self.fieldResolutions = fieldResolutions
                 self.id = id
@@ -37960,141 +26266,6 @@ extension Components {
                 case dataQuality
                 case displayImages
                 case attachments
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.fieldResolutions = try container.decodeIfPresent(
-                    Components.Schemas.OptionalFieldResolutions.self,
-                    forKey: .fieldResolutions
-                )
-                self.id = try container.decode(
-                    Components.Schemas.ProjectShortcode.self,
-                    forKey: .id
-                )
-                self.name = try container.decode(
-                    Swift.String.self,
-                    forKey: .name
-                )
-                self.status = try container.decode(
-                    Components.Schemas.ProjectStatus.self,
-                    forKey: .status
-                )
-                self.kind = try container.decodeIfPresent(
-                    Components.Schemas.ProjectKind.self,
-                    forKey: .kind
-                )
-                self.locations = try container.decode(
-                    Components.Schemas.InputSchema56.self,
-                    forKey: .locations
-                )
-                self.defaultTrade = try container.decodeIfPresent(
-                    Components.Schemas.Trade.self,
-                    forKey: .defaultTrade
-                )
-                self.costEstimate = try container.decodeIfPresent(
-                    Components.Schemas.PositiveMoney.self,
-                    forKey: .costEstimate
-                )
-                self.parentProjectId = try container.decodeIfPresent(
-                    Components.Schemas.ProjectShortcode.self,
-                    forKey: .parentProjectId
-                )
-                self.startDate = try container.decodeIfPresent(
-                    Components.Schemas.PlainDate.self,
-                    forKey: .startDate
-                )
-                self.endDate = try container.decodeIfPresent(
-                    Components.Schemas.PlainDate.self,
-                    forKey: .endDate
-                )
-                self.icon = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .icon
-                )
-                self.notes = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .notes
-                )
-                self.googleDriveFolderUrl = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .googleDriveFolderUrl
-                )
-                self.notionPageUrl = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .notionPageUrl
-                )
-                self.parentProjectName = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .parentProjectName
-                )
-                self.childProjectIds = try container.decode(
-                    Components.Schemas.OutputSchema332.self,
-                    forKey: .childProjectIds
-                )
-                self.blockedByIds = try container.decode(
-                    Components.Schemas.OutputSchema332.self,
-                    forKey: .blockedByIds
-                )
-                self.blockingIds = try container.decode(
-                    Components.Schemas.OutputSchema332.self,
-                    forKey: .blockingIds
-                )
-                self.createdAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .createdAt
-                )
-                self.updatedAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .updatedAt
-                )
-                self.rollup = try container.decode(
-                    Components.Schemas.ProjectOutputFieldsProjectRollup.self,
-                    forKey: .rollup
-                )
-                self.dates = try container.decode(
-                    Components.Schemas.ProjectOutputFieldsProjectDateWindow.self,
-                    forKey: .dates
-                )
-                self.dataQuality = try container.decode(
-                    Components.Schemas.DataQuality.self,
-                    forKey: .dataQuality
-                )
-                self.displayImages = try container.decode(
-                    Components.Schemas.DisplayImagesField.self,
-                    forKey: .displayImages
-                )
-                self.attachments = try container.decode(
-                    Components.Schemas.OutputSchema437.self,
-                    forKey: .attachments
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "fieldResolutions",
-                    "id",
-                    "name",
-                    "status",
-                    "kind",
-                    "locations",
-                    "defaultTrade",
-                    "costEstimate",
-                    "parentProjectId",
-                    "startDate",
-                    "endDate",
-                    "icon",
-                    "notes",
-                    "googleDriveFolderUrl",
-                    "notionPageUrl",
-                    "parentProjectName",
-                    "childProjectIds",
-                    "blockedByIds",
-                    "blockingIds",
-                    "createdAt",
-                    "updatedAt",
-                    "rollup",
-                    "dates",
-                    "dataQuality",
-                    "displayImages",
-                    "attachments"
-                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/ProjectKind`.
@@ -38155,11 +26326,11 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/ProjectListItem/parentProjectName`.
             public var parentProjectName: Swift.String?
             /// - Remark: Generated from `#/components/schemas/ProjectListItem/childProjectIds`.
-            public var childProjectIds: Components.Schemas.OutputSchema332
+            public var childProjectIds: Components.Schemas.OutputSchema345
             /// - Remark: Generated from `#/components/schemas/ProjectListItem/blockedByIds`.
-            public var blockedByIds: Components.Schemas.OutputSchema332
+            public var blockedByIds: Components.Schemas.OutputSchema345
             /// - Remark: Generated from `#/components/schemas/ProjectListItem/blockingIds`.
-            public var blockingIds: Components.Schemas.OutputSchema332
+            public var blockingIds: Components.Schemas.OutputSchema345
             /// - Remark: Generated from `#/components/schemas/ProjectListItem/createdAt`.
             public var createdAt: Foundation.Date
             /// - Remark: Generated from `#/components/schemas/ProjectListItem/updatedAt`.
@@ -38217,9 +26388,9 @@ extension Components {
                 googleDriveFolderUrl: Swift.String? = nil,
                 notionPageUrl: Swift.String? = nil,
                 parentProjectName: Swift.String? = nil,
-                childProjectIds: Components.Schemas.OutputSchema332,
-                blockedByIds: Components.Schemas.OutputSchema332,
-                blockingIds: Components.Schemas.OutputSchema332,
+                childProjectIds: Components.Schemas.OutputSchema345,
+                blockedByIds: Components.Schemas.OutputSchema345,
+                blockingIds: Components.Schemas.OutputSchema345,
                 createdAt: Foundation.Date,
                 updatedAt: Foundation.Date,
                 rollup: Components.Schemas.ProjectOutputFieldsProjectRollup,
@@ -38280,136 +26451,6 @@ extension Components {
                 case dataQuality
                 case displayImages
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.fieldResolutions = try container.decodeIfPresent(
-                    Components.Schemas.OptionalFieldResolutions.self,
-                    forKey: .fieldResolutions
-                )
-                self.id = try container.decode(
-                    Components.Schemas.ProjectShortcode.self,
-                    forKey: .id
-                )
-                self.name = try container.decode(
-                    Swift.String.self,
-                    forKey: .name
-                )
-                self.status = try container.decode(
-                    Components.Schemas.ProjectStatus.self,
-                    forKey: .status
-                )
-                self.kind = try container.decodeIfPresent(
-                    Components.Schemas.ProjectKind.self,
-                    forKey: .kind
-                )
-                self.locations = try container.decode(
-                    Components.Schemas.InputSchema56.self,
-                    forKey: .locations
-                )
-                self.defaultTrade = try container.decodeIfPresent(
-                    Components.Schemas.Trade.self,
-                    forKey: .defaultTrade
-                )
-                self.costEstimate = try container.decodeIfPresent(
-                    Components.Schemas.PositiveMoney.self,
-                    forKey: .costEstimate
-                )
-                self.parentProjectId = try container.decodeIfPresent(
-                    Components.Schemas.ProjectShortcode.self,
-                    forKey: .parentProjectId
-                )
-                self.startDate = try container.decodeIfPresent(
-                    Components.Schemas.PlainDate.self,
-                    forKey: .startDate
-                )
-                self.endDate = try container.decodeIfPresent(
-                    Components.Schemas.PlainDate.self,
-                    forKey: .endDate
-                )
-                self.icon = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .icon
-                )
-                self.notes = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .notes
-                )
-                self.googleDriveFolderUrl = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .googleDriveFolderUrl
-                )
-                self.notionPageUrl = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .notionPageUrl
-                )
-                self.parentProjectName = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .parentProjectName
-                )
-                self.childProjectIds = try container.decode(
-                    Components.Schemas.OutputSchema332.self,
-                    forKey: .childProjectIds
-                )
-                self.blockedByIds = try container.decode(
-                    Components.Schemas.OutputSchema332.self,
-                    forKey: .blockedByIds
-                )
-                self.blockingIds = try container.decode(
-                    Components.Schemas.OutputSchema332.self,
-                    forKey: .blockingIds
-                )
-                self.createdAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .createdAt
-                )
-                self.updatedAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .updatedAt
-                )
-                self.rollup = try container.decode(
-                    Components.Schemas.ProjectOutputFieldsProjectRollup.self,
-                    forKey: .rollup
-                )
-                self.dates = try container.decode(
-                    Components.Schemas.ProjectOutputFieldsProjectDateWindow.self,
-                    forKey: .dates
-                )
-                self.dataQuality = try container.decode(
-                    Components.Schemas.DataQuality.self,
-                    forKey: .dataQuality
-                )
-                self.displayImages = try container.decode(
-                    Components.Schemas.DisplayImagesField.self,
-                    forKey: .displayImages
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "fieldResolutions",
-                    "id",
-                    "name",
-                    "status",
-                    "kind",
-                    "locations",
-                    "defaultTrade",
-                    "costEstimate",
-                    "parentProjectId",
-                    "startDate",
-                    "endDate",
-                    "icon",
-                    "notes",
-                    "googleDriveFolderUrl",
-                    "notionPageUrl",
-                    "parentProjectName",
-                    "childProjectIds",
-                    "blockedByIds",
-                    "blockingIds",
-                    "createdAt",
-                    "updatedAt",
-                    "rollup",
-                    "dates",
-                    "dataQuality",
-                    "displayImages"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/ProjectListPage`.
         public struct ProjectListPage: Codable, Hashable, Sendable {
@@ -38432,21 +26473,6 @@ extension Components {
             public enum CodingKeys: String, CodingKey {
                 case items
                 case meta
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.items = try container.decode(
-                    [Components.Schemas.ProjectListItem].self,
-                    forKey: .items
-                )
-                self.meta = try container.decode(
-                    Components.Schemas.ListPageMeta.self,
-                    forKey: .meta
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "items",
-                    "meta"
-                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/ProjectOut`.
@@ -38498,11 +26524,11 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/ProjectOut/parentProjectName`.
             public var parentProjectName: Swift.String?
             /// - Remark: Generated from `#/components/schemas/ProjectOut/childProjectIds`.
-            public var childProjectIds: Components.Schemas.OutputSchema332
+            public var childProjectIds: Components.Schemas.OutputSchema345
             /// - Remark: Generated from `#/components/schemas/ProjectOut/blockedByIds`.
-            public var blockedByIds: Components.Schemas.OutputSchema332
+            public var blockedByIds: Components.Schemas.OutputSchema345
             /// - Remark: Generated from `#/components/schemas/ProjectOut/blockingIds`.
-            public var blockingIds: Components.Schemas.OutputSchema332
+            public var blockingIds: Components.Schemas.OutputSchema345
             /// - Remark: Generated from `#/components/schemas/ProjectOut/createdAt`.
             public var createdAt: Foundation.Date
             /// - Remark: Generated from `#/components/schemas/ProjectOut/updatedAt`.
@@ -38557,9 +26583,9 @@ extension Components {
                 googleDriveFolderUrl: Swift.String? = nil,
                 notionPageUrl: Swift.String? = nil,
                 parentProjectName: Swift.String? = nil,
-                childProjectIds: Components.Schemas.OutputSchema332,
-                blockedByIds: Components.Schemas.OutputSchema332,
-                blockingIds: Components.Schemas.OutputSchema332,
+                childProjectIds: Components.Schemas.OutputSchema345,
+                blockedByIds: Components.Schemas.OutputSchema345,
+                blockingIds: Components.Schemas.OutputSchema345,
                 createdAt: Foundation.Date,
                 updatedAt: Foundation.Date,
                 rollup: Components.Schemas.ProjectOutputFieldsProjectRollup,
@@ -38617,131 +26643,6 @@ extension Components {
                 case dates
                 case dataQuality
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.fieldResolutions = try container.decodeIfPresent(
-                    Components.Schemas.OptionalFieldResolutions.self,
-                    forKey: .fieldResolutions
-                )
-                self.id = try container.decode(
-                    Components.Schemas.ProjectShortcode.self,
-                    forKey: .id
-                )
-                self.name = try container.decode(
-                    Swift.String.self,
-                    forKey: .name
-                )
-                self.status = try container.decode(
-                    Components.Schemas.ProjectStatus.self,
-                    forKey: .status
-                )
-                self.kind = try container.decodeIfPresent(
-                    Components.Schemas.ProjectKind.self,
-                    forKey: .kind
-                )
-                self.locations = try container.decode(
-                    Components.Schemas.InputSchema56.self,
-                    forKey: .locations
-                )
-                self.defaultTrade = try container.decodeIfPresent(
-                    Components.Schemas.Trade.self,
-                    forKey: .defaultTrade
-                )
-                self.costEstimate = try container.decodeIfPresent(
-                    Components.Schemas.PositiveMoney.self,
-                    forKey: .costEstimate
-                )
-                self.parentProjectId = try container.decodeIfPresent(
-                    Components.Schemas.ProjectShortcode.self,
-                    forKey: .parentProjectId
-                )
-                self.startDate = try container.decodeIfPresent(
-                    Components.Schemas.PlainDate.self,
-                    forKey: .startDate
-                )
-                self.endDate = try container.decodeIfPresent(
-                    Components.Schemas.PlainDate.self,
-                    forKey: .endDate
-                )
-                self.icon = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .icon
-                )
-                self.notes = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .notes
-                )
-                self.googleDriveFolderUrl = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .googleDriveFolderUrl
-                )
-                self.notionPageUrl = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .notionPageUrl
-                )
-                self.parentProjectName = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .parentProjectName
-                )
-                self.childProjectIds = try container.decode(
-                    Components.Schemas.OutputSchema332.self,
-                    forKey: .childProjectIds
-                )
-                self.blockedByIds = try container.decode(
-                    Components.Schemas.OutputSchema332.self,
-                    forKey: .blockedByIds
-                )
-                self.blockingIds = try container.decode(
-                    Components.Schemas.OutputSchema332.self,
-                    forKey: .blockingIds
-                )
-                self.createdAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .createdAt
-                )
-                self.updatedAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .updatedAt
-                )
-                self.rollup = try container.decode(
-                    Components.Schemas.ProjectOutputFieldsProjectRollup.self,
-                    forKey: .rollup
-                )
-                self.dates = try container.decode(
-                    Components.Schemas.ProjectOutputFieldsProjectDateWindow.self,
-                    forKey: .dates
-                )
-                self.dataQuality = try container.decode(
-                    Components.Schemas.DataQuality.self,
-                    forKey: .dataQuality
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "fieldResolutions",
-                    "id",
-                    "name",
-                    "status",
-                    "kind",
-                    "locations",
-                    "defaultTrade",
-                    "costEstimate",
-                    "parentProjectId",
-                    "startDate",
-                    "endDate",
-                    "icon",
-                    "notes",
-                    "googleDriveFolderUrl",
-                    "notionPageUrl",
-                    "parentProjectName",
-                    "childProjectIds",
-                    "blockedByIds",
-                    "blockingIds",
-                    "createdAt",
-                    "updatedAt",
-                    "rollup",
-                    "dates",
-                    "dataQuality"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/ProjectOutputFieldsProjectDateSource`.
         @frozen public enum ProjectOutputFieldsProjectDateSource: String, Codable, Hashable, Sendable, CaseIterable {
@@ -38794,41 +26695,6 @@ extension Components {
                 case effectiveEnd
                 case startSource
                 case endSource
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.derivedStart = try container.decodeIfPresent(
-                    Components.Schemas.PlainDate.self,
-                    forKey: .derivedStart
-                )
-                self.derivedEnd = try container.decodeIfPresent(
-                    Components.Schemas.PlainDate.self,
-                    forKey: .derivedEnd
-                )
-                self.effectiveStart = try container.decodeIfPresent(
-                    Components.Schemas.PlainDate.self,
-                    forKey: .effectiveStart
-                )
-                self.effectiveEnd = try container.decodeIfPresent(
-                    Components.Schemas.PlainDate.self,
-                    forKey: .effectiveEnd
-                )
-                self.startSource = try container.decode(
-                    Components.Schemas.ProjectOutputFieldsProjectDateSource.self,
-                    forKey: .startSource
-                )
-                self.endSource = try container.decode(
-                    Components.Schemas.ProjectOutputFieldsProjectDateSource.self,
-                    forKey: .endSource
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "derivedStart",
-                    "derivedEnd",
-                    "effectiveStart",
-                    "effectiveEnd",
-                    "startSource",
-                    "endSource"
-                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/ProjectOutputFieldsProjectRollup`.
@@ -38915,56 +26781,6 @@ extension Components {
                     case projectCount
                     case costEstimate
                 }
-                public init(from decoder: any Swift.Decoder) throws {
-                    let container = try decoder.container(keyedBy: CodingKeys.self)
-                    self.spent = try container.decode(
-                        Components.Schemas.Money.self,
-                        forKey: .spent
-                    )
-                    self.actualSpent = try container.decode(
-                        Components.Schemas.Money.self,
-                        forKey: .actualSpent
-                    )
-                    self.committedSpent = try container.decode(
-                        Components.Schemas.Money.self,
-                        forKey: .committedSpent
-                    )
-                    self.contributions = try container.decode(
-                        Components.Schemas.Money.self,
-                        forKey: .contributions
-                    )
-                    self.expenseCount = try container.decode(
-                        Swift.Int.self,
-                        forKey: .expenseCount
-                    )
-                    self.taskCount = try container.decode(
-                        Swift.Int.self,
-                        forKey: .taskCount
-                    )
-                    self.doneTaskCount = try container.decode(
-                        Swift.Int.self,
-                        forKey: .doneTaskCount
-                    )
-                    self.projectCount = try container.decode(
-                        Swift.Int.self,
-                        forKey: .projectCount
-                    )
-                    self.costEstimate = try container.decodeIfPresent(
-                        Components.Schemas.Money.self,
-                        forKey: .costEstimate
-                    )
-                    try decoder.ensureNoAdditionalProperties(knownKeys: [
-                        "spent",
-                        "actualSpent",
-                        "committedSpent",
-                        "contributions",
-                        "expenseCount",
-                        "taskCount",
-                        "doneTaskCount",
-                        "projectCount",
-                        "costEstimate"
-                    ])
-                }
             }
             /// - Remark: Generated from `#/components/schemas/ProjectOutputFieldsProjectRollup/subtree`.
             public var subtree: Components.Schemas.ProjectOutputFieldsProjectRollup.SubtreePayload
@@ -39007,51 +26823,6 @@ extension Components {
                 case taskCount
                 case doneTaskCount
                 case subtree
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.spent = try container.decode(
-                    Components.Schemas.Money.self,
-                    forKey: .spent
-                )
-                self.actualSpent = try container.decode(
-                    Components.Schemas.Money.self,
-                    forKey: .actualSpent
-                )
-                self.committedSpent = try container.decode(
-                    Components.Schemas.Money.self,
-                    forKey: .committedSpent
-                )
-                self.contributions = try container.decode(
-                    Components.Schemas.Money.self,
-                    forKey: .contributions
-                )
-                self.expenseCount = try container.decode(
-                    Swift.Int.self,
-                    forKey: .expenseCount
-                )
-                self.taskCount = try container.decode(
-                    Swift.Int.self,
-                    forKey: .taskCount
-                )
-                self.doneTaskCount = try container.decode(
-                    Swift.Int.self,
-                    forKey: .doneTaskCount
-                )
-                self.subtree = try container.decode(
-                    Components.Schemas.ProjectOutputFieldsProjectRollup.SubtreePayload.self,
-                    forKey: .subtree
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "spent",
-                    "actualSpent",
-                    "committedSpent",
-                    "contributions",
-                    "expenseCount",
-                    "taskCount",
-                    "doneTaskCount",
-                    "subtree"
-                ])
             }
         }
         /// project shortcode, e.g. PRJ-4K7M
@@ -39301,7 +27072,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/PurchaseDetail/displayImages`.
             public var displayImages: Components.Schemas.DisplayImagesField
             /// - Remark: Generated from `#/components/schemas/PurchaseDetail/attachments`.
-            public var attachments: Components.Schemas.OutputSchema437
+            public var attachments: Components.Schemas.OutputSchema450
             /// Creates a new `PurchaseDetail`.
             ///
             /// - Parameters:
@@ -39357,7 +27128,7 @@ extension Components {
                 updatedAt: Foundation.Date,
                 dataQuality: Components.Schemas.DataQuality,
                 displayImages: Components.Schemas.DisplayImagesField,
-                attachments: Components.Schemas.OutputSchema437
+                attachments: Components.Schemas.OutputSchema450
             ) {
                 self.id = id
                 self.vendorId = vendorId
@@ -39413,141 +27184,6 @@ extension Components {
                 case dataQuality
                 case displayImages
                 case attachments
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.id = try container.decode(
-                    Components.Schemas.PurchaseShortcode.self,
-                    forKey: .id
-                )
-                self.vendorId = try container.decode(
-                    Components.Schemas.VendorShortcode.self,
-                    forKey: .vendorId
-                )
-                self.vendorAccountId = try container.decodeIfPresent(
-                    Components.Schemas.VendorAccountShortcode.self,
-                    forKey: .vendorAccountId
-                )
-                self.defaultProjectId = try container.decodeIfPresent(
-                    Components.Schemas.ProjectShortcode.self,
-                    forKey: .defaultProjectId
-                )
-                self.defaultTrade = try container.decodeIfPresent(
-                    Components.Schemas.Trade.self,
-                    forKey: .defaultTrade
-                )
-                self.orderId = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .orderId
-                )
-                self.displayLabel = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .displayLabel
-                )
-                self.date = try container.decode(
-                    Components.Schemas.InputSchema37.self,
-                    forKey: .date
-                )
-                self.statedTotal = try container.decodeIfPresent(
-                    Components.Schemas.WholeCentAmount.self,
-                    forKey: .statedTotal
-                )
-                self.notes = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .notes
-                )
-                self.vendorName = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .vendorName
-                )
-                self.vendorLogo = try container.decodeIfPresent(
-                    Components.Schemas.ImageUrlSummary.self,
-                    forKey: .vendorLogo
-                )
-                self.orderUrl = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .orderUrl
-                )
-                self.expenseCount = try container.decode(
-                    Swift.Int.self,
-                    forKey: .expenseCount
-                )
-                self.unpricedExpenseCount = try container.decode(
-                    Swift.Int.self,
-                    forKey: .unpricedExpenseCount
-                )
-                self.expenseTotal = try container.decode(
-                    Components.Schemas.Money.self,
-                    forKey: .expenseTotal
-                )
-                self.reconciliation = try container.decode(
-                    Components.Schemas.PurchaseFieldsPurchaseReconciliation.self,
-                    forKey: .reconciliation
-                )
-                self.financialReconciliation = try container.decode(
-                    Components.Schemas.FinancialReconciliationSummary.self,
-                    forKey: .financialReconciliation
-                )
-                self.documentCount = try container.decode(
-                    Swift.Int.self,
-                    forKey: .documentCount
-                )
-                self.images = try container.decode(
-                    Components.Schemas.PurchaseImages.self,
-                    forKey: .images
-                )
-                self.displayName = try container.decode(
-                    Swift.String.self,
-                    forKey: .displayName
-                )
-                self.createdAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .createdAt
-                )
-                self.updatedAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .updatedAt
-                )
-                self.dataQuality = try container.decode(
-                    Components.Schemas.DataQuality.self,
-                    forKey: .dataQuality
-                )
-                self.displayImages = try container.decode(
-                    Components.Schemas.DisplayImagesField.self,
-                    forKey: .displayImages
-                )
-                self.attachments = try container.decode(
-                    Components.Schemas.OutputSchema437.self,
-                    forKey: .attachments
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "id",
-                    "vendorId",
-                    "vendorAccountId",
-                    "defaultProjectId",
-                    "defaultTrade",
-                    "orderId",
-                    "displayLabel",
-                    "date",
-                    "statedTotal",
-                    "notes",
-                    "vendorName",
-                    "vendorLogo",
-                    "orderUrl",
-                    "expenseCount",
-                    "unpricedExpenseCount",
-                    "expenseTotal",
-                    "reconciliation",
-                    "financialReconciliation",
-                    "documentCount",
-                    "images",
-                    "displayName",
-                    "createdAt",
-                    "updatedAt",
-                    "dataQuality",
-                    "displayImages",
-                    "attachments"
-                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/PurchaseFieldsPurchaseDocumentKind`.
@@ -39618,41 +27254,6 @@ extension Components {
                 case contentType
                 case key
                 case documentKind
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.id = try container.decode(
-                    Components.Schemas.ImageShortcode.self,
-                    forKey: .id
-                )
-                self.url = try container.decode(
-                    Swift.String.self,
-                    forKey: .url
-                )
-                self.filename = try container.decode(
-                    Swift.String.self,
-                    forKey: .filename
-                )
-                self.contentType = try container.decode(
-                    Swift.String.self,
-                    forKey: .contentType
-                )
-                self.key = try container.decode(
-                    Swift.String.self,
-                    forKey: .key
-                )
-                self.documentKind = try container.decode(
-                    Components.Schemas.PurchaseFieldsPurchaseDocumentKind.self,
-                    forKey: .documentKind
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "id",
-                    "url",
-                    "filename",
-                    "contentType",
-                    "key",
-                    "documentKind"
-                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/PurchaseImages`.
@@ -39821,136 +27422,6 @@ extension Components {
                 case dataQuality
                 case displayImages
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.id = try container.decode(
-                    Components.Schemas.PurchaseShortcode.self,
-                    forKey: .id
-                )
-                self.vendorId = try container.decode(
-                    Components.Schemas.VendorShortcode.self,
-                    forKey: .vendorId
-                )
-                self.vendorAccountId = try container.decodeIfPresent(
-                    Components.Schemas.VendorAccountShortcode.self,
-                    forKey: .vendorAccountId
-                )
-                self.defaultProjectId = try container.decodeIfPresent(
-                    Components.Schemas.ProjectShortcode.self,
-                    forKey: .defaultProjectId
-                )
-                self.defaultTrade = try container.decodeIfPresent(
-                    Components.Schemas.Trade.self,
-                    forKey: .defaultTrade
-                )
-                self.orderId = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .orderId
-                )
-                self.displayLabel = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .displayLabel
-                )
-                self.date = try container.decode(
-                    Components.Schemas.InputSchema37.self,
-                    forKey: .date
-                )
-                self.statedTotal = try container.decodeIfPresent(
-                    Components.Schemas.WholeCentAmount.self,
-                    forKey: .statedTotal
-                )
-                self.notes = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .notes
-                )
-                self.vendorName = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .vendorName
-                )
-                self.vendorLogo = try container.decodeIfPresent(
-                    Components.Schemas.ImageUrlSummary.self,
-                    forKey: .vendorLogo
-                )
-                self.orderUrl = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .orderUrl
-                )
-                self.expenseCount = try container.decode(
-                    Swift.Int.self,
-                    forKey: .expenseCount
-                )
-                self.unpricedExpenseCount = try container.decode(
-                    Swift.Int.self,
-                    forKey: .unpricedExpenseCount
-                )
-                self.expenseTotal = try container.decode(
-                    Components.Schemas.Money.self,
-                    forKey: .expenseTotal
-                )
-                self.reconciliation = try container.decode(
-                    Components.Schemas.PurchaseFieldsPurchaseReconciliation.self,
-                    forKey: .reconciliation
-                )
-                self.financialReconciliation = try container.decode(
-                    Components.Schemas.FinancialReconciliationSummary.self,
-                    forKey: .financialReconciliation
-                )
-                self.documentCount = try container.decode(
-                    Swift.Int.self,
-                    forKey: .documentCount
-                )
-                self.images = try container.decode(
-                    Components.Schemas.PurchaseImages.self,
-                    forKey: .images
-                )
-                self.displayName = try container.decode(
-                    Swift.String.self,
-                    forKey: .displayName
-                )
-                self.createdAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .createdAt
-                )
-                self.updatedAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .updatedAt
-                )
-                self.dataQuality = try container.decode(
-                    Components.Schemas.DataQuality.self,
-                    forKey: .dataQuality
-                )
-                self.displayImages = try container.decode(
-                    Components.Schemas.DisplayImagesField.self,
-                    forKey: .displayImages
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "id",
-                    "vendorId",
-                    "vendorAccountId",
-                    "defaultProjectId",
-                    "defaultTrade",
-                    "orderId",
-                    "displayLabel",
-                    "date",
-                    "statedTotal",
-                    "notes",
-                    "vendorName",
-                    "vendorLogo",
-                    "orderUrl",
-                    "expenseCount",
-                    "unpricedExpenseCount",
-                    "expenseTotal",
-                    "reconciliation",
-                    "financialReconciliation",
-                    "documentCount",
-                    "images",
-                    "displayName",
-                    "createdAt",
-                    "updatedAt",
-                    "dataQuality",
-                    "displayImages"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/PurchaseListPage`.
         public struct PurchaseListPage: Codable, Hashable, Sendable {
@@ -39973,21 +27444,6 @@ extension Components {
             public enum CodingKeys: String, CodingKey {
                 case items
                 case meta
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.items = try container.decode(
-                    [Components.Schemas.PurchaseListItem].self,
-                    forKey: .items
-                )
-                self.meta = try container.decode(
-                    Components.Schemas.ListPageMeta.self,
-                    forKey: .meta
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "items",
-                    "meta"
-                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/PurchaseOut`.
@@ -40143,131 +27599,6 @@ extension Components {
                 case createdAt
                 case updatedAt
                 case dataQuality
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.id = try container.decode(
-                    Components.Schemas.PurchaseShortcode.self,
-                    forKey: .id
-                )
-                self.vendorId = try container.decode(
-                    Components.Schemas.VendorShortcode.self,
-                    forKey: .vendorId
-                )
-                self.vendorAccountId = try container.decodeIfPresent(
-                    Components.Schemas.VendorAccountShortcode.self,
-                    forKey: .vendorAccountId
-                )
-                self.defaultProjectId = try container.decodeIfPresent(
-                    Components.Schemas.ProjectShortcode.self,
-                    forKey: .defaultProjectId
-                )
-                self.defaultTrade = try container.decodeIfPresent(
-                    Components.Schemas.Trade.self,
-                    forKey: .defaultTrade
-                )
-                self.orderId = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .orderId
-                )
-                self.displayLabel = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .displayLabel
-                )
-                self.date = try container.decode(
-                    Components.Schemas.InputSchema37.self,
-                    forKey: .date
-                )
-                self.statedTotal = try container.decodeIfPresent(
-                    Components.Schemas.WholeCentAmount.self,
-                    forKey: .statedTotal
-                )
-                self.notes = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .notes
-                )
-                self.vendorName = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .vendorName
-                )
-                self.vendorLogo = try container.decodeIfPresent(
-                    Components.Schemas.ImageUrlSummary.self,
-                    forKey: .vendorLogo
-                )
-                self.orderUrl = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .orderUrl
-                )
-                self.expenseCount = try container.decode(
-                    Swift.Int.self,
-                    forKey: .expenseCount
-                )
-                self.unpricedExpenseCount = try container.decode(
-                    Swift.Int.self,
-                    forKey: .unpricedExpenseCount
-                )
-                self.expenseTotal = try container.decode(
-                    Components.Schemas.Money.self,
-                    forKey: .expenseTotal
-                )
-                self.reconciliation = try container.decode(
-                    Components.Schemas.PurchaseFieldsPurchaseReconciliation.self,
-                    forKey: .reconciliation
-                )
-                self.financialReconciliation = try container.decode(
-                    Components.Schemas.FinancialReconciliationSummary.self,
-                    forKey: .financialReconciliation
-                )
-                self.documentCount = try container.decode(
-                    Swift.Int.self,
-                    forKey: .documentCount
-                )
-                self.images = try container.decode(
-                    Components.Schemas.PurchaseImages.self,
-                    forKey: .images
-                )
-                self.displayName = try container.decode(
-                    Swift.String.self,
-                    forKey: .displayName
-                )
-                self.createdAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .createdAt
-                )
-                self.updatedAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .updatedAt
-                )
-                self.dataQuality = try container.decode(
-                    Components.Schemas.DataQuality.self,
-                    forKey: .dataQuality
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "id",
-                    "vendorId",
-                    "vendorAccountId",
-                    "defaultProjectId",
-                    "defaultTrade",
-                    "orderId",
-                    "displayLabel",
-                    "date",
-                    "statedTotal",
-                    "notes",
-                    "vendorName",
-                    "vendorLogo",
-                    "orderUrl",
-                    "expenseCount",
-                    "unpricedExpenseCount",
-                    "expenseTotal",
-                    "reconciliation",
-                    "financialReconciliation",
-                    "documentCount",
-                    "images",
-                    "displayName",
-                    "createdAt",
-                    "updatedAt",
-                    "dataQuality"
-                ])
             }
         }
         /// purchase shortcode, e.g. PUR-4K7M
@@ -40505,31 +27836,6 @@ extension Components {
                     case equipment
                     case page
                 }
-                public init(from decoder: any Swift.Decoder) throws {
-                    let container = try decoder.container(keyedBy: CodingKeys.self)
-                    self.url = try container.decodeIfPresent(
-                        Swift.String.self,
-                        forKey: .url
-                    )
-                    self.times = try container.decodeIfPresent(
-                        Components.Schemas.RecipeTimes.self,
-                        forKey: .times
-                    )
-                    self.equipment = try container.decodeIfPresent(
-                        [Swift.String].self,
-                        forKey: .equipment
-                    )
-                    self.page = try container.decodeIfPresent(
-                        Swift.String.self,
-                        forKey: .page
-                    )
-                    try decoder.ensureNoAdditionalProperties(knownKeys: [
-                        "url",
-                        "times",
-                        "equipment",
-                        "page"
-                    ])
-                }
             }
             /// - Remark: Generated from `#/components/schemas/RecipeDetail/meta`.
             public var meta: Components.Schemas.RecipeDetail.MetaPayload?
@@ -40548,7 +27854,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/RecipeDetail/totals`.
             public var totals: Components.Schemas.MealTotals?
             /// - Remark: Generated from `#/components/schemas/RecipeDetail/images`.
-            public var images: Components.Schemas.OutputSchema133
+            public var images: Components.Schemas.OutputSchema146
             /// - Remark: Generated from `#/components/schemas/RecipeDetail/forkedFromRecipeId`.
             public var forkedFromRecipeId: Components.Schemas.RecipeShortcode?
             /// - Remark: Generated from `#/components/schemas/RecipeDetail/forkedFromRecipeName`.
@@ -40558,7 +27864,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/RecipeDetail/displayImages`.
             public var displayImages: Components.Schemas.DisplayImagesField
             /// - Remark: Generated from `#/components/schemas/RecipeDetail/attachments`.
-            public var attachments: Components.Schemas.OutputSchema437
+            public var attachments: Components.Schemas.OutputSchema450
             /// Creates a new `RecipeDetail`.
             ///
             /// - Parameters:
@@ -40593,12 +27899,12 @@ extension Components {
                 notes: Components.Schemas.RecipeNotes? = nil,
                 sections: Components.Schemas.RecipeSectionsOut,
                 totals: Components.Schemas.MealTotals? = nil,
-                images: Components.Schemas.OutputSchema133,
+                images: Components.Schemas.OutputSchema146,
                 forkedFromRecipeId: Components.Schemas.RecipeShortcode? = nil,
                 forkedFromRecipeName: Swift.String? = nil,
                 dataQuality: Components.Schemas.DataQuality,
                 displayImages: Components.Schemas.DisplayImagesField,
-                attachments: Components.Schemas.OutputSchema437
+                attachments: Components.Schemas.OutputSchema450
             ) {
                 self.id = id
                 self.name = name
@@ -40638,101 +27944,6 @@ extension Components {
                 case dataQuality
                 case displayImages
                 case attachments
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.id = try container.decode(
-                    Components.Schemas.RecipeShortcode.self,
-                    forKey: .id
-                )
-                self.name = try container.decode(
-                    Swift.String.self,
-                    forKey: .name
-                )
-                self.createdAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .createdAt
-                )
-                self.updatedAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .updatedAt
-                )
-                self.meta = try container.decodeIfPresent(
-                    Components.Schemas.RecipeDetail.MetaPayload.self,
-                    forKey: .meta
-                )
-                self.source = try container.decodeIfPresent(
-                    Components.Schemas.RecipeSource.self,
-                    forKey: .source
-                )
-                self._yield = try container.decodeIfPresent(
-                    Components.Schemas.PositiveAmount.self,
-                    forKey: ._yield
-                )
-                self.servings = try container.decodeIfPresent(
-                    Components.Schemas.RecipeServings.self,
-                    forKey: .servings
-                )
-                self.tags = try container.decodeIfPresent(
-                    Components.Schemas.RecipeTags.self,
-                    forKey: .tags
-                )
-                self.notes = try container.decodeIfPresent(
-                    Components.Schemas.RecipeNotes.self,
-                    forKey: .notes
-                )
-                self.sections = try container.decode(
-                    Components.Schemas.RecipeSectionsOut.self,
-                    forKey: .sections
-                )
-                self.totals = try container.decodeIfPresent(
-                    Components.Schemas.MealTotals.self,
-                    forKey: .totals
-                )
-                self.images = try container.decode(
-                    Components.Schemas.OutputSchema133.self,
-                    forKey: .images
-                )
-                self.forkedFromRecipeId = try container.decodeIfPresent(
-                    Components.Schemas.RecipeShortcode.self,
-                    forKey: .forkedFromRecipeId
-                )
-                self.forkedFromRecipeName = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .forkedFromRecipeName
-                )
-                self.dataQuality = try container.decode(
-                    Components.Schemas.DataQuality.self,
-                    forKey: .dataQuality
-                )
-                self.displayImages = try container.decode(
-                    Components.Schemas.DisplayImagesField.self,
-                    forKey: .displayImages
-                )
-                self.attachments = try container.decode(
-                    Components.Schemas.OutputSchema437.self,
-                    forKey: .attachments
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "id",
-                    "name",
-                    "createdAt",
-                    "updatedAt",
-                    "meta",
-                    "source",
-                    "yield",
-                    "servings",
-                    "tags",
-                    "notes",
-                    "sections",
-                    "totals",
-                    "images",
-                    "forkedFromRecipeId",
-                    "forkedFromRecipeName",
-                    "dataQuality",
-                    "displayImages",
-                    "attachments"
-                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/RecipeDetailMcpOut`.
@@ -40779,31 +27990,6 @@ extension Components {
                     case equipment
                     case page
                 }
-                public init(from decoder: any Swift.Decoder) throws {
-                    let container = try decoder.container(keyedBy: CodingKeys.self)
-                    self.url = try container.decodeIfPresent(
-                        Swift.String.self,
-                        forKey: .url
-                    )
-                    self.times = try container.decodeIfPresent(
-                        Components.Schemas.RecipeTimes.self,
-                        forKey: .times
-                    )
-                    self.equipment = try container.decodeIfPresent(
-                        [Swift.String].self,
-                        forKey: .equipment
-                    )
-                    self.page = try container.decodeIfPresent(
-                        Swift.String.self,
-                        forKey: .page
-                    )
-                    try decoder.ensureNoAdditionalProperties(knownKeys: [
-                        "url",
-                        "times",
-                        "equipment",
-                        "page"
-                    ])
-                }
             }
             /// - Remark: Generated from `#/components/schemas/RecipeDetailMcpOut/meta`.
             public var meta: Components.Schemas.RecipeDetailMcpOut.MetaPayload?
@@ -40822,7 +28008,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/RecipeDetailMcpOut/totals`.
             public var totals: Components.Schemas.MealTotals?
             /// - Remark: Generated from `#/components/schemas/RecipeDetailMcpOut/images`.
-            public var images: Components.Schemas.OutputSchema133
+            public var images: Components.Schemas.OutputSchema146
             /// - Remark: Generated from `#/components/schemas/RecipeDetailMcpOut/forkedFromRecipeId`.
             public var forkedFromRecipeId: Components.Schemas.RecipeShortcode?
             /// - Remark: Generated from `#/components/schemas/RecipeDetailMcpOut/forkedFromRecipeName`.
@@ -40861,7 +28047,7 @@ extension Components {
                 notes: Components.Schemas.RecipeNotes? = nil,
                 sections: Components.Schemas.RecipeSectionsOut,
                 totals: Components.Schemas.MealTotals? = nil,
-                images: Components.Schemas.OutputSchema133,
+                images: Components.Schemas.OutputSchema146,
                 forkedFromRecipeId: Components.Schemas.RecipeShortcode? = nil,
                 forkedFromRecipeName: Swift.String? = nil,
                 dataQuality: Components.Schemas.DataQuality
@@ -40901,91 +28087,6 @@ extension Components {
                 case forkedFromRecipeName
                 case dataQuality
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.id = try container.decode(
-                    Components.Schemas.RecipeShortcode.self,
-                    forKey: .id
-                )
-                self.name = try container.decode(
-                    Swift.String.self,
-                    forKey: .name
-                )
-                self.createdAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .createdAt
-                )
-                self.updatedAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .updatedAt
-                )
-                self.meta = try container.decodeIfPresent(
-                    Components.Schemas.RecipeDetailMcpOut.MetaPayload.self,
-                    forKey: .meta
-                )
-                self.source = try container.decodeIfPresent(
-                    Components.Schemas.RecipeSource.self,
-                    forKey: .source
-                )
-                self._yield = try container.decodeIfPresent(
-                    Components.Schemas.PositiveAmount.self,
-                    forKey: ._yield
-                )
-                self.servings = try container.decodeIfPresent(
-                    Components.Schemas.RecipeServings.self,
-                    forKey: .servings
-                )
-                self.tags = try container.decodeIfPresent(
-                    Components.Schemas.RecipeTags.self,
-                    forKey: .tags
-                )
-                self.notes = try container.decodeIfPresent(
-                    Components.Schemas.RecipeNotes.self,
-                    forKey: .notes
-                )
-                self.sections = try container.decode(
-                    Components.Schemas.RecipeSectionsOut.self,
-                    forKey: .sections
-                )
-                self.totals = try container.decodeIfPresent(
-                    Components.Schemas.MealTotals.self,
-                    forKey: .totals
-                )
-                self.images = try container.decode(
-                    Components.Schemas.OutputSchema133.self,
-                    forKey: .images
-                )
-                self.forkedFromRecipeId = try container.decodeIfPresent(
-                    Components.Schemas.RecipeShortcode.self,
-                    forKey: .forkedFromRecipeId
-                )
-                self.forkedFromRecipeName = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .forkedFromRecipeName
-                )
-                self.dataQuality = try container.decode(
-                    Components.Schemas.DataQuality.self,
-                    forKey: .dataQuality
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "id",
-                    "name",
-                    "createdAt",
-                    "updatedAt",
-                    "meta",
-                    "source",
-                    "yield",
-                    "servings",
-                    "tags",
-                    "notes",
-                    "sections",
-                    "totals",
-                    "images",
-                    "forkedFromRecipeId",
-                    "forkedFromRecipeName",
-                    "dataQuality"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/RecipeFieldsRecipeSectionOut`.
         public struct RecipeFieldsRecipeSectionOut: Codable, Hashable, Sendable {
@@ -41006,16 +28107,6 @@ extension Components {
                 }
                 public enum CodingKeys: String, CodingKey {
                     case instruction
-                }
-                public init(from decoder: any Swift.Decoder) throws {
-                    let container = try decoder.container(keyedBy: CodingKeys.self)
-                    self.instruction = try container.decode(
-                        Swift.String.self,
-                        forKey: .instruction
-                    )
-                    try decoder.ensureNoAdditionalProperties(knownKeys: [
-                        "instruction"
-                    ])
                 }
             }
             /// - Remark: Generated from `#/components/schemas/RecipeFieldsRecipeSectionOut/instructions`.
@@ -41059,41 +28150,6 @@ extension Components {
                 case createdAt
                 case updatedAt
                 case ingredients
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.id = try container.decode(
-                    Swift.String.self,
-                    forKey: .id
-                )
-                self.name = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .name
-                )
-                self.instructions = try container.decode(
-                    Components.Schemas.RecipeFieldsRecipeSectionOut.InstructionsPayload.self,
-                    forKey: .instructions
-                )
-                self.createdAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .createdAt
-                )
-                self.updatedAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .updatedAt
-                )
-                self.ingredients = try container.decode(
-                    [Components.Schemas.RecipeSectionIngredientOut].self,
-                    forKey: .ingredients
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "id",
-                    "name",
-                    "instructions",
-                    "createdAt",
-                    "updatedAt",
-                    "ingredients"
-                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/RecipeIngredientInput`.
@@ -41306,31 +28362,6 @@ extension Components {
                     case equipment
                     case page
                 }
-                public init(from decoder: any Swift.Decoder) throws {
-                    let container = try decoder.container(keyedBy: CodingKeys.self)
-                    self.url = try container.decodeIfPresent(
-                        Swift.String.self,
-                        forKey: .url
-                    )
-                    self.times = try container.decodeIfPresent(
-                        Components.Schemas.RecipeTimes.self,
-                        forKey: .times
-                    )
-                    self.equipment = try container.decodeIfPresent(
-                        [Swift.String].self,
-                        forKey: .equipment
-                    )
-                    self.page = try container.decodeIfPresent(
-                        Swift.String.self,
-                        forKey: .page
-                    )
-                    try decoder.ensureNoAdditionalProperties(knownKeys: [
-                        "url",
-                        "times",
-                        "equipment",
-                        "page"
-                    ])
-                }
             }
             /// - Remark: Generated from `#/components/schemas/RecipeListItem/meta`.
             public var meta: Components.Schemas.RecipeListItem.MetaPayload?
@@ -41434,96 +28465,6 @@ extension Components {
                 case sectionCount
                 case displayImages
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.id = try container.decode(
-                    Components.Schemas.RecipeShortcode.self,
-                    forKey: .id
-                )
-                self.name = try container.decode(
-                    Swift.String.self,
-                    forKey: .name
-                )
-                self.createdAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .createdAt
-                )
-                self.updatedAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .updatedAt
-                )
-                self.meta = try container.decodeIfPresent(
-                    Components.Schemas.RecipeListItem.MetaPayload.self,
-                    forKey: .meta
-                )
-                self.source = try container.decodeIfPresent(
-                    Components.Schemas.RecipeSource.self,
-                    forKey: .source
-                )
-                self._yield = try container.decodeIfPresent(
-                    Components.Schemas.PositiveAmount.self,
-                    forKey: ._yield
-                )
-                self.servings = try container.decodeIfPresent(
-                    Components.Schemas.RecipeServings.self,
-                    forKey: .servings
-                )
-                self.tags = try container.decodeIfPresent(
-                    Components.Schemas.RecipeTags.self,
-                    forKey: .tags
-                )
-                self.notes = try container.decodeIfPresent(
-                    Components.Schemas.RecipeNotes.self,
-                    forKey: .notes
-                )
-                self.forkedFromRecipeId = try container.decodeIfPresent(
-                    Components.Schemas.RecipeShortcode.self,
-                    forKey: .forkedFromRecipeId
-                )
-                self.forkedFromRecipeName = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .forkedFromRecipeName
-                )
-                self.dataQuality = try container.decode(
-                    Components.Schemas.DataQuality.self,
-                    forKey: .dataQuality
-                )
-                self.totals = try container.decodeIfPresent(
-                    Components.Schemas.MealTotals.self,
-                    forKey: .totals
-                )
-                self.mealCount = try container.decode(
-                    Swift.Int.self,
-                    forKey: .mealCount
-                )
-                self.sectionCount = try container.decode(
-                    Swift.Int.self,
-                    forKey: .sectionCount
-                )
-                self.displayImages = try container.decode(
-                    Components.Schemas.DisplayImagesField.self,
-                    forKey: .displayImages
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "id",
-                    "name",
-                    "createdAt",
-                    "updatedAt",
-                    "meta",
-                    "source",
-                    "yield",
-                    "servings",
-                    "tags",
-                    "notes",
-                    "forkedFromRecipeId",
-                    "forkedFromRecipeName",
-                    "dataQuality",
-                    "totals",
-                    "mealCount",
-                    "sectionCount",
-                    "displayImages"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/RecipeListPage`.
         public struct RecipeListPage: Codable, Hashable, Sendable {
@@ -41546,21 +28487,6 @@ extension Components {
             public enum CodingKeys: String, CodingKey {
                 case items
                 case meta
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.items = try container.decode(
-                    [Components.Schemas.RecipeListItem].self,
-                    forKey: .items
-                )
-                self.meta = try container.decode(
-                    Components.Schemas.ListPageMeta.self,
-                    forKey: .meta
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "items",
-                    "meta"
-                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/RecipeNotes`.
@@ -41586,21 +28512,6 @@ extension Components {
             public enum CodingKeys: String, CodingKey {
                 case id
                 case name
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.id = try container.decode(
-                    Components.Schemas.RecipeShortcode.self,
-                    forKey: .id
-                )
-                self.name = try container.decode(
-                    Swift.String.self,
-                    forKey: .name
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "id",
-                    "name"
-                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/RecipeSectionIngredientOut`.
@@ -41647,7 +28558,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/RecipeSectionIngredientOutIngredient/id`.
             public var id: Swift.String
             /// - Remark: Generated from `#/components/schemas/RecipeSectionIngredientOutIngredient/amounts`.
-            public var amounts: Components.Schemas.OutputSchema219
+            public var amounts: Components.Schemas.OutputSchema232
             /// - Remark: Generated from `#/components/schemas/RecipeSectionIngredientOutIngredient/rawLine`.
             public var rawLine: Swift.String?
             /// - Remark: Generated from `#/components/schemas/RecipeSectionIngredientOutIngredient/modifier`.
@@ -41702,36 +28613,6 @@ extension Components {
                     case updatedAt
                     case aliases
                 }
-                public init(from decoder: any Swift.Decoder) throws {
-                    let container = try decoder.container(keyedBy: CodingKeys.self)
-                    self.id = try container.decode(
-                        Components.Schemas.IngredientShortcode.self,
-                        forKey: .id
-                    )
-                    self.name = try container.decode(
-                        Swift.String.self,
-                        forKey: .name
-                    )
-                    self.createdAt = try container.decode(
-                        Foundation.Date.self,
-                        forKey: .createdAt
-                    )
-                    self.updatedAt = try container.decode(
-                        Foundation.Date.self,
-                        forKey: .updatedAt
-                    )
-                    self.aliases = try container.decodeIfPresent(
-                        [Swift.String].self,
-                        forKey: .aliases
-                    )
-                    try decoder.ensureNoAdditionalProperties(knownKeys: [
-                        "id",
-                        "name",
-                        "createdAt",
-                        "updatedAt",
-                        "aliases"
-                    ])
-                }
             }
             /// - Remark: Generated from `#/components/schemas/RecipeSectionIngredientOutIngredient/ingredient`.
             public var ingredient: Components.Schemas.RecipeSectionIngredientOutIngredient.IngredientPayload
@@ -41748,7 +28629,7 @@ extension Components {
             ///   - ingredient:
             public init(
                 id: Swift.String,
-                amounts: Components.Schemas.OutputSchema219,
+                amounts: Components.Schemas.OutputSchema232,
                 rawLine: Swift.String? = nil,
                 modifier: Swift.String? = nil,
                 createdAt: Foundation.Date,
@@ -41775,51 +28656,6 @@ extension Components {
                 case _type = "type"
                 case ingredient
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.id = try container.decode(
-                    Swift.String.self,
-                    forKey: .id
-                )
-                self.amounts = try container.decode(
-                    Components.Schemas.OutputSchema219.self,
-                    forKey: .amounts
-                )
-                self.rawLine = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .rawLine
-                )
-                self.modifier = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .modifier
-                )
-                self.createdAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .createdAt
-                )
-                self.updatedAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .updatedAt
-                )
-                self._type = try container.decode(
-                    Components.Schemas.RecipeSectionIngredientOutIngredient._TypePayload.self,
-                    forKey: ._type
-                )
-                self.ingredient = try container.decode(
-                    Components.Schemas.RecipeSectionIngredientOutIngredient.IngredientPayload.self,
-                    forKey: .ingredient
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "id",
-                    "amounts",
-                    "rawLine",
-                    "modifier",
-                    "createdAt",
-                    "updatedAt",
-                    "type",
-                    "ingredient"
-                ])
-            }
         }
         /// Always null on the wire: ingredient.
         ///
@@ -41828,7 +28664,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/RecipeSectionIngredientOutRecipe/id`.
             public var id: Swift.String
             /// - Remark: Generated from `#/components/schemas/RecipeSectionIngredientOutRecipe/amounts`.
-            public var amounts: Components.Schemas.OutputSchema219
+            public var amounts: Components.Schemas.OutputSchema232
             /// - Remark: Generated from `#/components/schemas/RecipeSectionIngredientOutRecipe/rawLine`.
             public var rawLine: Swift.String?
             /// - Remark: Generated from `#/components/schemas/RecipeSectionIngredientOutRecipe/modifier`.
@@ -41858,7 +28694,7 @@ extension Components {
             ///   - recipe:
             public init(
                 id: Swift.String,
-                amounts: Components.Schemas.OutputSchema219,
+                amounts: Components.Schemas.OutputSchema232,
                 rawLine: Swift.String? = nil,
                 modifier: Swift.String? = nil,
                 createdAt: Foundation.Date,
@@ -41884,51 +28720,6 @@ extension Components {
                 case updatedAt
                 case _type = "type"
                 case recipe
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.id = try container.decode(
-                    Swift.String.self,
-                    forKey: .id
-                )
-                self.amounts = try container.decode(
-                    Components.Schemas.OutputSchema219.self,
-                    forKey: .amounts
-                )
-                self.rawLine = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .rawLine
-                )
-                self.modifier = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .modifier
-                )
-                self.createdAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .createdAt
-                )
-                self.updatedAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .updatedAt
-                )
-                self._type = try container.decode(
-                    Components.Schemas.RecipeSectionIngredientOutRecipe._TypePayload.self,
-                    forKey: ._type
-                )
-                self.recipe = try container.decode(
-                    Components.Schemas.RecipeTopLevel.self,
-                    forKey: .recipe
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "id",
-                    "amounts",
-                    "rawLine",
-                    "modifier",
-                    "createdAt",
-                    "updatedAt",
-                    "type",
-                    "recipe"
-                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/RecipeSectionInput`.
@@ -42057,26 +28848,6 @@ extension Components {
                 case book
                 case cookbookId
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self._type = try container.decode(
-                    Components.Schemas.RecipeSourceBook._TypePayload.self,
-                    forKey: ._type
-                )
-                self.book = try container.decode(
-                    Swift.String.self,
-                    forKey: .book
-                )
-                self.cookbookId = try container.decodeIfPresent(
-                    Components.Schemas.CookbookShortcode.self,
-                    forKey: .cookbookId
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "type",
-                    "book",
-                    "cookbookId"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/RecipeSourceNotion`.
         public struct RecipeSourceNotion: Codable, Hashable, Sendable {
@@ -42110,26 +28881,6 @@ extension Components {
                 case pageId
                 case url
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self._type = try container.decode(
-                    Components.Schemas.RecipeSourceNotion._TypePayload.self,
-                    forKey: ._type
-                )
-                self.pageId = try container.decode(
-                    Swift.String.self,
-                    forKey: .pageId
-                )
-                self.url = try container.decode(
-                    Swift.String.self,
-                    forKey: .url
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "type",
-                    "pageId",
-                    "url"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/RecipeSourceOther`.
         public struct RecipeSourceOther: Codable, Hashable, Sendable {
@@ -42148,16 +28899,6 @@ extension Components {
             }
             public enum CodingKeys: String, CodingKey {
                 case _type = "type"
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self._type = try container.decode(
-                    Components.Schemas.RecipeSourceOther._TypePayload.self,
-                    forKey: ._type
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "type"
-                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/RecipeSourceWebsite`.
@@ -42185,21 +28926,6 @@ extension Components {
             public enum CodingKeys: String, CodingKey {
                 case _type = "type"
                 case url
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self._type = try container.decode(
-                    Components.Schemas.RecipeSourceWebsite._TypePayload.self,
-                    forKey: ._type
-                )
-                self.url = try container.decode(
-                    Swift.String.self,
-                    forKey: .url
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "type",
-                    "url"
-                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/RecipeTags`.
@@ -42263,51 +28989,6 @@ extension Components {
                 case totalMinutes
                 case prepMinutes
                 case cookMinutes
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.active = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .active
-                )
-                self.total = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .total
-                )
-                self.prep = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .prep
-                )
-                self.cook = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .cook
-                )
-                self.activeMinutes = try container.decodeIfPresent(
-                    Swift.Int.self,
-                    forKey: .activeMinutes
-                )
-                self.totalMinutes = try container.decodeIfPresent(
-                    Swift.Int.self,
-                    forKey: .totalMinutes
-                )
-                self.prepMinutes = try container.decodeIfPresent(
-                    Swift.Int.self,
-                    forKey: .prepMinutes
-                )
-                self.cookMinutes = try container.decodeIfPresent(
-                    Swift.Int.self,
-                    forKey: .cookMinutes
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "active",
-                    "total",
-                    "prep",
-                    "cook",
-                    "activeMinutes",
-                    "totalMinutes",
-                    "prepMinutes",
-                    "cookMinutes"
-                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/RecipeTimesInput`.
@@ -42413,31 +29094,6 @@ extension Components {
                     case equipment
                     case page
                 }
-                public init(from decoder: any Swift.Decoder) throws {
-                    let container = try decoder.container(keyedBy: CodingKeys.self)
-                    self.url = try container.decodeIfPresent(
-                        Swift.String.self,
-                        forKey: .url
-                    )
-                    self.times = try container.decodeIfPresent(
-                        Components.Schemas.RecipeTimes.self,
-                        forKey: .times
-                    )
-                    self.equipment = try container.decodeIfPresent(
-                        [Swift.String].self,
-                        forKey: .equipment
-                    )
-                    self.page = try container.decodeIfPresent(
-                        Swift.String.self,
-                        forKey: .page
-                    )
-                    try decoder.ensureNoAdditionalProperties(knownKeys: [
-                        "url",
-                        "times",
-                        "equipment",
-                        "page"
-                    ])
-                }
             }
             /// - Remark: Generated from `#/components/schemas/RecipeTopLevel/meta`.
             public var meta: Components.Schemas.RecipeTopLevel.MetaPayload?
@@ -42510,71 +29166,6 @@ extension Components {
                 case notes
                 case forkedFromRecipeId
                 case forkedFromRecipeName
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.id = try container.decode(
-                    Components.Schemas.RecipeShortcode.self,
-                    forKey: .id
-                )
-                self.name = try container.decode(
-                    Swift.String.self,
-                    forKey: .name
-                )
-                self.createdAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .createdAt
-                )
-                self.updatedAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .updatedAt
-                )
-                self.meta = try container.decodeIfPresent(
-                    Components.Schemas.RecipeTopLevel.MetaPayload.self,
-                    forKey: .meta
-                )
-                self.source = try container.decodeIfPresent(
-                    Components.Schemas.RecipeSource.self,
-                    forKey: .source
-                )
-                self._yield = try container.decodeIfPresent(
-                    Components.Schemas.PositiveAmount.self,
-                    forKey: ._yield
-                )
-                self.servings = try container.decodeIfPresent(
-                    Components.Schemas.RecipeServings.self,
-                    forKey: .servings
-                )
-                self.tags = try container.decodeIfPresent(
-                    Components.Schemas.RecipeTags.self,
-                    forKey: .tags
-                )
-                self.notes = try container.decodeIfPresent(
-                    Components.Schemas.RecipeNotes.self,
-                    forKey: .notes
-                )
-                self.forkedFromRecipeId = try container.decodeIfPresent(
-                    Components.Schemas.RecipeShortcode.self,
-                    forKey: .forkedFromRecipeId
-                )
-                self.forkedFromRecipeName = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .forkedFromRecipeName
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "id",
-                    "name",
-                    "createdAt",
-                    "updatedAt",
-                    "meta",
-                    "source",
-                    "yield",
-                    "servings",
-                    "tags",
-                    "notes",
-                    "forkedFromRecipeId",
-                    "forkedFromRecipeName"
-                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/RecipeUpdateData`.
@@ -42735,41 +29326,6 @@ extension Components {
                 case rawLine
                 case modifier
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.id = try container.decode(
-                    Swift.String.self,
-                    forKey: .id
-                )
-                self.recipe = try container.decode(
-                    Components.Schemas.RecipeTopLevel.self,
-                    forKey: .recipe
-                )
-                self.sectionName = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .sectionName
-                )
-                self.amounts = try container.decode(
-                    [Components.Schemas.Amount].self,
-                    forKey: .amounts
-                )
-                self.rawLine = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .rawLine
-                )
-                self.modifier = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .modifier
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "id",
-                    "recipe",
-                    "sectionName",
-                    "amounts",
-                    "rawLine",
-                    "modifier"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/RecommendationLocationTarget`.
         public struct RecommendationLocationTarget: Codable, Hashable, Sendable {
@@ -42792,21 +29348,6 @@ extension Components {
             public enum CodingKeys: String, CodingKey {
                 case id
                 case name
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.id = try container.decode(
-                    Components.Schemas.LocationShortcode.self,
-                    forKey: .id
-                )
-                self.name = try container.decode(
-                    Swift.String.self,
-                    forKey: .name
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "id",
-                    "name"
-                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/RecommendationProjectTarget`.
@@ -42831,21 +29372,6 @@ extension Components {
                 case id
                 case name
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.id = try container.decode(
-                    Components.Schemas.ProjectShortcode.self,
-                    forKey: .id
-                )
-                self.name = try container.decode(
-                    Swift.String.self,
-                    forKey: .name
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "id",
-                    "name"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/RecommendationSupportingExpense`.
         public struct RecommendationSupportingExpense: Codable, Hashable, Sendable {
@@ -42868,21 +29394,6 @@ extension Components {
             public enum CodingKeys: String, CodingKey {
                 case id
                 case name
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.id = try container.decode(
-                    Components.Schemas.ExpenseShortcode.self,
-                    forKey: .id
-                )
-                self.name = try container.decode(
-                    Swift.String.self,
-                    forKey: .name
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "id",
-                    "name"
-                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/ReconcileSessionPayload`.
@@ -42953,26 +29464,6 @@ extension Components {
                 case signal
                 case detail
                 case weight
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.signal = try container.decode(
-                    Swift.String.self,
-                    forKey: .signal
-                )
-                self.detail = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .detail
-                )
-                self.weight = try container.decode(
-                    Swift.Double.self,
-                    forKey: .weight
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "signal",
-                    "detail",
-                    "weight"
-                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/ResolveScanStraysInput`.
@@ -43055,26 +29546,6 @@ extension Components {
                     case reason
                     case message
                 }
-                public init(from decoder: any Swift.Decoder) throws {
-                    let container = try decoder.container(keyedBy: CodingKeys.self)
-                    self.entryId = try container.decode(
-                        Components.Schemas.InventoryShortcode.self,
-                        forKey: .entryId
-                    )
-                    self.reason = try container.decode(
-                        Components.Schemas.ScanStraySkipReason.self,
-                        forKey: .reason
-                    )
-                    self.message = try container.decode(
-                        Swift.String.self,
-                        forKey: .message
-                    )
-                    try decoder.ensureNoAdditionalProperties(knownKeys: [
-                        "entryId",
-                        "reason",
-                        "message"
-                    ])
-                }
             }
             /// - Remark: Generated from `#/components/schemas/ResolveScanStraysOut/skipped`.
             public typealias SkippedPayload = [Components.Schemas.ResolveScanStraysOut.SkippedPayloadPayload]
@@ -43101,26 +29572,6 @@ extension Components {
                 case moved
                 case skipped
                 case sideEffects
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.moved = try container.decode(
-                    Swift.Int.self,
-                    forKey: .moved
-                )
-                self.skipped = try container.decode(
-                    Components.Schemas.ResolveScanStraysOut.SkippedPayload.self,
-                    forKey: .skipped
-                )
-                self.sideEffects = try container.decode(
-                    Components.Schemas.MutationSideEffects.self,
-                    forKey: .sideEffects
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "moved",
-                    "skipped",
-                    "sideEffects"
-                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/RetryImageProcessingInput`.
@@ -43159,21 +29610,6 @@ extension Components {
             public enum CodingKeys: String, CodingKey {
                 case retried
                 case submissionId
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.retried = try container.decode(
-                    Swift.Int.self,
-                    forKey: .retried
-                )
-                self.submissionId = try container.decodeIfPresent(
-                    Components.Schemas.ActivitySubmissionId.self,
-                    forKey: .submissionId
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "retried",
-                    "submissionId"
-                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/ScanAtLocationInput`.
@@ -43304,36 +29740,6 @@ extension Components {
                     case manufacturer
                     case hasPrice
                 }
-                public init(from decoder: any Swift.Decoder) throws {
-                    let container = try decoder.container(keyedBy: CodingKeys.self)
-                    self.id = try container.decode(
-                        Components.Schemas.ProductShortcode.self,
-                        forKey: .id
-                    )
-                    self.name = try container.decode(
-                        Swift.String.self,
-                        forKey: .name
-                    )
-                    self.created = try container.decode(
-                        Swift.Bool.self,
-                        forKey: .created
-                    )
-                    self.manufacturer = try container.decodeIfPresent(
-                        Swift.String.self,
-                        forKey: .manufacturer
-                    )
-                    self.hasPrice = try container.decode(
-                        Swift.Bool.self,
-                        forKey: .hasPrice
-                    )
-                    try decoder.ensureNoAdditionalProperties(knownKeys: [
-                        "id",
-                        "name",
-                        "created",
-                        "manufacturer",
-                        "hasPrice"
-                    ])
-                }
             }
             /// - Remark: Generated from `#/components/schemas/ScanAtLocationOut/product`.
             public var product: Components.Schemas.ScanAtLocationOut.ProductPayload
@@ -43365,31 +29771,6 @@ extension Components {
                 case strays
                 case sideEffects
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.outcome = try container.decode(
-                    Components.Schemas.ScanAtLocationOut.OutcomePayload.self,
-                    forKey: .outcome
-                )
-                self.product = try container.decode(
-                    Components.Schemas.ScanAtLocationOut.ProductPayload.self,
-                    forKey: .product
-                )
-                self.strays = try container.decode(
-                    [Components.Schemas.ScanStrayOut].self,
-                    forKey: .strays
-                )
-                self.sideEffects = try container.decode(
-                    Components.Schemas.MutationSideEffects.self,
-                    forKey: .sideEffects
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "outcome",
-                    "product",
-                    "strays",
-                    "sideEffects"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/ScanStrayOut`.
         public struct ScanStrayOut: Codable, Hashable, Sendable {
@@ -43416,21 +29797,6 @@ extension Components {
                 public enum CodingKeys: String, CodingKey {
                     case id
                     case name
-                }
-                public init(from decoder: any Swift.Decoder) throws {
-                    let container = try decoder.container(keyedBy: CodingKeys.self)
-                    self.id = try container.decode(
-                        Components.Schemas.LocationShortcode.self,
-                        forKey: .id
-                    )
-                    self.name = try container.decode(
-                        Swift.String.self,
-                        forKey: .name
-                    )
-                    try decoder.ensureNoAdditionalProperties(knownKeys: [
-                        "id",
-                        "name"
-                    ])
                 }
             }
             /// - Remark: Generated from `#/components/schemas/ScanStrayOut/location`.
@@ -43464,31 +29830,6 @@ extension Components {
                 case location
                 case amount
                 case ambiguousQuantity
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.entryId = try container.decode(
-                    Components.Schemas.InventoryShortcode.self,
-                    forKey: .entryId
-                )
-                self.location = try container.decode(
-                    Components.Schemas.ScanStrayOut.LocationPayload.self,
-                    forKey: .location
-                )
-                self.amount = try container.decode(
-                    Components.Schemas.Amount.self,
-                    forKey: .amount
-                )
-                self.ambiguousQuantity = try container.decode(
-                    Swift.Bool.self,
-                    forKey: .ambiguousQuantity
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "entryId",
-                    "location",
-                    "amount",
-                    "ambiguousQuantity"
-                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/ScanStraySkipReason`.
@@ -43540,21 +29881,6 @@ extension Components {
             public enum CodingKeys: String, CodingKey {
                 case jobIds
                 case submissionId
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.jobIds = try container.decode(
-                    [Swift.String].self,
-                    forKey: .jobIds
-                )
-                self.submissionId = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .submissionId
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "jobIds",
-                    "submissionId"
-                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/SearchableEntity`.
@@ -43630,61 +29956,6 @@ extension Components {
                 case matchField
                 case matchReason
                 case matchTerms
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.id = try container.decode(
-                    Components.Schemas.SearchableEntityId.self,
-                    forKey: .id
-                )
-                self.entityType = try container.decode(
-                    Components.Schemas.SearchableEntity.self,
-                    forKey: .entityType
-                )
-                self.title = try container.decode(
-                    Swift.String.self,
-                    forKey: .title
-                )
-                self.subtitle = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .subtitle
-                )
-                self.typeHint = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .typeHint
-                )
-                self.imageUrl = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .imageUrl
-                )
-                self.matchKind = try container.decode(
-                    Components.Schemas.SearchMatchKind.self,
-                    forKey: .matchKind
-                )
-                self.matchField = try container.decode(
-                    Components.Schemas.SearchMatchField.self,
-                    forKey: .matchField
-                )
-                self.matchReason = try container.decode(
-                    Swift.String.self,
-                    forKey: .matchReason
-                )
-                self.matchTerms = try container.decode(
-                    [Swift.String].self,
-                    forKey: .matchTerms
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "id",
-                    "entityType",
-                    "title",
-                    "subtitle",
-                    "typeHint",
-                    "imageUrl",
-                    "matchKind",
-                    "matchField",
-                    "matchReason",
-                    "matchTerms"
-                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/SearchHitsOut`.
@@ -43811,21 +30082,6 @@ extension Components {
                     case id
                     case perceptualHash
                 }
-                public init(from decoder: any Swift.Decoder) throws {
-                    let container = try decoder.container(keyedBy: CodingKeys.self)
-                    self.id = try container.decode(
-                        Components.Schemas.ImageShortcode.self,
-                        forKey: .id
-                    )
-                    self.perceptualHash = try container.decode(
-                        Components.Schemas.PerceptualHash.self,
-                        forKey: .perceptualHash
-                    )
-                    try decoder.ensureNoAdditionalProperties(knownKeys: [
-                        "id",
-                        "perceptualHash"
-                    ])
-                }
             }
             /// - Remark: Generated from `#/components/schemas/SetPerceptualHashesOutput/items`.
             public typealias ItemsPayload = [Components.Schemas.SetPerceptualHashesOutput.ItemsPayloadPayload]
@@ -43848,21 +30104,6 @@ extension Components {
             public enum CodingKeys: String, CodingKey {
                 case items
                 case unavailable
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.items = try container.decode(
-                    Components.Schemas.SetPerceptualHashesOutput.ItemsPayload.self,
-                    forKey: .items
-                )
-                self.unavailable = try container.decode(
-                    [Components.Schemas.ImageShortcode].self,
-                    forKey: .unavailable
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "items",
-                    "unavailable"
-                ])
             }
         }
         /// Product units covered by this expense; fractional values are allowed (half a coil thrown away is -0.5). Null means the receipt does not establish quantity. Signed: money direction wins, so a positive-cost line is an acquisition of |qty| and a negative-cost line is an exit of |qty|. On a $0 line the sign IS the fact — a positive quantity is a free acquisition (promo pack, bundled accessory), a negative quantity is a discard/write-off. Zero is legal ONLY on a negative-cost line and means money came back but no unit left — a price concession with the item kept (Amazon "Account adjustment", a partial refund for shipping damage). Prefer 0 over null there: null says the count is unknown and gets reported as data-entry debt.
@@ -43896,26 +30137,6 @@ extension Components {
                 case summary
                 case products
                 case totalCount
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.summary = try container.decode(
-                    Components.Schemas.SmartCollectionSummary.self,
-                    forKey: .summary
-                )
-                self.products = try container.decode(
-                    [Components.Schemas.CollectionProductOut].self,
-                    forKey: .products
-                )
-                self.totalCount = try container.decode(
-                    Swift.Int.self,
-                    forKey: .totalCount
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "summary",
-                    "products",
-                    "totalCount"
-                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/SmartCollectionMatch`.
@@ -43961,31 +30182,6 @@ extension Components {
                 case kind
                 case value
                 case evidence
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.ruleIndex = try container.decode(
-                    Swift.Int.self,
-                    forKey: .ruleIndex
-                )
-                self.kind = try container.decode(
-                    Components.Schemas.SmartCollectionMatch.KindPayload.self,
-                    forKey: .kind
-                )
-                self.value = try container.decode(
-                    Swift.String.self,
-                    forKey: .value
-                )
-                self.evidence = try container.decode(
-                    [Swift.String].self,
-                    forKey: .evidence
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "ruleIndex",
-                    "kind",
-                    "value",
-                    "evidence"
-                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/SmartCollectionPagination`.
@@ -44239,46 +30435,6 @@ extension Components {
                     case locationNameContains
                     case historicalExpenseTrade
                 }
-                public init(from decoder: any Swift.Decoder) throws {
-                    let container = try decoder.container(keyedBy: CodingKeys.self)
-                    self.effectiveOwnerEquals = try container.decode(
-                        Swift.Int.self,
-                        forKey: .effectiveOwnerEquals
-                    )
-                    self.categoryEquals = try container.decode(
-                        Swift.Int.self,
-                        forKey: .categoryEquals
-                    )
-                    self.categoryFeatureEquals = try container.decode(
-                        Swift.Int.self,
-                        forKey: .categoryFeatureEquals
-                    )
-                    self.productTagEquals = try container.decode(
-                        Swift.Int.self,
-                        forKey: .productTagEquals
-                    )
-                    self.manufacturerEquals = try container.decode(
-                        Swift.Int.self,
-                        forKey: .manufacturerEquals
-                    )
-                    self.locationNameContains = try container.decode(
-                        Swift.Int.self,
-                        forKey: .locationNameContains
-                    )
-                    self.historicalExpenseTrade = try container.decode(
-                        Swift.Int.self,
-                        forKey: .historicalExpenseTrade
-                    )
-                    try decoder.ensureNoAdditionalProperties(knownKeys: [
-                        "effectiveOwnerEquals",
-                        "categoryEquals",
-                        "categoryFeatureEquals",
-                        "productTagEquals",
-                        "manufacturerEquals",
-                        "locationNameContains",
-                        "historicalExpenseTrade"
-                    ])
-                }
             }
             /// - Remark: Generated from `#/components/schemas/SmartCollectionSummary/sourceCounts`.
             public var sourceCounts: Components.Schemas.SmartCollectionSummary.SourceCountsPayload
@@ -44305,31 +30461,6 @@ extension Components {
                 case name
                 case totalCount
                 case sourceCounts
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.key = try container.decode(
-                    Components.Schemas.SmartCollectionSummary.KeyPayload.self,
-                    forKey: .key
-                )
-                self.name = try container.decode(
-                    Swift.String.self,
-                    forKey: .name
-                )
-                self.totalCount = try container.decode(
-                    Swift.Int.self,
-                    forKey: .totalCount
-                )
-                self.sourceCounts = try container.decode(
-                    Components.Schemas.SmartCollectionSummary.SourceCountsPayload.self,
-                    forKey: .sourceCounts
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "key",
-                    "name",
-                    "totalCount",
-                    "sourceCounts"
-                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/SubmitReceiptEvidenceInput`.
@@ -44382,26 +30513,6 @@ extension Components {
                 case huntId
                 case imageId
                 case queued
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.huntId = try container.decode(
-                    Swift.String.self,
-                    forKey: .huntId
-                )
-                self.imageId = try container.decode(
-                    Components.Schemas.ImageShortcode.self,
-                    forKey: .imageId
-                )
-                self.queued = try container.decode(
-                    Swift.Bool.self,
-                    forKey: .queued
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "huntId",
-                    "imageId",
-                    "queued"
-                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/TaskCreateInput`.
@@ -44532,15 +30643,15 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/TaskDetail/parentTaskName`.
             public var parentTaskName: Swift.String?
             /// - Remark: Generated from `#/components/schemas/TaskDetail/blockedByIds`.
-            public var blockedByIds: Components.Schemas.OutputSchema311
+            public var blockedByIds: Components.Schemas.OutputSchema324
             /// - Remark: Generated from `#/components/schemas/TaskDetail/blockingIds`.
-            public var blockingIds: Components.Schemas.OutputSchema311
+            public var blockingIds: Components.Schemas.OutputSchema324
             /// - Remark: Generated from `#/components/schemas/TaskDetail/subtaskCount`.
             public var subtaskCount: Swift.Int
             /// - Remark: Generated from `#/components/schemas/TaskDetail/doneSubtaskCount`.
             public var doneSubtaskCount: Swift.Int
             /// - Remark: Generated from `#/components/schemas/TaskDetail/images`.
-            public var images: Components.Schemas.OutputSchema133
+            public var images: Components.Schemas.OutputSchema146
             /// - Remark: Generated from `#/components/schemas/TaskDetail/createdAt`.
             public var createdAt: Foundation.Date
             /// - Remark: Generated from `#/components/schemas/TaskDetail/updatedAt`.
@@ -44550,7 +30661,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/TaskDetail/displayImages`.
             public var displayImages: Components.Schemas.DisplayImagesField
             /// - Remark: Generated from `#/components/schemas/TaskDetail/attachments`.
-            public var attachments: Components.Schemas.OutputSchema437
+            public var attachments: Components.Schemas.OutputSchema450
             /// Creates a new `TaskDetail`.
             ///
             /// - Parameters:
@@ -44593,16 +30704,16 @@ extension Components {
                 projectName: Swift.String? = nil,
                 subjectProductName: Swift.String? = nil,
                 parentTaskName: Swift.String? = nil,
-                blockedByIds: Components.Schemas.OutputSchema311,
-                blockingIds: Components.Schemas.OutputSchema311,
+                blockedByIds: Components.Schemas.OutputSchema324,
+                blockingIds: Components.Schemas.OutputSchema324,
                 subtaskCount: Swift.Int,
                 doneSubtaskCount: Swift.Int,
-                images: Components.Schemas.OutputSchema133,
+                images: Components.Schemas.OutputSchema146,
                 createdAt: Foundation.Date,
                 updatedAt: Foundation.Date,
                 dataQuality: Components.Schemas.DataQuality,
                 displayImages: Components.Schemas.DisplayImagesField,
-                attachments: Components.Schemas.OutputSchema437
+                attachments: Components.Schemas.OutputSchema450
             ) {
                 self.fieldResolutions = fieldResolutions
                 self.id = id
@@ -44655,131 +30766,6 @@ extension Components {
                 case displayImages
                 case attachments
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.fieldResolutions = try container.decodeIfPresent(
-                    Components.Schemas.OptionalFieldResolutions.self,
-                    forKey: .fieldResolutions
-                )
-                self.id = try container.decode(
-                    Components.Schemas.TaskShortcode.self,
-                    forKey: .id
-                )
-                self.name = try container.decode(
-                    Swift.String.self,
-                    forKey: .name
-                )
-                self.status = try container.decode(
-                    Components.Schemas.TaskStatus.self,
-                    forKey: .status
-                )
-                self.projectId = try container.decodeIfPresent(
-                    Components.Schemas.ProjectShortcode.self,
-                    forKey: .projectId
-                )
-                self.subjectProductId = try container.decodeIfPresent(
-                    Components.Schemas.ProductShortcode.self,
-                    forKey: .subjectProductId
-                )
-                self.parentTaskId = try container.decodeIfPresent(
-                    Components.Schemas.TaskShortcode.self,
-                    forKey: .parentTaskId
-                )
-                self.dueDate = try container.decodeIfPresent(
-                    Components.Schemas.PlainDate.self,
-                    forKey: .dueDate
-                )
-                self.dueEndDate = try container.decodeIfPresent(
-                    Components.Schemas.PlainDate.self,
-                    forKey: .dueEndDate
-                )
-                self.trade = try container.decode(
-                    Components.Schemas.Trade.self,
-                    forKey: .trade
-                )
-                self.sortOrder = try container.decodeIfPresent(
-                    Swift.Double.self,
-                    forKey: .sortOrder
-                )
-                self.projectName = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .projectName
-                )
-                self.subjectProductName = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .subjectProductName
-                )
-                self.parentTaskName = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .parentTaskName
-                )
-                self.blockedByIds = try container.decode(
-                    Components.Schemas.OutputSchema311.self,
-                    forKey: .blockedByIds
-                )
-                self.blockingIds = try container.decode(
-                    Components.Schemas.OutputSchema311.self,
-                    forKey: .blockingIds
-                )
-                self.subtaskCount = try container.decode(
-                    Swift.Int.self,
-                    forKey: .subtaskCount
-                )
-                self.doneSubtaskCount = try container.decode(
-                    Swift.Int.self,
-                    forKey: .doneSubtaskCount
-                )
-                self.images = try container.decode(
-                    Components.Schemas.OutputSchema133.self,
-                    forKey: .images
-                )
-                self.createdAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .createdAt
-                )
-                self.updatedAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .updatedAt
-                )
-                self.dataQuality = try container.decode(
-                    Components.Schemas.DataQuality.self,
-                    forKey: .dataQuality
-                )
-                self.displayImages = try container.decode(
-                    Components.Schemas.DisplayImagesField.self,
-                    forKey: .displayImages
-                )
-                self.attachments = try container.decode(
-                    Components.Schemas.OutputSchema437.self,
-                    forKey: .attachments
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "fieldResolutions",
-                    "id",
-                    "name",
-                    "status",
-                    "projectId",
-                    "subjectProductId",
-                    "parentTaskId",
-                    "dueDate",
-                    "dueEndDate",
-                    "trade",
-                    "sortOrder",
-                    "projectName",
-                    "subjectProductName",
-                    "parentTaskName",
-                    "blockedByIds",
-                    "blockingIds",
-                    "subtaskCount",
-                    "doneSubtaskCount",
-                    "images",
-                    "createdAt",
-                    "updatedAt",
-                    "dataQuality",
-                    "displayImages",
-                    "attachments"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/TaskListItem`.
         public struct TaskListItem: Codable, Hashable, Sendable {
@@ -44814,15 +30800,15 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/TaskListItem/parentTaskName`.
             public var parentTaskName: Swift.String?
             /// - Remark: Generated from `#/components/schemas/TaskListItem/blockedByIds`.
-            public var blockedByIds: Components.Schemas.OutputSchema311
+            public var blockedByIds: Components.Schemas.OutputSchema324
             /// - Remark: Generated from `#/components/schemas/TaskListItem/blockingIds`.
-            public var blockingIds: Components.Schemas.OutputSchema311
+            public var blockingIds: Components.Schemas.OutputSchema324
             /// - Remark: Generated from `#/components/schemas/TaskListItem/subtaskCount`.
             public var subtaskCount: Swift.Int
             /// - Remark: Generated from `#/components/schemas/TaskListItem/doneSubtaskCount`.
             public var doneSubtaskCount: Swift.Int
             /// - Remark: Generated from `#/components/schemas/TaskListItem/images`.
-            public var images: Components.Schemas.OutputSchema133
+            public var images: Components.Schemas.OutputSchema146
             /// - Remark: Generated from `#/components/schemas/TaskListItem/createdAt`.
             public var createdAt: Foundation.Date
             /// - Remark: Generated from `#/components/schemas/TaskListItem/updatedAt`.
@@ -44872,11 +30858,11 @@ extension Components {
                 projectName: Swift.String? = nil,
                 subjectProductName: Swift.String? = nil,
                 parentTaskName: Swift.String? = nil,
-                blockedByIds: Components.Schemas.OutputSchema311,
-                blockingIds: Components.Schemas.OutputSchema311,
+                blockedByIds: Components.Schemas.OutputSchema324,
+                blockingIds: Components.Schemas.OutputSchema324,
                 subtaskCount: Swift.Int,
                 doneSubtaskCount: Swift.Int,
-                images: Components.Schemas.OutputSchema133,
+                images: Components.Schemas.OutputSchema146,
                 createdAt: Foundation.Date,
                 updatedAt: Foundation.Date,
                 dataQuality: Components.Schemas.DataQuality,
@@ -44931,126 +30917,6 @@ extension Components {
                 case dataQuality
                 case displayImages
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.fieldResolutions = try container.decodeIfPresent(
-                    Components.Schemas.OptionalFieldResolutions.self,
-                    forKey: .fieldResolutions
-                )
-                self.id = try container.decode(
-                    Components.Schemas.TaskShortcode.self,
-                    forKey: .id
-                )
-                self.name = try container.decode(
-                    Swift.String.self,
-                    forKey: .name
-                )
-                self.status = try container.decode(
-                    Components.Schemas.TaskStatus.self,
-                    forKey: .status
-                )
-                self.projectId = try container.decodeIfPresent(
-                    Components.Schemas.ProjectShortcode.self,
-                    forKey: .projectId
-                )
-                self.subjectProductId = try container.decodeIfPresent(
-                    Components.Schemas.ProductShortcode.self,
-                    forKey: .subjectProductId
-                )
-                self.parentTaskId = try container.decodeIfPresent(
-                    Components.Schemas.TaskShortcode.self,
-                    forKey: .parentTaskId
-                )
-                self.dueDate = try container.decodeIfPresent(
-                    Components.Schemas.PlainDate.self,
-                    forKey: .dueDate
-                )
-                self.dueEndDate = try container.decodeIfPresent(
-                    Components.Schemas.PlainDate.self,
-                    forKey: .dueEndDate
-                )
-                self.trade = try container.decode(
-                    Components.Schemas.Trade.self,
-                    forKey: .trade
-                )
-                self.sortOrder = try container.decodeIfPresent(
-                    Swift.Double.self,
-                    forKey: .sortOrder
-                )
-                self.projectName = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .projectName
-                )
-                self.subjectProductName = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .subjectProductName
-                )
-                self.parentTaskName = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .parentTaskName
-                )
-                self.blockedByIds = try container.decode(
-                    Components.Schemas.OutputSchema311.self,
-                    forKey: .blockedByIds
-                )
-                self.blockingIds = try container.decode(
-                    Components.Schemas.OutputSchema311.self,
-                    forKey: .blockingIds
-                )
-                self.subtaskCount = try container.decode(
-                    Swift.Int.self,
-                    forKey: .subtaskCount
-                )
-                self.doneSubtaskCount = try container.decode(
-                    Swift.Int.self,
-                    forKey: .doneSubtaskCount
-                )
-                self.images = try container.decode(
-                    Components.Schemas.OutputSchema133.self,
-                    forKey: .images
-                )
-                self.createdAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .createdAt
-                )
-                self.updatedAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .updatedAt
-                )
-                self.dataQuality = try container.decode(
-                    Components.Schemas.DataQuality.self,
-                    forKey: .dataQuality
-                )
-                self.displayImages = try container.decode(
-                    Components.Schemas.DisplayImagesField.self,
-                    forKey: .displayImages
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "fieldResolutions",
-                    "id",
-                    "name",
-                    "status",
-                    "projectId",
-                    "subjectProductId",
-                    "parentTaskId",
-                    "dueDate",
-                    "dueEndDate",
-                    "trade",
-                    "sortOrder",
-                    "projectName",
-                    "subjectProductName",
-                    "parentTaskName",
-                    "blockedByIds",
-                    "blockingIds",
-                    "subtaskCount",
-                    "doneSubtaskCount",
-                    "images",
-                    "createdAt",
-                    "updatedAt",
-                    "dataQuality",
-                    "displayImages"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/TaskListPage`.
         public struct TaskListPage: Codable, Hashable, Sendable {
@@ -45073,21 +30939,6 @@ extension Components {
             public enum CodingKeys: String, CodingKey {
                 case items
                 case meta
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.items = try container.decode(
-                    [Components.Schemas.TaskListItem].self,
-                    forKey: .items
-                )
-                self.meta = try container.decode(
-                    Components.Schemas.ListPageMeta.self,
-                    forKey: .meta
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "items",
-                    "meta"
-                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/TaskOut`.
@@ -45123,15 +30974,15 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/TaskOut/parentTaskName`.
             public var parentTaskName: Swift.String?
             /// - Remark: Generated from `#/components/schemas/TaskOut/blockedByIds`.
-            public var blockedByIds: Components.Schemas.OutputSchema311
+            public var blockedByIds: Components.Schemas.OutputSchema324
             /// - Remark: Generated from `#/components/schemas/TaskOut/blockingIds`.
-            public var blockingIds: Components.Schemas.OutputSchema311
+            public var blockingIds: Components.Schemas.OutputSchema324
             /// - Remark: Generated from `#/components/schemas/TaskOut/subtaskCount`.
             public var subtaskCount: Swift.Int
             /// - Remark: Generated from `#/components/schemas/TaskOut/doneSubtaskCount`.
             public var doneSubtaskCount: Swift.Int
             /// - Remark: Generated from `#/components/schemas/TaskOut/images`.
-            public var images: Components.Schemas.OutputSchema133
+            public var images: Components.Schemas.OutputSchema146
             /// - Remark: Generated from `#/components/schemas/TaskOut/createdAt`.
             public var createdAt: Foundation.Date
             /// - Remark: Generated from `#/components/schemas/TaskOut/updatedAt`.
@@ -45178,11 +31029,11 @@ extension Components {
                 projectName: Swift.String? = nil,
                 subjectProductName: Swift.String? = nil,
                 parentTaskName: Swift.String? = nil,
-                blockedByIds: Components.Schemas.OutputSchema311,
-                blockingIds: Components.Schemas.OutputSchema311,
+                blockedByIds: Components.Schemas.OutputSchema324,
+                blockingIds: Components.Schemas.OutputSchema324,
                 subtaskCount: Swift.Int,
                 doneSubtaskCount: Swift.Int,
-                images: Components.Schemas.OutputSchema133,
+                images: Components.Schemas.OutputSchema146,
                 createdAt: Foundation.Date,
                 updatedAt: Foundation.Date,
                 dataQuality: Components.Schemas.DataQuality
@@ -45233,121 +31084,6 @@ extension Components {
                 case createdAt
                 case updatedAt
                 case dataQuality
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.fieldResolutions = try container.decodeIfPresent(
-                    Components.Schemas.OptionalFieldResolutions.self,
-                    forKey: .fieldResolutions
-                )
-                self.id = try container.decode(
-                    Components.Schemas.TaskShortcode.self,
-                    forKey: .id
-                )
-                self.name = try container.decode(
-                    Swift.String.self,
-                    forKey: .name
-                )
-                self.status = try container.decode(
-                    Components.Schemas.TaskStatus.self,
-                    forKey: .status
-                )
-                self.projectId = try container.decodeIfPresent(
-                    Components.Schemas.ProjectShortcode.self,
-                    forKey: .projectId
-                )
-                self.subjectProductId = try container.decodeIfPresent(
-                    Components.Schemas.ProductShortcode.self,
-                    forKey: .subjectProductId
-                )
-                self.parentTaskId = try container.decodeIfPresent(
-                    Components.Schemas.TaskShortcode.self,
-                    forKey: .parentTaskId
-                )
-                self.dueDate = try container.decodeIfPresent(
-                    Components.Schemas.PlainDate.self,
-                    forKey: .dueDate
-                )
-                self.dueEndDate = try container.decodeIfPresent(
-                    Components.Schemas.PlainDate.self,
-                    forKey: .dueEndDate
-                )
-                self.trade = try container.decode(
-                    Components.Schemas.Trade.self,
-                    forKey: .trade
-                )
-                self.sortOrder = try container.decodeIfPresent(
-                    Swift.Double.self,
-                    forKey: .sortOrder
-                )
-                self.projectName = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .projectName
-                )
-                self.subjectProductName = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .subjectProductName
-                )
-                self.parentTaskName = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .parentTaskName
-                )
-                self.blockedByIds = try container.decode(
-                    Components.Schemas.OutputSchema311.self,
-                    forKey: .blockedByIds
-                )
-                self.blockingIds = try container.decode(
-                    Components.Schemas.OutputSchema311.self,
-                    forKey: .blockingIds
-                )
-                self.subtaskCount = try container.decode(
-                    Swift.Int.self,
-                    forKey: .subtaskCount
-                )
-                self.doneSubtaskCount = try container.decode(
-                    Swift.Int.self,
-                    forKey: .doneSubtaskCount
-                )
-                self.images = try container.decode(
-                    Components.Schemas.OutputSchema133.self,
-                    forKey: .images
-                )
-                self.createdAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .createdAt
-                )
-                self.updatedAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .updatedAt
-                )
-                self.dataQuality = try container.decode(
-                    Components.Schemas.DataQuality.self,
-                    forKey: .dataQuality
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "fieldResolutions",
-                    "id",
-                    "name",
-                    "status",
-                    "projectId",
-                    "subjectProductId",
-                    "parentTaskId",
-                    "dueDate",
-                    "dueEndDate",
-                    "trade",
-                    "sortOrder",
-                    "projectName",
-                    "subjectProductName",
-                    "parentTaskName",
-                    "blockedByIds",
-                    "blockingIds",
-                    "subtaskCount",
-                    "doneSubtaskCount",
-                    "images",
-                    "createdAt",
-                    "updatedAt",
-                    "dataQuality"
-                ])
             }
         }
         /// task shortcode, e.g. TSK-4K7M
@@ -45419,46 +31155,6 @@ extension Components {
                 case projectId
                 case projectName
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.id = try container.decode(
-                    Components.Schemas.TaskShortcode.self,
-                    forKey: .id
-                )
-                self.name = try container.decode(
-                    Swift.String.self,
-                    forKey: .name
-                )
-                self.status = try container.decode(
-                    Components.Schemas.TaskTodayBriefingItemOut.StatusPayload.self,
-                    forKey: .status
-                )
-                self.dueDate = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .dueDate
-                )
-                self.dueEndDate = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .dueEndDate
-                )
-                self.projectId = try container.decodeIfPresent(
-                    Components.Schemas.ProjectShortcode.self,
-                    forKey: .projectId
-                )
-                self.projectName = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .projectName
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "id",
-                    "name",
-                    "status",
-                    "dueDate",
-                    "dueEndDate",
-                    "projectId",
-                    "projectName"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/TaskTodayBriefingOut`.
         public struct TaskTodayBriefingOut: Codable, Hashable, Sendable {
@@ -45505,41 +31201,6 @@ extension Components {
                 case blockedCount
                 case overdueCount
                 case dueThisWeekCount
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.next = try container.decode(
-                    [Components.Schemas.TaskTodayBriefingItemOut].self,
-                    forKey: .next
-                )
-                self.nextCount = try container.decode(
-                    Swift.Int.self,
-                    forKey: .nextCount
-                )
-                self.laterCount = try container.decode(
-                    Swift.Int.self,
-                    forKey: .laterCount
-                )
-                self.blockedCount = try container.decode(
-                    Swift.Int.self,
-                    forKey: .blockedCount
-                )
-                self.overdueCount = try container.decode(
-                    Swift.Int.self,
-                    forKey: .overdueCount
-                )
-                self.dueThisWeekCount = try container.decode(
-                    Swift.Int.self,
-                    forKey: .dueThisWeekCount
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "next",
-                    "nextCount",
-                    "laterCount",
-                    "blockedCount",
-                    "overdueCount",
-                    "dueThisWeekCount"
-                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/TaskUpdateData`.
@@ -45814,26 +31475,6 @@ extension Components {
                     case unit
                     case upperValue
                 }
-                public init(from decoder: any Swift.Decoder) throws {
-                    let container = try decoder.container(keyedBy: CodingKeys.self)
-                    self.value = try container.decode(
-                        Swift.Double.self,
-                        forKey: .value
-                    )
-                    self.unit = try container.decode(
-                        Swift.String.self,
-                        forKey: .unit
-                    )
-                    self.upperValue = try container.decodeIfPresent(
-                        Swift.Double.self,
-                        forKey: .upperValue
-                    )
-                    try decoder.ensureNoAdditionalProperties(knownKeys: [
-                        "value",
-                        "unit",
-                        "upperValue"
-                    ])
-                }
             }
             /// left side of the pair, e.g. { value: 8, unit: "oz" }
             ///
@@ -45868,26 +31509,6 @@ extension Components {
                     case value
                     case unit
                     case upperValue
-                }
-                public init(from decoder: any Swift.Decoder) throws {
-                    let container = try decoder.container(keyedBy: CodingKeys.self)
-                    self.value = try container.decode(
-                        Swift.Double.self,
-                        forKey: .value
-                    )
-                    self.unit = try container.decode(
-                        Swift.String.self,
-                        forKey: .unit
-                    )
-                    self.upperValue = try container.decodeIfPresent(
-                        Swift.Double.self,
-                        forKey: .upperValue
-                    )
-                    try decoder.ensureNoAdditionalProperties(knownKeys: [
-                        "value",
-                        "unit",
-                        "upperValue"
-                    ])
                 }
             }
             /// right side of the pair, e.g. { value: 10, unit: "dollar" }
@@ -45940,46 +31561,6 @@ extension Components {
                 case createdAt
                 case updatedAt
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.id = try container.decode(
-                    Swift.String.self,
-                    forKey: .id
-                )
-                self.a = try container.decode(
-                    Components.Schemas.UnitMappingOut.APayload.self,
-                    forKey: .a
-                )
-                self.b = try container.decode(
-                    Components.Schemas.UnitMappingOut.BPayload.self,
-                    forKey: .b
-                )
-                self.source = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .source
-                )
-                self.sourceMetadata = try container.decode(
-                    Components.Schemas.OutputSchema18.self,
-                    forKey: .sourceMetadata
-                )
-                self.createdAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .createdAt
-                )
-                self.updatedAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .updatedAt
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "id",
-                    "a",
-                    "b",
-                    "source",
-                    "sourceMetadata",
-                    "createdAt",
-                    "updatedAt"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/UnitMappingWithMetadata`.
         public struct UnitMappingWithMetadata: Codable, Hashable, Sendable {
@@ -46012,26 +31593,6 @@ extension Components {
                     case value
                     case unit
                     case upperValue
-                }
-                public init(from decoder: any Swift.Decoder) throws {
-                    let container = try decoder.container(keyedBy: CodingKeys.self)
-                    self.value = try container.decode(
-                        Swift.Double.self,
-                        forKey: .value
-                    )
-                    self.unit = try container.decode(
-                        Swift.String.self,
-                        forKey: .unit
-                    )
-                    self.upperValue = try container.decodeIfPresent(
-                        Swift.Double.self,
-                        forKey: .upperValue
-                    )
-                    try decoder.ensureNoAdditionalProperties(knownKeys: [
-                        "value",
-                        "unit",
-                        "upperValue"
-                    ])
                 }
             }
             /// left side of the pair, e.g. { value: 8, unit: "oz" }
@@ -46068,26 +31629,6 @@ extension Components {
                     case unit
                     case upperValue
                 }
-                public init(from decoder: any Swift.Decoder) throws {
-                    let container = try decoder.container(keyedBy: CodingKeys.self)
-                    self.value = try container.decode(
-                        Swift.Double.self,
-                        forKey: .value
-                    )
-                    self.unit = try container.decode(
-                        Swift.String.self,
-                        forKey: .unit
-                    )
-                    self.upperValue = try container.decodeIfPresent(
-                        Swift.Double.self,
-                        forKey: .upperValue
-                    )
-                    try decoder.ensureNoAdditionalProperties(knownKeys: [
-                        "value",
-                        "unit",
-                        "upperValue"
-                    ])
-                }
             }
             /// right side of the pair, e.g. { value: 10, unit: "dollar" }
             ///
@@ -46123,31 +31664,6 @@ extension Components {
                 case source
                 case sourceMetadata
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.a = try container.decode(
-                    Components.Schemas.UnitMappingWithMetadata.APayload.self,
-                    forKey: .a
-                )
-                self.b = try container.decode(
-                    Components.Schemas.UnitMappingWithMetadata.BPayload.self,
-                    forKey: .b
-                )
-                self.source = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .source
-                )
-                self.sourceMetadata = try container.decode(
-                    Components.Schemas.OutputSchema18.self,
-                    forKey: .sourceMetadata
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "a",
-                    "b",
-                    "source",
-                    "sourceMetadata"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/UnitMappingWithMetadataFood`.
         public struct UnitMappingWithMetadataFood: Codable, Hashable, Sendable {
@@ -46175,21 +31691,6 @@ extension Components {
                 case _type = "type"
                 case fdcId
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self._type = try container.decode(
-                    Components.Schemas.UnitMappingWithMetadataFood._TypePayload.self,
-                    forKey: ._type
-                )
-                self.fdcId = try container.decode(
-                    Components.Schemas.FdcId.self,
-                    forKey: .fdcId
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "type",
-                    "fdcId"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/UnitMappingWithMetadataManual`.
         public struct UnitMappingWithMetadataManual: Codable, Hashable, Sendable {
@@ -46208,16 +31709,6 @@ extension Components {
             }
             public enum CodingKeys: String, CodingKey {
                 case _type = "type"
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self._type = try container.decode(
-                    Components.Schemas.UnitMappingWithMetadataManual._TypePayload.self,
-                    forKey: ._type
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "type"
-                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/UnitMappingWithMetadataProduct`.
@@ -46245,21 +31736,6 @@ extension Components {
             public enum CodingKeys: String, CodingKey {
                 case _type = "type"
                 case productId
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self._type = try container.decode(
-                    Components.Schemas.UnitMappingWithMetadataProduct._TypePayload.self,
-                    forKey: ._type
-                )
-                self.productId = try container.decode(
-                    Components.Schemas.ProductShortcode.self,
-                    forKey: .productId
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "type",
-                    "productId"
-                ])
             }
         }
         /// EAN-8 (8), UPC-A (12), EAN-13 (13), or GTIN-14 (14) barcode
@@ -46341,61 +31817,6 @@ extension Components {
                 case source
                 case cached
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.upc = try container.decode(
-                    Swift.String.self,
-                    forKey: .upc
-                )
-                self.name = try container.decode(
-                    Swift.String.self,
-                    forKey: .name
-                )
-                self.manufacturer = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .manufacturer
-                )
-                self.brand = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .brand
-                )
-                self.category = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .category
-                )
-                self.description = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .description
-                )
-                self.priceDollars = try container.decodeIfPresent(
-                    Swift.Double.self,
-                    forKey: .priceDollars
-                )
-                self.imageUrl = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .imageUrl
-                )
-                self.source = try container.decode(
-                    Components.Schemas.UpcLookupOutput.SourcePayload.self,
-                    forKey: .source
-                )
-                self.cached = try container.decode(
-                    Swift.Bool.self,
-                    forKey: .cached
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "upc",
-                    "name",
-                    "manufacturer",
-                    "brand",
-                    "category",
-                    "description",
-                    "priceDollars",
-                    "imageUrl",
-                    "source",
-                    "cached"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/UsdaFoodListOut`.
         public struct UsdaFoodListOut: Codable, Hashable, Sendable {
@@ -46418,21 +31839,6 @@ extension Components {
             public enum CodingKeys: String, CodingKey {
                 case meta
                 case items
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.meta = try container.decode(
-                    Components.Schemas.ListPageMeta.self,
-                    forKey: .meta
-                )
-                self.items = try container.decode(
-                    [Components.Schemas.FoodSummaryWithLinkedProducts].self,
-                    forKey: .items
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "meta",
-                    "items"
-                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/UsdaListInput`.
@@ -46595,16 +32001,6 @@ extension Components {
             public enum CodingKeys: String, CodingKey {
                 case message
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.message = try container.decodeIfPresent(
-                    Components.Schemas.ImageProcessingServerMessage.self,
-                    forKey: .message
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "message"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/VendorAccountBrowser`.
         @frozen public enum VendorAccountBrowser: String, Codable, Hashable, Sendable, CaseIterable {
@@ -46692,31 +32088,6 @@ extension Components {
                 case backfillBeforeOrderAt
                 case earliestAvailableOrderAt
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.newestOrderAt = try container.decodeIfPresent(
-                    Foundation.Date.self,
-                    forKey: .newestOrderAt
-                )
-                self.orderIdsOnNewestDate = try container.decode(
-                    [Swift.String].self,
-                    forKey: .orderIdsOnNewestDate
-                )
-                self.backfillBeforeOrderAt = try container.decodeIfPresent(
-                    Foundation.Date.self,
-                    forKey: .backfillBeforeOrderAt
-                )
-                self.earliestAvailableOrderAt = try container.decodeIfPresent(
-                    Foundation.Date.self,
-                    forKey: .earliestAvailableOrderAt
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "newestOrderAt",
-                    "orderIdsOnNewestDate",
-                    "backfillBeforeOrderAt",
-                    "earliestAvailableOrderAt"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/VendorAccountDetail`.
         public struct VendorAccountDetail: Codable, Hashable, Sendable {
@@ -46751,7 +32122,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/VendorAccountDetail/displayImages`.
             public var displayImages: Components.Schemas.DisplayImagesField
             /// - Remark: Generated from `#/components/schemas/VendorAccountDetail/attachments`.
-            public var attachments: Components.Schemas.OutputSchema437
+            public var attachments: Components.Schemas.OutputSchema450
             /// Creates a new `VendorAccountDetail`.
             ///
             /// - Parameters:
@@ -46787,7 +32158,7 @@ extension Components {
                 createdAt: Foundation.Date,
                 updatedAt: Foundation.Date,
                 displayImages: Components.Schemas.DisplayImagesField,
-                attachments: Components.Schemas.OutputSchema437
+                attachments: Components.Schemas.OutputSchema450
             ) {
                 self.id = id
                 self.label = label
@@ -46823,91 +32194,6 @@ extension Components {
                 case updatedAt
                 case displayImages
                 case attachments
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.id = try container.decode(
-                    Components.Schemas.VendorAccountShortcode.self,
-                    forKey: .id
-                )
-                self.label = try container.decode(
-                    Swift.String.self,
-                    forKey: .label
-                )
-                self.vendorId = try container.decode(
-                    Components.Schemas.VendorShortcode.self,
-                    forKey: .vendorId
-                )
-                self.ledgerPartyId = try container.decode(
-                    Components.Schemas.LedgerPartyShortcode.self,
-                    forKey: .ledgerPartyId
-                )
-                self.inventoryOwnerDefaultEnabled = try container.decode(
-                    Swift.Bool.self,
-                    forKey: .inventoryOwnerDefaultEnabled
-                )
-                self.status = try container.decode(
-                    Components.Schemas.VendorAccountStatus.self,
-                    forKey: .status
-                )
-                self.browser = try container.decode(
-                    Components.Schemas.VendorAccountBrowser.self,
-                    forKey: .browser
-                )
-                self.cursor = try container.decode(
-                    Components.Schemas.VendorAccountCursor.self,
-                    forKey: .cursor
-                )
-                self.lastRunAt = try container.decodeIfPresent(
-                    Foundation.Date.self,
-                    forKey: .lastRunAt
-                )
-                self.lastSuccessAt = try container.decodeIfPresent(
-                    Foundation.Date.self,
-                    forKey: .lastSuccessAt
-                )
-                self.vendorName = try container.decode(
-                    Swift.String.self,
-                    forKey: .vendorName
-                )
-                self.ledgerPartyName = try container.decode(
-                    Swift.String.self,
-                    forKey: .ledgerPartyName
-                )
-                self.createdAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .createdAt
-                )
-                self.updatedAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .updatedAt
-                )
-                self.displayImages = try container.decode(
-                    Components.Schemas.DisplayImagesField.self,
-                    forKey: .displayImages
-                )
-                self.attachments = try container.decode(
-                    Components.Schemas.OutputSchema437.self,
-                    forKey: .attachments
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "id",
-                    "label",
-                    "vendorId",
-                    "ledgerPartyId",
-                    "inventoryOwnerDefaultEnabled",
-                    "status",
-                    "browser",
-                    "cursor",
-                    "lastRunAt",
-                    "lastSuccessAt",
-                    "vendorName",
-                    "ledgerPartyName",
-                    "createdAt",
-                    "updatedAt",
-                    "displayImages",
-                    "attachments"
-                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/VendorAccountListItem`.
@@ -47010,86 +32296,6 @@ extension Components {
                 case updatedAt
                 case displayImages
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.id = try container.decode(
-                    Components.Schemas.VendorAccountShortcode.self,
-                    forKey: .id
-                )
-                self.label = try container.decode(
-                    Swift.String.self,
-                    forKey: .label
-                )
-                self.vendorId = try container.decode(
-                    Components.Schemas.VendorShortcode.self,
-                    forKey: .vendorId
-                )
-                self.ledgerPartyId = try container.decode(
-                    Components.Schemas.LedgerPartyShortcode.self,
-                    forKey: .ledgerPartyId
-                )
-                self.inventoryOwnerDefaultEnabled = try container.decode(
-                    Swift.Bool.self,
-                    forKey: .inventoryOwnerDefaultEnabled
-                )
-                self.status = try container.decode(
-                    Components.Schemas.VendorAccountStatus.self,
-                    forKey: .status
-                )
-                self.browser = try container.decode(
-                    Components.Schemas.VendorAccountBrowser.self,
-                    forKey: .browser
-                )
-                self.cursor = try container.decode(
-                    Components.Schemas.VendorAccountCursor.self,
-                    forKey: .cursor
-                )
-                self.lastRunAt = try container.decodeIfPresent(
-                    Foundation.Date.self,
-                    forKey: .lastRunAt
-                )
-                self.lastSuccessAt = try container.decodeIfPresent(
-                    Foundation.Date.self,
-                    forKey: .lastSuccessAt
-                )
-                self.vendorName = try container.decode(
-                    Swift.String.self,
-                    forKey: .vendorName
-                )
-                self.ledgerPartyName = try container.decode(
-                    Swift.String.self,
-                    forKey: .ledgerPartyName
-                )
-                self.createdAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .createdAt
-                )
-                self.updatedAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .updatedAt
-                )
-                self.displayImages = try container.decode(
-                    Components.Schemas.DisplayImagesField.self,
-                    forKey: .displayImages
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "id",
-                    "label",
-                    "vendorId",
-                    "ledgerPartyId",
-                    "inventoryOwnerDefaultEnabled",
-                    "status",
-                    "browser",
-                    "cursor",
-                    "lastRunAt",
-                    "lastSuccessAt",
-                    "vendorName",
-                    "ledgerPartyName",
-                    "createdAt",
-                    "updatedAt",
-                    "displayImages"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/VendorAccountListPage`.
         public struct VendorAccountListPage: Codable, Hashable, Sendable {
@@ -47112,21 +32318,6 @@ extension Components {
             public enum CodingKeys: String, CodingKey {
                 case items
                 case meta
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.items = try container.decode(
-                    [Components.Schemas.VendorAccountListItem].self,
-                    forKey: .items
-                )
-                self.meta = try container.decode(
-                    Components.Schemas.ListPageMeta.self,
-                    forKey: .meta
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "items",
-                    "meta"
-                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/VendorAccountOut`.
@@ -47223,81 +32414,6 @@ extension Components {
                 case createdAt
                 case updatedAt
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.id = try container.decode(
-                    Components.Schemas.VendorAccountShortcode.self,
-                    forKey: .id
-                )
-                self.label = try container.decode(
-                    Swift.String.self,
-                    forKey: .label
-                )
-                self.vendorId = try container.decode(
-                    Components.Schemas.VendorShortcode.self,
-                    forKey: .vendorId
-                )
-                self.ledgerPartyId = try container.decode(
-                    Components.Schemas.LedgerPartyShortcode.self,
-                    forKey: .ledgerPartyId
-                )
-                self.inventoryOwnerDefaultEnabled = try container.decode(
-                    Swift.Bool.self,
-                    forKey: .inventoryOwnerDefaultEnabled
-                )
-                self.status = try container.decode(
-                    Components.Schemas.VendorAccountStatus.self,
-                    forKey: .status
-                )
-                self.browser = try container.decode(
-                    Components.Schemas.VendorAccountBrowser.self,
-                    forKey: .browser
-                )
-                self.cursor = try container.decode(
-                    Components.Schemas.VendorAccountCursor.self,
-                    forKey: .cursor
-                )
-                self.lastRunAt = try container.decodeIfPresent(
-                    Foundation.Date.self,
-                    forKey: .lastRunAt
-                )
-                self.lastSuccessAt = try container.decodeIfPresent(
-                    Foundation.Date.self,
-                    forKey: .lastSuccessAt
-                )
-                self.vendorName = try container.decode(
-                    Swift.String.self,
-                    forKey: .vendorName
-                )
-                self.ledgerPartyName = try container.decode(
-                    Swift.String.self,
-                    forKey: .ledgerPartyName
-                )
-                self.createdAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .createdAt
-                )
-                self.updatedAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .updatedAt
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "id",
-                    "label",
-                    "vendorId",
-                    "ledgerPartyId",
-                    "inventoryOwnerDefaultEnabled",
-                    "status",
-                    "browser",
-                    "cursor",
-                    "lastRunAt",
-                    "lastSuccessAt",
-                    "vendorName",
-                    "ledgerPartyName",
-                    "createdAt",
-                    "updatedAt"
-                ])
-            }
         }
         /// vendorAccount shortcode, e.g. VACCT-4K7M
         ///
@@ -47390,31 +32506,6 @@ extension Components {
                 case pagination
                 case orderLinkPattern
                 case notes
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.ordersListUrl = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .ordersListUrl
-                )
-                self.pagination = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .pagination
-                )
-                self.orderLinkPattern = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .orderLinkPattern
-                )
-                self.notes = try container.decode(
-                    [Swift.String].self,
-                    forKey: .notes
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "ordersListUrl",
-                    "pagination",
-                    "orderLinkPattern",
-                    "notes"
-                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/VendorAgentHintsInput`.
@@ -47560,7 +32651,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/VendorDetail/displayImages`.
             public var displayImages: Components.Schemas.DisplayImagesField
             /// - Remark: Generated from `#/components/schemas/VendorDetail/attachments`.
-            public var attachments: Components.Schemas.OutputSchema437
+            public var attachments: Components.Schemas.OutputSchema450
             /// Creates a new `VendorDetail`.
             ///
             /// - Parameters:
@@ -47602,7 +32693,7 @@ extension Components {
                 updatedAt: Foundation.Date,
                 dataQuality: Components.Schemas.DataQuality,
                 displayImages: Components.Schemas.DisplayImagesField,
-                attachments: Components.Schemas.OutputSchema437
+                attachments: Components.Schemas.OutputSchema450
             ) {
                 self.id = id
                 self.name = name
@@ -47644,106 +32735,6 @@ extension Components {
                 case dataQuality
                 case displayImages
                 case attachments
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.id = try container.decode(
-                    Components.Schemas.VendorShortcode.self,
-                    forKey: .id
-                )
-                self.name = try container.decode(
-                    Swift.String.self,
-                    forKey: .name
-                )
-                self.website = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .website
-                )
-                self.orderUrlTemplate = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .orderUrlTemplate
-                )
-                self.orderEvidence = try container.decodeIfPresent(
-                    Components.Schemas.VendorImportFieldsVendorOrderEvidence.self,
-                    forKey: .orderEvidence
-                )
-                self.orderEmailSenders = try container.decode(
-                    Components.Schemas.VendorEmailSenderList.self,
-                    forKey: .orderEmailSenders
-                )
-                self.browserDomains = try container.decode(
-                    Components.Schemas.VendorDomainList.self,
-                    forKey: .browserDomains
-                )
-                self.agentHints = try container.decode(
-                    Components.Schemas.VendorAgentHints.self,
-                    forKey: .agentHints
-                )
-                self.returnWindowDays = try container.decodeIfPresent(
-                    Swift.Int.self,
-                    forKey: .returnWindowDays
-                )
-                self.notes = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .notes
-                )
-                self.purchaseCount = try container.decode(
-                    Swift.Int.self,
-                    forKey: .purchaseCount
-                )
-                self.spend = try container.decode(
-                    Components.Schemas.Money.self,
-                    forKey: .spend
-                )
-                self.latestPurchaseDate = try container.decodeIfPresent(
-                    Components.Schemas.PlainDate.self,
-                    forKey: .latestPurchaseDate
-                )
-                self.logo = try container.decodeIfPresent(
-                    Components.Schemas.ImageOut.self,
-                    forKey: .logo
-                )
-                self.createdAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .createdAt
-                )
-                self.updatedAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .updatedAt
-                )
-                self.dataQuality = try container.decode(
-                    Components.Schemas.DataQuality.self,
-                    forKey: .dataQuality
-                )
-                self.displayImages = try container.decode(
-                    Components.Schemas.DisplayImagesField.self,
-                    forKey: .displayImages
-                )
-                self.attachments = try container.decode(
-                    Components.Schemas.OutputSchema437.self,
-                    forKey: .attachments
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "id",
-                    "name",
-                    "website",
-                    "orderUrlTemplate",
-                    "orderEvidence",
-                    "orderEmailSenders",
-                    "browserDomains",
-                    "agentHints",
-                    "returnWindowDays",
-                    "notes",
-                    "purchaseCount",
-                    "spend",
-                    "latestPurchaseDate",
-                    "logo",
-                    "createdAt",
-                    "updatedAt",
-                    "dataQuality",
-                    "displayImages",
-                    "attachments"
-                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/VendorDomainList`.
@@ -47880,101 +32871,6 @@ extension Components {
                 case dataQuality
                 case displayImages
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.id = try container.decode(
-                    Components.Schemas.VendorShortcode.self,
-                    forKey: .id
-                )
-                self.name = try container.decode(
-                    Swift.String.self,
-                    forKey: .name
-                )
-                self.website = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .website
-                )
-                self.orderUrlTemplate = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .orderUrlTemplate
-                )
-                self.orderEvidence = try container.decodeIfPresent(
-                    Components.Schemas.VendorImportFieldsVendorOrderEvidence.self,
-                    forKey: .orderEvidence
-                )
-                self.orderEmailSenders = try container.decode(
-                    Components.Schemas.VendorEmailSenderList.self,
-                    forKey: .orderEmailSenders
-                )
-                self.browserDomains = try container.decode(
-                    Components.Schemas.VendorDomainList.self,
-                    forKey: .browserDomains
-                )
-                self.agentHints = try container.decode(
-                    Components.Schemas.VendorAgentHints.self,
-                    forKey: .agentHints
-                )
-                self.returnWindowDays = try container.decodeIfPresent(
-                    Swift.Int.self,
-                    forKey: .returnWindowDays
-                )
-                self.notes = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .notes
-                )
-                self.purchaseCount = try container.decode(
-                    Swift.Int.self,
-                    forKey: .purchaseCount
-                )
-                self.spend = try container.decode(
-                    Components.Schemas.Money.self,
-                    forKey: .spend
-                )
-                self.latestPurchaseDate = try container.decodeIfPresent(
-                    Components.Schemas.PlainDate.self,
-                    forKey: .latestPurchaseDate
-                )
-                self.logo = try container.decodeIfPresent(
-                    Components.Schemas.ImageOut.self,
-                    forKey: .logo
-                )
-                self.createdAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .createdAt
-                )
-                self.updatedAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .updatedAt
-                )
-                self.dataQuality = try container.decode(
-                    Components.Schemas.DataQuality.self,
-                    forKey: .dataQuality
-                )
-                self.displayImages = try container.decode(
-                    Components.Schemas.DisplayImagesField.self,
-                    forKey: .displayImages
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "id",
-                    "name",
-                    "website",
-                    "orderUrlTemplate",
-                    "orderEvidence",
-                    "orderEmailSenders",
-                    "browserDomains",
-                    "agentHints",
-                    "returnWindowDays",
-                    "notes",
-                    "purchaseCount",
-                    "spend",
-                    "latestPurchaseDate",
-                    "logo",
-                    "createdAt",
-                    "updatedAt",
-                    "dataQuality",
-                    "displayImages"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/VendorListPage`.
         public struct VendorListPage: Codable, Hashable, Sendable {
@@ -47997,21 +32893,6 @@ extension Components {
             public enum CodingKeys: String, CodingKey {
                 case items
                 case meta
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.items = try container.decode(
-                    [Components.Schemas.VendorListItem].self,
-                    forKey: .items
-                )
-                self.meta = try container.decode(
-                    Components.Schemas.ListPageMeta.self,
-                    forKey: .meta
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "items",
-                    "meta"
-                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/VendorOut`.
@@ -48127,96 +33008,6 @@ extension Components {
                 case createdAt
                 case updatedAt
                 case dataQuality
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.id = try container.decode(
-                    Components.Schemas.VendorShortcode.self,
-                    forKey: .id
-                )
-                self.name = try container.decode(
-                    Swift.String.self,
-                    forKey: .name
-                )
-                self.website = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .website
-                )
-                self.orderUrlTemplate = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .orderUrlTemplate
-                )
-                self.orderEvidence = try container.decodeIfPresent(
-                    Components.Schemas.VendorImportFieldsVendorOrderEvidence.self,
-                    forKey: .orderEvidence
-                )
-                self.orderEmailSenders = try container.decode(
-                    Components.Schemas.VendorEmailSenderList.self,
-                    forKey: .orderEmailSenders
-                )
-                self.browserDomains = try container.decode(
-                    Components.Schemas.VendorDomainList.self,
-                    forKey: .browserDomains
-                )
-                self.agentHints = try container.decode(
-                    Components.Schemas.VendorAgentHints.self,
-                    forKey: .agentHints
-                )
-                self.returnWindowDays = try container.decodeIfPresent(
-                    Swift.Int.self,
-                    forKey: .returnWindowDays
-                )
-                self.notes = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .notes
-                )
-                self.purchaseCount = try container.decode(
-                    Swift.Int.self,
-                    forKey: .purchaseCount
-                )
-                self.spend = try container.decode(
-                    Components.Schemas.Money.self,
-                    forKey: .spend
-                )
-                self.latestPurchaseDate = try container.decodeIfPresent(
-                    Components.Schemas.PlainDate.self,
-                    forKey: .latestPurchaseDate
-                )
-                self.logo = try container.decodeIfPresent(
-                    Components.Schemas.ImageOut.self,
-                    forKey: .logo
-                )
-                self.createdAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .createdAt
-                )
-                self.updatedAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .updatedAt
-                )
-                self.dataQuality = try container.decode(
-                    Components.Schemas.DataQuality.self,
-                    forKey: .dataQuality
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "id",
-                    "name",
-                    "website",
-                    "orderUrlTemplate",
-                    "orderEvidence",
-                    "orderEmailSenders",
-                    "browserDomains",
-                    "agentHints",
-                    "returnWindowDays",
-                    "notes",
-                    "purchaseCount",
-                    "spend",
-                    "latestPurchaseDate",
-                    "logo",
-                    "createdAt",
-                    "updatedAt",
-                    "dataQuality"
-                ])
             }
         }
         /// vendor shortcode, e.g. VEN-4K7M
@@ -48338,41 +33129,6 @@ extension Components {
                 case price
                 case inventoried
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.id = try container.decode(
-                    Components.Schemas.ProductShortcode.self,
-                    forKey: .id
-                )
-                self.name = try container.decode(
-                    Swift.String.self,
-                    forKey: .name
-                )
-                self.manufacturer = try container.decode(
-                    Swift.String.self,
-                    forKey: .manufacturer
-                )
-                self.model = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .model
-                )
-                self.price = try container.decodeIfPresent(
-                    Components.Schemas.Money.self,
-                    forKey: .price
-                )
-                self.inventoried = try container.decode(
-                    Swift.Bool.self,
-                    forKey: .inventoried
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "id",
-                    "name",
-                    "manufacturer",
-                    "model",
-                    "price",
-                    "inventoried"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/WishCreateInput`.
         public struct WishCreateInput: Codable, Hashable, Sendable {
@@ -48414,7 +33170,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/WishDetail/acquiredAt`.
             public var acquiredAt: Foundation.Date?
             /// - Remark: Generated from `#/components/schemas/WishDetail/candidates`.
-            public var candidates: Components.Schemas.OutputSchema431
+            public var candidates: Components.Schemas.OutputSchema444
             /// - Remark: Generated from `#/components/schemas/WishDetail/candidateCount`.
             public var candidateCount: Swift.Int
             /// - Remark: Generated from `#/components/schemas/WishDetail/priceRange`.
@@ -48428,7 +33184,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/WishDetail/displayImages`.
             public var displayImages: Components.Schemas.DisplayImagesField
             /// - Remark: Generated from `#/components/schemas/WishDetail/attachments`.
-            public var attachments: Components.Schemas.OutputSchema437
+            public var attachments: Components.Schemas.OutputSchema450
             /// Creates a new `WishDetail`.
             ///
             /// - Parameters:
@@ -48449,14 +33205,14 @@ extension Components {
                 name: Swift.String,
                 notes: Swift.String? = nil,
                 acquiredAt: Foundation.Date? = nil,
-                candidates: Components.Schemas.OutputSchema431,
+                candidates: Components.Schemas.OutputSchema444,
                 candidateCount: Swift.Int,
                 priceRange: Components.Schemas.WishPriceRangeOut? = nil,
                 createdAt: Foundation.Date,
                 updatedAt: Foundation.Date,
                 dataQuality: Components.Schemas.DataQuality,
                 displayImages: Components.Schemas.DisplayImagesField,
-                attachments: Components.Schemas.OutputSchema437
+                attachments: Components.Schemas.OutputSchema450
             ) {
                 self.id = id
                 self.name = name
@@ -48485,71 +33241,6 @@ extension Components {
                 case displayImages
                 case attachments
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.id = try container.decode(
-                    Components.Schemas.WishShortcode.self,
-                    forKey: .id
-                )
-                self.name = try container.decode(
-                    Swift.String.self,
-                    forKey: .name
-                )
-                self.notes = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .notes
-                )
-                self.acquiredAt = try container.decodeIfPresent(
-                    Foundation.Date.self,
-                    forKey: .acquiredAt
-                )
-                self.candidates = try container.decode(
-                    Components.Schemas.OutputSchema431.self,
-                    forKey: .candidates
-                )
-                self.candidateCount = try container.decode(
-                    Swift.Int.self,
-                    forKey: .candidateCount
-                )
-                self.priceRange = try container.decodeIfPresent(
-                    Components.Schemas.WishPriceRangeOut.self,
-                    forKey: .priceRange
-                )
-                self.createdAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .createdAt
-                )
-                self.updatedAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .updatedAt
-                )
-                self.dataQuality = try container.decode(
-                    Components.Schemas.DataQuality.self,
-                    forKey: .dataQuality
-                )
-                self.displayImages = try container.decode(
-                    Components.Schemas.DisplayImagesField.self,
-                    forKey: .displayImages
-                )
-                self.attachments = try container.decode(
-                    Components.Schemas.OutputSchema437.self,
-                    forKey: .attachments
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "id",
-                    "name",
-                    "notes",
-                    "acquiredAt",
-                    "candidates",
-                    "candidateCount",
-                    "priceRange",
-                    "createdAt",
-                    "updatedAt",
-                    "dataQuality",
-                    "displayImages",
-                    "attachments"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/WishListItem`.
         public struct WishListItem: Codable, Hashable, Sendable {
@@ -48562,7 +33253,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/WishListItem/acquiredAt`.
             public var acquiredAt: Foundation.Date?
             /// - Remark: Generated from `#/components/schemas/WishListItem/candidates`.
-            public var candidates: Components.Schemas.OutputSchema431
+            public var candidates: Components.Schemas.OutputSchema444
             /// - Remark: Generated from `#/components/schemas/WishListItem/candidateCount`.
             public var candidateCount: Swift.Int
             /// - Remark: Generated from `#/components/schemas/WishListItem/priceRange`.
@@ -48594,7 +33285,7 @@ extension Components {
                 name: Swift.String,
                 notes: Swift.String? = nil,
                 acquiredAt: Foundation.Date? = nil,
-                candidates: Components.Schemas.OutputSchema431,
+                candidates: Components.Schemas.OutputSchema444,
                 candidateCount: Swift.Int,
                 priceRange: Components.Schemas.WishPriceRangeOut? = nil,
                 createdAt: Foundation.Date,
@@ -48627,66 +33318,6 @@ extension Components {
                 case dataQuality
                 case displayImages
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.id = try container.decode(
-                    Components.Schemas.WishShortcode.self,
-                    forKey: .id
-                )
-                self.name = try container.decode(
-                    Swift.String.self,
-                    forKey: .name
-                )
-                self.notes = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .notes
-                )
-                self.acquiredAt = try container.decodeIfPresent(
-                    Foundation.Date.self,
-                    forKey: .acquiredAt
-                )
-                self.candidates = try container.decode(
-                    Components.Schemas.OutputSchema431.self,
-                    forKey: .candidates
-                )
-                self.candidateCount = try container.decode(
-                    Swift.Int.self,
-                    forKey: .candidateCount
-                )
-                self.priceRange = try container.decodeIfPresent(
-                    Components.Schemas.WishPriceRangeOut.self,
-                    forKey: .priceRange
-                )
-                self.createdAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .createdAt
-                )
-                self.updatedAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .updatedAt
-                )
-                self.dataQuality = try container.decode(
-                    Components.Schemas.DataQuality.self,
-                    forKey: .dataQuality
-                )
-                self.displayImages = try container.decode(
-                    Components.Schemas.DisplayImagesField.self,
-                    forKey: .displayImages
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "id",
-                    "name",
-                    "notes",
-                    "acquiredAt",
-                    "candidates",
-                    "candidateCount",
-                    "priceRange",
-                    "createdAt",
-                    "updatedAt",
-                    "dataQuality",
-                    "displayImages"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/WishListPage`.
         public struct WishListPage: Codable, Hashable, Sendable {
@@ -48710,21 +33341,6 @@ extension Components {
                 case items
                 case meta
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.items = try container.decode(
-                    [Components.Schemas.WishListItem].self,
-                    forKey: .items
-                )
-                self.meta = try container.decode(
-                    Components.Schemas.ListPageMeta.self,
-                    forKey: .meta
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "items",
-                    "meta"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/WishOut`.
         public struct WishOut: Codable, Hashable, Sendable {
@@ -48737,7 +33353,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/WishOut/acquiredAt`.
             public var acquiredAt: Foundation.Date?
             /// - Remark: Generated from `#/components/schemas/WishOut/candidates`.
-            public var candidates: Components.Schemas.OutputSchema431
+            public var candidates: Components.Schemas.OutputSchema444
             /// - Remark: Generated from `#/components/schemas/WishOut/candidateCount`.
             public var candidateCount: Swift.Int
             /// - Remark: Generated from `#/components/schemas/WishOut/priceRange`.
@@ -48766,7 +33382,7 @@ extension Components {
                 name: Swift.String,
                 notes: Swift.String? = nil,
                 acquiredAt: Foundation.Date? = nil,
-                candidates: Components.Schemas.OutputSchema431,
+                candidates: Components.Schemas.OutputSchema444,
                 candidateCount: Swift.Int,
                 priceRange: Components.Schemas.WishPriceRangeOut? = nil,
                 createdAt: Foundation.Date,
@@ -48796,61 +33412,6 @@ extension Components {
                 case updatedAt
                 case dataQuality
             }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.id = try container.decode(
-                    Components.Schemas.WishShortcode.self,
-                    forKey: .id
-                )
-                self.name = try container.decode(
-                    Swift.String.self,
-                    forKey: .name
-                )
-                self.notes = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .notes
-                )
-                self.acquiredAt = try container.decodeIfPresent(
-                    Foundation.Date.self,
-                    forKey: .acquiredAt
-                )
-                self.candidates = try container.decode(
-                    Components.Schemas.OutputSchema431.self,
-                    forKey: .candidates
-                )
-                self.candidateCount = try container.decode(
-                    Swift.Int.self,
-                    forKey: .candidateCount
-                )
-                self.priceRange = try container.decodeIfPresent(
-                    Components.Schemas.WishPriceRangeOut.self,
-                    forKey: .priceRange
-                )
-                self.createdAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .createdAt
-                )
-                self.updatedAt = try container.decode(
-                    Foundation.Date.self,
-                    forKey: .updatedAt
-                )
-                self.dataQuality = try container.decode(
-                    Components.Schemas.DataQuality.self,
-                    forKey: .dataQuality
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "id",
-                    "name",
-                    "notes",
-                    "acquiredAt",
-                    "candidates",
-                    "candidateCount",
-                    "priceRange",
-                    "createdAt",
-                    "updatedAt",
-                    "dataQuality"
-                ])
-            }
         }
         /// - Remark: Generated from `#/components/schemas/WishPriceRangeOut`.
         public struct WishPriceRangeOut: Codable, Hashable, Sendable {
@@ -48879,26 +33440,6 @@ extension Components {
                 case low
                 case high
                 case pricedCount
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.low = try container.decode(
-                    Swift.Double.self,
-                    forKey: .low
-                )
-                self.high = try container.decode(
-                    Swift.Double.self,
-                    forKey: .high
-                )
-                self.pricedCount = try container.decode(
-                    Swift.Int.self,
-                    forKey: .pricedCount
-                )
-                try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "low",
-                    "high",
-                    "pricedCount"
-                ])
             }
         }
         /// wish shortcode, e.g. WSH-4K7M

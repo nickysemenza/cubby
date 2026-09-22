@@ -1,10 +1,14 @@
-import type { FieldSuggestion } from "@cubby/schemas/ai";
+import type {
+  FieldSuggestion,
+  FieldSuggestionOutcome,
+} from "@cubby/schemas/ai";
 import { ArrowRight } from "lucide-react";
 import {
   createContext,
   useContext,
   useRef,
   useState,
+  type MouseEvent,
   type ReactNode,
 } from "react";
 
@@ -14,11 +18,32 @@ import { Button } from "~/components/ui/button";
 import { Description } from "~/components/ui/description";
 import { getAppErrorDetails } from "~/lib/error-utils";
 
-/** A `remove` (prune) proposal reviews at 0.85 regardless of `alternative` or
- * whether the field already has a value — it is never a "replace a value
- * with another guess" alternative, so the stricter 0.95 alternative gate
- * doesn't apply to it. */
-const REMOVE_THRESHOLD = 0.85;
+import { stringLabelOf } from "./field-suggestion";
+import type { SuggestionOutcomeSurface } from "./suggestion-outcome-mark";
+import { SuggestionOutcomeMark } from "./suggestion-outcome-mark";
+
+/** An empty-field `set` proposal, and a `remove` (prune) proposal regardless
+ * of `alternative` or whether the field already has a value — a prune is
+ * never a "replace a value with another guess" alternative, so the stricter
+ * `ALTERNATIVE_THRESHOLD` gate doesn't apply to it. */
+export const FILL_THRESHOLD = 0.85;
+/** A `set` proposal replacing a value the field already has, or answering a
+ * "provided" (already-populated basis) request. */
+export const ALTERNATIVE_THRESHOLD = 0.95;
+
+/** The probability bar `suggestion` must clear to become actionable — shared
+ * by the gate (`actionableSuggestion`) and the outcome mark's "needs NN%"
+ * copy so the two can't drift apart. */
+export function reviewThreshold(
+  suggestion: FieldSuggestion,
+  current: string | null,
+  alternative: boolean,
+): typeof FILL_THRESHOLD | typeof ALTERNATIVE_THRESHOLD {
+  if (suggestion.operation === "remove") return FILL_THRESHOLD;
+  return alternative || current?.trim()
+    ? ALTERNATIVE_THRESHOLD
+    : FILL_THRESHOLD;
+}
 
 export function actionableSuggestion(
   suggestion: FieldSuggestion | null,
@@ -27,11 +52,8 @@ export function actionableSuggestion(
 ): suggestion is FieldSuggestion & { value: string } {
   if (!suggestion?.value || suggestion.value === current) return false;
   if (suggestion.probability == null) return false;
-  if (suggestion.operation === "remove") {
-    return suggestion.probability >= REMOVE_THRESHOLD;
-  }
   return (
-    suggestion.probability >= (alternative || current?.trim() ? 0.95 : 0.85)
+    suggestion.probability >= reviewThreshold(suggestion, current, alternative)
   );
 }
 
@@ -108,6 +130,69 @@ interface ReviewBodyProps {
   dismiss: () => void;
   applyLabel: string;
   children?: ReactNode;
+  outcome: FieldSuggestionOutcome | null;
+  surface: SuggestionOutcomeSurface;
+  alternative: boolean;
+  autoFilled: boolean;
+  prune?: boolean;
+}
+
+function stop(event: MouseEvent) {
+  event.stopPropagation();
+}
+
+/** The Use/Remove + Keep row, shared by every inline body and the cell
+ * popover's review slot — one button implementation, never duplicated. */
+function ReviewButtons({
+  isRemove = false,
+  applyLabel,
+  saving,
+  pending,
+  apply,
+  dismiss,
+  hasCurrentValue,
+}: {
+  isRemove?: boolean;
+  applyLabel: string;
+  saving: boolean;
+  pending?: boolean;
+  apply: () => void;
+  dismiss: () => void;
+  hasCurrentValue: boolean;
+}) {
+  return (
+    <Row gap="xs" wrap>
+      <Button
+        type="button"
+        variant="link"
+        size="xs"
+        className="min-h-11 md:min-h-0"
+        disabled={pending || saving}
+        onClick={apply}
+      >
+        {saving ? "Saving…" : applyLabel}
+      </Button>
+      <Button
+        type="button"
+        variant="ghost"
+        size="xs"
+        className="min-h-11 md:min-h-0"
+        disabled={saving}
+        onClick={dismiss}
+      >
+        {isRemove ? "Keep" : hasCurrentValue ? "Keep current" : "Dismiss"}
+      </Button>
+    </Row>
+  );
+}
+
+function ReviewFailure({ failure }: { failure: unknown }) {
+  if (failure === null) return null;
+  return (
+    <Description size="xs" role="alert">
+      Could not save: {getAppErrorDetails(failure).message}
+    </Description>
+  );
 }
 
 /** A prune (`operation: "remove"`) proposal never replaces the current value
@@ -122,46 +207,45 @@ function RemoveReviewBody({
   dismiss,
   applyLabel,
   children,
+  outcome,
+  surface,
+  alternative,
+  autoFilled,
+  prune,
 }: ReviewBodyProps) {
   return (
     <Stack
       gap="xs"
       className="min-w-0 whitespace-normal"
-      onClick={(event) => event.stopPropagation()}
-      onMouseDown={(event) => event.stopPropagation()}
+      onClick={stop}
+      onMouseDown={stop}
     >
       {children}
-      <Description size="xs" className="text-muted-foreground">
-        {suggestion.label ?? `Remove ${suggestion.value}`}
-        {suggestion.detail ? ` — ${suggestion.detail}` : ""}
-      </Description>
       <Row gap="xs" wrap>
-        <Button
-          type="button"
-          variant="link"
-          size="xs"
-          className="min-h-11 md:min-h-0"
-          disabled={pending || saving}
-          onClick={apply}
-        >
-          {saving ? "Saving…" : applyLabel}
-        </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          size="xs"
-          className="min-h-11 md:min-h-0"
-          disabled={saving}
-          onClick={dismiss}
-        >
-          Keep
-        </Button>
-      </Row>
-      {failure !== null ? (
-        <Description size="xs" role="alert">
-          Could not save: {getAppErrorDetails(failure).message}
+        <Description size="xs" className="text-muted-foreground">
+          {suggestion.label ?? `Remove ${suggestion.value}`}
+          {suggestion.detail ? ` — ${suggestion.detail}` : ""}
         </Description>
-      ) : null}
+        <SuggestionOutcomeMark
+          outcome={outcome}
+          suggestion={suggestion}
+          alternative={alternative}
+          autoFilled={autoFilled}
+          surface={surface}
+          actionable
+          prune={prune}
+        />
+      </Row>
+      <ReviewButtons
+        isRemove
+        applyLabel={applyLabel}
+        saving={saving}
+        pending={pending}
+        apply={apply}
+        dismiss={dismiss}
+        hasCurrentValue={false}
+      />
+      <ReviewFailure failure={failure} />
     </Stack>
   );
 }
@@ -177,6 +261,10 @@ function SetReviewBody({
   dismiss,
   applyLabel,
   children,
+  outcome,
+  surface,
+  alternative,
+  autoFilled,
 }: ReviewBodyProps & {
   currentValue: string | null;
   currentLabel?: ReactNode;
@@ -185,8 +273,8 @@ function SetReviewBody({
     <Stack
       gap="xs"
       className="min-w-0 whitespace-normal"
-      onClick={(event) => event.stopPropagation()}
-      onMouseDown={(event) => event.stopPropagation()}
+      onClick={stop}
+      onMouseDown={stop}
     >
       {!currentValue?.trim() ? children : null}
       <Row gap="xs" wrap className="text-xs">
@@ -202,34 +290,76 @@ function SetReviewBody({
         <span className="text-primary">
           Suggested: {suggestion.label ?? suggestion.value}
         </span>
+        <SuggestionOutcomeMark
+          outcome={outcome}
+          suggestion={suggestion}
+          currentValue={currentValue}
+          currentLabel={stringLabelOf(currentLabel)}
+          alternative={alternative}
+          autoFilled={autoFilled}
+          surface={surface}
+          actionable
+        />
       </Row>
-      <Row gap="xs" wrap>
-        <Button
-          type="button"
-          variant="link"
-          size="xs"
-          className="min-h-11 md:min-h-0"
-          disabled={pending || saving}
-          onClick={apply}
-        >
-          {saving ? "Saving…" : applyLabel}
-        </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          size="xs"
-          className="min-h-11 md:min-h-0"
-          disabled={saving}
-          onClick={dismiss}
-        >
-          {currentValue?.trim() ? "Keep current" : "Dismiss"}
-        </Button>
-      </Row>
-      {failure !== null ? (
-        <Description size="xs" role="alert">
-          Could not save: {getAppErrorDetails(failure).message}
+      <ReviewButtons
+        applyLabel={applyLabel}
+        saving={saving}
+        pending={pending}
+        apply={apply}
+        dismiss={dismiss}
+        hasCurrentValue={Boolean(currentValue?.trim())}
+      />
+      <ReviewFailure failure={failure} />
+    </Stack>
+  );
+}
+
+/** The cell-surface popover's review slot: current value (for a `set`
+ * proposal), then the same buttons and failure line the inline bodies use —
+ * no separate button implementation. */
+function CellReviewSlot({
+  isRemove,
+  currentValue,
+  currentLabel,
+  pending,
+  saving,
+  failure,
+  apply,
+  dismiss,
+  applyLabel,
+}: {
+  isRemove: boolean;
+  currentValue: string | null;
+  currentLabel?: ReactNode;
+  pending?: boolean;
+  saving: boolean;
+  failure: unknown;
+  apply: () => void;
+  dismiss: () => void;
+  applyLabel: string;
+}) {
+  return (
+    <Stack
+      gap="xs"
+      className="min-w-0 whitespace-normal"
+      onClick={stop}
+      onMouseDown={stop}
+    >
+      {!isRemove && currentValue?.trim() ? (
+        <Description size="xs" className="text-muted-foreground">
+          Current: {currentLabel ?? currentValue}
         </Description>
       ) : null}
+      <ReviewButtons
+        isRemove={isRemove}
+        applyLabel={applyLabel}
+        saving={saving}
+        pending={pending}
+        apply={apply}
+        dismiss={dismiss}
+        hasCurrentValue={Boolean(currentValue?.trim())}
+      />
+      <ReviewFailure failure={failure} />
     </Stack>
   );
 }
@@ -244,6 +374,10 @@ export function SuggestionReview({
   onApply,
   applyLabel,
   alternative = false,
+  outcome = null,
+  surface = "inline",
+  autoFilled = false,
+  prune = false,
   children,
 }: {
   children?: ReactNode;
@@ -255,6 +389,17 @@ export function SuggestionReview({
   onApply: () => void | Promise<void>;
   applyLabel?: string;
   alternative?: boolean;
+  /** What Jev's decision tier did with this field — drives the always-visible
+   * mark even when there's no actionable proposal (or none at all). */
+  outcome?: FieldSuggestionOutcome | null;
+  /** `"cell"` folds the whole proposal (headline + buttons) into the mark's
+   * popover so a dense table row stays 28px; `"inline"`/`"line"` render it
+   * directly, same as before this prop existed. */
+  surface?: SuggestionOutcomeSurface;
+  autoFilled?: boolean;
+  /** Whether the target is a `mode: "prune"` field — changes the mark's
+   * "nothing to remove" copy for a declined removal. */
+  prune?: boolean;
 }) {
   const key = JSON.stringify([questionKey, currentValue, suggestion?.value]);
   const { dismissed, dismiss, apply, saving, failure } = useSuggestionActions(
@@ -262,11 +407,64 @@ export function SuggestionReview({
     onApply,
     pending,
   );
-  if (!actionableSuggestion(suggestion, currentValue, alternative) || dismissed)
-    return children ?? null;
+  const markCurrentLabel = stringLabelOf(currentLabel);
+  // Cleared the bar or not is a fact about the proposal itself, independent
+  // of whether the person went on to dismiss it — a dismissed-but-actionable
+  // suggestion still reads "Suggested X", not "Leaning X … needs 85%".
+  const meetsBar = actionableSuggestion(suggestion, currentValue, alternative);
+  if (!meetsBar || dismissed) {
+    return (
+      <>
+        {children}
+        <SuggestionOutcomeMark
+          outcome={outcome}
+          suggestion={suggestion}
+          currentValue={currentValue}
+          currentLabel={markCurrentLabel}
+          alternative={alternative}
+          autoFilled={autoFilled}
+          surface={surface}
+          actionable={meetsBar}
+          dismissed={dismissed}
+          prune={prune}
+        />
+      </>
+    );
+  }
   const isRemove = suggestion.operation === "remove";
   const resolvedApplyLabel =
     applyLabel ?? (isRemove ? "Remove tags" : "Use suggestion");
+  if (surface === "cell") {
+    return (
+      <>
+        {children}
+        <SuggestionOutcomeMark
+          outcome={outcome}
+          suggestion={suggestion}
+          currentValue={currentValue}
+          currentLabel={markCurrentLabel}
+          alternative={alternative}
+          autoFilled={autoFilled}
+          surface="cell"
+          actionable
+          prune={prune}
+          review={
+            <CellReviewSlot
+              isRemove={isRemove}
+              currentValue={currentValue}
+              currentLabel={currentLabel}
+              pending={pending}
+              saving={saving}
+              failure={failure}
+              apply={apply}
+              dismiss={dismiss}
+              applyLabel={resolvedApplyLabel}
+            />
+          }
+        />
+      </>
+    );
+  }
   const bodyProps: ReviewBodyProps = {
     suggestion,
     pending,
@@ -276,6 +474,11 @@ export function SuggestionReview({
     dismiss,
     applyLabel: resolvedApplyLabel,
     children,
+    outcome,
+    surface,
+    alternative,
+    autoFilled,
+    prune,
   };
   return isRemove ? (
     <RemoveReviewBody {...bodyProps} />

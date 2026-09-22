@@ -54,6 +54,9 @@ export function AutoSuggestSlot<TFieldValues extends FieldValues>({
         pending={isPending}
         onApply={apply}
         alternative={context?.isAlternative(field) ?? false}
+        outcome={context?.outcomeFor(field) ?? null}
+        autoFilled={context?.isAutoFilled(field) ?? false}
+        surface="line"
       />
     </>
   );

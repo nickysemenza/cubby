@@ -27,6 +27,7 @@ import {
   Package,
   Receipt,
   ReceiptText,
+  Smartphone,
   Sprout,
   Store,
   Tags,
@@ -205,6 +206,7 @@ const LUCIDE_ICONS = {
   Package,
   Receipt,
   ReceiptText,
+  Smartphone,
   Sprout,
   Store,
   Tags,
@@ -395,6 +397,10 @@ const entityDefinitions = withEntityNames({
   },
   productCategory: {
     ...generatedBrowserRoutes.productCategory,
+    color: INK.slate,
+  },
+  device: {
+    ...generatedBrowserRoutes.device,
     color: INK.slate,
   },
   purchase: {

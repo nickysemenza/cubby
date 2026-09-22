@@ -360,6 +360,14 @@ history is the archive. Permanent product constraints live in the
 
 ## Requires database changes
 
+- **Image provenance, `Device` entity, participation, activity bar** — in
+  delivery; see the [plan](plans/image-provenance-and-devices.md) for model,
+  derivation rule, compatibility constraints, and the PR table. Two new
+  manifest entities (`Device` `DEV-`, `ImageSighting` `IMS-`) plus additive
+  Image columns; runbook `docs/runbooks/image-provenance-schema.md` lands with
+  PR 3a. Hard gate: the open-output native client from PR 0 must be installed
+  on every household device before any server deploy adds a response field.
+
 - **HIGH PRIORITY — Generic durable data exceptions.** Every scored entity
   (`dataChecksByEntity`/`scoredEntities` in
   `packages/schemas/src/generated/data-quality-checks.gen.ts`) can now record
@@ -564,6 +572,25 @@ history is the archive. Permanent product constraints live in the
 
 ### Needs a decision or investigation
 
+- **Declarative "many, clamped to one" cardinality.** The image-provenance
+  work chose a many-row `ImageSighting` entity plus derived declared-`one`
+  Image fields over turning scalar relations into arrays with a runtime
+  clamp. Cardinality is a compile-time `one|many` literal
+  (`packages/schemas/src/entity-definitions/definition.ts`, relation
+  metadata) consumed by the editor branches, `image-policy.gen.ts`'s
+  `source-id` vs `source-id-list` bindings, Swift `FieldReference.multiple`,
+  every scalar FK column, and ADR 0001's no-generic-edge rule. Revisit only
+  when a second entity needs multi-evidence provenance; the existing
+  relation `provenance.sources[]` is the declarative construct to extend
+  first.
+
+- **Generic HTTP `resources.<entity>.batch` route.** MCP `entity_batch` runs
+  up to 50 create/update commands per call, but the HTTP surface is one row
+  per request, so a native bulk write (library sighting backfill, PR 5 of
+  the provenance plan) issues one generated `create` per row. Promote if a
+  5k-asset library makes that measurably slow; the route should mirror
+  `entity_batch`'s independent-item semantics and benefit every entity.
+
 - **One FROM context per entity list.** Every list repo pairs a Drizzle
   relational `findMany` rows query (root table aliased to its lowercase name;
   Column objects rewritten, `sql.raw` strings and nested `PgSelect` builders
@@ -592,7 +619,11 @@ history is the archive. Permanent product constraints live in the
   recovery behavior, operational cost, and test/deployment impact before
   adopting it. Keep shared run history independent of the execution engine.
   See the [purchase-import plan](plans/purchase-import-redesign.md) for the
-  existing runtime boundaries.
+  existing runtime boundaries. Include device-local work (library scan,
+  classification sweep, sighting backfill): the native
+  `BackgroundActivity` shape mirrors `ActivityRun` so posting those runs into
+  the `runProjection` union (`apps/web/src/server/repo/activity.ts`) is a
+  transport addition, giving cross-device history without a remodel.
 
 - **Durable Entity identity and shared files.** Three patterns coexist for a
   row that points at any of several entity types: an untyped type-plus-id pair,
@@ -807,6 +838,31 @@ history is the archive. Permanent product constraints live in the
   `apps/apple/project.yml`, `apps/apple/App`, and `CubbyKit`.
 
 ### Waiting for a trigger
+
+- **Follow-ups gated on image provenance landing** (see the
+  [plan](plans/image-provenance-and-devices.md)); each promotes on its own
+  trigger:
+  - *Geolocated photo → nearest Location suggestion* in import review, once
+    Locations carry coordinates (the coordinate field renderer from PR 3b is
+    reusable).
+  - *Capture date as inventory evidence*: a sighting's `capturedAt` says a
+    product existed / was at a Location on that day; emit it as a timeline
+    event when the inventory timeline next needs external evidence.
+  - *Cross-member duplicate review*: the same pixels in two members'
+    libraries already produce two sightings; a review queue reusing
+    `PhotoMatchStore` candidates is worth it once ambiguous attributions
+    accumulate.
+  - *Per-feature participation sub-switches* (companion jobs vs library
+    processing) if the single master switch proves too coarse.
+  - *`MenuBarExtra` companion status on macOS*: the app works in the
+    background unconditionally today; an always-visible indicator is honest
+    once the sidebar rows from PR 4 exist.
+  - *Hash-repair egress budget*: repair downloads full originals
+    (`PhotoMatchStore.repair`); cap per session and prefer Wi-Fi when cellular
+    use is observed.
+  - *Shortcuts App Intent "Log this photo to Cubby"*: on-device, keeps
+    location; depends on the import path carrying the `library` block.
+  - *Map / per-place / per-trip photo filters* once GPS is stored.
 
 - **Trace the web Worker's AI calls into Sentry's Agents view.** The purchase
   agent reports `gen_ai` spans through Flue's Sentry blueprint, but the web

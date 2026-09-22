@@ -130,7 +130,13 @@ export type ProductDeleteDisposition =
        *  (e.g. "inventory entries", "expenses"). */
       label: string;
     })
-  | (OperationDisposition & { effect: "soft-delete" | "hard-delete" });
+  | (OperationDisposition & { effect: "soft-delete" | "hard-delete" })
+  // `Device.productId` is the first product-retaining edge that clears
+  // rather than blocks or cascades: a device survives its hardware Product's
+  // deletion as a device with no linked hardware. Deliberately narrow (only
+  // this effect, not a general escape hatch) — see the `Cookbook.productId`
+  // comment below for why every other optional back-reference still blocks.
+  | (OperationDisposition & { effect: "detach" });
 
 export const PRODUCT_DELETE_EDGE_POLICY = {
   "ImportRunTarget.productId": {
@@ -256,5 +262,11 @@ export const PRODUCT_DELETE_EDGE_POLICY = {
     description: "A planting retains its source product for growing history.",
     reason: "CONSTRAINT_VIOLATION",
     label: "garden plantings",
+  },
+  "Device.productId": {
+    code: "clear-hardware",
+    effect: "detach",
+    description:
+      "Deleting a product clears any device's hardware link rather than blocking the delete — a device survives as one with no linked hardware.",
   },
 } as const satisfies IncomingEdgePolicy<"product", ProductDeleteDisposition>;

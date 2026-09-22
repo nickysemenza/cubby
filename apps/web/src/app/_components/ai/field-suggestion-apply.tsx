@@ -39,12 +39,13 @@ function StandaloneSuggestion({
   onApply,
   operations,
 }: ApplyProps) {
-  const { suggestions, isFetching } = useEntitySuggestionsQuery({
+  const { suggestions, outcomes, isFetching } = useEntitySuggestionsQuery({
     source,
     operations,
   });
   const targetKey = source?.targets[0];
   const suggestion = targetKey ? (suggestions[targetKey] ?? null) : null;
+  const outcome = targetKey ? (outcomes[targetKey] ?? null) : null;
   const applied = Boolean(
     suggestion?.value && currentValue === suggestion.value,
   );
@@ -58,6 +59,8 @@ function StandaloneSuggestion({
       pending={isFetching}
       onApply={suggestion ? () => onApply(suggestion) : undefined}
       alternative={source?.basisMode === "provided"}
+      outcome={outcome}
+      surface="line"
     />
   );
 }

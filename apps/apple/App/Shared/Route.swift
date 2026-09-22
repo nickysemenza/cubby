@@ -6,6 +6,10 @@ enum Route: Hashable {
     case graph(EntityRef?)
     case nutrition(day: String)
     case activityDetail(String)
+    /// A device-local `BackgroundActivity`'s own detail, resolved by id against whatever is
+    /// currently reporting activities (see `BackgroundActivityCenter`). "Finished" once the id is
+    /// gone rather than a distinct terminal state.
+    case localActivity(String)
     /// A generic list, optionally opened with filters already applied (keyed by wire name).
     case entityList(EntityKey, filters: EntityFilterState = EntityFilterState())
     case entityDetail(EntityKey, id: String)

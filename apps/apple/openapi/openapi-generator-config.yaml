@@ -92,6 +92,10 @@ filter:
     - purchaseImport.listReceiptHunts
     - purchaseImport.submitReceiptEvidence
     - recommendations.forEntity
+    - resources.device.create
+    - resources.device.get
+    - resources.device.list
+    - resources.device.update
     - resources.expense.create
     - resources.expense.get
     - resources.expense.list

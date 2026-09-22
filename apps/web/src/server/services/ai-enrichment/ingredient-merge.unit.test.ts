@@ -52,6 +52,7 @@ describe("suggestIngredientMerge", () => {
           probability: 0.99,
           reasoning: "synonym",
           alternatives: [],
+          evaluated: true,
         };
       },
     };
@@ -74,6 +75,7 @@ describe("suggestIngredientMerge", () => {
         probability: 0.1,
         reasoning: "hallucinated an id",
         alternatives: [],
+        evaluated: true,
       }),
     };
 
@@ -97,6 +99,7 @@ describe("suggestIngredientMerge", () => {
           probability: 0.1,
           reasoning: "n/a",
           alternatives: [],
+          evaluated: true,
         };
       },
     };
@@ -118,6 +121,7 @@ describe("suggestIngredientMerge", () => {
           probability: 0.1,
           reasoning: "n/a",
           alternatives: [],
+          evaluated: true,
         };
       },
     };

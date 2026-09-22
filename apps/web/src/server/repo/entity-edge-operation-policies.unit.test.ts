@@ -74,12 +74,22 @@ describe("product retaining edges", () => {
     "PurchaseProduct.productId",
     "Task.subjectProductId",
     "WishCandidate.productId",
+    // A device's linked hardware. Retaining by role (a device is real
+    // evidence the product still matters), but — unlike every other entry
+    // here — NOT blocking: it's the first retaining edge the policy
+    // vocabulary can actually clear (`effect: "detach"`), so it is excluded
+    // from BLOCKING below rather than forcing the delete to fail.
+    "Device.productId",
   ];
+
+  // Every retaining edge except `Device.productId`, which detaches instead of
+  // blocking — see its comment in RETAINING above.
+  const BLOCKING = RETAINING.filter((key) => key !== "Device.productId");
 
   it("retains exactly the acquisition, history, association, reference and usage edges", () => {
     expect(
       Object.keys(PRODUCT_EDGE_ROLES).filter(isRetainingEdgeKey).sort(),
-    ).toEqual(RETAINING);
+    ).toEqual([...RETAINING].sort());
   });
 
   it("blocks deletion on exactly those edges, and no others", () => {
@@ -88,7 +98,7 @@ describe("product retaining edges", () => {
         .filter(([, d]) => d.effect === "block")
         .map(([key]) => key)
         .sort(),
-    ).toEqual(RETAINING);
+    ).toEqual([...BLOCKING].sort());
   });
 
   /**
@@ -119,6 +129,7 @@ describe("product retaining edges", () => {
       | "PurchaseProduct.productId"
       | "Task.subjectProductId"
       | "WishCandidate.productId"
+      | "Device.productId"
     >();
   });
 });

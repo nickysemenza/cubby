@@ -607,6 +607,9 @@ const INTENTIONAL_RESPELLINGS = {
     "shortcode-list filter spelled as entityFilterList(vendorShortcode) over the generated scalar vendorId field",
   "vendorAccount::vendorAccountFilters::ledgerPartyId":
     "shortcode-list filter spelled as entityFilterList(ledgerPartyShortcode) over the generated scalar ledgerPartyId field",
+  // --- device -------------------------------------------------------------
+  "device::deviceFilters::ledgerPartyId":
+    "shortcode-list filter spelled as entityFilterList(ledgerPartyShortcode) over the generated scalar ledgerPartyId field",
   "importRun::importRunFilters::vendorAccountId":
     "shortcode-list filter spelled as entityFilterList(vendorAccountShortcode) over the generated scalar vendorAccountId field",
   "importRun::importRunFilters::vendorId":

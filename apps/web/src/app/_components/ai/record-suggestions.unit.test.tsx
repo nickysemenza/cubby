@@ -102,7 +102,18 @@ describe("record suggestions", () => {
           return new Promise((resolve) => {
             finish = resolve;
           });
-        return { suggestions: { categoryId: food } };
+        return {
+          suggestions: { categoryId: food },
+          outcomes: {
+            categoryId: {
+              kind: "evaluated" as const,
+              answer: "pick" as const,
+              confidence: "high" as const,
+              probability: food.probability,
+              alternatives: [],
+            },
+          },
+        };
       }),
     };
     const view = render(<Surface name="red apple" operations={operations} />, {
@@ -119,6 +130,15 @@ describe("record suggestions", () => {
         suggestions: {
           categoryId: { ...food, value: "CAT-2224", label: "Tools" },
         },
+        outcomes: {
+          categoryId: {
+            kind: "evaluated",
+            answer: "pick",
+            confidence: "high",
+            probability: food.probability,
+            alternatives: [],
+          },
+        },
       });
     });
     await screen.findByText("Suggested: Tools");
@@ -128,7 +148,9 @@ describe("record suggestions", () => {
     );
     view.rerender(<Surface name="steel wrench" operations={operations} />);
     expect(screen.queryByText("Suggested: Tools")).not.toBeInTheDocument();
-    expect(screen.getByText("0 suggestions")).toBeInTheDocument();
+    expect(
+      screen.getByText("No suggestions · 1 field checked"),
+    ).toBeInTheDocument();
     expect(calls).toHaveLength(2);
   });
 
@@ -653,5 +675,100 @@ describe("record suggestions", () => {
         }),
       ]),
     );
+  });
+
+  it("merges outcomes across the suggested, provided, and prune request groups onto one row", async () => {
+    // categoryId is empty → its own "suggested" group; tags already has
+    // entries → its own "prune" group. Two separate requests, one row.
+    const record = {
+      id: testShortcode("product", "merge-outcomes"),
+      name: "Rain shell",
+      manufacturer: "Jacquemus",
+      categoryId: null,
+      tags: ["jacquemus"],
+    };
+    const operations: EntitySuggestionsOperations = {
+      suggestFields: ai.suggestFields.withTransport(
+        async ({ input }): Promise<FieldSuggestionsOut> => {
+          if (input.targets.includes("categoryId")) {
+            return {
+              suggestions: { categoryId: food },
+              outcomes: {
+                categoryId: {
+                  kind: "evaluated",
+                  answer: "pick",
+                  confidence: "high",
+                  probability: food.probability,
+                  alternatives: [],
+                },
+              },
+            };
+          }
+          return {
+            suggestions: {},
+            outcomes: {
+              tags: {
+                kind: "evaluated",
+                answer: "none",
+                confidence: "medium",
+                probability: 0.6,
+                alternatives: [],
+              },
+            },
+          };
+        },
+      ),
+    };
+    render(
+      <RecordSuggestionsProvider
+        entity="product"
+        records={[record]}
+        fieldKeys={["categoryId", "tags"]}
+        operations={operations}
+      >
+        <RecordFieldSuggestion record={record} field="categoryId">
+          <span>Empty category</span>
+        </RecordFieldSuggestion>
+        <RecordFieldSuggestion record={record} field="tags">
+          <span>current tags</span>
+        </RecordFieldSuggestion>
+      </RecordSuggestionsProvider>,
+      { wrapper: harness.wrapper },
+    );
+    // Both groups' outcomes land on the same row — the status line counts
+    // both fields as checked, not just whichever request resolved last.
+    expect(
+      await screen.findByText("1 suggestion · 2 fields checked"),
+    ).toBeInTheDocument();
+  });
+
+  it("names the first basis field to add when the client never asked at all", async () => {
+    // An empty name leaves categoryId's basis insufficient
+    // (`isBasisSufficient`), so no request ever goes out.
+    const record = {
+      id: testShortcode("product", "unasked"),
+      name: "",
+      manufacturer: null,
+      categoryId: null,
+    };
+    const operations: EntitySuggestionsOperations = {
+      suggestFields: ai.suggestFields.withTransport(async () => ({
+        suggestions: {},
+      })),
+    };
+    render(
+      <RecordSuggestionsProvider
+        entity="product"
+        records={[record]}
+        fieldKeys={["categoryId"]}
+        operations={operations}
+      >
+        <span>row</span>
+      </RecordSuggestionsProvider>,
+      { wrapper: harness.wrapper },
+    );
+    expect(
+      await screen.findByText("Not checked — add a name first"),
+    ).toBeInTheDocument();
   });
 });

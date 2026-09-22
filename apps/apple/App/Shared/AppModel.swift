@@ -35,6 +35,10 @@ final class AppModel {
     /// Browsing the system library is independent from Cubby's persisted analysis index. Keep it
     /// available immediately so opening persistent state cannot block the Photos tab.
     let photoLibrary = PhotoLibraryStore()
+    /// The single register of device-local and companion work in progress, read by the iOS bottom
+    /// accessory, the macOS sidebar, and Activity's "This device" section (replaces the old
+    /// `localExecutionLabel`).
+    let backgroundActivity = BackgroundActivityCenter()
     #if os(macOS)
         let browserBridge = BrowserBridgeSettingsModel()
         @ObservationIgnored private var browserBridgeController: MacBrowserBridgeController?
@@ -65,7 +69,9 @@ final class AppModel {
             }.value
             guard let self else { return }
             storedPhotoAnalysisStore = analysisStore
-            storedPhotoClassificationSweep = makePhotoClassificationSweep()
+            let sweep = makePhotoClassificationSweep()
+            storedPhotoClassificationSweep = sweep
+            backgroundActivity.register(sweep)
             photoLibrary.install(analysisStore: analysisStore)
             photoSubsystemTask = nil
         }
@@ -130,6 +136,25 @@ final class AppModel {
             configureBrowserBridge()
         #endif
         configureCompanionImageWorker()
+        configureBackgroundActivitySources()
+    }
+
+    /// Registers this model's long-lived activity sources once. `photoLibrary`/`photoMatches`/
+    /// `browserBridge` are `let` constants that outlive host switches and sign-out (they `reset()`
+    /// in place), so registering them here — rather than in `rebindClients()` — never produces a
+    /// stale or duplicate registration. The companion adapter closes over `self` weakly and reads
+    /// `companionImageActivity` fresh on every access, so it too survives `configureCompanionImageWorker()`
+    /// rebuilding the underlying worker.
+    private func configureBackgroundActivitySources() {
+        backgroundActivity.register(photoLibrary)
+        backgroundActivity.register(photoMatches)
+        backgroundActivity.register(
+            CompanionActivitySource { [weak self] in
+                self?.companionImageActivity ?? .init(phase: .stopped)
+            })
+        #if os(macOS)
+            backgroundActivity.register(browserBridge)
+        #endif
     }
 
     /// Opens the SQLite cache at `Application Support/Cubby/PhotoAnalysis.sqlite`, falling back
@@ -361,17 +386,6 @@ final class AppModel {
             Diagnostics.report(error, context: "imageProcessing.outbox")
         }
         if let previous { Task { await previous.stop() } }
-    }
-
-    var localExecutionLabel: String? {
-        if companionImageActivity.phase == .processing {
-            return companionImageActivity.kind == "subject_lift"
-                ? "Creating image cutout" : "Describing image"
-        }
-        #if os(macOS)
-            if browserBridge.isSyncing { return "Running purchase import" }
-        #endif
-        return nil
     }
 
     #if os(macOS)

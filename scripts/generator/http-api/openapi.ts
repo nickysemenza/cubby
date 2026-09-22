@@ -110,21 +110,33 @@ const buildOpenApiDocument = async (): Promise<{
         io,
         reused: "inline",
         unrepresentable: "any",
-        override: stripMockHints,
+        override: schemaOverride(io),
       }),
     );
 
-  const stripMockHints: NonNullable<
-    Parameters<typeof z.toJSONSchema>[1]
-  >["override"] = ({ zodSchema, jsonSchema }) => {
-    delete jsonSchema.mock;
-    delete jsonSchema.mockValue;
-    // Zod emits `oneOf` for a discriminated union but no discriminator; the
-    // mapping is filled once every member is a named component.
-    const key = discriminatorOf(zodSchema);
-    if (key !== undefined && jsonSchema.oneOf !== undefined)
-      jsonSchema.discriminator = { propertyName: key };
-  };
+  /**
+   * Zod emits `additionalProperties: false` on every object in `output`
+   * mode, and swift-openapi-generator turns that into
+   * `ensureNoAdditionalProperties` in each `init(from:)` — so an installed
+   * native build rejected every response the server had gained a field on.
+   * Outputs are therefore left open (a client ignores what it does not
+   * know); inputs stay closed so an unknown request key is still refused.
+   */
+  const schemaOverride =
+    (
+      io: "input" | "output",
+    ): NonNullable<Parameters<typeof z.toJSONSchema>[1]>["override"] =>
+    ({ zodSchema, jsonSchema }) => {
+      delete jsonSchema.mock;
+      delete jsonSchema.mockValue;
+      if (io === "output" && jsonSchema.additionalProperties === false)
+        delete jsonSchema.additionalProperties;
+      // Zod emits `oneOf` for a discriminated union but no discriminator; the
+      // mapping is filled once every member is a named component.
+      const key = discriminatorOf(zodSchema);
+      if (key !== undefined && jsonSchema.oneOf !== undefined)
+        jsonSchema.discriminator = { propertyName: key };
+    };
 
   /**
    * Parameters cannot reference components, and a registered leaf (a shortcode
@@ -330,7 +342,7 @@ const buildOpenApiDocument = async (): Promise<{
       unrepresentable: "any",
       uri: (id) =>
         `#/components/schemas/${id === "__shared" ? `${io}___shared` : id}`,
-      override: stripMockHints,
+      override: schemaOverride(io),
     });
     for (const [id, schema] of Object.entries(schemas)) {
       if (id === "__shared") {

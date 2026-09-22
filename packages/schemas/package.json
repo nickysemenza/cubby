@@ -124,7 +124,9 @@
     "./image-processing": "./src/image-processing.ts",
     "./field-explanation": "./src/field-explanation.ts",
     "./product-category": "./src/product-category.ts",
-    "./product-category-fields": "./src/product-category-fields.ts"
+    "./product-category-fields": "./src/product-category-fields.ts",
+    "./device": "./src/device.ts",
+    "./device-fields": "./src/device-fields.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

@@ -127,12 +127,15 @@ export function AddToMeal({
     targets: ["mealType", "mealKind"],
     basis: { name: recipeName },
   };
-  const { suggestions, isFetching: checkingSuggestions } =
-    useEntitySuggestionsQuery({
-      source: suggestionSource,
-      enabled: open && target === NEW_MEAL,
-      operations,
-    });
+  const {
+    suggestions,
+    outcomes: suggestionOutcomes,
+    isFetching: checkingSuggestions,
+  } = useEntitySuggestionsQuery({
+    source: suggestionSource,
+    enabled: open && target === NEW_MEAL,
+    operations,
+  });
 
   const mealOptions = useMemo(
     () => [
@@ -307,6 +310,7 @@ export function AddToMeal({
                         mealTypeFromPicker(suggestions.mealType?.value ?? null),
                       )
                     }
+                    outcome={suggestionOutcomes.mealType ?? null}
                   />
                 </Stack>
                 <Stack gap="xs" className="min-w-40 flex-1">
@@ -331,6 +335,7 @@ export function AddToMeal({
                         mealKindFromPicker(suggestions.mealKind?.value ?? null),
                       )
                     }
+                    outcome={suggestionOutcomes.mealKind ?? null}
                   />
                 </Stack>
               </Row>

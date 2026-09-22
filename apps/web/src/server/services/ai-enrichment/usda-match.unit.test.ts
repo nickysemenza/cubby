@@ -138,6 +138,7 @@ describe("suggestUsdaFood", () => {
           probability: 0.99,
           reasoning: "matched",
           alternatives: [],
+          evaluated: true,
         };
       },
     };
@@ -162,6 +163,7 @@ describe("suggestUsdaFood", () => {
         probability: 0.1,
         reasoning: "hallucinated an fdcId",
         alternatives: [],
+        evaluated: true,
       }),
     };
 
@@ -187,6 +189,7 @@ describe("suggestUsdaFood", () => {
           probability: 0.1,
           reasoning: "n/a",
           alternatives: [],
+          evaluated: true,
         };
       },
     };
@@ -211,6 +214,7 @@ describe("suggestUsdaFood", () => {
           probability: 0.1,
           reasoning: "n/a",
           alternatives: [],
+          evaluated: true,
         };
       },
     };

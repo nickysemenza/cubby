@@ -239,22 +239,119 @@ struct ActivityView: View {
     }
 
     @ViewBuilder private var localExecution: some View {
-        let activity = appModel.companionImageActivity
-        if activity.phase == .processing {
-            Section("Running on this device") {
-                Label {
-                    VStack(alignment: .leading) {
-                        Text(activity.kind == "subject_lift" ? "Creating image cutout" : "Describing image")
-                        if let startedAt = activity.startedAt {
-                            Text(startedAt, style: .relative).font(.caption).foregroundStyle(.secondary)
-                        }
+        let activities = appModel.backgroundActivity.visibleActivities
+        Section("This device — now") {
+            if activities.isEmpty {
+                ContentUnavailableView("Nothing running on this device", systemImage: "checkmark.circle")
+            } else {
+                ForEach(activities) { activity in
+                    LocalActivityRow(activity: activity) {
+                        appModel.backgroundActivity.cancel(id: activity.id)
                     }
-                } icon: {
-                    ProgressView()
                 }
             }
         }
     }
+}
+
+private struct LocalActivityRow: View {
+    let activity: BackgroundActivity
+    let onCancel: () -> Void
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Group {
+                if let progress = activity.progress {
+                    ProgressView(value: progress)
+                } else {
+                    ProgressView()
+                }
+            }
+            .frame(width: 22)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(activity.title).font(.headline)
+                if let detail = activity.detail {
+                    Text(detail).font(.caption).foregroundStyle(.secondary)
+                }
+                Text(activity.startedAt, style: .relative).font(.caption).foregroundStyle(.secondary)
+            }
+            Spacer(minLength: 0)
+            if activity.isCancellable {
+                Button("Cancel", role: .destructive, action: onCancel)
+                    .buttonStyle(.borderless)
+            }
+        }
+        .padding(.vertical, 4)
+    }
+}
+
+/// A device-local `BackgroundActivity`'s own detail, reached from `Route.localActivity` (the
+/// bar/sidebar-row tap target, or a resumed local-activity link). Reads the activity fresh by id
+/// on every access — once the id is no longer among `BackgroundActivityCenter.activities`, the
+/// work is done and the screen shows "Finished" rather than a distinct terminal state.
+struct LocalActivityDetailView: View {
+    let id: String
+    @Environment(AppModel.self) private var appModel
+
+    private var activity: BackgroundActivity? {
+        appModel.backgroundActivity.activities.first { $0.id == id }
+    }
+
+    var body: some View {
+        List {
+            if let activity {
+                Section {
+                    LabeledContent("Task", value: activity.title)
+                    if let detail = activity.detail {
+                        LabeledContent("Detail", value: detail)
+                    }
+                    LabeledContent("Started") { Text(activity.startedAt, style: .relative) }
+                    if let progress = activity.progress {
+                        LabeledContent("Progress") {
+                            Text(progress, format: .percent.precision(.fractionLength(0)))
+                        }
+                        ProgressView(value: progress)
+                    } else {
+                        ProgressView()
+                    }
+                }
+                if activity.isCancellable {
+                    Section {
+                        Button("Cancel", role: .destructive) {
+                            appModel.backgroundActivity.cancel(id: activity.id)
+                        }
+                    }
+                }
+            } else {
+                ContentUnavailableView("Finished", systemImage: "checkmark.circle")
+            }
+        }
+        .navigationTitle(activity?.title ?? "Activity")
+        #if os(iOS)
+            .navigationBarTitleDisplayMode(.inline)
+        #endif
+    }
+}
+
+/// Kept outside the `#Preview` macro bodies below: seeding the model inline there made the type
+/// checker choke ("failed to produce diagnostic for expression").
+private func previewModelWithRunningLocalActivity() -> AppModel {
+    let model = PreviewFixtures.signedInModel()
+    _ = model.backgroundActivity.begin(
+        BackgroundActivity(
+            id: "photo-library-scan", kind: .libraryScan, title: "Scanning library",
+            phase: .running, progress: 0.41, detail: "41 of 100", startedAt: .now,
+            link: .localActivity("photo-library-scan"), isUserInitiated: false, isCancellable: false))
+    return model
+}
+
+#Preview("Local activity — running") {
+    NavigationStack { LocalActivityDetailView(id: "photo-library-scan") }
+        .environment(previewModelWithRunningLocalActivity())
+}
+
+#Preview("Local activity — finished", traits: .modifier(SignedInPreview())) {
+    NavigationStack { LocalActivityDetailView(id: "gone") }
 }
 
 private extension String {
