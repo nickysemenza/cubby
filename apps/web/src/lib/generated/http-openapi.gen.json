@@ -29617,6 +29617,9 @@
                     "null"
                   ]
                 },
+                "cacheStatus": {
+                  "$ref": "#/components/schemas/AiUsageCacheStatus"
+                },
                 "applicationCacheStatus": {
                   "$ref": "#/components/schemas/AiUsageCacheStatus"
                 },
