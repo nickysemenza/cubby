@@ -23,7 +23,7 @@ test("server error references open as a bounded sheet on a phone", async ({
   await more.click();
   await page
     .getByRole("dialog", { name: "More" })
-    .getByRole("link", { name: "Locations", exact: true })
+    .getByRole("link", { name: /^Locations(?: [\d,]+ records)?$/ })
     .click();
   await expect(
     page.getByText("Server request failed (HTTP 500)", { exact: true }).first(),
