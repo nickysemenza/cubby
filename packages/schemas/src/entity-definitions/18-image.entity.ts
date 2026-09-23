@@ -36,8 +36,8 @@ export default defineEntity({
     basePath: "images",
     // The image list is not a kernel list (no create contract), so its index
     // route stays hand-written; the detail reads its own query.
-    list: null,
-    detail: {
+    listOverride: null,
+    detailOverride: {
       query: {
         module: "~/entities/image.functions",
         export: "imageDetailQuery",
@@ -57,7 +57,7 @@ export default defineEntity({
     },
     icons: { lucide: "Image", sfSymbol: "photo", emoji: "🖼️" },
     detail: {
-      sections: [
+      sectionOverrides: [
         {
           kind: "fields",
           id: "overview",
@@ -107,7 +107,6 @@ export default defineEntity({
         },
       ],
     },
-    list: { actions: ["delete"] },
   },
   model: {
     fields: [
@@ -617,7 +616,6 @@ export default defineEntity({
     audit: [],
     sort: {
       fields: ["createdAt", "updatedAt", "filename", "size", "status"],
-      default: "createdAt",
     },
     output: [
       "representations",

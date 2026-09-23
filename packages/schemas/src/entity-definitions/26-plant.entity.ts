@@ -52,7 +52,7 @@ const derivedText = <const K extends string>(
 export default defineEntity({
   key: "plant",
   names: { singular: "Plant", plural: "Plants" },
-  route: { basePath: "plants", create: "dialog", list: true, detail: true },
+  route: { basePath: "plants" },
   table: "Plant",
   identifiers: { brand: "PlantId", shortcode: "PLANT-" },
   presentation: {
@@ -68,7 +68,7 @@ export default defineEntity({
     },
     icons: { lucide: "Leaf", sfSymbol: "leaf.circle", emoji: "🌿" },
     detail: {
-      sections: [
+      sectionOverrides: [
         {
           kind: "relation",
           id: "plantings",
@@ -119,7 +119,6 @@ export default defineEntity({
       ],
     },
     list: {
-      actions: ["delete"],
       links: [{ label: "Garden workbench", path: "/garden-workbench" }],
     },
   },
@@ -331,8 +330,7 @@ export default defineEntity({
     audit: ["name", "gardenGuideKey", "verdict", "ingredientId", "notes"],
     sort: {
       fields: ["name", "createdAt", "updatedAt"],
-      default: "name",
-      direction: "asc",
+      defaultOverride: "name",
     },
     intents: {
       fields: {
@@ -479,7 +477,7 @@ export default defineEntity({
     auditable: true,
     images: {
       storage: false,
-      displaySources: [
+      displaySourceOverrides: [
         {
           relationPath: ["products"],
           priority: 1,

@@ -3,7 +3,11 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { compileEntity, validateEntityIdentities } from "./compile.ts";
 import { validateDataQualityDeclarations } from "./data-quality.ts";
-import { deriveInverseRelations, deriveRelationSections } from "./derive.ts";
+import {
+  deriveImageDisplaySources,
+  deriveInverseRelations,
+  deriveRelationSections,
+} from "./derive.ts";
 import { validateRelationSections } from "./presentation.ts";
 import { browserRoutes } from "./render/routes.ts";
 import type {
@@ -419,9 +423,9 @@ export const loadEntityDeclarations = async (): Promise<CompiledEntity[]> => {
       return raw;
     }),
   );
-  const compiled = deriveInverseRelations(loaded).map((raw) =>
-    compileEntity(raw, 0),
-  );
+  const compiled = deriveInverseRelations(
+    deriveImageDisplaySources(loaded),
+  ).map((raw) => compileEntity(raw, 0));
   const entities = deriveRelationSections(
     validateDataQualityDeclarations(compiled),
   );

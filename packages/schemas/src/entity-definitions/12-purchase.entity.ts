@@ -19,7 +19,7 @@ import { tradeSchema } from "@cubby/schemas/task-fields";
 export default defineEntity({
   key: "purchase",
   names: { singular: "Purchase", plural: "Purchases" },
-  route: { basePath: "purchases", create: "dialog", list: true, detail: true },
+  route: { basePath: "purchases" },
   table: "Purchase",
   identifiers: { brand: "PurchaseId", shortcode: "PUR-" },
   presentation: {
@@ -40,8 +40,8 @@ export default defineEntity({
         "financial-transactions":
           "The financial-settlement slot renders the allocations with their amounts.",
       },
-      hero: { stats: ["statedTotal", "expenseTotal"], images: true },
-      sections: [
+      hero: { stats: ["statedTotal", "expenseTotal"], imagesOverride: true },
+      sectionOverrides: [
         {
           kind: "relation",
           id: "expenses",
@@ -95,7 +95,7 @@ export default defineEntity({
         },
       ],
     },
-    list: { actions: ["merge", "delete"] },
+    list: { actionOverrides: ["merge", "delete"] },
   },
   model: {
     fields: [
@@ -645,7 +645,7 @@ export default defineEntity({
         "createdAt",
         "updatedAt",
       ],
-      default: "date",
+      defaultOverride: "date",
       computed: ["vendor", "reconciliationGap"],
     },
     intents: {
@@ -1208,7 +1208,7 @@ export default defineEntity({
     },
     images: {
       storage: "gallery",
-      displaySources: [
+      displaySourceOverrides: [
         {
           relationPath: ["products"],
           priority: 1,

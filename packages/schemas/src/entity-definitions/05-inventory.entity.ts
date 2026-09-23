@@ -18,7 +18,7 @@ import { z } from "zod";
 export default defineEntity({
   key: "inventory",
   names: { singular: "Inventory Item", plural: "Inventory" },
-  route: { basePath: "inventory", create: "dialog", list: true, detail: true },
+  route: { basePath: "inventory" },
   table: "InventoryEntry",
   identifiers: { brand: "InventoryId", shortcode: "INV-" },
   // Inventory has no name field; `displayName` ("<product> · <location>")
@@ -38,7 +38,7 @@ export default defineEntity({
     },
     icons: { lucide: "Package", sfSymbol: "cube.box", emoji: "🗃️" },
     detail: {
-      sections: [
+      sectionOverrides: [
         {
           kind: "fields",
           id: "inventory-details",
@@ -57,7 +57,7 @@ export default defineEntity({
       ],
     },
     list: {
-      actions: ["moveTo", "delete"],
+      actionOverrides: ["moveTo", "delete"],
       links: [
         { label: "Recount", path: "/inventory/session" },
         { label: "Bulk edit", path: "/inventory/bulk-edit" },
@@ -371,7 +371,6 @@ export default defineEntity({
         "valuation",
         "verifiedAt",
       ],
-      default: "createdAt",
       computed: ["name", "product", "location"],
     },
     intents: {
@@ -645,20 +644,6 @@ export default defineEntity({
     auditable: true,
     images: {
       storage: false,
-      displaySources: [
-        {
-          relationPath: ["product"],
-          priority: 0,
-          ordering: "declared",
-          identityEvidence: false,
-        },
-        {
-          relationPath: ["location"],
-          priority: 1,
-          ordering: "declared",
-          identityEvidence: false,
-        },
-      ],
       ingress: [
         {
           kind: "existingRelated",

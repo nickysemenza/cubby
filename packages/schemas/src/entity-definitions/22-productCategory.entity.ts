@@ -10,9 +10,6 @@ export default defineEntity({
   names: { singular: "Product Category", plural: "Product Categories" },
   route: {
     basePath: "product-categories",
-    create: "dialog",
-    list: true,
-    detail: true,
   },
   table: "ProductCategory",
   identifiers: { brand: "ProductCategoryId", shortcode: "CAT-" },
@@ -28,7 +25,7 @@ export default defineEntity({
     },
     icons: { lucide: "Tags", sfSymbol: "tag", emoji: "🏷️" },
     detail: {
-      sections: [
+      sectionOverrides: [
         {
           kind: "fields",
           id: "overview",
@@ -58,9 +55,11 @@ export default defineEntity({
       ],
     },
     list: {
-      views: ["table", { kind: "slot", id: "hierarchy", label: "Hierarchy" }],
+      viewOverrides: [
+        "table",
+        { kind: "slot", id: "hierarchy", label: "Hierarchy" },
+      ],
       tree: { parentField: "parentId" },
-      actions: ["delete"],
     },
   },
   model: {
@@ -370,8 +369,8 @@ export default defineEntity({
     ],
     sort: {
       fields: ["name", "sortOrder", "updatedAt"],
-      default: "sortOrder",
-      direction: "asc",
+      defaultOverride: "sortOrder",
+      directionOverride: "asc",
     },
     intents: {
       fields: {
@@ -483,7 +482,7 @@ export default defineEntity({
     auditable: true,
     images: {
       storage: false,
-      displaySources: [
+      displaySourceOverrides: [
         {
           relationPath: ["products"],
           priority: 0,

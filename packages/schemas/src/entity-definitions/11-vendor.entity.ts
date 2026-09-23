@@ -13,7 +13,7 @@ import {
 export default defineEntity({
   key: "vendor",
   names: { singular: "Vendor", plural: "Vendors" },
-  route: { basePath: "vendors", create: "dialog", list: true, detail: true },
+  route: { basePath: "vendors" },
   table: "Vendor",
   identifiers: { brand: "VendorId", shortcode: "VEN-" },
   presentation: {
@@ -28,7 +28,7 @@ export default defineEntity({
     },
     icons: { lucide: "Store", sfSymbol: "storefront", emoji: "🏪" },
     detail: {
-      sections: [
+      sectionOverrides: [
         {
           kind: "fields",
           id: "overview",
@@ -93,7 +93,7 @@ export default defineEntity({
         },
       ],
     },
-    list: { actions: ["merge", "delete"] },
+    list: { actionOverrides: ["merge", "delete"] },
   },
   model: {
     fields: [
@@ -465,7 +465,7 @@ export default defineEntity({
       // question this roster exists to answer. Used to be a browser-registry
       // `list.defaultSort` override on top of a generated "name" default;
       // the product decision now lives on the declaration itself.
-      default: "spend",
+      defaultOverride: "spend",
     },
     intents: {
       fields: {

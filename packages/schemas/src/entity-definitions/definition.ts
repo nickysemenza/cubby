@@ -88,13 +88,15 @@ export type CompiledEntityPresentation = Omit<
   EntityPresentation,
   "detail" | "list"
 > & {
-  detail: Omit<EntityPresentation["detail"], "hero"> & {
+  detail: Omit<EntityPresentation["detail"], "hero" | "sections"> & {
+    sections: NonNullable<EntityPresentation["detail"]["sections"]>;
     hero: Omit<EntityPresentation["detail"]["hero"], "images" | "actions"> & {
       images: boolean;
       actions: readonly string[];
     };
   };
-  list: Omit<EntityPresentation["list"], "timeline" | "shelf"> & {
+  list: Omit<EntityPresentation["list"], "timeline" | "shelf" | "actions"> & {
+    actions: readonly string[];
     /**
      * Every compiled list has a card presentation. Declarations may refine its
      * caption, while the compiler supplies a mobile-subtitle fallback.
@@ -112,8 +114,9 @@ export type CompiledEntityPresentation = Omit<
       | null;
   };
 };
-export type EntityDetailSection =
-  EntityPresentation["detail"]["sections"][number];
+export type EntityDetailSection = NonNullable<
+  EntityPresentation["detail"]["sections"]
+>[number];
 export type EntityListView = EntityPresentation["list"]["views"][number];
 export type EntitySlotListView = Exclude<EntityListView, string>;
 
@@ -461,18 +464,19 @@ const metadataSchemas = () => {
   const entityFieldModelSortMetadataSchema = z
     .object({
       fields: z.array(nonEmptyString()).min(1),
-      default: nonEmptyString(),
+      /** Defaults to `createdAt` when sortable, otherwise the first field. */
+      defaultOverride: nonEmptyString().optional(),
       computed: z.array(nonEmptyString()).optional().default([]),
       groupable: z.array(nonEmptyString()).optional().default([]),
-      /**
-       * Direction the list opens `default` in. Defaults to "desc", which is
-       * right for the date/amount columns most lists open on and wrong for a
-       * name roster — `ledgerParty`/`financialAccount` declare "asc" so a
-       * name-sorted list opens A→Z instead of Z→A.
-       */
-      direction: z.enum(["asc", "desc"]).optional().default("desc"),
+      /** Text and enum defaults open ascending; other fields open descending. */
+      directionOverride: z.enum(["asc", "desc"]).optional(),
     })
-    .strict();
+    .strict()
+    .transform(({ defaultOverride, directionOverride, ...sort }) => ({
+      ...sort,
+      default: defaultOverride,
+      direction: directionOverride,
+    }));
 
   /**
    * Editing intents: named field fragments the browser editor exposes, plus
@@ -514,25 +518,44 @@ const metadataSchemas = () => {
    * over the generic list/detail renderers; `null` keeps that file
    * hand-written. `detail.query` is `(shortcode: string) => queryOptions` for
    * an entity outside the kernel detail roster (image). `create` is how a
-   * record is made from the list: `"dialog"` puts `?create=true` in the
-   * list's search schema and renders the capture dialog action; `"page"`
-   * means a hand-written `<basePath>.new.tsx` exists and is linked as
-   * `routes.new`.
+   * record is made from the list: a create contract and capture intent infer
+   * `"dialog"`, putting `?create=true` in the list's search schema.
+   * `createOverride: "page"` links a hand-written `<basePath>.new.tsx` as
+   * `routes.new`; `createOverride: null` omits the generic entry point.
    */
   const entityRouteMetadataSchema = z
     .object({
       basePath: nonEmptyString(),
       detailParam: nonEmptyString().optional(),
-      create: z.enum(["dialog", "page"]).optional(),
-      list: z.literal(true).nullable(),
-      detail: z
+      /** Replaces the capture-dialog default; null opts out. */
+      createOverride: z.enum(["dialog", "page"]).nullable().optional(),
+      /** A routed entity gets the generated list unless explicitly replaced. */
+      listOverride: z.literal(true).nullable().optional(),
+      /** A routed entity gets the generated detail unless explicitly replaced. */
+      detailOverride: z
         .union([
           z.literal(true),
           z.object({ query: sourceRefMetadataSchema }).strict(),
         ])
-        .nullable(),
+        .nullable()
+        .optional(),
     })
-    .strict();
+    .strict()
+    .transform(
+      ({
+        basePath,
+        detailParam,
+        createOverride,
+        listOverride,
+        detailOverride,
+      }) => ({
+        basePath,
+        detailParam,
+        create: createOverride,
+        list: listOverride === undefined ? true : listOverride,
+        detail: detailOverride === undefined ? true : detailOverride,
+      }),
+    );
 
   const entityIdentifiersMetadataSchema = z
     .object({
@@ -701,7 +724,7 @@ const metadataSchemas = () => {
            * supporting fields, with a "Log entry" create button prefilled
            * from its filter.
            */
-          variant: z
+          variantOverride: z
             .enum(["standard", "journal"])
             .optional()
             .default("standard"),
@@ -713,13 +736,31 @@ const metadataSchemas = () => {
               /** A reference field rendered as the ancestry breadcrumb. */
               breadcrumb: fieldKey.nullable().optional().default(null),
               /** Defaults to whether the entity stores a gallery. */
-              images: z.boolean({ error: "must be a boolean" }).optional(),
+              imagesOverride: z
+                .boolean({ error: "must be a boolean" })
+                .optional(),
               /** Defaults to `["edit"]` when the entity has an update contract. */
-              actions: z.array(actionKey).optional(),
+              actionOverrides: z.array(actionKey).optional(),
             })
             .strict()
-            .prefault({}),
-          sections: z.array(detailSectionSchema).optional().default([]),
+            .prefault({})
+            .transform(
+              ({
+                chip,
+                stats,
+                breadcrumb,
+                imagesOverride,
+                actionOverrides,
+              }) => ({
+                chip,
+                stats,
+                breadcrumb,
+                images: imagesOverride,
+                actions: actionOverrides,
+              }),
+            ),
+          /** Omitted: one Overview section for all detail fields; [] opts out. */
+          sectionOverrides: z.array(detailSectionSchema).optional(),
           /**
            * `many` relations this page deliberately renders no table for,
            * each with the reason. Every other `many` relation onto a list
@@ -732,22 +773,30 @@ const metadataSchemas = () => {
             .default({}),
         })
         .strict()
-        .prefault({}),
+        .prefault({})
+        .transform(
+          ({ sectionOverrides, variantOverride, hero, omitRelations }) => ({
+            variant: variantOverride,
+            hero,
+            sections: sectionOverrides,
+            omitRelations,
+          }),
+        ),
       list: z
         .object({
           /** The first view is the default; `table` when omitted. */
-          views: z.array(listViewSchema).min(1).optional().default(["table"]),
+          viewOverrides: z
+            .array(listViewSchema)
+            .min(1)
+            .optional()
+            .default(["table"]),
           /** URL-compatible aliases for retired view ids, mapped before rendering. */
           viewAliases: z
             .record(nonEmptyString(), nonEmptyString())
             .optional()
             .default({}),
-          shelf: z
-            .object({ subtitle: z.array(fieldKey).optional().default([]) })
-            .strict()
-            .nullable()
-            .optional()
-            .default(null),
+          /** Replaces the subtitle inferred from mobile card placement. */
+          shelfSubtitleOverride: z.array(fieldKey).optional(),
           /** A custom list transport's search parameter (for example USDA's nameFilter). */
           primarySearch: z
             .object({ key: nonEmptyString(), placeholder: nonEmptyString() })
@@ -766,8 +815,8 @@ const metadataSchemas = () => {
             .nullable()
             .optional()
             .default(null),
-          /** Bulk/row verbs from `action-verbs.ts`. */
-          actions: z.array(actionKey).optional().default([]),
+          /** Bulk/row verbs from `action-verbs.ts`; [] opts out of the default. */
+          actionOverrides: z.array(actionKey).optional(),
           links: z
             .array(
               z
@@ -805,11 +854,35 @@ const metadataSchemas = () => {
             .default(null),
         })
         .strict()
-        .prefault({}),
+        .prefault({})
+        .transform(
+          ({
+            actionOverrides,
+            viewOverrides,
+            viewAliases,
+            shelfSubtitleOverride,
+            primarySearch,
+            tree,
+            links,
+            timeline,
+          }) => ({
+            views: viewOverrides,
+            viewAliases,
+            shelf:
+              shelfSubtitleOverride === undefined
+                ? null
+                : { subtitle: shelfSubtitleOverride },
+            primarySearch,
+            tree,
+            actions: actionOverrides,
+            links,
+            timeline,
+          }),
+        ),
       edit: z
         .object({
           /** Editor sections; derived from `control.section` when omitted. */
-          sections: z
+          sectionOverrides: z
             .array(
               z
                 .object({
@@ -863,7 +936,20 @@ const metadataSchemas = () => {
             .default([]),
         })
         .strict()
-        .prefault({}),
+        .prefault({})
+        .transform(
+          ({
+            sectionOverrides,
+            readOnlyOnUpdate,
+            readOnlyWhen,
+            hiddenWhen,
+          }) => ({
+            sections: sectionOverrides,
+            readOnlyOnUpdate,
+            readOnlyWhen,
+            hiddenWhen,
+          }),
+        ),
     })
     .strict();
 
@@ -1086,14 +1172,19 @@ const metadataSchemas = () => {
   const imagePolicyMetadataSchema = z
     .object({
       storage: imageStorageMetadataSchema,
-      displaySources: z
+      displaySourceOverrides: z
         .array(imageDisplaySourceMetadataSchema)
-        .optional()
-        .default([]),
+        .optional(),
       ingress: z.array(imageIngressMetadataSchema).optional().default([]),
       routing: imageRoutingMetadataSchema.nullable().optional().default(null),
     })
-    .strict();
+    .strict()
+    .transform(({ storage, displaySourceOverrides, ingress, routing }) => ({
+      storage,
+      displaySources: displaySourceOverrides ?? [],
+      ingress,
+      routing,
+    }));
 
   const entityDataQualityCheckMetadataSchema = z
     .object({
@@ -1462,7 +1553,24 @@ const metadataSchemas = () => {
       capabilities: entityCapabilitiesMetadataSchema,
       extensions: entityExtensionsMetadataSchema,
     })
-    .strict();
+    .strict()
+    .transform((declaration) => ({
+      ...declaration,
+      route:
+        declaration.route === null
+          ? null
+          : {
+              ...declaration.route,
+              create:
+                declaration.route.create === undefined
+                  ? declaration.fields?.create !== null &&
+                    declaration.fields !== null &&
+                    declaration.model?.intents?.create.includes("capture")
+                    ? ("dialog" as const)
+                    : undefined
+                  : (declaration.route.create ?? undefined),
+            },
+    }));
 
   return {
     declaration: entityDeclarationMetadataSchema,

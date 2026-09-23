@@ -16,9 +16,6 @@ export default defineEntity({
   names: { singular: "Planting", plural: "Plantings" },
   route: {
     basePath: "plantings",
-    create: "dialog",
-    list: true,
-    detail: true,
   },
   table: "Planting",
   identifiers: { brand: "PlantingId", shortcode: "PLT-" },
@@ -34,11 +31,11 @@ export default defineEntity({
     },
     icons: { lucide: "Sprout", sfSymbol: "leaf", emoji: "🌱" },
     detail: {
-      variant: "journal",
+      variantOverride: "journal",
       hero: {
         chip: "status",
       },
-      sections: [
+      sectionOverrides: [
         {
           kind: "relation",
           id: "garden-history",
@@ -81,7 +78,7 @@ export default defineEntity({
       ],
     },
     list: {
-      views: [
+      viewOverrides: [
         "table",
         {
           kind: "slot",
@@ -91,7 +88,6 @@ export default defineEntity({
         },
         "timeline",
       ],
-      actions: ["delete"],
       links: [{ label: "Garden workbench", path: "/garden-workbench" }],
       timeline: {
         fields: [
@@ -495,7 +491,6 @@ export default defineEntity({
     ],
     sort: {
       fields: ["createdAt", "updatedAt", "status", "sowedOn", "finishedOn"],
-      default: "createdAt",
     },
     intents: {
       fields: {
@@ -697,7 +692,7 @@ export default defineEntity({
     timeline: "custom",
     images: {
       storage: false,
-      displaySources: [
+      displaySourceOverrides: [
         {
           relationPath: ["entries"],
           priority: 1,

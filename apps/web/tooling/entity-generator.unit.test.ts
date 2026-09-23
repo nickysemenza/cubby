@@ -14,6 +14,7 @@ import { parseSync } from "oxc-parser";
 import { z } from "zod";
 import {
   defineEntity,
+  parseEntityDeclarationMetadata,
   parseEntityFieldModelMetadata,
   readFieldSchemas,
 } from "../../../packages/schemas/src/entity-definitions/definition";
@@ -29,6 +30,7 @@ import {
 } from "../../../scripts/generator/entities/compile";
 import { loadEntityDeclarations } from "../../../scripts/generator/entities/declarations";
 import type { CompiledEntity } from "../../../scripts/generator/entities/declarations";
+import { deriveImageDisplaySources } from "../../../scripts/generator/entities/derive";
 import { renderBrowserRouteArtifacts } from "../../../scripts/generator/entities/render/browser-routes";
 import { renderEntityArtifacts } from "../../../scripts/generator/entities/render/index";
 import { renderFilterArtifacts } from "../../../scripts/generator/entities/render/filters";
@@ -642,6 +644,79 @@ describe("typed entity compiler", () => {
     expect(imagePolicy).toContain('"relationPath":["related"]');
   });
 
+  it("ranks singular subject images and preserves an explicit opt-out", () => {
+    const subject = {
+      key: "subject",
+      capabilities: { images: { storage: "gallery" } },
+      relations: [],
+    };
+    const image = {
+      key: "image",
+      capabilities: { images: { storage: false } },
+      relations: [],
+    };
+    const sighting = {
+      key: "sighting",
+      capabilities: { images: { storage: false } },
+      relations: [
+        {
+          key: "subject",
+          target: "subject",
+          cardinality: "one",
+          provenance: {
+            kind: "local-path",
+            steps: [{ edge: "Sighting.subjectId", direction: "outgoing" }],
+          },
+        },
+        {
+          key: "activity",
+          target: "subject",
+          cardinality: "many",
+          provenance: {
+            kind: "local-path",
+            steps: [{ edge: "Activity.sightingId", direction: "incoming" }],
+          },
+        },
+        {
+          key: "image",
+          target: "image",
+          cardinality: "one",
+          provenance: {
+            kind: "local-path",
+            steps: [{ edge: "Sighting.imageId", direction: "outgoing" }],
+          },
+        },
+      ],
+    };
+    const declarations = [sighting, subject, image];
+    expect(deriveImageDisplaySources(declarations)[0]).toMatchObject({
+      capabilities: {
+        images: {
+          displaySourceOverrides: [
+            { relationPath: ["image"], priority: 0 },
+            { relationPath: ["subject"], priority: 1 },
+          ],
+        },
+      },
+    });
+    const optedOut = {
+      ...sighting,
+      capabilities: { images: { storage: false, displaySourceOverrides: [] } },
+    };
+    expect(deriveImageDisplaySources([optedOut, subject, image])[0]).toBe(
+      optedOut,
+    );
+  });
+
+  it("derives ordinary list actions from capabilities and keeps explicit omissions", async () => {
+    const entities = await loadEntityDeclarations();
+    const byKey = new Map(entities.map((entity) => [entity.key, entity]));
+    expect(byKey.get("vendorAccount")?.inspector.list.actions).toEqual([
+      "delete",
+    ]);
+    expect(byKey.get("cookbook")?.inspector.list.actions).toEqual([]);
+  });
+
   it("preserves literal model keys through the inferred declaration contract", () => {
     const definition = defineEntity({
       ...base,
@@ -825,7 +900,6 @@ describe("typed entity compiler", () => {
           ...model,
           sort: {
             fields: ["name", "related:example.count"],
-            default: "name",
             computed: ["related:example.count"],
             groupable: ["name"],
           },
@@ -835,7 +909,7 @@ describe("typed entity compiler", () => {
     expect(entity.fieldModel.sort).toEqual({
       fields: ["name", "related:example.count"],
       default: "name",
-      direction: "desc",
+      direction: "asc",
       computed: ["related:example.count"],
       groupable: ["name"],
     });
@@ -846,21 +920,51 @@ describe("typed entity compiler", () => {
     expect(entity.fieldModel.sort).toBeNull();
   });
 
+  it("derives a detail overview from readable fields unless sections are opted out", () => {
+    const displayed = {
+      ...base,
+      model: {
+        ...model,
+        fields: [{ ...model.fields[0]!, display: { detail: true } }],
+      },
+    };
+    expect(
+      compileEntityDeclarations([displayed])[0]?.inspector.detail.sections,
+    ).toEqual([
+      {
+        kind: "fields",
+        id: "overview",
+        title: "Overview",
+        placement: "supporting",
+        collapsed: false,
+        fields: ["name"],
+      },
+    ]);
+    expect(
+      compileEntityDeclarations([
+        {
+          ...displayed,
+          presentation: { ...presentation, detail: { sectionOverrides: [] } },
+        },
+      ])[0]?.inspector.detail.sections,
+    ).toEqual([]);
+  });
+
   it.each([
     [
-      { fields: ["missing"], default: "missing" },
+      { fields: ["missing"], defaultOverride: "missing" },
       "references undeclared field missing",
     ],
     [
-      { fields: ["name"], default: "missing" },
+      { fields: ["name"], defaultOverride: "missing" },
       "default missing must be one of sort.fields",
     ],
     [
-      { fields: ["name"], default: "name", computed: ["missing"] },
+      { fields: ["name"], defaultOverride: "name", computed: ["missing"] },
       "computed missing must be one of sort.fields",
     ],
     [
-      { fields: ["name"], default: "name", groupable: ["missing"] },
+      { fields: ["name"], defaultOverride: "name", groupable: ["missing"] },
       "groupable missing must be one of sort.fields",
     ],
   ])("rejects an invalid sort declaration: %j", (sort, message) => {
@@ -1365,7 +1469,7 @@ describe("typed entity compiler", () => {
       keys: string[],
     ): Partial<EntityDeclaration["presentation"]> => ({
       detail: {
-        sections: [
+        sectionOverrides: [
           { kind: "fields", id: "overview", title: "Overview", fields: keys },
         ],
       },
@@ -1394,7 +1498,7 @@ describe("typed entity compiler", () => {
         "a field placed twice",
         {
           detail: {
-            sections: [
+            sectionOverrides: [
               {
                 kind: "fields",
                 id: "a",
@@ -1409,14 +1513,14 @@ describe("typed entity compiler", () => {
       ],
       [
         "a reserved section id",
-        { detail: { sections: [{ kind: "slot", id: "history" }] } },
+        { detail: { sectionOverrides: [{ kind: "slot", id: "history" }] } },
         "reserved id",
       ],
       [
         "a relation section over a to-one relation",
         {
           detail: {
-            sections: [
+            sectionOverrides: [
               {
                 kind: "relation",
                 id: "parent",
@@ -1441,7 +1545,7 @@ describe("typed entity compiler", () => {
       ],
       [
         "a timeline view without the capability",
-        { list: { views: ["table", "timeline"] } },
+        { list: { viewOverrides: ["table", "timeline"] } },
         "without capabilities.timeline",
       ],
       [
@@ -1525,7 +1629,7 @@ describe("typed entity compiler", () => {
           presentation: {
             ...base.presentation,
             edit: {
-              sections: [
+              sectionOverrides: [
                 { id: "identity", title: "Identity", fields: [...fields] },
               ],
             },
@@ -1558,8 +1662,8 @@ describe("typed entity compiler", () => {
         presentation: {
           ...base.presentation,
           list: {
-            views: ["table", "shelf"],
-            shelf: { subtitle: ["name"] },
+            viewOverrides: ["table", "shelf"],
+            shelfSubtitleOverride: ["name"],
           },
         },
       },
@@ -1597,15 +1701,52 @@ describe("typed entity compiler", () => {
   });
 
   it("splits browser route modules between the generator and hand-written files", () => {
+    expect(
+      parseEntityDeclarationMetadata(
+        { ...base, route: { basePath: "alphas" } },
+        "alpha",
+      ).route,
+    ).toMatchObject({ list: true, detail: true });
+    const routeReady = {
+      ...base,
+      model: {
+        ...model,
+        intents: {
+          fields: { capture: ["name"] },
+          create: ["capture"],
+          update: ["capture"],
+        },
+      },
+      fields: {
+        create: { module: "~/entities/alpha", export: "alphaCreate" },
+        update: null,
+        output: { module: "~/entities/alpha", export: "alphaOut" },
+      },
+    };
+    expect(
+      parseEntityDeclarationMetadata(
+        { ...routeReady, route: { basePath: "alphas" } },
+        "alpha",
+      ).route?.create,
+    ).toBe("dialog");
+    expect(
+      parseEntityDeclarationMetadata(
+        {
+          ...routeReady,
+          route: { basePath: "alphas", createOverride: null },
+        },
+        "alpha",
+      ).route?.create,
+    ).toBeUndefined();
     const entities = compileEntityDeclarations([
       {
         ...base,
         route: {
           basePath: "alphas",
           detailParam: "id",
-          create: "page",
-          list: null,
-          detail: {
+          createOverride: "page",
+          listOverride: null,
+          detailOverride: {
             query: { module: "~/entities/alpha", export: "alphaQuery" },
           },
         },
@@ -1626,7 +1767,14 @@ describe("typed entity compiler", () => {
     // create+update contract; a generated index only needs something to list.
     expect(() =>
       compileEntityDeclarations([
-        { ...base, route: { basePath: "alphas", list: null, detail: true } },
+        {
+          ...base,
+          route: {
+            basePath: "alphas",
+            listOverride: null,
+            detailOverride: true,
+          },
+        },
       ]),
     ).toThrow("no create+update contract");
     const alphaDetail = {
@@ -1636,7 +1784,7 @@ describe("typed entity compiler", () => {
       compileEntityDeclarations([
         {
           ...base,
-          route: { basePath: "alphas", list: true, detail: alphaDetail },
+          route: { basePath: "alphas", detailOverride: alphaDetail },
         },
       ]),
     ).toThrow("has no contract (nothing to list)");
@@ -1644,7 +1792,14 @@ describe("typed entity compiler", () => {
     // recipe and usda-food routes stay hand-written.
     expect(() =>
       compileEntityDeclarations([
-        { ...base, route: { basePath: "alphas", list: null, detail: null } },
+        {
+          ...base,
+          route: {
+            basePath: "alphas",
+            listOverride: null,
+            detailOverride: null,
+          },
+        },
       ]),
     ).toThrow("every entity gets the generic detail page");
     // A dialog-created entity needs a capture intent for the dialog to open.
@@ -1654,9 +1809,9 @@ describe("typed entity compiler", () => {
           ...base,
           route: {
             basePath: "alphas",
-            create: "dialog",
-            list: null,
-            detail: alphaDetail,
+            createOverride: "dialog",
+            listOverride: null,
+            detailOverride: alphaDetail,
           },
         },
       ]),

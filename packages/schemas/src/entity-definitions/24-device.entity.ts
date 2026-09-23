@@ -13,8 +13,8 @@ export default defineEntity({
   names: { singular: "Device", plural: "Devices" },
   route: {
     basePath: "devices",
-    list: true,
-    detail: true,
+    // Capture exists for registration, but devices are not created from the list.
+    createOverride: null,
   },
   table: "Device",
   identifiers: { brand: "DeviceId", shortcode: "DEV-" },
@@ -29,7 +29,7 @@ export default defineEntity({
     },
     icons: { lucide: "Smartphone", sfSymbol: "iphone", emoji: "📱" },
     detail: {
-      sections: [
+      sectionOverrides: [
         {
           kind: "fields",
           id: "overview",
@@ -52,7 +52,6 @@ export default defineEntity({
         },
       ],
     },
-    list: { actions: ["delete"] },
   },
   model: {
     fields: [
@@ -292,8 +291,7 @@ export default defineEntity({
     ],
     sort: {
       fields: ["name", "lastSeenAt", "updatedAt"],
-      default: "lastSeenAt",
-      direction: "desc",
+      defaultOverride: "lastSeenAt",
     },
     intents: {
       fields: {
@@ -448,14 +446,6 @@ export default defineEntity({
     auditable: true,
     images: {
       storage: false,
-      displaySources: [
-        {
-          relationPath: ["hardware"],
-          priority: 0,
-          ordering: "declared",
-          identityEvidence: false,
-        },
-      ],
     },
     countable: false,
     softDelete: true,

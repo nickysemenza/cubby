@@ -31,7 +31,7 @@ import {
 export default defineEntity({
   key: "expense",
   names: { singular: "Expense", plural: "Expenses" },
-  route: { basePath: "expenses", create: "dialog", list: true, detail: true },
+  route: { basePath: "expenses" },
   table: "Expense",
   identifiers: { brand: "ExpenseId", shortcode: "EXP-" },
   presentation: {
@@ -54,7 +54,7 @@ export default defineEntity({
         transactions:
           "The settlement slot renders the transactions that settle this expense.",
       },
-      sections: [
+      sectionOverrides: [
         {
           kind: "fields",
           id: "overview",
@@ -93,7 +93,7 @@ export default defineEntity({
       ],
     },
     list: {
-      views: [
+      viewOverrides: [
         "table",
         {
           kind: "slot",
@@ -108,7 +108,7 @@ export default defineEntity({
           ],
         },
       ],
-      actions: ["bulkEdit", "delete"],
+      actionOverrides: ["bulkEdit", "delete"],
     },
     // Mirrors the capture dialog's old hand-rolled behavior: a line with a
     // product picked has no separate "line kind" (it IS the product's
@@ -802,7 +802,7 @@ export default defineEntity({
         "createdAt",
         "updatedAt",
       ],
-      default: "date",
+      defaultOverride: "date",
       computed: ["project", "product"],
       groupable: ["costType"],
     },
@@ -1346,7 +1346,7 @@ export default defineEntity({
     auditable: true,
     images: {
       storage: false,
-      displaySources: [
+      displaySourceOverrides: [
         {
           relationPath: ["product"],
           priority: 0,

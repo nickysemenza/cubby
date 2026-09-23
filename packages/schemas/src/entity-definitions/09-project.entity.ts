@@ -19,7 +19,7 @@ const inheritanceModeSchema = z.enum(["inherit", "explicit"]);
 export default defineEntity({
   key: "project",
   names: { singular: "Project", plural: "Projects" },
-  route: { basePath: "projects", create: "dialog", list: true, detail: true },
+  route: { basePath: "projects" },
   table: "Project",
   identifiers: { brand: "ProjectId", shortcode: "PRJ-" },
   presentation: {
@@ -45,9 +45,9 @@ export default defineEntity({
       hero: {
         chip: "status",
         stats: ["costEstimate"],
-        actions: ["edit", "setStatus"],
+        actionOverrides: ["edit", "setStatus"],
       },
-      sections: [
+      sectionOverrides: [
         { kind: "slot", id: "budget", title: "Budget" },
         { kind: "slot", id: "schedule", title: "Schedule", placement: "full" },
         {
@@ -164,7 +164,7 @@ export default defineEntity({
       ],
     },
     list: {
-      views: [
+      viewOverrides: [
         "table",
         {
           kind: "slot",
@@ -181,7 +181,7 @@ export default defineEntity({
         { kind: "slot", id: "analytics", label: "Analytics" },
       ],
       viewAliases: { gallery: "shelf" },
-      actions: ["setStatus", "delete"],
+      actionOverrides: ["setStatus", "delete"],
       links: [{ label: "Tools", path: "/projects/tools" }],
     },
   },
@@ -695,7 +695,6 @@ export default defineEntity({
         "createdAt",
         "updatedAt",
       ],
-      default: "createdAt",
     },
     intents: {
       fields: {
@@ -1262,7 +1261,7 @@ export default defineEntity({
     auditable: true,
     images: {
       storage: "gallery",
-      displaySources: [
+      displaySourceOverrides: [
         {
           relationPath: ["tasks"],
           priority: 1,

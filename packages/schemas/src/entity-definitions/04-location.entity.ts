@@ -14,7 +14,7 @@ import { z } from "zod";
 export default defineEntity({
   key: "location",
   names: { singular: "Location", plural: "Locations" },
-  route: { basePath: "locations", create: "dialog", list: true, detail: true },
+  route: { basePath: "locations" },
   table: "Location",
   identifiers: { brand: "LocationId", shortcode: "LOC-" },
   presentation: {
@@ -33,8 +33,8 @@ export default defineEntity({
         ingredients:
           "Derived through inventory, then product, then ingredient; the Contents table already lists what is stocked here.",
       },
-      hero: { breadcrumb: "parentId", images: true },
-      sections: [
+      hero: { breadcrumb: "parentId", imagesOverride: true },
+      sectionOverrides: [
         {
           kind: "relation",
           id: "inventory",
@@ -104,12 +104,12 @@ export default defineEntity({
       ],
     },
     list: {
-      views: [
+      viewOverrides: [
         { kind: "slot", id: "gallery", label: "Contents" },
         "table",
         { kind: "slot", id: "visualizations", label: "Visualizations" },
       ],
-      actions: ["moveUnder", "delete"],
+      actionOverrides: ["moveUnder", "delete"],
       links: [
         { label: "Arrange", path: "/locations/arrange" },
         { label: "Photo pass", path: "/locations/photo-pass" },
@@ -505,7 +505,6 @@ export default defineEntity({
         "valuation",
         "inventoryEntries",
       ],
-      default: "createdAt",
       computed: ["parent", "inventoryEntries"],
       groupable: ["type"],
     },
@@ -847,7 +846,7 @@ export default defineEntity({
     auditable: true,
     images: {
       storage: "gallery",
-      displaySources: [
+      displaySourceOverrides: [
         {
           relationPath: ["product"],
           priority: 1,

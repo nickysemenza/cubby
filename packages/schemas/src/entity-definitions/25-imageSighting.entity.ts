@@ -19,8 +19,6 @@ export default defineEntity({
   names: { singular: "Image Sighting", plural: "Image Sightings" },
   route: {
     basePath: "image-sightings",
-    list: true,
-    detail: true,
   },
   table: "ImageSighting",
   identifiers: { brand: "ImageSightingId", shortcode: "IMS-" },
@@ -35,41 +33,6 @@ export default defineEntity({
         "A sighting is recorded automatically when a photo import or library scan reports an Image on a member's device.",
     },
     icons: { lucide: "Eye", sfSymbol: "eye", emoji: "👁️" },
-    detail: {
-      sections: [
-        {
-          kind: "fields",
-          id: "overview",
-          title: "Overview",
-          placement: "supporting",
-          fields: [
-            "imageId",
-            "ledgerPartyId",
-            "deviceId",
-            "assetKey",
-            "sourceType",
-            "mediaSubtypes",
-            "originalFilename",
-            "pixelWidth",
-            "pixelHeight",
-            "hasAdjustments",
-            "capturedAt",
-            "capturedAtOffsetMinutes",
-            "addedAt",
-            "location",
-            "placeName",
-            "camera",
-            "matchKind",
-            "hashDistance",
-            "aspectGate",
-            "observedAt",
-            "createdAt",
-            "updatedAt",
-          ],
-        },
-      ],
-    },
-    list: { actions: ["delete"] },
   },
   model: {
     fields: [
@@ -457,8 +420,7 @@ export default defineEntity({
     audit: ["placeName", "capturedAt"],
     sort: {
       fields: ["observedAt", "capturedAt", "createdAt", "updatedAt"],
-      default: "observedAt",
-      direction: "desc",
+      defaultOverride: "observedAt",
     },
     intents: {
       fields: {
@@ -638,14 +600,6 @@ export default defineEntity({
     auditable: true,
     images: {
       storage: false,
-      displaySources: [
-        {
-          relationPath: ["image"],
-          priority: 0,
-          ordering: "declared",
-          identityEvidence: false,
-        },
-      ],
     },
     countable: true,
     softDelete: true,

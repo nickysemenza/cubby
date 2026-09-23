@@ -15,7 +15,12 @@ import { productTopLevelOut } from "../product-output-fields.js";
 export default defineEntity({
   key: "usda-food",
   names: { singular: "USDA Food", plural: "USDA Foods" },
-  route: { basePath: "usda", detailParam: "id", list: null, detail: null },
+  route: {
+    basePath: "usda",
+    detailParam: "id",
+    listOverride: null,
+    detailOverride: null,
+  },
   table: null,
   identifiers: { brand: null, shortcode: null },
   presentation: {
@@ -28,7 +33,7 @@ export default defineEntity({
     },
     icons: { lucide: "Apple", sfSymbol: "leaf.fill", emoji: "🍎" },
     detail: {
-      sections: [
+      sectionOverrides: [
         {
           kind: "fields",
           id: "overview",
@@ -286,7 +291,6 @@ export default defineEntity({
         "relevance",
         "linkedProducts",
       ],
-      default: "fdc_id",
       computed: ["data_type", "relevance", "linkedProducts"],
     },
     output: [

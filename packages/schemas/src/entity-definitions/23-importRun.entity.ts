@@ -32,10 +32,9 @@ export default defineEntity({
   names: { singular: "Run", plural: "Runs" },
   route: {
     basePath: "runs",
-    list: true,
     // No create/update contract, so outside the kernel detail roster: the
     // generic page reads the run through its own query.
-    detail: {
+    detailOverride: {
       query: {
         module: "~/entities/run.functions",
         export: "runDetailQuery",
@@ -70,9 +69,9 @@ export default defineEntity({
         // slot renders them, so AI runs don't show four zeros.
         stats: [],
         breadcrumb: "vendorAccountId",
-        actions: [],
+        actionOverrides: [],
       },
-      sections: [
+      sectionOverrides: [
         {
           kind: "fields",
           id: "overview",
@@ -119,7 +118,7 @@ export default defineEntity({
         },
       ],
     },
-    list: { actions: [] },
+    list: { actionOverrides: [] },
   },
   model: {
     fields: [
@@ -470,7 +469,6 @@ export default defineEntity({
         "ordersSeen",
         "imported",
       ],
-      default: "startedAt",
     },
   },
   fields: {
@@ -644,7 +642,7 @@ export default defineEntity({
     auditable: false,
     images: {
       storage: false,
-      displaySources: [
+      displaySourceOverrides: [
         {
           relationPath: ["vendor"],
           priority: 0,

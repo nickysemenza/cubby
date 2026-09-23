@@ -8,9 +8,6 @@ export default defineEntity({
   names: { singular: "Ingredient", plural: "Ingredients" },
   route: {
     basePath: "ingredients",
-    create: "dialog",
-    list: true,
-    detail: true,
   },
   table: "Ingredient",
   identifiers: { brand: "IngredientId", shortcode: "ING-" },
@@ -30,7 +27,7 @@ export default defineEntity({
         eaters:
           "Who ate it is per-portion meal data; the Meals table on this page shows each meal and its eaters.",
       },
-      sections: [
+      sectionOverrides: [
         {
           kind: "fields",
           id: "basic-information",
@@ -74,7 +71,7 @@ export default defineEntity({
       ],
     },
     list: {
-      actions: ["setUsuallyOnHand", "merge", "delete"],
+      actionOverrides: ["setUsuallyOnHand", "merge", "delete"],
       links: [
         { label: "Equivalences", path: "/ingredients/equivalences" },
         { label: "Workbench", path: "/ingredients/workbench" },
@@ -224,7 +221,6 @@ export default defineEntity({
     audit: ["name", "aliases", "naKinds", "usuallyOnHand"],
     sort: {
       fields: ["createdAt", "updatedAt", "name", "appearsInRecipes", "product"],
-      default: "createdAt",
       computed: ["appearsInRecipes", "product"],
     },
     intents: {
@@ -492,7 +488,7 @@ export default defineEntity({
     auditable: true,
     images: {
       storage: false,
-      displaySources: [
+      displaySourceOverrides: [
         {
           relationPath: ["products"],
           priority: 0,

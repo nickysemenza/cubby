@@ -15,9 +15,6 @@ export default defineEntity({
   names: { singular: "Financial Account", plural: "Accounts" },
   route: {
     basePath: "financial-accounts",
-    create: "dialog",
-    list: true,
-    detail: true,
   },
   table: "FinancialAccount",
   identifiers: { brand: "FinancialAccountId", shortcode: "FAC-" },
@@ -39,7 +36,7 @@ export default defineEntity({
         purchases:
           "Two joins through transactions; the Transactions table links each transaction's purchase.",
       },
-      sections: [
+      sectionOverrides: [
         {
           kind: "fields",
           id: "overview",
@@ -71,7 +68,6 @@ export default defineEntity({
         },
       ],
     },
-    list: { actions: ["delete"] },
   },
   model: {
     fields: [
@@ -351,10 +347,9 @@ export default defineEntity({
         "createdAt",
         "updatedAt",
       ],
-      default: "name",
+      defaultOverride: "name",
       // A name roster reads A→Z; the table's blanket descending default was
       // opening the account list backwards.
-      direction: "asc",
     },
     intents: {
       fields: {
@@ -700,14 +695,6 @@ export default defineEntity({
     auditable: true,
     images: {
       storage: false,
-      displaySources: [
-        {
-          relationPath: ["provider-vendor"],
-          priority: 0,
-          ordering: "declared",
-          identityEvidence: false,
-        },
-      ],
     },
     countable: true,
     softDelete: true,
