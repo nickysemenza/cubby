@@ -1,3 +1,5 @@
+import * as Sentry from "@sentry/tanstackstart-react";
+
 import { publishBackgroundTasks } from "~/server/background-tasks/publish";
 import {
   getGmailOAuthCredentials,
@@ -66,7 +68,11 @@ export async function recoverMissedWork(db: Database) {
     staleExpired: stale?.expired,
     staleFailures: stale?.failures.length,
   });
-  errors.push(...(stale?.failures.map(({ error }) => error) ?? []));
+  for (const failure of stale?.failures ?? [])
+    Sentry.captureMessage(
+      `Stale purchase run could not be moved to review: ${failure.error}`,
+      "warning",
+    );
   if (errors.length) throw new Error(errors.join("; "));
   return { offline, stale };
 }
@@ -143,7 +149,11 @@ export async function discoverPurchases(db: Database) {
   const errors = [huntResult, gmailResult, ...dispatchResult]
     .filter((result) => result.status === "rejected")
     .map((result) => String(result.reason));
-  errors.push(...(summary?.failures.map(({ error }) => error) ?? []));
+  for (const failure of summary?.failures ?? [])
+    Sentry.captureMessage(
+      `Gmail purchase discovery failed for an account: ${failure.error}`,
+      "warning",
+    );
   if (errors.length) throw new Error(errors.join("; "));
   return { huntsCreated, huntsDispatched, summary };
 }
