@@ -33,6 +33,7 @@ import {
   financialTransaction,
   ledgerParty,
   statementRow,
+  vendor,
 } from "~/server/db/schema";
 import { createAppError, createBlockedError } from "~/server/errors/app-error";
 import { computeChanges, logAuditEntry } from "~/server/repo/audit-log";
@@ -101,6 +102,12 @@ const columns = {
   ledgerPartyName: sql<
     string | null
   >`(SELECT name FROM "LedgerParty" WHERE id = "FinancialAccount"."ledgerPartyId")`,
+  providerVendorShortcode: sql<
+    string | null
+  >`(SELECT shortcode FROM "Vendor" WHERE id = "FinancialAccount"."providerVendorId")`,
+  providerVendorName: sql<
+    string | null
+  >`(SELECT name FROM "Vendor" WHERE id = "FinancialAccount"."providerVendorId")`,
   notes: financialAccount.notes,
   createdAt: financialAccount.createdAt,
   updatedAt: financialAccount.updatedAt,
@@ -109,11 +116,13 @@ const columns = {
 
 type FinancialAccountRow = Omit<
   typeof financialAccount.$inferSelect,
-  "ledgerPartyId" | "deletedAt"
+  "ledgerPartyId" | "providerVendorId" | "deletedAt"
 > & {
   transactionCount: number;
   ledgerPartyShortcode: string | null;
   ledgerPartyName: string | null;
+  providerVendorShortcode: string | null;
+  providerVendorName: string | null;
 };
 
 const toOut = (
@@ -132,6 +141,10 @@ const toOut = (
       ? parseShortcodeFor("ledgerParty", row.ledgerPartyShortcode)
       : null,
     ledgerPartyName: row.ledgerPartyName,
+    providerVendorId: row.providerVendorShortcode
+      ? parseShortcodeFor("vendor", row.providerVendorShortcode)
+      : null,
+    providerVendorName: row.providerVendorName,
     notes: row.notes,
     transactionCount: Number(row.transactionCount),
     dataQuality,
@@ -335,6 +348,36 @@ async function resolveLedgerPartyForAccount(
   return party.id;
 }
 
+async function resolveProviderVendorForAccount(
+  tx: DrizzleTransaction,
+  shortcode: FinancialAccountCreateInput["providerVendorId"],
+) {
+  if (shortcode === null) return null;
+  const id = await resolveOrThrow(tx, "vendor", shortcode);
+  // Row lock so a concurrent vendor delete cannot pass its incoming-edge
+  // check between this read and the insert that references it.
+  const [row] = await tx
+    .select({ id: vendor.id })
+    .from(vendor)
+    .where(and(eq(vendor.id, id), notDeleted(vendor)))
+    .for("share")
+    .limit(1);
+  if (!row)
+    throw createAppError("VENDOR_NOT_FOUND", `Vendor not found: ${shortcode}`);
+  return row.id;
+}
+
+function assertProviderMatchesKind(
+  identity: FinancialAccountCreateInput["identity"],
+  providerVendorId: string | null,
+) {
+  if (providerVendorId !== null && identity.kind !== "stored_value")
+    throw createAppError(
+      "CONSTRAINT_VIOLATION",
+      `Only a stored-value account names a provider vendor; this account is ${identity.kind}.`,
+    );
+}
+
 export async function createFinancialAccount(
   db: Database,
   data: FinancialAccountCreateInput,
@@ -351,11 +394,16 @@ export async function createFinancialAccount(
       ),
     );
     await assertAliasesAvailable(tx, data.sourceAliases);
-    const { ledgerPartyId, ...columns } = data;
+    const { ledgerPartyId, providerVendorId, ...columns } = data;
     const resolvedLedgerPartyId = await resolveLedgerPartyForAccount(
       tx,
       ledgerPartyId,
     );
+    const resolvedProviderVendorId = await resolveProviderVendorForAccount(
+      tx,
+      providerVendorId,
+    );
+    assertProviderMatchesKind(data.identity, resolvedProviderVendorId);
     if (data.inventoryOwnerDefaultEnabled) {
       if (!resolvedLedgerPartyId) {
         throw createAppError(
@@ -377,6 +425,7 @@ export async function createFinancialAccount(
     const created = await insertWithShortcode(tx, "financialAccount", {
       ...columns,
       ledgerPartyId: resolvedLedgerPartyId,
+      providerVendorId: resolvedProviderVendorId,
     });
     await logAuditEntry(tx, actor, {
       entityType: "financialAccount",
@@ -425,6 +474,16 @@ export async function updateFinancialAccount(
       data.ledgerPartyId === undefined
         ? undefined
         : await resolveLedgerPartyForAccount(tx, data.ledgerPartyId);
+    const providerVendorId =
+      data.providerVendorId === undefined
+        ? undefined
+        : await resolveProviderVendorForAccount(tx, data.providerVendorId);
+    assertProviderMatchesKind(
+      data.identity ?? financialAccountIdentity.parse(before.identity),
+      providerVendorId === undefined
+        ? before.providerVendorId
+        : providerVendorId,
+    );
     const inventoryOwnerDefaultEnabled =
       data.inventoryOwnerDefaultEnabled ?? before.inventoryOwnerDefaultEnabled;
     if (inventoryOwnerDefaultEnabled) {
@@ -464,11 +523,17 @@ export async function updateFinancialAccount(
           "Cannot change an account's ledger party while it evidences a ledger transfer.",
         );
     }
-    const { ledgerPartyId: _ledgerPartyId, ...accountData } = data;
+    const {
+      ledgerPartyId: _ledgerPartyId,
+      providerVendorId: _providerVendorId,
+      ...accountData
+    } = data;
     const updateData: Partial<typeof financialAccount.$inferInsert> = {
       ...accountData,
     };
     if (ledgerPartyId !== undefined) updateData.ledgerPartyId = ledgerPartyId;
+    if (providerVendorId !== undefined)
+      updateData.providerVendorId = providerVendorId;
     const values = buildPartialUpdateValues(updateData);
     await tx
       .update(financialAccount)

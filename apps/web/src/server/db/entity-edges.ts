@@ -955,6 +955,14 @@ export const ENTITY_EDGES = {
     },
   }),
   vendor: edges({
+    "FinancialAccount.providerVendorId": {
+      column: financialAccount.providerVendorId,
+      role: "reference",
+      label: "stored-value accounts",
+      description:
+        "A gift card or store-credit balance this vendor owes a member or the household.",
+      liveness: { kind: "must-target-live" },
+    },
     "ImportRun.vendorId": {
       column: importRun.vendorId,
       role: "history",

@@ -855,17 +855,18 @@ export function toVendorCard(
 
 // ── Financial accounts ─────────────────────────────────────────────────────
 
-function financialAccountIdentitySummary(
-  identity: FinancialAccountOut["identity"],
-  cardNumbers: FinancialAccountOut["cardNumbers"],
-) {
+function financialAccountIdentitySummary({
+  identity,
+  cardNumbers,
+  providerVendorName,
+}: FinancialAccountOut) {
   const provider =
     identity.kind === "credit_card"
       ? identity.issuer
       : identity.kind === "bank_account" || identity.kind === "other"
         ? identity.institution
         : identity.kind === "stored_value"
-          ? identity.provider
+          ? (providerVendorName ?? identity.provider)
           : null;
   const last4 = currentLast4(cardNumbers);
 
@@ -887,7 +888,7 @@ export function toFinancialAccountCard(
     icon: <EntityIcon entity="financialAccount" size={14} colored />,
     name: data.name,
     tag: "account",
-    identity: financialAccountIdentitySummary(data.identity, data.cardNumbers),
+    identity: financialAccountIdentitySummary(data),
     body: [
       {
         kind: "stats",

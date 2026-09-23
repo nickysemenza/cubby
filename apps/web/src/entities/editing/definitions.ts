@@ -720,6 +720,10 @@ const financialAccountCreateData = (
   name: patch.name,
   provisional: patch.provisional,
   identity: financialAccountIdentity(patch),
+  // Switching the kind away from stored value after picking a provider must
+  // not submit it: the server rejects a provider on any other kind.
+  providerVendorId:
+    patch.kind === "stored_value" ? (patch.providerVendorId ?? null) : null,
   cardNumbers: financialAccountCardNumbers(patch),
   sourceAliases: normalizeSourceAliases(patch.sourceAliases),
   notes: patch.notes,
@@ -1211,6 +1215,7 @@ export const entityEditRegistry: EntityEditRegistry = {
           institution: "",
           accountType: "checking",
           provider: "",
+          providerVendorId: null,
           last4: "",
           provisional: false,
           sourceAliases: [],
@@ -1221,7 +1226,12 @@ export const entityEditRegistry: EntityEditRegistry = {
       full: {
         // The full create still collects the whole identity discriminant.
         fields: f.fieldsFor("capture"),
-        defaults: { provisional: false, sourceAliases: [], notes: null },
+        defaults: {
+          provisional: false,
+          providerVendorId: null,
+          sourceAliases: [],
+          notes: null,
+        },
         buildData: financialAccountCreateData,
       },
     },

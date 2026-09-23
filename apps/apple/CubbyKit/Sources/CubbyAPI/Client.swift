@@ -2479,6 +2479,13 @@ public struct Client: APIProtocol {
                     in: &request,
                     style: .form,
                     explode: true,
+                    name: "providerVendorId",
+                    value: input.query.providerVendorId
+                )
+                try converter.setQueryItemAsURI(
+                    in: &request,
+                    style: .form,
+                    explode: true,
                     name: "ledgerPartyId",
                     value: input.query.ledgerPartyId
                 )

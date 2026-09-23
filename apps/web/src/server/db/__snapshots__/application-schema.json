@@ -2127,6 +2127,12 @@
           "notNull": true,
           "default": "'[]'::jsonb"
         },
+        "providerVendorId": {
+          "name": "providerVendorId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
         "ledgerPartyId": {
           "name": "ledgerPartyId",
           "type": "uuid",
@@ -2227,9 +2233,44 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
+        },
+        "FinancialAccount_provider_owner_key": {
+          "name": "FinancialAccount_provider_owner_key",
+          "columns": [
+            {
+              "expression": "providerVendorId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "ledgerPartyId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"FinancialAccount\".\"providerVendorId\" IS NOT NULL AND \"FinancialAccount\".\"deletedAt\" IS NULL",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
       "foreignKeys": {
+        "FinancialAccount_providerVendorId_Vendor_id_fk": {
+          "name": "FinancialAccount_providerVendorId_Vendor_id_fk",
+          "tableFrom": "FinancialAccount",
+          "tableTo": "Vendor",
+          "columnsFrom": [
+            "providerVendorId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
         "FinancialAccount_ledgerPartyId_LedgerParty_id_fk": {
           "name": "FinancialAccount_ledgerPartyId_LedgerParty_id_fk",
           "tableFrom": "FinancialAccount",
@@ -2247,7 +2288,12 @@
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
-      "checkConstraints": {},
+      "checkConstraints": {
+        "FinancialAccount_providerVendor_stored_value_check": {
+          "name": "FinancialAccount_providerVendor_stored_value_check",
+          "value": "\"FinancialAccount\".\"providerVendorId\" IS NULL OR \"FinancialAccount\".\"identity\"->>'kind' = 'stored_value'"
+        }
+      },
       "isRLSEnabled": false
     },
     "public.FinancialTransaction": {

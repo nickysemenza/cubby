@@ -7,6 +7,7 @@ import {
 import {
   financialAccountShortcode,
   ledgerPartyShortcode,
+  vendorShortcode,
 } from "../identifier-fields.js";
 import { z } from "zod";
 export default defineEntity({
@@ -50,6 +51,7 @@ export default defineEntity({
             "provisional",
             "sourceAliases",
             "cardNumbers",
+            "providerVendorId",
             "ledgerPartyId",
             "inventoryOwnerDefaultEnabled",
             "notes",
@@ -145,6 +147,22 @@ export default defineEntity({
         },
       },
       {
+        key: "providerVendorId",
+        kind: "identifier",
+        nullable: true,
+        label: "Provider",
+        description:
+          "The vendor that owes a gift card or store-credit balance. Stored-value accounts only; one live account per provider and owner.",
+        reference: { entity: "vendor" },
+        control: { kind: "specialized", renderer: "entity-select" },
+        display: { list: true, detail: true, columnId: "providerVendorName" },
+        validation: {
+          read: vendorShortcode.nullable(),
+          create: vendorShortcode.nullable().default(null),
+          update: vendorShortcode.nullable().optional(),
+        },
+      },
+      {
         key: "ledgerPartyId",
         kind: "identifier",
         nullable: true,
@@ -193,6 +211,16 @@ export default defineEntity({
       },
       {
         key: "ledgerPartyName",
+        kind: "text",
+        nullable: true,
+        validation: {
+          read: z.string().nullable(),
+          create: null,
+          update: null,
+        },
+      },
+      {
+        key: "providerVendorName",
         kind: "text",
         nullable: true,
         validation: {
@@ -269,6 +297,7 @@ export default defineEntity({
         defaultValue: "'[]'::jsonb",
         specialized: "json:cardNumbers",
       },
+      { key: "providerVendorId", reference: "vendor" },
       { key: "ledgerPartyId", reference: "ledgerParty" },
       {
         key: "inventoryOwnerDefaultEnabled",
@@ -286,6 +315,7 @@ export default defineEntity({
       "provisional",
       "sourceAliases",
       "cardNumbers",
+      "providerVendorId",
       "ledgerPartyId",
       "inventoryOwnerDefaultEnabled",
       "notes",
@@ -296,6 +326,7 @@ export default defineEntity({
       "provisional",
       "sourceAliases",
       "cardNumbers",
+      "providerVendorId",
       "ledgerPartyId",
       "inventoryOwnerDefaultEnabled",
       "notes",
@@ -308,6 +339,7 @@ export default defineEntity({
       "sourceAliases",
       "cardNumbers",
       "notes",
+      "providerVendorId",
       "ledgerPartyId",
       "inventoryOwnerDefaultEnabled",
     ],
@@ -334,6 +366,7 @@ export default defineEntity({
           "institution",
           "accountType",
           "provider",
+          "providerVendorId",
           "last4",
           "provisional",
           "sourceAliases",
@@ -341,6 +374,7 @@ export default defineEntity({
         ],
         full: [
           "name",
+          "providerVendorId",
           "provisional",
           "sourceAliases",
           "inventoryOwnerDefaultEnabled",
@@ -367,9 +401,11 @@ export default defineEntity({
       "provisional",
       "sourceAliases",
       "cardNumbers",
+      "providerVendorId",
       "ledgerPartyId",
       "inventoryOwnerDefaultEnabled",
       "notes",
+      "providerVendorName",
       "ledgerPartyName",
       "transactionCount",
       "createdAt",
@@ -397,6 +433,15 @@ export default defineEntity({
       export: "financialAccountFilterFields",
     },
     descriptors: [
+      {
+        columnId: "providerVendorId",
+        kind: "idMulti",
+        placeholder: "Filter by provider...",
+        brandRef: { entity: "vendor" },
+        urlOnly: true,
+        deriveSchema: true,
+        stored: true,
+      },
       {
         columnId: "ledgerPartyId",
         kind: "idMulti",
@@ -530,6 +575,23 @@ export default defineEntity({
     ],
   },
   relations: [
+    {
+      key: "provider-vendor",
+      label: "Stored-value provider",
+      target: "vendor",
+      cardinality: "one",
+      provenance: {
+        kind: "local-path",
+        steps: [
+          { edge: "FinancialAccount.providerVendorId", direction: "outgoing" },
+        ],
+      },
+      inverse: {
+        steps: [
+          { edge: "FinancialAccount.providerVendorId", direction: "incoming" },
+        ],
+      },
+    },
     {
       key: "ledger-party",
       label: "Ledger party",

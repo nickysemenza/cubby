@@ -1,4 +1,5 @@
 import { entitySummary } from "@cubby/schemas/entity-summary";
+import { financialAccountIdentity } from "@cubby/schemas/financial-account";
 import { useDebouncedValue } from "@tanstack/react-pacer";
 import { useQuery } from "@tanstack/react-query";
 import { format, parseISO } from "date-fns";
@@ -305,11 +306,19 @@ const financialAccountSourceAliasesField = requiredFieldModel(
   "financialAccount",
   "sourceAliases",
 );
+const financialAccountProviderVendorField = requiredFieldModel(
+  "financialAccount",
+  "providerVendorId",
+);
 
 function FinancialAccountFields({ form, record }: EntityEditorFieldsProps) {
   const kind = form.watch("kind");
   const creating = !record;
   const idPrefix = useId();
+  const storedValue = creating
+    ? kind === "stored_value"
+    : financialAccountIdentity.safeParse(record.identity).data?.kind ===
+      "stored_value";
   return (
     <>
       <EntityPrimitiveFields
@@ -358,7 +367,7 @@ function FinancialAccountFields({ form, record }: EntityEditorFieldsProps) {
             </>
           ) : null}
           {kind === "stored_value" ? (
-            <TextField form={form} name="provider" label="Provider" />
+            <TextField form={form} name="provider" label="Provider name" />
           ) : null}
           {kind === "other" ? (
             <TextField form={form} name="institution" label="Institution" />
@@ -368,6 +377,17 @@ function FinancialAccountFields({ form, record }: EntityEditorFieldsProps) {
           ) : null}
         </>
       ) : null}
+      {storedValue
+        ? renderIntentField({
+            entity: "financialAccount",
+            field: financialAccountProviderVendorField,
+            form,
+            idPrefix,
+            mode: creating ? "create" : "edit",
+            record,
+            scopedValueRecord: {},
+          })
+        : null}
       {renderIntentField({
         entity: "financialAccount",
         field: financialAccountSourceAliasesField,

@@ -19,6 +19,7 @@ import {
   deleteFinancialAccounts,
   financialAccountOptions,
   listFinancialAccounts,
+  updateFinancialAccount,
 } from "./financial-account";
 import { previewFinancialStatementImport } from "./financial-statement-preview";
 import {
@@ -28,6 +29,7 @@ import {
   listFinancialTransactions,
   updateFinancialTransaction,
 } from "./financial-transaction";
+import { createLedgerParty } from "./ledger-party";
 import { findFinancialTransactionAllocationDefects } from "./problems/detectors-financial";
 import {
   createPurchase,
@@ -1332,5 +1334,90 @@ describe("financial repositories — critical invariants", () => {
     expect(
       defects.find((defect) => defect.id === payout.id)?.reasons,
     ).toContain("kind-sign-violation");
+  });
+
+  // Two members can each hold their own store credit at one vendor; settlement
+  // resolves a gift-card leg by (provider vendor, owner), so that pair must
+  // stay unique among live accounts and the provider must mean stored value.
+  it("keys stored-value accounts by provider vendor and owner", async () => {
+    const vendor = await getVendorByID(
+      ctx.db,
+      await findOrCreateVendor(ctx.db, "Stored Value Vendor"),
+    );
+    const member = async (name: string) =>
+      requireTestValue(
+        (
+          await createLedgerParty(
+            ctx.db,
+            { name, kind: "member", notes: null },
+            ctx.actor,
+          )
+        ).output,
+        "expected member",
+      ).id;
+    const [memberA, memberB] = [
+      await member("Stored Value Member A"),
+      await member("Stored Value Member B"),
+    ];
+    const storedValue = (name: string, owner: string | null) =>
+      createFinancialAccount(
+        ctx.db,
+        financialAccountCreateInput.parse({
+          name,
+          identity: { kind: "stored_value", provider: "Synthetic store" },
+          providerVendorId: vendor.id,
+          ledgerPartyId: owner,
+        }),
+        ctx.actor,
+      );
+
+    const a = (await storedValue("Credit A", memberA)).output;
+    const b = (await storedValue("Credit B", memberB)).output;
+    const shared = (await storedValue("Shared card", null)).output;
+    expect(a.providerVendorId).toBe(vendor.id);
+    expect(a.providerVendorName).toBe("Stored Value Vendor");
+
+    await expect(storedValue("Credit A again", memberA)).rejects.toMatchObject({
+      cause: { constraint: "FinancialAccount_provider_owner_key" },
+    });
+    // Null owners stay distinct, so a second household card is allowed.
+    await expect(storedValue("Shared card 2", null)).resolves.toBeDefined();
+
+    await expect(
+      createFinancialAccount(
+        ctx.db,
+        financialAccountCreateInput.parse({
+          ...account("Provider on a credit card"),
+          providerVendorId: vendor.id,
+        }),
+        ctx.actor,
+      ),
+    ).rejects.toThrow(/stored-value account/);
+    await expect(
+      updateFinancialAccount(
+        ctx.db,
+        b.id,
+        { identity: { kind: "cash" } },
+        ctx.actor,
+      ),
+    ).rejects.toThrow(/stored-value account/);
+
+    for (const [owner, expected] of [
+      [memberA, [a.id]],
+      [memberB, [b.id]],
+    ] as const) {
+      const resolved = await listFinancialAccounts(
+        ctx.db,
+        { providerVendorId: [vendor.id], ledgerPartyId: [owner] },
+        [],
+        { pageIndex: 0, pageSize: 10 },
+      );
+      expect(resolved.data.map((row) => row.id)).toEqual(expected);
+    }
+
+    // Soft-deleting frees the pair for a replacement account.
+    await deleteFinancialAccounts(ctx.db, [a.id], ctx.actor);
+    await expect(storedValue("Credit A new", memberA)).resolves.toBeDefined();
+    expect(shared.ledgerPartyId).toBeNull();
   });
 });
