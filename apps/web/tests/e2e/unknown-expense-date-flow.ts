@@ -68,6 +68,14 @@ export async function clearExpenseDatesInBrowser(page: Page, baseURL: string) {
   // for the control, and prove focus landed, before pressing.
   await expect(unknown).toBeVisible();
   await expect(unknown).toBeEnabled();
+  // The dialog moves focus to its own initial target once it has opened; a
+  // focus() that lands before that is taken back (CI: "Date unknown" stayed
+  // unfocused for the whole expect timeout). Wait until the dialog owns focus.
+  await expect
+    .poll(() =>
+      dialog.evaluate((node) => node.contains(document.activeElement)),
+    )
+    .toBe(true);
   await unknown.focus();
   await expect(unknown).toBeFocused();
   await page.keyboard.press("Space");

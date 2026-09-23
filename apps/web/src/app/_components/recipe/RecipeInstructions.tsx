@@ -4,9 +4,8 @@ import { useMemo, useState } from "react";
 import { Row, Stack } from "~/components/layout";
 import { Description } from "~/components/ui/description";
 import { cn } from "~/lib/utils";
-import { wasm } from "~/lib/wasm";
 
-import { formatRichText } from "./richtext";
+import { formatRichText, parseRichTextSafe } from "./richtext";
 import { SectionHeading } from "./section-heading";
 
 interface RecipeInstructionsProps {
@@ -88,7 +87,7 @@ export function RecipeInstructions({ recipe }: RecipeInstructionsProps) {
                       )}
                     >
                       {formatRichText(
-                        wasm.parse_rich_text(
+                        parseRichTextSafe(
                           instruction.instruction,
                           ingredientNames,
                         ),

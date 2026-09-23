@@ -3,13 +3,15 @@ import { unitMappingWithMetadata } from "@cubby/schemas/unitmapping";
 import { z } from "zod";
 
 import { LocationTree } from "~/app/_components/inventory/location-tree-view";
-import { formatRichText } from "~/app/_components/recipe/richtext";
+import {
+  formatRichText,
+  parseRichTextSafe,
+} from "~/app/_components/recipe/richtext";
 import { ConversionCapabilities } from "~/app/_components/units/ConversionCapabilities";
 import {
   EntitySummaryCard,
   entitySummaryDataSchema,
 } from "~/components/entity/entity-summary-card";
-import { wasm } from "~/lib/wasm";
 
 import { EditableComponentDemo } from "../_components/EditableComponentDemo";
 import { Prose } from "../_components/Prose";
@@ -28,7 +30,7 @@ interface RichTextInput {
 
 function RichTextDemoInner({ data }: { data: RichTextInput }) {
   // Parse the raw text into WRichItems using WASM, then format for display
-  const richItems = wasm.parse_rich_text(data.text, data.ingredientNames);
+  const richItems = parseRichTextSafe(data.text, data.ingredientNames);
   return <div className="text-lg">{formatRichText(richItems)}</div>;
 }
 
