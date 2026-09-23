@@ -1,6 +1,7 @@
 # Durable entity identity and shared file attachments
 
-Status: **implemented in PR 1**; the legacy-storage drop (PR 2) remains. The
+Status: **implemented**: PR 1 shipped identity, attachments, and the graph
+reads; PR 2 drops the legacy storage. The
 decision record is [ADR 0006](../adr/0006-durable-entity-identity-and-attachments.md)
 and the rollout is [the runbook](../runbooks/entity-identity-schema.md). This
 revision replaces the earlier proposal that also moved every local-entity edge

@@ -66,17 +66,32 @@ since the deploy, so restore the snapshot if those matter.
 
 ## PR 2: drop the legacy storage
 
-After at least one full background and import cycle with clean integrity
-detectors, a follow-up PR drops what this one stopped reading: the eight
-`<Entity>Image` joins, `Cookbook.coverImageId`, `Vendor.logoImageId`,
-`Image.targetType`/`targetId`/`idempotencyKey` and the
-`Image_attachment_idempotency_key` index, and the Product and Purchase
-`dataExceptions` columns.
+Run this right after the PR 1 deploy rather than waiting: the legacy joins and
+the cover and logo columns still hold `NO ACTION` foreign keys into `Image`,
+so the new build's image hard-delete (detach, cover or logo replacement) fails
+on any image a legacy row still names. The build no longer declares any of
+these objects, so dropping them never breaks a read.
+
+1. **Back up** (`pg_dump -Fc`).
+2. **Catch up.** Rerun `entity-identity.catchup.sql`; it is idempotent.
+3. **Drop.** Run `entity-identity.drop.sql`. One transaction: a guard refuses
+   if any live legacy association or data exception has no `EntityAttachment`
+   or `DataException` row, then it drops the eight `<Entity>Image` joins,
+   `Cookbook.coverImageId`, `Vendor.logoImageId`,
+   `Image.targetType`/`targetId`/`idempotencyKey` with the
+   `Image_attachment_idempotency_key` index, and the Product and Purchase
+   `dataExceptions` columns. Both verify queries at the end return no rows.
+   It takes every affected table's lock up front with `NOWAIT` retries, so it
+   never deadlocks against live reads; if it gives up, nothing changed, so
+   rerun it.
+
+`psql` (keg-only under `/opt/homebrew/opt/libpq/bin`) runs each file as
+written: use the direct Neon host (drop `-pooler`) with
+`sslrootcert=system`, and `-v ON_ERROR_STOP=1`.
 
 ## Known `db:push` drift
 
 An interactive `db:push` against a database built by this cutover offers to
 drop and re-add `AuditLog_entity_fk`, `SearchDocument_entity_fk`, and
 `EntityEmbedding_entity_fk` (drizzle-kit misreads composite FKs into
-`Entity(id, kind)`). Cancel those statements; they are unchanged. Until PR 2
-it also offers to drop the legacy tables and columns above; cancel those too.
+`Entity(id, kind)`). Cancel those statements; they are unchanged.

@@ -5,7 +5,7 @@
 -- PR: everything here is additive, and the triggers keep old code's writes
 -- consistent until the new build deploys. The legacy image joins, the cover
 -- and logo columns, `Image.targetType`/`targetId`/`idempotencyKey`, and the
--- `dataExceptions` columns stay until the follow-up drop PR.
+-- `dataExceptions` columns stay until entity-identity.drop.sql.
 --
 -- One transaction. Entity tables are locked against writes (reads continue)
 -- so no row is created between its backfill and its identity FK.
