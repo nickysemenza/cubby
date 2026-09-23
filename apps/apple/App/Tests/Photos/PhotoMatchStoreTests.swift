@@ -46,6 +46,57 @@ struct PhotoMatchStoreTests {
         store.reset()
     }
 
+    // MARK: - Saved results
+
+    private func index(_ items: [(id: String, hash: String)]) -> String {
+        let rows = items.map {
+            #"{"id":"\#($0.id)","perceptualHash":"\#($0.hash)","sourceFingerprint":null,"width":100,"height":100,"directOwnerShortcodes":[]}"#
+        }
+        return #"{"algorithmRevision":1,"items":[\#(rows.joined(separator: ","))],"repair":[]}"#
+    }
+
+    @Test func registerBatchReturnsWhatItPublishedAndSeedingSkipsMatching() async throws {
+        let store = PhotoMatchStore()
+        await store.refresh(client: try client(index: index([("IMG-2345", "0000000000000000")])))
+        let near = HashQuery(perceptualHash: .init(value: 0), aspectRatio: 1)
+        let published = await store.registerBatch(["scanned": near])
+        #expect(published["scanned"]?.map(\.id) == [ImageCode("IMG-2345")])
+        // A seeded result is installed as-is: this query matches nothing in the index, so seeing
+        // the saved candidate proves no matching ran.
+        let saved = DedupCandidate(
+            id: ImageCode("IMG-2345"), basis: .content, confidence: .strong, distance: 1)
+        let revision = store.revision
+        store.seedServerMatches([
+            "seeded": (HashQuery(perceptualHash: .init(value: .max), aspectRatio: 1), [saved])
+        ])
+        #expect(store.revision == revision + 1)
+        #expect(store.hasKnownResult(for: "seeded"))
+        #expect(store.storedCandidates(for: "seeded") == [saved])
+        store.reset()
+    }
+
+    // Regression: once results persist, a refresh (every reconcile, every import) must not
+    // re-match every known photo against the whole index — only against entries that changed.
+    @Test func refreshAppliesOnlyChangedEntriesToPhotosWithAResult() async throws {
+        let store = PhotoMatchStore()
+        await store.refresh(client: try client(index: index([("IMG-KEEP", "ffffffffffffffff")])))
+        // Deliberately not what a full match would produce for IMG-KEEP: it must survive untouched.
+        let saved = DedupCandidate(
+            id: ImageCode("IMG-KEEP"), basis: .content, confidence: .strong, distance: 1)
+        store.seedServerMatches([
+            "photo": (HashQuery(perceptualHash: .init(value: 0), aspectRatio: 1), [saved])
+        ])
+        await store.refresh(
+            client: try client(
+                index: index([("IMG-KEEP", "ffffffffffffffff"), ("IMG-NEW", "0000000000000000")])))
+        #expect(
+            store.storedCandidates(for: "photo").map(\.id) == [ImageCode("IMG-NEW"), ImageCode("IMG-KEEP")])
+        // Removing the entry drops its candidate; the unchanged one is still left alone.
+        await store.refresh(client: try client(index: index([("IMG-KEEP", "ffffffffffffffff")])))
+        #expect(store.storedCandidates(for: "photo") == [saved])
+        store.reset()
+    }
+
     @Test func ownerBadgeUsesDeterministicPrimaryAndOverflowCount() {
         #expect(PhotoGridBadge.text(for: ["MEAL-9", "PRJ-2", "TASK-2", "MEAL-9"]) == "MEAL-9+2")
         #expect(PhotoGridBadge.text(for: ["TASK-2"]) == "TASK-2")

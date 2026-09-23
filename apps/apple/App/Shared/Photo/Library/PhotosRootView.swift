@@ -222,7 +222,7 @@ private struct PhotoLibraryBrowser: View {
                         .padding(.vertical, 12)
                     }
                     .refreshControl(identifier: "photos.refresh") {
-                        await library.refresh(matches: matches, client: appModel.client)
+                        await library.refresh(matches: matches, client: appModel.client, forceRematch: true)
                     }
                     .onAppear {
                         // Scroll to the containing month first: `scrollTo` on an id nested two

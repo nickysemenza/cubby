@@ -304,6 +304,8 @@ final class PhotoMatchStore {
                 guard generation == token, !Task.isCancelled else { return }
                 _ = try HashIndex(entries: [], algorithmRevision: document.algorithmRevision.rawValue)
                 let items = try document.items.map(ImageHashEntry.init)
+                // What the queries already holding a server result were matched against.
+                let previousDigests = entries.mapValues(\.matchDigest)
                 entries = Dictionary(uniqueKeysWithValues: items.map { ($0.id, $0) })
                 directOwnersByImageID = Dictionary(
                     uniqueKeysWithValues: items.map { ($0.id.rawValue, $0.directOwnerShortcodes) })
@@ -312,13 +314,26 @@ final class PhotoMatchStore {
                 remainingCount = document.repair.count
                 hasIndex = true
                 publishCellStates(for: cellStateBoxes.keys)
-                let querySnapshot = queries.filter { priorityIDs?.contains($0.key) ?? true }
+                // A query that already has a server result (seeded from the saved cache, or
+                // matched earlier this session) only needs the entries that changed since then —
+                // re-matching every registered photo against the whole index on each refresh
+                // (after every import, too) was a full library x index pass once results persist.
+                let delta = try PhotoMatchDelta(previous: previousDigests, current: items)
+                let known = queries.filter { serverCandidates[$0.key] != nil }
+                if !delta.isEmpty, !known.isEmpty {
+                    let stored = serverCandidates.filter { known[$0.key] != nil }
+                    let updated = try await Self.apply(delta, to: stored, queries: known)
+                    guard generation == token, !Task.isCancelled else { return }
+                    publishServerMatches(updated, for: known, replacing: true)
+                }
+                let unknown = queries.filter { known[$0.key] == nil }
+                let querySnapshot = unknown.filter { priorityIDs?.contains($0.key) ?? true }
                 let matched = try await Self.match(entries: items, queries: querySnapshot)
                 guard generation == token, !Task.isCancelled else { return }
                 publishServerMatches(matched, for: querySnapshot, replacing: true)
                 pendingQueries = pendingQueries.filter { queries[$0.key] != $0.value }
                 if let priorityIDs {
-                    for (id, query) in queries where !priorityIDs.contains(id) {
+                    for (id, query) in unknown where !priorityIDs.contains(id) {
                         pendingQueries[id] = query
                     }
                 }
@@ -370,8 +385,11 @@ final class PhotoMatchStore {
         schedulePendingRegistrations()
     }
 
-    func registerBatch(_ additions: [String: HashQuery]) async {
-        guard !additions.isEmpty else { return }
+    /// Returns the server results it published (empty when there is no index yet or the batch
+    /// was cancelled), so the library scan can persist them.
+    @discardableResult
+    func registerBatch(_ additions: [String: HashQuery]) async -> [String: [DedupCandidate]] {
+        guard !additions.isEmpty else { return [:] }
         for (id, query) in additions {
             if queries[id] != query {
                 serverCandidates[id] = nil
@@ -383,7 +401,7 @@ final class PhotoMatchStore {
             matchErrorsByID[id] = nil
         }
         publishCellStates(for: additions.keys)
-        guard hasIndex else { return }
+        guard hasIndex else { return [:] }
         while !Task.isCancelled {
             let token = generation
             let entryVersion = entriesRevision
@@ -391,18 +409,40 @@ final class PhotoMatchStore {
             let querySnapshot = additions.filter { queries[$0.key] == $0.value }
             do {
                 let matched = try await Self.match(entries: entrySnapshot, queries: querySnapshot)
-                guard generation == token, !Task.isCancelled else { return }
+                guard generation == token, !Task.isCancelled else { return [:] }
                 if entriesRevision != entryVersion { continue }
                 publishServerMatches(matched, for: querySnapshot, replacing: true)
                 revision += 1
-                return
-            } catch is CancellationError {
-                return
+                return querySnapshot.reduce(into: [:]) { published, element in
+                    if queries[element.key] == element.value {
+                        published[element.key] = matched[element.key] ?? []
+                    }
+                }
             } catch {
-                return
+                return [:]
             }
         }
+        return [:]
     }
+
+    /// Installs results already known to be current for `entries` (the saved cache, brought up to
+    /// date by `PhotoMatchDelta`) without matching anything: one publish and one `revision` bump
+    /// for the whole set.
+    func seedServerMatches(_ seeded: [String: (query: HashQuery, candidates: [DedupCandidate])]) {
+        guard !seeded.isEmpty else { return }
+        for (id, value) in seeded {
+            queries[id] = value.query
+            pendingQueries[id] = nil
+        }
+        publishServerMatches(seeded.mapValues(\.candidates), for: seeded.mapValues(\.query), replacing: true)
+        revision += 1
+    }
+
+    /// The index as matching currently sees it, and the revision that identifies it — a caller
+    /// that matches off the main actor compares the revision before publishing.
+    var indexSnapshot: (entries: [ImageHashEntry], revision: Int) { (Array(entries.values), entriesRevision) }
+
+    func isCurrentIndex(_ revision: Int) -> Bool { hasIndex && entriesRevision == revision }
 
     private func schedulePendingRegistrations() {
         guard registrationTask == nil, !pendingQueries.isEmpty else { return }
@@ -533,39 +573,68 @@ final class PhotoMatchStore {
         for querySnapshot: [String: HashQuery],
         replacing: Bool
     ) {
-        var nextServerCandidates = serverCandidates
-        var nextCandidates = candidates
-        for (id, query) in querySnapshot where queries[id] == query {
-            let found = matches[id] ?? []
-            nextServerCandidates[id] =
-                replacing
-                ? found
-                : Self.merged(nextServerCandidates[id] ?? [], found)
-            nextCandidates[id] = Self.merged(
-                nextServerCandidates[id] ?? [], batchCandidates[id] ?? [])
-            checkedIDs.insert(id)
-            checkingIDs.remove(id)
-            cancelledCheckIDs.remove(id)
-            matchErrorsByID[id] = nil
+        // Mutated in place through one `inout` access: copying both whole-library dictionaries
+        // per batch (the previous `var next… = …` form) was O(library) work on every publish.
+        Self.update(&candidates) { candidates in
+            for (id, query) in querySnapshot where queries[id] == query {
+                let found = matches[id] ?? []
+                let server = replacing ? found : Self.merged(serverCandidates[id] ?? [], found)
+                serverCandidates[id] = server
+                let batch = batchCandidates[id] ?? []
+                candidates[id] = batch.isEmpty ? server : Self.merged(server, batch)
+                checkedIDs.insert(id)
+                checkingIDs.remove(id)
+                cancelledCheckIDs.remove(id)
+                matchErrorsByID[id] = nil
+            }
         }
-        serverCandidates = nextServerCandidates
-        candidates = nextCandidates
         publishCellStates(for: querySnapshot.keys)
+    }
+
+    private static func update<Value>(_ value: inout Value, _ body: (inout Value) -> Void) {
+        body(&value)
     }
 
     nonisolated private static func match(
         entries: [ImageHashEntry], queries: [String: HashQuery]
     ) async throws -> [String: [DedupCandidate]] {
+        let index = try HashIndex(entries: entries)
+        return try await parallelMap(queries) { _, query in index.candidates(for: query) }
+    }
+
+    nonisolated static func apply(
+        _ delta: PhotoMatchDelta, to stored: [String: [DedupCandidate]], queries: [String: HashQuery]
+    ) async throws -> [String: [DedupCandidate]] {
+        try await parallelMap(queries) { id, query in delta.apply(to: stored[id] ?? [], query: query) }
+    }
+
+    /// Spreads per-query work over the cores (one left for the UI) at utility priority: a cold
+    /// library scan is ~90k queries against the whole index, which pinned one core before.
+    nonisolated private static func parallelMap(
+        _ queries: [String: HashQuery],
+        _ transform: @escaping @Sendable (String, HashQuery) -> [DedupCandidate]
+    ) async throws -> [String: [DedupCandidate]] {
+        let pairs = Array(queries)
+        let lanes = max(1, min(ProcessInfo.processInfo.activeProcessorCount - 1, pairs.count / 16))
         let task = Task.detached(priority: .utility) {
-            try Task.checkCancellation()
-            let index = try HashIndex(entries: entries)
-            var result: [String: [DedupCandidate]] = [:]
-            result.reserveCapacity(queries.count)
-            for (id, query) in queries {
-                try Task.checkCancellation()
-                result[id] = index.candidates(for: query)
+            try await withThrowingTaskGroup(of: [(String, [DedupCandidate])].self) { group in
+                for lane in 0..<lanes {
+                    group.addTask(priority: .utility) {
+                        var part: [(String, [DedupCandidate])] = []
+                        for index in stride(from: lane, to: pairs.count, by: lanes) {
+                            try Task.checkCancellation()
+                            part.append((pairs[index].key, transform(pairs[index].key, pairs[index].value)))
+                        }
+                        return part
+                    }
+                }
+                var result: [String: [DedupCandidate]] = [:]
+                result.reserveCapacity(pairs.count)
+                for try await part in group {
+                    for (id, found) in part { result[id] = found }
+                }
+                return result
             }
-            return result
         }
         return try await withTaskCancellationHandler {
             try await task.value

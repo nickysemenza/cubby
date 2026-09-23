@@ -56,6 +56,11 @@ final class PhotoLibraryStore: NSObject, PHPhotoLibraryChangeObserver {
     @ObservationIgnored private var clients: [UUID: (PhotoMatchStore, CubbyClient)] = [:]
     @ObservationIgnored private var generation = UUID()
     @ObservationIgnored private var observing = false
+    /// The server host saved match results are keyed by (`AppModel.host`), set by `AppModel` on
+    /// install and on every host change. `nil` keeps matching in memory only.
+    @ObservationIgnored var matchHost: String?
+    /// Set by an explicit refresh so the next reconcile ignores saved match results once.
+    @ObservationIgnored private var forceRematch = false
     var hasFullAccess: Bool { authorization == .authorized }
 
     var scanStatus: String {
@@ -170,7 +175,10 @@ final class PhotoLibraryStore: NSObject, PHPhotoLibraryChangeObserver {
         await refresh(matches: matches, client: client)
     }
 
-    func refresh(matches: PhotoMatchStore, client: CubbyClient) async {
+    /// `forceRematch` (the header's refresh control) re-checks every photo against the whole index
+    /// instead of trusting saved results for this one load.
+    func refresh(matches: PhotoMatchStore, client: CubbyClient, forceRematch: Bool = false) async {
+        if forceRematch { self.forceRematch = true }
         stopWork()
         let token = generation
         defer { if generation == token { isLoadingLibrary = false } }
@@ -291,11 +299,95 @@ final class PhotoLibraryStore: NSObject, PHPhotoLibraryChangeObserver {
         guard generation == token, !Task.isCancelled else { return }
         // One batch read for the whole library's dot status, rather than a fetch per cell; the
         // sweep republishes individual ids afterward as it classifies them.
-        if let snapshots = try? await analysisStore.snapshots(for: Array(index.assetsByID.keys)) {
+        if let snapshots = try? await analysisStore.snapshots(
+            for: Array(index.assetsByID.keys), includeFullAnalysis: false)
+        {
             matches.markAnalysis(snapshots)
         }
-        let remaining = months.flatMap(\.assets).filter { !checked.contains($0.localIdentifier) }
+        let unchecked = months.flatMap(\.assets).filter { !checked.contains($0.localIdentifier) }
+        let remaining = await seedSavedMatches(
+            unchecked, matches: matches, analysisStore: analysisStore, token: token)
+        guard generation == token, !Task.isCancelled else { return }
         startScan(remaining: remaining, matches: matches, token: token)
+    }
+
+    /// Installs saved match results for every unedited photo, brought up to date with only the
+    /// index entries that changed since they were saved (`PhotoMatchDelta`), and returns the
+    /// photos that still need a full match: new, edited, or never matched. Re-matching the whole
+    /// library against the whole index every launch was most of a warm launch's work.
+    private func seedSavedMatches(
+        _ unchecked: [PHAsset], matches: PhotoMatchStore, analysisStore: PhotoAnalysisStore, token: UUID
+    ) async -> [PHAsset] {
+        let force = forceRematch
+        forceRematch = false
+        guard let host = matchHost, matches.hasIndex, !force, !unchecked.isEmpty else { return unchecked }
+        let (entries, indexRevision) = matches.indexSnapshot
+        do {
+            let state = try await analysisStore.matchState(host: host)
+            let hashes = try await analysisStore.hashes(for: unchecked.map(\.localIdentifier))
+            let delta = try PhotoMatchDelta(previous: state.indexDigests, current: entries)
+            var queries: [String: HashQuery] = [:]
+            var stored: [String: [DedupCandidate]] = [:]
+            var cold: [PHAsset] = []
+            for asset in unchecked {
+                let id = asset.localIdentifier
+                if let saved = state.matches[id], saved.modificationDate == asset.modificationDate,
+                    saved.hashRevision == PerceptualHash64.algorithmRevision,
+                    let record = hashes[id], Self.isCurrent(record, for: asset)
+                {
+                    queries[id] = Self.hashQuery(for: asset, hash: record.perceptualHash)
+                    stored[id] = saved.candidates
+                } else {
+                    cold.append(asset)
+                }
+            }
+            let updated =
+                delta.isEmpty ? stored : try await PhotoMatchStore.apply(delta, to: stored, queries: queries)
+            // The index moved while applying (a repair batch): leave everything to the full scan.
+            guard generation == token, !Task.isCancelled, matches.isCurrentIndex(indexRevision) else {
+                return unchecked
+            }
+            if !delta.isEmpty {
+                // Only rows the delta changed, with the snapshot they now reflect, atomically. On a
+                // first run this writes just the snapshot, before the scan saves any rows.
+                let changedRows = updated.compactMap { id, candidates -> StoredPhotoMatch? in
+                    guard candidates != stored[id], let asset = index.asset(for: id) else { return nil }
+                    return Self.storedMatch(for: asset, candidates: candidates)
+                }
+                try await analysisStore.applyMatchDelta(
+                    host: host, matches: changedRows,
+                    indexDigests: Dictionary(uniqueKeysWithValues: entries.map { ($0.id, $0.matchDigest) }))
+                guard generation == token, !Task.isCancelled else { return unchecked }
+            }
+            matches.seedServerMatches(
+                updated.reduce(into: [:]) { seeded, element in
+                    if let query = queries[element.key] { seeded[element.key] = (query, element.value) }
+                })
+            checked.formUnion(updated.keys)
+            return cold
+        } catch {
+            Diagnostics.report(error, context: "photos.savedMatches.load")
+            return unchecked
+        }
+    }
+
+    private static func storedMatch(for asset: PHAsset, candidates: [DedupCandidate]) -> StoredPhotoMatch {
+        StoredPhotoMatch(
+            localIdentifier: asset.localIdentifier, modificationDate: asset.modificationDate,
+            hashRevision: PerceptualHash64.algorithmRevision, candidates: candidates)
+    }
+
+    /// Persists results the scan just published so the next launch can seed them.
+    private func saveMatches(_ published: [String: [DedupCandidate]]) async {
+        guard let host = matchHost, let analysisStore, !published.isEmpty else { return }
+        let rows = published.compactMap { id, candidates in
+            index.asset(for: id).map { Self.storedMatch(for: $0, candidates: candidates) }
+        }
+        do {
+            try await analysisStore.saveMatches(host: host, rows)
+        } catch {
+            Diagnostics.report(error, context: "photos.savedMatches.save")
+        }
     }
 
     /// The background hash scan, factored out of `reconcileAnalysis` so `applyLibraryChange`
@@ -333,7 +425,7 @@ final class PhotoLibraryStore: NSObject, PHPhotoLibraryChangeObserver {
             @MainActor func flushWarm() async -> Bool {
                 guard !warm.isEmpty else { return true }
                 matches.markChecked(warm.keys)
-                await matches.registerBatch(warm)
+                await saveMatches(await matches.registerBatch(warm))
                 guard generation == token, !Task.isCancelled else { return false }
                 checked.formUnion(warm.keys)
                 warmDone += warm.count
@@ -380,7 +472,7 @@ final class PhotoLibraryStore: NSObject, PHPhotoLibraryChangeObserver {
                     // reads "known: no match" as soon as it publishes, instead of the stale
                     // "not checked" it would show if `checked` only updated afterward.
                     matches.markChecked(pending.keys)
-                    await matches.registerBatch(pending)
+                    await saveMatches(await matches.registerBatch(pending))
                     guard generation == token else { return }
                     checked.formUnion(pending.keys)
                     pending = [:]
@@ -389,7 +481,7 @@ final class PhotoLibraryStore: NSObject, PHPhotoLibraryChangeObserver {
             }
             if !pending.isEmpty {
                 matches.markChecked(pending.keys)
-                await matches.registerBatch(pending)
+                await saveMatches(await matches.registerBatch(pending))
                 guard generation == token else { return }
                 checked.formUnion(pending.keys)
             }
