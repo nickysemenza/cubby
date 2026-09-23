@@ -347,10 +347,6 @@ const INTENTIONAL_RESPELLINGS = {
   "ledgerTransfer::ledgerTransferFiltersSchema::toPartyId":
     "multi-value filter (oneOrMany(ledgerPartyShortcode)) over the generated scalar toPartyId field",
 
-  // --- financialAccount ---
-  "financialAccount::financialAccountFiltersSchema::ledgerPartyId":
-    "multi-value filter (oneOrMany(ledgerPartyShortcode)) over the generated scalar ledgerPartyId field",
-
   // --- planting / gardenEntry: id filters over the generated scalar reference fields ---
   "planting::plantingFiltersSchema::locationId":
     "multi-value filter (oneOrMany(locationShortcode)) over the generated scalar locationId field",
@@ -610,18 +606,6 @@ const INTENTIONAL_RESPELLINGS = {
   "purchase::purchaseUpdateData::imageOrder": HAND_WRITTEN_IMAGE_ID_ARRAY,
   "purchase::purchaseUpdateData::removeImageIds": HAND_WRITTEN_IMAGE_ID_ARRAY,
 
-  // --- vendor account -----------------------------------------------------
-  "vendorAccount::vendorAccountFilters::vendorId":
-    "shortcode-list filter spelled as entityFilterList(vendorShortcode) over the generated scalar vendorId field",
-  "vendorAccount::vendorAccountFilters::ledgerPartyId":
-    "shortcode-list filter spelled as entityFilterList(ledgerPartyShortcode) over the generated scalar ledgerPartyId field",
-  "importRun::importRunFilters::vendorAccountId":
-    "shortcode-list filter spelled as entityFilterList(vendorAccountShortcode) over the generated scalar vendorAccountId field",
-  "importRun::importRunFilters::vendorId":
-    "shortcode-list filter spelled as entityFilterList(vendorShortcode) over the generated scalar vendorId field",
-  "importRun::importRunFilters::ledgerPartyId":
-    "shortcode-list filter spelled as entityFilterList(ledgerPartyShortcode) over the generated scalar ledgerPartyId field",
-
   // --- recipe: recipeTopLevelFields (recipe-shared.ts) is a hand-declared
   // shared map predating the generator, reused across many exports (one
   // root cause); section/usage/instruction sub-rows have their own ids
@@ -745,16 +729,6 @@ const INTENTIONAL_RESPELLINGS = {
     "coincidental key-name collision: the candidate PRODUCT's own id (productShortcode) being matched against the wish item, not the wish item's own id",
   "wish::wishCandidateOut::name":
     "coincidental key-name collision: the candidate PRODUCT's own name, not the wish item's own name",
-
-  // --- device / imageSighting: id-list filters over a single-reference field ---
-  "device::deviceFilters::ledgerPartyId":
-    "the ledgerPartyId filter descriptor is urlOnly (no deriveSchema), so entityFilterList(ledgerPartyShortcode).optional() is hand-added to accept one-or-many ids for URL filter state; the generated read schema for the same-named model field is a single nullable shortcode, a different shape by design",
-  "imageSighting::imageSightingFilters::imageId":
-    "the imageId filter descriptor is urlOnly (no deriveSchema), so entityFilterList(imageShortcode).optional() is hand-added to accept one-or-many ids for URL filter state; the generated create schema for the same-named model field is a single required shortcode, a different shape by design",
-  "imageSighting::imageSightingFilters::ledgerPartyId":
-    "same reason as imageSighting::imageSightingFilters::imageId, for the owner filter",
-  "imageSighting::imageSightingFilters::deviceId":
-    "same reason as imageSighting::imageSightingFilters::imageId, for the reporter filter",
 };
 
 type FieldMap = Record<string, z.ZodType>;
