@@ -38,3 +38,11 @@ requires a physical-edge policy owned by the operation that executes it.
 Repository code remains necessary for locking, atomic replacement, audit
 ordering, specialized workflows, and other invariants that cannot be inferred
 from graph metadata.
+
+## Amendment (ADR 0006)
+
+Entity identity, file attachments, and data exceptions now share generic
+tables (`Entity`, `EntityAttachment`, `DataException`); see ADR 0006. That
+does not change this decision: domain edges stay typed FKs and joins, and the
+physical graph is a read-only projection composed from the edge registry, not
+a stored edge table.

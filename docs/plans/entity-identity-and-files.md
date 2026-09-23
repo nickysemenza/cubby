@@ -1,13 +1,37 @@
 # Durable entity identity and shared file attachments
 
-Status: **approved, decision-ready**. Ships as one PR plus a small follow-up
-drop PR, with a maintenance window during rollout. This revision replaces the
-earlier proposal that also moved every local-entity edge into a physical
-`EntityRelation` table; see [Rejected alternatives](#rejected-alternatives).
+Status: **implemented in PR 1**; the legacy-storage drop (PR 2) remains. The
+decision record is [ADR 0006](../adr/0006-durable-entity-identity-and-attachments.md)
+and the rollout is [the runbook](../runbooks/entity-identity-schema.md). This
+revision replaces the earlier proposal that also moved every local-entity edge
+into a physical `EntityRelation` table; see
+[Rejected alternatives](#rejected-alternatives).
 
 ADR 0001 stays authoritative: physical edges remain typed FKs and join tables,
-and Cubby has no generic edge table. This plan adds ADR 0006 for the `Entity`
-identity spine and `EntityAttachment`, and amends ADR 0001 to point at it.
+and Cubby has no generic edge table.
+
+## Where the implementation differs from this plan
+
+- **Identity writes are database triggers**, not only the
+  `insertWithShortcode` seam: every payload table has insert, soft-delete, and
+  delete triggers that maintain `Entity`, so no write path can bypass it. The
+  payload's own `deletedAt` stays the column its partial indexes use; the
+  trigger mirrors it. No static insert/delete check was needed.
+- **The edge graph is composed at read time** from `ENTITY_EDGES` and
+  `ENTITY_EDGE_OWNERS`, not stored as a database view: same shape, no
+  migration, no drift.
+- **Attachment roles** are the existing read vocabulary (`attachment`,
+  `cover`, `logo`). Deleting a cookbook or vendor now detaches and reaps its
+  cover or logo like any gallery photo.
+- **A deleted code** refuses with its deletion date instead of returning a
+  tombstone body; a merged-away code whose survivor was later deleted refuses
+  the same way.
+- **Orphan-checked kinds** are a list beside the edge source
+  (`ORPHAN_CHECK_KINDS`), not a manifest flag.
+- **Data exceptions** keep the per-entity `exceptions` declaration flag; the
+  hardcoded Product/Purchase enum is derived from it, and Vendor now opts in.
+- **Production data** had one known inconsistency the cutover repairs:
+  early-2026 audit entries that filed Product ids under `inventory`.
 
 ## Outcome
 

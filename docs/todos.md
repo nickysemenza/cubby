@@ -406,17 +406,13 @@ history is the archive. Permanent product constraints live in the
   a CI job that diffs `application-schema.json` against the live schema and
   blocks merge on a missing column.
 
-- **HIGH PRIORITY — Durable Entity identity and shared file attachments.**
-  One PR plus a follow-up drop PR, shipped in a maintenance window: an
-  `Entity` identity row per shortcode entity with permanent merge redirects,
-  one `EntityAttachment` table replacing the eight gallery joins and the
-  cover/logo FKs, a generated read-only `EntityEdge` view with Connections,
-  delete/merge impact, `/graph`, orphan-finder, and MCP reads over it, and
-  real `Entity` FKs for `AuditLog`, `SearchDocument`, `EntityEmbedding`, and
-  a generalized `DataException`. It also absorbs the former merge-redirect, generic
-  data-exception, photo-group proposal FK and dead-photo cleanup, and
-  product-merge match-evidence entries. See [the plan](plans/entity-identity-and-files.md);
-  open the PR without auto-merge and run its runbook first.
+- **Drop the legacy image joins and exception columns (entity identity PR 2).**
+  After production has run a full background and import cycle on `Entity` and
+  `EntityAttachment` with clean integrity detectors, drop the eight
+  `<Entity>Image` joins, `Cookbook.coverImageId`, `Vendor.logoImageId`,
+  `Image.targetType`/`targetId`/`idempotencyKey`, and the Product and Purchase
+  `dataExceptions` columns. See
+  [the runbook](runbooks/entity-identity-schema.md#pr-2-drop-the-legacy-storage).
 
 - **Finish the meal amount migration.** `MealFoodEntry` and
   `MealRecipePortion` still retain legacy `grams` columns and read/input

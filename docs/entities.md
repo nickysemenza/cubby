@@ -646,8 +646,8 @@ to projection SQL itself does not rewrite persisted rows — run the streaming
 `capabilities.dataQuality` on an entity definition
 (`entityDataQualityMetadataSchema` in
 `packages/schemas/src/entity-definitions/definition.ts`) declares
-`checks[{id, facet, kind, weight, label, message}]`, `exceptions` (true only
-where the table carries a `dataExceptions` jsonb column), `related` (other
+`checks[{id, facet, kind, weight, label, message}]`, `exceptions` (true where
+the entity may record `DataException` rows), `related` (other
 scored entities whose gaps roll up into this one), and `listOrder`. `id` must
 be globally unique across every entity's checks — it doubles as the `dataGap`
 filter option value.
@@ -693,9 +693,11 @@ bindings; `list-scaffold.ts` binds the resulting filters and sort for every
 scored entity's list in one place.
 
 Durable "not available" exceptions (`set_data_exception`/
-`clear_data_exception`) remain Product/Purchase-only this pass — only those
-tables carry a `dataExceptions` jsonb column. A generic exception store for
-every scored entity is a tracked follow-up (`docs/todos.md`).
+`clear_data_exception`) live in the `DataException` table, keyed by an
+`Entity(id, kind)` FK, for every entity whose declaration sets `exceptions`.
+Enabling it requires fingerprint inputs for every check and an allowed-reason
+list per check (`EXCEPTION_REASONS` in `repo/data-quality/exceptions.ts`). An
+exception goes with its entity when the entity is removed or merged away.
 
 ## Relations, deletion, and merge
 
@@ -715,13 +717,41 @@ no logical `deletionPolicy` and no inferred database cascade.
 
 Deletion is one command. Soft versus hard deletion is a capability, and the
 result identifies the deleted public references plus a non-null changed-row
-count for every affected-edge disposition. There is no generic delete preview
-or restore.
+count for every affected-edge disposition. There is no restore. Delete and
+merge confirmations show an advisory impact list (`entityGraph.connections`
+with an `operation`): each incoming edge group with its count and declared
+disposition. The mutation re-checks in its own transaction and its structured
+refusal stays authoritative.
 
 Merge is keeper-wins. Declared edges are repointed, only explicitly mergeable
 fields combine, and uniqueness or workflow collisions reject the operation.
-There is no generic merge preview. Entity-specific merge code remains only for
-irreducible transaction and collision rules.
+Entity-specific merge code remains only for irreducible transaction and
+collision rules.
+
+## Identity, attachments, and the physical graph
+
+Every shortcode entity has one durable `Entity` row (ADR 0006): payloads bind
+to it with a composite `(id, shortcode)` FK, and database triggers write it on
+insert and mirror soft and hard deletes. `finalizeMerge` records one-hop,
+path-compressed `mergedIntoId` redirects. A read through a merged-away code
+returns the survivor with `redirectedFrom`, and detail reads list
+`previousShortcodes`; a write through one refuses with the survivor's code, and
+a deleted code refuses with the deletion date. Codes are never reused, even a
+hard-deleted payload's.
+
+Direct files are `EntityAttachment` rows: gallery photos and purchase documents
+(`attachment`), a cookbook `cover`, a vendor `logo`. `imageJoinBindings` and
+`imageCascadeChild` all target that one table; `purpose` is Product-only and
+`documentKind` Purchase-only. Detach soft-deletes, a removed subject's
+attachments are detached and reaped, and an upload's idempotency key belongs to
+the attachment rather than the file.
+
+The physical graph is composed at read time from `ENTITY_EDGES` and
+`ENTITY_EDGE_OWNERS` (`repo/entity-edge-source.ts`): `(edgeKey, sourceKind,
+sourceId, targetKind, targetId)` with both ends live. It backs the Relations
+tab's Connections, the impact preview, the graph explorer's physical edges,
+the Problems orphan finder, and MCP `get_entity_connections`. Writes never go
+through it.
 
 ## Product classification and photos
 
@@ -789,7 +819,11 @@ precedence rule.
    unless you omit it with a reason (`detail.omitRelations`, `inverseOmit`).
 5. Run `pnpm generate`; review generated source like handwritten source.
 6. Declare physical edge semantics and operation-specific lifecycle policies,
-   when the entity participates in deletion or merge.
+   when the entity participates in deletion or merge. A new shortcode table
+   adds `entityIdentityFk(...)` beside its `shortcodeUnique(...)`; the identity
+   triggers follow the roster automatically, and the production cutover for
+   an existing database must backfill `Entity`. A new join or child table that
+   carries an edge column names its owner in `ENTITY_EDGE_OWNERS`.
 7. Run generated action contracts and the affected PostgreSQL contracts, plus
    UI and built-browser checks for changed presentation. Follow the repository
    validation guide for final gates.
