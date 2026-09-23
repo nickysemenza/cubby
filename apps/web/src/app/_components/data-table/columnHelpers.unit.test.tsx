@@ -880,9 +880,9 @@ describe("enum/boolean columns stay in the copy/paste range", () => {
     expect(column.meta?.filterConfig).toBeUndefined();
 
     renderColumn<EnumRow, string | null>(column, { kind: "purchase" });
-    expect(screen.getByText("Purchase").parentElement).toHaveStyle({
-      "--enum-pill-color": "var(--chart-1)",
-    });
+    expect(screen.getByText("Purchase").parentElement).toHaveStyle(
+      "--enum-pill-color: var(--chart-1)",
+    );
   });
 });
 
@@ -906,9 +906,7 @@ describe("boolean tones come from the roster, not the factory", () => {
     renderColumn<ProvisionalRow, string | null>(column, { provisional: true });
     const pill = screen.getByText("Provisional").parentElement;
     expect(pill).toHaveClass("rounded-full");
-    expect(pill).toHaveStyle({
-      "--enum-pill-color": "var(--warning)",
-    });
+    expect(pill).toHaveStyle("--enum-pill-color: var(--warning)");
   });
 });
 

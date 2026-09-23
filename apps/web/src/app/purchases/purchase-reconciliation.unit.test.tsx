@@ -32,9 +32,7 @@ describe("purchase reconciliation statuses", () => {
 
     const label = screen.getByText("Refund-adjusted -$127.10");
     expect(label.parentElement).toHaveClass("inline-flex", "rounded-full");
-    expect(label.parentElement).toHaveStyle({
-      "--enum-pill-color": "var(--slate)",
-    });
+    expect(label.parentElement).toHaveStyle("--enum-pill-color: var(--slate)");
   });
 
   it("reserves the warning tone and Needs review label for unexplained gaps", () => {
@@ -50,9 +48,9 @@ describe("purchase reconciliation statuses", () => {
     );
 
     const label = screen.getByText("Needs review -$127.10");
-    expect(label.parentElement).toHaveStyle({
-      "--enum-pill-color": "var(--warning)",
-    });
+    expect(label.parentElement).toHaveStyle(
+      "--enum-pill-color: var(--warning)",
+    );
   });
 
   it("keeps a matched financial settlement green", () => {
@@ -72,9 +70,9 @@ describe("purchase reconciliation statuses", () => {
     // "Settled", not the raw `match` enum this status used to interpolate.
     const label = screen.getByText("Settled · 2");
     expect(label.parentElement).toHaveClass("rounded-full");
-    expect(label.parentElement).toHaveStyle({
-      "--enum-pill-color": "var(--positive)",
-    });
+    expect(label.parentElement).toHaveStyle(
+      "--enum-pill-color: var(--positive)",
+    );
   });
 
   it("pre-associates a new settlement transaction with its purchase", () => {
