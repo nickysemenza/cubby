@@ -73,7 +73,10 @@ import {
   getLocationPutAwayCandidates,
   type LocationPutAwayCandidate,
 } from "~/server/repo/location";
-import { listProductCategoryTreeOptions } from "~/server/repo/product-category";
+import {
+  listBoundCategoryFeatures,
+  listProductCategoryTreeOptions,
+} from "~/server/repo/product-category";
 import { projectNameOptions } from "~/server/repo/project/lookup";
 import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
 import { vendorOptions } from "~/server/repo/vendor";
@@ -102,6 +105,9 @@ export type RawBasis = Readonly<Record<string, string | null>>;
 export interface EnumSuggestSpec<V extends string> {
   kind: "enum";
   values: readonly V[];
+  /** Narrows `values` for this record; an empty result skips the target
+   * without asking Jev (nothing admissible to suggest). */
+  candidates?(db: Database, raw: RawBasis): Promise<readonly V[]>;
   describe(v: V): string;
   labelOf?(v: V): string;
   rules: string;
@@ -635,6 +641,15 @@ export const FIELD_SUGGEST_REGISTRY = {
   "productCategory.feature": {
     kind: "enum",
     values: productCategoryFeatureValues,
+    // A child already inherits its ancestor's binding, and a nested binding is
+    // a deliberate override, not a guess. Each feature binds one category
+    // (`ProductCategory_feature_live_unique`), so a taken value would only
+    // fail on apply.
+    candidates: async (db, raw) => {
+      if (raw.parentId) return [];
+      const bound = new Set(await listBoundCategoryFeatures(db));
+      return productCategoryFeatureValues.filter((v) => !bound.has(v));
+    },
     describe: (v) => PRODUCT_CATEGORY_FEATURE_DESCRIPTIONS[v],
     rules: PRODUCT_CATEGORY_FEATURE_RULES,
     subject: (basis) => renderSubject("productCategory", basis),
