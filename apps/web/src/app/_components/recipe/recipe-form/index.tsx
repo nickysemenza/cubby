@@ -41,6 +41,7 @@ import {
 } from "../../form-utils";
 import { FormFieldGroup } from "../../forms/form-field-group";
 import { PendingImageUpload } from "../../PendingImageUpload";
+import { parseRichTextSafe } from "../richtext";
 import {
   recipeFormValuesToCreateInput,
   recipeFormValuesToUpdateInput,
@@ -119,17 +120,9 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
   // Uses namesForHighlighting which includes parsed names + matched DB names + aliases
   const richInstructions = useMemo(
     () =>
-      instructionLines.map((line) => {
-        try {
-          return wasm.parse_rich_text(
-            line,
-            ingredientImport.namesForHighlighting,
-          );
-        } catch {
-          // Fallback to plain text if parsing fails
-          return [{ kind: "Text" as const, value: line }];
-        }
-      }),
+      instructionLines.map((line) =>
+        parseRichTextSafe(line, ingredientImport.namesForHighlighting),
+      ),
     [instructionLines, ingredientImport.namesForHighlighting],
   );
 

@@ -32,7 +32,7 @@ import {
   ParsedIngredientTable,
   type ParsedLineRow,
 } from "./parsed-ingredient-table";
-import { formatRichText } from "./richtext";
+import { formatRichText, parseRichTextSafe } from "./richtext";
 import { useIngredientMatches } from "./use-ingredient-matches";
 
 // Unified status shared by both importers. Cookbook never produces
@@ -170,13 +170,9 @@ function RecipeImportCardImpl({
   const richBySection = useMemo(
     () =>
       recipe.sections.map((section) =>
-        section.instructions.map((line) => {
-          try {
-            return formatRichText(wasm.parse_rich_text(line, ingredientNames));
-          } catch {
-            return formatRichText([{ kind: "Text", value: line }]);
-          }
-        }),
+        section.instructions.map((line) =>
+          formatRichText(parseRichTextSafe(line, ingredientNames)),
+        ),
       ),
     [recipe, ingredientNames],
   );
