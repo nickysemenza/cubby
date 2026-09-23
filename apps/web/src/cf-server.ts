@@ -1115,3 +1115,4 @@ export default Sentry.withSentry(
 );
 
 export { DatabaseFreshnessDurableObject } from "./server/database-freshness/durable-object";
+export { AiResponseCacheDurableObject } from "./server/ai/response-cache-durable-object";

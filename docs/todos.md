@@ -583,15 +583,6 @@ history is the archive. Permanent product constraints live in the
   for clients that omit `If-Match`, then implement canonical conditional deletion
   through the adapter and Durable Object. Keep deletion in Cubby until then.
 
-- **Cache unchanged Jev evaluations by effective input.** Add application-level
-  reuse keyed by a canonical hash of model, explicit prompt version,
-  instructions, normalized context actually sent, and ordered choices/candidate
-  context. Cache successful results, including no-suggestion outcomes, and
-  deduplicate concurrent identical requests. Relevant input changes invalidate
-  reuse; unrelated entity edits do not. Define storage, expiry, and refresh
-  behavior before implementation. Preserve the existing Gateway cache; the
-  shared call boundary is `server/ai/jev.ts`.
-
 - **Review suggestions across a full filtered list.** The inline suggestion
   pass checks opened pages only. Design an explicit interactive scan with
   progress and individual acceptance before expanding beyond loaded records.

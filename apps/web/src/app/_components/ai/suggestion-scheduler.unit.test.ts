@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import { createSuggestionScheduler } from "./suggestion-scheduler";
 
 describe("page suggestion scheduler", () => {
-  it("starts 16 rows concurrently, fills released slots, and removes obsolete queued work", async () => {
+  it("starts four rows concurrently, fills released slots, and removes obsolete queued work", async () => {
     const scheduler = createSuggestionScheduler();
     const controllers = Array.from({ length: 65 }, () => new AbortController());
     const releases: Array<() => void> = [];
@@ -18,10 +18,10 @@ describe("page suggestion scheduler", () => {
       }, controller.signal),
     );
     const settled = Promise.allSettled(work);
-    await vi.waitFor(() => expect(started).toHaveLength(16));
+    await vi.waitFor(() => expect(started).toHaveLength(4));
     controllers[40]!.abort();
     releases.shift()!();
-    await vi.waitFor(() => expect(started).toHaveLength(17));
+    await vi.waitFor(() => expect(started).toHaveLength(5));
     expect(started).not.toContain(40);
     while (started.length < 64) {
       releases.splice(0).forEach((release) => release());

@@ -3589,6 +3589,9 @@ export const aiUsage = pgTable(
     estimatedCost: real("estimatedCost"),
     durationMs: integer("durationMs").notNull(),
     cacheStatus: text("cacheStatus").$type<"hit" | "miss" | "none">(),
+    applicationCacheStatus: text("applicationCacheStatus").$type<
+      "hit" | "miss" | "none"
+    >(),
     entityType: text("entityType"),
     entityId: uuid("entityId"),
     createdAt: timestamp("createdAt", { mode: "date" }).notNull().defaultNow(),

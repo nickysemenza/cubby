@@ -34,6 +34,7 @@ export type RecordAiUsageInput = {
   eventId?: string;
   durationMs: number;
   cacheStatus?: "hit" | "miss" | "none" | null;
+  applicationCacheStatus?: "hit" | "miss" | "none" | null;
   entity?: { entityType: string; entityId: string } | null;
 };
 
@@ -67,6 +68,7 @@ export async function recordAiUsage(
       gatewayLogId: input.gatewayLogId ?? null,
       durationMs: input.durationMs,
       cacheStatus: input.cacheStatus ?? null,
+      applicationCacheStatus: input.applicationCacheStatus ?? null,
       entityType: input.entity?.entityType ?? null,
       entityId: input.entity?.entityId ?? null,
       estimatedCost: input.estimatedCost ?? null,

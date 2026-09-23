@@ -96,6 +96,10 @@
       {
         "name": "IMAGE_PROCESSING",
         "class_name": "ImageProcessingDurableObject"
+      },
+      {
+        "name": "AI_RESPONSE_CACHE",
+        "class_name": "AiResponseCacheDurableObject"
       }
     ]
   },
@@ -113,6 +117,10 @@
       "storage": "sqlite"
     },
     "ImageProcessingDurableObject": {
+      "type": "durable-object",
+      "storage": "sqlite"
+    },
+    "AiResponseCacheDurableObject": {
       "type": "durable-object",
       "storage": "sqlite"
     }

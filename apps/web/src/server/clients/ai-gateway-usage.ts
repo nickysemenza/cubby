@@ -14,6 +14,7 @@ export type AiGatewayUsageContext = SupportedAiModelRef & {
   jobKind?: string | null;
   jobId?: string | null;
   cacheStatus?: "hit" | "miss" | "none";
+  applicationCacheStatus?: "hit" | "miss" | "none";
   entity?: { entityType: string; entityId: string } | null;
 };
 
@@ -33,6 +34,7 @@ export function aiGatewayUsageMiddleware(
           inputTokens: usage?.promptTokens ?? null,
           outputTokens: usage?.completionTokens ?? null,
           durationMs: Math.max(0, Math.round(info.duration)),
+          applicationCacheStatus: usageContext.applicationCacheStatus ?? "none",
         });
       },
     },

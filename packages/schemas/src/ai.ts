@@ -277,6 +277,7 @@ const aiUsageGroupFields = {
   jobKind: z.string().nullable(),
   jobId: z.string().nullable(),
   cacheStatus: aiUsageCacheStatus.nullable(),
+  applicationCacheStatus: aiUsageCacheStatus.nullable(),
 };
 
 export const aiUsageEntrySchema = z.object({
@@ -286,7 +287,7 @@ export const aiUsageEntrySchema = z.object({
   outputTokens: z.number().int().nullable(),
   cacheReadTokens: z.number().int().nullable(),
   cacheWriteTokens: z.number().int().nullable(),
-  attempt: z.number().int().positive(),
+  attempt: z.number().int().nonnegative(),
   status: z.enum(["succeeded", "failed"]),
   gatewayLogId: z.string().nullable(),
   estimatedCost: moneyNullable,
@@ -326,6 +327,7 @@ export const aiRunUsageOut = z.object({
       durationMs: true,
       status: true,
       gatewayLogId: true,
+      applicationCacheStatus: true,
       estimatedCost: true,
     }),
   ),

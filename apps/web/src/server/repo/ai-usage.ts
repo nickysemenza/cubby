@@ -27,6 +27,7 @@ export async function listRecentAiUsage(db: Database, limit: number) {
       estimatedCost: aiUsage.estimatedCost,
       durationMs: aiUsage.durationMs,
       cacheStatus: aiUsage.cacheStatus,
+      applicationCacheStatus: aiUsage.applicationCacheStatus,
       entityType: aiUsage.entityType,
       entityId: aiUsage.entityId,
       createdAt: aiUsage.createdAt,
@@ -64,6 +65,7 @@ export async function summarizeAiUsage(db: Database, days: number) {
       jobKind: aiUsage.jobKind,
       jobId: aiUsage.jobId,
       cacheStatus: aiUsage.cacheStatus,
+      applicationCacheStatus: aiUsage.applicationCacheStatus,
       count: sql<number>`count(*)::int`,
       // bigint to avoid int4 overflow on cumulative token/duration sums; the pg
       // driver returns bigint as a string, so these are Number()-coerced below.
@@ -91,6 +93,7 @@ export async function summarizeAiUsage(db: Database, days: number) {
       aiUsage.jobKind,
       aiUsage.jobId,
       aiUsage.cacheStatus,
+      aiUsage.applicationCacheStatus,
     )
     .orderBy(sql`${usageDayGroup} DESC`, aiUsage.feature, aiUsage.model);
 
@@ -190,6 +193,7 @@ export async function listAiUsageForRun(
         attempt: aiUsage.attempt,
         status: aiUsage.status,
         gatewayLogId: aiUsage.gatewayLogId,
+        applicationCacheStatus: aiUsage.applicationCacheStatus,
         durationMs: aiUsage.durationMs,
         estimatedCost: aiUsage.estimatedCost,
       })
