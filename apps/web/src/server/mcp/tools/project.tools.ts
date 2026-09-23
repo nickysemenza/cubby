@@ -7,6 +7,7 @@
  */
 
 import { projectShortcode } from "@cubby/schemas/identifiers";
+import { projectResourceFeatureLabels } from "@cubby/schemas/product-category-fields";
 import {
   actionableTasksOut,
   expenseAnalyticsOut,
@@ -189,8 +190,7 @@ export function registerProjectTools(server: McpServer) {
   // The prose that used to be `attach_project_resources`' /
   registerRouterTool(server, {
     name: "repoint_project_uses",
-    description:
-      "Move a Product's recorded project uses onto another Product, in one transaction. This is the tool for retiring or splitting a Product that delete_entity refuses because it has project-use history: repoint the history onto the component or replacement that should carry it, then delete. Do NOT do this as detach_entity plus attach_entity — a detach whose attach is missed discards the project's tool history with nothing to flag it, which is exactly why this stayed its own tool when those six collapsed into two. Omit projectIds to move every live use. Projects that already record the destination keep their existing row and are reported as alreadyPresent, not as an error. The destination must be a live Product with category tools or software.",
+    description: `Move a Product's recorded project uses onto another Product, in one transaction. This is the tool for retiring or splitting a Product that delete_entity refuses because it has project-use history: repoint the history onto the component or replacement that should carry it, then delete. Do NOT do this as detach_entity plus attach_entity — a detach whose attach is missed discards the project's tool history with nothing to flag it, which is exactly why this stayed its own tool when those six collapsed into two. Omit projectIds to move every live use. Projects that already record the destination keep their existing row and are reported as alreadyPresent, not as an error. The destination must be a live Product in a category that allows project resources (${projectResourceFeatureLabels}).`,
     inputSchema: repointProjectUsesInput,
     outputSchema: repointProjectUsesOut,
     annotations: WRITE_CLOSED,

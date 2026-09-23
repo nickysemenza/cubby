@@ -166,6 +166,17 @@ history is the archive. Permanent product constraints live in the
 
 ## Ready projects
 
+- **Backfill image descriptions as a paced, visible sweep.** Product
+  classification evidence is built from `image-description` analyses, but
+  automatic scheduling is off (image-processing settings `enabled: false`) and
+  `schedule_image_processing` queues one image at a time, so nearly every
+  product photo is undescribed and category suggestions see only text. Add a
+  "describe every undescribed image" command that enqueues `describe_image`
+  jobs in pages on the existing `ImageProcessingJob` queue, with a cap, the
+  existing pause, and a coverage readout (described / eligible). Decide whether
+  to turn automatic scheduling on for new uploads. Measured cost is about
+  $1.10 per 1,000 images at ~7 s each, so parallelism sets wall time.
+
 - **Batch the image-sighting backfill.** `LibraryMetadataSync` writes one
   `resources.imageSighting.create` per sighting at four concurrent requests, and
   the generated routes expose only create/get/list/update/delete for the entity,
@@ -494,6 +505,27 @@ history is the archive. Permanent product constraints live in the
 ---
 
 ## Requires thought or evidence
+
+- **Bulk product re-categorization sweep.** Re-running the `product.categoryId`
+  suggestion over the catalog has no run record, progress, pause, or review
+  surface; past sweeps were ad-hoc agent batches. Build a sweep that records
+  each product's suggestion (target, branch-rolled confidence, runner-up), applies only
+  high-confidence changes, and queues the rest for review. Decide where the
+  run lives: an `ImportRun` purpose, the activity `runProjection`, or a
+  shared sweep primitive also used by the image-description backfill. Run it
+  after that backfill, since the basis is mostly text until then. Measured:
+  about $0.10 per 1,000 Jev calls at a 2.3k-token roster; bursts near
+  600/min see ~6% throttling, so pace at a few hundred per minute. The
+  response cache keys on the taxonomy revision, so any category edit
+  invalidates a completed sweep.
+
+- **Image embeddings stopped being written.** On 2026-09-23 only 20 of about
+  6,300 live Images had an `EntityEmbedding` row, and none was newer than
+  2026-09-21, while every other embeddable kind was fully covered. The loader
+  exists (`getImageEmbeddingTexts` in `repo/entity-embedding-refresh.ts`), so
+  find out whether image refreshes are never enqueued, filtered out before
+  embedding, or were simply never backfilled, then backfill and add a guard
+  (a detector threshold or a test) that catches a kind going silent.
 
 - **Measure the delegate-less routing change.** Around 2026-10-06, re-measure
   30 days of Claude session transcripts against the baseline in

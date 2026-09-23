@@ -11,11 +11,12 @@ export const entityAttachmentRead = imageOut.extend({
   position: z.number().int().nonnegative(),
 });
 export type EntityAttachmentRead = z.infer<typeof entityAttachmentRead>;
+export const entityAttachmentList = z.array(entityAttachmentRead);
 
 const listMediaFields = z.object({ displayImages: displayImagesField });
 const detailMediaFields = z.object({
   displayImages: displayImagesField,
-  attachments: z.array(entityAttachmentRead),
+  attachments: entityAttachmentList,
   /** The code a read asked for when it was a merged-away code (ADR 0006). */
   redirectedFrom: z.string().nullable(),
   /** Codes of entities merged into this one; each still redirects here. */

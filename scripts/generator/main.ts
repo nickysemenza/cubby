@@ -52,11 +52,14 @@ const main = async () => {
 
   const problems: string[] = [];
   const written: EntityArtifacts[] = [];
+  const changed: string[] = [];
   const settle = async (artifacts: readonly EntityArtifacts[]) => {
     if (check) {
       problems.push(...(await checkArtifacts(ROOT, artifacts)));
     } else {
-      await writeArtifacts(ROOT, await sealArtifacts(ROOT, artifacts));
+      changed.push(
+        ...(await writeArtifacts(ROOT, await sealArtifacts(ROOT, artifacts))),
+      );
     }
     written.push(...artifacts);
   };
@@ -110,6 +113,12 @@ const main = async () => {
         : `Generated artifacts left files nothing generates; delete them:\n${problems.join("\n")}`,
     );
   }
+  if (!check)
+    console.log(
+      changed.length === 0
+        ? "Generated artifacts are unchanged."
+        : `Generated ${changed.length} changed artifacts:\n${changed.map((path) => `- ${path}`).join("\n")}`,
+    );
 };
 
 void main().catch((error) => {

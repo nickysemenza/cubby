@@ -99,7 +99,7 @@ Standing decisions that keep scope honest. A backlog item that contradicts one o
 
 **Wishlist**
 - A simple wanted-items list (name, notes, optional price, acquired toggle) for tracking things not yet owned, independent of inventory or projects
-- Optional candidate Tool products per wish, each with its own cover image and price; the list shows a merged cover thumbnail and a sortable price range, and expands a wish into its candidates' own rows
+- Optional candidate products per wish, each with its own cover image and price; the list shows a merged cover thumbnail and a sortable price range, and expands a wish into its candidates' own rows
 
 **Analytics**
 - Donut, treemap, sunburst, and network visualizations across products, inventory, and ingredients

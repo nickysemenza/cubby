@@ -52,6 +52,27 @@ struct PhotoImportFlowTests {
         #expect(manifest.selectedIDs == [second.id])
     }
 
+    @Test func finishingAssignmentsKeepsFocusButClearsAssignmentScope() throws {
+        let first = try selection(filename: "first.jpg")
+        let second = try selection(filename: "second.jpg")
+        let manifest = makeManifest(items: [first, second])
+        manifest.selectedIDs = [first.id, second.id]
+        let option = try #require(manifest.destinationOptions.first)
+
+        manifest.moveSelected(
+            to: option,
+            row: EntityRow(
+                id: "PRD-2345", title: "Example", subtitle: nil, imageURL: nil,
+                raw: ["id": "PRD-2345", "name": "Example"]))
+
+        #expect(manifest.focusedItemID == first.id)
+        #expect(manifest.selectedIDs.isEmpty)
+        #expect(manifest.reviewSelectionStatus == "All 2 photos ready to add")
+        manifest.toggle(second.id)
+        #expect(manifest.focusedItemID == second.id)
+        #expect(manifest.reviewSelectionStatus == "Assigning 1 of 2 photos")
+    }
+
     /// A1 regression: `scopedCaptureDate` (and therefore every editor/stage prefill) falls back to
     /// the whole batch when the selection is empty, exactly like `scopedHeroItems` — the original
     /// bug read `selectedItems.compactMap(\.capturedAt).min()` directly with no such fallback, so

@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { z } from "zod";
 
 /**
@@ -484,6 +485,81 @@ export function nameJsonValues(components: Components): Components {
       renames.has(name) ? freeForm : mapSchemas(schema, visit),
     ]),
   );
+}
+
+/** Give Zod's anonymous shared definitions names independent of emission order. */
+export function nameStructuralComponents(components: Components): Components {
+  const fingerprints = new Map<string, string>();
+  const active = new Set<string>();
+  const bodies = new Map<string, string>();
+  const fingerprint = (name: string): string => {
+    const cached = fingerprints.get(name);
+    if (cached !== undefined) return cached;
+    const schema = components[name];
+    if (schema === undefined)
+      throw new Error(`Missing OpenAPI component ${name}`);
+    if (active.has(name))
+      throw new Error(
+        `Anonymous OpenAPI component cycle at ${name}; name this schema explicitly`,
+      );
+    active.add(name);
+    const normalized = mapSchemas(schema, (node) => {
+      const {
+        description: _description,
+        $id: _id,
+        $schema: _schema,
+        ...body
+      } = node;
+      const referenced = componentName(body.$ref);
+      if (referenced !== undefined && isPositional(referenced))
+        body.$ref = `${COMPONENT_PREFIX}${fingerprint(referenced)}`;
+      return body;
+    });
+    active.delete(name);
+    const body = JSON.stringify(stable(z.json().parse(normalized)));
+    const prefix = name.startsWith("input_") ? "InputShared" : "OutputShared";
+    const renamed = `${prefix}${createHash("sha256").update(body).digest("hex").slice(0, 16).toUpperCase()}`;
+    const collision = bodies.get(renamed);
+    if (collision !== undefined && collision !== body)
+      throw new Error(
+        `OpenAPI structural component hash collision at ${renamed}`,
+      );
+    bodies.set(renamed, body);
+    fingerprints.set(name, renamed);
+    return renamed;
+  };
+  for (const name of Object.keys(components))
+    if (isPositional(name)) fingerprint(name);
+  const rewrite = (schema: JsonSchema) =>
+    mapSchemas(schema, (node) => {
+      const referenced = componentName(node.$ref);
+      const renamed =
+        referenced === undefined ? undefined : fingerprints.get(referenced);
+      return renamed === undefined
+        ? node
+        : { ...node, $ref: `${COMPONENT_PREFIX}${renamed}` };
+    });
+  const result = new Map<string, JsonSchema>();
+  const owners = new Map<string, boolean>();
+  for (const [name, schema] of Object.entries(components)) {
+    const renamed = fingerprints.get(name) ?? name;
+    const anonymous = fingerprints.has(name);
+    const rewritten = rewrite(schema);
+    const existing = result.get(renamed);
+    if (existing !== undefined) {
+      if (
+        !anonymous ||
+        !owners.get(renamed) ||
+        JSON.stringify(stable(z.json().parse(existing))) !==
+          JSON.stringify(stable(z.json().parse(rewritten)))
+      )
+        throw new Error(`OpenAPI component name collision at ${renamed}`);
+      continue;
+    }
+    result.set(renamed, rewritten);
+    owners.set(renamed, anonymous);
+  }
+  return Object.fromEntries(result);
 }
 
 /**

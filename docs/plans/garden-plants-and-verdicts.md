@@ -1,6 +1,7 @@
 # Garden plants, verdicts and outcomes
 
-Status: **implemented, production rollout pending** (§7). Design agreed
+Status: **shipped**; the §7 rollout, including the contract drops, is
+complete in production. Design agreed
 2026-09-21 after a gap analysis of the garden model against a full season
 plan that lived outside Cubby; refined 2026-09-22. ADR 0004 records the grain
 decision; this plan carries the model, static data, tools, migration and

@@ -11,10 +11,10 @@ import { pascal } from "./schema-names.ts";
 
 /**
  * Component names swift-openapi-generator would have rendered anyway but
- * that name nothing a person should write: the positional `input_schemaNN` /
- * `output_schemaNN` shared definitions.
+ * that name nothing a person should write: anonymous shared definitions.
  */
-const POSITIONAL_COMPONENT = /^(?:input|output)_/u;
+const ANONYMOUS_COMPONENT =
+  /^(?:(?:input|output)_|(?:Input|Output)Shared[0-9A-F]{16}$)/u;
 
 /**
  * Entity aliases that would shadow a Swift or SwiftUI type at every use site
@@ -146,7 +146,7 @@ export const renderApiTypes = (
   const aliased = [...reachable]
     .filter(
       (name) =>
-        !POSITIONAL_COMPONENT.test(name) && /^[A-Z][A-Za-z0-9]*$/u.test(name),
+        !ANONYMOUS_COMPONENT.test(name) && /^[A-Z][A-Za-z0-9]*$/u.test(name),
     )
     .sort((a, b) => a.localeCompare(b));
   const identifiable = aliased.filter((name) =>
@@ -214,8 +214,8 @@ export const renderApiTypes = (
     source:
       `${generatedHeader}// swift-format-ignore-file\n` +
       "// Every named component the filtered CubbyAPI client carries, aliased so hand-written\n" +
-      "// Swift names generated types without spelling `Components.Schemas`. Positional\n" +
-      "// `InputSchemaNN`/`OutputSchemaNN` components are never aliased. Entity aliases follow the\n" +
+      "// Swift names generated types without spelling `Components.Schemas`. Anonymous\n" +
+      "// `InputShared…`/`OutputShared…` components are never aliased. Entity aliases follow the\n" +
       "// entity key; `Task` and `Image` would shadow Swift/SwiftUI types, so those take a `Record` suffix.\n\n" +
       "import CubbyAPI\n\n" +
       "// MARK: - Entities\n\n" +

@@ -17,6 +17,9 @@ contracts and [the backlog](../../docs/todos.md) for deeper inventory and web pa
    types through the aliases `pnpm generate` writes to `CubbyKit/Generated/APITypes.swift`, with
    the branded codes and `PlainDate` supplied by the tiny `CubbyAPISupport` target.
    `generate-openapi.sh --check` fails when the committed client is stale.
+   On macOS, `pnpm generate:api` runs the web generator and this Swift generator
+   in order; unchanged generated files are left untouched. Anonymous shared
+   components use structural names, so inserting another schema does not renumber them.
 3. `xcodegen generate --spec apps/apple/project.yml` — produces `Cubby.xcodeproj` (gitignored).
 4. Optional: `brew install getsentry/tools/sentry-cli` and put an org auth token in
    `~/.sentryclirc`. Only the `Upload dSYMs to Sentry` archive phase needs it (project

@@ -24,6 +24,10 @@ import {
   hasFoodIndicators,
   type MergeProductsInput,
 } from "@cubby/schemas/product";
+import {
+  isProjectResourceFeature,
+  projectResourceFeatureLabels,
+} from "@cubby/schemas/product-category-fields";
 import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import { sumBy, uniq } from "es-toolkit";
 
@@ -1114,7 +1118,6 @@ async function buildProductMergePlan(
 type ProductMergeCategoryAdmission = {
   categoryId: ProductMergeRow["categoryId"];
   feature: Awaited<ReturnType<typeof getCategoryFeature>>;
-  hasWishCandidates: boolean;
   hasProjectUses: boolean;
   keeperIsGardenSource: boolean;
 };
@@ -1152,7 +1155,6 @@ const admitMergedProductCategory = async (
   return {
     categoryId,
     feature,
-    hasWishCandidates: plan.wishes.rows.length > 0,
     hasProjectUses: plan.projectUses.rows.length > 0,
     keeperIsGardenSource: keeperGardenSource !== undefined,
   };
@@ -1204,20 +1206,13 @@ const validateProductMergePlan = async (
     );
   }
   const admission = await admitMergedProductCategory(tx, plan);
-  if (admission.hasWishCandidates && admission.feature !== "tools") {
-    throw createAppError(
-      "PRODUCT_HAS_WISH_CANDIDATES",
-      "Remove this Product from the Wishlist before changing it out of the Tools category.",
-    );
-  }
   if (
     admission.hasProjectUses &&
-    admission.feature !== "tools" &&
-    admission.feature !== "software"
+    !isProjectResourceFeature(admission.feature)
   ) {
     throw createAppError(
       "PRODUCT_CATEGORY_INELIGIBLE",
-      "A Product used as a project resource must remain Tools or Software.",
+      `A Product used as a project resource must be in a category that allows project resources (${projectResourceFeatureLabels}).`,
     );
   }
   if (admission.keeperIsGardenSource && admission.feature === "food") {
@@ -1947,32 +1942,16 @@ export const previewMergeProducts = async (
     }),
     impact({
       disposition: {
-        code: "block-wishlist-category-ineligible",
-        effect: "block",
-        description:
-          "Wishlist candidacies can only point at Tools products. The merged survivor would no longer be eligible.",
-      },
-      edgeKey: "WishCandidate.productId",
-      label: "wishlist candidacies that require Tools",
-      byTargetId:
-        categoryAdmission.hasWishCandidates &&
-        categoryAdmission.feature !== "tools"
-          ? byProduct(plan.wishes.rows)
-          : {},
-    }),
-    impact({
-      disposition: {
         code: "block-project-resource-category-ineligible",
         effect: "block",
         description:
-          "Project resource usage requires Tools or Software. The merged survivor would no longer be eligible.",
+          "Project resource usage requires a category that allows project resources (Tools, Tool accessories, Software). The merged survivor would no longer be eligible.",
       },
       edgeKey: "ProjectToolUsage.productId",
-      label: "project uses that require Tools or Software",
+      label: "project uses that require an eligible category",
       byTargetId:
         categoryAdmission.hasProjectUses &&
-        categoryAdmission.feature !== "tools" &&
-        categoryAdmission.feature !== "software"
+        !isProjectResourceFeature(categoryAdmission.feature)
           ? byProduct(plan.projectUses.rows)
           : {},
     }),

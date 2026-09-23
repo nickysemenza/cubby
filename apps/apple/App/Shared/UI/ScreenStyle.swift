@@ -128,7 +128,7 @@ private struct KeyboardDismissBar: ViewModifier {
 
 /// Presentation role is a property of a task, independent of how its fields are laid out.
 enum NativeSheetPurpose {
-    case adjustment, picker, editor, photo, preview
+    case adjustment, picker, editor, photo, photoReview, preview
 }
 
 extension View {
@@ -158,6 +158,13 @@ private struct NativeSheetPresentation: ViewModifier {
             case .picker, .editor:
                 content.presentationSizing(.form)
                     .frame(minWidth: 360, idealWidth: 560, minHeight: 360, idealHeight: 620)
+            case .photoReview:
+                content.presentationSizing(.page)
+                    .frame(
+                        minWidth: 480, idealWidth: photoReviewSheetSize.width,
+                        minHeight: 420, idealHeight: photoReviewSheetSize.height
+                    )
+                    .task { windowSize = NSApp.keyWindow?.frame.size ?? windowSize }
             case .photo, .preview:
                 content.presentationSizing(.page)
                     .frame(
@@ -178,13 +185,19 @@ private struct NativeSheetPresentation: ViewModifier {
                     .onChange(of: textSize) { if textSize.isAccessibilitySize { detent = .large } }
             case .picker, .editor:
                 content.presentationSizing(.form).presentationDetents([.large])
-            case .photo, .preview:
+            case .photo, .photoReview, .preview:
                 content.presentationSizing(.page).presentationDetents([.large])
             }
         #endif
     }
 
     #if os(macOS)
+        private var photoReviewSheetSize: CGSize {
+            CGSize(
+                width: max(480, min(windowSize.width * 0.8, 1050)),
+                height: max(420, min(windowSize.height * 0.7, 680)))
+        }
+
         /// ~85% of the window, capped so it never dwarfs a large display and floored so it never
         /// shrinks to uselessness on a small one.
         private var photoSheetSize: CGSize {

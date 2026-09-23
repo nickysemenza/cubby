@@ -3,6 +3,11 @@ import type { ActorContext } from "@cubby/schemas/context";
 import type { ImpactItem } from "@cubby/schemas/entity-integrity";
 import type { ProductId, ProjectId } from "@cubby/schemas/identifiers";
 import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
+import {
+  isProjectResourceFeature,
+  projectResourceFeatureLabels,
+  projectResourceFeatures,
+} from "@cubby/schemas/product-category-fields";
 import type {
   ProductProjectUsesOut,
   ProjectResourceOut,
@@ -63,7 +68,10 @@ import {
 import { foldAssociation } from "~/server/repo/merge";
 import { getProductCoverImageUrlsByProductIds } from "~/server/repo/product";
 import { getCategoryFeature } from "~/server/repo/product-category";
-import { categoryFeatureSql } from "~/server/repo/product-category-sql";
+import {
+  categoryFeatureInSql,
+  categoryFeatureSql,
+} from "~/server/repo/product-category-sql";
 import { loadProductOwnershipTimelines } from "~/server/repo/product/ownership";
 import type { EntityRelationMutationAdapter } from "~/server/repo/relation-mutation-adapter";
 import {
@@ -97,12 +105,30 @@ const effectiveExpenseTrade = effectiveExpenseTradeSql();
 const effectiveTaskProject = effectiveTaskProjectSql();
 const effectiveTaskTrade = effectiveTaskTradeSql();
 
+/** Project-resource features that land in the `'tools'` bucket — everything
+ * eligible except `software`, which is its own bucket. A `tool-accessories`
+ * product (e.g. a jig or guide) is a tool for bucket purposes. */
+const TOOL_BUCKET_FEATURES = projectResourceFeatures.filter(
+  (feature) => feature !== "software",
+);
+
 const reusableCategorySql = () =>
   sql<ReusableResourceCategory | null>`CASE
-    WHEN ${categoryFeatureSql(sql`${product.categoryId}`, "tools")} THEN 'tools'
+    WHEN ${categoryFeatureInSql(sql`${product.categoryId}`, TOOL_BUCKET_FEATURES)} THEN 'tools'
     WHEN ${categoryFeatureSql(sql`${product.categoryId}`, "software")} THEN 'software'
     ELSE NULL
   END`;
+
+/** Same bucket mapping as `reusableCategorySql`, for a feature already resolved
+ * in TypeScript (e.g. via `getCategoryFeature`). */
+const reusableBucketFor = (
+  feature: Awaited<ReturnType<typeof getCategoryFeature>>,
+): ReusableResourceCategory | null =>
+  feature === "software"
+    ? "software"
+    : feature !== null && TOOL_BUCKET_FEATURES.includes(feature)
+      ? "tools"
+      : null;
 
 export type ResourceMetrics = {
   projectUseCount: number;
@@ -409,9 +435,9 @@ export async function listProjectResources(
     .where(
       and(
         eq(projectToolUsage.projectId, projectId),
-        or(
-          categoryFeatureSql(sql`${product.categoryId}`, "tools"),
-          categoryFeatureSql(sql`${product.categoryId}`, "software"),
+        categoryFeatureInSql(
+          sql`${product.categoryId}`,
+          projectResourceFeatures,
         ),
         notDeleted(projectToolUsage),
       ),
@@ -717,13 +743,12 @@ function assertResourcesAttachable(
       ids: pre.ineligible,
       codeById: pre.codeById,
       message: (codes) =>
-        `A project resource must have category tools or software. Wrong category: ${codes}. Change the product's category, or attach a different Product — these exist and are live.`,
+        `A project resource must be in a category that allows project resources (${projectResourceFeatureLabels}). Wrong category: ${codes}. Change the product's category, or attach a different Product — these exist and are live.`,
       items: [
         relationImpact({
           code: "block-product-category-ineligible",
           label: "products of the wrong category",
-          description:
-            "The Product is live, but only category tools or software may be recorded as a project resource.",
+          description: `The Product is live, but only a category that allows project resources (${projectResourceFeatureLabels}) may be recorded as a project resource.`,
           ids: pre.ineligible,
         }),
       ],
@@ -1044,19 +1069,18 @@ async function assertReusableCategory(
   },
 ): Promise<void> {
   const category = await getCategoryFeature(db, row.categoryId);
-  if (category === "tools" || category === "software") return;
+  if (isProjectResourceFeature(category)) return;
   throwRelationRefusal({
     reason: "PRODUCT_CATEGORY_INELIGIBLE",
     ids: [productId],
     codeById: new Map([[productId, row.shortcode]]),
     message: (codes) =>
-      `A project resource must have category tools or software. ${codes} is ineligible — change the product's category, or use a different Product.`,
+      `A project resource must be in a category that allows project resources (${projectResourceFeatureLabels}). ${codes} is ineligible — change the product's category, or use a different Product.`,
     items: [
       relationImpact({
         code: "block-product-category-ineligible",
         label: "products of the wrong category",
-        description:
-          "The Product is live, but only category tools or software may be recorded as a project resource.",
+        description: `The Product is live, but only a category that allows project resources (${projectResourceFeatureLabels}) may be recorded as a project resource.`,
         ids: [productId],
       }),
     ],
@@ -1711,10 +1735,9 @@ export async function listProductProjectUses(
   // ProjectToolUsage is durable history. It may predate a legitimate category
   // correction, so reads must never reinterpret a live edge as nonexistent.
   // Writes continue through assertReusableResource/assertUsagePair, which keep
-  // the tools/software admission policy intact.
+  // the project-resource admission policy intact.
   const category = await getCategoryFeature(db, productRow.categoryId);
-  const reusableCategory =
-    category === "tools" || category === "software" ? category : null;
+  const reusableCategory = reusableBucketFor(category);
 
   const rows = await dbc
     .select({
@@ -1742,10 +1765,10 @@ export async function listProductProjectUses(
   const [metricsByProduct, purchaseCostByProject, loadedWindows] =
     await Promise.all([
       loadResourceMetrics(dbc, [productId]),
-      category === "tools"
+      reusableCategory === "tools"
         ? loadProductPurchaseCostsByProject(dbc, productId, projectIds)
         : new Map<ProjectId, number>(),
-      category === "software" ? loadProjectDateWindows(db) : null,
+      reusableCategory === "software" ? loadProjectDateWindows(db) : null,
     ]);
   const metrics = metricsByProduct.get(productId) ?? EMPTY_METRICS;
   const windowContexts = loadedWindows
@@ -1756,7 +1779,7 @@ export async function listProductProjectUses(
       )
     : new Map<ProjectId, ResourceWindowContext | null>();
   const softwareExpenses =
-    category === "software"
+    reusableCategory === "software"
       ? await loadSoftwareExpenseRows(dbc, productId, windowContexts)
       : [];
 
@@ -1773,11 +1796,11 @@ export async function listProductProjectUses(
       status: row.status,
       kind: row.kind,
       projectPurchaseCost:
-        category === "tools"
+        reusableCategory === "tools"
           ? (purchaseCostByProject.get(row.projectId) ?? 0)
           : null,
       sharedWindow:
-        category === "software"
+        reusableCategory === "software"
           ? softwareSharedWindow(
               windowContexts.get(row.projectId),
               softwareExpenses,

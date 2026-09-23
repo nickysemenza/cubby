@@ -405,7 +405,6 @@ function WishFields({ form, record }: EntityEditorFieldsProps) {
     entityListFor("product").queryOptions({
       filters: {
         nameFilter: debouncedProductSearch.trim() || undefined,
-        categoryFeatureFilter: ["tools"],
       },
       sort: [{ orderBy: "name", direction: "asc" }],
       pagination: { pageIndex: 0, pageSize: 50 },
@@ -452,12 +451,14 @@ function WishFields({ form, record }: EntityEditorFieldsProps) {
         }}
       />
       <div className="grid gap-2">
-        <Label htmlFor={`${idPrefix}-product-search`}>Tool alternatives</Label>
+        <Label htmlFor={`${idPrefix}-product-search`}>
+          Candidate alternatives
+        </Label>
         <Input
           id={`${idPrefix}-product-search`}
           value={productSearch}
           onChange={(event) => setProductSearch(event.target.value)}
-          placeholder="Filter your Tool products…"
+          placeholder="Filter your products…"
         />
         <div className="grid max-h-48 gap-1 overflow-y-auto border p-2">
           {productOptions.map((product) => {
@@ -493,7 +494,7 @@ function WishFields({ form, record }: EntityEditorFieldsProps) {
           })}
           {!productsQuery.isLoading && productOptions.length === 0 ? (
             <p className="p-1 text-muted-foreground">
-              No matching Tool products yet.
+              No matching products yet.
             </p>
           ) : null}
         </div>
@@ -665,7 +666,7 @@ const presentations = {
   "wish:create:full": {
     title: () => "New wishlist item",
     description: () =>
-      "Add one desired outcome, then optionally list the Tool products you would consider.",
+      "Add one desired outcome, then optionally list the products you would consider.",
     size: "lg",
     Fields: WishFields,
     successMessage: (result) => `Created “${resultName(result, "wish")}”`,
@@ -673,7 +674,7 @@ const presentations = {
   "wish:update:full": {
     title: () => "Edit wishlist item",
     description: () =>
-      "Add one desired outcome, then optionally list the Tool products you would consider.",
+      "Add one desired outcome, then optionally list the products you would consider.",
     submitLabel: "Save changes",
     size: "lg",
     Fields: WishFields,

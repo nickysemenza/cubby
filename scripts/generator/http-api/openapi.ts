@@ -29,6 +29,7 @@ import {
   inlinePrimitiveComponents,
   mapSchemas,
   nameJsonValues,
+  nameStructuralComponents,
   openTupleItems,
   optionalNullableProperties,
   residualNullPointers,
@@ -369,6 +370,7 @@ const buildOpenApiDocument = async (): Promise<{
     fillDiscriminatorMappings,
     integerLiterals,
     openTupleItems,
+    nameStructuralComponents,
   ];
   const components = pruneUnreachableComponents(
     document,
@@ -398,8 +400,7 @@ const buildOpenApiDocument = async (): Promise<{
    * this an operation inserted mid-contract moved every later path and
    * component, and swift-openapi-generator — which renders in document order —
    * rewrote thousands of unrelated lines per addition. Sorting happens AFTER
-   * the passes: `foldPositionalDuplicates` picks survivors and `nameJsonValues`
-   * numbers by emission order, and those choices must not depend on the sort.
+   * the passes: anonymous names are normalized before sorting the document.
    */
   const sortedKeys = <T extends object>(record: T): T =>
     // SAFETY: same own enumerable entries, reordered; JSON key order carries no

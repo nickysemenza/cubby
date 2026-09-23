@@ -89,6 +89,7 @@ final class PhotoImportManifest {
     /// covers the common one-record-per-photo case, this covers a same-day batch someone
     /// deliberately selects.
     func toggleSelectAll() {
+        guard !isCommitting else { return }
         selectedIDs = selectedIDs.count == items.count ? [] : Set(items.map(\.id))
     }
 
@@ -660,7 +661,17 @@ final class PhotoImportManifest {
     }
 
     func toggle(_ id: String) {
+        guard !isCommitting else { return }
+        focusedItemID = id
         if selectedIDs.contains(id) { selectedIDs.remove(id) } else { selectedIDs.insert(id) }
+    }
+
+    var reviewSelectionStatus: String {
+        if selectedIDs.isEmpty, needsDestination.isEmpty {
+            return "All \(items.count) photo\(items.count == 1 ? "" : "s") ready to add"
+        }
+        if selectedIDs.isEmpty { return "Choose photos to assign" }
+        return "Assigning \(selectedIDs.count) of \(items.count) photo\(items.count == 1 ? "" : "s")"
     }
 
     func chooseExisting(_ imageID: ImageCode, for itemID: String) {
@@ -806,7 +817,7 @@ final class PhotoImportManifest {
             return
         }
         let next = needsDestination.first
-        focusedItemID = next
+        if let next { focusedItemID = next }
         selectedIDs = next.map { Set([$0]) } ?? []
     }
 

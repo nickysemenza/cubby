@@ -129,7 +129,6 @@ import { listScaffold } from "~/server/repo/list-scaffold";
 import { loadLocationAncestorsWithIds } from "~/server/repo/location/tree";
 import {
   resolveProductCategory,
-  getCategoryFeature,
   loadCategorySummaries,
 } from "~/server/repo/product-category";
 import {
@@ -1864,28 +1863,6 @@ export const updateProduct = async (
     return { desiredExternalIds, incomingGtin, updateData };
   };
 
-  const assertWishlistCategory = async (
-    tx: DrizzleTransaction,
-    updateData: Partial<typeof product.$inferInsert>,
-  ) => {
-    if (
-      updateData.categoryId === undefined ||
-      (await getCategoryFeature(tx, updateData.categoryId)) === "tools"
-    ) {
-      return;
-    }
-    const candidate = await tx.query.wishCandidate.findFirst({
-      where: and(eq(wishCandidate.productId, id), notDeleted(wishCandidate)),
-      columns: { id: true },
-    });
-    if (candidate) {
-      throw createAppError(
-        "PRODUCT_HAS_WISH_CANDIDATES",
-        "Remove this Product from the Wishlist before changing it out of the Tools category.",
-      );
-    }
-  };
-
   const syncProductUpdateDependents = async (
     tx: DrizzleTransaction,
     incomingGtin: string | null | undefined,
@@ -1937,11 +1914,6 @@ export const updateProduct = async (
 
       const { desiredExternalIds, incomingGtin, updateData } =
         await prepareUpdate(tx, beforeProduct, beforeExternalIds);
-
-      // Wishlist candidates are tools by domain definition. Check the final
-      // category after the food-indicator correction too, so a linked ingredient
-      // cannot silently reclassify a live candidate out of Tools.
-      await assertWishlistCategory(tx, updateData);
 
       // A caller that only touches a child table — unitMappings, externalIds,
       // pendingImageIds/removeImageIds/imageOrder — leaves no `product` column
