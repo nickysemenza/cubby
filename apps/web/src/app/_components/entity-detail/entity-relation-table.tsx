@@ -1,3 +1,4 @@
+import type { ConnectedRecordsOutput } from "@cubby/schemas/connected-records";
 import type { CompiledEntityPresentation } from "@cubby/schemas/entity-definitions/definition";
 import { generatedEntityEditIntents } from "@cubby/schemas/entity-edit-intents";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
@@ -7,10 +8,17 @@ import {
   type BrowserRoutedEntity,
 } from "@cubby/schemas/entity-manifest";
 import { entitySummary } from "@cubby/schemas/entity-summary";
+import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { flexRender, type RowData } from "@tanstack/react-table";
 import { ArrowUpRight, Plus } from "lucide-react";
-import { useCallback, useMemo, useState } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useMemo,
+  useState,
+} from "react";
 
 import { ErrorDisplay } from "~/components/feedback/error-display";
 import { Button } from "~/components/ui/button";
@@ -25,6 +33,7 @@ import {
   entities,
 } from "~/entities/entities";
 import { createEntityDisplayColumns } from "~/entities/entity-display";
+import { entityGraph } from "~/entities/entity-graph.functions";
 import { entityList, entityListFor } from "~/entities/entity-list.functions";
 import {
   listEntities,
@@ -39,11 +48,13 @@ import {
 import { ListWorkbench } from "../data-table/ListWorkbench";
 import {
   createCubbyColumnHelper,
+  createCubbyColumnCollection,
   type CubbyTable,
 } from "../data-table/table-features";
 import { type BaseListRow, useEntityList } from "../hooks/useEntityList";
 import type { ListQueryOptionsFn } from "../hooks/usePaginatedTableCore";
 import { useEntityFieldSave } from "../hooks/useUpdateMutation";
+import { HopRange, RecordPaths } from "./connected-records-table";
 
 type RelationSection = Extract<
   CompiledEntityPresentation["detail"]["sections"][number],
@@ -52,6 +63,8 @@ type RelationSection = Extract<
 
 /** What a relation section resolves to once the manifest is consulted. */
 export interface RelationSectionPlan {
+  source: BrowserRoutedEntity;
+  relation: string;
   target: ListEntity;
   /** The descriptor's column id — the filter control the scoped table hides. */
   descriptorId: string;
@@ -168,6 +181,8 @@ export function planRelationSection(
       seed = createSeedThrough(target, referenceField.key);
   }
   return {
+    source: entity,
+    relation: section.relation,
     target,
     descriptorId: descriptor.columnId,
     filterKey,
@@ -268,8 +283,12 @@ export function RelationSectionActions({
         nativeButton={false}
         render={
           <Link
-            to={entities[plan.target].routes.list}
-            search={{ [plan.urlKey]: recordId }}
+            to="/connections"
+            search={{
+              source: plan.source,
+              id: recordId,
+              view: `relation:${plan.relation}`,
+            }}
             aria-label={`Open all ${title.toLocaleLowerCase()}`}
           />
         }
@@ -399,6 +418,20 @@ const EMBEDDED_TABLE_STATE = {
   syncPaginationToUrl: false,
 } as const;
 
+const EvidenceContext = createContext<Map<
+  string,
+  ConnectedRecordsOutput["items"][number]
+> | null>(null);
+
+function ConnectionEvidenceCell({ id }: { id: string }) {
+  const evidence = useContext(EvidenceContext)?.get(id);
+  return evidence ? (
+    <RecordPaths paths={evidence.paths} />
+  ) : (
+    <span className="text-muted-foreground">—</span>
+  );
+}
+
 /**
  * A relation section's body: the target entity's own list, scoped to this
  * record through the declared descriptor, over the shared list workbench so
@@ -444,10 +477,19 @@ export function EntityRelationTable({
   });
   const columns = useMemo(
     () =>
-      createEntityDisplayColumns<RelationRow>(target, helper, undefined, {
-        only: plan.columns ?? undefined,
-        skipSpecialized: true,
-        onSaveField,
+      createCubbyColumnCollection<RelationRow>((add) => {
+        createEntityDisplayColumns<RelationRow>(target, helper, undefined, {
+          only: plan.columns ?? undefined,
+          skipSpecialized: true,
+          onSaveField,
+        }).visit(add);
+        add(
+          helper.display({
+            id: "connection",
+            header: "Connected through",
+            cell: ({ row }) => <ConnectionEvidenceCell id={row.original.id} />,
+          }),
+        );
       }),
     [helper, onSaveField, plan.columns, target],
   );
@@ -474,6 +516,21 @@ export function EntityRelationTable({
     // row `…` menu too. This only drops the checkbox column and bulk bar.
     selectable: false,
   });
+  const visibleIds = list.workbench.table
+    .getRowModel()
+    .rows.map((row) => row.original.id)
+    .slice(0, 50);
+  const evidenceQuery = useQuery(
+    entityGraph.connectedRecords.queryOptions({
+      source: { entityType: plan.source, entityId: recordId },
+      viewKey: `relation:${plan.relation}`,
+      targetIds: visibleIds,
+      limit: 50,
+    }),
+  );
+  const evidence = new Map(
+    evidenceQuery.data?.items.map((item) => [item.target.entityId, item]),
+  );
   useSectionCount(list.totalCount);
   // `list.totalCount` stays `undefined` until the first response lands (see
   // `useEntityList`), so this only fires once the read genuinely resolves
@@ -523,18 +580,43 @@ export function EntityRelationTable({
 
   return (
     <div className="space-y-2">
-      <ListWorkbench
-        model={list.workbench}
-        mode="embedded"
-        toolbarMode="none"
-        ariaLabel={title}
-      />
+      {evidenceQuery.data ? (
+        <HopRange range={evidenceQuery.data.routeHopRange} />
+      ) : null}
+      <EvidenceContext.Provider value={evidence}>
+        <ListWorkbench
+          model={list.workbench}
+          mode="embedded"
+          toolbarMode="none"
+          ariaLabel={title}
+          renderMobileRowFooter={(row) => {
+            const item = evidence.get(row.id);
+            return item ? (
+              <div className="border-t border-border/60 pt-2">
+                <span className="text-xs text-muted-foreground">
+                  Connected through
+                </span>
+                <RecordPaths paths={item.paths} />
+              </div>
+            ) : null;
+          }}
+        />
+      </EvidenceContext.Provider>
+      {evidenceQuery.isError ? (
+        <p role="alert" className="text-xs text-destructive">
+          Could not load connection paths: {String(evidenceQuery.error)}
+        </p>
+      ) : null}
       {truncated ? (
         <p className="text-xs text-muted-foreground">
           Showing {plan.limit} of {list.totalCount} ·{" "}
           <Link
-            to={entities[target].routes.list}
-            search={{ [plan.urlKey]: recordId }}
+            to="/connections"
+            search={{
+              source: plan.source,
+              id: recordId,
+              view: `relation:${plan.relation}`,
+            }}
           >
             Open all
           </Link>

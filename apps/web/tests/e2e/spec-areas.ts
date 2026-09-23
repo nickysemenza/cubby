@@ -485,6 +485,26 @@ export const SPEC_AREAS: readonly SpecAreaEntry[] = [
     ],
   },
   {
+    file: "connected-records.spec.ts",
+    globs: [
+      `${WEB}/tests/e2e/connected-records-contract.ts`,
+      `${WEB}/src/routes/_authenticated/plants.$shortcode.tsx`,
+      `${WEB}/src/routes/_authenticated/connections.tsx`,
+      `${WEB}/src/server/repo/connected-records.ts`,
+      `${WEB}/src/server/repo/relatedness/**`,
+    ],
+  },
+  {
+    file: "mobile.connected-records.spec.ts",
+    globs: [
+      `${WEB}/tests/e2e/connected-records-contract.ts`,
+      `${WEB}/src/routes/_authenticated/plants.$shortcode.tsx`,
+      `${WEB}/src/routes/_authenticated/connections.tsx`,
+      `${WEB}/src/server/repo/connected-records.ts`,
+      `${WEB}/src/server/repo/relatedness/**`,
+    ],
+  },
+  {
     file: "mobile.relationship-discovery.spec.ts",
     globs: [
       `${WEB}/tests/e2e/relationship-discovery-contract.ts`,

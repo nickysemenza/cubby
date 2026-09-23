@@ -2527,6 +2527,47 @@
         }
       }
     },
+    "/api/v1/entity/connectedRecords": {
+      "post": {
+        "tags": [
+          "entity"
+        ],
+        "parameters": [],
+        "operationId": "entity.connectedRecords",
+        "requestBody": {
+          "description": "Body",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConnectedRecordsInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "200",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConnectedRecordsOutput"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/entity/connections": {
       "get": {
         "tags": [
@@ -33263,6 +33304,134 @@
         "items": {
           "$ref": "#/components/schemas/ConnectedAppOut"
         }
+      },
+      "ConnectedPathNode": {
+        "type": "object",
+        "properties": {
+          "entityType": {
+            "$ref": "#/components/schemas/Entity"
+          },
+          "entityId": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "entityType",
+          "entityId",
+          "label"
+        ]
+      },
+      "ConnectedRecord": {
+        "type": "object",
+        "properties": {
+          "target": {
+            "$ref": "#/components/schemas/ConnectedPathNode"
+          },
+          "paths": {
+            "minItems": 1,
+            "type": "array",
+            "items": {
+              "minItems": 2,
+              "type": "array",
+              "items": {
+                "$ref": "#/components/schemas/ConnectedPathNode"
+              }
+            }
+          },
+          "shortestHops": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "target",
+          "paths",
+          "shortestHops"
+        ]
+      },
+      "ConnectedRecordsInput": {
+        "type": "object",
+        "properties": {
+          "source": {
+            "$ref": "#/components/schemas/EntityGraphRootInput"
+          },
+          "viewKey": {
+            "type": "string",
+            "minLength": 1
+          },
+          "targetIds": {
+            "maxItems": 50,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "offset": {
+            "default": 0,
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "limit": {
+            "default": 20,
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 50
+          }
+        },
+        "required": [
+          "source",
+          "viewKey"
+        ]
+      },
+      "ConnectedRecordsOutput": {
+        "type": "object",
+        "properties": {
+          "targetEntity": {
+            "$ref": "#/components/schemas/Entity"
+          },
+          "totalCount": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ConnectedRecord"
+            }
+          },
+          "routeHopRange": {
+            "type": "object",
+            "properties": {
+              "min": {
+                "type": "integer",
+                "exclusiveMinimum": 0,
+                "maximum": 9007199254740991
+              },
+              "max": {
+                "type": "integer",
+                "exclusiveMinimum": 0,
+                "maximum": 9007199254740991
+              }
+            },
+            "required": [
+              "min",
+              "max"
+            ]
+          }
+        },
+        "required": [
+          "targetEntity",
+          "totalCount",
+          "items",
+          "routeHopRange"
+        ]
       },
       "ConversionCoverageFreshness": {
         "type": "object",

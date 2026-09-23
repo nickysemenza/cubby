@@ -28,6 +28,7 @@ interface MobileListScreenProps<TItem extends RowData> {
   entity?: Entity;
   getDetailsHref?: (item: TItem) => string | undefined;
   disableDetailsHref?: boolean;
+  renderRowFooter?: (item: TItem) => ReactNode;
   additionalToolbarContent?: ReactNode;
   actions?: ReactNode;
   bulkActionBar?: ReactNode;
@@ -57,6 +58,7 @@ export function MobileListScreen<TItem extends RowData>({
   entity,
   getDetailsHref,
   disableDetailsHref,
+  renderRowFooter,
   additionalToolbarContent,
   actions,
   bulkActionBar,
@@ -150,6 +152,7 @@ export function MobileListScreen<TItem extends RowData>({
               entity={entity}
               getDetailsHref={getDetailsHref}
               disableDetailsHref={disableDetailsHref}
+              renderRowFooter={renderRowFooter}
               infiniteScroll={infiniteScroll}
               groupConfig={groupConfig}
               grouped={grouped}

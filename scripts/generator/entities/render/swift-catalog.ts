@@ -4,6 +4,7 @@ import {
   LIST_PRESENTATION_CHOICES,
   WAYFINDING_DOMAINS,
 } from "../../../../packages/schemas/src/entity-definitions/definition.ts";
+import { connectedViews } from "../../../../packages/schemas/src/connected-view-definitions.ts";
 import { generatedHeader } from "../../artifacts.ts";
 import type { CompiledEntity, EntityArtifacts } from "../declarations.ts";
 import {
@@ -366,6 +367,9 @@ const renderPresentationLiteral = (
     edit.readOnlyWhen.length === 0
       ? "[]"
       : `[${edit.readOnlyWhen.map((rule) => `ReadOnlyRule(field: ${swiftString(rule.field)}, equals: ${renderReadOnlyMatch(rule.equals)}, fields: ${swiftStringArray(rule.fields)})`).join(", ")}]`;
+  // SAFETY: entity is a compiled declaration key, and the exhaustive connected-view roster covers every declaration key.
+  const entityConnectedViews =
+    connectedViews[entity as keyof typeof connectedViews];
   return (
     `EntityPresentation(\n` +
     `${inner}detailVariant: .${detail.variant},\n` +
@@ -375,6 +379,7 @@ const renderPresentationLiteral = (
     `${inner}heroImages: ${swiftBool(detail.hero.images)},\n` +
     `${inner}heroActions: [${detail.hero.actions.map((action) => `.${swiftCaseName(action)}`).join(", ")}],\n` +
     `${inner}detailSections: ${sections},\n` +
+    `${inner}connectedViews: [${entityConnectedViews.map((view) => `ConnectedViewSpec(key: ${swiftString(view.key)}, title: ${swiftString(view.title)}, target: .${swiftCaseName(view.target)})`).join(", ")}],\n` +
     `${inner}listViews: [${list.views.map((view) => renderListViewLiteral(entity, view)).join(", ")}],\n` +
     `${inner}shelfSubtitle: ${swiftStringArray(list.shelf?.subtitle ?? [])},\n` +
     `${inner}listActions: ${swiftStringArray(list.actions)},\n` +
@@ -815,6 +820,13 @@ export const renderSwiftEntityCatalog = (
     "  public let equals: ReadOnlyMatch\n" +
     "  public let fields: [String]\n" +
     "}\n\n" +
+    "/// One curated indirect table on a generic detail screen.\n" +
+    "public struct ConnectedViewSpec: Codable, Sendable, Hashable, Identifiable {\n" +
+    "  public var id: String { key }\n" +
+    "  public let key: String\n" +
+    "  public let title: String\n" +
+    "  public let target: EntityKey\n" +
+    "}\n\n" +
     "/// The declaration's `presentation` block with its defaults resolved: what the generic\n" +
     "/// list, detail and editor screens render. Field keys are `FieldDescriptor.key`s; action keys\n" +
     "/// are the web verb vocabulary and render natively only where a slot registry provides them.\n" +
@@ -826,6 +838,7 @@ export const renderSwiftEntityCatalog = (
     "  public let heroImages: Bool\n" +
     "  public let heroActions: [EntityHeroActionID]\n" +
     "  public let detailSections: [DetailSection]\n" +
+    "  public let connectedViews: [ConnectedViewSpec]\n" +
     "  public let listViews: [ListView]\n" +
     "  /// Shelf card subtitle fields, in order; empty when there is no shelf view.\n" +
     "  public let shelfSubtitle: [String]\n" +

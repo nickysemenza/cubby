@@ -359,6 +359,10 @@ struct RelationSectionView: View {
                 } header: {
                     HStack {
                         Text(model.section.title ?? model.target.plural)
+                        if let range = model.hopRange {
+                            Text(recordHopLabel(min: range.min, max: range.max))
+                                .font(.caption.monospaced()).foregroundStyle(.secondary)
+                        }
                         Spacer()
                         if let onCreate, model.target.key.nativeActions.contains(.create) {
                             Button("New \(model.target.singular)", systemImage: "plus", action: onCreate)
@@ -372,7 +376,9 @@ struct RelationSectionView: View {
                 }
             }
         }
-        .task { await model.list.loadInitial() }
+        .task {
+            await model.list.loadInitial(); await model.loadConnectionEvidence()
+        }
     }
 
     @ViewBuilder
@@ -390,14 +396,25 @@ struct RelationSectionView: View {
                 Text("None").foregroundStyle(.secondary)
             }
             ForEach(list.rows) { row in
-                NavigationLink(value: Route.entityDetail(model.target.key, id: row.id)) {
-                    EntityRowView(key: model.target.key, row: row, columns: model.spec.columns)
+                VStack(alignment: .leading, spacing: 5) {
+                    NavigationLink(value: Route.entityDetail(model.target.key, id: row.id)) {
+                        EntityRowView(key: model.target.key, row: row, columns: model.spec.columns)
+                    }
+                    if let evidence = model.connectionEvidence[row.id] {
+                        RecordPathView(paths: evidence.paths)
+                    }
                 }
             }
+            if let error = model.connectionError {
+                Text(error).font(.caption).foregroundStyle(.secondary)
+                Button("Retry paths") { Task { await model.loadConnectionEvidence() } }
+            }
             if list.hasMore {
-                NavigationLink(value: Route.entityList(model.target.key, filters: list.filters)) {
-                    Label("See all \(list.meta.map { "\($0.totalCount)" } ?? "")", systemImage: "arrow.right")
-                        .font(.porcelainLabel)
+                Button("Open all · \(list.meta.map { "\($0.totalCount)" } ?? "")") {
+                    Task {
+                        await list.loadNextPage()
+                        await model.loadConnectionEvidence()
+                    }
                 }
             }
         }
@@ -424,16 +441,30 @@ struct EntityJournalSectionView: View {
             case .loaded:
                 if list.rows.isEmpty { Text("No entries yet.").foregroundStyle(.secondary) }
                 ForEach(list.rows) { row in
-                    EntityJournalEntryRow(descriptor: model.target, row: row)
+                    VStack(alignment: .leading, spacing: 5) {
+                        EntityJournalEntryRow(descriptor: model.target, row: row)
+                        if let evidence = model.connectionEvidence[row.id] {
+                            RecordPathView(paths: evidence.paths)
+                        }
+                    }
                 }
                 if list.hasMore {
-                    Button("Load more") { Task { await list.loadNextPage() } }
-                        .disabled(list.activity != .idle)
+                    Button("Load more") {
+                        Task {
+                            await list.loadNextPage()
+                            await model.loadConnectionEvidence()
+                        }
+                    }
+                    .disabled(list.activity != .idle)
                 }
             }
         } header: {
             HStack {
                 Text(model.section.title ?? "Journal")
+                if let range = model.hopRange {
+                    Text(recordHopLabel(min: range.min, max: range.max))
+                        .font(.caption.monospaced()).foregroundStyle(.secondary)
+                }
                 Spacer()
                 if model.target.key.nativeActions.contains(.create) {
                     Button("Log entry", systemImage: "square.and.pencil", action: onLogEntry)
@@ -443,7 +474,10 @@ struct EntityJournalSectionView: View {
                 }
             }
         }
-        .task { await model.list.loadInitial() }
+        .task {
+            await model.list.loadInitial()
+            await model.loadConnectionEvidence()
+        }
     }
 }
 

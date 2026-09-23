@@ -688,6 +688,7 @@ interface MobileCardViewProps<TItem extends RowData> {
   entity?: Entity;
   getDetailsHref?: (item: TItem) => string | undefined;
   disableDetailsHref?: boolean;
+  renderRowFooter?: (item: TItem) => ReactNode;
   /** Infinite scroll controls — when provided, auto-loads more at bottom */
   infiniteScroll?: InfiniteScrollControls;
   /** Group configuration for section headers */
@@ -706,6 +707,7 @@ export function MobileCardView<TItem extends RowData>({
   entity,
   getDetailsHref,
   disableDetailsHref,
+  renderRowFooter,
   infiniteScroll,
   groupConfig,
   grouped = false,
@@ -753,11 +755,13 @@ export function MobileCardView<TItem extends RowData>({
         const item = groupedItems[index];
         if (!item) return 56;
         if (item.kind === "header") return 36;
-        return estimateMobileRowHeight(item.item);
+        return estimateMobileRowHeight(item.item) + (renderRowFooter ? 52 : 0);
       }
-      return estimateMobileRowHeight(mobileRows[index]);
+      return (
+        estimateMobileRowHeight(mobileRows[index]) + (renderRowFooter ? 52 : 0)
+      );
     },
-    [groupedItems, mobileRows],
+    [groupedItems, mobileRows, renderRowFooter],
   );
 
   // Ref for scrollMargin offset calculation
@@ -856,6 +860,7 @@ export function MobileCardView<TItem extends RowData>({
         onRowClick={onRowClick}
         rowActions={resolveRowActions(row, model)}
       >
+        {renderRowFooter?.(row.original)}
         {resolveDebugContent(isDebugEnabled, row)}
       </PhoneListRow>
     );

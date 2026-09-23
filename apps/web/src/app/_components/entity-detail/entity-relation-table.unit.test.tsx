@@ -105,7 +105,10 @@ describe("RelationSectionActions", () => {
     );
     expect(
       screen.getByRole("button", { name: "Open all tasks" }),
-    ).toHaveAttribute("href", "/tasks?project=PRJ-TEST");
+    ).toHaveAttribute(
+      "href",
+      "/connections?source=project&id=PRJ-TEST&view=relation%3Atasks",
+    );
     // Visible text stays the generic "Add"; the accessible name carries the
     // specific noun so several sections' "Add" buttons stay distinguishable.
     const add = screen.getByRole("button", { name: "New task" });

@@ -1,4 +1,8 @@
 import {
+  connectedRecordsInputSchema,
+  connectedRecordsOutputSchema,
+} from "@cubby/schemas/connected-records";
+import {
   entityConnectionsInput,
   entityConnectionsOut,
 } from "@cubby/schemas/entity-connections";
@@ -14,6 +18,11 @@ import {
 import { defineContract, query } from "~/contracts/define";
 
 export const entityGraphContract = defineContract("entity", {
+  connectedRecords: query({
+    native: "Complete connection tables with record path evidence",
+    input: connectedRecordsInputSchema,
+    output: connectedRecordsOutputSchema,
+  }),
   explore: query({
     native: "Native relationship explorer",
     input: entityGraphExploreInputSchema,

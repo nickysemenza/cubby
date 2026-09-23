@@ -541,11 +541,11 @@ function EntityRelationsContent(
           onValueChange={(view) => change({ view })}
         />
         <ChoiceSwitcher
-          ariaLabel="Relationship depth"
+          ariaLabel="Declared relationship depth"
           options={[
-            { value: "1", label: "1 hop" },
-            { value: "2", label: "2 hops" },
-            { value: "3", label: "3 hops" },
+            { value: "1", label: "1" },
+            { value: "2", label: "2" },
+            { value: "3", label: "3" },
           ]}
           value={String(current.depth ?? 1)}
           onValueChange={(value: string) => {
@@ -555,6 +555,9 @@ function EntityRelationsContent(
             if (depth) change({ depth });
           }}
         />
+        <span className="text-xs text-muted-foreground">
+          Depth counts declared relationship hops.
+        </span>
         <Link
           to="/entities"
           search={{

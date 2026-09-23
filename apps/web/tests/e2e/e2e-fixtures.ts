@@ -169,7 +169,12 @@ export const seedProductCategoryPrerequisite = (
 
 export const seedTaskPrerequisite = (
   page: Page,
-  opts: { name: string; dueDate?: string; status?: TaskStatus },
+  opts: {
+    name: string;
+    dueDate?: string;
+    status?: TaskStatus;
+    projectId?: string;
+  },
 ) =>
   createFixture(
     page,
@@ -179,6 +184,7 @@ export const seedTaskPrerequisite = (
       trade: "other",
       dueDate: opts.dueDate,
       status: opts.status,
+      projectId: opts.projectId,
     }),
   );
 
@@ -221,17 +227,54 @@ export const seedPlantingPrerequisite = (
 
 export const seedProductPrerequisite = (
   page: Page,
-  opts: { name: string; manufacturer?: string; categoryId?: string },
+  opts: {
+    name: string;
+    manufacturer?: string;
+    categoryId?: string;
+    growsPlantId?: string;
+  },
 ) =>
   createFixture(
     page,
     "product",
-    productFixtureInput(
-      opts.name,
-      opts.manufacturer ?? "E2E fixture",
-      opts.categoryId,
-    ),
+    productCreateInput.parse({
+      ...productFixtureInput(
+        opts.name,
+        opts.manufacturer ?? "E2E fixture",
+        opts.categoryId,
+      ),
+      growsPlantId: opts.growsPlantId,
+    }),
   );
+
+export const seedProjectPrerequisite = (page: Page, name: string) =>
+  createFixture(page, "project", { name });
+
+export async function seedPlantPurchasePrerequisite(
+  page: Page,
+  opts: { plantId: string; vendorId: string; name: string },
+) {
+  const product = await seedProductPrerequisite(page, {
+    name: `${opts.name} product`,
+    growsPlantId: opts.plantId,
+  });
+  const purchase = await createFixture(page, "purchase", {
+    vendorId: opts.vendorId,
+    orderId: `${opts.name} order`,
+    date: "2026-09-09",
+  });
+  await createFixture(page, "expense", {
+    name: `${opts.name} expense`,
+    cost: 7,
+    date: "2026-09-09",
+    costType: "materials",
+    trade: "other",
+    productId: product.id,
+    productQuantity: 1,
+    purchaseId: purchase.id,
+  });
+  return { product, purchase };
+}
 
 export const seedImagePrerequisite = async (name: string) => {
   const created = await createUploadedImageRecord(getFixtureDb(), {

@@ -2331,6 +2331,163 @@ extension Components {
                 case quantity
             }
         }
+        /// - Remark: Generated from `#/components/schemas/ConnectedPathNode`.
+        public struct ConnectedPathNode: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ConnectedPathNode/entityType`.
+            public var entityType: Components.Schemas.Entity
+            /// - Remark: Generated from `#/components/schemas/ConnectedPathNode/entityId`.
+            public var entityId: Swift.String
+            /// - Remark: Generated from `#/components/schemas/ConnectedPathNode/label`.
+            public var label: Swift.String
+            /// Creates a new `ConnectedPathNode`.
+            ///
+            /// - Parameters:
+            ///   - entityType:
+            ///   - entityId:
+            ///   - label:
+            public init(
+                entityType: Components.Schemas.Entity,
+                entityId: Swift.String,
+                label: Swift.String
+            ) {
+                self.entityType = entityType
+                self.entityId = entityId
+                self.label = label
+            }
+            public enum CodingKeys: String, CodingKey {
+                case entityType
+                case entityId
+                case label
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/ConnectedRecord`.
+        public struct ConnectedRecord: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ConnectedRecord/target`.
+            public var target: Components.Schemas.ConnectedPathNode
+            /// - Remark: Generated from `#/components/schemas/ConnectedRecord/paths`.
+            public var paths: [[Components.Schemas.ConnectedPathNode]]
+            /// - Remark: Generated from `#/components/schemas/ConnectedRecord/shortestHops`.
+            public var shortestHops: Swift.Int
+            /// Creates a new `ConnectedRecord`.
+            ///
+            /// - Parameters:
+            ///   - target:
+            ///   - paths:
+            ///   - shortestHops:
+            public init(
+                target: Components.Schemas.ConnectedPathNode,
+                paths: [[Components.Schemas.ConnectedPathNode]],
+                shortestHops: Swift.Int
+            ) {
+                self.target = target
+                self.paths = paths
+                self.shortestHops = shortestHops
+            }
+            public enum CodingKeys: String, CodingKey {
+                case target
+                case paths
+                case shortestHops
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/ConnectedRecordsInput`.
+        public struct ConnectedRecordsInput: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ConnectedRecordsInput/source`.
+            public var source: Components.Schemas.EntityGraphRootInput
+            /// - Remark: Generated from `#/components/schemas/ConnectedRecordsInput/viewKey`.
+            public var viewKey: Swift.String
+            /// - Remark: Generated from `#/components/schemas/ConnectedRecordsInput/targetIds`.
+            public var targetIds: [Swift.String]?
+            /// - Remark: Generated from `#/components/schemas/ConnectedRecordsInput/offset`.
+            public var offset: Swift.Int?
+            /// - Remark: Generated from `#/components/schemas/ConnectedRecordsInput/limit`.
+            public var limit: Swift.Int?
+            /// Creates a new `ConnectedRecordsInput`.
+            ///
+            /// - Parameters:
+            ///   - source:
+            ///   - viewKey:
+            ///   - targetIds:
+            ///   - offset:
+            ///   - limit:
+            public init(
+                source: Components.Schemas.EntityGraphRootInput,
+                viewKey: Swift.String,
+                targetIds: [Swift.String]? = nil,
+                offset: Swift.Int? = nil,
+                limit: Swift.Int? = nil
+            ) {
+                self.source = source
+                self.viewKey = viewKey
+                self.targetIds = targetIds
+                self.offset = offset
+                self.limit = limit
+            }
+            public enum CodingKeys: String, CodingKey {
+                case source
+                case viewKey
+                case targetIds
+                case offset
+                case limit
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/ConnectedRecordsOutput`.
+        public struct ConnectedRecordsOutput: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ConnectedRecordsOutput/targetEntity`.
+            public var targetEntity: Components.Schemas.Entity
+            /// - Remark: Generated from `#/components/schemas/ConnectedRecordsOutput/totalCount`.
+            public var totalCount: Swift.Int
+            /// - Remark: Generated from `#/components/schemas/ConnectedRecordsOutput/items`.
+            public var items: [Components.Schemas.ConnectedRecord]
+            /// - Remark: Generated from `#/components/schemas/ConnectedRecordsOutput/routeHopRange`.
+            public struct RouteHopRangePayload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/ConnectedRecordsOutput/routeHopRange/min`.
+                public var min: Swift.Int
+                /// - Remark: Generated from `#/components/schemas/ConnectedRecordsOutput/routeHopRange/max`.
+                public var max: Swift.Int
+                /// Creates a new `RouteHopRangePayload`.
+                ///
+                /// - Parameters:
+                ///   - min:
+                ///   - max:
+                public init(
+                    min: Swift.Int,
+                    max: Swift.Int
+                ) {
+                    self.min = min
+                    self.max = max
+                }
+                public enum CodingKeys: String, CodingKey {
+                    case min
+                    case max
+                }
+            }
+            /// - Remark: Generated from `#/components/schemas/ConnectedRecordsOutput/routeHopRange`.
+            public var routeHopRange: Components.Schemas.ConnectedRecordsOutput.RouteHopRangePayload
+            /// Creates a new `ConnectedRecordsOutput`.
+            ///
+            /// - Parameters:
+            ///   - targetEntity:
+            ///   - totalCount:
+            ///   - items:
+            ///   - routeHopRange:
+            public init(
+                targetEntity: Components.Schemas.Entity,
+                totalCount: Swift.Int,
+                items: [Components.Schemas.ConnectedRecord],
+                routeHopRange: Components.Schemas.ConnectedRecordsOutput.RouteHopRangePayload
+            ) {
+                self.targetEntity = targetEntity
+                self.totalCount = totalCount
+                self.items = items
+                self.routeHopRange = routeHopRange
+            }
+            public enum CodingKeys: String, CodingKey {
+                case targetEntity
+                case totalCount
+                case items
+                case routeHopRange
+            }
+        }
         /// - Remark: Generated from `#/components/schemas/CookbookProductSummary`.
         public struct CookbookProductSummary: Codable, Hashable, Sendable {
             /// - Remark: Generated from `#/components/schemas/CookbookProductSummary/id`.

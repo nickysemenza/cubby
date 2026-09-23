@@ -1,5 +1,8 @@
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { connectedViews } from "../../packages/schemas/src/connected-view-definitions.ts";
+import { relationshipProvenanceSchema } from "../../packages/schemas/src/entity-integrity.ts";
+import type { CompiledEntity } from "./entities/declarations.ts";
 import {
   checkArtifacts,
   findExtraArtifacts,
@@ -30,6 +33,53 @@ import { renderHttpApiArtifacts } from "./http-api/openapi.ts";
 import { renderStartOperationArtifacts } from "./start-operations/render.ts";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
+
+const validateConnectedViews = (entities: readonly CompiledEntity[]) => {
+  const byKey = new Map(entities.map((entity) => [entity.key, entity]));
+  for (const [source, views] of Object.entries(connectedViews)) {
+    if (!byKey.has(source))
+      throw new EntityDeclarationError(
+        `Unknown connected-view source ${source}`,
+      );
+    const keys = new Set<string>();
+    for (const view of views) {
+      if (keys.has(view.key))
+        throw new EntityDeclarationError(
+          `Duplicate connected view ${source}.${view.key}`,
+        );
+      keys.add(view.key);
+      for (const route of view.routes) {
+        if (route.length < 2)
+          throw new EntityDeclarationError(
+            `Connected view ${source}.${view.key} needs at least two relations`,
+          );
+        let current = source;
+        for (const key of route) {
+          const relation = byKey
+            .get(current)
+            ?.relations.find((candidate) => candidate.key === key);
+          const provenance = relationshipProvenanceSchema.safeParse(
+            relation?.provenance,
+          );
+          if (
+            !relation ||
+            !provenance.success ||
+            provenance.data.kind !== "local-path"
+          ) {
+            throw new EntityDeclarationError(
+              `Connected view ${source}.${view.key} has no local ${current}.${key} relation`,
+            );
+          }
+          current = relation.target;
+        }
+        if (current !== view.target)
+          throw new EntityDeclarationError(
+            `Connected view ${source}.${view.key} reaches ${current}, expected ${view.target}`,
+          );
+      }
+    }
+  }
+};
 
 /**
  * `pnpm generate` runs three stages in order. Each later stage imports the
@@ -65,6 +115,7 @@ const main = async () => {
   };
 
   const entities = await loadEntityDeclarations();
+  validateConnectedViews(entities);
   await settle([
     ...renderEntityArtifacts(entities),
     ...renderRelationArtifacts(entities),

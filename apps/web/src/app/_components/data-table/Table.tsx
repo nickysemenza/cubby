@@ -143,6 +143,8 @@ export interface RTableProps<TItem extends RowData> {
   getMobileDetailsHref?: (item: TItem) => string | undefined;
   /** Suppress implicit entity links when cards use a specialist row interaction. */
   disableMobileDetailsHref?: boolean;
+  /** Full-width content below a mobile card's compact identity line. */
+  renderMobileRowFooter?: (item: TItem) => ReactNode;
   /** Callback when a row is clicked in either the desktop table or mobile card. */
   onRowClick?: (row: Row<TItem>) => void;
   /**
@@ -904,6 +906,7 @@ function RTableInner<TItem extends RowData>(props: RTableProps<TItem>) {
     entity,
     getMobileDetailsHref,
     disableMobileDetailsHref,
+    renderMobileRowFooter,
     onRowClick,
     currentRowId,
     onRowHover,
@@ -1187,6 +1190,7 @@ function RTableInner<TItem extends RowData>(props: RTableProps<TItem>) {
               entity={entity}
               getDetailsHref={getMobileDetailsHref}
               disableDetailsHref={disableMobileDetailsHref}
+              renderRowFooter={renderMobileRowFooter}
               onRowClick={onRowClick}
               additionalToolbarContent={additionalToolbarContent}
               actions={actions}

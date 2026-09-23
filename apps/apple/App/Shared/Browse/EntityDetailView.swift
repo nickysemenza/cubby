@@ -14,6 +14,7 @@ struct EntityDetailView: View {
     @State private var model: GenericEntityDetailModel?
     @State private var relationshipsModel: EntityRelationshipsModel?
     @State private var relationSections: [RelationSectionModel] = []
+    @State private var connectedSections: [ConnectedSectionModel] = []
     @State private var photoCapture: PhotoCaptureModel?
     @State private var editing = false
     @State private var creatingRelation: RelationSectionModel?
@@ -64,7 +65,10 @@ struct EntityDetailView: View {
                 EntityEditorSheet(
                     key: section.target.key, mode: .create(prefill: section.createPrefill)
                 ) { _ in
-                    Task { await section.list.refresh() }
+                    Task {
+                        await section.list.refresh()
+                        await section.loadConnectionEvidence()
+                    }
                 }
                 .environment(appModel)
             }
@@ -134,6 +138,7 @@ struct EntityDetailView: View {
                 EntityDetailContent(
                     descriptor: descriptor, row: row,
                     relationSections: relationSections,
+                    connectedSections: connectedSections,
                     relationshipsModel: relationshipsModel,
                     fetchedAt: model.fetchedAt,
                     onRelationshipAccepted: appModel.recordRelationshipMutation,
@@ -177,6 +182,12 @@ struct EntityDetailView: View {
             relationSections = RelationSectionModel.sections(
                 of: descriptor, recordID: id, client: appModel.client)
         }
+        if connectedSections.isEmpty {
+            connectedSections = descriptor.presentation.connectedViews.map {
+                ConnectedSectionModel(
+                    spec: $0, source: EntityRef(entity: key, id: id), client: appModel.client)
+            }
+        }
         guard let model, let relationshipsModel else { return }
         async let detailLoad: Void = model.loadInitial(id: id)
         async let relationshipLoad: Void = relationshipsModel.loadInitial(
@@ -189,7 +200,11 @@ struct EntityDetailView: View {
         async let detailRefresh: Void = model.refresh(id: id)
         async let relationshipRefresh: Void = relationshipsModel.refresh()
         _ = await (detailRefresh, relationshipRefresh)
-        for section in relationSections { await section.list.refresh() }
+        for section in relationSections {
+            await section.list.refresh()
+            await section.loadConnectionEvidence()
+        }
+        for section in connectedSections { await section.refresh() }
     }
 
 }
@@ -200,6 +215,7 @@ struct EntityDetailContent: View {
     let descriptor: EntityDescriptor
     let row: EntityRow
     var relationSections: [RelationSectionModel] = []
+    var connectedSections: [ConnectedSectionModel] = []
     var relationshipsModel: EntityRelationshipsModel? = nil
     /// Developer overlays layer 4: when this row was fetched. `nil` in previews/fixtures that
     /// never went through `GenericEntityDetailModel`.
@@ -262,6 +278,9 @@ struct EntityDetailContent: View {
             }
             ForEach(presentation.detailSections) { section in
                 if section.id != journalSection?.id { declared(section) }
+            }
+            ForEach(connectedSections) { section in
+                ConnectedSectionView(model: section)
             }
             if hasUnsupportedPresentation {
                 Section("More details") {

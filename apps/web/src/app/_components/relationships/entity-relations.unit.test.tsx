@@ -278,14 +278,17 @@ describe("shared entity Relations", () => {
       { wrapper: harness.wrapper },
     );
 
-    await screen.findByRole("button", { name: "1 hop" });
+    await screen.findByRole("button", { name: "1" });
+    expect(
+      screen.getByText("Depth counts declared relationship hops."),
+    ).toBeVisible();
     fireEvent.click(
       screen.getByRole("button", { name: "Explore Roast vegetables" }),
     );
     await waitFor(() =>
       expect(requests).toContainEqual({ id: recipe.entityId, depth: 1 }),
     );
-    fireEvent.click(screen.getByRole("button", { name: "3 hops" }));
+    fireEvent.click(screen.getByRole("button", { name: "3" }));
 
     await waitFor(() =>
       expect(requests).toContainEqual({ id: recipe.entityId, depth: 3 }),
