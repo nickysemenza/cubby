@@ -97,42 +97,56 @@ enum NativePresentationCoverage {
         }
     }
 
+    /// Hero actions are declaration-owned verbs. `edit` stays in the screen toolbar; every
+    /// other declared hero verb currently has a web implementation only. Add a native handler
+    /// and mark its verb implemented together when one becomes available.
+    static func heroAction(_ action: EntityHeroActionID) -> Status {
+        switch action {
+        case .edit:
+            .ownedElsewhere
+        case .addToInventory, .bulkEdit, .delete, .discard, .markPurchased, .recordSale, .setStatus:
+            .unsupported("This action is available on web.")
+        }
+    }
+
     /// Detail slots are entity-qualified in the generated catalog. Keep every declared id in
     /// this switch, including slots that currently have no native body, so an unqualified id or
     /// a newly copied slot cannot accidentally select the wrong entity's implementation.
     static func detailSlot(_ id: String) -> Status {
+        guard let id = EntityDetailSlotID(rawValue: id) else {
+            return .unsupported("Unknown native detail slot.")
+        }
         switch id {
-        case "ledgerParty.wardrobe", "meal.nutrition": .implemented
-        case "product.labels",
-            "product.nutrition",
-            "product.unit-mappings",
-            "product.fits-with",
-            "product.cookbooks",
-            "product.recipe-appearances",
-            "product.import-runs",
-            "recipe.workflow",
-            "ingredient.nutrition-product",
-            "cookbook.toc",
-            "cookbook.import-progress",
-            "location.contents-valuation",
-            "location.ai-description",
-            "meal.composition",
-            "project.budget",
-            "project.contribution",
-            "project.analytics",
-            "purchase.project-allocation",
-            "purchase.import-runs",
-            "purchase.reconciliation",
-            "purchase.financial-settlement",
-            "expense.settlement",
-            "image.associations",
-            "importRun.import-workflow",
-            "importRun.photo-batch",
-            "importRun.ai-usage",
-            "importRun.changes":
+        case .ledgerPartyWardrobe, .mealNutrition:
+            .implemented
+        case .productLabels,
+            .productNutrition,
+            .productUnitMappings,
+            .productFitsWith,
+            .productCookbooks,
+            .productRecipeAppearances,
+            .productImportRuns,
+            .recipeWorkflow,
+            .ingredientNutritionProduct,
+            .cookbookToc,
+            .cookbookImportProgress,
+            .locationContentsValuation,
+            .locationAiDescription,
+            .mealComposition,
+            .projectBudget,
+            .projectContribution,
+            .projectAnalytics,
+            .purchaseProjectAllocation,
+            .purchaseImportRuns,
+            .purchaseReconciliation,
+            .purchaseFinancialSettlement,
+            .expenseSettlement,
+            .imageAssociations,
+            .importRunImportWorkflow,
+            .importRunPhotoBatch,
+            .importRunAiUsage,
+            .importRunChanges:
             .unsupported("This detail is available on web.")
-        default:
-            .unsupported("Unknown native detail slot.")
         }
     }
 
@@ -170,6 +184,11 @@ enum NativePresentationCoverage {
 
     static func unsupportedSlot(_ slot: String) -> String? {
         guard case .unsupported(let reason) = detailSlot(slot) else { return nil }
+        return reason
+    }
+
+    static func unsupportedHeroAction(_ action: EntityHeroActionID) -> String? {
+        guard case .unsupported(let reason) = heroAction(action) else { return nil }
         return reason
     }
 }

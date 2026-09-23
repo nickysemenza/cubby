@@ -10,7 +10,6 @@ struct EntityDetailView: View {
     let id: String
 
     @Environment(AppModel.self) private var appModel
-    @Environment(\.dismiss) private var dismiss
     @Environment(\.developerOverlays) private var developerOverlays
     @State private var model: GenericEntityDetailModel?
     @State private var relationshipsModel: EntityRelationshipsModel?
@@ -18,8 +17,6 @@ struct EntityDetailView: View {
     @State private var photoCapture: PhotoCaptureModel?
     @State private var editing = false
     @State private var creatingRelation: RelationSectionModel?
-    @State private var confirmingDelete = false
-    @State private var deleteError: String?
 
     private var descriptor: EntityDescriptor { EntityCatalog[key] }
 
@@ -71,12 +68,6 @@ struct EntityDetailView: View {
                 }
                 .environment(appModel)
             }
-            .confirmationDialog(
-                "Delete this \(descriptor.singular)?", isPresented: $confirmingDelete,
-                titleVisibility: .visible
-            ) {
-                Button("Delete", role: .destructive) { Task { await delete() } }
-            }
     }
 
     @ToolbarContentBuilder
@@ -108,14 +99,6 @@ struct EntityDetailView: View {
                     } label: {
                         Label("Copy shortcode", systemImage: "number")
                     }
-                    if key.nativeActions.contains(.delete) {
-                        Divider()
-                        Button(role: .destructive) {
-                            confirmingDelete = true
-                        } label: {
-                            Label("Delete", systemImage: "trash")
-                        }
-                    }
                 } label: {
                     Label("More", systemImage: "ellipsis.circle")
                 }
@@ -142,7 +125,7 @@ struct EntityDetailView: View {
     private var content: some View {
         if let model, let row = model.row {
             VStack(spacing: 0) {
-                if let error = model.refreshError ?? deleteError {
+                if let error = model.refreshError {
                     HStack {
                         Text(error).font(.callout)
                         Button("Retry") { Task { await model.refresh(id: id) } }
@@ -209,17 +192,6 @@ struct EntityDetailView: View {
         for section in relationSections { await section.list.refresh() }
     }
 
-    private func delete() async {
-        deleteError = nil
-        do {
-            try await appModel.client.delete(descriptor, id: id)
-            appModel.recordEntityMutation(keys: [key])
-            dismiss()
-        } catch {
-            deleteError = (error as? CubbyAPIError)?.detail?.message ?? String(describing: error)
-            Diagnostics.report(error, context: "detail.delete")
-        }
-    }
 }
 
 /// Plain-data detail rendering, shared by the real screen and `#Preview`s so neither needs a
@@ -252,7 +224,10 @@ struct EntityDetailContent: View {
             guard case .slot = section.kind else { return false }
             return NativePresentationCoverage.unsupportedSlot(section.id) != nil
         }
-        return unsupportedField || unsupportedSlot
+        let unsupportedHero = presentation.heroActions.contains {
+            NativePresentationCoverage.unsupportedHeroAction($0) != nil
+        }
+        return unsupportedField || unsupportedSlot || unsupportedHero
     }
 
     /// The journal variant's leading section: the first declared relation.
@@ -269,11 +244,10 @@ struct EntityDetailContent: View {
         Form {
             Section {
                 EntityHeroView(descriptor: descriptor, row: row) {
-                    if let actions = DetailSlotRegistry.heroActions(
-                        for: descriptor.key, declared: presentation.heroActions, row: row,
-                        onChanged: onChanged)
+                    if let supplement = DetailSlotRegistry.supplement(
+                        for: descriptor.key, row: row, onChanged: onChanged)
                     {
-                        actions
+                        supplement
                     }
                 }
                 // Layer 4: shortcode + fetched-at/age. The generic entity API never exposes the
