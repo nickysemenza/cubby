@@ -12,7 +12,7 @@
  * Every glob is relative to the repository root (matching `git diff
  * --name-only` output), e.g. `apps/web/src/routes/__root.tsx`.
  *
- * Keep this file honest: `spec-areas.unit.test.ts` asserts every
+ * Keep this file honest: `scripts/e2e-affected.unit.test.ts` asserts every
  * `tests/e2e/*.spec.ts` file on disk has an entry here, and that no entry
  * points at a spec file that doesn't exist. When you add a spec, add its
  * entry; when a spec's routes or fixtures change, update its globs. When
@@ -238,14 +238,6 @@ export const SPEC_AREAS: readonly SpecAreaEntry[] = [
       `${WEB}/src/routes/_authenticated/account.$accountView.tsx`,
       `${WEB}/src/lib/http-api/**`,
       `${WEB}/src/server/repo/vendor.ts`,
-    ],
-  },
-  {
-    file: "http-resource-api.spec.ts",
-    globs: [
-      `${WEB}/src/routes/api/v1/**`,
-      `${WEB}/src/routes/api/auth/**`,
-      `${WEB}/src/lib/http-api/**`,
     ],
   },
   {
