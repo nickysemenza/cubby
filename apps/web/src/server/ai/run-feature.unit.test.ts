@@ -5,7 +5,7 @@ import { AI_CACHE_TTL_SECONDS } from "~/server/clients/ai-adapters";
 import { Database } from "~/server/db";
 
 import {
-  AGENT_ASK_FEATURE,
+  PURCHASE_IMPORT_REPAIR_FEATURE,
   LOCATION_DESCRIPTION_FEATURE,
   PRODUCT_IDENTIFICATION_FEATURE,
   RECIPE_FLOW_PRIMARY_FEATURE,
@@ -109,10 +109,10 @@ describe("planStructuredRun", () => {
   });
 
   it("skips the cache for an uncacheable feature, and streams it", () => {
-    const plan = planStructuredRun(AGENT_ASK_FEATURE, {
+    const plan = planStructuredRun(PURCHASE_IMPORT_REPAIR_FEATURE, {
       db,
       runId,
-      operation: "runAgentStream",
+      operation: "purchaseImport.repair",
     });
 
     expect(plan.call.skipCache).toBe(true);

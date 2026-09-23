@@ -1,13 +1,5 @@
-import {
-  aiLocationIdInput,
-  detectedInventorySchema,
-  fieldSuggestionsInput,
-  fieldSuggestionsOut,
-  productIdentificationInput,
-  productIdentificationSchema,
-  usdaFoodSuggestionInput,
-  usdaFoodSuggestionOut,
-} from "@cubby/schemas/ai";
+import { aiSmokeInputs, type AiSmokeScenario } from "@cubby/schemas/ai-smoke";
+import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { z } from "zod";
 
@@ -21,161 +13,182 @@ import {
   CardHeader,
   CardTitle,
 } from "~/components/ui/card";
-import { Description } from "~/components/ui/description";
 import { Spinner } from "~/components/ui/spinner";
-import { Textarea } from "~/components/ui/textarea";
-import { ai } from "~/lib/ai.functions";
 import { getErrorMessage } from "~/lib/error-utils";
+import { formatDuration } from "~/lib/format-duration";
+import { getAiSmokeCatalog, runAiSmokeCase } from "~/server-functions/ai-smoke";
 
-/** The registry model each spec's code path actually runs on, shown per card
- * instead of one global badge now that every feature can pick its own tier. */
-const FAST_TIER_MODEL = "gpt-5.6-luna";
-/** Every `ai.suggestFields` target runs on the decision tier (`classify.ts` /
- * `runAiSelection`), not the fast tier the other cards use. */
-const DECISION_TIER_MODEL = "typesafe/jev";
+import {
+  AiSmokeForm,
+  defaultSmokeInput,
+  type SmokeFormValue,
+} from "./ai-smoke-form";
 
-const jsonValueSchema = z.json();
-type JsonValue = z.infer<typeof jsonValueSchema>;
-type SmokeResult =
-  | z.infer<typeof fieldSuggestionsOut>
-  | z.infer<typeof usdaFoodSuggestionOut>
-  | z.infer<typeof productIdentificationSchema>
-  | z.infer<typeof detectedInventorySchema>;
+type SmokeResult = Awaited<ReturnType<typeof runAiSmokeCase>>;
+type Scenario = Awaited<ReturnType<typeof getAiSmokeCatalog>>[number];
+type SmokeOperations = {
+  catalog: () => Promise<Scenario[]>;
+  run: (
+    scenario: AiSmokeScenario,
+    input: z.infer<ReturnType<typeof z.json>>,
+  ) => Promise<SmokeResult>;
+};
+const productionSmokeOperations: SmokeOperations = {
+  catalog: () => getAiSmokeCatalog(),
+  run: (scenario, input) => runAiSmokeCase({ data: { scenario, input } }),
+};
 
-interface EndpointSpec {
-  key: string;
-  label: string;
-  description: string;
-  /** The registry model this code path runs on. */
-  model: string;
-  /** Prefilled JSON input, or undefined for input-less endpoints. */
-  defaultInput: JsonValue | undefined;
-  run: (input: JsonValue) => Promise<SmokeResult>;
-}
+const sourcePrerequisites = {
+  usdaFood: "Choose an ingredient to search the USDA catalog.",
+  usdaFoodBatch: "Choose at least one ingredient for the batch.",
+  ingredientMerge: "Choose at least one ingredient to compare.",
+  productIdentification: "Choose at least one uploaded product image.",
+  locationDescription: "Choose a location with uploaded images.",
+  inventoryDetection: "Choose a location with uploaded images.",
+  imageDescription: "Choose an uploaded image that passed integrity checks.",
+  recipeFlow: "Choose a recipe with authored ingredients and instructions.",
+  purchaseReceipt: "Choose an uploaded receipt image.",
+  entityEmbedding: "Choose a product to embed.",
+  purchaseAudit:
+    "Choose a Run with imported purchases, or use a synthetic batch.",
+} satisfies Partial<Record<Scenario["id"], string>>;
 
-// Core sweep — one spec per distinct AI code path. Inputs are edited as JSON
-// for uniformity across shapes.
-const SPECS: EndpointSpec[] = [
-  {
-    key: "suggestFields",
-    label: "ai.suggestFields",
-    description:
-      "Manifest-driven field auto-suggest — one round trip, targets resolved in dependency order (enum, reference, or roster-backed text)",
-    model: DECISION_TIER_MODEL,
-    defaultInput: {
-      entity: "product",
-      basisMode: "provided",
-      targets: ["category"],
-      basis: { name: "cordless drill", manufacturer: "DeWalt" },
-    },
-    run: (i) => ai.suggestFields.call(fieldSuggestionsInput.parse(i)),
-  },
-  {
-    key: "suggestUsdaFood",
-    label: "ai.suggestUsdaFood",
-    description: "Shortlist + one structured call — search USDA, then select",
-    model: FAST_TIER_MODEL,
-    defaultInput: { ingredientName: "olive oil" },
-    run: (i) => ai.suggestUsdaFood.call(usdaFoodSuggestionInput.parse(i)),
-  },
-  {
-    key: "identifyProduct",
-    label: "ai.identifyProduct",
-    description:
-      "Vision — paste 1-5 public image URLs (R2 images work; the gateway fetches them server-side)",
-    model: FAST_TIER_MODEL,
-    defaultInput: {
-      imageUrls: [`${__R2_PUBLIC_URL__}/cubby/replace-with-a-real-key.jpg`],
-    },
-    run: (i) => ai.identifyProduct.call(productIdentificationInput.parse(i)),
-  },
-  {
-    key: "detectInventoryItems",
-    label: "ai.detectInventoryItems",
-    description:
-      "Vision — cached structured location inventory detection with product matching",
-    model: FAST_TIER_MODEL,
-    defaultInput: { locationId: "replace-with-location-uuid" },
-    run: (i) => ai.detectInventoryItems.call(aiLocationIdInput.parse(i)),
-  },
-];
+const missingSourceRun = (scenario: AiSmokeScenario, input: SmokeFormValue) =>
+  scenario === "purchaseAudit" && input.source === "run" && !input.runId;
 
-type RunStatus = "idle" | "running" | "ok" | "error";
-
-interface RunState {
-  status: RunStatus;
-  ms?: number;
-  result?: SmokeResult;
-  error?: string;
-}
-
-function StatusBadge({ state }: { state: RunState }) {
-  if (state.status === "running") {
-    return (
-      <Badge variant="secondary">
-        <Spinner size="sm" /> running
-      </Badge>
-    );
-  }
-  if (state.status === "ok") {
-    return <Badge variant="positive">ok · {state.ms}ms</Badge>;
-  }
-  if (state.status === "error") {
-    return <Badge variant="destructive">error · {state.ms}ms</Badge>;
-  }
-  return <Badge variant="outline">idle</Badge>;
-}
-
-function EndpointCard({
+// Each probe keeps independent input, validation, execution, and result state.
+// eslint-disable-next-line complexity
+function ScenarioCard({
   spec,
-  input,
-  state,
-  onInputChange,
-  onRun,
+  operations,
 }: {
-  spec: EndpointSpec;
-  input: string | null;
-  state: RunState;
-  onInputChange: (value: string) => void;
-  onRun: () => void;
+  spec: Scenario;
+  operations: SmokeOperations;
 }) {
+  const [input, setInput] = useState<SmokeFormValue>(() =>
+    defaultSmokeInput(spec.id),
+  );
+  const [running, setRunning] = useState(false);
+  const [result, setResult] = useState<SmokeResult | null>(null);
+  const [validation, setValidation] = useState<string | null>(null);
+  const parsed = aiSmokeInputs[spec.id].safeParse(input);
+  const sourceMissing = missingSourceRun(spec.id, input);
+  const prerequisite = Object.entries(sourcePrerequisites).find(
+    ([id]) => id === spec.id,
+  )?.[1];
+
+  const onRun = async () => {
+    if (sourceMissing) {
+      setValidation("Choose a Run with imported purchases.");
+      return;
+    }
+    if (!parsed.success) {
+      setValidation(
+        parsed.error.issues
+          .map((issue) => `${issue.path.join(".")}: ${issue.message}`)
+          .join("; "),
+      );
+      return;
+    }
+    setValidation(null);
+    setResult(null);
+    setRunning(true);
+    try {
+      const response = await operations.run(
+        spec.id,
+        z.json().parse(parsed.data),
+      );
+      setResult(response);
+    } catch (error) {
+      setValidation(getErrorMessage(error));
+    } finally {
+      setRunning(false);
+    }
+  };
+
   return (
     <Card>
       <CardHeader>
         <CardTitle>{spec.label}</CardTitle>
         <CardDescription>{spec.description}</CardDescription>
       </CardHeader>
-      <CardContent className="flex flex-col gap-2">
-        <Row align="center" gap="sm">
-          <Badge variant="outline">model: {spec.model}</Badge>
+      <CardContent className="grid gap-3">
+        <Row align="center" gap="sm" wrap>
+          <Badge variant="outline">{result?.feature ?? spec.feature}</Badge>
+          <Badge variant="outline">{result?.model ?? spec.model}</Badge>
         </Row>
-        {input !== null && (
-          <Textarea
-            value={input}
-            onChange={(e) => onInputChange(e.target.value)}
-            spellCheck={false}
-            className="font-mono text-2xs"
-            rows={input.split("\n").length + 1}
-          />
-        )}
-        <Row align="center" gap="sm">
+        <AiSmokeForm
+          scenario={spec.id}
+          schema={spec.inputSchema}
+          value={input}
+          onChange={(next) => {
+            setInput(next);
+            setValidation(null);
+          }}
+        />
+        <Row align="center" gap="sm" wrap>
           <Button
             size="sm"
-            onClick={onRun}
-            disabled={state.status === "running"}
+            type="button"
+            disabled={running || !parsed.success || sourceMissing}
+            onClick={() => void onRun()}
           >
-            Run
+            {running ? (
+              <>
+                <Spinner size="sm" /> Running
+              </>
+            ) : (
+              "Run"
+            )}
           </Button>
-          <StatusBadge state={state} />
+          {result && (
+            <Badge
+              variant={
+                result.status === "error"
+                  ? "destructive"
+                  : result.status === "ok"
+                    ? "positive"
+                    : "secondary"
+              }
+            >
+              {result.status === "no_model_call"
+                ? "no model call"
+                : result.status}{" "}
+              · {formatDuration(result.durationMs)}
+            </Badge>
+          )}
+          {result && (
+            <a
+              className="text-sm text-primary underline-offset-2 hover:underline"
+              href={`/runs/${encodeURIComponent(result.runShortcode)}`}
+            >
+              View Run
+            </a>
+          )}
         </Row>
-        {state.error && (
-          <pre className="overflow-auto text-2xs whitespace-pre-wrap text-destructive">
-            {state.error}
+        {prerequisite && (
+          <p className="text-xs text-muted-foreground">
+            Prerequisite: {prerequisite}
+          </p>
+        )}
+        {!parsed.success && !prerequisite && (
+          <p className="text-xs text-muted-foreground">
+            Select the required options to run this probe.
+          </p>
+        )}
+        {validation && (
+          <p role="alert" className="text-xs text-destructive">
+            {validation}
+          </p>
+        )}
+        {result?.error && (
+          <pre className="max-h-56 overflow-auto text-xs whitespace-pre-wrap text-destructive">
+            {result.error}
           </pre>
         )}
-        {state.result !== undefined && (
-          <pre className="max-h-72 overflow-auto rounded-md bg-muted/40 p-2 text-2xs">
-            {JSON.stringify(state.result, null, 2)}
+        {result?.result !== undefined && (
+          <pre className="max-h-72 overflow-auto rounded-md bg-muted/40 p-2 text-xs">
+            {JSON.stringify(result.result, null, 2)}
           </pre>
         )}
       </CardContent>
@@ -183,100 +196,63 @@ function EndpointCard({
   );
 }
 
-export function AiSmokeTest() {
-  const [inputs, setInputs] = useState<Record<string, string>>(() =>
-    Object.fromEntries(
-      SPECS.filter((s) => s.defaultInput !== undefined).map((s) => [
-        s.key,
-        JSON.stringify(s.defaultInput, null, 2),
-      ]),
-    ),
-  );
-  const [states, setStates] = useState<Record<string, RunState>>(() =>
-    Object.fromEntries(SPECS.map((s) => [s.key, { status: "idle" }])),
-  );
+const groupOrder = [
+  "Decisions",
+  "Vision",
+  "Recipes",
+  "Purchase import",
+  "Embeddings",
+];
 
-  const runOne = async (spec: EndpointSpec) => {
-    setStates((m) => ({ ...m, [spec.key]: { status: "running" } }));
-    let parsed: JsonValue | undefined;
-    try {
-      parsed =
-        spec.defaultInput === undefined
-          ? undefined
-          : jsonValueSchema.parse(JSON.parse(inputs[spec.key] ?? "null"));
-    } catch (e) {
-      setStates((m) => ({
-        ...m,
-        [spec.key]: { status: "error", ms: 0, error: getErrorMessage(e) },
-      }));
-      return;
-    }
-    const t0 = performance.now();
-    try {
-      const result = await spec.run(parsed ?? null);
-      setStates((m) => ({
-        ...m,
-        [spec.key]: {
-          status: "ok",
-          ms: Math.round(performance.now() - t0),
-          result: result ?? null,
-        },
-      }));
-    } catch (e) {
-      setStates((m) => ({
-        ...m,
-        [spec.key]: {
-          status: "error",
-          ms: Math.round(performance.now() - t0),
-          error: getErrorMessage(e),
-        },
-      }));
-    }
-  };
-
-  const runAll = async () => {
-    for (const spec of SPECS) {
-      await runOne(spec);
-    }
-  };
-
-  const mode = import.meta.env.DEV
-    ? "dev — gateway REST"
-    : "prod — gateway binding";
-
+export function AiSmokeTest({
+  operations = productionSmokeOperations,
+}: { operations?: SmokeOperations } = {}) {
+  const catalog = useQuery({
+    queryKey: ["ai-smoke", "catalog"],
+    queryFn: operations.catalog,
+  });
+  if (catalog.isLoading)
+    return <p className="text-sm text-muted-foreground">Loading AI probes…</p>;
+  if (catalog.isError)
+    return (
+      <p role="alert" className="text-sm text-destructive">
+        {getErrorMessage(catalog.error)}
+      </p>
+    );
+  const scenarios = catalog.data ?? [];
   return (
-    <div className="flex flex-col gap-4">
-      <Row align="center" wrap gap="sm">
-        <Badge variant="secondary">{mode}</Badge>
-        <Description as="span" size="2xs">
-          In prod this exercises the real <code>env.AI.gateway("cubby")</code>{" "}
-          binding path — the only place it's testable end-to-end.
-        </Description>
-        <Button
-          size="sm"
-          variant="outline"
-          className="ml-auto"
-          onClick={runAll}
-        >
-          Run all
-        </Button>
-      </Row>
-      <div className="grid gap-4 md:grid-cols-2">
-        {SPECS.map((spec) => (
-          <EndpointCard
-            key={spec.key}
-            spec={spec}
-            input={
-              spec.defaultInput === undefined ? null : (inputs[spec.key] ?? "")
-            }
-            state={states[spec.key] ?? { status: "idle" }}
-            onInputChange={(value) =>
-              setInputs((m) => ({ ...m, [spec.key]: value }))
-            }
-            onRun={() => void runOne(spec)}
-          />
-        ))}
-      </div>
+    <div className="grid gap-6">
+      <p className="text-sm text-muted-foreground">
+        Choose a source and run one feature at a time. Each attempt creates a
+        Run with its AI usage and diagnostics.
+      </p>
+      {groupOrder.map((group) => {
+        const items = scenarios.filter((spec) => spec.group === group);
+        if (!items.length) return null;
+        return (
+          <section
+            key={group}
+            className="grid gap-3"
+            aria-labelledby={`smoke-${group.replaceAll(" ", "-")}`}
+          >
+            <h2
+              id={`smoke-${group.replaceAll(" ", "-")}`}
+              className="text-lg font-semibold"
+            >
+              {group}
+            </h2>
+            <div className="grid gap-4 lg:grid-cols-2">
+              {items.map((spec) => (
+                <ScenarioCard
+                  key={spec.id}
+                  spec={spec}
+                  operations={operations}
+                />
+              ))}
+            </div>
+          </section>
+        );
+      })}
     </div>
   );
 }

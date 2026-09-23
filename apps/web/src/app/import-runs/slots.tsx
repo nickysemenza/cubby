@@ -9,6 +9,7 @@ import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { StatusText } from "~/components/ui/status-text";
 import { run } from "~/entities/run.functions";
+import { formatDuration } from "~/lib/format-duration";
 import { formatCurrency } from "~/lib/utils";
 
 /** Run detail slot: every AI call the run grouped, for any run purpose. */
@@ -104,11 +105,21 @@ export function RunAiUsage({ record }: { record: ImportRunOut }) {
                     out
                   </td>
                   <td className="p-2 font-mono text-xs tabular-nums">
-                    {call.cacheReadTokens ?? "—"} read /{" "}
-                    {call.cacheWriteTokens ?? "—"} write
+                    <span className="block">
+                      {call.applicationCacheStatus === "hit"
+                        ? "Application hit · no model call"
+                        : `Application ${call.applicationCacheStatus ?? "—"}`}
+                    </span>
+                    <span className="block">
+                      Gateway {call.cacheStatus ?? "—"}
+                    </span>
+                    <span className="block text-muted-foreground">
+                      {call.cacheReadTokens ?? "—"} read /{" "}
+                      {call.cacheWriteTokens ?? "—"} write
+                    </span>
                   </td>
                   <td className="p-2 font-mono text-xs tabular-nums">
-                    {call.durationMs}ms
+                    {formatDuration(call.durationMs)}
                   </td>
                   <td className="p-2 font-mono text-xs tabular-nums">
                     {call.estimatedCost == null

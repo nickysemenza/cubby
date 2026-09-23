@@ -7,6 +7,7 @@ import {
 import { LRUCache } from "lru-cache";
 
 import { recordAiUsage } from "~/server/ai-usage";
+import { SEMANTIC_QUERY_FEATURE } from "~/server/ai/features";
 import { cachedCall } from "~/server/clients/ai-adapters";
 import {
   gatewayBaseURL,
@@ -117,7 +118,7 @@ export async function embedTexts(
     );
   }
   const operation = opts?.operation ?? "embeddings";
-  const feature = opts?.feature ?? "semantic-embedding";
+  const feature = opts?.feature ?? SEMANTIC_QUERY_FEATURE.feature;
 
   return withTrace(TraceNames.api("embeddings", operation), async (span) => {
     const config = ports.config();
@@ -197,7 +198,7 @@ export async function embedQuery(
     operation: "queryEmbedding",
     db: opts?.db,
     runId: opts?.runId,
-    feature: "semantic-query",
+    feature: SEMANTIC_QUERY_FEATURE.feature,
   });
   if (!embedding) return null;
   queryEmbeddingCache.set(normalized, embedding);

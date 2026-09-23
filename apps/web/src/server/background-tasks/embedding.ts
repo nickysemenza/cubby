@@ -5,6 +5,7 @@ import {
 } from "@cubby/schemas/search";
 
 import { getErrorMessage } from "~/lib/error-utils";
+import { ENTITY_EMBEDDING_FEATURE } from "~/server/ai/features";
 import type { Database } from "~/server/db";
 import {
   getStoredEmbeddingHashes,
@@ -268,7 +269,11 @@ async function embedPending(
   try {
     embeddings = await port.embed(
       pending.map((entry) => entry.text.embeddingText),
-      { operation: "entityEmbeddingRefresh", db, feature: "entity-embedding" },
+      {
+        operation: "entityEmbeddingRefresh",
+        db,
+        feature: ENTITY_EMBEDDING_FEATURE.feature,
+      },
     );
   } catch (error) {
     setErrorForRefs(

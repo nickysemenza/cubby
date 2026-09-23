@@ -38,7 +38,7 @@ import { uploadToS3 } from "~/server/utils/s3";
  * The edge rendition normalizes EXIF/HEIF orientation and requests a provider-
  * compatible JPEG without mutating or replacing the original attachment.
  */
-function imageAnalysisRenditionUrl(originalUrl: string): string {
+export function imageAnalysisRenditionUrl(originalUrl: string): string {
   const parsed = new URL(originalUrl);
   return `${parsed.origin}/cdn-cgi/image/width=2048,fit=scale-down,format=jpeg${parsed.pathname}${parsed.search}`;
 }
@@ -67,7 +67,7 @@ export function imageDescriptionInputFingerprint(input: {
   });
 }
 
-function descriptionRequest(imageUrl: string) {
+export function descriptionRequest(imageUrl: string) {
   const imagePart: ImagePart = {
     type: "image",
     source: { type: "url", value: imageUrl },
