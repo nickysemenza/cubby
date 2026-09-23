@@ -1,9 +1,11 @@
+import type { ImportRunOut } from "@cubby/schemas/import-run";
 import { render, screen } from "@testing-library/react";
+import { fromPartial } from "@total-typescript/shoehorn";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
-import { ImportRunDetailPage } from "./purchase-import-run-detail";
+import { RunImportWorkflow } from "./purchase-import-run-detail";
 
 let harness: ReturnType<typeof createBrowserTestHarness>;
 
@@ -29,30 +31,6 @@ const run = {
     ledgerParty: { id: "LPY-ABCDE12345", name: "Fixture household" },
   },
   vendorAccount: { id: "account-1", label: "Fixture vendor" },
-  usage: {
-    pricedSubtotal: 0.125,
-    unpricedCount: 1,
-    nextCursor: null,
-    records: [
-      {
-        id: "usage-1",
-        createdAt: "2026-09-20T16:01:00.000Z",
-        feature: "purchase-import",
-        operation: "extract",
-        provider: "gateway",
-        model: "test-model",
-        attempt: 1,
-        inputTokens: 10,
-        outputTokens: 5,
-        cacheReadTokens: null,
-        cacheWriteTokens: null,
-        durationMs: 100,
-        status: "completed",
-        gatewayLogId: null,
-        estimatedCost: 0.125,
-      },
-    ],
-  },
   affectedPurchases: [
     {
       shortcode: "PUR-ABCDE12345",
@@ -157,26 +135,25 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe("ImportRunDetailPage", () => {
-  it("keeps terminal evidence view-only while showing full-run usage and transcript", async () => {
-    render(<ImportRunDetailPage publicId={run.publicId} />, {
+const record = fromPartial<ImportRunOut>({
+  id: run.publicId,
+  status: "completed",
+  purpose: "purchase_validation",
+});
+
+describe("RunImportWorkflow", () => {
+  it("keeps terminal evidence view-only while showing the transcript", async () => {
+    render(<RunImportWorkflow record={record} />, {
       wrapper: harness.wrapper,
     });
 
     expect(
-      await screen.findByRole("heading", { name: run.publicId }),
-    ).toBeInTheDocument();
-    expect(screen.getByText(/Estimated subtotal \$0\.125/)).toHaveTextContent(
-      "1 unpriced",
-    );
-    expect(screen.getByText("$0.125")).toBeInTheDocument();
-    expect(
-      screen.getByRole("link", { name: "Fixture purchase" }),
+      await screen.findByRole("link", { name: "Fixture purchase" }),
     ).toHaveAttribute("href", "/purchases/PUR-ABCDE12345");
     expect(
       screen.getByLabelText("Purchase import transcript"),
     ).toHaveTextContent("extract-1");
-    expect(screen.getByText("purchase validation")).toBeInTheDocument();
+    expect(screen.getByText("Orders seen")).toBeInTheDocument();
     expect(screen.getByText("Targets and outcome")).toBeInTheDocument();
     expect(screen.getByText("Outcome: replayed")).toBeInTheDocument();
     expect(screen.getByText("fixture-order.pdf")).toBeInTheDocument();

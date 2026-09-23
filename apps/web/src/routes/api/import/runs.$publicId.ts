@@ -159,15 +159,6 @@ const browserRun = (
         createdAt: run.latestProgress.createdAt.toISOString(),
       }
     : null,
-  usage: {
-    pricedSubtotal: run.usage.pricedSubtotal,
-    unpricedCount: run.usage.unpricedCount,
-    records: run.usage.records.map((record) => ({
-      ...record,
-      createdAt: record.createdAt.toISOString(),
-    })),
-    nextCursor: run.usage.nextCursor,
-  },
 });
 
 export const Route = createFileRoute("/api/import/runs/$publicId")({
@@ -179,15 +170,11 @@ export const Route = createFileRoute("/api/import/runs/$publicId")({
         const context = requireActor(
           await createRequestContext({ headers: request.headers }),
         );
-        const usageCursor = new URL(request.url).searchParams.get(
-          "usageCursor",
-        );
         try {
           const run = await loadImportRunByShortcode(
             context.db,
             context.actorContext,
             publicId.data,
-            usageCursor ? { usageCursor } : undefined,
           );
           return Response.json(
             importRunDetailResponse.parse({ run: browserRun(run) }),

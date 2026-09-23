@@ -55,6 +55,7 @@ export {
   recommendationsContract,
 } from "./recommendations.contract";
 export { relatedDataContract } from "./related-data.contract";
+export { runContract } from "./run.contract";
 export { searchContract, searchStreamsContract } from "./search.contract";
 export { statementRowContract } from "./statement-row.contract";
 export { taskContract } from "./task.contract";

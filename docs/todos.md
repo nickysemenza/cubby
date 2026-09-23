@@ -385,11 +385,6 @@ history is the archive. Permanent product constraints live in the
   with `jobKind: "purchase_import_run"`; send the run id once Flue exposes the
   current run to module-scope providers.
 
-- **Give AI runs a detail view.** `/runs/:shortcode` renders the purchase-
-  import run page, which scopes to a member party, so `ai_suggest` /
-  `ai_action` / `background` runs (no party) have no page. Show their AI
-  usage and audit entries (`AiUsage.runId`, `AuditLog.runId`) instead.
-
 - **Finish the `ImportRun` → `Run` rename.** Runs now group all AI work
   (`ai_suggest`, `ai_action`, `background`, `file_import`, `legacy` purposes),
   but only the UI label and `/runs` route were renamed. Still named

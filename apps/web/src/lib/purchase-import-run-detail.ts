@@ -72,31 +72,6 @@ const importRunApproval = z.object({
   rejectedAt: z.iso.datetime().nullable(),
 });
 
-const importRunUsage = z.object({
-  pricedSubtotal: z.number().nonnegative(),
-  unpricedCount: z.number().int().nonnegative(),
-  records: z.array(
-    z.object({
-      id: z.string().min(1),
-      createdAt: z.iso.datetime(),
-      feature: z.string().min(1),
-      operation: z.string().min(1),
-      provider: z.string().min(1),
-      model: z.string().min(1),
-      attempt: z.number().int().nullable(),
-      inputTokens: z.number().int().nullable(),
-      outputTokens: z.number().int().nullable(),
-      cacheReadTokens: z.number().int().nullable(),
-      cacheWriteTokens: z.number().int().nullable(),
-      durationMs: z.number().int().nonnegative(),
-      status: z.string().min(1),
-      gatewayLogId: z.string().nullable(),
-      estimatedCost: z.number().nonnegative().nullable(),
-    }),
-  ),
-  nextCursor: z.string().nullable(),
-});
-
 const importRunProgress = z.object({
   eventId: z.string().min(1),
   phase: z.string().min(1),
@@ -204,7 +179,6 @@ const importRunDetail = z.object({
     )
     .default([]),
   vendorAccount: z.object({ id: z.string(), label: z.string() }).nullable(),
-  usage: importRunUsage.nullable().optional(),
   affectedPurchases: z.array(importRunPurchase).default([]),
   findings: z.array(importRunFinding).default([]),
   operations: z.array(importRunOperation),

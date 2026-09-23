@@ -55,7 +55,6 @@ import type { Database } from "~/server/db";
 import {
   financialTransaction,
   financialTransactionAllocation,
-  aiUsage,
   image,
   importFinding,
   importHunt,
@@ -144,23 +143,6 @@ export type StartTargetedImportRunInput = {
 };
 
 const OFFLINE_EXPIRY_MS = 24 * 60 * 60_000;
-
-const usageCursorSchema = z.object({
-  createdAt: z.iso.datetime(),
-  id: z.uuid(),
-});
-
-const encodeUsageCursor = (value: z.infer<typeof usageCursorSchema>) =>
-  btoa(JSON.stringify(value))
-    .replaceAll("+", "-")
-    .replaceAll("/", "_")
-    .replaceAll("=", "");
-
-const decodeUsageCursor = (value: string) => {
-  const base64 = value.replaceAll("-", "+").replaceAll("_", "/");
-  const padded = base64.padEnd(Math.ceil(base64.length / 4) * 4, "=");
-  return usageCursorSchema.parse(JSON.parse(atob(padded)));
-};
 
 const sha256 = async (value: string): Promise<string> => {
   const digest = await crypto.subtle.digest(
@@ -2760,7 +2742,6 @@ export async function loadImportRunByShortcode(
   db: Database,
   actor: ActorContext,
   rawPublicId: string,
-  options: { usageCursor?: string; usageLimit?: number } = {},
 ) {
   const publicId = importRunShortcode.parse(rawPublicId);
   const database = getDb(db);
@@ -2828,15 +2809,6 @@ export async function loadImportRunByShortcode(
     .limit(1);
   if (!run) throw new Error("Purchase import run was not found");
 
-  const usageLimit = z
-    .number()
-    .int()
-    .min(1)
-    .max(100)
-    .parse(options.usageLimit ?? 25);
-  const usageCursor = options.usageCursor
-    ? decodeUsageCursor(options.usageCursor)
-    : null;
   const [
     predecessor,
     successor,
@@ -2846,8 +2818,6 @@ export async function loadImportRunByShortcode(
     progress,
     affectedPurchases,
     findings,
-    usageTotals,
-    usageRows,
     controlHistory,
     targets,
     evidence,
@@ -2949,50 +2919,6 @@ export async function loadImportRunByShortcode(
       .orderBy(asc(importFinding.createdAt)),
     database
       .select({
-        pricedSubtotal: sql<number>`coalesce(sum(${aiUsage.estimatedCost}) filter (where ${aiUsage.estimatedCost} is not null), 0)`,
-        unpricedCount: sql<number>`(count(*) filter (where ${aiUsage.estimatedCost} is null and ${aiUsage.status} = 'succeeded'))::int`,
-      })
-      .from(aiUsage)
-      .where(and(eq(aiUsage.runId, run.id), notDeleted(aiUsage))),
-    database
-      .select({
-        id: aiUsage.id,
-        createdAt: aiUsage.createdAt,
-        feature: aiUsage.feature,
-        operation: aiUsage.operation,
-        provider: aiUsage.provider,
-        model: aiUsage.model,
-        inputTokens: aiUsage.inputTokens,
-        outputTokens: aiUsage.outputTokens,
-        cacheReadTokens: aiUsage.cacheReadTokens,
-        cacheWriteTokens: aiUsage.cacheWriteTokens,
-        attempt: aiUsage.attempt,
-        status: aiUsage.status,
-        gatewayLogId: aiUsage.gatewayLogId,
-        durationMs: aiUsage.durationMs,
-        estimatedCost: aiUsage.estimatedCost,
-        cacheStatus: aiUsage.cacheStatus,
-      })
-      .from(aiUsage)
-      .where(
-        and(
-          eq(aiUsage.runId, run.id),
-          notDeleted(aiUsage),
-          usageCursor
-            ? or(
-                lt(aiUsage.createdAt, new Date(usageCursor.createdAt)),
-                and(
-                  eq(aiUsage.createdAt, new Date(usageCursor.createdAt)),
-                  lt(aiUsage.id, usageCursor.id),
-                ),
-              )
-            : undefined,
-        ),
-      )
-      .orderBy(desc(aiUsage.createdAt), desc(aiUsage.id))
-      .limit(usageLimit + 1),
-    database
-      .select({
         action: importRunControlEvent.action,
         userId: importRunControlEvent.controllerUserId,
         name: importRunControlEvent.controllerName,
@@ -3047,8 +2973,6 @@ export async function loadImportRunByShortcode(
       .where(eq(importRunEvidence.runId, run.id))
       .orderBy(asc(importRunEvidence.createdAt)),
   ]);
-  const hasMoreUsage = usageRows.length > usageLimit;
-  const pageUsage = usageRows.slice(0, usageLimit);
   return {
     publicId: run.publicId,
     status: run.status,
@@ -3119,22 +3043,6 @@ export async function loadImportRunByShortcode(
     findings,
     targets,
     evidence,
-    usage: {
-      pricedSubtotal: usageTotals[0]?.pricedSubtotal ?? 0,
-      unpricedCount: usageTotals[0]?.unpricedCount ?? 0,
-      records: pageUsage,
-      nextCursor: hasMoreUsage
-        ? (() => {
-            const last = pageUsage.at(-1);
-            return last
-              ? encodeUsageCursor({
-                  createdAt: last.createdAt.toISOString(),
-                  id: last.id,
-                })
-              : null;
-          })()
-        : null,
-    },
   };
 }
 

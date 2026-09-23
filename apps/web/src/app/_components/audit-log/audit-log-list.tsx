@@ -39,6 +39,8 @@ const productionOperations: AuditLogListOperations = {
 interface AuditLogListProps {
   entityType?: AuditEntityType;
   entityId?: string;
+  /** Everything one Run wrote (a RUN- shortcode). */
+  runId?: string;
   channel?: AuditChannel;
   showEntityLink?: boolean;
   /** Number of entries per page (default 20) */
@@ -54,6 +56,7 @@ interface AuditLogListProps {
 export function AuditLogList({
   entityType,
   entityId,
+  runId,
   channel,
   showEntityLink = true,
   limit = 20,
@@ -85,6 +88,7 @@ export function AuditLogList({
       {
         entityType,
         entityId,
+        runId,
         channel,
         limit,
       },
