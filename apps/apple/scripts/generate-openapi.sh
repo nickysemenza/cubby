@@ -11,10 +11,9 @@
 # The spec is read straight from apps/web (no copy, no symlink) so there is one
 # source of truth; the committed Swift output is what `swift build` compiles.
 #
-# `--check` keeps a stamp over every input — the spec, the generator config, this
-# script, the generator binary, and the committed output — so an unchanged rerun
-# (the common pre-push case) exits without regenerating; it is written only after
-# a clean diff.
+# Both modes keep a stamp over every input and the committed output. An unchanged
+# rerun skips generation; a changed run generates into a temporary directory and
+# updates only files whose contents differ.
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 IOS="$ROOT/apps/apple"
@@ -87,28 +86,19 @@ drift_inputs() {
   git -C "$ROOT" hash-object "$COMMITTED"/*.swift
 }
 STAMP_DIR="$GENERATOR_SCRATCH/drift-clean"
-if [ "$CHECK" = "1" ]; then
-  STAMP="$STAMP_DIR/$(drift_inputs | shasum -a 256 | awk '{print $1}')"
-  if [ -f "$STAMP" ]; then
-    echo "generate-openapi.sh --check: inputs unchanged since the last clean check"
-    exit 0
-  fi
-  OUT="$(mktemp -d)"
-else
-  OUT="$COMMITTED"
-  mkdir -p "$OUT"
-  # CubbyAPI holds nothing but these files, so clearing them is enough; the other
-  # generated Swift (EntityCatalog, OperationRoutes, EntityOperations) lives in
-  # CubbyKit/Generated and belongs to other generators.
-  rm -f "$OUT"/Types*.swift "$OUT"/Client.swift
+STAMP="$STAMP_DIR/$(drift_inputs | shasum -a 256 | awk '{print $1}')"
+if [ -f "$STAMP" ]; then
+  echo "generate-openapi.sh: inputs and output unchanged"
+  exit 0
 fi
+OUT="$(mktemp -d)"
 
 # The generator only warns when it silently drops a schema (a nullable union
 # member, an unsupported keyword), so any warning is a hole in the client.
 LOG="$(mktemp)"
 cleanup() {
   rm -f "$LOG"
-  if [ "$CHECK" = "1" ]; then rm -rf "$OUT"; fi
+  rm -rf "$OUT"
 }
 trap cleanup EXIT
 "$BIN" generate --mode types --mode client \
@@ -121,16 +111,26 @@ if grep -q 'warning' "$LOG"; then
   exit 1
 fi
 
-if [ "$CHECK" = "1" ]; then
-  status=0
-  for f in "$OUT"/*.swift; do
-    name="$(basename "$f")"
-    if ! diff -u "$COMMITTED/$name" "$f"; then status=1; fi
-  done
-  if [ "$status" -ne 0 ]; then
-    echo "Generated OpenAPI client is stale; run apps/apple/scripts/generate-openapi.sh" >&2
-    exit "$status"
+changed=0
+for f in "$OUT"/*.swift; do
+  name="$(basename "$f")"
+  if ! cmp -s "$COMMITTED/$name" "$f"; then
+    echo "changed: apps/apple/CubbyKit/Sources/CubbyAPI/$name"
+    if [ "$CHECK" = "0" ]; then cp "$f" "$COMMITTED/$name"; fi
+    changed=1
   fi
-  mkdir -p "$STAMP_DIR"
-  touch "$STAMP_DIR/$(drift_inputs | shasum -a 256 | awk '{print $1}')"
+done
+for f in "$COMMITTED"/Types*.swift "$COMMITTED"/Client.swift; do
+  [ -e "$f" ] || continue
+  if [ ! -e "$OUT/$(basename "$f")" ]; then
+    echo "removed: apps/apple/CubbyKit/Sources/CubbyAPI/$(basename "$f")"
+    if [ "$CHECK" = "0" ]; then rm "$f"; fi
+    changed=1
+  fi
+done
+if [ "$CHECK" = "1" ] && [ "$changed" = "1" ]; then
+  echo "Generated OpenAPI client is stale; run pnpm generate:api" >&2
+  exit 1
 fi
+mkdir -p "$STAMP_DIR"
+touch "$STAMP_DIR/$(drift_inputs | shasum -a 256 | awk '{print $1}')"

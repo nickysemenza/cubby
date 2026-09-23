@@ -10,11 +10,12 @@ export const entityAttachmentRead = imageOut.extend({
   position: z.number().int().nonnegative(),
 });
 export type EntityAttachmentRead = z.infer<typeof entityAttachmentRead>;
+export const entityAttachmentList = z.array(entityAttachmentRead);
 
 const listMediaFields = z.object({ displayImages: displayImagesField });
 const detailMediaFields = z.object({
   displayImages: displayImagesField,
-  attachments: z.array(entityAttachmentRead),
+  attachments: entityAttachmentList,
 });
 
 const entityReadObject = (schema: z.ZodType) => {

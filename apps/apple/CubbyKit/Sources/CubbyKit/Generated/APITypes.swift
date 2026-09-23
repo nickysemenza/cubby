@@ -2,8 +2,8 @@
 
 // swift-format-ignore-file
 // Every named component the filtered CubbyAPI client carries, aliased so hand-written
-// Swift names generated types without spelling `Components.Schemas`. Positional
-// `InputSchemaNN`/`OutputSchemaNN` components are never aliased. Entity aliases follow the
+// Swift names generated types without spelling `Components.Schemas`. Anonymous
+// `InputShared…`/`OutputShared…` components are never aliased. Entity aliases follow the
 // entity key; `Task` and `Image` would shadow Swift/SwiftUI types, so those take a `Record` suffix.
 
 import CubbyAPI
@@ -119,6 +119,7 @@ public typealias EdgeKey = Components.Schemas.EdgeKey
 public typealias EffectiveInventoryOwnership = Components.Schemas.EffectiveInventoryOwnership
 public typealias EmbeddingReadiness = Components.Schemas.EmbeddingReadiness
 public typealias Entity = Components.Schemas.Entity
+public typealias EntityAttachmentList = Components.Schemas.EntityAttachmentList
 public typealias EntityAttachmentRead = Components.Schemas.EntityAttachmentRead
 public typealias EntityAttachmentRole = Components.Schemas.EntityAttachmentRole
 public typealias EntityGraphBranch = Components.Schemas.EntityGraphBranch

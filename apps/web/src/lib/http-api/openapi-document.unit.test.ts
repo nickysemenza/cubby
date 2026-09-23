@@ -4,6 +4,10 @@ import { z } from "zod";
 import { httpContract } from "~/lib/generated/http-contract.gen";
 import document from "~/lib/generated/http-openapi.gen.json";
 
+import {
+  nameStructuralComponents,
+  type JsonSchema,
+} from "../../../../../scripts/generator/http-api/document-passes";
 import { httpMetadataSchema } from "./router";
 import { httpRoutes } from "./routes";
 
@@ -94,8 +98,10 @@ const resolve = (ref: string) => {
 };
 const responseRef = (value: z.output<typeof response> | undefined) =>
   value?.content?.["application/json"]?.schema?.$ref;
-const isPositional = (name: string) =>
-  /^(?:input|output)_schema\d+$/u.test(name);
+const isAnonymous = (name: string) =>
+  /^(?:(?:input|output)_schema\d+|(?:Input|Output)Shared[0-9A-F]{16})$/u.test(
+    name,
+  );
 
 /** Every schema node in the components map, with its JSON pointer. */
 function* nodes(): Generator<[string, SchemaNode]> {
@@ -150,10 +156,16 @@ describe("generated HTTP OpenAPI document", () => {
   });
 
   it("names components after their exports", () => {
-    const named = Object.keys(schemas).filter((name) => !isPositional(name));
+    const named = Object.keys(schemas).filter((name) => !isAnonymous(name));
     for (const name of named) expect(name).toMatch(/^[A-Z][A-Za-z0-9]*$/u);
     expect(named.length).toBeGreaterThan(900);
     expect(schemas).toHaveProperty("ProductTopLevelOut");
+    expect(schemas).toHaveProperty("EntityAttachmentList");
+    expect(
+      Object.keys(schemas).some((name) =>
+        /^(?:input|output)_schema\d+$/u.test(name),
+      ),
+    ).toBe(false);
     expect(schemas).toHaveProperty("LocationShortcode");
     expect(schemas).toHaveProperty("VendorCreateInput");
     expect(schemas).toHaveProperty("RecipeListPage");
@@ -413,5 +425,70 @@ describe("generated HTTP OpenAPI document", () => {
       expect(schemaNode.parse(page.properties?.meta).$ref).toBe(
         `${COMPONENT}ListPageMeta`,
       );
+  });
+
+  it("keeps anonymous component names stable when unrelated definitions are inserted", () => {
+    const base = {
+      output_schema10: { type: "array", items: { type: "string" } },
+      output_schema11: {
+        type: "object",
+        properties: { values: { $ref: `${COMPONENT}output_schema10` } },
+      },
+      input_schema5: { type: "array", items: { type: "string" } },
+    } satisfies Record<string, JsonSchema>;
+    const original = nameStructuralComponents(base);
+    expect(
+      Object.keys(
+        nameStructuralComponents({
+          ...base,
+          output_schema10: {
+            ...base.output_schema10,
+            description: "A shared list",
+          },
+        }),
+      ),
+    ).toEqual(Object.keys(original));
+    const inserted = nameStructuralComponents({
+      output_schema0: { type: "boolean" },
+      output_schema77: base.output_schema10,
+      output_schema78: {
+        type: "object",
+        properties: { values: { $ref: `${COMPONENT}output_schema77` } },
+      },
+      input_schema99: base.input_schema5,
+    });
+    for (const [name, schema] of Object.entries(original))
+      expect(inserted[name]).toEqual(schema);
+    expect(Object.keys(inserted)).toHaveLength(
+      Object.keys(original).length + 1,
+    );
+    expect(
+      Object.keys(original).filter((name) => name.startsWith("OutputShared")),
+    ).toHaveLength(2);
+    expect(
+      Object.keys(original).filter((name) => name.startsWith("InputShared")),
+    ).toHaveLength(1);
+  });
+
+  it("requires an explicit name for a recursive anonymous component", () => {
+    expect(() =>
+      nameStructuralComponents({
+        output_schema1: {
+          type: "array",
+          items: { $ref: `${COMPONENT}output_schema1` },
+        },
+      }),
+    ).toThrow(/name this schema explicitly/u);
+  });
+
+  it("refuses a structural name already claimed by a named component", () => {
+    const anonymous = {
+      output_schema1: { type: "array", items: { type: "string" } },
+    } satisfies Record<string, JsonSchema>;
+    const [name] = Object.keys(nameStructuralComponents(anonymous));
+    if (name === undefined) throw new Error("Expected an anonymous component");
+    expect(() =>
+      nameStructuralComponents({ [name]: { type: "string" }, ...anonymous }),
+    ).toThrow(/component name collision/u);
   });
 });

@@ -13,6 +13,7 @@
     "typecheck": "pnpm -r --workspace-concurrency=2 typecheck && tsc --noEmit -p tsconfig.json",
     "typecheck:web": "pnpm --filter @cubby/web typecheck",
     "generate": "tsx --tsconfig apps/web/tsconfig.json scripts/generator/main.ts",
+    "generate:api": "pnpm generate && sh apps/apple/scripts/generate-openapi.sh",
     "generate:check": "tsx --tsconfig apps/web/tsconfig.json scripts/generator/main.ts --check",
     "dedupe:check": "pnpm dedupe --check",
     "check:clean": "sh -c 'if ! git diff --quiet HEAD || test -n \"$(git ls-files --others --exclude-standard)\"; then echo \"Working tree must be clean before and after verification. Commit or remove staged, unstaged, and untracked files:\" >&2; git status --short >&2; exit 1; fi'",
