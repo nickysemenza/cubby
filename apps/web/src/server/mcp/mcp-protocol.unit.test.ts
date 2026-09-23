@@ -453,7 +453,13 @@ describe("MCP protocol smoke", () => {
         : {
             action: "get",
             entity: "ingredient",
-            item: { ...ingredient, displayImages: [], attachments: [] },
+            item: {
+              ...ingredient,
+              displayImages: [],
+              attachments: [],
+              redirectedFrom: null,
+              previousShortcodes: [],
+            },
           };
     const server = new McpServer({ name: "test", version: "1.0.0" });
     registerEntityTools(server, runEntity);

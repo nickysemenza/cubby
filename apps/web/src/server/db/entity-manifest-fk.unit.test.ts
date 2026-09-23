@@ -56,6 +56,9 @@ for (const entity of entities) {
 // internal edges (session -> user, oauth_refresh_token -> oauth_client, etc.)
 // all need an entry here as well, since none of them are app-domain entities.
 const NON_ENTITY_FK_TARGETS = {
+  // Durable identity (ADR 0006): every payload binds to its own row, and an
+  // attachment names its subject here because a subject can be any entity.
+  Entity: "durable identity, not a domain entity of its own",
   // Owned wholly by its parent recipe (Recipe -> RecipeSection ->
   // RecipeSectionIngredient) — not independently addressable, so it never
   // graduated to its own entity.
@@ -512,6 +515,46 @@ describe("relationship provenance", () => {
     FK_TARGET.set(edge.key, edge.targetTableName);
   }
 
+  /**
+   * An FK to `Entity` (an attachment's subject) lands on whichever entity
+   * tables declare it in INCOMING_EDGES; ids are unique across them.
+   */
+  const landingTables = (edgeKey: string): string[] => {
+    const target = FK_TARGET.get(edgeKey);
+    if (target !== "Entity") return target === undefined ? [] : [target];
+    return entities.flatMap((entity) => {
+      const table = entityManifest[entity].dbTable;
+      return table && edgeKey in INCOMING_EDGES[entity] ? [table] : [];
+    });
+  };
+
+  /** One walker step; `finalTable` resolves an outgoing multi-target edge. */
+  const stepFrom = (
+    at: string,
+    step: { edge: string; direction: "outgoing" | "incoming" },
+    finalTable: string | null,
+  ): { at: string } | { error: string } => {
+    const targets = landingTables(step.edge);
+    if (targets.length === 0)
+      return { error: `\`${step.edge}\` is not a real FK.` };
+    const holder = sourceTableOf(step.edge);
+    if (step.direction === "outgoing") {
+      if (holder !== at)
+        return {
+          error: `outgoing \`${step.edge}\` starts on ${holder}, not ${at}.`,
+        };
+      if (targets.length === 1) return { at: targets[0]! };
+      return finalTable !== null && targets.includes(finalTable)
+        ? { at: finalTable }
+        : { error: `outgoing \`${step.edge}\` has several targets.` };
+    }
+    return targets.includes(at)
+      ? { at: holder }
+      : {
+          error: `incoming \`${step.edge}\` targets ${targets.join(" | ")}, not ${at}.`,
+        };
+  };
+
   /** The table a step's edge lives ON — the left half of its `Table.column` key. */
   const sourceTableOf = (edgeKey: string): string => {
     const [table] = edgeKey.split(".");
@@ -538,36 +581,19 @@ describe("relationship provenance", () => {
         // FK that actually touches it, and moves us to the other end.
         let at: string = startTable;
         let broke = false;
-        for (const step of rel.provenance.steps) {
-          const target = FK_TARGET.get(step.edge);
-          if (target === undefined) {
-            failures.push(`${where}: \`${step.edge}\` is not a real FK.`);
+        const finalTable = entityManifest[rel.target].dbTable;
+        for (const [index, step] of rel.provenance.steps.entries()) {
+          const next = stepFrom(
+            at,
+            step,
+            index === rel.provenance.steps.length - 1 ? finalTable : null,
+          );
+          if ("error" in next) {
+            failures.push(`${where}: ${next.error}`);
             broke = true;
             break;
           }
-          const holder = sourceTableOf(step.edge);
-
-          if (step.direction === "outgoing") {
-            // Walk the FK forwards: must start on the table holding it.
-            if (holder !== at) {
-              failures.push(
-                `${where}: step \`${step.edge}\` outgoing expects to be on ${holder}, but the path is on ${at}.`,
-              );
-              broke = true;
-              break;
-            }
-            at = target;
-          } else {
-            // Walk it backwards: must start on the table it points at.
-            if (target !== at) {
-              failures.push(
-                `${where}: step \`${step.edge}\` incoming expects to be on ${target}, but the path is on ${at}.`,
-              );
-              broke = true;
-              break;
-            }
-            at = holder;
-          }
+          at = next.at;
         }
         if (broke) continue;
 
@@ -589,32 +615,20 @@ describe("relationship provenance", () => {
       start: string,
       steps: readonly { edge: string; direction: "outgoing" | "incoming" }[],
       where: string,
+      finalTable: string | null = null,
     ): string | null => {
       let at = start;
-      for (const step of steps) {
-        const target = FK_TARGET.get(step.edge);
-        if (!target) {
-          failures.push(`${where}: \`${step.edge}\` is not a real FK.`);
+      for (const [index, step] of steps.entries()) {
+        const next = stepFrom(
+          at,
+          step,
+          index === steps.length - 1 ? finalTable : null,
+        );
+        if ("error" in next) {
+          failures.push(`${where}: ${next.error}`);
           return null;
         }
-        const holder = sourceTableOf(step.edge);
-        if (step.direction === "outgoing") {
-          if (holder !== at) {
-            failures.push(
-              `${where}: outgoing \`${step.edge}\` starts on ${holder}, not ${at}.`,
-            );
-            return null;
-          }
-          at = target;
-        } else {
-          if (target !== at) {
-            failures.push(
-              `${where}: incoming \`${step.edge}\` targets ${target}, not ${at}.`,
-            );
-            return null;
-          }
-          at = holder;
-        }
+        at = next.at;
       }
       return at;
     };
@@ -638,11 +652,16 @@ describe("relationship provenance", () => {
           const where = `${entity}.${relationship.key}[${source.key}]`;
           expect(source.inverse, `${where} has no inverse`).toBeDefined();
           if (!source.inverse || !targetTable) continue;
-          expect(walk(sourceTable, source.provenance.steps, where)).toBe(
-            targetTable,
-          );
           expect(
-            walk(targetTable, source.inverse.steps, `${where}.inverse`),
+            walk(sourceTable, source.provenance.steps, where, targetTable),
+          ).toBe(targetTable);
+          expect(
+            walk(
+              targetTable,
+              source.inverse.steps,
+              `${where}.inverse`,
+              sourceTable,
+            ),
           ).toBe(sourceTable);
         }
       }
