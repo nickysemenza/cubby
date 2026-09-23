@@ -16,6 +16,7 @@ import {
   settledCalendarFeedRevision,
   expectCalendarFeedDirtied,
 } from "../../tests/e2e/e2e-helpers";
+import { prepareE2EWranglerConfig } from "../../tests/e2e/e2e-worker-config";
 import {
   createE2EWorkerRuntime,
   type E2EWorkerRuntime,
@@ -46,6 +47,7 @@ const previousAuth = {
 beforeAll(async () => {
   process.env.E2E_TEST_USER_EMAIL = email;
   process.env.E2E_TEST_USER_PASSWORD = password;
+  prepareE2EWranglerConfig();
   await prepareE2EDatabaseTemplate();
   runtime = await createE2EWorkerRuntime({
     authenticated: true,
