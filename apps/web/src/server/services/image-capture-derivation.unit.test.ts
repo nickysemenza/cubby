@@ -1,8 +1,6 @@
 /**
- * Table-driven coverage of {@link deriveImageCapture}'s pure branches — the
- * plan's worked examples in docs/plans/image-provenance-and-devices.md
- * ("Ana's phone and Mac", "Ben texts Ana", "guest AirDrop tie") plus every
- * other branch the rule spells out. `deriveAndStoreImageCapture`'s DB I/O is
+ * Table-driven coverage of {@link deriveImageCapture}'s pure branches.
+ * `deriveAndStoreImageCapture`'s DB I/O is
  * exercised by `repo/image-sighting.integration.test.ts` instead — this file
  * never touches a database.
  */

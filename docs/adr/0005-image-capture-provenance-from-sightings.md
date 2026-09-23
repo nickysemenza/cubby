@@ -1,6 +1,6 @@
 # ADR 0005: Image capture provenance derived from sightings, not stored per device
 
-Status: Proposed
+Status: Accepted
 
 ## Context
 
@@ -94,7 +94,3 @@ LedgerParty` (block delete, repoint on merge), `ImageSighting → Device`
   `imageList` moving onto the generic `listScaffold` (PR3b, which is also
   what lets Image's manifest filters and data quality bind generically), and
   provenance-analysis heuristics (`classifyImageProvenance`, PR3b).
-
-See [docs/plans/image-provenance-and-devices.md](../plans/image-provenance-and-devices.md)
-for the full model, delivery sequence, and native participation-switch work
-this ADR's PR (3a) shares a plan document with but does not itself decide.

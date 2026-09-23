@@ -51,7 +51,3 @@ Client labels are derived from party kind. Route-capable entity references elsew
 ## Import boundary
 
 Clients orchestrate provider reads from Splitwise, Gmail, Monarch, or local exports and send normalized reviewed changes through the standard mutations. Cubby receives no provider credentials, raw emails, file paths, or whole exports. There is no global transaction across providers or independent records. Each record can be resumed from durable Source Claims and evidence, so a partial import does not require a global rollback or batch receipt.
-
-## Production cutover
-
-The cutover requires the superseded branch-only ledger tables to contain zero rows. It deliberately drops those empty structures and creates the canonical Ledger Party, Ledger Transfer, Expense Attribution, and Ledger Source Claim structures; it is not a data migration or rename. Immediately before applying the schema, the exclusive migration owner must repeat the zero-row checks and abort if any row exists. Ambiguous rename prompts are never accepted. Afterward, the owner reads back every table, column, foreign key, check, and partial index, then creates the singleton generic Household party through the standard repository path.

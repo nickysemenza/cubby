@@ -1417,8 +1417,7 @@ export const device = pgTable(
 );
 
 /** One report of a stored Image appearing in a member's photo library or
- * cloud asset — see the "Sightings, not arrays" decision in
- * docs/plans/image-provenance-and-devices.md. */
+ * cloud asset; see ADR 0005. */
 export const imageSighting = pgTable(
   "ImageSighting",
   generatedImageSightingColumns({

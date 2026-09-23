@@ -97,8 +97,7 @@ export type ImageSourceFingerprint = z.infer<
  * Bumps to invalidate every stored `Image.embeddedMetadata` row and the
  * `metadataRevision` stale marker that guards it, forcing the
  * `image-metadata.extract` background task to re-read and re-parse every
- * image's bytes (see `image-metadata-revision.service.ts` and
- * `docs/plans/image-provenance-and-devices.md`'s PR6 entry).
+ * image's bytes (see `image-metadata-revision.service.ts`).
  */
 export const IMAGE_METADATA_REVISION = 1;
 

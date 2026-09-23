@@ -55,7 +55,8 @@ previews, the graph explorer's physical edges, and the orphan finder read it.
   unique indexes, and turn every typed join into a join through one table.
   The runtime edge source gives the graph read without it.
 - EAV attributes, a graph database, a universal entity memo, and renaming
-  `Image` to `StoredFile`: see `docs/plans/entity-identity-and-files.md`.
+  `Image` to `StoredFile` add indirection without changing the typed domain
+  relationships or the existing stored-file contract.
 
 ## Consequences
 
