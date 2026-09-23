@@ -419,9 +419,9 @@ text: none` plus candidate names and passes through as "Deterministic local
   `deploy.yaml` deploys every `main` push and never applies schema; the
   image-provenance PRs (#1193, #1198, #1201) auto-merged green and deployed
   against a database that lacked `Device`, `ImageSighting` and the new
-  `Image` columns until `docs/runbooks/image-provenance-schema.md` was run by
-  hand. Rule: a PR whose runbook adds a table/column is opened as a draft or
-  without auto-merge until the expansion is applied and read back; consider
+  `Image` columns until the production expansion ran. Rule: a PR whose runbook
+  adds a table or column is opened as a draft or without auto-merge until the
+  expansion is applied and read back; consider
   a CI job that diffs `application-schema.json` against the live schema and
   blocks merge on a missing column.
 
@@ -548,8 +548,8 @@ example vegetable` must not resolve to the weight of an entire linked bag
   scored household entity now declares `capabilities.dataQuality` in its
   manifest (see `docs/entities.md` → "Data quality") and gets a computed
   0–100 score, `dataStatus`/`dataGap` list filters, and a `sort=dataQuality`
-  worklist ordering (ascending = weakest first), fulfilling most of the
-  [universal scoring commitment](plans/purchase-import-redesign.md#10-pre-implementation-improvements).
+  worklist ordering (ascending = weakest first); see `docs/entities.md` for
+  the current scoring contract.
   What remains: durable "not available" exceptions still only exist for
   Product and Purchase (the `dataExceptions` jsonb column and
   `set_data_exception`/`clear_data_exception` are hardcoded to those two —
@@ -560,26 +560,26 @@ example vegetable` must not resolve to the weight of an entire linked bag
 
 - **Incremental import cursors and paced backfill.** The account cursor declares
   newest-date/order-ID and backfill bounds, but imports do not advance them;
-  only the oldest available history boundary is recorded. Restore the
-  [incremental sync and backfill flows](plans/purchase-import-redesign.md#5-flows):
+  only the oldest available history boundary is recorded. Restore incremental
+  sync and backfill:
   advance cursors after successful processing and resume newest-first backfill
   with the planned 20–30 orders/hour pacing. This is durable progress and pacing,
   separate from the conditional vendor-pagination evidence item below.
 
 - **Vendor evidence classification.** `orderEvidence` has a manual editor and
-  drives checks, but the [decision 14 classification pass](plans/purchase-import-redesign.md#2-decision-log)
-  and batch review are absent. Use vendor identity, website, charge descriptors,
+  drives checks, but suggested classification and batch review are absent.
+  Use vendor identity, website, charge descriptors,
   and order-mail evidence to suggest classifications; decide confidence
   thresholds and fit accepted writes into the current approval model.
 
 - **Complete charge-to-order discovery.** Gmail discovery handles unique exact
-  amounts and order subsets, but lacks the [planned matching sequence](plans/purchase-import-redesign.md#47-server-gmail-discovery):
+  amounts and order subsets, but lacks the next matching steps:
   consult retained shipment-payment evidence before mailbox matching, then use
   a bounded Jev tie-break for ambiguous mail candidates. Preserve member/vendor
   scoping and unresolved outcomes when evidence cannot support a match.
 
-- **Import decision evaluation.** The [planned offline evaluation](plans/purchase-import-redesign.md#6-cost-and-evaluation)
-  needs representative, sanitized identity, line-role, and reversal cases with
+- **Import decision evaluation.** Offline evaluation needs representative,
+  sanitized identity, line-role, and reversal cases with
   known outcomes and measured provider decisions. The current static Product
   reuse fixture checks a result shape; it does not establish decision accuracy
   or calibrate confidence thresholds. Evaluate the current shared-agent path
@@ -616,8 +616,8 @@ example vegetable` must not resolve to the weight of an entire linked bag
   candidates into evidence, automatic receipt outcomes with attachment ids and
   classifications, replay-safe writes, and multi-order handling. Keep a
   multi-order export as run evidence. Record the run evidence and terminal
-  outcomes so interruption resumes rather than duplicating work. Close the
-  [grouped-settlement commitment](plans/purchase-import-redesign.md#47-server-gmail-discovery):
+  outcomes so interruption resumes rather than duplicating work. Close grouped
+  settlement:
   Gmail can identify several orders for one charge, but the writer matches
   separate exact-amount transactions per Purchase. Turn a confirmed group into
   the corresponding allocations atomically and without duplication; leave
@@ -755,8 +755,8 @@ entry` on the other — six shipped occurrences so far (#456, #462, #481,
   candidate identify orchestration code replaced, retry/state ownership,
   recovery behavior, operational cost, and test/deployment impact before
   adopting it. Keep shared run history independent of the execution engine.
-  See the [purchase-import plan](plans/purchase-import-redesign.md) for the
-  existing runtime boundaries. Include device-local work (library scan,
+  See `docs/infrastructure.md` for the current purchase-agent runtime boundary.
+  Include device-local work (library scan,
   classification sweep, sighting backfill): the native
   `BackgroundActivity` shape mirrors `ActivityRun` so posting those runs into
   the `runProjection` union (`apps/web/src/server/repo/activity.ts`) is a
@@ -772,8 +772,7 @@ entry` on the other — six shipped occurrences so far (#456, #462, #481,
   grant, define no-copy activation, replay behavior for a signed grant,
   activation fencing, delete-before-grant-expiry handling for a recreated
   orphan, and ownership of workflow evidence. Build on the `EntityAttachment`
-  and file-liveness model from the
-  [durable identity plan](plans/entity-identity-and-files.md) once it ships.
+  and file-liveness model in ADR 0006.
 
 - **Host-provided MCP file references.** Adapt client-owned file handles and
   download URLs through capability-specific input metadata and the existing
@@ -1001,9 +1000,7 @@ entry` on the other — six shipped occurrences so far (#456, #462, #481,
   before removing their routes. Keep the responsive website, ordinary record
   links, photo capture/upload, and the scan/reconcile APIs used by native.
 
-- **Follow-ups gated on image provenance landing** (see the
-  [plan](plans/image-provenance-and-devices.md)); each promotes on its own
-  trigger:
+- **Image provenance follow-ups.** Each promotes on its own trigger:
   - _Geolocated photo → nearest Location suggestion_ in import review, once
     Locations carry coordinates (the coordinate field renderer from PR 3b is
     reusable).
@@ -1516,6 +1513,17 @@ Deferred from the 2026-09 manifest-rendering and deletion/parity PRs; unordered.
   layer. Touches `wrangler` config and the USDA data source binding.
 
 ## Operational passes
+
+- **Finish the nutrition totals cutover.** Flattened `Recipe.totals` values
+  still exist on soft-deleted rows in production. Coordinate the reset and
+  recomputation in [the cutover runbook](nutrition-cutover.md), then verify
+  every cached row uses the current JSON shape, including deleted recipes.
+
+- **Finish image provenance rollout on existing photos.** Run
+  `classifyImageProvenance` in dry-run mode, review its proposed changes, then
+  apply the accepted sweep and run `backfillImageMetadata`. Confirm each native
+  install's automatic-work participation choice. The Device, ImageSighting,
+  and Image capture columns are already present in production.
 
 - **Fill ingredient density gaps.** Use the existing missing-weight list to add
   Product `UnitMapping` data organically as ingredients need it.

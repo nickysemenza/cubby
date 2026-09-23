@@ -147,22 +147,6 @@ pnpm --dir apps/purchase-agent run build
 pnpm --dir apps/purchase-agent exec wrangler deploy --dry-run
 ```
 
-For the shared-agent cutover, apply the temporary identity/backfill SQL before
-the ordinary schema push. The first command fences pre-cutover active runs and
-creates linked paused successors; the schema push then installs the additive
-progress, preparation, approval, controller-history, and usage columns/tables:
-
-```bash
-pgcli "$DATABASE_URL"
-\i scripts/cutovers/shared-flue-purchase-agent.sql
-pnpm --dir apps/web db:push
-```
-
-The SQL prints the run-status counts, missing-identity count (which must be
-zero), and both required `ImportRun` indexes. Re-run those verification queries
-after `db:push`. Delete the temporary SQL only after the operator confirms the
-production schema; it must not remain in the merged PR.
-
 Deploy `cubby` first whenever `PurchaseImportService` changes, then deploy
 `purchase-agent`. The GitHub workflow preserves that order; agent-only changes
 skip the web deploy. Verify the private Worker and bindings with:

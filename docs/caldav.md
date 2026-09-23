@@ -55,21 +55,9 @@ DELETE is absent from the HTTP adapter's `METHODS` policy and advertised
 privileges. A future PR must add its canonical implementation and decide how
 to handle clients that omit `If-Match`; there is no environment switch.
 
-## Validation and cutover
+## Validation
 
 Focused parser and canonical write tests live in the existing suites. Run
 `pnpm --filter @cubby/web test:calendar` manually for the small workerd/SQLite
 smoke suite. It is not appended to normal tests, hooks, or hosted CI. Verify
 Calendar.app on disposable data after protocol/setup changes.
-
-Deploy the simplified code before dropping the old PostgreSQL metadata tables.
-The new DO migration resets only calendar-owned publications, subscription
-credentials, app passwords, and pending writes once, with no data transfer or
-compatibility bridge. Rebuild from canonical entities, generate fresh calendar
-credentials/URLs, and reconnect clients. Tasks, Meals, accounts, and audit data
-remain intact.
-
-After confirming the deployed Worker no longer references either table and
-calendar setup/create/edit/refresh work, use the normal Drizzle `db:push`
-workflow to apply the removed `CalendarResourceIdentity` and
-`CalendarWriteReceipt` schema declarations. No separate SQL cleanup is needed.

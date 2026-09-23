@@ -134,8 +134,7 @@ evidence, written through the generic `resources.imageSighting.create` (the
 adapter upserts on the unique key) by `LibraryMetadataSync` in bounded
 batches, only while the install participates in automatic work. The server
 derives the image's capture fields and capturer from its sightings — see
-[ADR 0005](adr/0005-image-capture-provenance-from-sightings.md) and the
-[program plan](plans/image-provenance-and-devices.md).
+[ADR 0005](adr/0005-image-capture-provenance-from-sightings.md).
 
 ## Uploads and Garden dates
 
@@ -164,39 +163,12 @@ stays fixed after a batch starts so retries cannot split its saved days across
 locations. Ordinary Garden forms retain their existing selection flow, with a
 12-photo chooser bounded by remaining entry capacity.
 
-## Delivery and verification status
+## Device validation
 
-Implemented server work includes the additive columns and database format
-constraint, upload metadata persistence, hash-index and fill-only hash APIs,
-idempotent shared association writes, dimension repair, generated OpenAPI and
-native operation bindings, repository tests, and the application-schema
-snapshot. Native implementation includes the Photos browser, full-quality
-encoded-file upload pipeline, progressive matching/review, existing picker
-integration, capture-day Garden imports, cancellation, and retry checkpoints.
+Physical iPhone first-run throughput, memory and thermal behavior, Photos
+limited-access fallback, progressive-filter interaction, and PhotoKit
+current-rendition fixture parity still need device checks. Mac interaction
+requires an unlocked Photos library with authorization. Simulator and browser
+emulation do not establish physical-device behavior.
 
-The server lane passes `pnpm check`, focused unit/OpenAPI/schema checks, and the
-real-PostgreSQL image family (87 tests). CubbyKit's complete suite passes 202
-tests, including byte preservation, full dimensions, matching, cache pruning,
-and temporary-file ownership. The simulator app-host matching and Garden suites
-pass 10 tests, including partial-save retries and destination stability. The PR
-records the exact final commit and its `pnpm verify:local` result separately.
-
-A release-optimized synthetic Mac benchmark using the real hash-index code
-compared 6,000 queries against 6,000 entries in 0.564 seconds (36 million entry
-comparisons, source and stored fingerprints enabled). Maximum process RSS was
-6.7 MiB. This measures only in-memory matching; it excludes photo decoding,
-iCloud downloads, CDN repair, UI updates, and concurrent application memory.
-
-The 2026-09-13 Mac experiment above is measured evidence. Physical iPhone
-first-run throughput, memory and thermal behavior, Photos limited-access
-fallback, progressive-filter interaction, and actual PhotoKit current-rendition
-fixture parity remain device checks. The signed Mac app built and launched;
-interactive validation paused at the locked Mac/Photos permission prompt. The
-simulator parity suite is opt-in and also requires Photos authorization. These
-checks must not be inferred from
-the Mac CLI experiment, simulator behavior, compilation, or server tests.
-
-The additive production database expansion is complete; no application code
-from this branch has been deployed. The exact SQL, validated constraint,
-compatibility order, and completed read-back check are in
-[the native photo schema rollout](runbooks/native-photo-library-schema.md).
+The additive production database expansion is complete.

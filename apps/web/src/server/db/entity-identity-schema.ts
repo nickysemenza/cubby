@@ -116,9 +116,9 @@ export const entityIdentityFk = (
  *
  * `drizzle-kit push` does not manage triggers, so every place that builds a
  * database from `schema.ts` applies these statements afterwards: the
- * IntegreSQL template (`tooling/test-setup.ts`), the local dev push
- * (`tooling/dev-db-push.ts`), and the production cutover
- * (`scripts/cutovers/entity-identity.sql`, held in parity by a unit test).
+ * IntegreSQL template (`tooling/test-setup.ts`) and the local dev push
+ * (`tooling/dev-db-push.ts`). Production already has the triggers; a new
+ * shortcode entity needs its trigger installed before writes begin.
  * It lives beside the table so `tooling/test-setup.ts`, which may only load
  * the schema modules eagerly, can reach it through `schema.ts`.
  *
@@ -179,7 +179,7 @@ CREATE OR REPLACE TRIGGER "Entity_identity_delete" AFTER DELETE ON "${table}"
   FOR EACH ROW EXECUTE FUNCTION "entity_identity_on_delete"();`;
 
 /** Every function and trigger, idempotent, as one script. */
-export const entityIdentityTriggerSql = (): string =>
+const entityIdentityTriggerSql = (): string =>
   [ENTITY_IDENTITY_FUNCTIONS, ...identityTables().map(tableTriggers)].join(
     "\n\n",
   );

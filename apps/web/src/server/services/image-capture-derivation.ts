@@ -2,8 +2,7 @@ import type { ImageId, LedgerPartyId } from "@cubby/schemas/identifiers";
 /**
  * Derives an Image's capture fields (`capturedAt`, `captureLocation`,
  * `capturedByPartyId`, ...) from its `ImageSighting` rows and, failing that,
- * embedded EXIF. See "Derivation" in
- * docs/plans/image-provenance-and-devices.md.
+ * embedded EXIF. See ADR 0005 for the precedence rules.
  *
  * `deriveImageCapture` is pure — no DB access, no clock reads beyond what is
  * passed in — so it is exhaustively unit-testable. `deriveAndStoreImageCapture`

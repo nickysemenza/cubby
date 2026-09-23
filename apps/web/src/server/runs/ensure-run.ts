@@ -20,7 +20,7 @@ import { getDb, notDeleted } from "~/server/repo/database-helpers";
 /**
  * The actor for work with nobody behind it: crons, retries, scheduled
  * refreshes. Work a member starts (a backfill button) stays attributed to
- * that member. Seeded by `scripts/cutovers/run-attribution.sql`.
+ * that member. The reserved user exists in the production database.
  */
 const SYSTEM_USER_ID: UserId = userId.parse("cubby-system");
 export const systemActor = (): ActorContext =>
@@ -28,7 +28,7 @@ export const systemActor = (): ActorContext =>
 
 /**
  * The run that owns AI usage recorded before every call had a run, and any
- * usage whose run is gone. Seeded by `scripts/cutovers/run-attribution.sql`.
+ * usage whose run is gone. The reserved run exists in the production database.
  */
 export const LEGACY_RUN_ID: ImportRunId = importRunId.parse(
   "00000000-0000-4000-8000-00000000c0de",

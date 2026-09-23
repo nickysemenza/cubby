@@ -1,6 +1,6 @@
 # ADR 0004: Plant as the cultivar grain between Ingredient and Planting
 
-Status: Proposed
+Status: Accepted
 
 ## Context
 
@@ -53,6 +53,3 @@ contain shortcodes.
   is reversed for seeds and live plants.
 - Not decided here and not implied: bed positions or footprints, irrigation
   zones, seed viability, harvest aggregation, or any maturity forecast.
-
-See [docs/plans/garden-plants-and-verdicts.md](../plans/garden-plants-and-verdicts.md)
-for the model, static data, tools, migration and sequence.
