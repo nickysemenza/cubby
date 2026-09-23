@@ -263,10 +263,9 @@ jobs:
             shard: "2/2"
     env:
       NODE_OPTIONS: "--max-old-space-size=4096"
-      # Playwright 1.63's contiguous test-count split put 174s on shard 1 and
-      # 235s on shard 2 after the HTTP-only tests moved to PostgreSQL. This
-      # shifts three browser tests to shard 1 without adding a runner.
-      PWTEST_SHARD_WEIGHTS: "55:45"
+      # Playwright 1.63's contiguous test-count split put both long Scalar UI
+      # flows on shard 2. Move the first to shard 1 so each runner owns one.
+      PWTEST_SHARD_WEIGHTS: "53:47"
       E2E_TEST_USER_EMAIL: nicky@test.com
       E2E_TEST_USER_PASSWORD: password1234
       BETTER_AUTH_SECRET: ci-secret-TbGFDRAbhlR8e3RaXsfHR9CQ7r4nIc9
