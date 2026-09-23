@@ -1939,6 +1939,31 @@
             "explode": true
           },
           {
+            "name": "ledgerPartyId",
+            "in": "query",
+            "schema": {
+              "type": "array",
+              "items": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "pattern": "^LPY-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
+                    "description": "ledgerParty shortcode, e.g. LPY-4K7M"
+                  },
+                  {
+                    "type": "string",
+                    "const": "__unresolvable_entity_filter__"
+                  }
+                ],
+                "type": "string",
+                "pattern": "^LPY-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
+                "description": "ledgerParty shortcode, e.g. LPY-4K7M"
+              }
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
             "name": "dataStatus",
             "in": "query",
             "schema": {
@@ -1966,31 +1991,6 @@
                   "device_owner_missing",
                   "device_stale"
                 ]
-              }
-            },
-            "style": "form",
-            "explode": true
-          },
-          {
-            "name": "ledgerPartyId",
-            "in": "query",
-            "schema": {
-              "type": "array",
-              "items": {
-                "anyOf": [
-                  {
-                    "type": "string",
-                    "pattern": "^LPY-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
-                    "description": "ledgerParty shortcode, e.g. LPY-4K7M"
-                  },
-                  {
-                    "type": "string",
-                    "const": "__unresolvable_entity_filter__"
-                  }
-                ],
-                "type": "string",
-                "pattern": "^LPY-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
-                "description": "ledgerParty shortcode, e.g. LPY-4K7M"
               }
             },
             "style": "form",
@@ -4006,6 +4006,31 @@
             "explode": true
           },
           {
+            "name": "ledgerPartyId",
+            "in": "query",
+            "schema": {
+              "type": "array",
+              "items": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "pattern": "^LPY-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
+                    "description": "ledgerParty shortcode, e.g. LPY-4K7M"
+                  },
+                  {
+                    "type": "string",
+                    "const": "__unresolvable_entity_filter__"
+                  }
+                ],
+                "type": "string",
+                "pattern": "^LPY-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
+                "description": "ledgerParty shortcode, e.g. LPY-4K7M"
+              }
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
             "name": "search",
             "in": "query",
             "schema": {
@@ -4051,20 +4076,6 @@
                   "financial_account_ledger_party",
                   "financial_account_confirmed"
                 ]
-              }
-            },
-            "style": "form",
-            "explode": true
-          },
-          {
-            "name": "ledgerPartyId",
-            "in": "query",
-            "schema": {
-              "type": "array",
-              "items": {
-                "type": "string",
-                "pattern": "^LPY-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
-                "description": "ledgerParty shortcode, e.g. LPY-4K7M"
               }
             },
             "style": "form",
@@ -6042,39 +6053,6 @@
             "explode": true
           },
           {
-            "name": "sourceType",
-            "in": "query",
-            "schema": {
-              "type": "array",
-              "items": {
-                "type": "string",
-                "enum": [
-                  "userLibrary",
-                  "cloudShared",
-                  "iTunesSynced"
-                ]
-              }
-            },
-            "style": "form",
-            "explode": true
-          },
-          {
-            "name": "matchKind",
-            "in": "query",
-            "schema": {
-              "type": "array",
-              "items": {
-                "type": "string",
-                "enum": [
-                  "import",
-                  "libraryMatch"
-                ]
-              }
-            },
-            "style": "form",
-            "explode": true
-          },
-          {
             "name": "imageId",
             "in": "query",
             "schema": {
@@ -6144,6 +6122,39 @@
                 "type": "string",
                 "pattern": "^DEV-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
                 "description": "device shortcode, e.g. DEV-4K7M"
+              }
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "sourceType",
+            "in": "query",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "userLibrary",
+                  "cloudShared",
+                  "iTunesSynced"
+                ]
+              }
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "matchKind",
+            "in": "query",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "import",
+                  "libraryMatch"
+                ]
               }
             },
             "style": "form",
@@ -26257,24 +26268,6 @@
             "explode": true
           },
           {
-            "name": "status",
-            "in": "query",
-            "schema": {
-              "type": "array",
-              "items": {
-                "type": "string",
-                "enum": [
-                  "active",
-                  "paused_auth",
-                  "paused_offline",
-                  "disabled"
-                ]
-              }
-            },
-            "style": "form",
-            "explode": true
-          },
-          {
             "name": "vendorId",
             "in": "query",
             "schema": {
@@ -26319,6 +26312,24 @@
                 "type": "string",
                 "pattern": "^LPY-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
                 "description": "ledgerParty shortcode, e.g. LPY-4K7M"
+              }
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "active",
+                  "paused_auth",
+                  "paused_offline",
+                  "disabled"
+                ]
               }
             },
             "style": "form",

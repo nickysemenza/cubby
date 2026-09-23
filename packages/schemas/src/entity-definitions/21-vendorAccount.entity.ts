@@ -349,6 +349,8 @@ export default defineEntity({
         placeholder: "Filter by vendor...",
         brandRef: { entity: "vendor" },
         urlOnly: true,
+        deriveSchema: true,
+        stored: true,
       },
       {
         columnId: "ledgerPartyId",
@@ -356,6 +358,8 @@ export default defineEntity({
         placeholder: "Filter by member...",
         brandRef: { entity: "ledgerParty" },
         urlOnly: true,
+        deriveSchema: true,
+        stored: true,
       },
       {
         columnId: "status",

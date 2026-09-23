@@ -27,7 +27,6 @@ import {
   executeListQueryWithCount,
   getDb,
   notDeleted,
-  shortcodeSetCondition,
   unwrapDb,
   withTransaction,
 } from "~/server/repo/database-helpers";
@@ -128,14 +127,6 @@ type VendorAccountReferencePatch = {
 const buildWhere = (filters: VendorAccountFilters) =>
   scaffold.where(filters, [
     ...auditDateWhereConditions(vendorAccount, filters),
-    shortcodeSetCondition(
-      sql`(SELECT shortcode FROM "Vendor" WHERE id = "VendorAccount"."vendorId")`,
-      filters.vendorId,
-    ),
-    shortcodeSetCondition(
-      sql`(SELECT shortcode FROM "LedgerParty" WHERE id = "VendorAccount"."ledgerPartyId")`,
-      filters.ledgerPartyId,
-    ),
   ]);
 
 export async function listVendorAccounts(

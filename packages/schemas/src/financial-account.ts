@@ -2,7 +2,7 @@ import { z } from "zod";
 import type { GeneratedEntitySortField } from "./generated/entity-sort.gen";
 import { financialAccountRelatedFilterFields } from "./related-view";
 import { auditDateFilterFields } from "./base-entity";
-import { financialAccountShortcode, ledgerPartyShortcode } from "./identifiers";
+import { financialAccountShortcode } from "./identifiers";
 import {
   createPaginatedResponseSchema,
   oneOrMany,
@@ -62,7 +62,6 @@ export const financialAccountFilterFields = {
   ...auditDateFilterFields,
   ...financialAccountRelatedFilterFields,
   ...generatedFinancialAccountFilterFields,
-  ledgerPartyId: oneOrMany(ledgerPartyShortcode).optional(),
   identityKind: oneOrMany(financialAccountIdentityKind).optional(),
   last4: last4.optional(),
   source: oneOrMany(z.string().min(1)).optional(),

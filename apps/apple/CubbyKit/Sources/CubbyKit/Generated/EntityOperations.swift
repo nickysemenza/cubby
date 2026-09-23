@@ -136,9 +136,9 @@ extension EntityDescriptor {
                 case "platform": query.platform = try value.enumCases(name)
                 case "automaticWork": query.automaticWork = try value.bool(name)
                 case "remotePaused": query.remotePaused = try value.bool(name)
+                case "ledgerPartyId": query.ledgerPartyId = value.strings.map { .init(value1: $0) }
                 case "dataStatus": query.dataStatus = try value.enumCases(name)
                 case "dataGap": query.dataGap = try value.enumCases(name)
-                case "ledgerPartyId": query.ledgerPartyId = value.strings.map { .init(value1: $0) }
                 case "groupBy": query.groupBy = try value.enumCase(name)
                 default: throw EntityFilterError.unknownParameter(.device, name)
                 }
@@ -226,11 +226,11 @@ extension EntityDescriptor {
                 case "vendorId": query.vendorId = value.strings
                 case "vendorPresenceFilter": query.vendorPresenceFilter = try value.enumCase(name)
                 case "vendorSearch": query.vendorSearch = try value.string(name)
+                case "ledgerPartyId": query.ledgerPartyId = value.strings.map { .init(value1: $0) }
                 case "search": query.search = try value.string(name)
                 case "provisional": query.provisional = try value.bool(name)
                 case "dataStatus": query.dataStatus = try value.enumCases(name)
                 case "dataGap": query.dataGap = try value.enumCases(name)
-                case "ledgerPartyId": query.ledgerPartyId = value.strings
                 case "identityKind": query.identityKind = try value.enumCases(name)
                 case "last4": query.last4 = try value.string(name)
                 case "source": query.source = value.strings
@@ -328,11 +328,11 @@ extension EntityDescriptor {
                 case "createdTo": query.createdTo = try value.string(name)
                 case "updatedFrom": query.updatedFrom = try value.string(name)
                 case "updatedTo": query.updatedTo = try value.string(name)
-                case "sourceType": query.sourceType = try value.enumCases(name)
-                case "matchKind": query.matchKind = try value.enumCases(name)
                 case "imageId": query.imageId = value.strings.map { .init(value1: $0) }
                 case "ledgerPartyId": query.ledgerPartyId = value.strings.map { .init(value1: $0) }
                 case "deviceId": query.deviceId = value.strings.map { .init(value1: $0) }
+                case "sourceType": query.sourceType = try value.enumCases(name)
+                case "matchKind": query.matchKind = try value.enumCases(name)
                 case "groupBy": query.groupBy = try value.enumCase(name)
                 default: throw EntityFilterError.unknownParameter(.imageSighting, name)
                 }
@@ -936,9 +936,9 @@ extension EntityDescriptor {
                 case "updatedFrom": query.updatedFrom = try value.string(name)
                 case "updatedTo": query.updatedTo = try value.string(name)
                 case "search": query.search = try value.string(name)
-                case "status": query.status = try value.enumCases(name)
                 case "vendorId": query.vendorId = value.strings.map { .init(value1: $0) }
                 case "ledgerPartyId": query.ledgerPartyId = value.strings.map { .init(value1: $0) }
+                case "status": query.status = try value.enumCases(name)
                 case "groupBy": query.groupBy = try value.enumCase(name)
                 default: throw EntityFilterError.unknownParameter(.vendorAccount, name)
                 }
