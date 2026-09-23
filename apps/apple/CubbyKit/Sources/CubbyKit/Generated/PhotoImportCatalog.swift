@@ -180,7 +180,9 @@ public enum PhotoImportCatalog {
     PhotoDisplaySource(source: .expense, target: .product, relationPath: ["product"], priority: 0, ordering: .declared),
     PhotoDisplaySource(source: .expense, target: .purchase, relationPath: ["purchase"], priority: 1, ordering: .declared),
     PhotoDisplaySource(source: .planting, target: .gardenEntry, relationPath: ["entries"], priority: 1, ordering: .newest),
-    PhotoDisplaySource(source: .planting, target: .product, relationPath: ["source-product"], priority: 2, ordering: .declared)
+    PhotoDisplaySource(source: .planting, target: .product, relationPath: ["source-product"], priority: 2, ordering: .declared),
+    PhotoDisplaySource(source: .plant, target: .product, relationPath: ["products"], priority: 1, ordering: .declared),
+    PhotoDisplaySource(source: .plant, target: .gardenEntry, relationPath: ["plantings","entries"], priority: 2, ordering: .newest)
   ]
   public static let visualEvidence: [PhotoVisualEvidence] = [
     PhotoVisualEvidence(source: .recipe, target: .meal, relationPath: ["meals"], priority: 1, ordering: .newest),
@@ -201,7 +203,7 @@ public enum PhotoImportCatalog {
     .financialTransaction: PhotoRoutingPolicy(candidateFields: ["merchant","description"], temporalFields: ["transactionDate"], lifecycleFilters: [PhotoLifecycleFilter(field: "status", equals: "posted", oneOf: [])], ocrFields: ["merchant","description"], classifierLabels: ["receipt","credit_card"], minimumScore: 0.8, minimumMargin: 0.16, category: "documents"),
     .wish: PhotoRoutingPolicy(candidateFields: ["name","notes"], temporalFields: [], lifecycleFilters: [PhotoLifecycleFilter(field: "acquired", equals: "false", oneOf: [])], ocrFields: ["name","notes"], classifierLabels: ["gift"], minimumScore: 0.78, minimumMargin: 0.16, category: "home"),
     .expense: PhotoRoutingPolicy(candidateFields: ["name","notes"], temporalFields: ["date"], lifecycleFilters: [], ocrFields: ["name","notes"], classifierLabels: ["receipt"], minimumScore: 0.78, minimumMargin: 0.16, category: "documents"),
-    .planting: PhotoRoutingPolicy(candidateFields: ["variety","notes"], temporalFields: ["sowedOn","transplantedOn","finishedOn"], lifecycleFilters: [PhotoLifecycleFilter(field: "status", equals: "growing", oneOf: [])], ocrFields: ["variety","notes"], classifierLabels: ["plant","garden"], minimumScore: 0.76, minimumMargin: 0.14, category: "plants"),
+    .planting: PhotoRoutingPolicy(candidateFields: ["plantName","notes"], temporalFields: ["sowedOn","transplantedOn","finishedOn"], lifecycleFilters: [PhotoLifecycleFilter(field: "status", equals: "growing", oneOf: [])], ocrFields: ["plantName","notes"], classifierLabels: ["plant","garden"], minimumScore: 0.76, minimumMargin: 0.14, category: "plants"),
     .gardenEntry: PhotoRoutingPolicy(candidateFields: ["note"], temporalFields: ["observedOn"], lifecycleFilters: [], ocrFields: ["note"], classifierLabels: ["garden"], minimumScore: 0.72, minimumMargin: 0.12, category: "plants")
   ]
 }

@@ -202,7 +202,7 @@ export const seedLocationPrerequisite = (
 export const seedPlantingPrerequisite = (
   page: Page,
   opts: {
-    ingredientId: string;
+    plantId: string;
     locationId?: string;
     status?: string;
     taskId?: string;
@@ -212,7 +212,7 @@ export const seedPlantingPrerequisite = (
     page,
     "planting",
     plantingCreateInput.parse({
-      ingredientId: opts.ingredientId,
+      plantId: opts.plantId,
       locationId: opts.locationId ?? null,
       status: opts.status,
       taskId: opts.taskId,
@@ -387,6 +387,9 @@ export async function seedStaplePlanningPrerequisite(page: Page, name: string) {
 
 export const seedIngredientPrerequisite = (page: Page, name: string) =>
   createFixture(page, "ingredient", { name });
+
+export const seedPlantPrerequisite = (page: Page, name: string) =>
+  createFixture(page, "plant", { name });
 
 /**
  * An ingredient priced by one linked product: 1 cup = $2.50 and 100 g = $1.50.

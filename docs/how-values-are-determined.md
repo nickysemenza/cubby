@@ -270,24 +270,6 @@ Data gaps are the current checks reported by this entity's data-quality evaluati
 
 ## Ingredients (`ingredient`)
 
-### Guide sow window (`guideSowWindow`)
-
-The sowing window comes from the selected garden guide entry adjusted to the household microclimate.
-
-- Rule: `ingredient.guide-sow-window`, version 1
-- Resolver: Declared field projection
-- Value paths: Default `guideSowWindow`
-- Source dependencies: Garden guide key (`gardenGuideKey`)
-
-### Guide transplant window (`guideTransplantWindow`)
-
-The transplanting window comes from the selected garden guide entry adjusted to the household microclimate.
-
-- Rule: `ingredient.guide-transplant-window`, version 1
-- Resolver: Declared field projection
-- Value paths: Default `guideTransplantWindow`
-- Source dependencies: Garden guide key (`gardenGuideKey`)
-
 ### Data quality (`dataQuality`)
 
 Data-quality gaps and the 0–100 completeness score are evaluated from the checks this entity declares.
@@ -1118,21 +1100,39 @@ Data gaps are the current checks reported by this entity's data-quality evaluati
 
 ### Guide sow window (`guideSowWindow`)
 
-The sowing window comes from this planting's crop guide adjusted to the household microclimate.
+The sowing window comes from this planting's plant's crop guide adjusted to the household microclimate.
 
 - Rule: `planting.guide-sow-window`, version 1
 - Resolver: Declared field projection
 - Value paths: Default `guideSowWindow`
-- Source dependencies: Crop ingredient (`ingredientId`)
+- Source dependencies: Plant (`plantId`)
 
 ### Guide transplant window (`guideTransplantWindow`)
 
-The transplanting window comes from this planting's crop guide adjusted to the household microclimate.
+The transplanting window comes from this planting's plant's crop guide adjusted to the household microclimate.
 
 - Rule: `planting.guide-transplant-window`, version 1
 - Resolver: Declared field projection
 - Value paths: Default `guideTransplantWindow`
-- Source dependencies: Crop ingredient (`ingredientId`)
+- Source dependencies: Plant (`plantId`)
+
+### Expected harvest from (`expectedHarvestStart`)
+
+The transplant or sow date plus the plant's days to maturity, from its packet when recorded, else the crop estimate.
+
+- Rule: `planting.expected-harvest`, version 1
+- Resolver: Declared field projection
+- Value paths: Default `expectedHarvestStart`
+- Source dependencies: Sowed (`sowedOn`); Transplanted (`transplantedOn`); Plant (`plantId`)
+
+### Expected harvest (`expectedHarvest`)
+
+The expected harvest range with the source of its days to maturity.
+
+- Rule: `planting.expected-harvest-summary`, version 1
+- Resolver: Declared field projection
+- Value paths: Default `expectedHarvest`
+- Source dependencies: Plant (`plantId`)
 
 ### Data quality (`dataQuality`)
 
@@ -1253,6 +1253,53 @@ Data-quality gaps and the 0–100 completeness score are evaluated from the chec
 Data gaps are the current checks reported by this entity's data-quality evaluation.
 
 - Rule: `device.data-gaps`, version 1
+- Resolver: Declared field projection
+- Value paths: List `dataQuality.gaps`; Summary `dataQuality.gaps`
+- Source dependencies: Detected gaps (`dataQuality.gaps`)
+
+## Plants (`plant`)
+
+### Guide sow window (`guideSowWindow`)
+
+The sowing window comes from this plant's crop guide adjusted to the household microclimate.
+
+- Rule: `plant.guide-sow-window`, version 1
+- Resolver: Declared field projection
+- Value paths: Default `guideSowWindow`
+- Source dependencies: Crop (`gardenGuideKey`)
+
+### Guide transplant window (`guideTransplantWindow`)
+
+The transplanting window comes from this plant's crop guide adjusted to the household microclimate.
+
+- Rule: `plant.guide-transplant-window`, version 1
+- Resolver: Declared field projection
+- Value paths: Default `guideTransplantWindow`
+- Source dependencies: Crop (`gardenGuideKey`)
+
+### Start routes (`routes`)
+
+Each way the household starts this crop, read against this month's guide windows.
+
+- Rule: `plant.routes`, version 1
+- Resolver: Declared field projection
+- Value paths: Default `routes`
+- Source dependencies: Crop (`gardenGuideKey`)
+
+### Data quality (`dataQuality`)
+
+Data-quality gaps and the 0–100 completeness score are evaluated from the checks this entity declares.
+
+- Rule: `plant.data-quality`, version 1
+- Resolver: Declared field projection
+- Value paths: List `dataQuality.status`; Summary `dataQuality.status`
+- Source dependencies: Detected gaps (`dataQuality.gaps`)
+
+### Data gaps (`dataGaps`)
+
+Data gaps are the current checks reported by this entity's data-quality evaluation.
+
+- Rule: `plant.data-gaps`, version 1
 - Resolver: Declared field projection
 - Value paths: List `dataQuality.gaps`; Summary `dataQuality.gaps`
 - Source dependencies: Detected gaps (`dataQuality.gaps`)

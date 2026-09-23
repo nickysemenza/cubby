@@ -18,6 +18,7 @@ import { registerInventoryTools } from "./tools/inventory.tools";
 import { registerLedgerTools } from "./tools/ledger.tools";
 import { MEAL_RECIPE_TOOL_NAMES, registerMealTools } from "./tools/meal.tools";
 import { registerPhotoImportTools } from "./tools/photo-import.tools";
+import { registerPlantTools } from "./tools/plant.tools";
 import { registerProblemsTools } from "./tools/problems.tools";
 import { registerProductTools } from "./tools/product.tools";
 import { registerProjectTools } from "./tools/project.tools";
@@ -51,6 +52,7 @@ Public outputs omit storage-only child-row and diagnostic ids when no shortcode 
 Workflow tips:
 - Start with each tool's published input schema. Call entity with a command object such as {action:"list", entity:"product"} or {action:"get", entity:"product", id:"PRD-…"}; consult entities://catalog only when the schema leaves a supported entity/action unclear. Workflow tools remain for multi-entity work; global_search searches every indexed entity at once.
 - Ingredients: batch-resolve names with resolve_ingredients instead of one search+create per name.
+- Garden: resolve cultivars with resolve_plants ({ name, gardenGuideKey? }) before creating Plantings; a Planting names its Plant, never free-text variety.
 - Meals: ${MEAL_RECIPE_TOOL_NAMES.add} returns \`mealRecipeId\`; use that occurrence id (not recipeId) with ${MEAL_RECIPE_TOOL_NAMES.update} or ${MEAL_RECIPE_TOOL_NAMES.remove}. Generic entity meal reads omit the storage-only mealRecipe id.
 - Products: usdaFdcId reflects either an explicit fdc_id or a barcode-resolved USDA link. A product carries a SET of barcodes as \`gtin\` external ids, canonical GTIN-14; \`primaryGtin\` is the one that stands for it, and the \`upc\` write field sets that slot in any encoding. Use entity action="list", entity="product" with sort="dataQuality" (ascending = weakest identity first; every scored entity accepts it, plus dataStatus/dataGap filters) for enrichment worklists, patch_product_external_ids for slot-safe typed identifier changes, and exact (source, kind, externalId) collision checks before adding identity. Entity action="get", entity="product" is the detailed media read; verify_product_images is the explicit R2 integrity check.
 - Recipes: prefer create_recipe_from_text for pasted prep sheets; use entity action="create", entity="recipe" when you already have ingredient ids.
@@ -83,6 +85,7 @@ function registerTools(server: McpServer) {
   registerProductTools(server);
   registerSearchTools(server);
   registerIngredientTools(server);
+  registerPlantTools(server);
   registerLedgerTools(server);
   registerRecipeTools(server);
   registerProblemsTools(server);

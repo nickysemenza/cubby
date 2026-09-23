@@ -3,9 +3,11 @@ import { describe, expect, it } from "vitest";
 
 import { parseEntityTimelineInput } from "~/entities/generated/entity-timelines.gen";
 import { entityKernelContextSchema } from "~/server/entity-kernel";
-import { createIngredient } from "~/server/repo/ingredient";
 import { createLocation } from "~/server/repo/location";
-import { makeLocationInput } from "~/server/repo/repo.fixtures";
+import {
+  createPlantFixture,
+  makeLocationInput,
+} from "~/server/repo/repo.fixtures";
 import { createTestRequestContext } from "~/server/testing/request-context";
 
 import { createPlanting } from ".";
@@ -52,7 +54,7 @@ describe("plantingTimeline guide bands", () => {
   ])(
     "$status planting with a guide: band present = $expectBand",
     async ({ status, expectBand }) => {
-      const crop = await createIngredient(
+      const crop = await createPlantFixture(
         ctx.db,
         {
           name: `Guide band crop ${status}`,
@@ -62,7 +64,7 @@ describe("plantingTimeline guide bands", () => {
       );
       const location = await bed(`Guide band bed ${status}`);
       const input = {
-        ingredientId: crop.id,
+        plantId: crop.id,
         locationId: location.id,
         status,
         sowedOn: status === "finished" ? "2026-01-01" : null,
@@ -75,8 +77,8 @@ describe("plantingTimeline guide bands", () => {
     },
   );
 
-  it("emits no guide band for a planting whose ingredient has no garden guide key", async () => {
-    const crop = await createIngredient(
+  it("emits no guide band for a planting whose plant has no garden guide key", async () => {
+    const crop = await createPlantFixture(
       ctx.db,
       { name: "No guide crop" },
       TEST_ACTOR,
@@ -84,7 +86,7 @@ describe("plantingTimeline guide bands", () => {
     const location = await bed("No guide bed");
     const planted = await createPlanting(
       ctx.db,
-      { ingredientId: crop.id, locationId: location.id, status: "growing" },
+      { plantId: crop.id, locationId: location.id, status: "growing" },
       TEST_ACTOR,
     );
 
@@ -93,7 +95,7 @@ describe("plantingTimeline guide bands", () => {
   });
 
   it("cohort respects window.ids: a guide band only appears for the requested planting, not a sibling in the same bed", async () => {
-    const crop = await createIngredient(
+    const crop = await createPlantFixture(
       ctx.db,
       { name: "Cohort guide crop", gardenGuideKey: GUIDE_KEY_WITH_WINDOW },
       TEST_ACTOR,
@@ -101,12 +103,12 @@ describe("plantingTimeline guide bands", () => {
     const location = await bed("Cohort guide bed");
     const inScope = await createPlanting(
       ctx.db,
-      { ingredientId: crop.id, locationId: location.id, status: "growing" },
+      { plantId: crop.id, locationId: location.id, status: "growing" },
       TEST_ACTOR,
     );
     await createPlanting(
       ctx.db,
-      { ingredientId: crop.id, locationId: location.id, status: "growing" },
+      { plantId: crop.id, locationId: location.id, status: "growing" },
       TEST_ACTOR,
     );
 
@@ -117,7 +119,7 @@ describe("plantingTimeline guide bands", () => {
   });
 
   it("keeps each guide row's synthetic identity while linking it to its planting", async () => {
-    const crop = await createIngredient(
+    const crop = await createPlantFixture(
       ctx.db,
       { name: "Guide link crop", gardenGuideKey: GUIDE_KEY_WITH_WINDOW },
       TEST_ACTOR,
@@ -125,7 +127,7 @@ describe("plantingTimeline guide bands", () => {
     const location = await bed("Guide link bed");
     const planted = await createPlanting(
       ctx.db,
-      { ingredientId: crop.id, locationId: location.id, status: "growing" },
+      { plantId: crop.id, locationId: location.id, status: "growing" },
       TEST_ACTOR,
     );
 

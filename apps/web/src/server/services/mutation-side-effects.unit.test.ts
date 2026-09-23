@@ -45,7 +45,7 @@ class InMemoryMutationSideEffectPorts {
     findTaskEmbeddingRefsForProducts: async () => [],
     findWishEmbeddingRefsForProducts: async () => [],
     findMealEmbeddingRefsForRecipes: async () => [],
-    findPlantingEmbeddingRefsForIngredients: async () => this.plantingRefs,
+    findPlantingEmbeddingRefsForPlants: async () => this.plantingRefs,
     findPlantingEmbeddingRefsForLocations: async () => this.plantingRefs,
     findGardenEntryEmbeddingRefsForLocations: async () => this.gardenEntryRefs,
     findGardenEntryEmbeddingRefsForPlantings: async () => this.gardenEntryRefs,
@@ -181,9 +181,9 @@ describe("runMutationSideEffects", () => {
     );
   });
 
-  it("fans out an entity-embedding.refresh task to planting refs on ingredient update", async () => {
-    const ingredientId = testEntityId(
-      "ingredient",
+  it("fans out an entity-embedding.refresh task to planting refs on plant update", async () => {
+    const plantId = testEntityId(
+      "plant",
       "00000000-0000-4000-8000-000000000020",
     );
     const plantingId = testEntityId(
@@ -196,8 +196,8 @@ describe("runMutationSideEffects", () => {
       db,
       {
         action: "updated",
-        entity: { entity: "ingredient", id: ingredientId },
-        source: "ingredient.update",
+        entity: { entity: "plant", id: plantId },
+        source: "plant.update",
       },
       memory.ports,
     );
@@ -209,7 +209,7 @@ describe("runMutationSideEffects", () => {
     );
     expect(refreshedRefs).toEqual(
       expect.arrayContaining([
-        { entityType: "ingredient", entityId: ingredientId },
+        { entityType: "plant", entityId: plantId },
         { entityType: "planting", entityId: plantingId },
       ]),
     );

@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 
 import { createIngredient } from "~/server/repo/ingredient";
 import {
+  createPlantFixture,
   createProductFixture,
   makeProductInput,
 } from "~/server/repo/repo.fixtures";
@@ -10,7 +11,7 @@ import {
 import { productList } from ".";
 
 /**
- * `ingredientIdFilter` (the SKU's own ingredient) and `growsIngredientIdFilter`
+ * `ingredientIdFilter` (the SKU's own ingredient) and `growsPlantIdFilter`
  * (the crop this product seeds — the Product↔Ingredient "grows" relation) are
  * independent shortcode-resolved id filters on `buildProductWhere`; each must
  * narrow by its own column, not the other's.
@@ -18,13 +19,13 @@ import { productList } from ".";
 describe("productList id filters", () => {
   const ctx = withTestDb();
 
-  it("ingredientIdFilter narrows to products whose own ingredientId matches, leaving growsIngredientId-only matches out", async () => {
+  it("ingredientIdFilter narrows to products whose own ingredientId matches, leaving growsPlantId-only matches out", async () => {
     const flour = await createIngredient(
       ctx.db,
       { name: "Filter flour" },
       TEST_ACTOR,
     );
-    const tomato = await createIngredient(
+    const tomato = await createPlantFixture(
       ctx.db,
       { name: "Filter tomato crop" },
       TEST_ACTOR,
@@ -38,7 +39,7 @@ describe("productList id filters", () => {
       ctx.db,
       makeProductInput({
         name: "Tomato seed packet",
-        growsIngredientId: tomato.id,
+        growsPlantId: tomato.id,
       }),
       TEST_ACTOR,
     );
@@ -54,13 +55,13 @@ describe("productList id filters", () => {
     expect(ids.has(tomatoSeeds.id)).toBe(false);
   });
 
-  it("growsIngredientIdFilter narrows to products whose growsIngredientId matches, leaving ingredientId-only matches out", async () => {
+  it("growsPlantIdFilter narrows to products whose growsPlantId matches, leaving ingredientId-only matches out", async () => {
     const flour = await createIngredient(
       ctx.db,
       { name: "Filter flour 2" },
       TEST_ACTOR,
     );
-    const tomato = await createIngredient(
+    const tomato = await createPlantFixture(
       ctx.db,
       { name: "Filter tomato crop 2" },
       TEST_ACTOR,
@@ -74,14 +75,14 @@ describe("productList id filters", () => {
       ctx.db,
       makeProductInput({
         name: "Tomato seed packet 2",
-        growsIngredientId: tomato.id,
+        growsPlantId: tomato.id,
       }),
       TEST_ACTOR,
     );
 
     const { data } = await productList(
       ctx.db,
-      { growsIngredientIdFilter: tomato.id },
+      { growsPlantIdFilter: tomato.id },
       [],
       { pageIndex: 0, pageSize: 50 },
     );

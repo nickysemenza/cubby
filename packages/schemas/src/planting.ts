@@ -4,7 +4,7 @@ import { auditDateFilterFields, plainDate } from "./base-entity";
 import { displayImagesField } from "./display-images";
 import {
   gardenEntryShortcode,
-  ingredientShortcode,
+  plantShortcode,
   locationShortcode,
   plantingShortcode,
   productShortcode,
@@ -30,7 +30,7 @@ export const plantingFilterFields = {
   ...auditDateFilterFields,
   ...generatedPlantingFilterFields,
   locationId: oneOrMany(locationShortcode).optional(),
-  ingredientId: oneOrMany(ingredientShortcode).optional(),
+  plantId: oneOrMany(plantShortcode).optional(),
   taskId: oneOrMany(taskShortcode).optional(),
   sourceProductId: oneOrMany(productShortcode).optional(),
   /** Plantings a garden entry is logged against (`GardenEntryPlanting`). */

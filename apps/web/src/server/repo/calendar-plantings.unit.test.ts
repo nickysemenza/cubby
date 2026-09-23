@@ -10,8 +10,8 @@ const row = (
   overrides: Partial<CalendarPlantingRow> = {},
 ): CalendarPlantingRow => ({
   shortcode: testShortcode("planting", "PLT-4K7M"),
-  ingredientName: "Tomato",
-  variety: "Brandywine",
+  plantName: "Brandywine",
+  gardenGuideKey: "tomato",
   locationName: "Raised bed 2",
   plannedWindow: "Late spring",
   sowedOn: null,
@@ -44,7 +44,7 @@ describe("mapPlantingItems", () => {
       kind: "planting",
       id: testShortcode("planting", "PLT-4K7M"),
       milestone: "sowed",
-      title: "Tomato · Brandywine",
+      title: "Brandywine · Tomato",
       locationName: "Raised bed 2",
       plannedWindow: "Late spring",
       startDate: "2026-04-01",
@@ -53,9 +53,9 @@ describe("mapPlantingItems", () => {
     });
   });
 
-  it("falls back to the ingredient name alone when there is no variety", () => {
+  it("titles a species-level plant by its name alone", () => {
     const [item] = mapPlantingItems(
-      [row({ variety: null, sowedOn: "2026-03-01" })],
+      [row({ plantName: "Tomato", sowedOn: "2026-03-01" })],
       { startDate: "2026-01-01", endDateExclusive: "2027-01-01" },
     );
     expect(item?.title).toBe("Tomato");

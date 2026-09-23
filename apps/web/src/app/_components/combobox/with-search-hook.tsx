@@ -33,6 +33,7 @@ import {
   buildIngredientComboboxItem,
   buildLocationComboboxItem,
   buildLocationComboboxItemFromDetail,
+  buildPlantComboboxItem,
   buildPlantingComboboxItem,
   buildProductComboboxItem,
   buildProjectComboboxItem,
@@ -53,6 +54,7 @@ import {
   type UseEntitySearchConfig,
 } from "./entity-search-hooks";
 
+type PlantShortcode = ShortcodeFor<"plant">;
 type PlantingShortcode = ShortcodeFor<"planting">;
 
 const EntityEditDialog = lazy(() =>
@@ -255,6 +257,21 @@ function useProductListSource(searchQuery: string, enabled: boolean) {
   return { data: data?.items, isLoading };
 }
 
+function usePlantListSource(
+  searchQuery: string,
+  enabled: boolean,
+  scope?: EntitySearchScope | null,
+) {
+  const { data, isLoading } = useQuery({
+    ...entityListFor("plant").queryOptions({
+      filters: withScope({ search: searchQuery }, scope),
+      pagination,
+    }),
+    enabled,
+  });
+  return { data: data?.items, isLoading };
+}
+
 /** Plantings have no ordinary name filter; scoped picks use the list route so
  * dependent filters stay server-enforced instead of widening to global search. */
 function usePlantingListSource(
@@ -386,6 +403,21 @@ const taskConfig: UseEntitySearchConfig<
   build: buildTaskComboboxItem,
   buildDetail: buildTaskComboboxItem,
   buildSearchHit: (hit) => buildSearchHitComboboxItem(hit, "task"),
+  useOnCreateNew: useNoCreateNew,
+  createNew: "none",
+};
+
+const plantConfig: UseEntitySearchConfig<
+  PlantShortcode,
+  Parameters<typeof buildPlantComboboxItem>[0],
+  Parameters<typeof buildPlantComboboxItem>[0]
+> = {
+  detailPlaceholder: detailPlaceholder("plant"),
+  splitBlankTyped: true,
+  useListSource: usePlantListSource,
+  build: buildPlantComboboxItem,
+  buildDetail: buildPlantComboboxItem,
+  buildSearchHit: (hit) => buildSearchHitComboboxItem(hit, "plant"),
   useOnCreateNew: useNoCreateNew,
   createNew: "none",
 };
@@ -676,6 +708,15 @@ function TaskEntitySearch({
   return <>{children({ items, onSearchChange, isLoading, onOpenChange })}</>;
 }
 
+function PlantEntitySearch({
+  children,
+  scope,
+}: WithEntitySearchProps<PlantShortcode>) {
+  const { items, isLoading, onSearchChange, onOpenChange } =
+    useEntitySearchRows("plant", plantConfig, scope);
+  return <>{children({ items, onSearchChange, isLoading, onOpenChange })}</>;
+}
+
 function PlantingEntitySearch({
   children,
   scope,
@@ -730,6 +771,8 @@ function NonVendorEntitySearch({
       );
     case "task":
       return <TaskEntitySearch scope={scope}>{children}</TaskEntitySearch>;
+    case "plant":
+      return <PlantEntitySearch scope={scope}>{children}</PlantEntitySearch>;
     case "planting":
       return (
         <PlantingEntitySearch scope={scope}>{children}</PlantingEntitySearch>
@@ -795,7 +838,9 @@ type EntityIdFor<E extends Exclude<PickerSearchEntity, "vendor">> =
               ? ProjectShortcode
               : E extends "task"
                 ? TaskShortcode
-                : PlantingShortcode;
+                : E extends "plant"
+                  ? PlantShortcode
+                  : PlantingShortcode;
 
 /**
  * The shared entity combobox provider: search-query state, the deferred-open

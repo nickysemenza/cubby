@@ -119,11 +119,11 @@ const splitProductImages = (
 
 type ProductTopLevelDB = Omit<
   RowWithOptionalAliases<typeof product.$inferSelect>,
-  "growsIngredientId"
+  "growsPlantId"
 > & {
   classificationEvidence: string;
   category: ProductCategorySummary | null;
-  growsIngredientId?: (typeof product.$inferSelect)["growsIngredientId"];
+  growsPlantId?: (typeof product.$inferSelect)["growsPlantId"];
   images?: ProductImageRow[] | null;
   externalIds?: MappableProductExternalId[] | null;
   dataQuality: ProductTopLevelOut["dataQuality"];
@@ -133,7 +133,7 @@ type ProductTopLevelDB = Omit<
   // (e.g. ingredient-relation reads) fall back to `null` below.
   coverImageUrl?: string | null;
   /** Loaded where a public product response needs the garden source relation. */
-  growsIngredient?: { shortcode: string } | null;
+  growsPlant?: { shortcode: string } | null;
 };
 
 /**
@@ -216,8 +216,8 @@ export const mapDbProductToTopLevel = (
     category: productData.category,
     categoryId: productData.category?.id ?? null,
     classificationEvidence: productData.classificationEvidence,
-    growsIngredientId: productData.growsIngredient
-      ? parseShortcodeFor("ingredient", productData.growsIngredient.shortcode)
+    growsPlantId: productData.growsPlant
+      ? parseShortcodeFor("plant", productData.growsPlant.shortcode)
       : null,
     price: productData.price,
     pricing: productData.pricing ?? resolveProductPricing(productData.price),
@@ -553,8 +553,8 @@ export const dbProductToAPI = (
     classificationEvidence: productData.classificationEvidence,
     categoryId: productData.category?.id ?? null,
     category: productData.category,
-    growsIngredientId: productData.growsIngredient
-      ? parseShortcodeFor("ingredient", productData.growsIngredient.shortcode)
+    growsPlantId: productData.growsPlant
+      ? parseShortcodeFor("plant", productData.growsPlant.shortcode)
       : null,
     price: productData.price,
     pricing: productData.pricing ?? resolveProductPricing(productData.price),

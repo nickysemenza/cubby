@@ -24,6 +24,7 @@ import {
   location,
   meal,
   mealRecipe,
+  plant,
   planting,
   product,
   project,
@@ -36,6 +37,10 @@ import {
   wish,
   wishCandidate,
 } from "~/server/db/schema";
+import {
+  plantDisplayName,
+  plantingDisplayName,
+} from "~/server/garden-guides/windows";
 import { notDeleted, unwrapDb } from "~/server/repo/database-helpers";
 import { solePurchaseForTransaction } from "~/server/repo/financial-transaction-allocations";
 import { categorySummarySql } from "~/server/repo/product-category-sql";
@@ -52,6 +57,7 @@ import {
   buildInventoryEmbeddingText,
   buildLocationEmbeddingText,
   buildMealEmbeddingText,
+  buildPlantEmbeddingText,
   buildPlantingEmbeddingText,
   buildProductEmbeddingText,
   buildProjectEmbeddingText,
@@ -985,6 +991,45 @@ async function getFinancialTransactionEmbeddingTexts(
   }));
 }
 
+async function getPlantEmbeddingTexts(
+  db: Database | DrizzleTransaction,
+  options: EmbeddingLoadOptions = {},
+): Promise<SearchableEntityText[]> {
+  const queryConfig = withOptionalLimit(
+    {
+      where: and(
+        notDeleted(plant),
+        options.ids?.length
+          ? inArray(
+              plant.id,
+              options.ids.map((id) => parseEntityId("plant", id)),
+            )
+          : undefined,
+      ),
+      columns: {
+        id: true,
+        name: true,
+        gardenGuideKey: true,
+        latinName: true,
+        verdict: true,
+        notes: true,
+      },
+    },
+    options.limit,
+  );
+  const rows = await unwrapDb(db).query.plant.findMany(queryConfig);
+  return rows.map((row) => ({
+    entityType: "plant",
+    entityId: row.id,
+    embeddingText: buildPlantEmbeddingText({
+      displayName: plantDisplayName(row.name, row.gardenGuideKey),
+      latinName: row.latinName,
+      verdict: row.verdict,
+      notes: row.notes,
+    }),
+  }));
+}
+
 async function getPlantingEmbeddingTexts(
   db: Database | DrizzleTransaction,
   options: EmbeddingLoadOptions = {},
@@ -1000,9 +1045,9 @@ async function getPlantingEmbeddingTexts(
             )
           : undefined,
       ),
-      columns: { id: true, variety: true, status: true, notes: true },
+      columns: { id: true, status: true, notes: true },
       with: {
-        ingredient: { columns: { name: true } },
+        plant: { columns: { name: true, gardenGuideKey: true } },
         location: { columns: { name: true } },
       },
     },
@@ -1013,8 +1058,7 @@ async function getPlantingEmbeddingTexts(
     entityType: "planting",
     entityId: row.id,
     embeddingText: buildPlantingEmbeddingText({
-      ingredientName: row.ingredient.name,
-      variety: row.variety,
+      plantName: plantingDisplayName(row.plant),
       status: row.status,
       locationName: row.location?.name ?? null,
       notes: row.notes,
@@ -1050,8 +1094,10 @@ async function getGardenEntryEmbeddingTexts(
           where: notDeleted(gardenEntryPlanting),
           with: {
             planting: {
-              columns: { variety: true },
-              with: { ingredient: { columns: { name: true } } },
+              columns: { id: true },
+              with: {
+                plant: { columns: { name: true, gardenGuideKey: true } },
+              },
             },
           },
         },
@@ -1072,13 +1118,7 @@ async function getGardenEntryEmbeddingTexts(
       plantingName:
         row.plantings
           .flatMap((link) =>
-            link.planting
-              ? [
-                  link.planting.variety
-                    ? `${link.planting.ingredient.name} · ${link.planting.variety}`
-                    : link.planting.ingredient.name,
-                ]
-              : [],
+            link.planting ? [plantingDisplayName(link.planting.plant)] : [],
           )
           .join(", ") || null,
       note: row.note,
@@ -1104,6 +1144,7 @@ const embeddingTextLoaders = {
   financialTransaction: getFinancialTransactionEmbeddingTexts,
   expense: getExpenseEmbeddingTexts,
   wish: getWishEmbeddingTexts,
+  plant: getPlantEmbeddingTexts,
   planting: getPlantingEmbeddingTexts,
   gardenEntry: getGardenEntryEmbeddingTexts,
 } satisfies Record<SearchableEntity, EmbeddingTextLoader>;

@@ -155,6 +155,7 @@ public actor CubbyClient {
             case .importRun: .importRun
             case .device: .device
             case .imageSighting: .imageSighting
+            case .plant: .plant
             }
         return try await perform {
             try await api.fieldExplanation_explain(

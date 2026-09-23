@@ -3,13 +3,14 @@ import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { and, eq, inArray, ne } from "drizzle-orm";
 
 import { householdLocalDate } from "~/lib/household-date";
-import { ingredient, planting } from "~/server/db/schema";
+import { plant, planting } from "~/server/db/schema";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import type { EntityTimelineImplementation } from "~/server/entity-timeline/contracts";
 import { defaultTimelinePage } from "~/server/entity-timeline/default-timeline";
 import {
   guideBandMonthsFor,
   resolveGardenGuideKey,
+  plantDisplayName,
 } from "~/server/garden-guides/windows";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
 
@@ -33,11 +34,11 @@ const guideRows = async (
   const rows = await getDb(context.readDb)
     .select({
       shortcode: planting.shortcode,
-      ingredientName: ingredient.name,
-      gardenGuideKey: ingredient.gardenGuideKey,
+      plantName: plant.name,
+      gardenGuideKey: plant.gardenGuideKey,
     })
     .from(planting)
-    .innerJoin(ingredient, eq(planting.ingredientId, ingredient.id))
+    .innerJoin(plant, eq(planting.plantId, plant.id))
     .where(
       and(
         inArray(
@@ -63,7 +64,7 @@ const guideRows = async (
       const max = Math.max(...months);
       out.push({
         id: `guide-${method}:${id}`,
-        name: `Recommended ${method} · ${row.ingredientName}`,
+        name: `Recommended ${method} · ${plantDisplayName(row.plantName, row.gardenGuideKey)}`,
         // The synthetic id keeps sow and transplant rows independently stable;
         // navigation still belongs to the live planting record.
         link: { entity: "planting", id },

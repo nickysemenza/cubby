@@ -87,6 +87,7 @@ export const wishId = ENTITY_ID_SCHEMA.wish;
 export const plantingId = ENTITY_ID_SCHEMA.planting;
 export const gardenEntryId = ENTITY_ID_SCHEMA.gardenEntry;
 export const deviceId = ENTITY_ID_SCHEMA.device;
+export const plantId = ENTITY_ID_SCHEMA.plant;
 export const imageSightingId = ENTITY_ID_SCHEMA.imageSighting;
 
 export type RecipeId = EntityId<"recipe">;
@@ -113,6 +114,7 @@ export type WishId = EntityId<"wish">;
 export type PlantingId = EntityId<"planting">;
 export type GardenEntryId = EntityId<"gardenEntry">;
 export type DeviceId = EntityId<"device">;
+export type PlantId = EntityId<"plant">;
 export type ImageSightingId = EntityId<"imageSighting">;
 
 type AnyEntityId = {
@@ -190,6 +192,7 @@ const PARSE_ENTITY_REF = {
   importRun: entityRefParser("importRun"),
   wish: entityRefParser("wish"),
   device: entityRefParser("device"),
+  plant: entityRefParser("plant"),
   imageSighting: entityRefParser("imageSighting"),
 } as const satisfies { [E in ShortcodeEntity]: EntityRefParser<E> };
 
@@ -236,6 +239,7 @@ export {
   plantingShortcode,
   gardenEntryShortcode,
   deviceShortcode,
+  plantShortcode,
   imageSightingShortcode,
 } from "@cubby/shared";
 export type {
@@ -262,5 +266,6 @@ export type {
   ImportRunShortcode,
   WishShortcode,
   DeviceShortcode,
+  PlantShortcode,
   ImageSightingShortcode,
 } from "@cubby/shared";

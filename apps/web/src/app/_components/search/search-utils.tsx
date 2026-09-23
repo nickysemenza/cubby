@@ -36,6 +36,7 @@ export const entityTypeMap = {
   expense: "expense",
   wish: "wish",
   image: "image",
+  plant: "plant",
   planting: "planting",
   gardenEntry: "gardenEntry",
 } satisfies Record<SearchableEntity, BrowserRoutedEntity>;

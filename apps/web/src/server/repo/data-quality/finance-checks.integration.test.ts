@@ -18,7 +18,6 @@ import { createExpense } from "~/server/repo/expense";
 import { createFinancialAccount } from "~/server/repo/financial-account";
 import { createFinancialTransaction } from "~/server/repo/financial-transaction";
 import { createGardenEntry, createPlanting } from "~/server/repo/garden";
-import { createIngredient } from "~/server/repo/ingredient";
 import { createLedgerParty } from "~/server/repo/ledger-party";
 import { createLedgerTransfer } from "~/server/repo/ledger-transfer";
 import { createLocation } from "~/server/repo/location";
@@ -26,6 +25,7 @@ import { createProject } from "~/server/repo/project";
 import { createPurchase } from "~/server/repo/purchase";
 import {
   createImageFixture,
+  createPlantFixture,
   createProductFixture,
   makeLocationInput,
   makeProductInput,
@@ -362,8 +362,8 @@ describe("data quality: finance and project entities", () => {
     });
   });
 
-  it("planting: variety and location (location only once no longer planned)", async () => {
-    const crop = await createIngredient(
+  it("planting: location (only once no longer planned)", async () => {
+    const crop = await createPlantFixture(
       ctx.db,
       { name: "DQ planting crop" },
       TEST_ACTOR,
@@ -375,16 +375,15 @@ describe("data quality: finance and project entities", () => {
     );
     const gap = await createPlanting(
       ctx.db,
-      { ingredientId: crop.id, status: "growing" },
+      { plantId: crop.id, status: "growing" },
       TEST_ACTOR,
     );
     const complete = await createPlanting(
       ctx.db,
       {
-        ingredientId: crop.id,
+        plantId: crop.id,
         locationId: bed.id,
         status: "growing",
-        variety: "Roma",
       },
       TEST_ACTOR,
     );
@@ -402,8 +401,7 @@ describe("data quality: finance and project entities", () => {
       completeId,
     ]);
     const gapChecks = hydrated.get(gapId)?.gaps.map((g) => g.check);
-    expect(gapChecks).toContain("planting_variety");
-    expect(gapChecks).toContain("planting_location");
+    expect(gapChecks).toEqual(["planting_location"]);
     expect(hydrated.get(completeId)).toMatchObject({
       status: "complete",
       gaps: [],

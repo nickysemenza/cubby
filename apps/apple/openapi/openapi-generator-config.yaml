@@ -142,6 +142,10 @@ filter:
     - resources.meal.get
     - resources.meal.list
     - resources.meal.update
+    - resources.plant.create
+    - resources.plant.get
+    - resources.plant.list
+    - resources.plant.update
     - resources.planting.create
     - resources.planting.get
     - resources.planting.list

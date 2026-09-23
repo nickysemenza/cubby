@@ -45,7 +45,7 @@ export type ProductDeepDB = ProductSelect & {
   // (e.g. ingredient-relation reads) fall back to `null` in the mapper.
   coverImageUrl?: string | null;
   ingredient: typeof ingredient.$inferSelect | null;
-  growsIngredient?: { shortcode: string } | null;
+  growsPlant?: { shortcode: string } | null;
   unitMappings: Array<typeof productUnitMappings.$inferSelect>;
   externalIds: MappableProductExternalId[];
   inventoryEntry: Array<
@@ -84,7 +84,7 @@ export type ProductListDB = ProductSelect & {
   pricing?: ProductPricing;
   dataQuality: DataQuality;
   ingredient: typeof ingredient.$inferSelect | null;
-  growsIngredient?: { shortcode: string } | null;
+  growsPlant?: { shortcode: string } | null;
   unitMappings: Array<typeof productUnitMappings.$inferSelect>;
   externalIds: MappableProductExternalId[];
   inventoryEntry: Array<

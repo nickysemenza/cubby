@@ -78,6 +78,7 @@ export const INCOMING_EDGES = {
   wish: projectIncomingEdges(ENTITY_EDGES.wish),
   expense: projectIncomingEdges(ENTITY_EDGES.expense),
   ledgerTransfer: projectIncomingEdges(ENTITY_EDGES.ledgerTransfer),
+  plant: projectIncomingEdges(ENTITY_EDGES.plant),
   planting: projectIncomingEdges(ENTITY_EDGES.planting),
   gardenEntry: projectIncomingEdges(ENTITY_EDGES.gardenEntry),
   inventory: projectIncomingEdges(ENTITY_EDGES.inventory),

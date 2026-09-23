@@ -771,7 +771,8 @@
                 "vendorAccount",
                 "productCategory",
                 "device",
-                "imageSighting"
+                "imageSighting",
+                "plant"
               ]
             },
             "style": "form",
@@ -782,7 +783,7 @@
             "in": "query",
             "schema": {
               "type": "string",
-              "pattern": "^(?:PRD-|RCP-|ING-|CKB-|LOC-|INV-|MEL-|LPY-|LTR-|PRJ-|TSK-|VEN-|PUR-|FAC-|FTX-|WSH-|EXP-|PLT-|GDE-|VACCT-|CAT-|DEV-|IMS-)[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$"
+              "pattern": "^(?:PRD-|RCP-|ING-|CKB-|LOC-|INV-|MEL-|LPY-|LTR-|PRJ-|TSK-|VEN-|PUR-|FAC-|FTX-|WSH-|EXP-|PLT-|GDE-|VACCT-|CAT-|DEV-|IMS-|PLANT-)[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$"
             },
             "style": "form",
             "explode": true
@@ -3818,7 +3819,8 @@
                 "productCategory",
                 "importRun",
                 "device",
-                "imageSighting"
+                "imageSighting",
+                "plant"
               ]
             },
             "style": "form",
@@ -11734,7 +11736,8 @@
                 "productCategory",
                 "importRun",
                 "device",
-                "imageSighting"
+                "imageSighting",
+                "plant"
               ]
             },
             "style": "form",
@@ -13398,7 +13401,6 @@
               "items": {
                 "type": "string",
                 "enum": [
-                  "planting_variety",
                   "planting_location"
                 ]
               }
@@ -13421,14 +13423,14 @@
             "explode": true
           },
           {
-            "name": "ingredientId",
+            "name": "plantId",
             "in": "query",
             "schema": {
               "type": "array",
               "items": {
                 "type": "string",
-                "pattern": "^ING-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
-                "description": "ingredient shortcode, e.g. ING-4K7M"
+                "pattern": "^PLANT-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
+                "description": "plant shortcode, e.g. PLANT-4K7M"
               }
             },
             "style": "form",
@@ -13847,7 +13849,6 @@
               "items": {
                 "type": "string",
                 "enum": [
-                  "planting_variety",
                   "planting_location"
                 ]
               }
@@ -13870,14 +13871,14 @@
             "explode": true
           },
           {
-            "name": "ingredientId",
+            "name": "plantId",
             "in": "query",
             "schema": {
               "type": "array",
               "items": {
                 "type": "string",
-                "pattern": "^ING-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
-                "description": "ingredient shortcode, e.g. ING-4K7M"
+                "pattern": "^PLANT-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
+                "description": "plant shortcode, e.g. PLANT-4K7M"
               }
             },
             "style": "form",
@@ -14029,6 +14030,467 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/EntityTimelineOut"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/plants": {
+      "get": {
+        "description": "Use page=1&pageSize=20&sort=name,-createdAt. Filters are individual query parameters: text is literal, numbers and booleans are plain, and a list repeats its key (tag=a&tag=b). Response pagination metadata remains zero-based. Resource methods depend on entity capabilities.",
+        "tags": [
+          "plant"
+        ],
+        "parameters": [
+          {
+            "name": "createdFrom",
+            "in": "query",
+            "description": "Calendar day as \"YYYY-MM-DD\"",
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "createdTo",
+            "in": "query",
+            "description": "Calendar day as \"YYYY-MM-DD\"",
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "updatedFrom",
+            "in": "query",
+            "description": "Calendar day as \"YYYY-MM-DD\"",
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "updatedTo",
+            "in": "query",
+            "description": "Calendar day as \"YYYY-MM-DD\"",
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "search",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "gardenGuideKey",
+            "in": "query",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "artichoke",
+                  "basil",
+                  "bean-fava",
+                  "bean-runner",
+                  "bean-snap",
+                  "beet",
+                  "broccoli",
+                  "brussels-sprout",
+                  "cabbage",
+                  "carrot",
+                  "cauliflower",
+                  "celery",
+                  "chard",
+                  "collard",
+                  "corn",
+                  "cucumber",
+                  "eggplant",
+                  "garlic",
+                  "kale",
+                  "kohlrabi",
+                  "leek",
+                  "lettuce",
+                  "mustard",
+                  "onion",
+                  "parsnip",
+                  "pea",
+                  "pepper",
+                  "potato",
+                  "radish",
+                  "rhubarb",
+                  "shallot",
+                  "spinach",
+                  "squash-summer",
+                  "squash-winter",
+                  "sunflower",
+                  "tomato",
+                  "turnip",
+                  "melon",
+                  "pumpkin",
+                  "rutabaga",
+                  "watermelon",
+                  "asian-greens",
+                  "broccoli-raab",
+                  "cilantro",
+                  "dill",
+                  "parsley",
+                  "sorrel",
+                  "shiso",
+                  "tomatillo",
+                  "epazote",
+                  "fenugreek",
+                  "scallion",
+                  "bean-yardlong",
+                  "saffron",
+                  "celery-leaf",
+                  "alyssum",
+                  "nasturtium",
+                  "marigold"
+                ]
+              }
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "verdict",
+            "in": "query",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "yes",
+                  "maybe",
+                  "no"
+                ]
+              }
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "dataStatus",
+            "in": "query",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "complete",
+                  "needs_data",
+                  "defect"
+                ]
+              }
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "dataGap",
+            "in": "query",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "plant_crop"
+                ]
+              }
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "ingredientId",
+            "in": "query",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^ING-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
+                "description": "ingredient shortcode, e.g. ING-4K7M"
+              }
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "searchQuery",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "description": "Page number, starting at 1 (default 1)",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "description": "Items per page (default 10, maximum 500)",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 500
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "description": "Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: name, createdAt, updatedAt, dataQuality. Default: -name",
+            "schema": {
+              "type": "string",
+              "pattern": "^-?[^,\\s-][^,\\s]*(,-?[^,\\s-][^,\\s]*){0,2}$"
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "groupBy",
+            "in": "query",
+            "description": "Group rows by one field. One of: name, createdAt, updatedAt",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "name",
+                "createdAt",
+                "updatedAt"
+              ]
+            },
+            "style": "form",
+            "explode": true
+          }
+        ],
+        "operationId": "resources.plant.list",
+        "responses": {
+          "200": {
+            "description": "200",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlantListPage"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "plant"
+        ],
+        "parameters": [],
+        "operationId": "resources.plant.create",
+        "requestBody": {
+          "description": "Body",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlantCreateInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "201",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GeneratedEntityMutationCreateResultPlant"
+                }
+              }
+            },
+            "headers": {
+              "Location": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Created resource URL"
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/plants/{id}": {
+      "delete": {
+        "tags": [
+          "plant"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "plant shortcode, e.g. PLANT-4K7M",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^PLANT-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$"
+            }
+          }
+        ],
+        "operationId": "resources.plant.delete",
+        "responses": {
+          "200": {
+            "description": "200",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EntityDeleteResult"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "plant"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "plant shortcode, e.g. PLANT-4K7M",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^PLANT-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$"
+            }
+          }
+        ],
+        "operationId": "resources.plant.get",
+        "responses": {
+          "200": {
+            "description": "200",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlantDetail"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "plant"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "plant shortcode, e.g. PLANT-4K7M",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^PLANT-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$"
+            }
+          }
+        ],
+        "operationId": "resources.plant.update",
+        "requestBody": {
+          "description": "Body",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlantUpdateData"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "200",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GeneratedEntityMutationUpdateResultPlant"
                 }
               }
             }
@@ -16759,7 +17221,7 @@
             "explode": true
           },
           {
-            "name": "growsIngredientIdFilter",
+            "name": "growsPlantIdFilter",
             "in": "query",
             "schema": {
               "type": "array",
@@ -16767,8 +17229,8 @@
                 "anyOf": [
                   {
                     "type": "string",
-                    "pattern": "^ING-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
-                    "description": "ingredient shortcode, e.g. ING-4K7M"
+                    "pattern": "^PLANT-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
+                    "description": "plant shortcode, e.g. PLANT-4K7M"
                   },
                   {
                     "type": "string",
@@ -16776,8 +17238,8 @@
                   }
                 ],
                 "type": "string",
-                "pattern": "^ING-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
-                "description": "ingredient shortcode, e.g. ING-4K7M"
+                "pattern": "^PLANT-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
+                "description": "plant shortcode, e.g. PLANT-4K7M"
               }
             },
             "style": "form",
@@ -18157,7 +18619,7 @@
             "explode": true
           },
           {
-            "name": "growsIngredientIdFilter",
+            "name": "growsPlantIdFilter",
             "in": "query",
             "schema": {
               "type": "array",
@@ -18165,8 +18627,8 @@
                 "anyOf": [
                   {
                     "type": "string",
-                    "pattern": "^ING-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
-                    "description": "ingredient shortcode, e.g. ING-4K7M"
+                    "pattern": "^PLANT-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
+                    "description": "plant shortcode, e.g. PLANT-4K7M"
                   },
                   {
                     "type": "string",
@@ -18174,8 +18636,8 @@
                   }
                 ],
                 "type": "string",
-                "pattern": "^ING-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
-                "description": "ingredient shortcode, e.g. ING-4K7M"
+                "pattern": "^PLANT-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
+                "description": "plant shortcode, e.g. PLANT-4K7M"
               }
             },
             "style": "form",
@@ -23045,7 +23507,8 @@
                 "productCategory",
                 "importRun",
                 "device",
-                "imageSighting"
+                "imageSighting",
+                "plant"
               ]
             },
             "style": "form",
@@ -23620,7 +24083,8 @@
                 "productCategory",
                 "importRun",
                 "device",
-                "imageSighting"
+                "imageSighting",
+                "plant"
               ]
             },
             "style": "form",
@@ -24005,7 +24469,8 @@
                   "expense",
                   "image",
                   "planting",
-                  "gardenEntry"
+                  "gardenEntry",
+                  "plant"
                 ]
               }
             },
@@ -24093,7 +24558,8 @@
                   "expense",
                   "image",
                   "planting",
-                  "gardenEntry"
+                  "gardenEntry",
+                  "plant"
                 ]
               }
             },
@@ -24181,7 +24647,8 @@
                   "expense",
                   "image",
                   "planting",
-                  "gardenEntry"
+                  "gardenEntry",
+                  "plant"
                 ]
               }
             },
@@ -24269,7 +24736,8 @@
                   "expense",
                   "image",
                   "planting",
-                  "gardenEntry"
+                  "gardenEntry",
+                  "plant"
                 ]
               }
             },
@@ -24357,7 +24825,8 @@
                   "expense",
                   "image",
                   "planting",
-                  "gardenEntry"
+                  "gardenEntry",
+                  "plant"
                 ]
               }
             },
@@ -28089,10 +28558,10 @@
             ]
           },
           "blockedByIds": {
-            "$ref": "#/components/schemas/output_schema363"
+            "$ref": "#/components/schemas/output_schema378"
           },
           "blockingIds": {
-            "$ref": "#/components/schemas/output_schema363"
+            "$ref": "#/components/schemas/output_schema378"
           },
           "subtaskCount": {
             "type": "integer",
@@ -29452,7 +29921,8 @@
           "vendorAccount",
           "productCategory",
           "device",
-          "imageSighting"
+          "imageSighting",
+          "plant"
         ]
       },
       "AuditLogEntryOut": {
@@ -29469,7 +29939,7 @@
               "string",
               "null"
             ],
-            "pattern": "^(?:PRD-|RCP-|ING-|CKB-|LOC-|INV-|MEL-|LPY-|LTR-|PRJ-|TSK-|VEN-|PUR-|FAC-|FTX-|WSH-|EXP-|PLT-|GDE-|VACCT-|CAT-|DEV-|IMS-)[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$"
+            "pattern": "^(?:PRD-|RCP-|ING-|CKB-|LOC-|INV-|MEL-|LPY-|LTR-|PRJ-|TSK-|VEN-|PUR-|FAC-|FTX-|WSH-|EXP-|PLT-|GDE-|VACCT-|CAT-|DEV-|IMS-|PLANT-)[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$"
           },
           "entityName": {
             "type": [
@@ -30139,7 +30609,7 @@
             "const": "capture"
           },
           "allowedHosts": {
-            "$ref": "#/components/schemas/input_schema207"
+            "$ref": "#/components/schemas/input_schema208"
           },
           "enhancedEvidence": {
             "type": "boolean"
@@ -30185,7 +30655,7 @@
             "maxLength": 200
           },
           "allowedHosts": {
-            "$ref": "#/components/schemas/input_schema207"
+            "$ref": "#/components/schemas/input_schema208"
           }
         },
         "required": [
@@ -30206,7 +30676,7 @@
             "format": "uri"
           },
           "allowedHosts": {
-            "$ref": "#/components/schemas/input_schema207"
+            "$ref": "#/components/schemas/input_schema208"
           }
         },
         "required": [
@@ -34260,6 +34730,11 @@
             "minimum": -9007199254740991,
             "maximum": 9007199254740991
           },
+          "plant": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
           "usdaFoods": {
             "type": "integer",
             "minimum": -9007199254740991,
@@ -34287,6 +34762,7 @@
           "gardenEntry",
           "importRun",
           "imageSighting",
+          "plant",
           "usdaFoods"
         ]
       },
@@ -34791,7 +35267,7 @@
             "$ref": "#/components/schemas/DisplayImagesField"
           },
           "attachments": {
-            "$ref": "#/components/schemas/output_schema489"
+            "$ref": "#/components/schemas/output_schema504"
           }
         },
         "required": [
@@ -35689,71 +36165,13 @@
             "description": "Ingredient name"
           },
           "aliases": {
-            "$ref": "#/components/schemas/input_schema91"
+            "$ref": "#/components/schemas/input_schema90"
           },
           "naKinds": {
             "$ref": "#/components/schemas/output_schema195"
           },
           "usuallyOnHand": {
             "type": "boolean"
-          },
-          "gardenGuideKey": {
-            "type": "string",
-            "enum": [
-              "artichoke",
-              "basil",
-              "bean-fava",
-              "bean-runner",
-              "bean-snap",
-              "beet",
-              "broccoli",
-              "brussels-sprout",
-              "cabbage",
-              "carrot",
-              "cauliflower",
-              "celery",
-              "chard",
-              "collard",
-              "corn",
-              "cucumber",
-              "eggplant",
-              "garlic",
-              "kale",
-              "kohlrabi",
-              "leek",
-              "lettuce",
-              "mustard",
-              "onion",
-              "parsnip",
-              "pea",
-              "pepper",
-              "potato",
-              "radish",
-              "rhubarb",
-              "shallot",
-              "spinach",
-              "squash-summer",
-              "squash-winter",
-              "sunflower",
-              "tomato",
-              "turnip",
-              "melon",
-              "pumpkin",
-              "rutabaga",
-              "watermelon"
-            ]
-          },
-          "guideSowWindow": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "guideTransplantWindow": {
-            "type": [
-              "string",
-              "null"
-            ]
           },
           "createdAt": {
             "type": "string",
@@ -35852,8 +36270,6 @@
           "aliases",
           "naKinds",
           "usuallyOnHand",
-          "guideSowWindow",
-          "guideTransplantWindow",
           "createdAt",
           "updatedAt",
           "dataQuality",
@@ -35911,7 +36327,8 @@
           "productCategory",
           "importRun",
           "device",
-          "imageSighting"
+          "imageSighting",
+          "plant"
         ]
       },
       "EntityAttachmentRead": {
@@ -36154,7 +36571,8 @@
               "productCategory",
               "importRun",
               "device",
-              "imageSighting"
+              "imageSighting",
+              "plant"
             ]
           },
           "deletedReferences": {
@@ -36188,7 +36606,8 @@
                     "productCategory",
                     "importRun",
                     "device",
-                    "imageSighting"
+                    "imageSighting",
+                    "plant"
                   ]
                 },
                 "id": {
@@ -36748,7 +37167,7 @@
           },
           "entityId": {
             "type": "string",
-            "pattern": "^(?:PRD-|RCP-|ING-|CKB-|LOC-|INV-|MEL-|LPY-|LTR-|PRJ-|TSK-|VEN-|PUR-|FAC-|FTX-|WSH-|EXP-|IMG-|PLT-|GDE-|VACCT-|CAT-|RUN-|DEV-|IMS-)[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$"
+            "pattern": "^(?:PRD-|RCP-|ING-|CKB-|LOC-|INV-|MEL-|LPY-|LTR-|PRJ-|TSK-|VEN-|PUR-|FAC-|FTX-|WSH-|EXP-|IMG-|PLT-|GDE-|VACCT-|CAT-|RUN-|DEV-|IMS-|PLANT-)[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$"
           }
         },
         "required": [
@@ -37686,10 +38105,10 @@
             "type": "object",
             "properties": {
               "scope": {
-                "$ref": "#/components/schemas/output_schema390"
+                "$ref": "#/components/schemas/output_schema405"
               },
               "grid": {
-                "$ref": "#/components/schemas/output_schema390"
+                "$ref": "#/components/schemas/output_schema405"
               }
             },
             "required": [
@@ -37701,19 +38120,19 @@
             "type": "object",
             "properties": {
               "tail": {
-                "$ref": "#/components/schemas/output_schema390"
+                "$ref": "#/components/schemas/output_schema405"
               },
               "causes": {
                 "type": "object",
                 "properties": {
                   "adjustments": {
-                    "$ref": "#/components/schemas/output_schema390"
+                    "$ref": "#/components/schemas/output_schema405"
                   },
                   "unattributedProject": {
-                    "$ref": "#/components/schemas/output_schema390"
+                    "$ref": "#/components/schemas/output_schema405"
                   },
                   "unattributedVendor": {
-                    "$ref": "#/components/schemas/output_schema390"
+                    "$ref": "#/components/schemas/output_schema405"
                   }
                 },
                 "required": [
@@ -38024,10 +38443,10 @@
             "$ref": "#/components/schemas/PlainDate"
           },
           "lineKind": {
-            "$ref": "#/components/schemas/output_schema394"
+            "$ref": "#/components/schemas/output_schema409"
           },
           "lineBasis": {
-            "$ref": "#/components/schemas/output_schema395"
+            "$ref": "#/components/schemas/output_schema410"
           },
           "costType": {
             "$ref": "#/components/schemas/CostType"
@@ -38135,7 +38554,7 @@
             "$ref": "#/components/schemas/DisplayImagesField"
           },
           "attachments": {
-            "$ref": "#/components/schemas/output_schema489"
+            "$ref": "#/components/schemas/output_schema504"
           }
         },
         "required": [
@@ -38430,12 +38849,12 @@
           "projectId": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/input_schema171"
+                "$ref": "#/components/schemas/input_schema172"
               },
               {
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/input_schema171"
+                  "$ref": "#/components/schemas/input_schema172"
                 }
               }
             ]
@@ -38530,12 +38949,12 @@
           "purchaseId": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/input_schema178"
+                "$ref": "#/components/schemas/input_schema179"
               },
               {
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/input_schema178"
+                  "$ref": "#/components/schemas/input_schema179"
                 }
               }
             ]
@@ -38610,10 +39029,10 @@
             "$ref": "#/components/schemas/PlainDate"
           },
           "lineKind": {
-            "$ref": "#/components/schemas/output_schema394"
+            "$ref": "#/components/schemas/output_schema409"
           },
           "lineBasis": {
-            "$ref": "#/components/schemas/output_schema395"
+            "$ref": "#/components/schemas/output_schema410"
           },
           "costType": {
             "$ref": "#/components/schemas/CostType"
@@ -38827,10 +39246,10 @@
             "$ref": "#/components/schemas/PlainDate"
           },
           "lineKind": {
-            "$ref": "#/components/schemas/output_schema394"
+            "$ref": "#/components/schemas/output_schema409"
           },
           "lineBasis": {
-            "$ref": "#/components/schemas/output_schema395"
+            "$ref": "#/components/schemas/output_schema410"
           },
           "costType": {
             "$ref": "#/components/schemas/CostType"
@@ -39953,7 +40372,7 @@
             "$ref": "#/components/schemas/DisplayImagesField"
           },
           "attachments": {
-            "$ref": "#/components/schemas/output_schema489"
+            "$ref": "#/components/schemas/output_schema504"
           }
         },
         "required": [
@@ -40928,7 +41347,7 @@
             "$ref": "#/components/schemas/DisplayImagesField"
           },
           "attachments": {
-            "$ref": "#/components/schemas/output_schema489"
+            "$ref": "#/components/schemas/output_schema504"
           }
         },
         "required": [
@@ -41489,6 +41908,69 @@
           "linkedProducts"
         ]
       },
+      "GardenCropKey": {
+        "type": "string",
+        "enum": [
+          "artichoke",
+          "basil",
+          "bean-fava",
+          "bean-runner",
+          "bean-snap",
+          "beet",
+          "broccoli",
+          "brussels-sprout",
+          "cabbage",
+          "carrot",
+          "cauliflower",
+          "celery",
+          "chard",
+          "collard",
+          "corn",
+          "cucumber",
+          "eggplant",
+          "garlic",
+          "kale",
+          "kohlrabi",
+          "leek",
+          "lettuce",
+          "mustard",
+          "onion",
+          "parsnip",
+          "pea",
+          "pepper",
+          "potato",
+          "radish",
+          "rhubarb",
+          "shallot",
+          "spinach",
+          "squash-summer",
+          "squash-winter",
+          "sunflower",
+          "tomato",
+          "turnip",
+          "melon",
+          "pumpkin",
+          "rutabaga",
+          "watermelon",
+          "asian-greens",
+          "broccoli-raab",
+          "cilantro",
+          "dill",
+          "parsley",
+          "sorrel",
+          "shiso",
+          "tomatillo",
+          "epazote",
+          "fenugreek",
+          "scallion",
+          "bean-yardlong",
+          "saffron",
+          "celery-leaf",
+          "alyssum",
+          "nasturtium",
+          "marigold"
+        ]
+      },
       "GardenEntryCreateInput": {
         "type": "object",
         "properties": {
@@ -41598,7 +42080,7 @@
             "$ref": "#/components/schemas/DisplayImagesField"
           },
           "attachments": {
-            "$ref": "#/components/schemas/output_schema489"
+            "$ref": "#/components/schemas/output_schema504"
           }
         },
         "required": [
@@ -42227,6 +42709,31 @@
           "sideEffects"
         ]
       },
+      "GeneratedEntityMutationCreateResultPlant": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string",
+            "const": "create"
+          },
+          "entity": {
+            "type": "string",
+            "const": "plant"
+          },
+          "item": {
+            "$ref": "#/components/schemas/PlantOut"
+          },
+          "sideEffects": {
+            "$ref": "#/components/schemas/MutationSideEffects"
+          }
+        },
+        "required": [
+          "action",
+          "entity",
+          "item",
+          "sideEffects"
+        ]
+      },
       "GeneratedEntityMutationCreateResultPlanting": {
         "type": "object",
         "properties": {
@@ -42802,6 +43309,31 @@
           "sideEffects"
         ]
       },
+      "GeneratedEntityMutationUpdateResultPlant": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string",
+            "const": "update"
+          },
+          "entity": {
+            "type": "string",
+            "const": "plant"
+          },
+          "item": {
+            "$ref": "#/components/schemas/PlantOut"
+          },
+          "sideEffects": {
+            "$ref": "#/components/schemas/MutationSideEffects"
+          }
+        },
+        "required": [
+          "action",
+          "entity",
+          "item",
+          "sideEffects"
+        ]
+      },
       "GeneratedEntityMutationUpdateResultPlanting": {
         "type": "object",
         "properties": {
@@ -43079,10 +43611,10 @@
             "type": "object",
             "properties": {
               "confirmed": {
-                "$ref": "#/components/schemas/output_schema278"
+                "$ref": "#/components/schemas/output_schema275"
               },
               "projected": {
-                "$ref": "#/components/schemas/output_schema278"
+                "$ref": "#/components/schemas/output_schema275"
               }
             },
             "required": [
@@ -45649,7 +46181,7 @@
             "$ref": "#/components/schemas/ImageSightingSourceType"
           },
           "mediaSubtypes": {
-            "$ref": "#/components/schemas/input_schema91"
+            "$ref": "#/components/schemas/input_schema90"
           },
           "originalFilename": {
             "type": [
@@ -45751,7 +46283,7 @@
             "$ref": "#/components/schemas/DisplayImagesField"
           },
           "attachments": {
-            "$ref": "#/components/schemas/output_schema489"
+            "$ref": "#/components/schemas/output_schema504"
           }
         },
         "required": [
@@ -45803,7 +46335,7 @@
             "$ref": "#/components/schemas/ImageSightingSourceType"
           },
           "mediaSubtypes": {
-            "$ref": "#/components/schemas/input_schema91"
+            "$ref": "#/components/schemas/input_schema90"
           },
           "originalFilename": {
             "type": [
@@ -46020,7 +46552,7 @@
             "$ref": "#/components/schemas/ImageSightingSourceType"
           },
           "mediaSubtypes": {
-            "$ref": "#/components/schemas/input_schema91"
+            "$ref": "#/components/schemas/input_schema90"
           },
           "originalFilename": {
             "type": [
@@ -47437,10 +47969,10 @@
             "description": "name of location"
           },
           "aliases": {
-            "$ref": "#/components/schemas/input_schema91"
+            "$ref": "#/components/schemas/input_schema90"
           },
           "tags": {
-            "$ref": "#/components/schemas/output_schema228"
+            "$ref": "#/components/schemas/output_schema225"
           },
           "type": {
             "$ref": "#/components/schemas/LocationType"
@@ -47488,10 +48020,10 @@
             "$ref": "#/components/schemas/DataQuality"
           },
           "children": {
-            "$ref": "#/components/schemas/output_schema253"
+            "$ref": "#/components/schemas/output_schema250"
           },
           "parent": {
-            "$ref": "#/components/schemas/output_schema254"
+            "$ref": "#/components/schemas/output_schema251"
           },
           "childCount": {
             "type": "integer",
@@ -47509,7 +48041,7 @@
             "maximum": 9007199254740991
           },
           "inventoryItems": {
-            "$ref": "#/components/schemas/output_schema258"
+            "$ref": "#/components/schemas/output_schema255"
           }
         },
         "required": [
@@ -47709,52 +48241,6 @@
           "usuallyOnHand": {
             "default": false,
             "type": "boolean"
-          },
-          "gardenGuideKey": {
-            "type": "string",
-            "enum": [
-              "artichoke",
-              "basil",
-              "bean-fava",
-              "bean-runner",
-              "bean-snap",
-              "beet",
-              "broccoli",
-              "brussels-sprout",
-              "cabbage",
-              "carrot",
-              "cauliflower",
-              "celery",
-              "chard",
-              "collard",
-              "corn",
-              "cucumber",
-              "eggplant",
-              "garlic",
-              "kale",
-              "kohlrabi",
-              "leek",
-              "lettuce",
-              "mustard",
-              "onion",
-              "parsnip",
-              "pea",
-              "pepper",
-              "potato",
-              "radish",
-              "rhubarb",
-              "shallot",
-              "spinach",
-              "squash-summer",
-              "squash-winter",
-              "sunflower",
-              "tomato",
-              "turnip",
-              "melon",
-              "pumpkin",
-              "rutabaga",
-              "watermelon"
-            ]
           }
         },
         "required": [
@@ -47772,71 +48258,13 @@
             "description": "Ingredient name"
           },
           "aliases": {
-            "$ref": "#/components/schemas/input_schema91"
+            "$ref": "#/components/schemas/input_schema90"
           },
           "naKinds": {
             "$ref": "#/components/schemas/output_schema195"
           },
           "usuallyOnHand": {
             "type": "boolean"
-          },
-          "gardenGuideKey": {
-            "type": "string",
-            "enum": [
-              "artichoke",
-              "basil",
-              "bean-fava",
-              "bean-runner",
-              "bean-snap",
-              "beet",
-              "broccoli",
-              "brussels-sprout",
-              "cabbage",
-              "carrot",
-              "cauliflower",
-              "celery",
-              "chard",
-              "collard",
-              "corn",
-              "cucumber",
-              "eggplant",
-              "garlic",
-              "kale",
-              "kohlrabi",
-              "leek",
-              "lettuce",
-              "mustard",
-              "onion",
-              "parsnip",
-              "pea",
-              "pepper",
-              "potato",
-              "radish",
-              "rhubarb",
-              "shallot",
-              "spinach",
-              "squash-summer",
-              "squash-winter",
-              "sunflower",
-              "tomato",
-              "turnip",
-              "melon",
-              "pumpkin",
-              "rutabaga",
-              "watermelon"
-            ]
-          },
-          "guideSowWindow": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "guideTransplantWindow": {
-            "type": [
-              "string",
-              "null"
-            ]
           },
           "createdAt": {
             "type": "string",
@@ -47855,19 +48283,19 @@
             "$ref": "#/components/schemas/RecipeTopLevel"
           },
           "recipeUsages": {
-            "$ref": "#/components/schemas/output_schema214"
+            "$ref": "#/components/schemas/output_schema211"
           },
           "appearsInRecipes": {
-            "$ref": "#/components/schemas/output_schema215"
+            "$ref": "#/components/schemas/output_schema212"
           },
           "product": {
-            "$ref": "#/components/schemas/output_schema216"
+            "$ref": "#/components/schemas/output_schema213"
           },
           "displayImages": {
             "$ref": "#/components/schemas/DisplayImagesField"
           },
           "attachments": {
-            "$ref": "#/components/schemas/output_schema489"
+            "$ref": "#/components/schemas/output_schema504"
           }
         },
         "required": [
@@ -47876,8 +48304,6 @@
           "aliases",
           "naKinds",
           "usuallyOnHand",
-          "guideSowWindow",
-          "guideTransplantWindow",
           "createdAt",
           "updatedAt",
           "dataQuality",
@@ -47908,71 +48334,13 @@
             "description": "Ingredient name"
           },
           "aliases": {
-            "$ref": "#/components/schemas/input_schema91"
+            "$ref": "#/components/schemas/input_schema90"
           },
           "naKinds": {
             "$ref": "#/components/schemas/output_schema195"
           },
           "usuallyOnHand": {
             "type": "boolean"
-          },
-          "gardenGuideKey": {
-            "type": "string",
-            "enum": [
-              "artichoke",
-              "basil",
-              "bean-fava",
-              "bean-runner",
-              "bean-snap",
-              "beet",
-              "broccoli",
-              "brussels-sprout",
-              "cabbage",
-              "carrot",
-              "cauliflower",
-              "celery",
-              "chard",
-              "collard",
-              "corn",
-              "cucumber",
-              "eggplant",
-              "garlic",
-              "kale",
-              "kohlrabi",
-              "leek",
-              "lettuce",
-              "mustard",
-              "onion",
-              "parsnip",
-              "pea",
-              "pepper",
-              "potato",
-              "radish",
-              "rhubarb",
-              "shallot",
-              "spinach",
-              "squash-summer",
-              "squash-winter",
-              "sunflower",
-              "tomato",
-              "turnip",
-              "melon",
-              "pumpkin",
-              "rutabaga",
-              "watermelon"
-            ]
-          },
-          "guideSowWindow": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "guideTransplantWindow": {
-            "type": [
-              "string",
-              "null"
-            ]
           },
           "createdAt": {
             "type": "string",
@@ -48014,8 +48382,6 @@
           "aliases",
           "naKinds",
           "usuallyOnHand",
-          "guideSowWindow",
-          "guideTransplantWindow",
           "createdAt",
           "updatedAt",
           "dataQuality",
@@ -48180,71 +48546,13 @@
             "description": "Ingredient name"
           },
           "aliases": {
-            "$ref": "#/components/schemas/input_schema91"
+            "$ref": "#/components/schemas/input_schema90"
           },
           "naKinds": {
             "$ref": "#/components/schemas/output_schema195"
           },
           "usuallyOnHand": {
             "type": "boolean"
-          },
-          "gardenGuideKey": {
-            "type": "string",
-            "enum": [
-              "artichoke",
-              "basil",
-              "bean-fava",
-              "bean-runner",
-              "bean-snap",
-              "beet",
-              "broccoli",
-              "brussels-sprout",
-              "cabbage",
-              "carrot",
-              "cauliflower",
-              "celery",
-              "chard",
-              "collard",
-              "corn",
-              "cucumber",
-              "eggplant",
-              "garlic",
-              "kale",
-              "kohlrabi",
-              "leek",
-              "lettuce",
-              "mustard",
-              "onion",
-              "parsnip",
-              "pea",
-              "pepper",
-              "potato",
-              "radish",
-              "rhubarb",
-              "shallot",
-              "spinach",
-              "squash-summer",
-              "squash-winter",
-              "sunflower",
-              "tomato",
-              "turnip",
-              "melon",
-              "pumpkin",
-              "rutabaga",
-              "watermelon"
-            ]
-          },
-          "guideSowWindow": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "guideTransplantWindow": {
-            "type": [
-              "string",
-              "null"
-            ]
           },
           "createdAt": {
             "type": "string",
@@ -48266,8 +48574,6 @@
           "aliases",
           "naKinds",
           "usuallyOnHand",
-          "guideSowWindow",
-          "guideTransplantWindow",
           "createdAt",
           "updatedAt",
           "dataQuality"
@@ -48352,52 +48658,6 @@
           "usuallyOnHand": {
             "type": "boolean"
           },
-          "gardenGuideKey": {
-            "type": "string",
-            "enum": [
-              "artichoke",
-              "basil",
-              "bean-fava",
-              "bean-runner",
-              "bean-snap",
-              "beet",
-              "broccoli",
-              "brussels-sprout",
-              "cabbage",
-              "carrot",
-              "cauliflower",
-              "celery",
-              "chard",
-              "collard",
-              "corn",
-              "cucumber",
-              "eggplant",
-              "garlic",
-              "kale",
-              "kohlrabi",
-              "leek",
-              "lettuce",
-              "mustard",
-              "onion",
-              "parsnip",
-              "pea",
-              "pepper",
-              "potato",
-              "radish",
-              "rhubarb",
-              "shallot",
-              "spinach",
-              "squash-summer",
-              "squash-winter",
-              "sunflower",
-              "tomato",
-              "turnip",
-              "melon",
-              "pumpkin",
-              "rutabaga",
-              "watermelon"
-            ]
-          },
           "name": {
             "type": "string",
             "minLength": 1,
@@ -48405,7 +48665,7 @@
           },
           "aliases": {
             "description": "New aliases (replaces existing list)",
-            "$ref": "#/components/schemas/input_schema91"
+            "$ref": "#/components/schemas/input_schema90"
           }
         }
       },
@@ -48460,71 +48720,13 @@
             "description": "Ingredient name"
           },
           "aliases": {
-            "$ref": "#/components/schemas/input_schema91"
+            "$ref": "#/components/schemas/input_schema90"
           },
           "naKinds": {
             "$ref": "#/components/schemas/output_schema195"
           },
           "usuallyOnHand": {
             "type": "boolean"
-          },
-          "gardenGuideKey": {
-            "type": "string",
-            "enum": [
-              "artichoke",
-              "basil",
-              "bean-fava",
-              "bean-runner",
-              "bean-snap",
-              "beet",
-              "broccoli",
-              "brussels-sprout",
-              "cabbage",
-              "carrot",
-              "cauliflower",
-              "celery",
-              "chard",
-              "collard",
-              "corn",
-              "cucumber",
-              "eggplant",
-              "garlic",
-              "kale",
-              "kohlrabi",
-              "leek",
-              "lettuce",
-              "mustard",
-              "onion",
-              "parsnip",
-              "pea",
-              "pepper",
-              "potato",
-              "radish",
-              "rhubarb",
-              "shallot",
-              "spinach",
-              "squash-summer",
-              "squash-winter",
-              "sunflower",
-              "tomato",
-              "turnip",
-              "melon",
-              "pumpkin",
-              "rutabaga",
-              "watermelon"
-            ]
-          },
-          "guideSowWindow": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "guideTransplantWindow": {
-            "type": [
-              "string",
-              "null"
-            ]
           },
           "createdAt": {
             "type": "string",
@@ -48552,8 +48754,6 @@
           "aliases",
           "naKinds",
           "usuallyOnHand",
-          "guideSowWindow",
-          "guideTransplantWindow",
           "createdAt",
           "updatedAt",
           "dataQuality",
@@ -48571,71 +48771,13 @@
             "description": "Ingredient name"
           },
           "aliases": {
-            "$ref": "#/components/schemas/input_schema91"
+            "$ref": "#/components/schemas/input_schema90"
           },
           "naKinds": {
             "$ref": "#/components/schemas/output_schema195"
           },
           "usuallyOnHand": {
             "type": "boolean"
-          },
-          "gardenGuideKey": {
-            "type": "string",
-            "enum": [
-              "artichoke",
-              "basil",
-              "bean-fava",
-              "bean-runner",
-              "bean-snap",
-              "beet",
-              "broccoli",
-              "brussels-sprout",
-              "cabbage",
-              "carrot",
-              "cauliflower",
-              "celery",
-              "chard",
-              "collard",
-              "corn",
-              "cucumber",
-              "eggplant",
-              "garlic",
-              "kale",
-              "kohlrabi",
-              "leek",
-              "lettuce",
-              "mustard",
-              "onion",
-              "parsnip",
-              "pea",
-              "pepper",
-              "potato",
-              "radish",
-              "rhubarb",
-              "shallot",
-              "spinach",
-              "squash-summer",
-              "squash-winter",
-              "sunflower",
-              "tomato",
-              "turnip",
-              "melon",
-              "pumpkin",
-              "rutabaga",
-              "watermelon"
-            ]
-          },
-          "guideSowWindow": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "guideTransplantWindow": {
-            "type": [
-              "string",
-              "null"
-            ]
           },
           "createdAt": {
             "type": "string",
@@ -48654,13 +48796,13 @@
             "$ref": "#/components/schemas/RecipeTopLevel"
           },
           "recipeUsages": {
-            "$ref": "#/components/schemas/output_schema214"
+            "$ref": "#/components/schemas/output_schema211"
           },
           "appearsInRecipes": {
-            "$ref": "#/components/schemas/output_schema215"
+            "$ref": "#/components/schemas/output_schema212"
           },
           "product": {
-            "$ref": "#/components/schemas/output_schema216"
+            "$ref": "#/components/schemas/output_schema213"
           }
         },
         "required": [
@@ -48669,8 +48811,6 @@
           "aliases",
           "naKinds",
           "usuallyOnHand",
-          "guideSowWindow",
-          "guideTransplantWindow",
           "createdAt",
           "updatedAt",
           "dataQuality",
@@ -49008,13 +49148,13 @@
           "url"
         ]
       },
-      "input_schema101": {
+      "input_schema100": {
         "type": "array",
         "items": {
           "$ref": "#/components/schemas/ImageShortcode"
         }
       },
-      "input_schema107": {
+      "input_schema106": {
         "anyOf": [
           {
             "$ref": "#/components/schemas/ProductShortcode"
@@ -49028,7 +49168,7 @@
         "pattern": "^PRD-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
         "description": "product shortcode, e.g. PRD-4K7M"
       },
-      "input_schema109": {
+      "input_schema108": {
         "anyOf": [
           {
             "$ref": "#/components/schemas/LocationShortcode"
@@ -49042,10 +49182,10 @@
         "pattern": "^LOC-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
         "description": "location shortcode, e.g. LOC-4K7M"
       },
-      "input_schema120": {
+      "input_schema119": {
         "$ref": "#/components/schemas/MealFoodEntryId"
       },
-      "input_schema139": {
+      "input_schema140": {
         "anyOf": [
           {
             "type": "string"
@@ -49058,7 +49198,7 @@
           }
         ]
       },
-      "input_schema150": {
+      "input_schema151": {
         "anyOf": [
           {
             "$ref": "#/components/schemas/IngredientShortcode"
@@ -49072,7 +49212,21 @@
         "pattern": "^ING-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
         "description": "ingredient shortcode, e.g. ING-4K7M"
       },
-      "input_schema159": {
+      "input_schema153": {
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/PlantShortcode"
+          },
+          {
+            "type": "string",
+            "const": "__unresolvable_entity_filter__"
+          }
+        ],
+        "type": "string",
+        "pattern": "^PLANT-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
+        "description": "plant shortcode, e.g. PLANT-4K7M"
+      },
+      "input_schema160": {
         "type": "object",
         "properties": {
           "orderBy": {
@@ -49112,7 +49266,7 @@
           }
         }
       },
-      "input_schema171": {
+      "input_schema172": {
         "anyOf": [
           {
             "$ref": "#/components/schemas/ProjectShortcode"
@@ -49126,7 +49280,7 @@
         "pattern": "^PRJ-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
         "description": "project shortcode, e.g. PRJ-4K7M"
       },
-      "input_schema178": {
+      "input_schema179": {
         "anyOf": [
           {
             "$ref": "#/components/schemas/PurchaseShortcode"
@@ -49140,7 +49294,7 @@
         "pattern": "^PUR-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
         "description": "purchase shortcode, e.g. PUR-4K7M"
       },
-      "input_schema193": {
+      "input_schema194": {
         "type": "object",
         "properties": {
           "orderBy": {
@@ -49157,7 +49311,7 @@
           }
         }
       },
-      "input_schema195": {
+      "input_schema196": {
         "anyOf": [
           {
             "$ref": "#/components/schemas/TaskShortcode"
@@ -49171,7 +49325,7 @@
         "pattern": "^TSK-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
         "description": "task shortcode, e.g. TSK-4K7M"
       },
-      "input_schema207": {
+      "input_schema208": {
         "minItems": 1,
         "maxItems": 20,
         "type": "array",
@@ -49181,7 +49335,7 @@
           "maxLength": 253
         }
       },
-      "input_schema218": {
+      "input_schema219": {
         "type": "object",
         "properties": {
           "kind": {
@@ -49197,7 +49351,7 @@
           "value"
         ]
       },
-      "input_schema222": {
+      "input_schema223": {
         "type": "object",
         "properties": {
           "orderBy": {
@@ -49221,7 +49375,7 @@
           }
         }
       },
-      "input_schema223": {
+      "input_schema224": {
         "type": "object",
         "properties": {
           "orderBy": {
@@ -49455,7 +49609,7 @@
           }
         }
       },
-      "input_schema91": {
+      "input_schema90": {
         "type": "array",
         "items": {
           "type": "string"
@@ -49872,7 +50026,7 @@
             "$ref": "#/components/schemas/InventoryShortcode"
           },
           "amount": {
-            "$ref": "#/components/schemas/output_schema217"
+            "$ref": "#/components/schemas/output_schema214"
           },
           "valuation": {
             "$ref": "#/components/schemas/Money",
@@ -49887,7 +50041,7 @@
             "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
           },
           "placement": {
-            "$ref": "#/components/schemas/output_schema221"
+            "$ref": "#/components/schemas/output_schema218"
           },
           "ownershipMode": {
             "$ref": "#/components/schemas/InventoryOwnershipMode"
@@ -49924,7 +50078,7 @@
             "$ref": "#/components/schemas/DisplayImagesField"
           },
           "attachments": {
-            "$ref": "#/components/schemas/output_schema489"
+            "$ref": "#/components/schemas/output_schema504"
           }
         },
         "required": [
@@ -50051,7 +50205,7 @@
             "$ref": "#/components/schemas/InventoryShortcode"
           },
           "amount": {
-            "$ref": "#/components/schemas/output_schema217"
+            "$ref": "#/components/schemas/output_schema214"
           },
           "valuation": {
             "$ref": "#/components/schemas/Money",
@@ -50066,7 +50220,7 @@
             "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
           },
           "placement": {
-            "$ref": "#/components/schemas/output_schema221"
+            "$ref": "#/components/schemas/output_schema218"
           },
           "ownershipMode": {
             "$ref": "#/components/schemas/InventoryOwnershipMode"
@@ -50110,7 +50264,7 @@
             "$ref": "#/components/schemas/InventoryShortcode"
           },
           "amount": {
-            "$ref": "#/components/schemas/output_schema217"
+            "$ref": "#/components/schemas/output_schema214"
           },
           "valuation": {
             "$ref": "#/components/schemas/Money",
@@ -50125,7 +50279,7 @@
             "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
           },
           "placement": {
-            "$ref": "#/components/schemas/output_schema221"
+            "$ref": "#/components/schemas/output_schema218"
           },
           "ownershipMode": {
             "$ref": "#/components/schemas/InventoryOwnershipMode"
@@ -50615,7 +50769,7 @@
             "$ref": "#/components/schemas/InventoryShortcode"
           },
           "amount": {
-            "$ref": "#/components/schemas/output_schema217"
+            "$ref": "#/components/schemas/output_schema214"
           },
           "valuation": {
             "$ref": "#/components/schemas/Money",
@@ -50630,7 +50784,7 @@
             "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
           },
           "placement": {
-            "$ref": "#/components/schemas/output_schema221"
+            "$ref": "#/components/schemas/output_schema218"
           },
           "ownershipMode": {
             "$ref": "#/components/schemas/InventoryOwnershipMode"
@@ -51021,7 +51175,7 @@
             "$ref": "#/components/schemas/DisplayImagesField"
           },
           "attachments": {
-            "$ref": "#/components/schemas/output_schema489"
+            "$ref": "#/components/schemas/output_schema504"
           }
         },
         "required": [
@@ -51560,7 +51714,7 @@
             "$ref": "#/components/schemas/LedgerSourceClaimsOut"
           },
           "evidenceTransactionIds": {
-            "$ref": "#/components/schemas/output_schema250"
+            "$ref": "#/components/schemas/output_schema247"
           },
           "createdAt": {
             "type": "string",
@@ -51579,7 +51733,7 @@
             "$ref": "#/components/schemas/DisplayImagesField"
           },
           "attachments": {
-            "$ref": "#/components/schemas/output_schema489"
+            "$ref": "#/components/schemas/output_schema504"
           }
         },
         "required": [
@@ -51645,7 +51799,7 @@
             "$ref": "#/components/schemas/LedgerSourceClaimsOut"
           },
           "evidenceTransactionIds": {
-            "$ref": "#/components/schemas/output_schema250"
+            "$ref": "#/components/schemas/output_schema247"
           },
           "createdAt": {
             "type": "string",
@@ -51737,7 +51891,7 @@
             "$ref": "#/components/schemas/LedgerSourceClaimsOut"
           },
           "evidenceTransactionIds": {
-            "$ref": "#/components/schemas/output_schema250"
+            "$ref": "#/components/schemas/output_schema247"
           },
           "createdAt": {
             "type": "string",
@@ -51970,14 +52124,14 @@
             },
             "anyOf": [
               {
-                "$ref": "#/components/schemas/input_schema222"
+                "$ref": "#/components/schemas/input_schema223"
               },
               {
                 "minItems": 1,
                 "maxItems": 3,
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/input_schema222"
+                  "$ref": "#/components/schemas/input_schema223"
                 }
               }
             ]
@@ -52062,10 +52216,10 @@
           "aliases": {
             "default": [],
             "description": "Alternate names for this location — searched alongside the name. Replaces the existing list when provided.",
-            "$ref": "#/components/schemas/input_schema91"
+            "$ref": "#/components/schemas/input_schema90"
           },
           "tags": {
-            "$ref": "#/components/schemas/input_schema91"
+            "$ref": "#/components/schemas/input_schema90"
           },
           "type": {
             "$ref": "#/components/schemas/LocationType"
@@ -52084,7 +52238,7 @@
             "$ref": "#/components/schemas/LocationShortcode"
           },
           "pendingImageIds": {
-            "$ref": "#/components/schemas/input_schema101"
+            "$ref": "#/components/schemas/input_schema100"
           }
         },
         "required": [
@@ -52102,10 +52256,10 @@
             "description": "name of location"
           },
           "aliases": {
-            "$ref": "#/components/schemas/input_schema91"
+            "$ref": "#/components/schemas/input_schema90"
           },
           "tags": {
-            "$ref": "#/components/schemas/output_schema228"
+            "$ref": "#/components/schemas/output_schema225"
           },
           "type": {
             "$ref": "#/components/schemas/LocationType"
@@ -52153,10 +52307,10 @@
             "$ref": "#/components/schemas/DataQuality"
           },
           "children": {
-            "$ref": "#/components/schemas/output_schema253"
+            "$ref": "#/components/schemas/output_schema250"
           },
           "parent": {
-            "$ref": "#/components/schemas/output_schema254"
+            "$ref": "#/components/schemas/output_schema251"
           },
           "childCount": {
             "type": "integer",
@@ -52174,13 +52328,13 @@
             "maximum": 9007199254740991
           },
           "inventoryItems": {
-            "$ref": "#/components/schemas/output_schema258"
+            "$ref": "#/components/schemas/output_schema255"
           },
           "displayImages": {
             "$ref": "#/components/schemas/DisplayImagesField"
           },
           "attachments": {
-            "$ref": "#/components/schemas/output_schema489"
+            "$ref": "#/components/schemas/output_schema504"
           }
         },
         "required": [
@@ -52313,12 +52467,12 @@
           "productId": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/input_schema107"
+                "$ref": "#/components/schemas/input_schema106"
               },
               {
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/input_schema107"
+                  "$ref": "#/components/schemas/input_schema106"
                 }
               }
             ]
@@ -52334,12 +52488,12 @@
           "parentId": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/input_schema109"
+                "$ref": "#/components/schemas/input_schema108"
               },
               {
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/input_schema109"
+                  "$ref": "#/components/schemas/input_schema108"
                 }
               }
             ]
@@ -52478,10 +52632,10 @@
             "description": "name of location"
           },
           "aliases": {
-            "$ref": "#/components/schemas/input_schema91"
+            "$ref": "#/components/schemas/input_schema90"
           },
           "tags": {
-            "$ref": "#/components/schemas/output_schema228"
+            "$ref": "#/components/schemas/output_schema225"
           },
           "type": {
             "$ref": "#/components/schemas/LocationType"
@@ -52711,10 +52865,10 @@
             "description": "name of location"
           },
           "aliases": {
-            "$ref": "#/components/schemas/input_schema91"
+            "$ref": "#/components/schemas/input_schema90"
           },
           "tags": {
-            "$ref": "#/components/schemas/output_schema228"
+            "$ref": "#/components/schemas/output_schema225"
           },
           "type": {
             "$ref": "#/components/schemas/LocationType"
@@ -52941,10 +53095,10 @@
             "description": "name of location"
           },
           "aliases": {
-            "$ref": "#/components/schemas/input_schema91"
+            "$ref": "#/components/schemas/input_schema90"
           },
           "tags": {
-            "$ref": "#/components/schemas/input_schema91"
+            "$ref": "#/components/schemas/input_schema90"
           },
           "type": {
             "$ref": "#/components/schemas/LocationType"
@@ -52963,15 +53117,15 @@
             "$ref": "#/components/schemas/LocationShortcode"
           },
           "pendingImageIds": {
-            "$ref": "#/components/schemas/input_schema101"
+            "$ref": "#/components/schemas/input_schema100"
           },
           "removeImageIds": {
             "description": "Image ids to detach. Detaching DELETES the stored file when nothing else references it — there is no restore, and the id will not resolve again.",
-            "$ref": "#/components/schemas/input_schema101"
+            "$ref": "#/components/schemas/input_schema100"
           },
           "imageOrder": {
             "description": "existing image ids in display order; first = cover",
-            "$ref": "#/components/schemas/input_schema101"
+            "$ref": "#/components/schemas/input_schema100"
           }
         }
       },
@@ -52995,10 +53149,10 @@
             "maximum": 9007199254740991
           },
           "direct": {
-            "$ref": "#/components/schemas/output_schema237"
+            "$ref": "#/components/schemas/output_schema234"
           },
           "total": {
-            "$ref": "#/components/schemas/output_schema237"
+            "$ref": "#/components/schemas/output_schema234"
           },
           "installed": {
             "type": "object",
@@ -53135,10 +53289,10 @@
             "description": "name of location"
           },
           "aliases": {
-            "$ref": "#/components/schemas/input_schema91"
+            "$ref": "#/components/schemas/input_schema90"
           },
           "tags": {
-            "$ref": "#/components/schemas/output_schema228"
+            "$ref": "#/components/schemas/output_schema225"
           },
           "type": {
             "$ref": "#/components/schemas/LocationType"
@@ -53328,16 +53482,16 @@
                   "type": "string"
                 },
                 "inputSchema": {
-                  "$ref": "#/components/schemas/output_schema454"
+                  "$ref": "#/components/schemas/output_schema469"
                 },
                 "outputSchema": {
-                  "$ref": "#/components/schemas/output_schema454"
+                  "$ref": "#/components/schemas/output_schema469"
                 },
                 "annotations": {
-                  "$ref": "#/components/schemas/output_schema456"
+                  "$ref": "#/components/schemas/output_schema471"
                 },
                 "_meta": {
-                  "$ref": "#/components/schemas/output_schema454"
+                  "$ref": "#/components/schemas/output_schema469"
                 }
               },
               "required": [
@@ -53406,10 +53560,10 @@
                   "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
                 },
                 "user": {
-                  "$ref": "#/components/schemas/output_schema457"
+                  "$ref": "#/components/schemas/output_schema472"
                 },
                 "client": {
-                  "$ref": "#/components/schemas/output_schema458"
+                  "$ref": "#/components/schemas/output_schema473"
                 }
               },
               "required": [
@@ -53507,7 +53661,7 @@
           "daily": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/output_schema459"
+              "$ref": "#/components/schemas/output_schema474"
             }
           },
           "tools": {
@@ -53531,13 +53685,13 @@
                   ]
                 },
                 "inputSchema": {
-                  "$ref": "#/components/schemas/output_schema454"
+                  "$ref": "#/components/schemas/output_schema469"
                 },
                 "outputSchema": {
-                  "$ref": "#/components/schemas/output_schema454"
+                  "$ref": "#/components/schemas/output_schema469"
                 },
                 "annotations": {
-                  "$ref": "#/components/schemas/output_schema456"
+                  "$ref": "#/components/schemas/output_schema471"
                 },
                 "status": {
                   "$ref": "#/components/schemas/McpToolUsageStatus"
@@ -53590,19 +53744,19 @@
                 "daily": {
                   "type": "array",
                   "items": {
-                    "$ref": "#/components/schemas/output_schema459"
+                    "$ref": "#/components/schemas/output_schema474"
                   }
                 },
                 "users": {
                   "type": "array",
                   "items": {
-                    "$ref": "#/components/schemas/output_schema457"
+                    "$ref": "#/components/schemas/output_schema472"
                   }
                 },
                 "clients": {
                   "type": "array",
                   "items": {
-                    "$ref": "#/components/schemas/output_schema458"
+                    "$ref": "#/components/schemas/output_schema473"
                   }
                 }
               },
@@ -53628,25 +53782,25 @@
           "users": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/output_schema460"
+              "$ref": "#/components/schemas/output_schema475"
             }
           },
           "clients": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/output_schema460"
+              "$ref": "#/components/schemas/output_schema475"
             }
           },
           "surfaces": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/output_schema460"
+              "$ref": "#/components/schemas/output_schema475"
             }
           },
           "entities": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/output_schema460"
+              "$ref": "#/components/schemas/output_schema475"
             }
           }
         },
@@ -53792,7 +53946,7 @@
             "$ref": "#/components/schemas/MealKind"
           },
           "recipes": {
-            "$ref": "#/components/schemas/output_schema282"
+            "$ref": "#/components/schemas/output_schema279"
           },
           "totals": {
             "$ref": "#/components/schemas/MealTotals"
@@ -53804,7 +53958,7 @@
             "type": "string"
           },
           "recipeNames": {
-            "$ref": "#/components/schemas/input_schema91"
+            "$ref": "#/components/schemas/input_schema90"
           },
           "createdAt": {
             "type": "string",
@@ -53823,7 +53977,7 @@
             "$ref": "#/components/schemas/DisplayImagesField"
           },
           "attachments": {
-            "$ref": "#/components/schemas/output_schema489"
+            "$ref": "#/components/schemas/output_schema504"
           }
         },
         "required": [
@@ -53959,7 +54113,7 @@
             "$ref": "#/components/schemas/MealKind"
           },
           "recipes": {
-            "$ref": "#/components/schemas/output_schema282"
+            "$ref": "#/components/schemas/output_schema279"
           },
           "totals": {
             "$ref": "#/components/schemas/MealTotals"
@@ -53971,7 +54125,7 @@
             "type": "string"
           },
           "recipeNames": {
-            "$ref": "#/components/schemas/input_schema91"
+            "$ref": "#/components/schemas/input_schema90"
           },
           "createdAt": {
             "type": "string",
@@ -54396,7 +54550,7 @@
             "$ref": "#/components/schemas/MealKind"
           },
           "recipes": {
-            "$ref": "#/components/schemas/output_schema282"
+            "$ref": "#/components/schemas/output_schema279"
           },
           "totals": {
             "$ref": "#/components/schemas/MealTotals"
@@ -54408,7 +54562,7 @@
             "type": "string"
           },
           "recipeNames": {
-            "$ref": "#/components/schemas/input_schema91"
+            "$ref": "#/components/schemas/input_schema90"
           },
           "createdAt": {
             "type": "string",
@@ -55457,18 +55611,6 @@
             "type": "integer",
             "minimum": 0,
             "maximum": 9007199254740991
-          },
-          "gardenGuideKeyCarried": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "gardenGuideKeyConflicts": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
           }
         },
         "required": [
@@ -55476,9 +55618,7 @@
           "recipesMoved",
           "productsMoved",
           "deletedIds",
-          "merged",
-          "gardenGuideKeyCarried",
-          "gardenGuideKeyConflicts"
+          "merged"
         ]
       },
       "MergeVendorsInput": {
@@ -56004,25 +56144,25 @@
           "$ref": "#/components/schemas/BaseKind"
         }
       },
-      "output_schema214": {
+      "output_schema211": {
         "type": "array",
         "items": {
           "$ref": "#/components/schemas/RecipeUsageOut"
         }
       },
-      "output_schema215": {
+      "output_schema212": {
         "type": "array",
         "items": {
           "$ref": "#/components/schemas/RecipeTopLevel"
         }
       },
-      "output_schema216": {
+      "output_schema213": {
         "type": "array",
         "items": {
           "$ref": "#/components/schemas/ProductWithMappingsAndFoodOut"
         }
       },
-      "output_schema217": {
+      "output_schema214": {
         "type": "object",
         "properties": {
           "value": {
@@ -56043,15 +56183,15 @@
         ],
         "description": "Quantity on hand"
       },
-      "output_schema221": {
+      "output_schema218": {
         "description": "'stock' = movable stock; 'installed' = a fixed installation, kept as a record but excluded from browsing, counting and audits",
         "$ref": "#/components/schemas/InventoryPlacement"
       },
-      "output_schema228": {
+      "output_schema225": {
         "description": "Namespaced Collection tags assigned directly to this location",
-        "$ref": "#/components/schemas/input_schema91"
+        "$ref": "#/components/schemas/input_schema90"
       },
-      "output_schema237": {
+      "output_schema234": {
         "type": "object",
         "properties": {
           "priced": {
@@ -56076,22 +56216,22 @@
           "miscNoPrice"
         ]
       },
-      "output_schema250": {
+      "output_schema247": {
         "type": "array",
         "items": {
           "$ref": "#/components/schemas/FinancialTransactionShortcode"
         }
       },
-      "output_schema253": {
+      "output_schema250": {
         "type": "array",
         "items": {
           "$ref": "#/components/schemas/InfLocation"
         }
       },
-      "output_schema254": {
+      "output_schema251": {
         "$ref": "#/components/schemas/InfLocation"
       },
-      "output_schema258": {
+      "output_schema255": {
         "type": "array",
         "items": {
           "type": "object",
@@ -56117,13 +56257,13 @@
           ]
         }
       },
-      "output_schema270": {
+      "output_schema267": {
         "type": "array",
         "items": {
           "$ref": "#/components/schemas/Amount"
         }
       },
-      "output_schema278": {
+      "output_schema275": {
         "type": "object",
         "properties": {
           "portionCount": {
@@ -56139,6 +56279,12 @@
           "portionCount",
           "totals"
         ]
+      },
+      "output_schema279": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/MealRecipeOut"
+        }
       },
       "output_schema28": {
         "oneOf": [
@@ -56161,19 +56307,13 @@
           }
         }
       },
-      "output_schema282": {
-        "type": "array",
-        "items": {
-          "$ref": "#/components/schemas/MealRecipeOut"
-        }
-      },
-      "output_schema324": {
+      "output_schema339": {
         "type": "array",
         "items": {
           "$ref": "#/components/schemas/UnitMappingOut"
         }
       },
-      "output_schema331": {
+      "output_schema346": {
         "type": "object",
         "properties": {
           "id": {
@@ -56214,13 +56354,13 @@
           "updatedAt"
         ]
       },
-      "output_schema332": {
+      "output_schema347": {
         "type": "array",
         "items": {
           "$ref": "#/components/schemas/ProductListInventoryEntryOut"
         }
       },
-      "output_schema338": {
+      "output_schema353": {
         "type": "object",
         "properties": {
           "id": {
@@ -56268,10 +56408,10 @@
                 "description": "name of location"
               },
               "aliases": {
-                "$ref": "#/components/schemas/input_schema91"
+                "$ref": "#/components/schemas/input_schema90"
               },
               "tags": {
-                "$ref": "#/components/schemas/output_schema228"
+                "$ref": "#/components/schemas/output_schema225"
               },
               "type": {
                 "$ref": "#/components/schemas/LocationType"
@@ -56321,7 +56461,7 @@
               "ancestors": {
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/output_schema339"
+                  "$ref": "#/components/schemas/output_schema354"
                 }
               }
             },
@@ -56349,7 +56489,7 @@
           "location"
         ]
       },
-      "output_schema339": {
+      "output_schema354": {
         "type": "object",
         "properties": {
           "id": {
@@ -56370,7 +56510,7 @@
           "name"
         ]
       },
-      "output_schema340": {
+      "output_schema355": {
         "type": "object",
         "properties": {
           "id": {
@@ -56388,7 +56528,7 @@
           "ancestors": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/output_schema339"
+              "$ref": "#/components/schemas/output_schema354"
             }
           }
         },
@@ -56398,7 +56538,7 @@
           "ancestors"
         ]
       },
-      "output_schema348": {
+      "output_schema363": {
         "minItems": 1,
         "maxItems": 3,
         "type": "array",
@@ -56419,19 +56559,25 @@
           ]
         }
       },
-      "output_schema363": {
+      "output_schema378": {
         "type": "array",
         "items": {
           "$ref": "#/components/schemas/TaskShortcode"
         }
       },
-      "output_schema384": {
+      "output_schema399": {
         "type": "array",
         "items": {
           "$ref": "#/components/schemas/ProjectShortcode"
         }
       },
-      "output_schema390": {
+      "output_schema40": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/output_schema41"
+        }
+      },
+      "output_schema405": {
         "type": "object",
         "properties": {
           "current": {
@@ -56445,19 +56591,9 @@
           "current"
         ]
       },
-      "output_schema394": {
+      "output_schema409": {
         "description": "Receipt role. Principal lines are the purchased item/service; every other value is a purchase-level adjustment.",
         "$ref": "#/components/schemas/ExpenseLineKind"
-      },
-      "output_schema395": {
-        "description": "Whether this row is a line item or a slice of a total that was never itemized. 'allocation' means the money was cut by payment schedule (a deposit and a balance on one order) or by an estimated materials/labor split of a lump-sum contract — such a row can never carry a productId, and its costType may be an estimate rather than a vendor-stated fact.",
-        "$ref": "#/components/schemas/ExpenseLineBasis"
-      },
-      "output_schema40": {
-        "type": "array",
-        "items": {
-          "$ref": "#/components/schemas/output_schema41"
-        }
       },
       "output_schema41": {
         "type": "object",
@@ -56658,7 +56794,11 @@
           "updatedAt"
         ]
       },
-      "output_schema443": {
+      "output_schema410": {
+        "description": "Whether this row is a line item or a slice of a total that was never itemized. 'allocation' means the money was cut by payment schedule (a deposit and a balance on one order) or by an estimated materials/labor split of a lump-sum contract — such a row can never carry a productId, and its costType may be an estimate rather than a vendor-stated fact.",
+        "$ref": "#/components/schemas/ExpenseLineBasis"
+      },
+      "output_schema458": {
         "oneOf": [
           {
             "$ref": "#/components/schemas/RowDiagnosticOwnFull"
@@ -56687,7 +56827,7 @@
           }
         }
       },
-      "output_schema444": {
+      "output_schema459": {
         "oneOf": [
           {
             "$ref": "#/components/schemas/RowDiagnosticTrue"
@@ -56697,7 +56837,7 @@
           }
         ]
       },
-      "output_schema454": {
+      "output_schema469": {
         "type": "object",
         "propertyNames": {
           "type": "string"
@@ -56706,7 +56846,7 @@
           "$ref": "#/components/schemas/JsonValue"
         }
       },
-      "output_schema456": {
+      "output_schema471": {
         "type": "object",
         "properties": {
           "readOnlyHint": {
@@ -56723,7 +56863,7 @@
           }
         }
       },
-      "output_schema457": {
+      "output_schema472": {
         "type": "object",
         "properties": {
           "id": {
@@ -56745,7 +56885,7 @@
           "email"
         ]
       },
-      "output_schema458": {
+      "output_schema473": {
         "type": "object",
         "properties": {
           "id": {
@@ -56766,7 +56906,7 @@
           "name"
         ]
       },
-      "output_schema459": {
+      "output_schema474": {
         "type": "object",
         "properties": {
           "day": {
@@ -56795,7 +56935,7 @@
           "total"
         ]
       },
-      "output_schema460": {
+      "output_schema475": {
         "type": "object",
         "properties": {
           "key": {
@@ -56816,13 +56956,13 @@
           "count"
         ]
       },
-      "output_schema483": {
+      "output_schema498": {
         "type": "array",
         "items": {
           "$ref": "#/components/schemas/WishCandidateOut"
         }
       },
-      "output_schema489": {
+      "output_schema504": {
         "type": "array",
         "items": {
           "$ref": "#/components/schemas/EntityAttachmentRead"
@@ -57113,7 +57253,8 @@
                         "productCategory",
                         "importRun",
                         "device",
-                        "imageSighting"
+                        "imageSighting",
+                        "plant"
                       ]
                     },
                     "id": {
@@ -57800,11 +57941,233 @@
         "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
         "description": "Calendar day as \"YYYY-MM-DD\""
       },
+      "PlantBreeding": {
+        "type": "string",
+        "enum": [
+          "open-pollinated",
+          "hybrid"
+        ]
+      },
+      "PlantCreateInput": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "gardenGuideKey": {
+            "$ref": "#/components/schemas/GardenCropKey",
+            "default": null
+          },
+          "verdict": {
+            "$ref": "#/components/schemas/PlantVerdict",
+            "default": null
+          },
+          "ingredientId": {
+            "$ref": "#/components/schemas/IngredientShortcode",
+            "default": null
+          },
+          "latinName": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "minLength": 1,
+            "default": null
+          },
+          "breeding": {
+            "$ref": "#/components/schemas/PlantBreeding",
+            "default": null
+          },
+          "daysFromSowMin": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991,
+            "default": null
+          },
+          "daysFromSowMax": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991,
+            "default": null
+          },
+          "daysFromTransplantMin": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991,
+            "default": null
+          },
+          "daysFromTransplantMax": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991,
+            "default": null
+          },
+          "notes": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "minLength": 1,
+            "default": null
+          }
+        },
+        "required": [
+          "name"
+        ]
+      },
+      "PlantDetail": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/PlantShortcode"
+          },
+          "name": {
+            "type": "string"
+          },
+          "gardenGuideKey": {
+            "$ref": "#/components/schemas/GardenCropKey"
+          },
+          "verdict": {
+            "$ref": "#/components/schemas/PlantVerdict"
+          },
+          "ingredientId": {
+            "$ref": "#/components/schemas/IngredientShortcode"
+          },
+          "latinName": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "minLength": 1
+          },
+          "breeding": {
+            "$ref": "#/components/schemas/PlantBreeding"
+          },
+          "daysFromSowMin": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
+          "daysFromSowMax": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
+          "daysFromTransplantMin": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
+          "daysFromTransplantMax": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
+          "notes": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "minLength": 1
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "ingredientName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "guideSowWindow": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "guideTransplantWindow": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "routes": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "dataQuality": {
+            "$ref": "#/components/schemas/DataQuality"
+          },
+          "displayImages": {
+            "$ref": "#/components/schemas/DisplayImagesField"
+          },
+          "attachments": {
+            "$ref": "#/components/schemas/output_schema504"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "latinName",
+          "daysFromSowMin",
+          "daysFromSowMax",
+          "daysFromTransplantMin",
+          "daysFromTransplantMax",
+          "notes",
+          "displayName",
+          "ingredientName",
+          "guideSowWindow",
+          "guideTransplantWindow",
+          "routes",
+          "createdAt",
+          "updatedAt",
+          "dataQuality",
+          "displayImages",
+          "attachments"
+        ]
+      },
       "PlantingCreateInput": {
         "type": "object",
         "properties": {
-          "ingredientId": {
-            "$ref": "#/components/schemas/IngredientShortcode"
+          "plantId": {
+            "$ref": "#/components/schemas/PlantShortcode"
           },
           "sourceProductId": {
             "$ref": "#/components/schemas/ProductShortcode",
@@ -57822,12 +58185,8 @@
             "default": "planned",
             "$ref": "#/components/schemas/PlantingStatus"
           },
-          "variety": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "minLength": 1,
+          "outcome": {
+            "$ref": "#/components/schemas/PlantingOutcome",
             "default": null
           },
           "quantity": {
@@ -57868,7 +58227,7 @@
           }
         },
         "required": [
-          "ingredientId"
+          "plantId"
         ]
       },
       "PlantingDetail": {
@@ -57877,8 +58236,8 @@
           "id": {
             "$ref": "#/components/schemas/PlantingShortcode"
           },
-          "ingredientId": {
-            "$ref": "#/components/schemas/IngredientShortcode"
+          "plantId": {
+            "$ref": "#/components/schemas/PlantShortcode"
           },
           "sourceProductId": {
             "$ref": "#/components/schemas/ProductShortcode"
@@ -57892,12 +58251,8 @@
           "status": {
             "$ref": "#/components/schemas/PlantingStatus"
           },
-          "variety": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "minLength": 1
+          "outcome": {
+            "$ref": "#/components/schemas/PlantingOutcome"
           },
           "quantity": {
             "type": [
@@ -57932,8 +58287,23 @@
           "displayName": {
             "type": "string"
           },
-          "ingredientName": {
-            "type": "string"
+          "plantName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "expectedHarvestStart": {
+            "$ref": "#/components/schemas/PlainDate"
+          },
+          "expectedHarvestEnd": {
+            "$ref": "#/components/schemas/PlainDate"
+          },
+          "expectedHarvest": {
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "sourceProductName": {
             "type": [
@@ -57982,19 +58352,19 @@
             "$ref": "#/components/schemas/DisplayImagesField"
           },
           "attachments": {
-            "$ref": "#/components/schemas/output_schema489"
+            "$ref": "#/components/schemas/output_schema504"
           }
         },
         "required": [
           "id",
-          "ingredientId",
+          "plantId",
           "status",
-          "variety",
           "quantity",
           "notes",
           "plannedWindow",
           "displayName",
-          "ingredientName",
+          "plantName",
+          "expectedHarvest",
           "sourceProductName",
           "locationName",
           "taskName",
@@ -58013,8 +58383,8 @@
           "id": {
             "$ref": "#/components/schemas/PlantingShortcode"
           },
-          "ingredientId": {
-            "$ref": "#/components/schemas/IngredientShortcode"
+          "plantId": {
+            "$ref": "#/components/schemas/PlantShortcode"
           },
           "sourceProductId": {
             "$ref": "#/components/schemas/ProductShortcode"
@@ -58028,12 +58398,8 @@
           "status": {
             "$ref": "#/components/schemas/PlantingStatus"
           },
-          "variety": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "minLength": 1
+          "outcome": {
+            "$ref": "#/components/schemas/PlantingOutcome"
           },
           "quantity": {
             "type": [
@@ -58068,8 +58434,23 @@
           "displayName": {
             "type": "string"
           },
-          "ingredientName": {
-            "type": "string"
+          "plantName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "expectedHarvestStart": {
+            "$ref": "#/components/schemas/PlainDate"
+          },
+          "expectedHarvestEnd": {
+            "$ref": "#/components/schemas/PlainDate"
+          },
+          "expectedHarvest": {
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "sourceProductName": {
             "type": [
@@ -58120,14 +58501,14 @@
         },
         "required": [
           "id",
-          "ingredientId",
+          "plantId",
           "status",
-          "variety",
           "quantity",
           "notes",
           "plannedWindow",
           "displayName",
-          "ingredientName",
+          "plantName",
+          "expectedHarvest",
           "sourceProductName",
           "locationName",
           "taskName",
@@ -58163,8 +58544,8 @@
           "id": {
             "$ref": "#/components/schemas/PlantingShortcode"
           },
-          "ingredientId": {
-            "$ref": "#/components/schemas/IngredientShortcode"
+          "plantId": {
+            "$ref": "#/components/schemas/PlantShortcode"
           },
           "sourceProductId": {
             "$ref": "#/components/schemas/ProductShortcode"
@@ -58178,12 +58559,8 @@
           "status": {
             "$ref": "#/components/schemas/PlantingStatus"
           },
-          "variety": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "minLength": 1
+          "outcome": {
+            "$ref": "#/components/schemas/PlantingOutcome"
           },
           "quantity": {
             "type": [
@@ -58218,8 +58595,23 @@
           "displayName": {
             "type": "string"
           },
-          "ingredientName": {
-            "type": "string"
+          "plantName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "expectedHarvestStart": {
+            "$ref": "#/components/schemas/PlainDate"
+          },
+          "expectedHarvestEnd": {
+            "$ref": "#/components/schemas/PlainDate"
+          },
+          "expectedHarvest": {
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "sourceProductName": {
             "type": [
@@ -58267,14 +58659,14 @@
         },
         "required": [
           "id",
-          "ingredientId",
+          "plantId",
           "status",
-          "variety",
           "quantity",
           "notes",
           "plannedWindow",
           "displayName",
-          "ingredientName",
+          "plantName",
+          "expectedHarvest",
           "sourceProductName",
           "locationName",
           "taskName",
@@ -58283,6 +58675,13 @@
           "createdAt",
           "updatedAt",
           "dataQuality"
+        ]
+      },
+      "PlantingOutcome": {
+        "type": "string",
+        "enum": [
+          "succeeded",
+          "failed"
         ]
       },
       "PlantingShortcode": {
@@ -58301,8 +58700,8 @@
       "PlantingUpdateData": {
         "type": "object",
         "properties": {
-          "ingredientId": {
-            "$ref": "#/components/schemas/IngredientShortcode"
+          "plantId": {
+            "$ref": "#/components/schemas/PlantShortcode"
           },
           "sourceProductId": {
             "$ref": "#/components/schemas/ProductShortcode"
@@ -58316,12 +58715,8 @@
           "status": {
             "$ref": "#/components/schemas/PlantingStatus"
           },
-          "variety": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "minLength": 1
+          "outcome": {
+            "$ref": "#/components/schemas/PlantingOutcome"
           },
           "quantity": {
             "type": [
@@ -58354,6 +58749,362 @@
             "$ref": "#/components/schemas/PlainDate"
           }
         }
+      },
+      "PlantListItem": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/PlantShortcode"
+          },
+          "name": {
+            "type": "string"
+          },
+          "gardenGuideKey": {
+            "$ref": "#/components/schemas/GardenCropKey"
+          },
+          "verdict": {
+            "$ref": "#/components/schemas/PlantVerdict"
+          },
+          "ingredientId": {
+            "$ref": "#/components/schemas/IngredientShortcode"
+          },
+          "latinName": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "minLength": 1
+          },
+          "breeding": {
+            "$ref": "#/components/schemas/PlantBreeding"
+          },
+          "daysFromSowMin": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
+          "daysFromSowMax": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
+          "daysFromTransplantMin": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
+          "daysFromTransplantMax": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
+          "notes": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "minLength": 1
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "ingredientName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "guideSowWindow": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "guideTransplantWindow": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "routes": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "dataQuality": {
+            "$ref": "#/components/schemas/DataQuality"
+          },
+          "displayImages": {
+            "$ref": "#/components/schemas/DisplayImagesField"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "latinName",
+          "daysFromSowMin",
+          "daysFromSowMax",
+          "daysFromTransplantMin",
+          "daysFromTransplantMax",
+          "notes",
+          "displayName",
+          "ingredientName",
+          "guideSowWindow",
+          "guideTransplantWindow",
+          "routes",
+          "createdAt",
+          "updatedAt",
+          "dataQuality",
+          "displayImages"
+        ]
+      },
+      "PlantListPage": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PlantListItem"
+            }
+          },
+          "meta": {
+            "$ref": "#/components/schemas/ListPageMeta"
+          }
+        },
+        "required": [
+          "items",
+          "meta"
+        ]
+      },
+      "PlantOut": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/PlantShortcode"
+          },
+          "name": {
+            "type": "string"
+          },
+          "gardenGuideKey": {
+            "$ref": "#/components/schemas/GardenCropKey"
+          },
+          "verdict": {
+            "$ref": "#/components/schemas/PlantVerdict"
+          },
+          "ingredientId": {
+            "$ref": "#/components/schemas/IngredientShortcode"
+          },
+          "latinName": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "minLength": 1
+          },
+          "breeding": {
+            "$ref": "#/components/schemas/PlantBreeding"
+          },
+          "daysFromSowMin": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
+          "daysFromSowMax": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
+          "daysFromTransplantMin": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
+          "daysFromTransplantMax": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
+          "notes": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "minLength": 1
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "ingredientName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "guideSowWindow": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "guideTransplantWindow": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "routes": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "dataQuality": {
+            "$ref": "#/components/schemas/DataQuality"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "latinName",
+          "daysFromSowMin",
+          "daysFromSowMax",
+          "daysFromTransplantMin",
+          "daysFromTransplantMax",
+          "notes",
+          "displayName",
+          "ingredientName",
+          "guideSowWindow",
+          "guideTransplantWindow",
+          "routes",
+          "createdAt",
+          "updatedAt",
+          "dataQuality"
+        ]
+      },
+      "PlantShortcode": {
+        "type": "string",
+        "pattern": "^PLANT-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
+        "description": "plant shortcode, e.g. PLANT-4K7M"
+      },
+      "PlantUpdateData": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "gardenGuideKey": {
+            "$ref": "#/components/schemas/GardenCropKey"
+          },
+          "verdict": {
+            "$ref": "#/components/schemas/PlantVerdict"
+          },
+          "ingredientId": {
+            "$ref": "#/components/schemas/IngredientShortcode"
+          },
+          "latinName": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "minLength": 1
+          },
+          "breeding": {
+            "$ref": "#/components/schemas/PlantBreeding"
+          },
+          "daysFromSowMin": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
+          "daysFromSowMax": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
+          "daysFromTransplantMin": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
+          "daysFromTransplantMax": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
+          "notes": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "minLength": 1
+          }
+        }
+      },
+      "PlantVerdict": {
+        "type": "string",
+        "enum": [
+          "yes",
+          "maybe",
+          "no"
+        ]
       },
       "PositiveAmount": {
         "type": "object",
@@ -59205,7 +59956,7 @@
             "minLength": 1
           },
           "aliases": {
-            "$ref": "#/components/schemas/input_schema91"
+            "$ref": "#/components/schemas/input_schema90"
           },
           "description": {
             "type": [
@@ -59231,7 +59982,7 @@
             ]
           },
           "path": {
-            "$ref": "#/components/schemas/output_schema348"
+            "$ref": "#/components/schemas/output_schema363"
           },
           "productCount": {
             "type": "integer",
@@ -59255,7 +60006,7 @@
             "$ref": "#/components/schemas/DisplayImagesField"
           },
           "attachments": {
-            "$ref": "#/components/schemas/output_schema489"
+            "$ref": "#/components/schemas/output_schema504"
           }
         },
         "required": [
@@ -59349,7 +60100,7 @@
             "minLength": 1
           },
           "aliases": {
-            "$ref": "#/components/schemas/input_schema91"
+            "$ref": "#/components/schemas/input_schema90"
           },
           "description": {
             "type": [
@@ -59375,7 +60126,7 @@
             ]
           },
           "path": {
-            "$ref": "#/components/schemas/output_schema348"
+            "$ref": "#/components/schemas/output_schema363"
           },
           "productCount": {
             "type": "integer",
@@ -59446,7 +60197,7 @@
             "minLength": 1
           },
           "aliases": {
-            "$ref": "#/components/schemas/input_schema91"
+            "$ref": "#/components/schemas/input_schema90"
           },
           "description": {
             "type": [
@@ -59472,7 +60223,7 @@
             ]
           },
           "path": {
-            "$ref": "#/components/schemas/output_schema348"
+            "$ref": "#/components/schemas/output_schema363"
           },
           "productCount": {
             "type": "integer",
@@ -59702,7 +60453,7 @@
           "tags": {
             "default": [],
             "description": "Compatibility or ecosystem tokens only — battery platform, mount, thread, size standard. Never the manufacturer, a classification word, or a path node; those belong in manufacturer/categoryId. `collection:*` entries are managed by Collections. Leave empty when nothing fits.",
-            "$ref": "#/components/schemas/input_schema91"
+            "$ref": "#/components/schemas/input_schema90"
           },
           "upc": {
             "$ref": "#/components/schemas/GtinInput"
@@ -59744,8 +60495,8 @@
           "ingredientId": {
             "$ref": "#/components/schemas/IngredientShortcode"
           },
-          "growsIngredientId": {
-            "$ref": "#/components/schemas/IngredientShortcode"
+          "growsPlantId": {
+            "$ref": "#/components/schemas/PlantShortcode"
           },
           "price": {
             "$ref": "#/components/schemas/PositiveMoney"
@@ -59831,10 +60582,10 @@
             "description": "Product name"
           },
           "aliases": {
-            "$ref": "#/components/schemas/input_schema91"
+            "$ref": "#/components/schemas/input_schema90"
           },
           "tags": {
-            "$ref": "#/components/schemas/input_schema91"
+            "$ref": "#/components/schemas/input_schema90"
           },
           "primaryGtin": {
             "$ref": "#/components/schemas/Gtin"
@@ -59866,8 +60617,8 @@
           "categoryId": {
             "$ref": "#/components/schemas/ProductCategoryShortcode"
           },
-          "growsIngredientId": {
-            "$ref": "#/components/schemas/IngredientShortcode"
+          "growsPlantId": {
+            "$ref": "#/components/schemas/PlantShortcode"
           },
           "images": {
             "$ref": "#/components/schemas/output_schema40"
@@ -59937,7 +60688,7 @@
             "format": "uri"
           },
           "ingredient": {
-            "$ref": "#/components/schemas/output_schema331"
+            "$ref": "#/components/schemas/output_schema346"
           },
           "unitMappings": {
             "type": "array",
@@ -59948,13 +60699,13 @@
           "inventoryEntry": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/output_schema338"
+              "$ref": "#/components/schemas/output_schema353"
             }
           },
           "servingAsLocations": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/output_schema340"
+              "$ref": "#/components/schemas/output_schema355"
             }
           },
           "componentCount": {
@@ -59996,7 +60747,7 @@
             "$ref": "#/components/schemas/DisplayImagesField"
           },
           "attachments": {
-            "$ref": "#/components/schemas/output_schema489"
+            "$ref": "#/components/schemas/output_schema504"
           }
         },
         "required": [
@@ -60442,7 +61193,7 @@
           },
           "tagFilters": {
             "description": "Match products carrying any of these tags",
-            "$ref": "#/components/schemas/input_schema139"
+            "$ref": "#/components/schemas/input_schema140"
           },
           "dataStatus": {
             "anyOf": [
@@ -60596,12 +61347,12 @@
           "locationIdFilter": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/input_schema109"
+                "$ref": "#/components/schemas/input_schema108"
               },
               {
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/input_schema109"
+                  "$ref": "#/components/schemas/input_schema108"
                 }
               }
             ]
@@ -60612,25 +61363,25 @@
           "ingredientIdFilter": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/input_schema150"
+                "$ref": "#/components/schemas/input_schema151"
               },
               {
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/input_schema150"
+                  "$ref": "#/components/schemas/input_schema151"
                 }
               }
             ]
           },
-          "growsIngredientIdFilter": {
+          "growsPlantIdFilter": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/input_schema150"
+                "$ref": "#/components/schemas/input_schema153"
               },
               {
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/input_schema150"
+                  "$ref": "#/components/schemas/input_schema153"
                 }
               }
             ]
@@ -61101,10 +61852,10 @@
             "description": "Product name"
           },
           "aliases": {
-            "$ref": "#/components/schemas/input_schema91"
+            "$ref": "#/components/schemas/input_schema90"
           },
           "tags": {
-            "$ref": "#/components/schemas/input_schema91"
+            "$ref": "#/components/schemas/input_schema90"
           },
           "primaryGtin": {
             "$ref": "#/components/schemas/Gtin"
@@ -61136,8 +61887,8 @@
           "categoryId": {
             "$ref": "#/components/schemas/ProductCategoryShortcode"
           },
-          "growsIngredientId": {
-            "$ref": "#/components/schemas/IngredientShortcode"
+          "growsPlantId": {
+            "$ref": "#/components/schemas/PlantShortcode"
           },
           "images": {
             "$ref": "#/components/schemas/output_schema40"
@@ -61203,7 +61954,7 @@
             "$ref": "#/components/schemas/DisplayImagesField"
           },
           "unitMappings": {
-            "$ref": "#/components/schemas/output_schema324"
+            "$ref": "#/components/schemas/output_schema339"
           },
           "unitPriceMappings": {
             "$ref": "#/components/schemas/ProductUnitPriceMappings"
@@ -61260,10 +62011,10 @@
             "$ref": "#/components/schemas/ProductDataGaps"
           },
           "ingredient": {
-            "$ref": "#/components/schemas/output_schema331"
+            "$ref": "#/components/schemas/output_schema346"
           },
           "inventoryEntry": {
-            "$ref": "#/components/schemas/output_schema332"
+            "$ref": "#/components/schemas/output_schema347"
           },
           "expenseCount": {
             "type": "integer",
@@ -61346,10 +62097,10 @@
             "description": "Product name"
           },
           "aliases": {
-            "$ref": "#/components/schemas/input_schema91"
+            "$ref": "#/components/schemas/input_schema90"
           },
           "tags": {
-            "$ref": "#/components/schemas/input_schema91"
+            "$ref": "#/components/schemas/input_schema90"
           },
           "primaryGtin": {
             "$ref": "#/components/schemas/Gtin"
@@ -61381,8 +62132,8 @@
           "categoryId": {
             "$ref": "#/components/schemas/ProductCategoryShortcode"
           },
-          "growsIngredientId": {
-            "$ref": "#/components/schemas/IngredientShortcode"
+          "growsPlantId": {
+            "$ref": "#/components/schemas/PlantShortcode"
           },
           "images": {
             "$ref": "#/components/schemas/output_schema40"
@@ -61448,7 +62199,7 @@
             "$ref": "#/components/schemas/DisplayImagesField"
           },
           "unitMappings": {
-            "$ref": "#/components/schemas/output_schema324"
+            "$ref": "#/components/schemas/output_schema339"
           },
           "unitPriceMappings": {
             "$ref": "#/components/schemas/ProductUnitPriceMappings"
@@ -61505,10 +62256,10 @@
             "$ref": "#/components/schemas/ProductDataGaps"
           },
           "ingredient": {
-            "$ref": "#/components/schemas/output_schema331"
+            "$ref": "#/components/schemas/output_schema346"
           },
           "inventoryEntry": {
-            "$ref": "#/components/schemas/output_schema332"
+            "$ref": "#/components/schemas/output_schema347"
           },
           "expenseCount": {
             "type": "integer",
@@ -62547,14 +63298,14 @@
             },
             "anyOf": [
               {
-                "$ref": "#/components/schemas/input_schema159"
+                "$ref": "#/components/schemas/input_schema160"
               },
               {
                 "minItems": 1,
                 "maxItems": 3,
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/input_schema159"
+                  "$ref": "#/components/schemas/input_schema160"
                 }
               }
             ]
@@ -62671,10 +63422,10 @@
             "description": "Product name"
           },
           "aliases": {
-            "$ref": "#/components/schemas/input_schema91"
+            "$ref": "#/components/schemas/input_schema90"
           },
           "tags": {
-            "$ref": "#/components/schemas/input_schema91"
+            "$ref": "#/components/schemas/input_schema90"
           },
           "primaryGtin": {
             "$ref": "#/components/schemas/Gtin"
@@ -62706,8 +63457,8 @@
           "categoryId": {
             "$ref": "#/components/schemas/ProductCategoryShortcode"
           },
-          "growsIngredientId": {
-            "$ref": "#/components/schemas/IngredientShortcode"
+          "growsPlantId": {
+            "$ref": "#/components/schemas/PlantShortcode"
           },
           "images": {
             "$ref": "#/components/schemas/output_schema40"
@@ -62835,7 +63586,7 @@
           },
           "tags": {
             "description": "Compatibility or ecosystem tokens only — battery platform, mount, thread, size standard. Never the manufacturer, a classification word, or a path node; those belong in manufacturer/categoryId. `collection:*` entries are managed by Collections. Leave empty when nothing fits.",
-            "$ref": "#/components/schemas/input_schema91"
+            "$ref": "#/components/schemas/input_schema90"
           },
           "upc": {
             "$ref": "#/components/schemas/GtinInput"
@@ -62876,8 +63627,8 @@
           "ingredientId": {
             "$ref": "#/components/schemas/IngredientShortcode"
           },
-          "growsIngredientId": {
-            "$ref": "#/components/schemas/IngredientShortcode"
+          "growsPlantId": {
+            "$ref": "#/components/schemas/PlantShortcode"
           },
           "price": {
             "$ref": "#/components/schemas/PositiveMoney"
@@ -62998,10 +63749,10 @@
             "description": "Product name"
           },
           "aliases": {
-            "$ref": "#/components/schemas/input_schema91"
+            "$ref": "#/components/schemas/input_schema90"
           },
           "tags": {
-            "$ref": "#/components/schemas/input_schema91"
+            "$ref": "#/components/schemas/input_schema90"
           },
           "primaryGtin": {
             "$ref": "#/components/schemas/Gtin"
@@ -63033,8 +63784,8 @@
           "categoryId": {
             "$ref": "#/components/schemas/ProductCategoryShortcode"
           },
-          "growsIngredientId": {
-            "$ref": "#/components/schemas/IngredientShortcode"
+          "growsPlantId": {
+            "$ref": "#/components/schemas/PlantShortcode"
           },
           "images": {
             "$ref": "#/components/schemas/output_schema40"
@@ -63104,7 +63855,7 @@
             "format": "uri"
           },
           "ingredient": {
-            "$ref": "#/components/schemas/output_schema331"
+            "$ref": "#/components/schemas/output_schema346"
           },
           "unitMappings": {
             "type": "array",
@@ -63115,13 +63866,13 @@
           "inventoryEntry": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/output_schema338"
+              "$ref": "#/components/schemas/output_schema353"
             }
           },
           "servingAsLocations": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/output_schema340"
+              "$ref": "#/components/schemas/output_schema355"
             }
           },
           "food": {
@@ -63256,10 +64007,10 @@
             "description": "Product name"
           },
           "aliases": {
-            "$ref": "#/components/schemas/input_schema91"
+            "$ref": "#/components/schemas/input_schema90"
           },
           "tags": {
-            "$ref": "#/components/schemas/input_schema91"
+            "$ref": "#/components/schemas/input_schema90"
           },
           "primaryGtin": {
             "$ref": "#/components/schemas/Gtin"
@@ -63291,8 +64042,8 @@
           "categoryId": {
             "$ref": "#/components/schemas/ProductCategoryShortcode"
           },
-          "growsIngredientId": {
-            "$ref": "#/components/schemas/IngredientShortcode"
+          "growsPlantId": {
+            "$ref": "#/components/schemas/PlantShortcode"
           },
           "images": {
             "$ref": "#/components/schemas/output_schema40"
@@ -63407,10 +64158,10 @@
             "description": "Product name"
           },
           "aliases": {
-            "$ref": "#/components/schemas/input_schema91"
+            "$ref": "#/components/schemas/input_schema90"
           },
           "tags": {
-            "$ref": "#/components/schemas/input_schema91"
+            "$ref": "#/components/schemas/input_schema90"
           },
           "primaryGtin": {
             "$ref": "#/components/schemas/Gtin"
@@ -63442,8 +64193,8 @@
           "categoryId": {
             "$ref": "#/components/schemas/ProductCategoryShortcode"
           },
-          "growsIngredientId": {
-            "$ref": "#/components/schemas/IngredientShortcode"
+          "growsPlantId": {
+            "$ref": "#/components/schemas/PlantShortcode"
           },
           "images": {
             "$ref": "#/components/schemas/output_schema40"
@@ -64759,7 +65510,7 @@
             "$ref": "#/components/schemas/ProjectKind"
           },
           "locations": {
-            "$ref": "#/components/schemas/input_schema91"
+            "$ref": "#/components/schemas/input_schema90"
           },
           "defaultTrade": {
             "$ref": "#/components/schemas/Trade"
@@ -64814,13 +65565,13 @@
             ]
           },
           "childProjectIds": {
-            "$ref": "#/components/schemas/output_schema384"
+            "$ref": "#/components/schemas/output_schema399"
           },
           "blockedByIds": {
-            "$ref": "#/components/schemas/output_schema384"
+            "$ref": "#/components/schemas/output_schema399"
           },
           "blockingIds": {
-            "$ref": "#/components/schemas/output_schema384"
+            "$ref": "#/components/schemas/output_schema399"
           },
           "createdAt": {
             "type": "string",
@@ -64845,7 +65596,7 @@
             "$ref": "#/components/schemas/DisplayImagesField"
           },
           "attachments": {
-            "$ref": "#/components/schemas/output_schema489"
+            "$ref": "#/components/schemas/output_schema504"
           }
         },
         "required": [
@@ -65110,7 +65861,7 @@
           },
           "location": {
             "description": "Any exact match against locations[]",
-            "$ref": "#/components/schemas/input_schema139"
+            "$ref": "#/components/schemas/input_schema140"
           },
           "dataStatus": {
             "anyOf": [
@@ -65183,12 +65934,12 @@
           "parentProjectId": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/input_schema171"
+                "$ref": "#/components/schemas/input_schema172"
               },
               {
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/input_schema171"
+                  "$ref": "#/components/schemas/input_schema172"
                 }
               }
             ]
@@ -65288,7 +66039,7 @@
             "$ref": "#/components/schemas/ProjectKind"
           },
           "locations": {
-            "$ref": "#/components/schemas/input_schema91"
+            "$ref": "#/components/schemas/input_schema90"
           },
           "defaultTrade": {
             "$ref": "#/components/schemas/Trade"
@@ -65343,13 +66094,13 @@
             ]
           },
           "childProjectIds": {
-            "$ref": "#/components/schemas/output_schema384"
+            "$ref": "#/components/schemas/output_schema399"
           },
           "blockedByIds": {
-            "$ref": "#/components/schemas/output_schema384"
+            "$ref": "#/components/schemas/output_schema399"
           },
           "blockingIds": {
-            "$ref": "#/components/schemas/output_schema384"
+            "$ref": "#/components/schemas/output_schema399"
           },
           "createdAt": {
             "type": "string",
@@ -65413,7 +66164,7 @@
             "$ref": "#/components/schemas/ProjectKind"
           },
           "locations": {
-            "$ref": "#/components/schemas/input_schema91"
+            "$ref": "#/components/schemas/input_schema90"
           },
           "defaultTrade": {
             "$ref": "#/components/schemas/Trade"
@@ -65468,13 +66219,13 @@
             ]
           },
           "childProjectIds": {
-            "$ref": "#/components/schemas/output_schema384"
+            "$ref": "#/components/schemas/output_schema399"
           },
           "blockedByIds": {
-            "$ref": "#/components/schemas/output_schema384"
+            "$ref": "#/components/schemas/output_schema399"
           },
           "blockingIds": {
-            "$ref": "#/components/schemas/output_schema384"
+            "$ref": "#/components/schemas/output_schema399"
           },
           "createdAt": {
             "type": "string",
@@ -65590,7 +66341,7 @@
             "$ref": "#/components/schemas/ProjectKind"
           },
           "locations": {
-            "$ref": "#/components/schemas/input_schema91"
+            "$ref": "#/components/schemas/input_schema90"
           },
           "defaultTrade": {
             "$ref": "#/components/schemas/Trade"
@@ -65645,13 +66396,13 @@
             ]
           },
           "childProjectIds": {
-            "$ref": "#/components/schemas/output_schema384"
+            "$ref": "#/components/schemas/output_schema399"
           },
           "blockedByIds": {
-            "$ref": "#/components/schemas/output_schema384"
+            "$ref": "#/components/schemas/output_schema399"
           },
           "blockingIds": {
-            "$ref": "#/components/schemas/output_schema384"
+            "$ref": "#/components/schemas/output_schema399"
           },
           "createdAt": {
             "type": "string",
@@ -66635,14 +67386,14 @@
             },
             "anyOf": [
               {
-                "$ref": "#/components/schemas/input_schema193"
+                "$ref": "#/components/schemas/input_schema194"
               },
               {
                 "minItems": 1,
                 "maxItems": 3,
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/input_schema193"
+                  "$ref": "#/components/schemas/input_schema194"
                 }
               }
             ]
@@ -67120,7 +67871,7 @@
             "$ref": "#/components/schemas/DisplayImagesField"
           },
           "attachments": {
-            "$ref": "#/components/schemas/output_schema489"
+            "$ref": "#/components/schemas/output_schema504"
           }
         },
         "required": [
@@ -67773,11 +68524,11 @@
           },
           "removeImageIds": {
             "description": "Document ids to detach. Detaching DELETES the stored file when nothing else references it — there is no restore, and the id will not resolve again.",
-            "$ref": "#/components/schemas/input_schema101"
+            "$ref": "#/components/schemas/input_schema100"
           },
           "imageOrder": {
             "description": "existing document ids in display order",
-            "$ref": "#/components/schemas/input_schema101"
+            "$ref": "#/components/schemas/input_schema100"
           }
         }
       },
@@ -68190,7 +68941,7 @@
             "$ref": "#/components/schemas/DisplayImagesField"
           },
           "attachments": {
-            "$ref": "#/components/schemas/output_schema489"
+            "$ref": "#/components/schemas/output_schema504"
           }
         },
         "required": [
@@ -69415,7 +70166,7 @@
             "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
           },
           "amounts": {
-            "$ref": "#/components/schemas/output_schema270"
+            "$ref": "#/components/schemas/output_schema267"
           },
           "rawLine": {
             "type": [
@@ -69496,7 +70247,7 @@
             "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
           },
           "amounts": {
-            "$ref": "#/components/schemas/output_schema270"
+            "$ref": "#/components/schemas/output_schema267"
           },
           "rawLine": {
             "type": [
@@ -71413,13 +72164,13 @@
             "type": "object",
             "properties": {
               "cost": {
-                "$ref": "#/components/schemas/output_schema443"
+                "$ref": "#/components/schemas/output_schema458"
               },
               "weight": {
-                "$ref": "#/components/schemas/output_schema443"
+                "$ref": "#/components/schemas/output_schema458"
               },
               "nutrients": {
-                "$ref": "#/components/schemas/output_schema443"
+                "$ref": "#/components/schemas/output_schema458"
               }
             },
             "required": [
@@ -71435,10 +72186,10 @@
             ]
           },
           "price": {
-            "$ref": "#/components/schemas/output_schema444"
+            "$ref": "#/components/schemas/output_schema459"
           },
           "gram": {
-            "$ref": "#/components/schemas/output_schema444"
+            "$ref": "#/components/schemas/output_schema459"
           },
           "nutrient": {
             "oneOf": [
@@ -71708,7 +72459,7 @@
         "type": "object",
         "properties": {
           "id": {
-            "$ref": "#/components/schemas/input_schema120"
+            "$ref": "#/components/schemas/input_schema119"
           },
           "mealId": {
             "$ref": "#/components/schemas/MealShortcode"
@@ -71745,7 +72496,7 @@
         "type": "object",
         "properties": {
           "id": {
-            "$ref": "#/components/schemas/input_schema120"
+            "$ref": "#/components/schemas/input_schema119"
           },
           "mealId": {
             "$ref": "#/components/schemas/MealShortcode"
@@ -71788,7 +72539,7 @@
         "type": "object",
         "properties": {
           "id": {
-            "$ref": "#/components/schemas/input_schema120"
+            "$ref": "#/components/schemas/input_schema119"
           },
           "mealId": {
             "$ref": "#/components/schemas/MealShortcode"
@@ -71882,7 +72633,7 @@
                 "$ref": "#/components/schemas/ProductFindOrCreateByCodeInput"
               },
               {
-                "$ref": "#/components/schemas/input_schema218"
+                "$ref": "#/components/schemas/input_schema219"
               }
             ],
             "description": "The scanned code."
@@ -72061,12 +72812,13 @@
           "expense",
           "image",
           "planting",
-          "gardenEntry"
+          "gardenEntry",
+          "plant"
         ]
       },
       "SearchableEntityId": {
         "type": "string",
-        "pattern": "^(?:PRD-|RCP-|ING-|CKB-|LOC-|INV-|MEL-|PRJ-|TSK-|VEN-|PUR-|FAC-|FTX-|WSH-|EXP-|IMG-|PLT-|GDE-)[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$"
+        "pattern": "^(?:PRD-|RCP-|ING-|CKB-|LOC-|INV-|MEL-|PRJ-|TSK-|VEN-|PUR-|FAC-|FTX-|WSH-|EXP-|IMG-|PLT-|GDE-|PLANT-)[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$"
       },
       "SearchComponentPlacement": {
         "type": "object",
@@ -72395,7 +73147,7 @@
             "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
           },
           "amounts": {
-            "$ref": "#/components/schemas/output_schema270"
+            "$ref": "#/components/schemas/output_schema267"
           },
           "rawLine": {
             "type": [
@@ -72476,7 +73228,7 @@
             "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
           },
           "amounts": {
-            "$ref": "#/components/schemas/output_schema270"
+            "$ref": "#/components/schemas/output_schema267"
           },
           "rawLine": {
             "type": [
@@ -74240,10 +74992,10 @@
             ]
           },
           "blockedByIds": {
-            "$ref": "#/components/schemas/output_schema363"
+            "$ref": "#/components/schemas/output_schema378"
           },
           "blockingIds": {
-            "$ref": "#/components/schemas/output_schema363"
+            "$ref": "#/components/schemas/output_schema378"
           },
           "subtaskCount": {
             "type": "integer",
@@ -74275,7 +75027,7 @@
             "$ref": "#/components/schemas/DisplayImagesField"
           },
           "attachments": {
-            "$ref": "#/components/schemas/output_schema489"
+            "$ref": "#/components/schemas/output_schema504"
           }
         },
         "required": [
@@ -74340,12 +75092,12 @@
           "parentTaskId": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/input_schema195"
+                "$ref": "#/components/schemas/input_schema196"
               },
               {
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/input_schema195"
+                  "$ref": "#/components/schemas/input_schema196"
                 }
               }
             ]
@@ -74432,12 +75184,12 @@
           "projectId": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/input_schema171"
+                "$ref": "#/components/schemas/input_schema172"
               },
               {
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/input_schema171"
+                  "$ref": "#/components/schemas/input_schema172"
                 }
               }
             ]
@@ -74445,12 +75197,12 @@
           "subjectProductId": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/input_schema107"
+                "$ref": "#/components/schemas/input_schema106"
               },
               {
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/input_schema107"
+                  "$ref": "#/components/schemas/input_schema106"
                 }
               }
             ]
@@ -74559,10 +75311,10 @@
             ]
           },
           "blockedByIds": {
-            "$ref": "#/components/schemas/output_schema363"
+            "$ref": "#/components/schemas/output_schema378"
           },
           "blockingIds": {
-            "$ref": "#/components/schemas/output_schema363"
+            "$ref": "#/components/schemas/output_schema378"
           },
           "subtaskCount": {
             "type": "integer",
@@ -74692,10 +75444,10 @@
             ]
           },
           "blockedByIds": {
-            "$ref": "#/components/schemas/output_schema363"
+            "$ref": "#/components/schemas/output_schema378"
           },
           "blockingIds": {
-            "$ref": "#/components/schemas/output_schema363"
+            "$ref": "#/components/schemas/output_schema378"
           },
           "subtaskCount": {
             "type": "integer",
@@ -76215,14 +76967,14 @@
             },
             "anyOf": [
               {
-                "$ref": "#/components/schemas/input_schema223"
+                "$ref": "#/components/schemas/input_schema224"
               },
               {
                 "minItems": 1,
                 "maxItems": 3,
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/input_schema223"
+                  "$ref": "#/components/schemas/input_schema224"
                 }
               }
             ]
@@ -76415,7 +77167,7 @@
             "$ref": "#/components/schemas/DisplayImagesField"
           },
           "attachments": {
-            "$ref": "#/components/schemas/output_schema489"
+            "$ref": "#/components/schemas/output_schema504"
           }
         },
         "required": [
@@ -76875,7 +77627,7 @@
             "$ref": "#/components/schemas/DisplayImagesField"
           },
           "attachments": {
-            "$ref": "#/components/schemas/output_schema489"
+            "$ref": "#/components/schemas/output_schema504"
           }
         },
         "required": [
@@ -77435,7 +78187,7 @@
             "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
           },
           "candidates": {
-            "$ref": "#/components/schemas/output_schema483"
+            "$ref": "#/components/schemas/output_schema498"
           },
           "candidateCount": {
             "type": "integer",
@@ -77462,7 +78214,7 @@
             "$ref": "#/components/schemas/DisplayImagesField"
           },
           "attachments": {
-            "$ref": "#/components/schemas/output_schema489"
+            "$ref": "#/components/schemas/output_schema504"
           }
         },
         "required": [
@@ -77505,7 +78257,7 @@
             "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
           },
           "candidates": {
-            "$ref": "#/components/schemas/output_schema483"
+            "$ref": "#/components/schemas/output_schema498"
           },
           "candidateCount": {
             "type": "integer",
@@ -77589,7 +78341,7 @@
             "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
           },
           "candidates": {
-            "$ref": "#/components/schemas/output_schema483"
+            "$ref": "#/components/schemas/output_schema498"
           },
           "candidateCount": {
             "type": "integer",

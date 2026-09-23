@@ -34,6 +34,7 @@ import {
   inventoryEntry,
   location,
   meal,
+  plant,
   planting,
   product,
   purchase,
@@ -272,6 +273,11 @@ export const LABEL_COLUMN_OVERRIDES = {
     column: gardenEntry.kind,
     reason:
       "titleField (displayName) is a computed value with no single storage column; kind is a short, always-present label",
+  },
+  plant: {
+    column: plant.name,
+    reason:
+      "titleField (displayName) appends the crop label from static data; name is the stored part",
   },
   planting: {
     column: planting.status,

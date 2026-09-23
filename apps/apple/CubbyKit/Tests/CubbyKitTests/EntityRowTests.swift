@@ -153,10 +153,10 @@ struct EntityRowTests {
             (
                 EntityKey.planting,
                 [
-                    "id": "PLT-2345", "ingredientId": "ING-2345",
-                    "displayName": "Tomato · San Marzano",
+                    "id": "PLT-2345", "plantId": "PLANT-2345",
+                    "displayName": "San Marzano · Tomato",
                 ] as JSONValue,
-                "Tomato · San Marzano"
+                "San Marzano · Tomato"
             ),
             (
                 EntityKey.gardenEntry,

@@ -310,16 +310,22 @@ function mapAlternatives<C>(
 }
 
 async function resolveEnumTarget(
+  db: Database,
   spec: Extract<FieldSuggestSpec, { kind: "enum" }>,
   subject: string,
+  rawBasis: RawBasis,
   usage: AiSelectionUsage,
   jev: JevPort | undefined,
 ): Promise<TargetResolution> {
+  const values = spec.candidates
+    ? await spec.candidates(db, rawBasis)
+    : spec.values;
+  if (values.length === 0) return skipped("no_candidates");
   const result = await classifyWithJev({
     feature: FIELD_SUGGESTION_FEATURE,
     subject,
     rules: spec.rules,
-    values: spec.values,
+    values,
     describe: spec.describe,
     usage,
     port: jev,
@@ -508,7 +514,7 @@ async function resolveOneTarget(
   jev: JevPort | undefined,
 ): Promise<TargetResolution> {
   if (spec.kind === "enum") {
-    return resolveEnumTarget(spec, subject, usage, jev);
+    return resolveEnumTarget(db, spec, subject, rawBasis, usage, jev);
   }
   if (spec.kind === "reference") {
     return resolveReferenceTarget(

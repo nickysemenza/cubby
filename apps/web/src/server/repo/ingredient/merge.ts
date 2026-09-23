@@ -37,19 +37,8 @@ import {
   resolveMergeTargets,
 } from "~/server/repo/merge";
 
-import { mergeImpactForIngredients } from "./search";
-
-type MergeCandidate = {
-  id: string;
-  name: string;
-  weight: number;
-  detail: Array<{ label: string; count: number }>;
-};
-
 type IngredientSurvivorChanges = {
   mergedFrom: { from: null; to: string[] };
-  gardenGuideKey?: { from: null; to: string };
-  gardenGuideKeyConflicts?: { from: null; to: string[] };
 };
 
 export const INGREDIENT_MERGE_EDGE_POLICY = {
@@ -71,16 +60,10 @@ export const INGREDIENT_MERGE_EDGE_POLICY = {
     description:
       "A merged ingredient's linked products are re-pointed onto the surviving ingredient.",
   },
-  "Product.growsIngredientId": {
+  "Plant.ingredientId": {
     code: "repoint-to-survivor",
     effect: "repoint",
-    description:
-      "Garden source products point to the surviving crop ingredient.",
-  },
-  "Planting.ingredientId": {
-    code: "repoint-to-survivor",
-    effect: "repoint",
-    description: "Plantings retain the surviving crop ingredient.",
+    description: "Plants linked to a merged ingredient move to the survivor.",
   },
 } as const satisfies IncomingEdgePolicy<"ingredient", OperationDisposition>;
 
@@ -228,8 +211,6 @@ export const mergeIngredients = async (
      */
     affectedRecipeIds: RecipeId[];
     productsMoved: number;
-    gardenGuideKeyCarried: string | null;
-    gardenGuideKeyConflicts: string[];
   }> => {
     const targetRec = await conn.query.ingredient.findFirst({
       // notDeleted: a soft-deleted target would otherwise pass validation and
@@ -277,21 +258,6 @@ export const mergeIngredients = async (
       .select({ id: product.id })
       .from(product)
       .where(inArray(product.ingredientId, uniqueAliases));
-    const loserGuideKeys = uniq(
-      aliasRecs
-        .map((alias) => alias.gardenGuideKey)
-        .filter((key): key is string => key != null && key !== ""),
-    );
-    const gardenGuideKeyCarried =
-      targetRec.gardenGuideKey == null && loserGuideKeys.length === 1
-        ? loserGuideKeys[0]!
-        : null;
-    const gardenGuideKeyConflicts = targetRec.gardenGuideKey
-      ? loserGuideKeys.filter((key) => key !== targetRec.gardenGuideKey)
-      : loserGuideKeys.length > 1
-        ? loserGuideKeys
-        : [];
-
     return {
       newAliases,
       aliasesAdded: newAliases.filter((a) => !existing.has(a)),
@@ -302,8 +268,6 @@ export const mergeIngredients = async (
       movedRecipeIds,
       affectedRecipeIds,
       productsMoved: movedProducts.length,
-      gardenGuideKeyCarried,
-      gardenGuideKeyConflicts,
     };
   };
 
@@ -315,7 +279,6 @@ export const mergeIngredients = async (
       .update(ingredient)
       .set({
         aliases: r.newAliases,
-        gardenGuideKey: r.gardenGuideKeyCarried ?? undefined,
       })
       .where(eq(ingredient.id, target));
 
@@ -346,15 +309,9 @@ export const mergeIngredients = async (
       to: target,
       liveOnly: false,
     });
-    // The two garden edges are real FKs too, so left unpointed they abort the
-    // hard delete with a raw FK violation — `liveOnly: false` for the same
-    // reason as above.
-    await repointEdge(tx, "ingredient", "Planting.ingredientId", {
-      from: uniqueAliases,
-      to: target,
-      liveOnly: false,
-    });
-    await repointEdge(tx, "ingredient", "Product.growsIngredientId", {
+    // The plant link is a real FK too, so left unpointed it aborts the hard
+    // delete with a raw FK violation — `liveOnly: false` for the same reason.
+    await repointEdge(tx, "ingredient", "Plant.ingredientId", {
       from: uniqueAliases,
       to: target,
       liveOnly: false,
@@ -367,18 +324,6 @@ export const mergeIngredients = async (
     const survivorChanges: IngredientSurvivorChanges = {
       mergedFrom: { from: null, to: uniqueAliases },
     };
-    if (r.gardenGuideKeyCarried) {
-      survivorChanges.gardenGuideKey = {
-        from: null,
-        to: r.gardenGuideKeyCarried,
-      };
-    }
-    if (r.gardenGuideKeyConflicts.length > 0) {
-      survivorChanges.gardenGuideKeyConflicts = {
-        from: null,
-        to: r.gardenGuideKeyConflicts,
-      };
-    }
     const { removed } = await finalizeMerge(tx, {
       entity: "ingredient",
       table: ingredient,
@@ -408,69 +353,6 @@ export const mergeIngredients = async (
       deletedIds: r.deletedIds,
       deletedEntityIds: r.deletedEntityIds,
       affectedRecipeIds: r.affectedRecipeIds,
-      gardenGuideKeyCarried: r.gardenGuideKeyCarried,
-      gardenGuideKeyConflicts: r.gardenGuideKeyConflicts,
     };
   });
-};
-
-/**
- * Weight tiers for {@link previewMergeIngredientCandidates}, encoding the same
- * priority `rankImpact` (`merge-confirmation.tsx`) sorts candidates by: a USDA
- * link beats any product-count difference, a product-count difference beats
- * any recipe-usage difference, which beats alias count. Each tier's
- * multiplier is far larger than any realistic count in the tier below it (a
- * personal pantry app's ingredient never carries anywhere near a thousand
- * products or recipe usages), so summing them into one integer preserves the
- * lexicographic order without shipping a multi-key comparator over the wire.
- */
-const USDA_LINK_WEIGHT = 1_000_000_000;
-const PRODUCT_COUNT_WEIGHT = 1_000_000;
-const RECIPE_USAGE_WEIGHT = 1_000;
-
-/**
- * Per-candidate ranking data for the merge picker, before a keeper is named —
- * the mode the merge dialog needs to DEFAULT the keeper (sort descending by
- * `weight`) and show what each row carries (`detail`).
- *
- * Wraps {@link mergeImpactForIngredients} (`./search`) rather than re-querying:
- * same counts, reshaped into `MergeCandidate`. Replaces that function's role as
- * the confirmation dialog's data source; `mergeImpactForIngredients` stays
- * exported for its existing caller until it migrates.
- */
-export const previewMergeIngredientCandidates = async (
-  db: Database,
-  ids: IngredientId[],
-): Promise<MergeCandidate[]> => {
-  const impacts = await mergeImpactForIngredients(db, ids);
-  const guideRows = await getDb(db)
-    .select({ shortcode: ingredient.shortcode, key: ingredient.gardenGuideKey })
-    .from(ingredient)
-    .where(and(inArray(ingredient.id, ids), notDeleted(ingredient)));
-  const guideKeyByShortcode = new Map(
-    guideRows.map((row) => [row.shortcode, row.key]),
-  );
-  return impacts.map((i) => ({
-    id: i.id,
-    name: i.name,
-    weight:
-      (i.hasUsdaLink ? USDA_LINK_WEIGHT : 0) +
-      i.productCount * PRODUCT_COUNT_WEIGHT +
-      i.recipeUsageCount * RECIPE_USAGE_WEIGHT +
-      i.aliasCount,
-    detail: [
-      { label: "USDA link", count: i.hasUsdaLink ? 1 : 0 },
-      { label: "products", count: i.productCount },
-      { label: "recipe usages", count: i.recipeUsageCount },
-      { label: "aliases", count: i.aliasCount },
-      ...(guideKeyByShortcode.get(i.id)
-        ? [
-            {
-              label: `garden guide: ${guideKeyByShortcode.get(i.id)}`,
-              count: 1,
-            },
-          ]
-        : []),
-    ],
-  }));
 };

@@ -20,7 +20,6 @@ import { createTestRequestContext } from "~/server/testing/request-context";
 
 import { getDb } from "./database-helpers";
 import { createGardenEntry, createPlanting } from "./garden";
-import { createIngredient } from "./ingredient";
 import { createInventoryEntry, deleteInventoryEntries } from "./inventory";
 import {
   buildLocationTree,
@@ -34,6 +33,7 @@ import { createProduct } from "./product";
 import {
   createInventoryFixture,
   createLocationFixture,
+  createPlantFixture,
   createProductFixture,
   makeLocationInput,
   makeProductInput,
@@ -248,7 +248,7 @@ describe("deleteLocations hierarchy", () => {
    * deletes went through and left plantings pointing at a tombstoned bed.
    */
   it("rejects a bed with a growing planting (LOCATION_HAS_PLANTINGS)", async () => {
-    const crop = await createIngredient(
+    const crop = await createPlantFixture(
       ctx.db,
       { name: "Location delete crop" },
       ctx.actor,
@@ -264,7 +264,7 @@ describe("deleteLocations hierarchy", () => {
     );
     await createPlanting(
       ctx.db,
-      { ingredientId: crop.id, locationId: bed.id, status: "growing" },
+      { plantId: crop.id, locationId: bed.id, status: "growing" },
       ctx.actor,
     );
 
@@ -277,7 +277,7 @@ describe("deleteLocations hierarchy", () => {
   });
 
   it("rejects a bed named by a planned planting's locationId (LOCATION_HAS_PLANTINGS)", async () => {
-    const crop = await createIngredient(
+    const crop = await createPlantFixture(
       ctx.db,
       { name: "Location intended crop" },
       ctx.actor,
@@ -296,7 +296,7 @@ describe("deleteLocations hierarchy", () => {
     );
     await createPlanting(
       ctx.db,
-      { ingredientId: crop.id, locationId: bed.id, status: "planned" },
+      { plantId: crop.id, locationId: bed.id, status: "planned" },
       ctx.actor,
     );
 

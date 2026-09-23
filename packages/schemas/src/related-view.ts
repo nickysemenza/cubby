@@ -526,6 +526,7 @@ const ENTITIES_WITHOUT_RELATED_VIEWS = {
     "ledger transfer relationships are rendered in the household ledger",
   // The one entity with no shortcode, no detail route, and no list table.
   image: "no detail route or list table to hang a preview column on",
+  plant: "a plant's plantings and products render as detail relation sections",
   planting:
     "its cross-entity relationships (ingredient, location, source product, task) are already reachable from those entities' own relation sections",
   gardenEntry: "garden timelines render entries directly",

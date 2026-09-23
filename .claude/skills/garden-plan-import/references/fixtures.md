@@ -2,7 +2,7 @@
 
 Three representative rows from a seasonal plan, walked through the mapping
 in [mapping.md](mapping.md). Shortcodes below are placeholders
-(`LOC-XXXX`/`PRJ-XXXX`/`TSK-XXXX`/`ING-XXXX`/`PLT-XXXX`) — never copy real
+(`LOC-XXXX`/`PRJ-XXXX`/`TSK-XXXX`/`PLANT-XXXX`/`PLT-XXXX`) — never copy real
 household codes into a skill file; resolve and create against the live
 catalog instead.
 
@@ -16,8 +16,9 @@ plus a planted Task's Planting.
 
 1. Resolve `Location` "bed 3" → existing `LOC-B3XX` (`type: "bed"`), or
    create it if this is the first plan to mention it.
-2. Resolve `Ingredient` "broccoli" via `resolve_ingredients` → `ING-BRCL`
-   (create only if unresolved).
+2. Resolve the cultivar via `resolve_plants` with
+   `{ "name": "DiCicco", "gardenGuideKey": "broccoli" }` → `PLANT-BRCL`
+   (created if unresolved); note "or Belstar" in that Plant's `notes`.
 3. Create the `Task`:
    ```json
    { "action": "create", "entity": "task",
@@ -28,8 +29,8 @@ plus a planted Task's Planting.
 4. Create the `Planting`:
    ```json
    { "action": "create", "entity": "planting",
-     "data": { "ingredientId": "ING-BRCL", "locationId": "LOC-B3XX",
-               "status": "planned", "variety": "DiCicco or Belstar",
+     "data": { "plantId": "PLANT-BRCL", "locationId": "LOC-B3XX",
+               "status": "planned",
                "quantity": "3", "plannedWindow": "plant now",
                "taskId": "TSK-BRC3" } }
    ```
@@ -41,7 +42,8 @@ plus a planted Task's Planting.
 A calendar row with a future window and no bed assigned yet in the plan.
 Produces a Task plus a planned Planting with `locationId: null`.
 
-1. Resolve `Ingredient` "fava" (fava bean) → `ING-FAVA`.
+1. Resolve `{ "name": "Windsor", "gardenGuideKey": "bean-fava" }` via
+   `resolve_plants` → `PLANT-FAVA` (displays as "Windsor · Fava bean").
 2. Create the `Task`:
    ```json
    { "action": "create", "entity": "task",
@@ -52,8 +54,8 @@ Produces a Task plus a planned Planting with `locationId: null`.
 3. Create the `Planting`:
    ```json
    { "action": "create", "entity": "planting",
-     "data": { "ingredientId": "ING-FAVA", "locationId": null,
-               "status": "planned", "variety": "Windsor",
+     "data": { "plantId": "PLANT-FAVA", "locationId": null,
+               "status": "planned",
                "quantity": "3/4 lb", "plannedWindow": "Nov",
                "taskId": "TSK-FAVA" } }
    ```

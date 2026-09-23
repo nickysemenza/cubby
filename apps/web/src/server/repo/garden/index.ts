@@ -44,7 +44,9 @@ import {
 } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
 import {
+  expectedHarvestFor,
   guideWindowsFor,
+  plantingDisplayName,
   resolveGardenGuideKey,
 } from "~/server/garden-guides/windows";
 import {
@@ -82,7 +84,7 @@ import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 type GardenDb = Database | DrizzleTransaction;
 
 // `z.input`, not `z.infer`/`z.output`: every defaultable create field
-// (`status`, `variety`, …) is optional pre-parse and non-optional
+// (`status`, `outcome`, …) is optional pre-parse and non-optional
 // post-parse, but this repo function does its own `?? null` coalescing
 // rather than relying on zod's default-fill — the wider input type is both
 // what a direct (non-entity-kernel) caller naturally writes and a safe
@@ -100,7 +102,7 @@ export const buildPlantingWhere = () => notDeleted(planting);
 export const buildGardenEntryWhere = () => notDeleted(gardenEntry);
 
 const required = async <
-  T extends "ingredient" | "location" | "planting" | "product" | "task",
+  T extends "location" | "plant" | "planting" | "product" | "task",
 >(
   db: GardenDb,
   shortcode: string,
@@ -118,7 +120,7 @@ const required = async <
 /** Keep garden source links semantic without introducing a Product subtype. */
 const validatePlantingSource = async (
   db: GardenDb,
-  ingredientId: string,
+  plantId: string | null,
   sourceProductId: string | null,
 ): Promise<void> => {
   if (!sourceProductId) return;
@@ -127,7 +129,7 @@ const validatePlantingSource = async (
       eq(product.id, parseEntityId("product", sourceProductId)),
       isNull(product.deletedAt),
     ),
-    columns: { categoryId: true, growsIngredientId: true },
+    columns: { categoryId: true, growsPlantId: true },
   });
   if (!source) return;
   if ((await getCategoryFeature(db, source.categoryId)) === "food") {
@@ -136,10 +138,10 @@ const validatePlantingSource = async (
       "A planting source Product must be a garden product, not a food Product.",
     );
   }
-  if (source.growsIngredientId && source.growsIngredientId !== ingredientId) {
+  if (source.growsPlantId && plantId && source.growsPlantId !== plantId) {
     throw createAppError(
       "CONSTRAINT_VIOLATION",
-      "The planting source Product grows a different crop.",
+      "The planting source Product grows a different plant.",
     );
   }
 };
@@ -147,8 +149,16 @@ const validatePlantingSource = async (
 // The joins `plantingOut`'s name/guide projections read; shared by the row
 // read and the list so both parse the same shape.
 const plantingReferences = {
-  ingredient: {
-    columns: { shortcode: true, name: true, gardenGuideKey: true },
+  plant: {
+    columns: {
+      shortcode: true,
+      name: true,
+      gardenGuideKey: true,
+      daysFromSowMin: true,
+      daysFromSowMax: true,
+      daysFromTransplantMin: true,
+      daysFromTransplantMax: true,
+    },
   },
   sourceProduct: { columns: { shortcode: true, name: true } },
   location: { columns: { shortcode: true, name: true } },
@@ -171,12 +181,18 @@ const plantingRow = async (db: GardenDb, id: PlantingId) => {
 type PlantingWithReferences = Awaited<ReturnType<typeof plantingRow>>;
 
 const mapPlanting = (row: PlantingWithReferences, dataQuality: DataQuality) => {
-  const gardenGuideKey = resolveGardenGuideKey(row.ingredient.gardenGuideKey);
+  const gardenGuideKey = resolveGardenGuideKey(row.plant?.gardenGuideKey);
   const { sow, transplant } = guideWindowsFor(gardenGuideKey);
+  const harvest = expectedHarvestFor({
+    key: gardenGuideKey,
+    plant: row.plant,
+    sowedOn: row.sowedOn,
+    transplantedOn: row.transplantedOn,
+  });
   return plantingOut.parse({
     ...row,
     id: parseShortcodeFor("planting", row.shortcode),
-    ingredientId: parseShortcodeFor("ingredient", row.ingredient.shortcode),
+    plantId: row.plant ? parseShortcodeFor("plant", row.plant.shortcode) : null,
     sourceProductId: row.sourceProduct
       ? parseShortcodeFor("product", row.sourceProduct.shortcode)
       : null,
@@ -184,16 +200,16 @@ const mapPlanting = (row: PlantingWithReferences, dataQuality: DataQuality) => {
       ? parseShortcodeFor("location", row.location.shortcode)
       : null,
     taskId: row.task ? parseShortcodeFor("task", row.task.shortcode) : null,
-    ingredientName: row.ingredient.name,
+    plantName: row.plant?.name ?? null,
     sourceProductName: row.sourceProduct?.name ?? null,
     locationName: row.location?.name ?? null,
     taskName: row.task?.name ?? null,
     guideSowWindow: sow,
     guideTransplantWindow: transplant,
-    displayName: plantingDisplayName({
-      ingredientName: row.ingredient.name,
-      variety: row.variety,
-    }),
+    expectedHarvestStart: harvest?.start ?? null,
+    expectedHarvestEnd: harvest?.end ?? null,
+    expectedHarvest: harvest?.summary ?? null,
+    displayName: plantingDisplayName(row.plant),
     dataQuality,
   });
 };
@@ -203,21 +219,13 @@ type GardenEntryWithReferences = typeof gardenEntry.$inferSelect & {
   plantings: Array<{
     planting: {
       shortcode: string;
-      variety: string | null;
-      ingredient: { name: string };
+      plant: { name: string; gardenGuideKey: string | null } | null;
     } | null;
   }>;
   images: Array<{ image: MappableImageRecord; deletedAt?: Date | null }>;
 };
 
-/** `"<ingredient name>[ · <variety>]"` — the canonical planting identity, shared
- * by `planting.displayName`, garden-entry planting references, and the
- * calendar's planting item title (`repo/calendar-plantings.ts`). */
-export const plantingDisplayName = (row: {
-  ingredientName: string;
-  variety: string | null;
-}) =>
-  row.variety ? `${row.ingredientName} · ${row.variety}` : row.ingredientName;
+export { plantingDisplayName } from "~/server/garden-guides/windows";
 
 const GARDEN_ENTRY_KIND_LABELS = {
   note: "Note",
@@ -258,10 +266,7 @@ const mapEntry = (row: GardenEntryWithReferences, dataQuality: DataQuality) =>
         ),
         plantings: plantings.map((linked) => ({
           id: parseShortcodeFor("planting", linked.shortcode),
-          name: plantingDisplayName({
-            ingredientName: linked.ingredient.name,
-            variety: linked.variety,
-          }),
+          name: plantingDisplayName(linked.plant),
         })),
       };
     })(),
@@ -291,8 +296,10 @@ export const getGardenEntry = async (db: GardenDb, id: GardenEntryId) => {
         where: notDeleted(gardenEntryPlanting),
         with: {
           planting: {
-            columns: { shortcode: true, variety: true },
-            with: { ingredient: { columns: { name: true } } },
+            columns: { shortcode: true },
+            with: {
+              plant: { columns: { name: true, gardenGuideKey: true } },
+            },
           },
         },
       },
@@ -402,22 +409,22 @@ export const createPlanting = async (
   actor: ActorContext,
 ) =>
   withTransaction(db, async (tx) => {
-    const ingredientId = await required(tx, data.ingredientId, "ingredient");
+    const plantId = await required(tx, data.plantId, "plant");
     const sourceProductId = data.sourceProductId
       ? await required(tx, data.sourceProductId, "product")
       : null;
-    await validatePlantingSource(tx, ingredientId, sourceProductId);
+    await validatePlantingSource(tx, plantId, sourceProductId);
     const locationId = data.locationId
       ? await required(tx, data.locationId, "location")
       : null;
     const taskId = data.taskId ? await required(tx, data.taskId, "task") : null;
     const row = await insertWithShortcode(tx, "planting", {
-      ingredientId,
+      plantId,
       sourceProductId,
       locationId,
       taskId,
       status: data.status ?? "planned",
-      variety: data.variety ?? null,
+      outcome: data.outcome ?? null,
       quantity: data.quantity ?? null,
       notes: data.notes ?? null,
       plannedWindow: data.plannedWindow ?? null,
@@ -498,9 +505,9 @@ export const updatePlanting = async (
         "The planting no longer exists.",
       );
     }
-    const ingredientId =
-      data.ingredientId !== undefined
-        ? await required(tx, data.ingredientId, "ingredient")
+    const plantId =
+      data.plantId !== undefined
+        ? await required(tx, data.plantId, "plant")
         : undefined;
     const sourceProductId =
       data.sourceProductId !== undefined
@@ -522,16 +529,16 @@ export const updatePlanting = async (
         : undefined;
     await validatePlantingSource(
       tx,
-      ingredientId ?? before.ingredientId,
+      plantId === undefined ? before.plantId : plantId,
       sourceProductId === undefined ? before.sourceProductId : sourceProductId,
     );
     const values = buildPartialUpdateValues({
-      ingredientId,
+      plantId,
       sourceProductId,
       locationId,
       taskId,
       status: data.status,
-      variety: data.variety,
+      outcome: data.outcome,
       quantity: data.quantity,
       notes: data.notes,
       plannedWindow: data.plannedWindow,
@@ -686,13 +693,12 @@ export const plantingList = async (
 ) => {
   // Id filters resolve shortcodes first; a requested set that resolves to
   // nothing matches nothing (`eqAnyRequested`), never the whole list.
-  const [locationIds, ingredientIds, taskIds, sourceProductIds] =
-    await Promise.all([
-      resolveFilterIds(db, "location", filters.locationId),
-      resolveFilterIds(db, "ingredient", filters.ingredientId),
-      resolveFilterIds(db, "task", filters.taskId),
-      resolveFilterIds(db, "product", filters.sourceProductId),
-    ]);
+  const [locationIds, plantIds, taskIds, sourceProductIds] = await Promise.all([
+    resolveFilterIds(db, "location", filters.locationId),
+    resolveFilterIds(db, "plant", filters.plantId),
+    resolveFilterIds(db, "task", filters.taskId),
+    resolveFilterIds(db, "product", filters.sourceProductId),
+  ]);
   const where = plantingScaffold.where(filters, [
     buildPlantingWhere(),
     filters.activeOn
@@ -700,7 +706,7 @@ export const plantingList = async (
           AND (${planting.finishedOn} IS NULL OR ${planting.finishedOn} >= ${filters.activeOn}::date)`
       : undefined,
     eqAnyRequested(planting.locationId, locationIds),
-    eqAnyRequested(planting.ingredientId, ingredientIds),
+    eqAnyRequested(planting.plantId, plantIds),
     eqAnyRequested(planting.taskId, taskIds),
     eqAnyRequested(planting.sourceProductId, sourceProductIds),
     filters.gardenEntryId === undefined
@@ -881,8 +887,10 @@ export const gardenEntryList = async (
             where: notDeleted(gardenEntryPlanting),
             with: {
               planting: {
-                columns: { shortcode: true, variety: true },
-                with: { ingredient: { columns: { name: true } } },
+                columns: { shortcode: true },
+                with: {
+                  plant: { columns: { name: true, gardenGuideKey: true } },
+                },
               },
             },
           },
