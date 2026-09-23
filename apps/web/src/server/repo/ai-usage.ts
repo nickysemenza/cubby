@@ -193,6 +193,7 @@ export async function listAiUsageForRun(
         attempt: aiUsage.attempt,
         status: aiUsage.status,
         gatewayLogId: aiUsage.gatewayLogId,
+        cacheStatus: aiUsage.cacheStatus,
         applicationCacheStatus: aiUsage.applicationCacheStatus,
         durationMs: aiUsage.durationMs,
         estimatedCost: aiUsage.estimatedCost,

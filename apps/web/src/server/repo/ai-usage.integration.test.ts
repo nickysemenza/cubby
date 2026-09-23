@@ -57,6 +57,7 @@ describe("listAiUsageForRun", () => {
       model: "typesafe/jev",
       operation: "suggestFields.product.categoryId",
       runId,
+      cacheStatus: "none",
       applicationCacheStatus: "hit",
       attempt: 0,
       inputTokens: 0,
@@ -68,6 +69,7 @@ describe("listAiUsageForRun", () => {
     expect(usage.pricedSubtotal).toBe(0);
     expect(usage.unpricedCount).toBe(0);
     expect(usage.records[0]).toMatchObject({
+      cacheStatus: "none",
       applicationCacheStatus: "hit",
       attempt: 0,
       estimatedCost: 0,

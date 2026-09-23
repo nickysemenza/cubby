@@ -2286,7 +2286,7 @@ export async function auditImportBatch(
   }
   return {
     findings: stored,
-    nextOffset: importedPurchases.length === 25 ? input.offset + 25 : null,
+    nextOffset: renderedBatch.length === 25 ? input.offset + 25 : null,
   };
 }
 
