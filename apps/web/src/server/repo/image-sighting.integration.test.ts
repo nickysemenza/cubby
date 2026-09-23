@@ -1,7 +1,11 @@
+import { entityRefKey } from "@cubby/schemas/entity";
 import type { LedgerPartyShortcode } from "@cubby/schemas/identifiers";
+import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import { image as imageTable } from "~/server/db/schema";
+import { getDb } from "~/server/repo/database-helpers";
 import { createDevice } from "~/server/repo/device";
 import { getImageById } from "~/server/repo/image";
 import {
@@ -17,6 +21,12 @@ import {
 } from "~/server/repo/ledger-party";
 import { setMemberLoginParty } from "~/server/repo/member-login";
 import { createImageFixture } from "~/server/repo/repo.fixtures";
+import { getR2PublicUrl } from "~/server/utils/r2-public-url";
+
+import {
+  resolveEntityDisplayImages,
+  withUniversalEntityMedia,
+} from "./entity-display-image";
 
 describe("image-sighting", () => {
   const ctx = withTestDb();
@@ -50,6 +60,64 @@ describe("image-sighting", () => {
     );
     return device.output.id;
   };
+
+  it("shows the related image in list, detail, and compact entity previews", async () => {
+    const image = await createImageFixture(ctx.db, "sighting-preview");
+    const member = await makeMember("Preview member");
+    const reporter = await makeDevice("Preview device", member);
+    const sighting = await createImageSighting(
+      ctx.db,
+      {
+        imageId: image.shortcode,
+        ledgerPartyId: member,
+        deviceId: reporter,
+        assetKey: "SYNTHETIC-PREVIEW-ASSET",
+        sourceType: "userLibrary",
+        mediaSubtypes: [],
+        hasAdjustments: false,
+        matchKind: "import",
+        observedAt: new Date("2026-06-01T10:00:00Z"),
+      },
+      ctx.actor,
+    );
+
+    const expectedURL = getR2PublicUrl(image.key);
+    const list = await withUniversalEntityMedia(
+      ctx.db,
+      "imageSighting",
+      [{ id: sighting.output.id }],
+      false,
+    );
+    const detail = await withUniversalEntityMedia(
+      ctx.db,
+      "imageSighting",
+      [{ id: sighting.output.id }],
+      true,
+    );
+    expect(list[0]?.displayImages[0]).toMatchObject({
+      id: image.shortcode,
+      url: expectedURL,
+    });
+    expect(detail[0]?.displayImages).toEqual(list[0]?.displayImages);
+    const compact = await resolveEntityDisplayImages(ctx.db, [
+      { entityType: "imageSighting", entityId: sighting.entityId },
+    ]);
+    expect(
+      compact.get(entityRefKey("imageSighting", sighting.entityId))?.url,
+    ).toBe(expectedURL);
+
+    await getDb(ctx.db)
+      .update(imageTable)
+      .set({ deletedAt: new Date() })
+      .where(eq(imageTable.id, image.id));
+    const hidden = await withUniversalEntityMedia(
+      ctx.db,
+      "imageSighting",
+      [{ id: sighting.output.id }],
+      false,
+    );
+    expect(hidden[0]?.displayImages).toEqual([]);
+  });
 
   it("upserts on a repeat report for the same (imageId, ledgerPartyId, assetKey): no error, observation columns replace, shortcode is kept", async () => {
     const image = await createImageFixture(ctx.db, "ana-sunset");

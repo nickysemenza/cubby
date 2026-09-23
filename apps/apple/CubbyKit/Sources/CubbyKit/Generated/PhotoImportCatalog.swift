@@ -173,6 +173,7 @@ public enum PhotoImportCatalog {
     PhotoDisplaySource(source: .task, target: .project, relationPath: ["project"], priority: 2, ordering: .declared),
     PhotoDisplaySource(source: .purchase, target: .product, relationPath: ["products"], priority: 1, ordering: .declared),
     PhotoDisplaySource(source: .purchase, target: .vendor, relationPath: ["vendor"], priority: 2, ordering: .declared),
+    PhotoDisplaySource(source: .financialAccount, target: .vendor, relationPath: ["provider-vendor"], priority: 0, ordering: .declared),
     PhotoDisplaySource(source: .financialTransaction, target: .purchase, relationPath: ["purchase"], priority: 1, ordering: .newest),
     PhotoDisplaySource(source: .financialTransaction, target: .product, relationPath: ["products"], priority: 2, ordering: .declared),
     PhotoDisplaySource(source: .financialTransaction, target: .vendor, relationPath: ["vendor"], priority: 3, ordering: .declared),
@@ -181,6 +182,11 @@ public enum PhotoImportCatalog {
     PhotoDisplaySource(source: .expense, target: .purchase, relationPath: ["purchase"], priority: 1, ordering: .declared),
     PhotoDisplaySource(source: .planting, target: .gardenEntry, relationPath: ["entries"], priority: 1, ordering: .newest),
     PhotoDisplaySource(source: .planting, target: .product, relationPath: ["source-product"], priority: 2, ordering: .declared),
+    PhotoDisplaySource(source: .vendorAccount, target: .vendor, relationPath: ["vendor"], priority: 0, ordering: .declared),
+    PhotoDisplaySource(source: .productCategory, target: .product, relationPath: ["products"], priority: 0, ordering: .declared),
+    PhotoDisplaySource(source: .importRun, target: .vendor, relationPath: ["vendor"], priority: 0, ordering: .declared),
+    PhotoDisplaySource(source: .device, target: .product, relationPath: ["hardware"], priority: 0, ordering: .declared),
+    PhotoDisplaySource(source: .imageSighting, target: .image, relationPath: ["image"], priority: 0, ordering: .declared),
     PhotoDisplaySource(source: .plant, target: .product, relationPath: ["products"], priority: 1, ordering: .declared),
     PhotoDisplaySource(source: .plant, target: .gardenEntry, relationPath: ["plantings","entries"], priority: 2, ordering: .newest)
   ]
