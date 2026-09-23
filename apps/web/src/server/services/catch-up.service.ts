@@ -61,7 +61,11 @@ export async function recoverMissedWork(db: Database) {
   const offline =
     offlineResult.status === "fulfilled" ? offlineResult.value : null;
   const stale = staleResult.status === "fulfilled" ? staleResult.value : null;
-  console.log("[catch-up] purchase runs expired", { offline, stale });
+  console.log("[catch-up] purchase runs expired", {
+    offlineExpired: offline?.expired,
+    staleExpired: stale?.expired,
+    staleFailures: stale?.failures.length,
+  });
   errors.push(...(stale?.failures.map(({ error }) => error) ?? []));
   if (errors.length) throw new Error(errors.join("; "));
   return { offline, stale };
@@ -132,7 +136,9 @@ export async function discoverPurchases(db: Database) {
   console.log("[catch-up] purchase discovery", {
     huntsCreated,
     huntsDispatched,
-    summary,
+    gmailAttempted: summary?.attempted,
+    gmailSucceeded: summary?.succeeded,
+    gmailFailures: summary?.failures.length,
   });
   const errors = [huntResult, gmailResult, ...dispatchResult]
     .filter((result) => result.status === "rejected")
