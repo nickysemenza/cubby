@@ -53,6 +53,9 @@ public protocol APIProtocol: Sendable {
     /// - Remark: HTTP `PATCH /api/v1/devices/{id}`.
     /// - Remark: Generated from `#/paths//api/v1/devices/{id}/patch(resources.device.update)`.
     func resources_device_update(_ input: Operations.Resources_device_update.Input) async throws -> Operations.Resources_device_update.Output
+    /// - Remark: HTTP `POST /api/v1/entity/connectedRecords`.
+    /// - Remark: Generated from `#/paths//api/v1/entity/connectedRecords/post(entity.connectedRecords)`.
+    func entity_connectedRecords(_ input: Operations.Entity_connectedRecords.Input) async throws -> Operations.Entity_connectedRecords.Output
     /// - Remark: HTTP `GET /api/v1/entity/connections`.
     /// - Remark: Generated from `#/paths//api/v1/entity/connections/get(entity.connections)`.
     func entity_connections(_ input: Operations.Entity_connections.Input) async throws -> Operations.Entity_connections.Output
@@ -661,6 +664,17 @@ extension APIProtocol {
     ) async throws -> Operations.Resources_device_update.Output {
         try await resources_device_update(Operations.Resources_device_update.Input(
             path: path,
+            headers: headers,
+            body: body
+        ))
+    }
+    /// - Remark: HTTP `POST /api/v1/entity/connectedRecords`.
+    /// - Remark: Generated from `#/paths//api/v1/entity/connectedRecords/post(entity.connectedRecords)`.
+    public func entity_connectedRecords(
+        headers: Operations.Entity_connectedRecords.Input.Headers = .init(),
+        body: Operations.Entity_connectedRecords.Input.Body? = nil
+    ) async throws -> Operations.Entity_connectedRecords.Output {
+        try await entity_connectedRecords(Operations.Entity_connectedRecords.Input(
             headers: headers,
             body: body
         ))

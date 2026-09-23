@@ -256,6 +256,21 @@ public actor CubbyClient {
 
     // MARK: - Entity relationships
 
+    public func connectedRecords(
+        source: EntityRef, viewKey: String, offset: Int = 0, limit: Int = 20,
+        targetIDs: [String]? = nil
+    ) async throws -> ConnectedRecordsOutput {
+        try await perform {
+            try await api.entity_connectedRecords(
+                body: .json(
+                    .init(
+                        source: source.graphRootInput, viewKey: viewKey,
+                        targetIds: targetIDs, offset: offset, limit: limit
+                    ))
+            ).ok.body.json
+        }
+    }
+
     public func exploreRelationships(root: EntityRef, depth: Int) async throws -> EntityGraph {
         let depth = min(3, max(1, depth))
         return try await perform {

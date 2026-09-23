@@ -5,6 +5,9 @@ import { defineOperationDomain } from "~/integrations/tanstack-query/operation-c
 
 /** Read-only, bounded graph expansion for entity relationship exploration. */
 export const entityGraph = defineOperationDomain(entityGraphContract, {
+  connectedRecords: {
+    tags: [["relatedData"], ...allEntities.map((entity) => [entity] as const)],
+  },
   explore: {
     tags: [["relatedData"], ...allEntities.map((entity) => [entity] as const)],
   },

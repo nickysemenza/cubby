@@ -244,7 +244,7 @@ const graphRelationshipsFor = (
 ];
 
 // oxlint-disable-next-line eslint/complexity -- One branch per entity whose label is not a plain name column.
-const labelSql = (entity: Entity, alias: string) => {
+export const labelSql = (entity: Entity, alias: string) => {
   const prefix = alias ? `${alias}.` : "";
   const column = (name: string) => sql.raw(`${prefix}"${name}"`);
   switch (entity) {

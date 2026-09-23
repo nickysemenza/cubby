@@ -6,19 +6,24 @@ struct RelationshipDepthPicker: View {
     let model: EntityRelationshipsModel
 
     var body: some View {
-        Picker(
-            "Depth",
-            selection: Binding(
-                get: { model.depth },
-                set: { model.requestDepth($0) }
-            )
-        ) {
-            Text("1 hop").tag(1)
-            Text("2 hops").tag(2)
-            Text("3 hops").tag(3)
+        VStack(alignment: .leading, spacing: 4) {
+            Picker(
+                "Declared relationship depth",
+                selection: Binding(
+                    get: { model.depth },
+                    set: { model.requestDepth($0) }
+                )
+            ) {
+                Text("1").tag(1)
+                Text("2").tag(2)
+                Text("3").tag(3)
+            }
+            .pickerStyle(.segmented)
+            .frame(minHeight: PorcelainTokens.touchTarget)
+            .disabled(model.activity != .idle)
+            Text("Depth counts declared relationship hops.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
         }
-        .pickerStyle(.segmented)
-        .frame(minHeight: PorcelainTokens.touchTarget)
-        .disabled(model.activity != .idle)
     }
 }

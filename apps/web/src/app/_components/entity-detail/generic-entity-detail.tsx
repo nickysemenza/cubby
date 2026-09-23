@@ -1,3 +1,4 @@
+import { connectedViews } from "@cubby/schemas/connected-views";
 import type { Entity } from "@cubby/schemas/entity";
 import type { CompiledEntityPresentation } from "@cubby/schemas/entity-definitions/definition";
 import {
@@ -75,6 +76,7 @@ import {
   EntityTimeline,
   type EntityTimelineOperations,
 } from "../timeline/entity-timeline";
+import { ConnectedRecordsTable } from "./connected-records-table";
 import { detailEditOverrideFor } from "./detail-edit-overrides";
 import type { DetailRecordOf, GenericDetailEntity } from "./detail-record";
 import { detailSlotsFor } from "./detail-slots";
@@ -552,6 +554,22 @@ export function GenericEntityDetail<E extends GenericDetailEntity>({
   const { images, documents } = detailFiles(entity, record, bag);
   const heroImages = detail.hero.images ? images : undefined;
   const sections = declaredSections(entity, record, bag, operations);
+  for (const view of connectedViews[entity]) {
+    sections.push({
+      id: `connected-${view.key}`,
+      title: view.title,
+      icon: Link2,
+      placement: "primary",
+      content: (
+        <ConnectedRecordsTable
+          source={entity}
+          sourceId={bag.id}
+          viewKey={view.key}
+          target={view.target}
+        />
+      ),
+    });
+  }
 
   // Derived from capabilities, never declared: a gallery's photos edit
   // inline; a cover/logo shows what is attached; documents get a viewer.

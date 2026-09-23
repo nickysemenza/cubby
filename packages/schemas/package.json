@@ -13,6 +13,8 @@
     "./display-images": "./src/display-images.ts",
     "./entity-attachment": "./src/entity-attachment.ts",
     "./entity-connections": "./src/entity-connections.ts",
+    "./connected-views": "./src/connected-views.ts",
+    "./connected-records": "./src/connected-records.ts",
     "./entity-media": "./src/entity-media.ts",
     "./entity-read-media": "./src/entity-read-media.ts",
     "./import-recipe": "./src/import-recipe.ts",

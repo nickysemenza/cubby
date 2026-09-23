@@ -17,6 +17,10 @@ public final class RelationSectionModel: Identifiable {
     public let referenceField: FieldDescriptor?
     private let prefillIsMany: Bool?
     public let list: GenericEntityListModel
+    public private(set) var connectionEvidence: [String: ConnectedRecord] = [:]
+    public private(set) var hopRange: ConnectedRecordsOutput.RouteHopRangePayload?
+    public private(set) var connectionError: String?
+    private let client: CubbyClient
 
     /// `nil` when `section` is not a relation section, the relation is undeclared on `source`, or
     /// the target has no descriptor by the section's name — each a compiler-checked declaration
@@ -39,6 +43,7 @@ public final class RelationSectionModel: Identifiable {
         self.spec = spec
         self.source = source
         self.recordID = recordID
+        self.client = client
         self.target = target
         // The generic seed rule: when the filter's own column is a real create field on the
         // target (a direct filter like `locationId`), seed that; otherwise (a derived/urlOnly
@@ -76,6 +81,27 @@ public final class RelationSectionModel: Identifiable {
             ? .array([.string(recordID)])
             : .string(recordID)
         return [referenceField.key: value]
+    }
+
+    public func loadConnectionEvidence() async {
+        let ids = list.rows.map(\.id)
+        guard !ids.isEmpty else { return }
+        do {
+            var evidence: [String: ConnectedRecord] = [:]
+            for start in stride(from: 0, to: ids.count, by: 50) {
+                let page = try await client.connectedRecords(
+                    source: EntityRef(entity: source.key, id: recordID),
+                    viewKey: "relation:\(spec.relation)", limit: 50,
+                    targetIDs: Array(ids[start..<min(start + 50, ids.count)])
+                )
+                hopRange = page.routeHopRange
+                for item in page.items { evidence[item.target.entityId] = item }
+            }
+            connectionEvidence = evidence
+            connectionError = nil
+        } catch {
+            connectionError = String(describing: error)
+        }
     }
 
     /// The declared relation sections of `descriptor`, each bound to `recordID`.
