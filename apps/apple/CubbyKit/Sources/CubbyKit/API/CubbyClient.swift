@@ -223,12 +223,6 @@ public actor CubbyClient {
         }
     }
 
-    /// `resources.<entity>.delete`; throws `EntityOperationError.unsupported` for an entity whose
-    /// delete operation the generated client does not carry.
-    public func delete(_ descriptor: EntityDescriptor, id: String) async throws {
-        try await perform { try await descriptor.delete(id: id, client: api) }
-    }
-
     /// One row by id, or `nil` when the server does not have it.
     public func row(_ descriptor: EntityDescriptor, id: String) async throws -> EntityRow? {
         do {

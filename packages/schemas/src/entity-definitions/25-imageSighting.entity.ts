@@ -646,26 +646,11 @@ export default defineEntity({
     mcp: ["get", "list", "create", "update", "delete"],
   },
   extensions: {
-    countFilter: null,
-    relatednessSignals: null,
-    mcpNames: null,
     ports: {
       repository: {
         module: "~/server/repo/image-sighting.entity-adapter",
         export: "imageSightingEntityAdapter",
       },
-      references: {
-        label: { module: "~/entities/entities", export: "entityLabel" },
-        resolver: {
-          module: "~/server/repo/shortcode-resolver",
-          export: "resolveLiveShortcode",
-        },
-      },
-      filters: {
-        module: "~/entities/filter-manifest",
-        export: "getEntityFilters",
-      },
-      search: { projection: null, semanticText: null, dependentRefresh: null },
     },
   },
 });

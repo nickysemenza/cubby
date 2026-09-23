@@ -10,7 +10,13 @@ const SECTION_HEADER_HEIGHT = 28;
  * `~/` alias imports and can be unit-tested in the alias-free vitest project.
  */
 export type GroupedItem =
-  | { kind: "header"; title: string; count: number; color: string }
+  | {
+      kind: "header";
+      key?: string;
+      title: string;
+      count: number;
+      color: string;
+    }
   | { kind: "row"; rowIndex: number; groupRowIndex: number };
 
 /**
@@ -24,7 +30,13 @@ export type GroupedItem =
  * isolation.
  */
 type ResolvedVirtualIndex =
-  | { kind: "header"; title: string; count: number; color: string }
+  | {
+      kind: "header";
+      key?: string;
+      title: string;
+      count: number;
+      color: string;
+    }
   /** groupRowIndex present only in grouped mode (position within the group). */
   | { kind: "row"; rowIndex: number; groupRowIndex?: number }
   | { kind: "sentinel" };
@@ -79,7 +91,7 @@ export function tableVirtualItemKey(
   if (groupedItems) {
     const item = groupedItems[index];
     if (!item) return `missing:${index}`;
-    if (item.kind === "header") return `group:${item.title}`;
+    if (item.kind === "header") return `group:${item.key ?? item.title}`;
     return `row:${rowKeys[item.rowIndex] ?? item.rowIndex}`;
   }
   return `row:${rowKeys[index] ?? index}`;

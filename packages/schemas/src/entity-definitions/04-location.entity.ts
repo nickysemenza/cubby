@@ -335,10 +335,16 @@ export default defineEntity({
       },
       {
         key: "aiDescription",
+        label: "AI Description",
         kind: "text",
         nullable: true,
         // Rendered (and regenerated) by the `ai-description` detail slot.
-        display: { list: true, listHidden: true },
+        display: {
+          list: true,
+          listHidden: true,
+          width: "lg",
+          mobile: { slot: "meta", priority: 70 },
+        },
         validation: {
           read: z.string().nullable(),
           create: null,
@@ -906,39 +912,12 @@ export default defineEntity({
     },
   },
   extensions: {
-    countFilter: null,
-    relatednessSignals: null,
-    mcpNames: null,
     ports: {
       repository: {
         module: "~/server/repo/location/entity-adapter",
         export: "locationEntityAdapter",
       },
-      references: {
-        label: { module: "~/entities/entities", export: "entityLabel" },
-        resolver: {
-          module: "~/server/repo/shortcode-resolver",
-          export: "resolveLiveShortcode",
-        },
-      },
-      filters: {
-        module: "~/entities/filter-manifest",
-        export: "getEntityFilters",
-      },
-      search: {
-        projection: {
-          module: "~/server/repo/search-document",
-          export: "refreshSearchDocument",
-        },
-        semanticText: {
-          module: "~/server/repo/search-document",
-          export: "getSearchDocumentEmbeddingText",
-        },
-        dependentRefresh: {
-          module: "~/server/services/mutation-side-effects",
-          export: "runMutationSideEffects",
-        },
-      },
+      search: "document",
     },
   },
 });

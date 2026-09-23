@@ -41,14 +41,10 @@ struct EntityListView: View {
     @State private var model: GenericEntityListModel?
     @State private var showingFilters = false
     @State private var creating = false
-    @State private var selecting = false
-    @State private var selectedIDs: Set<String> = []
     @State private var searchText = ""
     @State private var searchPresented = false
     @State private var retainedSearchText = ""
     @State private var clearingSearchExplicitly = false
-    @State private var confirmingDelete = false
-    @State private var deleteError: String?
     @State private var cardDensity = ListPresentationChoice.cards
     private let initialFilters: EntityFilterState
 
@@ -78,8 +74,6 @@ struct EntityListView: View {
             }
         }
     }
-
-    private var canDelete: Bool { key.nativeActions.contains(.delete) }
 
     private var presentationChoices: [PresentationChoice] {
         let shared = renderableViews.filter { $0 == .table } + renderableViews.filter { $0 == .shelf }
@@ -141,9 +135,6 @@ struct EntityListView: View {
         )
         .onChange(of: searchText) { _, value in applySearchText(value) }
         .toolbar { toolbarContent }
-        #if os(iOS)
-            .environment(\.editMode, .constant(selecting ? .active : .inactive))
-        #endif
         .task(id: key) {
             if model == nil {
                 model = GenericEntityListModel(
@@ -177,12 +168,6 @@ struct EntityListView: View {
                 }
             }
             .environment(appModel)
-        }
-        .confirmationDialog(
-            "Delete \(selectedIDs.count) \(selectedIDs.count == 1 ? descriptor.singular : descriptor.plural)?",
-            isPresented: $confirmingDelete, titleVisibility: .visible
-        ) {
-            Button("Delete", role: .destructive) { Task { await deleteSelected() } }
         }
     }
 
@@ -237,26 +222,12 @@ struct EntityListView: View {
                     .accessibilityIdentifier("browse.\(key.rawValue).create")
                 }
             }
-            if canDelete, model?.view == .table {
-                ToolbarItem(placement: .secondaryAction) {
-                    if selecting {
-                        Button("Delete selected", role: .destructive) { confirmingDelete = true }
-                            .disabled(selectedIDs.isEmpty)
-                        Button("Done") {
-                            selecting = false
-                            selectedIDs = []
-                        }
-                    } else {
-                        Button("Select") { selecting = true }
-                    }
-                }
-            }
         #endif
     }
 
     private var hasControls: Bool {
         (model != nil && presentationChoices.count > 1) || !descriptor.filters.isEmpty
-            || (canDelete && model?.view == .table) || descriptor.primarySearch != nil
+            || descriptor.primarySearch != nil
     }
 
     @ViewBuilder
@@ -285,18 +256,6 @@ struct EntityListView: View {
                 Label(filterAccessibilityLabel, systemImage: "line.3.horizontal.decrease.circle")
             }
             .accessibilityIdentifier("browse.\(key.rawValue).filter")
-        }
-        if canDelete, model?.view == .table {
-            if selecting {
-                Button("Delete selected", role: .destructive) { confirmingDelete = true }
-                    .disabled(selectedIDs.isEmpty)
-                Button("Done selecting") {
-                    selecting = false
-                    selectedIDs = []
-                }
-            } else {
-                Button("Select") { selecting = true }
-            }
         }
     }
 
@@ -380,10 +339,6 @@ struct EntityListView: View {
     private func selectPresentation(_ id: String, model: GenericEntityListModel) {
         guard let choice = presentationChoices.first(where: { $0.id == id }) else { return }
         if let density = choice.density { cardDensity = density }
-        if choice.view != .table {
-            selecting = false
-            selectedIDs = []
-        }
         Task { await model.select(view: choice.view) }
     }
 
@@ -493,7 +448,7 @@ struct EntityListView: View {
     }
 
     private func hasBanner(_ model: GenericEntityListModel) -> Bool {
-        model.refreshError != nil || model.searchModel?.refreshError != nil || deleteError != nil
+        model.refreshError != nil || model.searchModel?.refreshError != nil
     }
 
     @ViewBuilder
@@ -512,9 +467,6 @@ struct EntityListView: View {
                 }
             }
         }
-        if let deleteError {
-            Text(deleteError).foregroundStyle(PorcelainTokens.destructive)
-        }
     }
 
     private var selection: Binding<RecordSelection?>? {
@@ -529,11 +481,7 @@ struct EntityListView: View {
 
     @ViewBuilder
     private func rowList(_ model: GenericEntityListModel) -> some View {
-        if selecting {
-            List(selection: $selectedIDs) { rows(model) }.listStyle(.plain)
-        } else {
-            List(selection: selection) { rows(model) }.listStyle(.plain)
-        }
+        List(selection: selection) { rows(model) }.listStyle(.plain)
     }
 
     @ViewBuilder
@@ -603,42 +551,19 @@ struct EntityListView: View {
     }
 
     @ViewBuilder private func rowContent(_ row: EntityRow) -> some View {
-        if selecting {
-            EntityRowView(key: key, row: row).tag(row.id)
-        } else {
-            #if os(macOS)
-                if appModel.navigator.section == .browse && appModel.navigator.browseKey == key {
-                    EntityRowView(key: key, row: row).tag(RecordSelection(key: key, id: row.id))
-                } else {
-                    NavigationLink(value: Route.entityDetail(key, id: row.id)) {
-                        EntityRowView(key: key, row: row)
-                    }
-                }
-            #else
+        #if os(macOS)
+            if appModel.navigator.section == .browse && appModel.navigator.browseKey == key {
+                EntityRowView(key: key, row: row).tag(RecordSelection(key: key, id: row.id))
+            } else {
                 NavigationLink(value: Route.entityDetail(key, id: row.id)) {
                     EntityRowView(key: key, row: row)
                 }
-            #endif
-        }
-    }
-
-    private func deleteSelected() async {
-        guard let model else { return }
-        deleteError = nil
-        var failed: [String] = []
-        for id in selectedIDs {
-            do {
-                try await appModel.client.delete(descriptor, id: id)
-            } catch {
-                failed.append(id)
-                Diagnostics.report(error, context: "browse.delete")
             }
-        }
-        if !failed.isEmpty { deleteError = "Couldn't delete \(failed.joined(separator: ", "))" }
-        selectedIDs = []
-        selecting = false
-        appModel.recordEntityMutation(keys: [key])
-        await refreshVisible(model)
+        #else
+            NavigationLink(value: Route.entityDetail(key, id: row.id)) {
+                EntityRowView(key: key, row: row)
+            }
+        #endif
     }
 }
 

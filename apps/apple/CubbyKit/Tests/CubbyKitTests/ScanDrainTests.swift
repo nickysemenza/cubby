@@ -5,28 +5,50 @@ import Testing
 @testable import CubbyKit
 
 @MainActor
-private func settle<T: Sendable>(_ drain: ScanDrain<T>, timeout: Duration = .seconds(2)) async throws {
+private func waitUntil(
+    timeout: Duration = .seconds(30),
+    _ condition: @MainActor () -> Bool
+) async throws {
     let deadline = ContinuousClock.now + timeout
-    while drain.pendingCount > 0 {
-        try #require(ContinuousClock.now < deadline, "drain never settled")
+    while !condition() {
+        try #require(ContinuousClock.now < deadline, "condition never became true")
         try await Task.sleep(for: .milliseconds(5))
     }
 }
 
-// Cases schedule a MainActor-owned drain through child Tasks. Run this suite serially so a
-// neighboring case cannot starve a drain past its condition-based timeout on a loaded CI runner.
+@MainActor
+private func settle<T: Sendable>(_ drain: ScanDrain<T>) async throws {
+    try await waitUntil { drain.pendingCount == 0 }
+}
+
+@MainActor
+private final class ScanWorkGate {
+    private(set) var started: [String] = []
+    private var releases: [CheckedContinuation<Void, Never>] = []
+
+    func pause(_ raw: String) async {
+        started.append(raw)
+        await withCheckedContinuation { releases.append($0) }
+    }
+
+    func releaseFirst() {
+        releases.removeFirst().resume()
+    }
+}
+
 @Suite("ScanDrain", .serialized)
 @MainActor
 struct ScanDrainTests {
     let shelf = LocationCode("LOC-2345")
 
-    @Test func worksRunOneAtATimeInOrder() async throws {
+    @Test(.timeLimit(.minutes(1))) func worksRunOneAtATimeInOrder() async throws {
         let active = Mutex((now: 0, peak: 0))
+        let gate = ScanWorkGate()
         let drain = ScanDrain<String>(anchor: shelf) { read in
             active.withLock {
                 $0.now += 1; $0.peak = max($0.peak, $0.now)
             }
-            try? await Task.sleep(for: .milliseconds(10))
+            await gate.pause(read.raw)
             active.withLock { $0.now -= 1 }
             return read.raw
         }
@@ -36,9 +58,16 @@ struct ScanDrainTests {
         drain.submit("b", at: .now + 5)
         drain.submit("c", at: .now + 10)
         #expect(drain.pendingCount == 3)
-        // This case deliberately suspends three MainActor work items to prove serialized draining.
-        // Let a loaded hosted runner schedule those turns, while still failing a genuinely stuck drain.
-        try await settle(drain, timeout: .seconds(5))
+        try await waitUntil { gate.started.count >= 1 }
+        #expect(gate.started == ["a"])
+        gate.releaseFirst()
+        try await waitUntil { gate.started.count >= 2 }
+        #expect(gate.started == ["a", "b"])
+        gate.releaseFirst()
+        try await waitUntil { gate.started.count >= 3 }
+        #expect(gate.started == ["a", "b", "c"])
+        gate.releaseFirst()
+        try await settle(drain)
         #expect(active.withLock { $0.peak } == 1)
         #expect(settled == ["a", "b", "c"])
     }

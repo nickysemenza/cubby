@@ -1,3 +1,4 @@
+import type { ListGroupSummary } from "@cubby/schemas/pagination";
 import type { QueryKey, QueryMeta } from "@tanstack/react-query";
 import { useMemo } from "react";
 
@@ -11,6 +12,7 @@ export interface ListQueryResponse<TData> {
     totalCount: number;
     /** Full-filtered-set column aggregates (footer totals), by column id. */
     sums?: Record<string, number>;
+    groups?: ListGroupSummary[];
   };
 }
 

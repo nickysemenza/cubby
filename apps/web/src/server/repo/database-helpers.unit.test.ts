@@ -104,6 +104,23 @@ describe("buildOrderBy", () => {
     expect(sql[0]).toContain('"Product"."categoryId" asc nulls last');
     expect(sql.at(-1)).toContain('"Product"."id" asc');
   });
+
+  it("promotes a later group-field sort ahead of the other sorts", () => {
+    const clauses = renderSql(
+      buildOrderBy(
+        product,
+        [
+          { orderBy: "name", direction: "asc" },
+          { orderBy: "categoryId", direction: "desc" },
+        ],
+        ["name", "categoryId"],
+        { groupBy: "categoryId" },
+      ),
+    );
+    expect(clauses).toHaveLength(3);
+    expect(clauses[0]).toContain('"Product"."categoryId" desc nulls last');
+    expect(clauses[1]).toContain('"Product"."name" asc');
+  });
 });
 
 describe("eqAnyOrPresence", () => {
@@ -131,105 +148,26 @@ describe("eqAnyOrPresence", () => {
 });
 
 describe("buildPartialUpdateValues", () => {
-  it("should return empty object for empty input", () => {
-    const result = buildPartialUpdateValues({});
-    expect(result).toEqual({});
-  });
-
-  it("should filter out undefined values", () => {
-    const result = buildPartialUpdateValues({
-      name: "test",
-      description: undefined,
-      type: "product",
+  it("drops undefined fields and preserves other values", () => {
+    const nested = { foo: "bar" };
+    expect(
+      buildPartialUpdateValues({
+        absent: undefined,
+        nullable: null,
+        empty: "",
+        zero: 0,
+        disabled: false,
+        nested,
+        items: [1, 2],
+      }),
+    ).toEqual({
+      nullable: null,
+      empty: "",
+      zero: 0,
+      disabled: false,
+      nested,
+      items: [1, 2],
     });
-    expect(result).toEqual({
-      name: "test",
-      type: "product",
-    });
-  });
-
-  it("should keep null values", () => {
-    const result = buildPartialUpdateValues({
-      name: "test",
-      parentId: null,
-    });
-    expect(result).toEqual({
-      name: "test",
-      parentId: null,
-    });
-  });
-
-  it("should keep empty string values", () => {
-    const result = buildPartialUpdateValues({
-      name: "",
-      description: undefined,
-    });
-    expect(result).toEqual({
-      name: "",
-    });
-  });
-
-  it("should keep zero values", () => {
-    const result = buildPartialUpdateValues({
-      quantity: 0,
-      price: undefined,
-    });
-    expect(result).toEqual({
-      quantity: 0,
-    });
-  });
-
-  it("should keep false boolean values", () => {
-    const result = buildPartialUpdateValues({
-      isActive: false,
-      isDeleted: undefined,
-    });
-    expect(result).toEqual({
-      isActive: false,
-    });
-  });
-
-  it("should handle all undefined values", () => {
-    const result = buildPartialUpdateValues({
-      name: undefined,
-      type: undefined,
-      description: undefined,
-    });
-    expect(result).toEqual({});
-  });
-
-  it("should handle all defined values", () => {
-    const result = buildPartialUpdateValues({
-      name: "test",
-      type: "product",
-      quantity: 5,
-    });
-    expect(result).toEqual({
-      name: "test",
-      type: "product",
-      quantity: 5,
-    });
-  });
-
-  it("should handle nested objects", () => {
-    const nestedObj = { foo: "bar" };
-    const result = buildPartialUpdateValues({
-      config: nestedObj,
-      other: undefined,
-    });
-    expect(result).toEqual({
-      config: nestedObj,
-    });
-  });
-
-  it("should handle arrays", () => {
-    const arr = [1, 2, 3];
-    const result = buildPartialUpdateValues({
-      items: arr,
-      tags: undefined,
-    });
-    expect(result).toEqual({
-      items: arr,
-    });
+    expect(buildPartialUpdateValues({ a: undefined })).toEqual({});
   });
 });

@@ -2,6 +2,8 @@ import { UNRESOLVABLE_ENTITY_FILTER } from "@cubby/shared";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import {
+  buildPaginatedResponse,
+  createPaginatedResponseSchema,
   createPaginatedResponseSchemaWithContext,
   entityFilter,
   entityFilterList,
@@ -10,6 +12,30 @@ import {
   normalizeSorts,
   sortPaginationCombo,
 } from "./pagination";
+
+it("carries ordered full-filter group counts in list metadata", () => {
+  const response = buildPaginatedResponse(
+    { pageIndex: 0, pageSize: 1 },
+    [{ name: "one" }],
+    3,
+    undefined,
+    [
+      { key: "category-one", label: "Category one", count: 2 },
+      { key: "category-two", label: "Category two", count: 1 },
+    ],
+  );
+  const schema = createPaginatedResponseSchema(z.object({ name: z.string() }));
+  expect(schema.parse(response).meta.groups).toEqual(response.meta.groups);
+  expect(
+    schema.safeParse({
+      ...response,
+      meta: {
+        ...response.meta,
+        groups: [{ key: "", label: "Empty", count: 0 }],
+      },
+    }).success,
+  ).toBe(false);
+});
 
 describe("exact entity filters", () => {
   const shortcode = z.string().regex(/^PRD-[A-Z2-9]{4}$/);
@@ -61,22 +87,11 @@ describe("MCP pagination", () => {
 });
 
 describe("normalizeSorts", () => {
-  it("wraps a single sort object into a one-element array", () => {
-    expect(normalizeSorts({ orderBy: "name", direction: "asc" })).toEqual([
-      { orderBy: "name", direction: "asc" },
-    ]);
-  });
-
-  it("passes a stacked sort through in order", () => {
-    expect(
-      normalizeSorts([
-        { orderBy: "location", direction: "asc" },
-        { orderBy: "price", direction: "desc" },
-      ]),
-    ).toEqual([
-      { orderBy: "location", direction: "asc" },
-      { orderBy: "price", direction: "desc" },
-    ]);
+  it("keeps a single sort and a stack in order", () => {
+    const first = { orderBy: "location", direction: "asc" as const };
+    const second = { orderBy: "price", direction: "desc" as const };
+    expect(normalizeSorts(first)).toEqual([first]);
+    expect(normalizeSorts([first, second])).toEqual([first, second]);
   });
 
   it("dedupes by orderBy, first occurrence wins", () => {

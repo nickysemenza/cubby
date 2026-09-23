@@ -348,8 +348,7 @@ export const getLedgerPartyByShortcode = reader.getByShortcode;
 
 /**
  * The complete WHERE for this entity's list. Not on `listScaffold`: the list
- * takes one sort mapped by hand below and composes nothing beyond the
- * declared predicates, so there is no boilerplate to fold.
+ * composes its declared predicates and sort stack below.
  */
 export const buildLedgerPartyWhere = (filters: LedgerPartyFilters) =>
   and(
@@ -368,34 +367,35 @@ export async function listLedgerParties(
   pagination: PaginationParams,
 ) {
   const where = buildLedgerPartyWhere(filters);
-  const order = sorts[0] ?? { orderBy: "name", direction: "asc" as const };
-  const dataQualityOrderBy = dataQualitySortResolver(
-    "ledgerParty",
-    ledgerParty,
-  )(order);
-  const orderColumn = (() => {
-    switch (order.orderBy) {
-      case "kind":
-        return ledgerParty.kind;
-      case "createdAt":
-        return ledgerParty.createdAt;
-      case "updatedAt":
-        return ledgerParty.updatedAt;
-      default:
-        return ledgerParty.name;
-    }
-  })();
+  const orderBy = (
+    sorts.length ? sorts : [{ orderBy: "name", direction: "asc" as const }]
+  ).flatMap((order) => {
+    const dataQualityOrderBy = dataQualitySortResolver(
+      "ledgerParty",
+      ledgerParty,
+    )(order);
+    if (dataQualityOrderBy) return dataQualityOrderBy;
+    const column = (() => {
+      switch (order.orderBy) {
+        case "kind":
+          return ledgerParty.kind;
+        case "createdAt":
+          return ledgerParty.createdAt;
+        case "updatedAt":
+          return ledgerParty.updatedAt;
+        default:
+          return ledgerParty.name;
+      }
+    })();
+    return [order.direction === "desc" ? desc(column) : asc(column)];
+  });
   const { take, skip } = buildTakeSkip(pagination);
   const { data, count } = await executeListQueryWithCount(
     getDb(db)
       .select(columns)
       .from(ledgerParty)
       .where(where)
-      .orderBy(
-        ...(dataQualityOrderBy ?? [
-          order.direction === "desc" ? desc(orderColumn) : asc(orderColumn),
-        ]),
-      )
+      .orderBy(...orderBy, asc(ledgerParty.shortcode), asc(ledgerParty.id))
       .limit(take)
       .offset(skip),
     countWhere(db, ledgerParty, where),

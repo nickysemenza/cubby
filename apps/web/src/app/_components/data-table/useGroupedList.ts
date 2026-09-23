@@ -1,3 +1,4 @@
+import type { ListGroupSummary } from "@cubby/schemas/pagination";
 import { useMemo } from "react";
 
 export interface GroupConfig<TItem> {
@@ -6,11 +7,44 @@ export interface GroupConfig<TItem> {
   /** Extract the group key from an item. Null/undefined becomes "(unspecified)". */
   keyFn: (item: TItem) => string | null | undefined;
   colorFn: (key: string) => string;
+  /** Ordered summaries of the entire filtered set, including unloaded pages. */
+  groups?: readonly ListGroupSummary[];
 }
 
 type GroupedVirtualItem<TItem> =
-  | { kind: "header"; title: string; count: number; color: string }
+  | {
+      kind: "header";
+      key?: string;
+      title: string;
+      count: number;
+      color: string;
+    }
   | { kind: "row"; item: TItem };
+
+export function orderedGroupSections<T>(
+  groups: ReadonlyMap<string, T[]>,
+  summaries?: readonly ListGroupSummary[],
+) {
+  const seen = new Set(summaries?.map((group) => group.key));
+  return [
+    ...(summaries?.map((group) => ({
+      key: group.key,
+      serverKey: group.key,
+      label: group.label,
+      count: group.count,
+      items: groups.get(group.key) ?? [],
+    })) ?? []),
+    ...Array.from(groups.entries())
+      .filter(([key]) => !seen.has(key))
+      .map(([key, items]) => ({
+        key,
+        serverKey: undefined,
+        label: key,
+        count: items.length,
+        items,
+      })),
+  ];
+}
 
 export function useGroupedList<TItem>(
   data: TItem[],
@@ -32,22 +66,29 @@ export function useGroupedList<TItem>(
       }
     }
 
-    const sections = Array.from(groups.entries());
-    sections.sort(([a], [b]) => {
-      if (a === "(unspecified)") return 1;
-      if (b === "(unspecified)") return -1;
-      return a.localeCompare(b);
-    });
+    const sortedGroups = groupConfig.groups
+      ? groups
+      : new Map(
+          Array.from(groups.entries()).sort(([a], [b]) => {
+            if (a === "(unspecified)") return 1;
+            if (b === "(unspecified)") return -1;
+            return a.localeCompare(b);
+          }),
+        );
 
     const result: GroupedVirtualItem<TItem>[] = [];
-    for (const [title, items] of sections) {
+    for (const section of orderedGroupSections(
+      sortedGroups,
+      groupConfig.groups,
+    )) {
       result.push({
         kind: "header",
-        title,
-        count: items.length,
-        color: groupConfig.colorFn(title),
+        key: section.serverKey,
+        title: section.label,
+        count: section.count,
+        color: groupConfig.colorFn(section.key),
       });
-      for (const item of items) {
+      for (const item of section.items) {
         result.push({ kind: "row", item });
       }
     }

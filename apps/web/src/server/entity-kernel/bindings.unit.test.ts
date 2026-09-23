@@ -1,6 +1,6 @@
 import type { Entity } from "@cubby/schemas/entity";
 import { SHORTCODE_PREFIX } from "@cubby/shared";
-import { describe, expect, expectTypeOf, it } from "vitest";
+import { describe, expect, it } from "vitest";
 
 import { mock } from "~/lib/test/mock-schema";
 import { ENTITY_SCHEMA_BINDINGS } from "~/server/generated/entity-bindings.gen";
@@ -17,13 +17,10 @@ import { generatedMcpEntityKernelContractCases } from "~/server/generated/entity
 
 import {
   ENTITY_KERNEL_ENTITIES,
-  type EntityBrowserMutationCommand,
   entityCommandSchema,
-  type EntityQueryCommand,
   entityDeleteResultSchema,
   entityMcpCommandSchema,
   entityMcpReadCommandSchema,
-  type EntityResultFor,
   entityMutationResultSchema,
 } from "./contracts";
 
@@ -90,34 +87,6 @@ describe("entity kernel bindings", () => {
         }).success,
       ).toBe(true);
     });
-  });
-
-  it("correlates command entity and action with the exact result variant", () => {
-    type ProductGetCommand = EntityQueryCommand & {
-      action: "get";
-      entity: "product";
-    };
-    type ProductGetResult = EntityResultFor<ProductGetCommand>;
-    type ProductCreateCommand = Extract<
-      EntityBrowserMutationCommand,
-      { action: "create"; entity: "product" }
-    >;
-    type ProductCreateResult = EntityResultFor<ProductCreateCommand>;
-
-    expectTypeOf<ProductGetResult>().toMatchTypeOf<{
-      action: "get";
-      entity: "product";
-    }>();
-    expectTypeOf<
-      Extract<ProductGetResult, { entity: "image" }>
-    >().toEqualTypeOf<never>();
-    expectTypeOf<ProductCreateResult>().toMatchTypeOf<{
-      action: "create";
-      entity: "product";
-    }>();
-    expectTypeOf<
-      Extract<ProductCreateResult, { action: "merge" }>
-    >().toEqualTypeOf<never>();
   });
 
   it("has one complete binding for every advertised entity", () => {

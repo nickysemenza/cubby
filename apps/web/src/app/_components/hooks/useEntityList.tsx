@@ -3,6 +3,10 @@ import {
   entityInspectorMetadata,
   type BrowserRoutedEntity,
 } from "@cubby/schemas/entity-manifest";
+import {
+  LOCATION_UNSPECIFIED_GROUP_KEY,
+  PRODUCT_UNCLASSIFIED_GROUP_KEY,
+} from "@cubby/schemas/pagination";
 import type { UnitMapping } from "@cubby/schemas/unitmapping";
 import { useSearch } from "@tanstack/react-router";
 import type { ReactNode } from "react";
@@ -403,8 +407,40 @@ export function useEntityList<
     groupBy: groupByField,
   });
 
-  const { data, totalCount, sums, isLoading, error, timing, refreshControls } =
-    infiniteResult;
+  const {
+    data,
+    totalCount,
+    sums,
+    groups,
+    isLoading,
+    error,
+    timing,
+    refreshControls,
+  } = infiniteResult;
+  const effectiveGroupConfig = useMemo(() => {
+    if (!groupConfig || !grouped || !groups) return groupConfig;
+    if (entity === "product") {
+      const categoryRow = z.object({
+        category: z.object({ id: z.string() }).nullable().optional(),
+      });
+      return {
+        ...groupConfig,
+        groups,
+        keyFn: (item: TData) =>
+          categoryRow.safeParse(item).data?.category?.id ??
+          PRODUCT_UNCLASSIFIED_GROUP_KEY,
+      };
+    }
+    if (entity === "location") {
+      return {
+        ...groupConfig,
+        groups,
+        keyFn: (item: TData) =>
+          groupConfig.keyFn(item) ?? LOCATION_UNSPECIFIED_GROUP_KEY,
+      };
+    }
+    return groupConfig;
+  }, [entity, groupConfig, grouped, groups]);
 
   const serverTotals = useMemo(
     () => ({ totalCount, sums }),
@@ -584,7 +620,7 @@ export function useEntityList<
       refreshControls,
       grouped,
       onGroupedChange,
-      groupConfig,
+      groupConfig: effectiveGroupConfig,
     },
     currentFilters,
     mappingsMap,

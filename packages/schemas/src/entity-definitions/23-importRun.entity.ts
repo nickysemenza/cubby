@@ -652,26 +652,11 @@ export default defineEntity({
     mcp: ["get", "list"],
   },
   extensions: {
-    countFilter: null,
-    relatednessSignals: null,
-    mcpNames: null,
     ports: {
       repository: {
         module: "~/server/repo/import-run.entity-adapter",
         export: "importRunEntityAdapter",
       },
-      references: {
-        label: { module: "~/entities/entities", export: "entityLabel" },
-        resolver: {
-          module: "~/server/repo/shortcode-resolver",
-          export: "resolveLiveShortcode",
-        },
-      },
-      filters: {
-        module: "~/entities/filter-manifest",
-        export: "getEntityFilters",
-      },
-      search: { projection: null, semanticText: null, dependentRefresh: null },
     },
   },
 });
