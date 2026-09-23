@@ -33,7 +33,7 @@ struct PhotoDestinationSheet: View {
         NavigationStack(path: $path) {
             reviewContent
         }
-        .nativeSheet(.photo)
+        .nativeSheet(.photoReview)
         .interactiveDismissDisabled(manifest.isCommitting)
         .task {
             manifest.startAnalysis(client: appModel.client, matches: appModel.photoMatches)
@@ -128,7 +128,7 @@ struct PhotoDestinationSheet: View {
             #if os(iOS)
                 .navigationBarTitleDisplayMode(.inline)
             #endif
-            .navigationSubtitle("\(manifest.selectedIDs.count) of \(manifest.items.count) selected")
+            .navigationSubtitle(manifest.reviewSelectionStatus)
             .toolbar { reviewToolbar }
             .safeAreaInset(edge: .bottom, spacing: 0) { statusFooter }
             .navigationDestination(for: PhotoImportNavigationDestination.self) { destination in
@@ -212,7 +212,9 @@ struct PhotoDestinationSheet: View {
 
     @ToolbarContentBuilder
     private var reviewToolbar: some ToolbarContent {
-        ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+        ToolbarItem(placement: .cancellationAction) {
+            Button("Cancel") { dismiss() }.disabled(manifest.isCommitting)
+        }
         if developerOverlays {
             ToolbarItem { CopyDiagnosticsButton { reviewDiagnostics } }
         }
@@ -344,31 +346,36 @@ struct PhotoDestinationSheet: View {
         }
     }
 
-    /// Phones stack hero → status → list. At regular width (iPad, macOS sheet) the hero, filmstrip
-    /// and assign action form a fixed side column so the assignment list gets the full height —
-    /// stacked, a 960pt-wide Mac sheet left the list ~40% of the height with half the width empty.
+    /// Keep a bounded side column when the window has room. A narrow regular-size window uses
+    /// the same compact, list-first layout as a phone instead of clipping a fixed-width sidebar.
     @ViewBuilder private var reviewLayout: some View {
-        if horizontalSizeClass == .regular {
-            // A3: a `GeometryReader` at the sheet root gives the column a share of the actual
-            // sheet width instead of a fixed 400pt that was cramped once the Mac sheet started
-            // tracking the (larger) window; `.padding()` keeps the title clear of the top safe
-            // area and the hero clear of the divider, both of which used to run edge-to-edge.
-            GeometryReader { geometry in
+        GeometryReader { geometry in
+            if horizontalSizeClass == .regular && geometry.size.width >= 640 {
                 HStack(spacing: 0) {
-                    sideColumn(width: max(400, geometry.size.width * 0.36))
+                    sideColumn(width: min(300, max(220, geometry.size.width * 0.32)))
                     Divider()
                     List { manifestListContent }
                 }
-            }
-            #if os(macOS)
-                .frame(minWidth: 960, minHeight: 620)
-            #endif
-        } else {
-            VStack(alignment: .leading, spacing: 0) {
-                hero(heightCap: (220, 0.22))
-                analysisStatus
-                destinationAction
-                List { manifestListContent }
+            } else {
+                VStack(alignment: .leading, spacing: 0) {
+                    hero(heightCap: (220, 0.22), compact: true)
+                    if horizontalSizeClass == .regular {
+                        HStack {
+                            Text(manifest.reviewSelectionStatus)
+                                .font(.subheadline).foregroundStyle(.secondary)
+                            Spacer()
+                            selectAllButton
+                        }
+                        .padding(.horizontal)
+                    }
+                    analysisStatus
+                    List {
+                        if !manifest.selectedIDs.isEmpty {
+                            Section { destinationAction }
+                        }
+                        manifestListContent
+                    }
+                }
             }
         }
     }
@@ -377,11 +384,10 @@ struct PhotoDestinationSheet: View {
     /// under the project's type-check budget (apps/apple/AGENTS.md).
     private func sideColumn(width: CGFloat) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            hero(heightCap: (480, 0.5))
-            HStack {
-                Text("\(manifest.selectedIDs.count) of \(manifest.items.count) selected")
+            hero(heightCap: (260, 0.3))
+            VStack(alignment: .leading, spacing: 4) {
+                Text(manifest.reviewSelectionStatus)
                     .font(.subheadline).foregroundStyle(.secondary)
-                Spacer()
                 selectAllButton.buttonStyle(.borderless)
             }
             analysisStatus
@@ -396,10 +402,11 @@ struct PhotoDestinationSheet: View {
         Button(manifest.selectedIDs.count == manifest.items.count ? "Deselect all" : "Select all") {
             manifest.toggleSelectAll()
         }
+        .disabled(manifest.isCommitting)
         .accessibilityIdentifier("photos.manifest.selectAll")
     }
 
-    private func hero(heightCap: (points: CGFloat, fraction: CGFloat)) -> some View {
+    private func hero(heightCap: (points: CGFloat, fraction: CGFloat), compact: Bool = false) -> some View {
         PhotoImportHero(
             items: manifest.items,
             selectedIDs: manifest.selectedIDs,
@@ -407,6 +414,7 @@ struct PhotoDestinationSheet: View {
                 get: { manifest.focusedItemID ?? manifest.items.first?.id ?? "" },
                 set: { manifest.focusedItemID = $0 }),
             heightCap: heightCap,
+            compact: compact,
             onToggle: manifest.toggle
         )
     }
@@ -538,8 +546,6 @@ struct PhotoDestinationSheet: View {
                     .buttonStyle(.bordered)
                 }
             }
-            .padding(.horizontal)
-            .padding(.bottom, 8)
             .accessibilityIdentifier("photos.manifest.destination")
         }
     }
@@ -614,14 +620,19 @@ struct PhotoDestinationSheet: View {
     /// toolbar group so it gets the system bar's Liquid Glass instead of a hand-built background.
     @ViewBuilder
     private var statusFooter: some View {
-        if manifest.errorMessage != nil || (!manifest.canCommit && manifest.commitDisabledReason != nil) {
+        if manifest.errorMessage != nil
+            || (!manifest.canCommit && !manifest.isCommitting && manifest.needsDestination.isEmpty
+                && manifest.commitDisabledReason != nil)
+        {
             VStack(alignment: .leading, spacing: 4) {
                 if let error = manifest.errorMessage {
                     Label(error, systemImage: "exclamationmark.triangle")
                         .font(.caption)
                         .foregroundStyle(PorcelainTokens.destructive)
                 }
-                if !manifest.canCommit, let reason = manifest.commitDisabledReason {
+                if !manifest.canCommit, !manifest.isCommitting, manifest.needsDestination.isEmpty,
+                    let reason = manifest.commitDisabledReason
+                {
                     Label(reason, systemImage: "info.circle")
                         .font(.caption)
                         .foregroundStyle(.secondary)

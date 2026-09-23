@@ -256,6 +256,7 @@ struct PhotoLibraryHeader: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Binding var filter: PhotoLibraryFilter
     @Binding var selectedCategory: PhotoCategory?
+    @State private var showsBadgeKey = false
     /// `!picker` — the picker sheet's browser instance shows the ownership filter alone, with no
     /// category chips and no per-category footnote.
     let showsCategories: Bool
@@ -347,11 +348,15 @@ struct PhotoLibraryHeader: View {
             ViewThatFits(in: .horizontal) {
                 HStack(spacing: PorcelainTokens.Space.sm) {
                     filterPicker.fixedSize()
+                    badgeKeyButton
                     HStack(spacing: 6) { chips }
                     Spacer(minLength: 0)
                 }
                 VStack(alignment: .leading, spacing: PorcelainTokens.Space.xs) {
-                    filterPicker
+                    HStack {
+                        filterPicker
+                        badgeKeyButton
+                    }
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 6) { chips }
                     }
@@ -373,6 +378,20 @@ struct PhotoLibraryHeader: View {
         )
     }
 
+    private var badgeKeyButton: some View {
+        Button("Badge key", systemImage: "info.circle") { showsBadgeKey = true }
+            .labelStyle(.iconOnly)
+            #if os(iOS)
+                .frame(minWidth: 44, minHeight: 44)
+            #endif
+            .accessibilityLabel("Photo badge key")
+            .help("Explain photo badge colors and symbols")
+            .popover(isPresented: $showsBadgeKey) {
+                PhotoBadgeKey()
+                    .presentationCompactAdaptation(.sheet)
+            }
+    }
+
     @ViewBuilder private var chips: some View {
         ForEach(PhotoImportCatalog.categories, id: \.key) { category in
             CategoryChip(
@@ -383,6 +402,52 @@ struct PhotoLibraryHeader: View {
         }
     }
 }
+
+private struct PhotoBadgeKey: View {
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 10) {
+                Text("Photo badge key").font(.headline)
+                Text("Color shows what the photo may contain.")
+                    .font(.subheadline).foregroundStyle(.secondary)
+                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], alignment: .leading) {
+                    ForEach(PhotoImportCatalog.categories, id: \.key) { category in
+                        HStack(spacing: 8) {
+                            Circle().fill(PhotoCategoryTint.color(for: [category.key]) ?? .gray)
+                                .frame(width: 12, height: 12).accessibilityHidden(true)
+                            Text(category.label)
+                        }
+                    }
+                }
+                HStack(spacing: 8) {
+                    Circle().fill(.gray).frame(width: 12, height: 12).accessibilityHidden(true)
+                    Text("Analyzed; no category found")
+                }
+                Label("Plain badge: classification pending", systemImage: "circle")
+                Divider()
+                Text("The symbol or record abbreviation shows the Cubby match.")
+                    .font(.subheadline).foregroundStyle(.secondary)
+                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], alignment: .leading) {
+                    Label("In Cubby", systemImage: "checkmark.circle.fill")
+                    Label("Possible match", systemImage: "questionmark.circle.fill")
+                    Label("No match found", systemImage: "photo.badge.plus")
+                    Label("Not checked", systemImage: "questionmark.circle")
+                    Label("Checking", systemImage: "arrow.trianglehead.2.clockwise")
+                    Label("Unavailable", systemImage: "exclamationmark.triangle.fill")
+                }
+                Text(
+                    "A record abbreviation names an owner; a question mark means it is only a possible match."
+                )
+                .font(.caption).foregroundStyle(.secondary)
+            }
+            .padding()
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .frame(idealWidth: 330, idealHeight: 340)
+    }
+}
+
+#Preview("Photo badge key") { PhotoBadgeKey() }
 
 /// The stage panel's own layout, taking a `PhotoLibraryStatus` and a `[PhotoLibraryStages.Stage]`
 /// rather than reading `PhotoLibraryHeader`'s live stores directly — every case is then
