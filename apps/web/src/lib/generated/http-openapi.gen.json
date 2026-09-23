@@ -11608,6 +11608,47 @@
         }
       }
     },
+    "/api/v1/maintenance/requestCatchUp": {
+      "post": {
+        "tags": [
+          "maintenance"
+        ],
+        "parameters": [],
+        "operationId": "maintenance.requestCatchUp",
+        "requestBody": {
+          "description": "Body",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MaintenanceRequestCatchUpInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "200",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MaintenanceRequestCatchUpOutput"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/maintenance/settleAwaitingWork": {
       "post": {
         "tags": [
@@ -53738,6 +53779,26 @@
           "staleRecipeTotals",
           "cullablePendingImages",
           "entitiesMissingEmbeddings"
+        ]
+      },
+      "MaintenanceRequestCatchUpInput": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "MaintenanceRequestCatchUpOutput": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "queued",
+              "recent"
+            ]
+          }
+        },
+        "required": [
+          "status"
         ]
       },
       "MaintenanceSettleAwaitingWorkInput": {

@@ -21030,6 +21030,34 @@ extension Components {
                 case partial
             }
         }
+        /// - Remark: Generated from `#/components/schemas/MaintenanceRequestCatchUpInput`.
+        public struct MaintenanceRequestCatchUpInput: Codable, Hashable, Sendable {
+            /// Creates a new `MaintenanceRequestCatchUpInput`.
+            public init() {}
+            public init(from decoder: any Swift.Decoder) throws {
+                try decoder.ensureNoAdditionalProperties(knownKeys: [])
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/MaintenanceRequestCatchUpOutput`.
+        public struct MaintenanceRequestCatchUpOutput: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/MaintenanceRequestCatchUpOutput/status`.
+            @frozen public enum StatusPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                case queued = "queued"
+                case recent = "recent"
+            }
+            /// - Remark: Generated from `#/components/schemas/MaintenanceRequestCatchUpOutput/status`.
+            public var status: Components.Schemas.MaintenanceRequestCatchUpOutput.StatusPayload
+            /// Creates a new `MaintenanceRequestCatchUpOutput`.
+            ///
+            /// - Parameters:
+            ///   - status:
+            public init(status: Components.Schemas.MaintenanceRequestCatchUpOutput.StatusPayload) {
+                self.status = status
+            }
+            public enum CodingKeys: String, CodingKey {
+                case status
+            }
+        }
         /// - Remark: Generated from `#/components/schemas/MealCreateInput`.
         public struct MealCreateInput: Codable, Hashable, Sendable {
             /// - Remark: Generated from `#/components/schemas/MealCreateInput/date`.
