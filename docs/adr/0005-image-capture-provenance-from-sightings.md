@@ -27,7 +27,7 @@ or cloud asset store — `(imageId, ledgerPartyId, assetKey)` unique, so a
 repeat report from the same person's second device replaces the observation
 columns on the existing row instead of duplicating it. A pure function,
 `deriveImageCapture`, reduces an image's live sightings (and, failing those,
-embedded EXIF) to the *derived* fields stored directly on Image:
+embedded EXIF) to the _derived_ fields stored directly on Image:
 `capturedAt`, `capturedAtOffsetMinutes`, `captureLocation`, `capturePlaceName`,
 `captureDeviceLabel`, `capturedByPartyId`, and a `captureAttribution` of
 `none | derived | ambiguous | confirmed`.
@@ -78,7 +78,7 @@ parsing and filename heuristics.
 ## Consequences
 
 - New edges: `ImageSighting → Image` (cascade on delete), `ImageSighting →
-  LedgerParty` (block delete, repoint on merge), `ImageSighting → Device`
+LedgerParty` (block delete, repoint on merge), `ImageSighting → Device`
   (cascade on delete), `Image.capturedByPartyId → LedgerParty` (clear owner
   on delete, repoint on merge).
 - `Image.source` gains `screenshot`; every hand-typed union mirroring it
@@ -88,8 +88,8 @@ parsing and filename heuristics.
   floor; it now defaults `source` to `catalog` when a URL drove the
   attachment and records `provenanceEvidence: {basis: "import-url"}`,
   participating in the same precedence order derivation respects.
-- CONTEXT.md gains *Image Sighting*, *Capture Attribution*, and *Device*, and
-  extends *Ledger Party* to name it as the identity behind both.
+- CONTEXT.md gains _Image Sighting_, _Capture Attribution_, and _Device_, and
+  extends _Ledger Party_ to name it as the identity behind both.
 - Not decided here: EXIF extraction itself (a server background task, PR6),
   `imageList` moving onto the generic `listScaffold` (PR3b, which is also
   what lets Image's manifest filters and data quality bind generically), and

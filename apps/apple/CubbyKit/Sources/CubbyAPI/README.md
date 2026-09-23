@@ -8,7 +8,7 @@ fails CI when the committed copy is stale.
 The generator renders in document order, and the JSON emits `paths` and
 `components.schemas` sorted, so adding an operation changes only the lines
 that describe it. Positional `_schemaNN` names are assigned at schema
-registration and can still renumber when a new *schema* (not operation) is
+registration and can still renumber when a new _schema_ (not operation) is
 added; `apps/apple/AGENTS.md` forbids naming those in hand-written Swift for
 exactly that reason.
 

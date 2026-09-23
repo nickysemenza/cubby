@@ -29,5 +29,5 @@ services:
         "-c",
         "log_destination=stderr",
         "-c",
-        "log_line_prefix=%t [%p]:[%l] user=%u, db=%d "
+        "log_line_prefix=%t [%p]:[%l] user=%u, db=%d ",
       ]

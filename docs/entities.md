@@ -69,12 +69,21 @@ export default defineEntity({
     titleField: "name",
     domain: "pantry",
     description: "One sentence for the records catalog.",
-    emptyState: { title: "No examples yet", description: "…", actionLabel: "New Example" },
+    emptyState: {
+      title: "No examples yet",
+      description: "…",
+      actionLabel: "New Example",
+    },
     icons: { lucide: "Box", sfSymbol: "cube" },
     detail: {
       hero: { chip: "status", actions: ["edit"] },
       sections: [
-        { kind: "fields", id: "overview", title: "Overview", fields: ["name", "status"] },
+        {
+          kind: "fields",
+          id: "overview",
+          title: "Overview",
+          fields: ["name", "status"],
+        },
         {
           kind: "relation",
           id: "tasks",
@@ -83,7 +92,12 @@ export default defineEntity({
           filter: { descriptor: "exampleId" },
           columns: ["name", "status"],
         },
-        { kind: "slot", id: "analytics", title: "Analytics", placement: "full" },
+        {
+          kind: "slot",
+          id: "analytics",
+          title: "Analytics",
+          placement: "full",
+        },
       ],
     },
     list: { views: ["table", "shelf"], actions: ["delete"] },
@@ -154,7 +168,7 @@ module and export; they do not import implementations into the declaration. `fie
 is optional and falls back to `fields.output`; declare it when the current
 detail read carries enriched relations or computed fields.
 
-`presentation` is everything a generic surface needs to *present* the entity
+`presentation` is everything a generic surface needs to _present_ the entity
 and nothing a surface computes: `titleField` (a read-projection key — the
 compiler rejects one that is not) must resolve to a **non-nullable** text read
 field; the compiler rejects a nullable title. An entity whose natural title
@@ -242,7 +256,7 @@ first one, supplied the start. `edit.sections` (`[{ id, title, fields,
 collapsed? }]`) is the editor's section grammar: the web `EntityIntentFields`
 and the native `GenericEntityEditModel` both bucket the intent's fields by
 it, falling back to `control.section` groups when it is omitted. Because the
-native editor renders *only* the fields a declared section lists, the
+native editor renders _only_ the fields a declared section lists, the
 compiler requires a declaring entity to place every controlled field of its
 create/update rosters and edit intents exactly once — the image-block keys
 (`pendingImageIds`, `pendingImagePurposes`, `removeImageIds`, `imageOrder`)
@@ -379,7 +393,7 @@ the basis → target edges across an entity's suggest fields, so one request can
 always resolve every target in dependency order.
 
 `mode: "prune"` targets a `text-array` field instead (the compiler rejects any
-other kind) and proposes *removals* rather than a value: entries whose value
+other kind) and proposes _removals_ rather than a value: entries whose value
 restates one of the named `basis` fields (a manufacturer name, a classification
 path segment) are candidates to drop, never to add. A prune target judges its
 own current entries, so it is an implicit self-basis — naming it explicitly in
@@ -792,7 +806,7 @@ image counts count displayable images. A cutout is a rendition of one Image:
 original bytes remain the analysis source and fallback, and the original can
 be selected explicitly.
 
-An Image's *who took this and when* is derived, never entered directly.
+An Image's _who took this and when_ is derived, never entered directly.
 `ImageSighting` records each report that a stored Image appears in one Ledger
 Party member's photo library or cloud asset store, from one reporting
 `Device` — unique per `(imageId, ledgerPartyId, assetKey)`, so a member's

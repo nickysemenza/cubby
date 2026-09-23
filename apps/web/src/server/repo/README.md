@@ -32,7 +32,9 @@ handle at the boundary and do not resolve it directly:
 
 ```typescript
 // In ~/server/db/database.ts
-export class Database { /* runtime handle; no query methods */ }
+export class Database {
+  /* runtime handle; no query methods */
+}
 ```
 
 This keeps code like this out of routers and services by convention and API
@@ -162,10 +164,7 @@ const updatedCount = await batchUpdateWithCaseWhen(tx, product, [
 DB-to-API transformations often require repetitive patterns. These helpers reduce duplication:
 
 ```typescript
-import {
-  mapImages,
-  mapRelation,
-} from "~/server/repo/database-helpers";
+import { mapImages, mapRelation } from "~/server/repo/database-helpers";
 
 // Project images from join-table (or bare) rows, dropping soft-deleted
 // Before: const images = product.images?.map((pi) => pi.image) ?? [];

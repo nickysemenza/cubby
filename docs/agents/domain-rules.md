@@ -103,7 +103,7 @@ explicit migration proves the old exception is still active.
 
 Unit vocabulary derives from `recipebridge`'s `size_unit_aliases()`; the TS
 title matcher and the Postgres prefilter both build from it — never hand-list
-unit spellings. The ingredient crate is a *recipe* grammar, so `cup`/`q`/`tsp`
+unit spellings. The ingredient crate is a _recipe_ grammar, so `cup`/`q`/`tsp`
 in product titles name cavities, part numbers and vessel capacities; the
 derived vocabulary is narrowed by `RECIPE_MEASURE_STEMS` for that reason.
 `pnpm run wasm` builds into a `CARGO_TARGET_DIR` shared across checkouts, so

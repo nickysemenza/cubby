@@ -78,14 +78,14 @@ this list, so a receipt only auto-settles against digits registered there.
 **A receipt's card digits need not match the statement's.** There are two
 distinct mechanisms, and the statement row tells you which:
 
-- *Wallet tokenization.* A wallet payment presents a device account number to
+- _Wallet tokenization._ A wallet payment presents a device account number to
   the merchant terminal, so the invoice prints one set of last-four while the
   statement shows the funding card's — an `AplPay` or similar prefix on the
   statement row is the tell, though many providers (Monarch included) drop it.
-- *Card reissue or a sibling card on one account.* No wallet prefix, and the
+- _Card reissue or a sibling card on one account._ No wallet prefix, and the
   mismatch is stable across older receipts but absent from newer ones. A
   reissued or replaced card changes the printed last-four while the account
-  persists, and the statement is labelled with the account's *current* card, so
+  persists, and the statement is labelled with the account's _current_ card, so
   historical rows inherit today's digits. Amex is especially prone to this: the
   card member number and the account differ, and supplementary cards share an
   account.
@@ -196,14 +196,14 @@ rather than positive.
 The payout is `kind: "income"` and links to the sale Purchase; linked income
 must be negative. It is **not** a `refund` — that means "the vendor gave money
 back for goods I returned", it feeds `postedRefundTotal`, and a sale Purchase
-separately needs `refund` for real refunds issued to *buyers*.
+separately needs `refund` for real refunds issued to _buyers_.
 
 **Never derive a payout from the item price.** Two mechanisms make it
 unfalsifiable, and both are invisible in bank rows and payout emails:
 
-- *Promoted-listing ad fees* are charged per item, on some listings and not
+- _Promoted-listing ad fees_ are charged per item, on some listings and not
   others, and are not implied by anything else on the order.
-- *Shipping labels cross payout boundaries.* A label is deducted from whichever
+- _Shipping labels cross payout boundaries._ A label is deducted from whichever
   payout is open when it is bought, which is often not the payout carrying its
   order — so a single-order payout may still not equal that order's earnings.
 
@@ -234,7 +234,7 @@ cites, so the order id is a direct lookup. Notes claiming that an order is
 unrecorded can be stale; check its identity before creating a new Purchase and
 correct an obsolete note when touching that record.
 
-A label bought against an already-open payout is deducted from a *different*
+A label bought against an already-open payout is deducted from a _different_
 payout than the one carrying its order. Where eBay charged that leg to the bank
 separately it is its own transaction and allocates cleanly. Where it was netted
 inside the payout, the truthful split needs an opposite-signed allocation, which
@@ -253,7 +253,7 @@ transaction for it.
   store number, and its `Id` column is a usable external id. Copilot: **sign
   inverted** (positive = charge), carries the account mask directly. Mint-era
   exports: unsigned amount with a `Transaction Type` column, card named by
-  *product* with no last-four, and no external id — rows sourced from them get
+  _product_ with no last-four, and no external id — rows sourced from them get
   no `sourceRef`. Combine overlapping exports only after establishing their
   source coverage;
   different files may each carry only one leg of a charge/credit pair.
@@ -323,8 +323,8 @@ transaction for it.
 - **To settle from an orphan, LINK it** (set allocations and `transactionDate`
   on the existing row). Creating a fresh transaction beside a live orphan is
   what manufactures twins.
-- A twin pair is a *linked* row (purchase, reasoning, readable vendor ref) and an
-  *orphan* (true descriptor, dedupe hash). Neither dominates: **delete the
+- A twin pair is a _linked_ row (purchase, reasoning, readable vendor ref) and an
+  _orphan_ (true descriptor, dedupe hash). Neither dominates: **delete the
   orphan first, then graft its `v1:` hash onto the linked row's `sourceRefs`**
   — refs are globally unique, so grafting while the orphan is live fails with a
   source-ref conflict. Deleting the orphan without grafting throws the hash
@@ -366,7 +366,7 @@ money, but most nonzero gaps are benign. Check these causes:
   vendor+date — the charge side of the export disambiguates.
 - `statedTotal` holding a **net** is a tell: whenever it equals the expense
   total on a purchase that had a return, suspect the refunded tax is missing.
-- Linking an orphan credit can *create* a double-count when the Purchase already
+- Linking an orphan credit can _create_ a double-count when the Purchase already
   carries the same refund from another source. Check first.
 - The itemisation detector (`statedTotal − Σ expenses > 0.5`) needs two
   exclusions: a negative Expense line (a booked return) **and** a negative
@@ -394,7 +394,7 @@ money, but most nonzero gaps are benign. Check these causes:
   `/cpe/yourpayments/transactions` (20 rows per POST page; render results into
   the DOM and read with `get_page_text`, since `javascript_tool` truncates
   returns), join free transactions to charges on (amount, date ±6 d) to get the
-  **order id**, then order id → Purchase. Query *all* purchases, not just
+  **order id**, then order id → Purchase. Query _all_ purchases, not just
   zero-allocation ones — most wins are extra shipment legs on partially-settled
   orders, and refund-only purchases complete to net zero when the charge lands.
   Re-run the audit (group `orderId → [amounts]`, diff against Cubby) after any
@@ -407,7 +407,7 @@ money, but most nonzero gaps are benign. Check these causes:
   `statedTotal` (returns net both sides down together).
 - A charge that **predates its order** falsifies the match by itself; a 1–3 day
   lead is posting noise, a week is a wrong purchase date. A gift-card line means
-  the card charge is *not* the stated total. Marketplace vs first-party
+  the card charge is _not_ the stated total. Marketplace vs first-party
   descriptors (`AMAZON MKTPL` vs `Amazon.com`) break same-day ties; `Sold by:` on
   the invoice explains multi-seller multi-charge orders. When identical charges
   stay indistinguishable, pick, and say the pick is arbitrary in the note. Never

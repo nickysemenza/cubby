@@ -51,7 +51,7 @@ builds the active scheme (`Cubby-iOS`) and returns `previewSnapshotPath`, a PNG.
 Use it for behavior a preview cannot show: navigation, taps, sheets, typing.
 
 1. `DeviceInteractionStartWorkspaceSession(workspaceIdentifier, sessionIdentifier,
-   deviceIdentifier)` — boots the device; start it early. `deviceIdentifier`
+deviceIdentifier)` — boots the device; start it early. `deviceIdentifier`
    takes a simulator UUID or exact name; a vague name like `iPhone` fails and the
    error lists eligible devices.
 2. `DeviceInteractionInstallAndRun(workspaceIdentifier, interactionSessionKey)` —
@@ -81,10 +81,10 @@ the operator wants to watch or for deep-link checks.
 
 ## Troubleshooting
 
-| Symptom | Fix |
-| --- | --- |
-| "This agent isn't approved" | `XcodeOpenWorkspace` to raise approval; operator approves |
-| "workspaceIdentifier is required" | Use an id the error lists |
-| "File not found in project structure" | Project-relative path via `XcodeGlob` |
-| `TaskTimeoutError` on first render | Raise `timeout`; the cold build is still running |
+| Symptom                                                        | Fix                                                                            |
+| -------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| "This agent isn't approved"                                    | `XcodeOpenWorkspace` to raise approval; operator approves                      |
+| "workspaceIdentifier is required"                              | Use an id the error lists                                                      |
+| "File not found in project structure"                          | Project-relative path via `XcodeGlob`                                          |
+| `TaskTimeoutError` on first render                             | Raise `timeout`; the cold build is still running                               |
 | "Launch session has not been found" / "Cannot find … in scope" | `BuildProject` to see errors; a stale `Cubby.xcodeproj` needs `pnpm apple gen` |

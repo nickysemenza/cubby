@@ -7,10 +7,12 @@ This preserves the detailed former web guidance. Load the relevant heading for t
 **CRITICAL**: Never pass inline object literals, arrays, or functions to hooks with dependencies. This creates new references on every render, triggering infinite loops.
 
 ### Bad (causes infinite re-renders):
+
 ```typescript
 const { table } = useEntityList({
   deletable: {
-    mutationOptions: (callbacks) => api.product.delete.mutationOptions(callbacks),
+    mutationOptions: (callbacks) =>
+      api.product.delete.mutationOptions(callbacks),
     entityLabel: "Product",
     invalidateKeys: [queryKeys.product.list],
   },
@@ -18,6 +20,7 @@ const { table } = useEntityList({
 ```
 
 ### Good (stable reference):
+
 ```typescript
 const deletableConfig = useDeletableConfig({
   mutationFn: api.product.delete.mutationOptions,
@@ -31,6 +34,7 @@ const { table } = useEntityList({
 ```
 
 **Rule**: If you're passing configuration objects to `useEntityList`, `useMemo`, `useEffect`, or any hook with dependencies, either:
+
 1. Use `useDeletableConfig` helper for deletable configs
 2. Wrap in `useMemo` with proper dependencies
 3. Extract to a stable reference outside the component
@@ -60,7 +64,10 @@ values at module scope or memoize them.
 ```typescript
 // Bad — raw useQueries returns new array every render:
 const queries = useQueries({ queries: queryOptions });
-const data = useMemo(() => queries.map((q) => q.data).filter(Boolean), [queries]); // ← new ref every render
+const data = useMemo(
+  () => queries.map((q) => q.data).filter(Boolean),
+  [queries],
+); // ← new ref every render
 
 // Good — combine provides structural sharing:
 const { data, isLoading } = useQueries({

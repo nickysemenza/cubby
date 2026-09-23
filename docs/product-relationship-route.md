@@ -33,16 +33,16 @@ accessibility. This contract requires no database migration.
 
 ## Relationship semantics
 
-| Station | Meaning and source | Required distinction |
-| --- | --- | --- |
-| Stock | Product → InventoryEntry → holding Location | A holding Location is not an identity-only Location. |
-| Also a location | Location whose identity is this Product | Keep separate from “Stock”. |
-| Expenses | Acquisition or disposition lines keyed by `productId` | Explain kit-owned expenses and explicit manual prices where applicable. |
-| Purchases | Explicit `PurchaseProduct` links or inferred itemized Expenses | Label `Direct link`, `Via expense`, or both; exit/future Expense rows are not acquisitions. |
-| Vendors | Derived attributed Product Expense → Purchase → Vendor spend | An explicit `PurchaseProduct` link alone is not vendor spend. |
-| Used on projects | Explicit reusable-tool usage | Keep separate from acquisition attribution. |
-| Purchased for projects | Derived acquisition-spend project attribution | A Project may appear in both project branches. |
-| Tasks | Nullable `Task.subjectProductId` links for non-food Products | Preserve the existing task creation path and truthful empty state. |
+| Station                | Meaning and source                                             | Required distinction                                                                        |
+| ---------------------- | -------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| Stock                  | Product → InventoryEntry → holding Location                    | A holding Location is not an identity-only Location.                                        |
+| Also a location        | Location whose identity is this Product                        | Keep separate from “Stock”.                                                                 |
+| Expenses               | Acquisition or disposition lines keyed by `productId`          | Explain kit-owned expenses and explicit manual prices where applicable.                     |
+| Purchases              | Explicit `PurchaseProduct` links or inferred itemized Expenses | Label `Direct link`, `Via expense`, or both; exit/future Expense rows are not acquisitions. |
+| Vendors                | Derived attributed Product Expense → Purchase → Vendor spend   | An explicit `PurchaseProduct` link alone is not vendor spend.                               |
+| Used on projects       | Explicit reusable-tool usage                                   | Keep separate from acquisition attribution.                                                 |
+| Purchased for projects | Derived acquisition-spend project attribution                  | A Project may appear in both project branches.                                              |
+| Tasks                  | Nullable `Task.subjectProductId` links for non-food Products   | Preserve the existing task creation path and truthful empty state.                          |
 
 Required station labels are `Stock`, `Also a location`, `Expenses`, `Purchases`,
 `Vendors`, `Used on projects`, `Purchased for projects`, and `Tasks`. Do not

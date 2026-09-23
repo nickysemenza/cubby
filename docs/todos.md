@@ -204,7 +204,7 @@ history is the archive. Permanent product constraints live in the
   choices per product: a one-click "Park in Unknown" (ensure the global
   Unknown, create the entry there so it surfaces in `unknownParkedItems`) and
   a stock amount defaulted from the quantity ledger (`expectedQuantity −
-  onHandUnits`; `product-hero-presence.ts` computes the presentation and is
+onHandUnits`; `product-hero-presence.ts` computes the presentation and is
   currently unused) instead of `QuickInventoryAdd`'s constant `1`. Detail
   pages have no prev/next navigation, so use the guided-flow shape
   (`problem-actions.ts` `start-recount`), optionally scoped to one import run
@@ -231,7 +231,7 @@ history is the archive. Permanent product constraints live in the
   check
   misses the Fresh / Whole Foods / in-store ASIN split constantly, so the name
   fallback is load-bearing. Ideal shape: one call taking `{name,
-  externalIds[]}` per line and returning exact-id hits, alias hits, and lexical
+externalIds[]}` per line and returning exact-id hits, alias hits, and lexical
   candidates together.
 
 - **Actionable meal suggestions.** `/meals/suggestions` is already reachable
@@ -294,7 +294,7 @@ history is the archive. Permanent product constraints live in the
 
 - **Itemization and settlement verdict on the transactions list.** The
   linkage exists (`FinancialTransaction ──< Allocation >── Purchase ──<
-  Expense`) but the two halves of "is this charge itemized?" sit on different
+Expense`) but the two halves of "is this charge itemized?" sit on different
   lists: `/finance` transactions have only the has/none purchase-presence
   filter, and the reconciliation verdict (`unknown`/`match`/`refund_adjusted`/
   `mismatch`, `financial-reconciliation.ts`) lives on `/purchases`. Add a
@@ -309,11 +309,11 @@ history is the archive. Permanent product constraints live in the
   import (app and `cubby photo analyze`) stops at the entity type: for a first
   photo of a plant the per-record ranking has no signal — OCR needs a label in
   frame, the date match needs a same-day `sowedOn`/`transplantedOn`, the Vision
-  feature print only matches photos *already attached* to that record, and the
+  feature print only matches photos _already attached_ to that record, and the
   classifier label (`plant 0.9`) is identical for every candidate — so the
   chooser is in default order and the household picks by hand. The on-device
   Foundation Model is text-only (it sees `classifications: plant, foliage;
-  text: none` plus candidate names and passes through as "Deterministic local
+text: none` plus candidate names and passes through as "Deterministic local
   evidence"), and Vision ships no species classifier, so on-device cannot close
   this. Two pieces, both generic over the routing policy's `candidateFields`:
   - **Server vision identification.** A `photo-import.identify` op (native
@@ -331,9 +331,9 @@ history is the archive. Permanent product constraints live in the
     paths (a planting's garden-entry photos, a recipe's meal photos) and take
     the best of several references, so the second photo of a plant matches
     even when the first was filed on an entry rather than the planting.
-  Owners: `apps/web/src/server/ai`, `services/photo-import-*`,
-  `apps/apple/CubbyKit/Sources/CubbyKit/Photo/PhotoEvidenceScorer.swift`,
-  `App/Shared/Photo/Library/PhotoVisualEvidenceMatcher.swift`.
+    Owners: `apps/web/src/server/ai`, `services/photo-import-*`,
+    `apps/apple/CubbyKit/Sources/CubbyKit/Photo/PhotoEvidenceScorer.swift`,
+    `App/Shared/Photo/Library/PhotoVisualEvidenceMatcher.swift`.
 
 - **Label photo → `labelNutrition`.** The Brami panel was transcribed by hand
   from a photo pasted into chat. Accept an attached image on the product and
@@ -435,9 +435,9 @@ history is the archive. Permanent product constraints live in the
   by giving cookbooks durable identity plus a merge/repoint path.
 
 - **Count units resolve on the ingredient, never via product `each`.** `1 whole
-  example vegetable` must not resolve to the weight of an entire linked bag
-  because its `each` satisfies `whole`. Product `each` means *package*; recipe
-  `whole/bunch/crown/clove` means *piece*. A USDA portion can supply the
+example vegetable` must not resolve to the weight of an entire linked bag
+  because its `each` satisfies `whole`. Product `each` means _package_; recipe
+  `whole/bunch/crown/clove` means _piece_. A USDA portion can supply the
   ingredient-specific piece-to-gram mapping. Rule: piece units come from USDA
   `portionInfo` or an ingredient-level mapping, and product `each` prices the
   package only — it must never satisfy a piece unit.
@@ -654,7 +654,7 @@ history is the archive. Permanent product constraints live in the
   manifest `display.format`/field decisions, not ledger CSS.
 
 - **Phone hit areas as pseudo-elements, app-wide.** Button's default
-  `mobileSize: "touch"` grows icon controls to 44px *layout* boxes, which
+  `mobileSize: "touch"` grows icon controls to 44px _layout_ boxes, which
   wraps dense rows on phones. The detail ledger now keeps the 44px target as
   an `::after` (suggestion glyph, cohort filter link, field-explanation
   trigger; the `checkbox.tsx` pattern). Decide whether `touch` itself should
@@ -673,7 +673,7 @@ history is the archive. Permanent product constraints live in the
   Promote when agents keep reproducing edge states against real data; decide
   how it stays out of the production bundle (`mock-schema.ts` imports faker).
   The data half is now covered: `pnpm db:dev:up/push/seed` plus `pnpm
-  dev:local` (`apps/web/tooling/scenarios/corpus.ts`) gives a persistent
+dev:local` (`apps/web/tooling/scenarios/corpus.ts`) gives a persistent
   local database with named, non-empty entities in every state the corpus
   covers, so `dev:local` no longer needs the shared prod `DATABASE_URL` for
   this. What remains is the route/component-preview half — driving one
@@ -715,7 +715,7 @@ history is the archive. Permanent product constraints live in the
   not) with an unaliased `$count` on the same where clause, so any predicate
   that references the outer row by raw table name or through a correlated
   sub-select compiles on one leg and throws `invalid reference to FROM-clause
-  entry` on the other — six shipped occurrences so far (#456, #462, #481,
+entry` on the other — six shipped occurrences so far (#456, #462, #481,
   #762, #785, CUBBY-11R). The sanctioned workarounds (uncorrelated `IN`
   sub-selects, dual-alias where builders, string alias parameters on
   `effective*Sql` fragments) are guarded by
@@ -890,7 +890,7 @@ history is the archive. Permanent product constraints live in the
   total/saturated/trans fat, cholesterol, sodium, carbs, fiber, sugars, added
   sugars, protein, vitamin D, calcium, iron, potassium; a manufacturer may omit
   one only as "not a significant source" (below rounding). So for label-sourced
-  records a missing *mandatory* nutrient is an inferred zero and a missing
+  records a missing _mandatory_ nutrient is an inferred zero and a missing
   micronutrient (zinc, B12, magnesium, folate…) stays unknown. Model nutrient
   values as `measured | inferred-zero | unknown`; count inferred zeros as
   covered but flag them. Manual override: extend ingredient `naKinds` with
@@ -977,27 +977,27 @@ history is the archive. Permanent product constraints live in the
 - **Follow-ups gated on image provenance landing** (see the
   [plan](plans/image-provenance-and-devices.md)); each promotes on its own
   trigger:
-  - *Geolocated photo → nearest Location suggestion* in import review, once
+  - _Geolocated photo → nearest Location suggestion_ in import review, once
     Locations carry coordinates (the coordinate field renderer from PR 3b is
     reusable).
-  - *Capture date as inventory evidence*: a sighting's `capturedAt` says a
+  - _Capture date as inventory evidence_: a sighting's `capturedAt` says a
     product existed / was at a Location on that day; emit it as a timeline
     event when the inventory timeline next needs external evidence.
-  - *Cross-member duplicate review*: the same pixels in two members'
+  - _Cross-member duplicate review_: the same pixels in two members'
     libraries already produce two sightings; a review queue reusing
     `PhotoMatchStore` candidates is worth it once ambiguous attributions
     accumulate.
-  - *Per-feature participation sub-switches* (companion jobs vs library
+  - _Per-feature participation sub-switches_ (companion jobs vs library
     processing) if the single master switch proves too coarse.
-  - *`MenuBarExtra` companion status on macOS*: the app works in the
+  - _`MenuBarExtra` companion status on macOS_: the app works in the
     background unconditionally today; an always-visible indicator is honest
     once the sidebar rows from PR 4 exist.
-  - *Hash-repair egress budget*: repair downloads full originals
+  - _Hash-repair egress budget_: repair downloads full originals
     (`PhotoMatchStore.repair`); cap per session and prefer Wi-Fi when cellular
     use is observed.
-  - *Shortcuts App Intent "Log this photo to Cubby"*: on-device, keeps
+  - _Shortcuts App Intent "Log this photo to Cubby"_: on-device, keeps
     location; depends on the import path carrying the `library` block.
-  - *Map / per-place / per-trip photo filters* once GPS is stored.
+  - _Map / per-place / per-trip photo filters_ once GPS is stored.
 
 - **Trace the web Worker's AI calls into Sentry's Agents view.** The purchase
   agent reports `gen_ai` spans through Flue's Sentry blueprint, but the web
@@ -1107,7 +1107,7 @@ history is the archive. Permanent product constraints live in the
   recorded: `dataException` has no such check, yet `view-manifest.ts` asserts the view
   converges. Two designs were costed and the operator chose to leave the detector alone
   (2026-08-18): book the missing unit as an Expense with `cost: null,
-  productQuantity: 1` (no code change; the ledger already reads a NULL cost by the
+productQuantity: 1` (no code change; the ledger already reads a NULL cost by the
   quantity's sign, but zero such rows exist today), or add a product data check with a
   **ledger-derived** fingerprint — the obvious `updatedAt`-keyed version is unsafe,
   because adding a real acquisition would not re-open the row.
@@ -1119,7 +1119,7 @@ history is the archive. Permanent product constraints live in the
 - **Driven simulator smoke for the photo flow** — Promote when the next
   SwiftUI identity/state bug ships (the stale second `.sheet(item:)` in
   #1084 was the first). `apple-check.sh` now gates the known pattern
-  (`State(initialValue:)` from init); the only thing that catches *unknown*
+  (`State(initialValue:)` from init); the only thing that catches _unknown_
   ones is a scripted run: `simctl addmedia` two fixture photos, then drive
   select A → Add to… → Cancel → Clear → select B → Add to… via Axiom `xcui`
   and assert the hero's identifier names B. Keep it out of the pre-push gate;
@@ -1441,7 +1441,7 @@ history is the archive. Permanent product constraints live in the
 
 - **Seasonal garden planning and photo comparison.** The `garden-plan-import`
   skill already turns a written seasonal plan into Locations/Project/Tasks/
-  planned Plantings; build past one-time ingest toward *revising* a standing
+  planned Plantings; build past one-time ingest toward _revising_ a standing
   plan season over season, comparing dated bed/tree photos with AI, and
   explaining forecast changes and keep-versus-replace recommendations. Keep
   the workflow occasional and lightweight; planting windows alone do not

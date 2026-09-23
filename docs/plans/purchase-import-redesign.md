@@ -72,61 +72,61 @@ store.
 
 ## 2. Decision log
 
-| # | Decision | Choice |
-|---|---|---|
-| 1 | What "assigned to a user" means | The vendor **login** (`VendorAccount` owned by a `LedgerParty`). Purchaser is *derived on read*, never stored *(review: a third stored "who" beside `FinancialAccount.ledgerPartyId` and `ExpenseAttribution` was redundant)*. |
-| 2 | Device identity | Real member auth: better-auth user ↔ `LedgerParty.userId`. |
-| 3 | Account-owner client | The account owner runs the Mac app. |
-| 4 | Discovery | Charge-driven: a statement charge at an `online_account` vendor is *something to hunt*; a server-side Gmail pull (per member mailbox, history-based, hourly cron) resolves its order id and event stream; the browser then fetches that one order by `orderUrlTemplate`. The orders-list walk is only for backfill and vendors with no email senders. |
-| 5 | Automation scope | Everything automatic except receiving. |
-| 6 | Auditor autonomy | Applies reversible relinks/reclassifies only, and only on rows written by the same run; everything else is an open finding with the fix attached. |
-| 7 | Exception surface | Problems page is the source of truth; the Mac app posts one local notification per run with a count. No APNs *(review: none exists)*. |
-| 8 | Vendor scope | Generic, all vendors. `Vendor.orderEvidence` drives expectations. |
-| 9 | Backfill | Yes, paced, newest-first; history can be jump-started from an Amazon export via the MCP client. |
-| 10 | Enrichment fetching | Same client, same worklist protocol, second phase. |
-| 11 | Vendor challenge | Human solves it in their real browser; agent pauses. |
-| 12 | Purchaser | Derived: account owner → card owner → null. No column. |
-| 13 | Session ownership | Strict everywhere: a VendorAccount is only driven from a Mac signed in as its owner, and an MCP write naming a `vendorAccountId` must come from that owner's OAuth session (`@better-auth/oauth-provider` already ties every MCP call to a `user.id`). The account owner runs one-off imports. |
-| 14 | Vendor evidence flag | `orderEvidence: online_account \| receipt_only \| not_expected \| null`; `null` behaves as `online_account` until classified. A one-time classification pass uses Jev `vendor-evidence-suggest` (name, website, charge descriptors, presence of order mail): high-probability values auto-apply, the rest are one batch review. Expectation checks are *derived* Problems detectors: an `online_account` charge whose hunt (decision 47) failed; a `receipt_only` charge without a document. |
-| 15 | Receiving | Never automatic. "All shipments delivered" (read off the order page) files an `arrived` finding once per Purchase; the human receives through the existing flow. No delivery column. |
-| 16 | Existing lines | If the Purchase's live Expenses are exactly one unlinked `principal` row whose cost equals the extracted lines' sum, the writer replaces it with the lines, carrying the aggregate's title, `costType`, trade, and project onto them (the skill's snapshot rule). Any other shape — a linked row, a partial split, a sum that disagrees — writes **no lines** and files `duplicate_lines` with the extracted lines for review *(review: plain "fill gaps" would double-count)*. Populated header fields are never overwritten. |
-| 17 | Extraction | AI extraction (fast tier) from capped captured text + links + image srcs. No coded extractors. Navigation is agentic with cached hints. |
-| 18 | Mac app lifetime | Runs only while the app is open. |
-| 19 | Backfill pacing | ~20–30 orders/hour, newest first. |
-| 20 | The Markdown skill | Splits: invariants → code; judgment → agent skill + auditor prompt; mechanics → capture tool. The settlement/statement/Monarch half of the skill is untouched. |
-| 21 | Capture payload | Readable text (capped) + product links + image srcs. Screenshot always taken, only sent to the repair feature. |
-| 22 | Primary document | Order page rendered to PDF and attached with `documentKind: "order_confirmation"`, which *is* the primary document today. Screenshot attached as `other`. |
-| 23 | Sum mismatch | Lines must equal the page's grand total to the cent **to be emitted by extraction**; after one repair turn still fails, the Purchase is created with its PDF, **one productless `principal` Expense at the page's printed grand total** (page evidence, not a rollup of `statedTotal`), and a `sum_mismatch` finding carrying the extracted lines. Spend is right immediately; lines arrive when the finding is applied. The writer never refuses on `statedTotal` *(review: tenet 5)*. |
-| 24 | Vendor learning | Agent caches hints on the Vendor; hints are advisory and rediscovered on failure. First-time learning may also be a Claude Code + Chrome MCP session. |
-| 25 | Delivered signal | Read from the order page; `arrived` finding only when all shipments show delivered. |
-| 26 | Agentic loop | Yes: a Flue agent per VendorAccount with coarse tools. |
-| 27 | Browser | The member's real Chrome (default) or Safari via Apple Events, tabs in a dedicated background window. |
-| 28 | Agent granularity | One durable Flue agent per `ImportRun`, named `import-run:<id>`; transcript/recovery state is in its SQLite DO and authoritative business/audit state remains in Postgres. |
-| 29 | Model tiers | Fast tier drives and extracts; Jev decides; reasoning tier at high effort audits and repairs. |
-| 30 | Browser offline | Pause instantly on socket drop, auto-resume on reconnect, nag after 24 h. |
-| 31 | Run triggers | Browser runs: Mac app foreground with a browser available, a non-empty worklist (hunts from charges or Gmail), manual "Sync now". Gmail polling and charge matching run on an hourly cron *(review: Workflows do not self-schedule)*. |
-| 32 | Prompts | In-repo under `apps/web/src/server/agents/purchase-import/`, versioned like features, with an offline eval. |
-| 33 | Loop implementation | Flue in a private `purchase-agent` Worker. Its generated entry/Vite configuration is isolated from the existing TanStack/Vite web Worker; there is no fallback runtime. |
-| 34 | Browser bridge tools | Read-only by construction: `navigate` (allow-listed to the VendorAccount's domains), `capture`, `click(selector)`, `paginate`, `screenshot`, `pdf`, `tabs`. No free-form `evaluate`, no tool that submits a form — page text reaches the agent as data, so a page must never be able to turn into an action in a signed-in session. |
-| 35 | Auditor batching | Per run; per ≤25 orders during backfill; input is the rendered import only. |
-| 36 | `ImportRun` | One row per run, `Purchase.importRunId`; cost is `SUM(AiUsage)` by job id, never stored. *(2026-09: promoted to the read-only `purchaseImportRun` manifest entity so the generic list, inspector and MCP get/list render it.)* |
-| 37 | Pause semantics | As 30. Status lives on `VendorAccount` only. |
-| 38 | Findings | `ImportFinding`, a plain table surfaced through a new `importFindings` Problems key *(review: Problems is a key registry with detectors; no abstraction needed)*. |
-| 39 | Gmail grant | Per member via better-auth's Google provider (`linkSocial`, `gmail.readonly`, offline access); refresh token in better-auth's `account` row; `historyId` on our side. |
-| 40 | UI split | Web: VendorAccounts, runs, hints, findings. Mac app: status line, "Sync now", browser choice. |
-| 41 | Currency | Lines are written at the USD figure the page shows; a page with no USD figure gets a `foreign_currency` finding and no lines. Nothing is scaled from `statedTotal` or held for settlement *(review: tenet 5)*. Further handling is deferred until the first such order exists. |
-| 42 | Dedupe key | The existing `Purchase.orderId` + `Purchase_vendorId_orderId_key`; `vendorAccountId` is an attribute *(review)*. |
-| 43 | Public prefixes | `VendorAccount` is `VACCT-`; `ImportRun` carries a `RUN-` shortcode for URLs and read payloads while agents and the delegation gate use its internal UUID *(the earlier `PIR-` handle was replaced without an alias; in-flight runs were failed at cutover)*; `ImportFinding` remains internal to its run/Problem surface. |
-| 44 | Completeness | Every entity gets a 0–100 completeness score derived from its data-quality checks, each check weighted and carrying an `expectedIf` predicate; a Purchase at a `receipt_only` vendor is complete at amount + project + date, one at an `online_account` vendor is not complete without lines. Generalises today's `complete \| needs_data \| defect` (§10 item 2). **Status (2026-09):** shipped for every scored household entity via manifest `capabilities.dataQuality` (docs/entities.md → "Data quality"); durable exceptions remain Product/Purchase-only (docs/todos.md). |
-| 45 | "Tried, not available" | A data exception with reason `history_expired` (or `unavailable`) on `empty_expenses` / `primary_document`. The agent sets it automatically for orders older than the earliest order the vendor still shows; a human can set it from the Purchase. |
-| 46 | Exception staleness | **All** data exceptions are fingerprinted on the inputs their check reads (live expense count, document set, `orderId`, …) instead of the row's `updatedAt`: an exception is valid while the check's inputs are unchanged. Reasons stay mandatory and typed as today. |
-| 47 | Hunt | A charge at an `online_account` vendor with no allocated Purchase opens a hunt: Gmail match (sender, date window, amount) → order id → targeted browser fetch. No email match → on the next run the browser walks the orders list bounded to the charge date ±7 days → still nothing → `expected order not found` Problem. |
-| 48 | Hunt routing | The charge routes by `FinancialAccount.ledgerPartyId` to that member's VendorAccount. The Gmail step runs server-side immediately, so the order id is known before the owner's Mac appears; only the fetch waits for their session. |
-| 49 | Shipment-level settlement | Amazon (and others) charge per **shipment**, so one order yields several charges that never equal the order total, and one charge sometimes covers several same-day orders. Extraction captures the order page's own transaction list (card, amount, date per shipment); the writer records one `FinancialTransaction` allocation per shipment charge; hunts match a charge against shipment amounts first, then subset-sum over order mails in the window for the N-orders-one-charge case. |
-| 50 | Receipt photos | `receipt_only` vendors use the same writer: a receipt photo (iOS photo import, or attached from the Purchase) → vision extract → `prepare_purchase_import` → identity investigation → `commit_purchase_import` → Jev → auditor. A `receipt_only` hunt asks "is there a receipt photo within ±3 days of the charge?" before filing "photograph the receipt". |
-| 51 | Mail attachments | An `OrderMail` with a PDF attachment attaches it to the matched Purchase as `invoice` (or `receipt` when the mail says so), which closes `primary_document` for utilities, contractors, and `not_expected` vendors without any browser work. |
-| 52 | Return windows and refunds | `OrderMail` refund events file a `refund_unbooked` finding with the proposed negative row; a delivered event plus the vendor's return policy (a per-Vendor `returnWindowDays`, null = none) files a `return_window` finding that surfaces only for lines above a threshold and expires itself. |
-| 53 | Later, enabled by this plan | Price history on the shopping list; recurring-order detection as consumption *rate* suggestions (never a decrement); an AI cost page by `jobKind`. §11. |
+| #   | Decision                        | Choice                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| --- | ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | What "assigned to a user" means | The vendor **login** (`VendorAccount` owned by a `LedgerParty`). Purchaser is _derived on read_, never stored _(review: a third stored "who" beside `FinancialAccount.ledgerPartyId` and `ExpenseAttribution` was redundant)_.                                                                                                                                                                                                                                                                                                                                                   |
+| 2   | Device identity                 | Real member auth: better-auth user ↔ `LedgerParty.userId`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| 3   | Account-owner client            | The account owner runs the Mac app.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| 4   | Discovery                       | Charge-driven: a statement charge at an `online_account` vendor is _something to hunt_; a server-side Gmail pull (per member mailbox, history-based, hourly cron) resolves its order id and event stream; the browser then fetches that one order by `orderUrlTemplate`. The orders-list walk is only for backfill and vendors with no email senders.                                                                                                                                                                                                                            |
+| 5   | Automation scope                | Everything automatic except receiving.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| 6   | Auditor autonomy                | Applies reversible relinks/reclassifies only, and only on rows written by the same run; everything else is an open finding with the fix attached.                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| 7   | Exception surface               | Problems page is the source of truth; the Mac app posts one local notification per run with a count. No APNs _(review: none exists)_.                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| 8   | Vendor scope                    | Generic, all vendors. `Vendor.orderEvidence` drives expectations.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| 9   | Backfill                        | Yes, paced, newest-first; history can be jump-started from an Amazon export via the MCP client.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| 10  | Enrichment fetching             | Same client, same worklist protocol, second phase.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| 11  | Vendor challenge                | Human solves it in their real browser; agent pauses.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| 12  | Purchaser                       | Derived: account owner → card owner → null. No column.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| 13  | Session ownership               | Strict everywhere: a VendorAccount is only driven from a Mac signed in as its owner, and an MCP write naming a `vendorAccountId` must come from that owner's OAuth session (`@better-auth/oauth-provider` already ties every MCP call to a `user.id`). The account owner runs one-off imports.                                                                                                                                                                                                                                                                                   |
+| 14  | Vendor evidence flag            | `orderEvidence: online_account \| receipt_only \| not_expected \| null`; `null` behaves as `online_account` until classified. A one-time classification pass uses Jev `vendor-evidence-suggest` (name, website, charge descriptors, presence of order mail): high-probability values auto-apply, the rest are one batch review. Expectation checks are _derived_ Problems detectors: an `online_account` charge whose hunt (decision 47) failed; a `receipt_only` charge without a document.                                                                                     |
+| 15  | Receiving                       | Never automatic. "All shipments delivered" (read off the order page) files an `arrived` finding once per Purchase; the human receives through the existing flow. No delivery column.                                                                                                                                                                                                                                                                                                                                                                                             |
+| 16  | Existing lines                  | If the Purchase's live Expenses are exactly one unlinked `principal` row whose cost equals the extracted lines' sum, the writer replaces it with the lines, carrying the aggregate's title, `costType`, trade, and project onto them (the skill's snapshot rule). Any other shape — a linked row, a partial split, a sum that disagrees — writes **no lines** and files `duplicate_lines` with the extracted lines for review _(review: plain "fill gaps" would double-count)_. Populated header fields are never overwritten.                                                   |
+| 17  | Extraction                      | AI extraction (fast tier) from capped captured text + links + image srcs. No coded extractors. Navigation is agentic with cached hints.                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| 18  | Mac app lifetime                | Runs only while the app is open.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| 19  | Backfill pacing                 | ~20–30 orders/hour, newest first.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| 20  | The Markdown skill              | Splits: invariants → code; judgment → agent skill + auditor prompt; mechanics → capture tool. The settlement/statement/Monarch half of the skill is untouched.                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| 21  | Capture payload                 | Readable text (capped) + product links + image srcs. Screenshot always taken, only sent to the repair feature.                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| 22  | Primary document                | Order page rendered to PDF and attached with `documentKind: "order_confirmation"`, which _is_ the primary document today. Screenshot attached as `other`.                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| 23  | Sum mismatch                    | Lines must equal the page's grand total to the cent **to be emitted by extraction**; after one repair turn still fails, the Purchase is created with its PDF, **one productless `principal` Expense at the page's printed grand total** (page evidence, not a rollup of `statedTotal`), and a `sum_mismatch` finding carrying the extracted lines. Spend is right immediately; lines arrive when the finding is applied. The writer never refuses on `statedTotal` _(review: tenet 5)_.                                                                                          |
+| 24  | Vendor learning                 | Agent caches hints on the Vendor; hints are advisory and rediscovered on failure. First-time learning may also be a Claude Code + Chrome MCP session.                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| 25  | Delivered signal                | Read from the order page; `arrived` finding only when all shipments show delivered.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| 26  | Agentic loop                    | Yes: a Flue agent per VendorAccount with coarse tools.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| 27  | Browser                         | The member's real Chrome (default) or Safari via Apple Events, tabs in a dedicated background window.                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| 28  | Agent granularity               | One durable Flue agent per `ImportRun`, named `import-run:<id>`; transcript/recovery state is in its SQLite DO and authoritative business/audit state remains in Postgres.                                                                                                                                                                                                                                                                                                                                                                                                       |
+| 29  | Model tiers                     | Fast tier drives and extracts; Jev decides; reasoning tier at high effort audits and repairs.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| 30  | Browser offline                 | Pause instantly on socket drop, auto-resume on reconnect, nag after 24 h.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| 31  | Run triggers                    | Browser runs: Mac app foreground with a browser available, a non-empty worklist (hunts from charges or Gmail), manual "Sync now". Gmail polling and charge matching run on an hourly cron _(review: Workflows do not self-schedule)_.                                                                                                                                                                                                                                                                                                                                            |
+| 32  | Prompts                         | In-repo under `apps/web/src/server/agents/purchase-import/`, versioned like features, with an offline eval.                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| 33  | Loop implementation             | Flue in a private `purchase-agent` Worker. Its generated entry/Vite configuration is isolated from the existing TanStack/Vite web Worker; there is no fallback runtime.                                                                                                                                                                                                                                                                                                                                                                                                          |
+| 34  | Browser bridge tools            | Read-only by construction: `navigate` (allow-listed to the VendorAccount's domains), `capture`, `click(selector)`, `paginate`, `screenshot`, `pdf`, `tabs`. No free-form `evaluate`, no tool that submits a form — page text reaches the agent as data, so a page must never be able to turn into an action in a signed-in session.                                                                                                                                                                                                                                              |
+| 35  | Auditor batching                | Per run; per ≤25 orders during backfill; input is the rendered import only.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| 36  | `ImportRun`                     | One row per run, `Purchase.importRunId`; cost is `SUM(AiUsage)` by job id, never stored. _(2026-09: promoted to the read-only `purchaseImportRun` manifest entity so the generic list, inspector and MCP get/list render it.)_                                                                                                                                                                                                                                                                                                                                                   |
+| 37  | Pause semantics                 | As 30. Status lives on `VendorAccount` only.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| 38  | Findings                        | `ImportFinding`, a plain table surfaced through a new `importFindings` Problems key _(review: Problems is a key registry with detectors; no abstraction needed)_.                                                                                                                                                                                                                                                                                                                                                                                                                |
+| 39  | Gmail grant                     | Per member via better-auth's Google provider (`linkSocial`, `gmail.readonly`, offline access); refresh token in better-auth's `account` row; `historyId` on our side.                                                                                                                                                                                                                                                                                                                                                                                                            |
+| 40  | UI split                        | Web: VendorAccounts, runs, hints, findings. Mac app: status line, "Sync now", browser choice.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| 41  | Currency                        | Lines are written at the USD figure the page shows; a page with no USD figure gets a `foreign_currency` finding and no lines. Nothing is scaled from `statedTotal` or held for settlement _(review: tenet 5)_. Further handling is deferred until the first such order exists.                                                                                                                                                                                                                                                                                                   |
+| 42  | Dedupe key                      | The existing `Purchase.orderId` + `Purchase_vendorId_orderId_key`; `vendorAccountId` is an attribute _(review)_.                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| 43  | Public prefixes                 | `VendorAccount` is `VACCT-`; `ImportRun` carries a `RUN-` shortcode for URLs and read payloads while agents and the delegation gate use its internal UUID _(the earlier `PIR-` handle was replaced without an alias; in-flight runs were failed at cutover)_; `ImportFinding` remains internal to its run/Problem surface.                                                                                                                                                                                                                                                       |
+| 44  | Completeness                    | Every entity gets a 0–100 completeness score derived from its data-quality checks, each check weighted and carrying an `expectedIf` predicate; a Purchase at a `receipt_only` vendor is complete at amount + project + date, one at an `online_account` vendor is not complete without lines. Generalises today's `complete \| needs_data \| defect` (§10 item 2). **Status (2026-09):** shipped for every scored household entity via manifest `capabilities.dataQuality` (docs/entities.md → "Data quality"); durable exceptions remain Product/Purchase-only (docs/todos.md). |
+| 45  | "Tried, not available"          | A data exception with reason `history_expired` (or `unavailable`) on `empty_expenses` / `primary_document`. The agent sets it automatically for orders older than the earliest order the vendor still shows; a human can set it from the Purchase.                                                                                                                                                                                                                                                                                                                               |
+| 46  | Exception staleness             | **All** data exceptions are fingerprinted on the inputs their check reads (live expense count, document set, `orderId`, …) instead of the row's `updatedAt`: an exception is valid while the check's inputs are unchanged. Reasons stay mandatory and typed as today.                                                                                                                                                                                                                                                                                                            |
+| 47  | Hunt                            | A charge at an `online_account` vendor with no allocated Purchase opens a hunt: Gmail match (sender, date window, amount) → order id → targeted browser fetch. No email match → on the next run the browser walks the orders list bounded to the charge date ±7 days → still nothing → `expected order not found` Problem.                                                                                                                                                                                                                                                       |
+| 48  | Hunt routing                    | The charge routes by `FinancialAccount.ledgerPartyId` to that member's VendorAccount. The Gmail step runs server-side immediately, so the order id is known before the owner's Mac appears; only the fetch waits for their session.                                                                                                                                                                                                                                                                                                                                              |
+| 49  | Shipment-level settlement       | Amazon (and others) charge per **shipment**, so one order yields several charges that never equal the order total, and one charge sometimes covers several same-day orders. Extraction captures the order page's own transaction list (card, amount, date per shipment); the writer records one `FinancialTransaction` allocation per shipment charge; hunts match a charge against shipment amounts first, then subset-sum over order mails in the window for the N-orders-one-charge case.                                                                                     |
+| 50  | Receipt photos                  | `receipt_only` vendors use the same writer: a receipt photo (iOS photo import, or attached from the Purchase) → vision extract → `prepare_purchase_import` → identity investigation → `commit_purchase_import` → Jev → auditor. A `receipt_only` hunt asks "is there a receipt photo within ±3 days of the charge?" before filing "photograph the receipt".                                                                                                                                                                                                                      |
+| 51  | Mail attachments                | An `OrderMail` with a PDF attachment attaches it to the matched Purchase as `invoice` (or `receipt` when the mail says so), which closes `primary_document` for utilities, contractors, and `not_expected` vendors without any browser work.                                                                                                                                                                                                                                                                                                                                     |
+| 52  | Return windows and refunds      | `OrderMail` refund events file a `refund_unbooked` finding with the proposed negative row; a delivered event plus the vendor's return policy (a per-Vendor `returnWindowDays`, null = none) files a `return_window` finding that surfaces only for lines above a threshold and expires itself.                                                                                                                                                                                                                                                                                   |
+| 53  | Later, enabled by this plan     | Price history on the shopping list; recurring-order detection as consumption _rate_ suggestions (never a decrement); an AI cost page by `jobKind`. §11.                                                                                                                                                                                                                                                                                                                                                                                                                          |
 
 ## 3. Domain model changes
 
@@ -141,14 +141,14 @@ is `(): AnyPgColumn =>` across modules), unique, CHECK `userId IS NULL OR kind
 
 ### 3.2 `VendorAccount` (entity, `VACCT-`)
 
-| column | notes |
-|---|---|
-| `vendorId` | FK Vendor |
-| `ledgerPartyId` | FK LedgerParty (member); the owner |
-| `label` | e.g. "TEST-ACCOUNT" |
-| `cursor` | JSON `{ newestOrderAt, orderIdsOnNewestDate[], backfillBeforeOrderAt, earliestAvailableOrderAt }` — order ids are not monotonic, so the cursor is a date plus the ids already seen on it; `earliestAvailableOrderAt` is the oldest order the site still shows, which bounds what backfill can ever recover |
-| `status` | `active \| paused_auth \| paused_offline \| disabled` — the vendor-account connection state; run lifecycle is recorded separately on `ImportRun` |
-| `lastRunAt`, `lastSuccessAt` | |
+| column                       | notes                                                                                                                                                                                                                                                                                                      |
+| ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `vendorId`                   | FK Vendor                                                                                                                                                                                                                                                                                                  |
+| `ledgerPartyId`              | FK LedgerParty (member); the owner                                                                                                                                                                                                                                                                         |
+| `label`                      | e.g. "TEST-ACCOUNT"                                                                                                                                                                                                                                                                                        |
+| `cursor`                     | JSON `{ newestOrderAt, orderIdsOnNewestDate[], backfillBeforeOrderAt, earliestAvailableOrderAt }` — order ids are not monotonic, so the cursor is a date plus the ids already seen on it; `earliestAvailableOrderAt` is the oldest order the site still shows, which bounds what backfill can ever recover |
+| `status`                     | `active \| paused_auth \| paused_offline \| disabled` — the vendor-account connection state; run lifecycle is recorded separately on `ImportRun`                                                                                                                                                           |
+| `lastRunAt`, `lastSuccessAt` |                                                                                                                                                                                                                                                                                                            |
 
 Unique on `(vendorId, ledgerPartyId)` where not deleted. Full entity work per
 `docs/entities.md` "Adding an entity": declaration, branded id, kernel
@@ -158,20 +158,20 @@ adapter, incoming-edge dispositions for Vendor and LedgerParty,
 
 ### 3.3 `Vendor` additions
 
-| column | notes |
-|---|---|
-| `orderEvidence` | `online_account \| receipt_only \| not_expected \| null` |
-| `orderEmailSenders` | text[] used by discovery |
-| `agentHints` | JSON the agent writes: orders-list URL, pagination shape, order-link pattern, notes. Detail URLs come from the existing `Vendor.orderUrlTemplate`; hints never store a second template. |
-| `browserDomains` | text[] the bridge may navigate to for this vendor (decision 34); seeded from `website` |
-| `returnWindowDays` | nullable int (decision 52) |
+| column              | notes                                                                                                                                                                                   |
+| ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `orderEvidence`     | `online_account \| receipt_only \| not_expected \| null`                                                                                                                                |
+| `orderEmailSenders` | text[] used by discovery                                                                                                                                                                |
+| `agentHints`        | JSON the agent writes: orders-list URL, pagination shape, order-link pattern, notes. Detail URLs come from the existing `Vendor.orderUrlTemplate`; hints never store a second template. |
+| `browserDomains`    | text[] the bridge may navigate to for this vendor (decision 34); seeded from `website`                                                                                                  |
+| `returnWindowDays`  | nullable int (decision 52)                                                                                                                                                              |
 
 ### 3.4 `Purchase` additions
 
-| column | notes |
-|---|---|
+| column            | notes                                                      |
+| ----------------- | ---------------------------------------------------------- |
 | `vendorAccountId` | nullable FK; set on every fetched or export-imported order |
-| `importRunId` | nullable FK to `ImportRun` |
+| `importRunId`     | nullable FK to `ImportRun`                                 |
 
 No import state column: a Purchase either has lines or has an open finding.
 Purchaser is exposed on read as account owner → card owner (via the allocated
@@ -228,7 +228,7 @@ duplicate; the screenshot attaches as `other`.
 ### 4.1 Mac app: browser bridge
 
 - Drives the member's real browser via Apple Events: Chrome `execute
-  javascript` or Safari `do JavaScript`. Requires the browser's "Allow
+javascript` or Safari `do JavaScript`. Requires the browser's "Allow
   JavaScript from Apple Events" toggle and the
   `com.apple.security.automation.apple-events` entitlement +
   `NSAppleEventsUsageDescription`. Sandbox stays on.
@@ -236,7 +236,7 @@ duplicate; the screenshot attaches as `other`.
 - **Socket.** Connects to `GET /api/import/agent/socket?vendorAccount=VACCT-…`
   (a normal route, not a dot-directory) with the better-auth bearer token. The
   Worker resolves the session, maps `user.id → LedgerParty.userId →
-  VendorAccount.ledgerPartyId`, rejects a non-owner with 403 before the
+VendorAccount.ledgerPartyId`, rejects a non-owner with 403 before the
   upgrade, then forwards to the DO, which `acceptWebSocket`s and stores
   `{ partyId, vendorAccountId }` via `serializeAttachment` because in-memory
   state does not survive hibernation. Long-poll REST fallback on the OpenAPI
@@ -244,11 +244,11 @@ duplicate; the screenshot attaches as `other`.
 - Executes a fixed, versioned tool set — no free-form JavaScript reaches the
   page: `navigate(url)` (refused unless the host is in
   `Vendor.browserDomains`), `capture()` → `{ text, links[], images[],
-  transactions[] }` with text capped at 24 KB and links/images limited to
+transactions[] }` with text capped at 24 KB and links/images limited to
   product-shaped hrefs, `click(selector)` and `paginate()` for "show more"
   and next-page controls (never a submit button or a form), `screenshot()`,
   `pdf()`, `tabs()`. The injected scripts ship with the app and are the
-  only code that runs in the tab; the agent chooses *which*, never *what*.
+  only code that runs in the tab; the agent chooses _which_, never _what_.
 - Paces requests; reports `auth_required` on a sign-in or challenge page,
   raises the window and posts a local notification.
 - UI: per-account status line, "Sync now", browser choice.
@@ -305,14 +305,14 @@ One SQLite-backed Durable Object per VendorAccount: `new_sqlite_classes` +
 via `withRequestDbClient(env.HYPERDRIVE.connectionString, …)` as the existing
 DOs do. Skill file = the judgment half of the current skill. Tools:
 
-| tool | executes | notes |
-|---|---|---|
-| `browser.*` (§4.1) | on the Mac over the socket | blocking; the agent pauses when no socket is attached |
-| `cubby.import_order_page(orderId, capture)` | server | extract (+validate) → PDF attach → writer → Jev; returns one line |
-| `cubby.list_known_orders(vendorAccountId, since)` | server | so the agent stops at the cursor |
-| `cubby.save_hints(patch)` | server | writes `Vendor.agentHints` |
-| `cubby.finish_run(summary)` | server | closes the `ImportRun` (idempotent), triggers the auditor |
-| `cubby.mark_history_expired(vendorAccountId, earliestAvailableOrderAt)` | server | records the bound on the cursor and sets `history_expired` exceptions on `empty_expenses` / `primary_document` for this account's Purchases dated before it that have neither; never touches a Purchase that has lines or a document |
+| tool                                                                    | executes                   | notes                                                                                                                                                                                                                                |
+| ----------------------------------------------------------------------- | -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `browser.*` (§4.1)                                                      | on the Mac over the socket | blocking; the agent pauses when no socket is attached                                                                                                                                                                                |
+| `cubby.import_order_page(orderId, capture)`                             | server                     | extract (+validate) → PDF attach → writer → Jev; returns one line                                                                                                                                                                    |
+| `cubby.list_known_orders(vendorAccountId, since)`                       | server                     | so the agent stops at the cursor                                                                                                                                                                                                     |
+| `cubby.save_hints(patch)`                                               | server                     | writes `Vendor.agentHints`                                                                                                                                                                                                           |
+| `cubby.finish_run(summary)`                                             | server                     | closes the `ImportRun` (idempotent), triggers the auditor                                                                                                                                                                            |
+| `cubby.mark_history_expired(vendorAccountId, earliestAvailableOrderAt)` | server                     | records the bound on the cursor and sets `history_expired` exceptions on `empty_expenses` / `primary_document` for this account's Purchases dated before it that have neither; never touches a Purchase that has lines or a document |
 
 The DO's worklist has three sources, in priority order: **hunts** (a charge
 resolved to an order id by Gmail, or an unresolved charge with a date window
@@ -323,7 +323,7 @@ DO was evicted.
 
 ### 4.3 Server: extraction features
 
-Two features *(review: `runStructuredFeature` cannot switch tier mid-run)*:
+Two features _(review: `runStructuredFeature` cannot switch tier mid-run)_:
 
 - `vendor-order-extract` — fast tier, `cache: false` (page text is unique),
   structured output = the writer payload: header (`orderId`, date,
@@ -381,19 +381,19 @@ Commit returns per order:
 
 ### 4.5 Jev features
 
-| feature | choice set | cap |
-|---|---|---|
-| `product-line-identity` | shortlist ∪ `none` | 20 labels |
-| `expense-line-role` | the seven `lineKind`s | |
-| `product-promotion` | `promote \| coarse_only` | |
-| `reversal-kind` | `return \| concession \| cancellation \| replacement` | |
-| `charge-purchase-match` | open Purchases ±7 days, ±0 amount first | 30 labels |
-| `product-image-pick` | candidate images as `#n WxH alt…` labels, never URLs | 12 |
-| `kit-detection` | `kit_with_components \| single \| n_pack` | |
-| `order-mail-classify` | `order_mail \| not_order_mail` | |
-| `charge-mail-match` | candidate order mails in the charge's date window ∪ `none` (tie-break after sender + amount filtering) | 20 labels |
-| `vendor-evidence-suggest` | `online_account \| receipt_only \| not_expected` | |
-| `product-category-suggestion` | existing | |
+| feature                       | choice set                                                                                             | cap       |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------ | --------- |
+| `product-line-identity`       | shortlist ∪ `none`                                                                                     | 20 labels |
+| `expense-line-role`           | the seven `lineKind`s                                                                                  |           |
+| `product-promotion`           | `promote \| coarse_only`                                                                               |           |
+| `reversal-kind`               | `return \| concession \| cancellation \| replacement`                                                  |           |
+| `charge-purchase-match`       | open Purchases ±7 days, ±0 amount first                                                                | 30 labels |
+| `product-image-pick`          | candidate images as `#n WxH alt…` labels, never URLs                                                   | 12        |
+| `kit-detection`               | `kit_with_components \| single \| n_pack`                                                              |           |
+| `order-mail-classify`         | `order_mail \| not_order_mail`                                                                         |           |
+| `charge-mail-match`           | candidate order mails in the charge's date window ∪ `none` (tie-break after sender + amount filtering) | 20 labels |
+| `vendor-evidence-suggest`     | `online_account \| receipt_only \| not_expected`                                                       |           |
+| `product-category-suggestion` | existing                                                                                               |           |
 
 Every request stays under Jev's 32 000-byte cap by construction (labels, not
 payloads). All register in `AI_FEATURES` with versioned prompts. Thresholds
@@ -402,7 +402,7 @@ use the raw probability exposed by §10 item 5.
 ### 4.6 Server: auditor
 
 `purchase-import-audit`, reasoning tier, adaptive thinking, high effort. Input
-per ≤25 orders: the *rendered* import only — rows, probabilities, linked
+per ≤25 orders: the _rendered_ import only — rows, probabilities, linked
 Product name/model/last price, settlement match — roughly 400 tokens per
 order; never raw captures. Output: `ImportFinding[]`. Auto-applies
 `wrong_product` / `reversal_kind` relinks only when the target row was written
@@ -414,19 +414,19 @@ renders a structured refusal if the targets have since merged or deleted.
 
 Hourly cron (`"crons"` gains `0 * * * *`) → one Workflow with two steps.
 
-*Mail.* Per connected mailbox: `users.history.list` since `historyId` →
+_Mail._ Per connected mailbox: `users.history.list` since `historyId` →
 metadata `messages.get` → match `From` against `Vendor.orderEmailSenders` →
 parse order id + amount + event (`placed \| shipped \| delivered \| refunded
 \| cancelled`) into a small `OrderMail` table (`ledgerPartyId`, `vendorId`,
 `orderId`, `amount`, `event`, `messageId`, `receivedAt`). Unknown senders →
 Jev `order-mail-classify` → if order mail, a derived Problem "new vendor?".
 
-*Attachments.* An order mail carrying a PDF attaches it to the matched
+_Attachments._ An order mail carrying a PDF attaches it to the matched
 Purchase as `invoice` (`receipt` when the subject says so) through the
 existing document path with the idempotency key; `attachmentImageId` records
 it (decision 51).
 
-*Hunts.* For every unallocated `FinancialTransaction` at an `online_account`
+_Hunts._ For every unallocated `FinancialTransaction` at an `online_account`
 (or `null`) vendor: route to the card owner's VendorAccount
 (`FinancialAccount.ledgerPartyId`); match, in order: (1) a shipment charge
 already captured on an imported Purchase (decision 49); (2) an `OrderMail`
@@ -437,12 +437,12 @@ subset of same-window order mails whose amounts sum to the charge; (4) Jev
 a socket is attached. A hunt whose walk found nothing files the
 `expected order not found` Problem.
 
-*Receipt hunts.* For a `receipt_only` vendor's charge: look for a receipt
+_Receipt hunts._ For a `receipt_only` vendor's charge: look for a receipt
 photo within ±3 days (the photo import's date index) → `receipt-photo-
 extract` → writer; none → Problem "photograph the receipt for Example Garden Store
 $25.00 on Jan 15", which accepts a photo directly (decision 50).
 
-*Events.* `refunded` mail with no matching negative Expense → `refund_unbooked`
+_Events._ `refunded` mail with no matching negative Expense → `refund_unbooked`
 finding with the proposed row; `delivered` on a Purchase whose Vendor has
 `returnWindowDays` → `return_window` finding for lines above $50 that
 auto-dismisses when the window closes (decision 52).
@@ -508,8 +508,8 @@ transactional writer resolves the owned VendorAccount from that run scope.
 9. **Delivered.** Page shows all shipments delivered → `arrived` finding
    (once) → human receives via the existing flow → finding dismissed.
 10. **Enrichment worklist.** Products missing a cover → server lists
-    `{ productId, pageUrls[] }` → Mac app captures each *page* (bot-guarded)
-    → Jev picks the image → server fetches the *bytes* from the CDN URL
+    `{ productId, pageUrls[] }` → Mac app captures each _page_ (bot-guarded)
+    → Jev picks the image → server fetches the _bytes_ from the CDN URL
     (not bot-guarded) → verify.
 11. **Vendor learning.** New vendor → the agent (or a Claude Code session)
     finds the orders page, saves hints; failure later invalidates hints →
@@ -667,7 +667,7 @@ build for the Mac app.
 
 ## 10. Pre-implementation improvements
 
-Each is a blocker for the above *and* a good change on its own. Land these
+Each is a blocker for the above _and_ a good change on its own. Land these
 first, as separate small PRs, in numeric order.
 
 0. **Shortcode prefixes of 2–5 letters.** The `XXX-` shape is asserted in
@@ -685,13 +685,13 @@ first, as separate small PRs, in numeric order.
    defaults.
 2. **Completeness score and durable "not available" exceptions.** Three
    changes to `apps/web/src/server/repo/data-quality.ts` and the manifest:
-   - *Vendor-aware checks.* Each check gains an `expectedIf` predicate
+   - _Vendor-aware checks._ Each check gains an `expectedIf` predicate
      evaluated against the row and its Vendor: `empty_expenses` and
      `primary_document` are expected only when `orderEvidence =
-     online_account` (or `null`, which should nag once); a `receipt_only`
+online_account` (or `null`, which should nag once); a `receipt_only`
      vendor expects a document but not lines; `not_expected` expects
      neither. Unexpected checks do not count.
-   - *Exceptable `empty_expenses`, input-scoped fingerprints.* Add
+   - _Exceptable `empty_expenses`, input-scoped fingerprints._ Add
      `empty_expenses` to `EXCEPTION_REASONS` with `history_expired` and
      `unavailable`; add `history_expired` to `primary_document`. Change the
      fingerprint for **every** check from `<check>:<updatedAt>` to a hash of
@@ -700,7 +700,7 @@ first, as separate small PRs, in numeric order.
      and unrelated edits (project, notes) no longer reopen it. Each check
      declares its `inputsFingerprint` beside its predicate; the
      `domain-rules.md` paragraph on fingerprints is rewritten.
-   - *Score.* Replace the three-valued status with a weighted 0–100 score
+   - _Score._ Replace the three-valued status with a weighted 0–100 score
      per entity (each manifest declaration lists its checks with weights;
      excepted and unexpected checks count as satisfied), keep the status as
      a derived bucket for existing filters, and expose the score on list
@@ -719,6 +719,7 @@ first, as separate small PRs, in numeric order.
    weakest first). Durable "not available" exceptions remain Product/Purchase
    only; generalizing them is tracked as its own todo (docs/todos.md →
    "Requires database changes" → "Generic durable data exceptions").
+
 3. **Google provider in better-auth.** Enable `google` with `linkSocial`,
    offline access, incremental scopes; a settings card to connect/disconnect.
 4. **Job id through AI telemetry.** `jobKind`/`jobId` on `AiRunContext`,
@@ -758,7 +759,7 @@ Not in scope; listed so the design keeps the door open.
   `Purchase.vendorId`; the shopping list and wishlist read it, and the
   enrichment worklist can capture a current price for wishlist items.
 - **Recurring-order detection.** Subscribe & Save and repeat purchases give a
-  consumption *rate* per Product; surfaced only as a shopping-list
+  consumption _rate_ per Product; surfaced only as a shopping-list
   suggestion ("you buy this every 34 days; last was 31 days ago"), never as
   an inventory decrement (tenet 1).
 - **AI cost page.** `AiUsage` grouped by `jobKind`/`jobId` (§10 item 4) gives

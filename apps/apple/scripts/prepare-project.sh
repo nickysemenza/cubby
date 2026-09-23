@@ -6,16 +6,18 @@
 # workspace root.
 set -euo pipefail
 
-# The xcframework + shim come from the Nx cache when the Rust tree is
-# unchanged; a stale committed shim shows up as a dirty path afterwards. In
-# CI, .github/actions/setup-apple-ffi has already restored or built the
-# xcframework for the current fingerprint before this runs, so
-# ensure-apple-ffi.ts's no-arg mode matches the marker inside it and returns
-# without touching Nx (which needs node_modules — see runNxTarget in
-# scripts/rust-fingerprint.ts). If the marker IS stale and node_modules is
-# missing, say so plainly instead of leaving only Nx's generic "cannot
-# resolve nx" error as the diagnostic.
-if ! node scripts/ensure-apple-ffi.ts; then
+# The xcframework + shim come from the Nx cache locally; a stale committed
+# shim shows up as a dirty path afterwards. In native CI, setup-apple-ffi has
+# already verified the artifact. Its fingerprint is authoritative for the job:
+# a second Cargo metadata resolution can differ after the Rust build, while
+# the native job has no node_modules for Nx.
+if [ -n "${CUBBY_FFI_SETUP_FINGERPRINT:-}" ]; then
+  marker="apps/apple/CubbyKit/Frameworks/CubbyFFI.xcframework/.fingerprint"
+  if [ ! -f "$marker" ] || [ "$(cat "$marker")" != "$CUBBY_FFI_SETUP_FINGERPRINT" ]; then
+    echo "CubbyFFI.xcframework does not match setup-apple-ffi's fingerprint" >&2
+    exit 1
+  fi
+elif ! node scripts/ensure-apple-ffi.ts; then
   if [ ! -d node_modules/nx ]; then
     echo "CubbyFFI.xcframework is stale and node_modules is missing; run \`pnpm install --frozen-lockfile\` (or the setup-apple-ffi action) first" >&2
   fi

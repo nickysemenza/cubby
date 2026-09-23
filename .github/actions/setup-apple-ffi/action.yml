@@ -64,6 +64,7 @@ runs:
         set -euo pipefail
         fingerprint="$(node scripts/ensure-apple-ffi.ts --fingerprint)"
         echo "key=apple-ffi-output-v1-${RUNNER_OS}-${{ inputs.targets }}-${{ inputs.profile }}-${fingerprint}" >> "$GITHUB_OUTPUT"
+        echo "CUBBY_FFI_SETUP_FINGERPRINT=$fingerprint" >> "$GITHUB_ENV"
 
     - name: Restore target-specific Apple FFI output
       id: ffi-cache

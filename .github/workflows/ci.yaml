@@ -22,20 +22,25 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
-      apple: ${{ github.event_name != 'pull_request' || steps.filter.outputs.apple == 'true' }}
+      validation: ${{ steps.classify.outputs.validation }}
+      web: ${{ steps.classify.outputs.web }}
+      auxiliary: ${{ steps.classify.outputs.auxiliary }}
+      rust: ${{ steps.classify.outputs.rust }}
+      apple: ${{ steps.classify.outputs.apple }}
+      docs: ${{ steps.classify.outputs.docs }}
+      format: ${{ steps.classify.outputs.format }}
+      generator: ${{ steps.classify.outputs.generator }}
     steps:
-      # Only pull requests have outward text to check or a diff to filter
-      # on; a push or workflow_dispatch skips every step here.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-        if: github.event_name == 'pull_request'
         with:
+          fetch-depth: 0
           sparse-checkout: |
             .nvmrc
             scripts/check-outward-text.ts
+            scripts/ci-change-scope.ts
             packages/shared/src/generated/shortcode-registry.gen.ts
           sparse-checkout-cone-mode: false
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
-        if: github.event_name == 'pull_request'
         with:
           node-version-file: .nvmrc
       # The commit-msg hook gates commit messages; the PR title and body are
@@ -48,34 +53,24 @@ jobs:
         run: |
           gh pr view "$PR" --repo "$GITHUB_REPOSITORY" --json title,body \
             --jq '.title + "\n" + .body' | node scripts/check-outward-text.ts --stdin
-      # The Apple lane is path-filtered because it's by far the slowest
-      # (macOS runners, xcodebuild) — everything else always runs. On a push
-      # or workflow_dispatch (no PR to diff against) the Apple lane always
-      # runs too. `.github/` is narrowed to the files those jobs actually
-      # use, rather than the whole directory, so unrelated workflow/action
-      # edits don't force a macOS run. paths-filter reads the PR's file list
-      # from the API, so the sparse checkout above is enough.
       - id: filter
-        if: github.event_name == 'pull_request'
+        if: github.event_name != 'workflow_dispatch'
         uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
         with:
+          base: ${{ github.event_name == 'push' && 'main' || '' }}
+          list-files: json
           filters: |
-            apple:
-              - 'apps/apple/**'
-              - 'cubby-ffi/**'
-              - 'recipebridge/**'
-              - 'rust-toolchain.toml'
-              - 'scripts/ensure-apple-ffi.ts'
-              - 'scripts/rust-fingerprint.ts'
-              - 'scripts/apple-check.sh'
-              - 'scripts/stamp-source-mtimes.ts'
-              - 'apps/web/src/lib/generated/http-openapi.gen.json'
-              - '.github/workflows/ci.yaml'
-              - '.github/actions/setup-apple-ffi/**'
-              - '.github/actions/setup-apple-tools/**'
+            changed:
+              - '**'
+      - name: Classify affected checks
+        id: classify
+        env:
+          CUBBY_CHANGED_FILES: ${{ steps.filter.outputs.changed_files || '[]' }}
+        run: node scripts/ci-change-scope.ts
 
   validation:
     name: Validation
+    needs: scope
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
@@ -84,19 +79,45 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: ./.github/actions/setup-node-with-deps
+        if: needs.scope.outputs.validation == 'true' || needs.scope.outputs.generator == 'true'
         with:
-          wasm: "restore"
+          wasm: ${{ needs.scope.outputs.validation == 'true' && 'restore' || 'false' }}
+      - uses: ./.github/actions/setup-node-with-deps
+        if: needs.scope.outputs.validation != 'true' && needs.scope.outputs.generator != 'true' && needs.scope.outputs.format == 'true'
+        with:
+          wasm: "false"
+          workspace-filter: "."
       # The Nx `wasm` target's runtime input (ensure-wasm.ts --fingerprint)
       # runs `wasm-pack --version`, which a restored package does not provide.
       - name: Install wasm-pack for validation
+        if: needs.scope.outputs.validation == 'true'
         uses: taiki-e/install-action@2ca9b94c269419b7b0c711c09d0b21c4e1d51145 # v2
         with:
           tool: wasm-pack
-      - run: pnpm check:all
-      - run: pnpm dedupe:check
+      - if: needs.scope.outputs.validation == 'true'
+        run: pnpm check:all
+      - if: needs.scope.outputs.validation == 'true'
+        run: pnpm dedupe:check
+      - if: needs.scope.outputs.generator == 'true' && needs.scope.outputs.validation != 'true'
+        run: pnpm generate:check
+      - if: needs.scope.outputs.format == 'true' && needs.scope.outputs.validation != 'true'
+        run: pnpm exec oxfmt --check .
+      - name: Check relative Markdown links
+        if: needs.scope.outputs.docs == 'true'
+        uses: lycheeverse/lychee-action@e7477775783ea5526144ba13e8db5eec57747ce8 # v2.9.0
+        with:
+          args: >-
+            --offline
+            --no-progress
+            --exclude-path '(^|/)node_modules/'
+            --root-dir "${{ github.workspace }}"
+            './**/*.md'
+            './**/*.mdx'
 
   test-aux:
     name: Auxiliary tests and builds
+    needs: scope
+    if: needs.scope.outputs.auxiliary == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -111,6 +132,8 @@ jobs:
 
   test-rust:
     name: Rust - recipebridge
+    needs: scope
+    if: needs.scope.outputs.rust == 'true'
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 25
     steps:
@@ -125,6 +148,8 @@ jobs:
 
   test-web:
     name: Tests - web (${{ matrix.tier }})
+    needs: scope
+    if: needs.scope.outputs.web == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
@@ -171,6 +196,8 @@ jobs:
 
   test-postgres:
     name: PostgreSQL integration tests
+    needs: scope
+    if: needs.scope.outputs.web == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     services:
@@ -214,6 +241,8 @@ jobs:
 
   test-e2e:
     name: E2E tests (${{ matrix.lane }})
+    needs: scope
+    if: needs.scope.outputs.web == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     strategy:
@@ -384,37 +413,29 @@ jobs:
           path: apps/web/playwright-report/
           retention-days: 1
 
-  # One stable name for "every chromium shard passed", so the shard count can
-  # change without renaming a required check: the main ruleset requires this
-  # job, not the per-shard lanes (switched 2026-09-23). `needs.test-e2e.result`
-  # folds the webkit lane in too, so read the chromium lanes' own conclusions.
-  test-e2e-chromium:
-    name: E2E tests (chromium)
-    needs: test-e2e
+  # Matrix jobs are omitted entirely when web is unaffected. This stable
+  # required check verifies their combined result whenever they run.
+  web-checks:
+    name: Web checks
+    needs: [scope, test-web, test-postgres, test-e2e]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Require every chromium shard to pass
-        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
-        with:
-          script: |
-            const jobs = await github.paginate(
-              github.rest.actions.listJobsForWorkflowRun,
-              { ...context.repo, run_id: context.runId, per_page: 100 },
-            );
-            // Matches the matrix display name "E2E tests (chromium k/n)".
-            const shards = jobs.filter(({ name }) =>
-              /^E2E tests \(chromium \d+\/\d+\)$/.test(name),
-            );
-            for (const { name, conclusion } of shards) {
-              core.info(`${name}: ${conclusion}`);
-            }
-            if (shards.length === 0) {
-              core.setFailed("No chromium shard ran");
-            } else if (shards.some(({ conclusion }) => conclusion !== "success")) {
-              core.setFailed("A chromium shard did not succeed");
-            }
+      - name: Require affected web lanes to pass
+        env:
+          SCOPE_RESULT: ${{ needs.scope.result }}
+          WEB: ${{ needs.scope.outputs.web }}
+          WEB_RESULT: ${{ needs.test-web.result }}
+          POSTGRES_RESULT: ${{ needs.test-postgres.result }}
+          E2E_RESULT: ${{ needs.test-e2e.result }}
+        run: |
+          test "$SCOPE_RESULT" = success || exit 1
+          if [ "$WEB" = true ]; then
+            test "$WEB_RESULT" = success || exit 1
+            test "$POSTGRES_RESULT" = success || exit 1
+            test "$E2E_RESULT" = success || exit 1
+          fi
 
   # Host `swift test` for CubbyKit's package tests; not folded into test-apple
   # below. Measured 2026-09-21: running these on the iOS Simulator inside the
@@ -561,7 +582,8 @@ jobs:
   # is no PR here to filter anyway (push-only). Not a required check.
   warm-apple-ffi:
     name: Warm Apple FFI cache (${{ matrix.targets }})
-    if: github.event_name == 'push'
+    needs: scope
+    if: github.event_name == 'push' && needs.scope.outputs.apple == 'true'
     runs-on: macos-26
     timeout-minutes: 30
     strategy:
@@ -574,4 +596,3 @@ jobs:
         with:
           targets: ${{ matrix.targets }}
           profile: dist
-

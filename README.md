@@ -6,7 +6,7 @@ Recipe database and home inventory database, tied together. A personal pantry-an
 
 ## 🎯 Why Cubby
 
-Cubby is a personal system — built for my own household, not a product for strangers. Its north-star is the **recipe ↔ inventory tie**: knowing what I can actually cook from what I physically own, where it lives, and what it costs. Most tools do recipes *or* a pantry list; Cubby joins the two, so *"what can I make tonight, and what would it cost?"* becomes a query instead of a guess.
+Cubby is a personal system — built for my own household, not a product for strangers. Its north-star is the **recipe ↔ inventory tie**: knowing what I can actually cook from what I physically own, where it lives, and what it costs. Most tools do recipes _or_ a pantry list; Cubby joins the two, so _"what can I make tonight, and what would it cost?"_ becomes a query instead of a guess.
 
 It's three things at once: an earnest daily-use home utility, a playground for a modern stack (TanStack Start, Cloudflare Workers, Rust/WASM, agentic AI), and a place to hold a high engineering bar on something I actually use.
 
@@ -21,15 +21,16 @@ It's three things at once: an earnest daily-use home utility, a playground for a
 
 Standing decisions that keep scope honest. A backlog item that contradicts one of these is rejected, not deferred.
 
-1. **Inventory is a ballpark, not a ledger.** For kitchen ingredients especially, a count is a stale-tolerant estimate — enough to answer *"do I have enough flour?"*, never precise enough to drive automatic math. Truth is restored by a deliberate [recount](docs/inventory-audit.md), never inferred from activity. **Nothing decrements inventory as a side effect** — there is no cook-a-recipe → deduct-the-ingredients flow, and there won't be. Consumption is always an explicit human act.
+1. **Inventory is a ballpark, not a ledger.** For kitchen ingredients especially, a count is a stale-tolerant estimate — enough to answer _"do I have enough flour?"_, never precise enough to drive automatic math. Truth is restored by a deliberate [recount](docs/inventory-audit.md), never inferred from activity. **Nothing decrements inventory as a side effect** — there is no cook-a-recipe → deduct-the-ingredients flow, and there won't be. Consumption is always an explicit human act.
 2. **`fdc_id` belongs to the product, not the ingredient.** A USDA link describes a specific purchasable thing, not the abstract "flour". Ingredient nutrition resolves through the product (`ingredient → product → fdc_id`) — always one hop away, on purpose. Don't add a per-ingredient USDA column to shorten the hop.
 3. **Rare and interactive work stays interactive.** Cookbook/EPUB import runs a few times a year with a human watching; it needs no queue, retries, or DLQ. The background queue is for work that is frequent, unattended, or slow enough to break a request (embeddings, recipe-total cascades, location AI) — not for making rare work look industrial. Derived data that is cheap to compute is computed at the source (in the write transaction or on read), never deferred.
 4. **One household, trusted users.** Cubby serves a tiny, mutually trusted household user set, not isolated tenants. Authenticated household users may see household-wide operational data, including user and client attribution in MCP analytics. The native apps are distributed to this household through internal TestFlight only; a public App Store release is not planned. Every trade-off resolves toward the household's taste: no multi-user coordination, no restore/undo, no reservations or locking. Speed and recoverability beat correctness ceremony.
-5. **All money lives on `Expense`.** Spend is `SUM(expense.cost)`, always — the `Vendor ──< Purchase ──< Expense` header carries *identity* (who, which order, which date) and at most a `statedTotal` that is **never summed into spend**. `statedTotal` is a soft reconciliation cue whose mismatch is frequently correct, so nothing may reject a write over it or back-compute a cost from it. Don't propose a second place money is stored or a rollup that adds header totals to line totals.
+5. **All money lives on `Expense`.** Spend is `SUM(expense.cost)`, always — the `Vendor ──< Purchase ──< Expense` header carries _identity_ (who, which order, which date) and at most a `statedTotal` that is **never summed into spend**. `statedTotal` is a soft reconciliation cue whose mismatch is frequently correct, so nothing may reject a write over it or back-compute a cost from it. Don't propose a second place money is stored or a rollup that adds header totals to line totals.
 
 ## ✨ Capabilities
 
 **Inventory**
+
 - Add/edit/move inventory items across hierarchical locations
 - Barcode scan for quick capture (mobile-optimized)
 - Bulk edit and move
@@ -37,12 +38,14 @@ Standing decisions that keep scope honest. A backlog item that contradicts one o
 - Phone-first recount/reconcile pass — the deliberate act that refreshes the ballpark (see [docs/inventory-audit.md](docs/inventory-audit.md))
 
 **Products**
+
 - Specific items (UPC, manufacturer, price, nutrition) or `misc:` placeholders
 - Multi-unit mappings (volume ↔ weight ↔ price) for cross-unit conversions
 - Optional link to an ingredient and to a USDA food entry
 - Merge duplicate Products into one survivor — stock, ledger lines, external identifiers, images, unit mappings, tasks, project uses, and wishlist candidacies move onto the keeper, with same-location stock summed rather than dropped
 
 **Recipes**
+
 - Multi-section recipes with nested ingredients
 - Ingredients can be other recipes (composition)
 - Side-by-side recipe comparison
@@ -52,37 +55,44 @@ Standing decisions that keep scope honest. A backlog item that contradicts one o
 - Client-side scaling (multiplier / target weight / anchor ingredient)
 
 **Cookbooks**
+
 - Import a cookbook from an EPUB — chapters chunked and assembled into recipes (client-side WASM extraction, server-side LLM proxy)
 - Recipes keep a `recipeSource` pointer back to the cookbook they came from
 
 **Meals**
+
 - Plan recipes on shared month and focused week calendars (plus a table view), scaled per meal
 - Classify each meal by slot (breakfast → dessert, ordering the calendar day) and by kind — a `eating out` / `takeout` meal is a recipe-less placeholder on purpose, and only `cooked` meals feed the shopping list. Calendar chips carry the slot as their glyph; non-cooked meals read as dashed
 - Shopping list — aggregated need vs. on-hand inventory, with a per-meal breakdown, estimated trip cost, and shop-friendly units (display-only; see [Tenets](#tenets))
-- Suggestions — *"what can I make tonight?"* from recorded stock plus explicitly marked **Usually on hand** ingredients. These ingredient-level staples mean “assume I have enough”; aliases share the setting, brands do not own it, and inventory is never fabricated or decremented.
+- Suggestions — _"what can I make tonight?"_ from recorded stock plus explicitly marked **Usually on hand** ingredients. These ingredient-level staples mean “assume I have enough”; aliases share the setting, brands do not own it, and inventory is never fabricated or decremented.
 - Shopping shows staples and their required quantities in a separate **Usually on hand** section, including in copy/print, and excludes them from the buy list and estimated total. Missing quantities and blocked sub-recipes remain visible.
 
 **Planning calendar**
+
 - Month overview and Sunday–Saturday focus views for meals, due tasks, expenses, and multi-day project spans — a ruled day-by-day agenda on phones, where a seven-column grid can't be read
 - Source and project-kind filters, date drawers with daily totals, and quick-add flows
 - Drag-to-reschedule for meals, tasks, and planned expenses; actual expenses and project spans stay read-only
 - Published iCalendar feeds (`webcal://…/api/calendar/<token>/{all,meals,tasks}.ics`) for meals and open task due dates, subscribable from macOS/iOS Calendar; read-only, and the URL's token is the only credential
 
 **USDA**
+
 - Full USDA FoodData Central database loaded into a sibling service
 - Browse, search, and link products by barcode or FDC id
 
 **Locations**
+
 - Tree structure (house → room → shelf → bin)
 - Drag-drop arrange surface (tree + Miller-column board) for reparenting locations and moving items
 - Interactive graph, treemap, sunburst views
 - Printable QR-code shortcode labels
 
 **Images**
+
 - S3/R2-backed image upload with presigned URLs
 - Linked to products, locations, recipes, projects, or a purchase (its invoice/receipt)
 
 **Project Tracker**
+
 - Household projects, tasks, and expenses (the spend ledger) — migrated from Notion into first-class entities
 - Vendor roster and per-transaction `Purchase` records: order id, purchase date, stated total, and invoice PDF, with split/link/merge operations over the Expenses
 - Typed Expense receipt roles (`principal`, tax, shipping, discount, fee, tip, other adjustment) that keep all money in `SUM(Expense.cost)` while excluding ancillary rows from merchandise/category analytics
@@ -93,28 +103,33 @@ Standing decisions that keep scope honest. A backlog item that contradicts one o
 - First-class inline links/hovercards, global + semantic search, full MCP CRUD
 
 **Financial accounts & transactions**
+
 - `FinancialAccount ──< FinancialTransaction ──< FinancialTransactionAllocation >── Purchase` — a settlement evidence layer separate from spend: statement activity (pending charges, split tender, installments, refunds). A transaction is allocated across the Purchases it settled, so one real card line can settle several orders; allocations sum to the transaction amount and never enter spend
 - Never changes spend — `Expense.cost` remains the sole spend source; reconciliation compares linked non-void transactions against live Expense lines as `unknown` / `pending` / `match` / `mismatch`
 - Client-parsed Monarch statement preview → selective creation, never a CSV upload path
 
 **Wishlist**
+
 - A simple wanted-items list (name, notes, optional price, acquired toggle) for tracking things not yet owned, independent of inventory or projects
 - Optional candidate products per wish, each with its own cover image and price; the list shows a merged cover thumbnail and a sortable price range, and expands a wish into its candidates' own rows
 
 **Analytics**
+
 - Donut, treemap, sunburst, and network visualizations across products, inventory, and ingredients
 - Category audits + data-problem detection
 
 **Auth & Audit**
+
 - Better-Auth sign-up/login with API keys
 - Activity log across all entities
 - Soft delete on all major entities (no restore — by design)
 
 **Mobile (PWA, iOS)**
+
 - Installable PWA with splash screens
 - Touch-friendly cards and immersive barcode scanner
 - App-shell offline fallback with precached styles, fonts, and recipe WASM
-- *A true offline mutation queue is deliberately deferred — the app shell works offline, writes need the network*
+- _A true offline mutation queue is deliberately deferred — the app shell works offline, writes need the network_
 
 ## 🧱 Tech Stack
 
@@ -136,28 +151,28 @@ and drift-check procedure live in [docs/infrastructure.md](docs/infrastructure.m
 
 ### Apps (deployed)
 
-| Path | Package | Role | Runtime | Deploys to |
-|---|---|---|---|---|
-| [apps/web](apps/web) | `@cubby/web` | Main app — TanStack Start + Entity Kernel + Drizzle | Cloudflare Workers | Worker `cubby` · DB via **Hyperdrive** → Postgres |
-| [apps/upc-lookup](apps/upc-lookup) | `@cubby/upc-lookup` | UPC barcode lookup API — Hono + D1 | Cloudflare Workers | Worker `upc-lookup` · <https://upc-lookup.nicky.workers.dev> |
-| [apps/usda-api](apps/usda-api) | `@cubby/usda-api` | USDA FoodData Central API — Hono + D1/R2 bundles | Cloudflare Workers | Worker `usda-api` · <https://usda-api.nicky.workers.dev> · D1 search index + R2 NDJSON payload bundles |
-| [apps/apple](apps/apple) | (no package.json) | Native iOS + macOS app, `CubbyKit` Swift package, `cubby` CLI harness | iOS 26 / macOS 26 (SwiftUI, Swift 6 strict concurrency) | Internal TestFlight for the household; local Xcode installs for development |
+| Path                               | Package             | Role                                                                  | Runtime                                                 | Deploys to                                                                                             |
+| ---------------------------------- | ------------------- | --------------------------------------------------------------------- | ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| [apps/web](apps/web)               | `@cubby/web`        | Main app — TanStack Start + Entity Kernel + Drizzle                   | Cloudflare Workers                                      | Worker `cubby` · DB via **Hyperdrive** → Postgres                                                      |
+| [apps/upc-lookup](apps/upc-lookup) | `@cubby/upc-lookup` | UPC barcode lookup API — Hono + D1                                    | Cloudflare Workers                                      | Worker `upc-lookup` · <https://upc-lookup.nicky.workers.dev>                                           |
+| [apps/usda-api](apps/usda-api)     | `@cubby/usda-api`   | USDA FoodData Central API — Hono + D1/R2 bundles                      | Cloudflare Workers                                      | Worker `usda-api` · <https://usda-api.nicky.workers.dev> · D1 search index + R2 NDJSON payload bundles |
+| [apps/apple](apps/apple)           | (no package.json)   | Native iOS + macOS app, `CubbyKit` Swift package, `cubby` CLI harness | iOS 26 / macOS 26 (SwiftUI, Swift 6 strict concurrency) | Internal TestFlight for the household; local Xcode installs for development                            |
 
 ### Packages (internal, not deployed)
 
-| Path | Package | Role | Consumed by |
-|---|---|---|---|
-| [packages/wasm](packages/wasm) | `@cubby/recipebridge` | WASM bindings — built from `recipebridge/` Rust source via `pnpm run wasm` | `web` |
-| [packages/upc-contract](packages/upc-contract) | `@cubby/upc-contract` | Shared UPC request/response transport contract | `web`, `upc-lookup` |
-| [packages/usda-contract](packages/usda-contract) | `@cubby/usda-contract` | ts-rest endpoint contract for the USDA API | `web`, `usda-api` |
-| [packages/usda-schemas](packages/usda-schemas) | `@cubby/usda-schemas` | Shared Zod schemas for USDA entities | `web`, `usda-api` |
-| [packages/schemas](packages/schemas) | `@cubby/schemas` | Cross-app Zod schemas | `web` |
-| [packages/shared](packages/shared) | `@cubby/shared` | Shared utilities, including guarded external fetches | `web`, `upc-lookup` |
-| [packages/worker-tracing](packages/worker-tracing) | `@cubby/worker-tracing` | Cloudflare Worker tracing/Sentry bootstrap | `upc-lookup`, `usda-api` |
-| [packages/design-tokens](packages/design-tokens) | `@cubby/design-tokens` | Shared brand CSS (palette, type stacks) | `web`, `mcp-apps` |
-| [apps/mcp-apps](apps/mcp-apps) | `@cubby/mcp-apps` | Interactive MCP-hosted UIs — its own build target, inlined into `web`'s server rather than deployed on its own; see [MCP Apps](#mcp-apps-interactive-uis-in-the-conversation) | `web` (inlined at build) |
-| [recipebridge/](recipebridge) | (Rust source) | Source for the ingredient-parser WASM shim | Built into `packages/wasm` |
-| [cubby-ffi/](cubby-ffi) | (Rust source) | UniFFI boundary exposing `recipebridge`'s ingredient parser to Swift (same Rust source as the WASM build) | Built into `apps/apple`'s `CubbyFFI.xcframework` via `apps/apple/scripts/build-rust.sh` |
+| Path                                               | Package                 | Role                                                                                                                                                                          | Consumed by                                                                             |
+| -------------------------------------------------- | ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| [packages/wasm](packages/wasm)                     | `@cubby/recipebridge`   | WASM bindings — built from `recipebridge/` Rust source via `pnpm run wasm`                                                                                                    | `web`                                                                                   |
+| [packages/upc-contract](packages/upc-contract)     | `@cubby/upc-contract`   | Shared UPC request/response transport contract                                                                                                                                | `web`, `upc-lookup`                                                                     |
+| [packages/usda-contract](packages/usda-contract)   | `@cubby/usda-contract`  | ts-rest endpoint contract for the USDA API                                                                                                                                    | `web`, `usda-api`                                                                       |
+| [packages/usda-schemas](packages/usda-schemas)     | `@cubby/usda-schemas`   | Shared Zod schemas for USDA entities                                                                                                                                          | `web`, `usda-api`                                                                       |
+| [packages/schemas](packages/schemas)               | `@cubby/schemas`        | Cross-app Zod schemas                                                                                                                                                         | `web`                                                                                   |
+| [packages/shared](packages/shared)                 | `@cubby/shared`         | Shared utilities, including guarded external fetches                                                                                                                          | `web`, `upc-lookup`                                                                     |
+| [packages/worker-tracing](packages/worker-tracing) | `@cubby/worker-tracing` | Cloudflare Worker tracing/Sentry bootstrap                                                                                                                                    | `upc-lookup`, `usda-api`                                                                |
+| [packages/design-tokens](packages/design-tokens)   | `@cubby/design-tokens`  | Shared brand CSS (palette, type stacks)                                                                                                                                       | `web`, `mcp-apps`                                                                       |
+| [apps/mcp-apps](apps/mcp-apps)                     | `@cubby/mcp-apps`       | Interactive MCP-hosted UIs — its own build target, inlined into `web`'s server rather than deployed on its own; see [MCP Apps](#mcp-apps-interactive-uis-in-the-conversation) | `web` (inlined at build)                                                                |
+| [recipebridge/](recipebridge)                      | (Rust source)           | Source for the ingredient-parser WASM shim                                                                                                                                    | Built into `packages/wasm`                                                              |
+| [cubby-ffi/](cubby-ffi)                            | (Rust source)           | UniFFI boundary exposing `recipebridge`'s ingredient parser to Swift (same Rust source as the WASM build)                                                                     | Built into `apps/apple`'s `CubbyFFI.xcframework` via `apps/apple/scripts/build-rust.sh` |
 
 ## 🏗️ Architecture
 
@@ -202,19 +217,19 @@ public id — what appears in URLs, on printed QR labels, and as the `id` field 
 MCP. Codes are non-null, immutable, never reused (uniqueness spans soft-deleted
 rows, so a retired code is a permanent tombstone), and case-insensitive on input.
 
-| Entity | Prefix | | Entity | Prefix | | Entity | Prefix |
-|---|---|---|---|---|---|---|---|
-| cookbook | `CKB-` | | inventory | `INV-` | | purchase | `PUR-` |
-| expense | `EXP-` | | location | `LOC-` | | recipe | `RCP-` |
-| ingredient | `ING-` | | meal | `MEL-` | | task | `TSK-` |
-| product | `PRD-` | | project | `PRJ-` | | vendor | `VEN-` |
-| financial account | `FAC-` | | financial transaction | `FTX-` | | image | `IMG-` |
-| wishlist | `WSH-` | | — | — | | — | — |
+| Entity            | Prefix |     | Entity                | Prefix |     | Entity   | Prefix |
+| ----------------- | ------ | --- | --------------------- | ------ | --- | -------- | ------ |
+| cookbook          | `CKB-` |     | inventory             | `INV-` |     | purchase | `PUR-` |
+| expense           | `EXP-` |     | location              | `LOC-` |     | recipe   | `RCP-` |
+| ingredient        | `ING-` |     | meal                  | `MEL-` |     | task     | `TSK-` |
+| product           | `PRD-` |     | project               | `PRJ-` |     | vendor   | `VEN-` |
+| financial account | `FAC-` |     | financial transaction | `FTX-` |     | image    | `IMG-` |
+| wishlist          | `WSH-` |     | —                     | —      |     | —        | —      |
 
 `Image` carries a code like every other local-table entity. It was the last
 holdout, addressed by raw uuid — which made it a permanent carve-out in every
 shape that could name an entity, so it was given a prefix rather than kept as an
-exception. The remaining uuid exceptions are all *sub-entity* ids (the
+exception. The remaining uuid exceptions are all _sub-entity_ ids (the
 `mealRecipe` id inside a meal's `recipes[]`, recipe section and section-line ids,
 unit-mapping ids); none of them are manifest entities.
 
@@ -267,15 +282,15 @@ App: <http://localhost:3000> · Jaeger: <http://localhost:16686>
 
 Required keys (see [apps/web/.env.example](apps/web/.env.example) for the full file):
 
-| Key | Purpose |
-|---|---|
-| `BETTER_AUTH_SECRET` | Auth signing secret |
-| `DATABASE_URL` | Application PostgreSQL connection; separate from disposable test databases |
-| `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` / `R2_ENDPOINT` / `R2_BUCKET_NAME` / `R2_PUBLIC_URL` | Image storage |
-| `USDA_API_URL` | USDA service URL (defaults to `http://localhost:8787/` for local Wrangler dev) |
-| `UPC_LOOKUP_API_URL` / `UPC_LOOKUP_API_KEY` | UPC lookup worker |
-| `NOTION_API_KEY` | *(optional)* Notion recipes import |
-| `OTEL_EXPORTER_OTLP_ENDPOINT` | *(optional)* OTLP traces → Jaeger (`pnpm trace`; defaults to localhost:4318) |
+| Key                                                                                              | Purpose                                                                        |
+| ------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------ |
+| `BETTER_AUTH_SECRET`                                                                             | Auth signing secret                                                            |
+| `DATABASE_URL`                                                                                   | Application PostgreSQL connection; separate from disposable test databases     |
+| `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` / `R2_ENDPOINT` / `R2_BUCKET_NAME` / `R2_PUBLIC_URL` | Image storage                                                                  |
+| `USDA_API_URL`                                                                                   | USDA service URL (defaults to `http://localhost:8787/` for local Wrangler dev) |
+| `UPC_LOOKUP_API_URL` / `UPC_LOOKUP_API_KEY`                                                      | UPC lookup worker                                                              |
+| `NOTION_API_KEY`                                                                                 | _(optional)_ Notion recipes import                                             |
+| `OTEL_EXPORTER_OTLP_ENDPOINT`                                                                    | _(optional)_ OTLP traces → Jaeger (`pnpm trace`; defaults to localhost:4318)   |
 
 ### Local dev database (optional)
 
@@ -406,7 +421,7 @@ them under `$CODEX_HOME/worktrees`. A few things to know:
   `CUBBY_E2E_WORKERS=1|2|3|4` overrides its local macOS default of 2. CI and Linux
   default to one browser worker. Multiple pairs share the host's finite CPU and memory.
 - **⚠ Shared prod DB:** every worktree's `DATABASE_URL` is the **same prod Neon**
-  instance (dev DB *is* prod). `db:push` and data changes from one worktree are
+  instance (dev DB _is_ prod). `db:push` and data changes from one worktree are
   visible everywhere and hit prod — coordinate schema changes across parallel work.
 - Editing `recipebridge/` Rust source — or the patched sibling ingredient-parser
   checkout — is picked up automatically on the next `pnpm dev` (see "WASM never
@@ -415,33 +430,33 @@ them under `$CODEX_HOME/worktrees`. A few things to know:
 
 ## ⚡ Common Commands
 
-| Command | What it does |
-|---|---|
-| `pnpm run dev` | Start the web, UPC, and USDA local services |
-| `pnpm run build` | Build all three production Worker bundles |
-| `pnpm run check` | Fast full-tree quality, TypeScript, entity freshness, Knip, and high-risk guards |
-| `pnpm run check:all` | `check` plus Worker/OpenAPI, script-test, and security validation |
-| `pnpm run dedupe:check` | Dependency deduplication; CI runs it on every run |
-| `pnpm run typecheck` | Recursive package typecheck with `tsc` (TypeScript 7, native) |
-| `pnpm run lint` | Full-tree Oxlint |
-| `pnpm run lint:fix` | Full-tree Oxlint auto-fix |
-| `pnpm run format:check` | Full-tree Oxfmt check |
-| `pnpm run format` | Full-tree Oxfmt write |
-| `pnpm run test` | All fast unit, UI, contract, and auxiliary-package tests |
-| `pnpm run test:postgres` | Authoritative PostgreSQL contracts (disposable Apple containers on macOS) |
-| `pnpm run test:e2e` | PostgreSQL-backed Playwright tests (disposable Apple containers on macOS) |
-| `pnpm run test:all` | Fast tests, then PostgreSQL and Playwright concurrently |
-| `pnpm run test:local` | Alias of `test:all` |
-| `pnpm run test:services:down` | Remove warm `CUBBY_TEST_SERVICES=warm` containers |
-| `pnpm --filter @cubby/web run test:e2e:watch` | Warm services + `vite build --watch` + Playwright `--ui`, local-only |
-| `pnpm run db:dev:up` / `:push` / `:seed` / `:down` | Persistent local dev PostgreSQL + synthetic corpus (see above) |
-| `pnpm run dev:local` | `vite dev` against the local dev database instead of prod |
-| `pnpm --filter @cubby/web run db:push` | Push the web Drizzle schema to the configured Postgres DB |
-| `pnpm --filter @cubby/web run build:cf` | Build only the main web Worker |
-| `pnpm --filter @cubby/web run preview:cf` | Run the Workers build locally |
-| `pnpm --filter @cubby/web run deploy:cf` | Deploy to Cloudflare Workers |
-| `pnpm run deploy:all` | Deploy all four production Workers in dependency order |
-| `pnpm run wasm` | Rebuild `@cubby/recipebridge` from Rust source |
+| Command                                            | What it does                                                                     |
+| -------------------------------------------------- | -------------------------------------------------------------------------------- |
+| `pnpm run dev`                                     | Start the web, UPC, and USDA local services                                      |
+| `pnpm run build`                                   | Build all three production Worker bundles                                        |
+| `pnpm run check`                                   | Fast full-tree quality, TypeScript, entity freshness, Knip, and high-risk guards |
+| `pnpm run check:all`                               | `check` plus Worker/OpenAPI, script-test, and security validation                |
+| `pnpm run dedupe:check`                            | Dependency deduplication; CI runs it for code validation                         |
+| `pnpm run typecheck`                               | Recursive package typecheck with `tsc` (TypeScript 7, native)                    |
+| `pnpm run lint`                                    | Full-tree Oxlint                                                                 |
+| `pnpm run lint:fix`                                | Full-tree Oxlint auto-fix                                                        |
+| `pnpm run format:check`                            | Full-tree Oxfmt check                                                            |
+| `pnpm run format`                                  | Full-tree Oxfmt write                                                            |
+| `pnpm run test`                                    | All fast unit, UI, contract, and auxiliary-package tests                         |
+| `pnpm run test:postgres`                           | Authoritative PostgreSQL contracts (disposable Apple containers on macOS)        |
+| `pnpm run test:e2e`                                | PostgreSQL-backed Playwright tests (disposable Apple containers on macOS)        |
+| `pnpm run test:all`                                | Fast tests, then PostgreSQL and Playwright concurrently                          |
+| `pnpm run test:local`                              | Alias of `test:all`                                                              |
+| `pnpm run test:services:down`                      | Remove warm `CUBBY_TEST_SERVICES=warm` containers                                |
+| `pnpm --filter @cubby/web run test:e2e:watch`      | Warm services + `vite build --watch` + Playwright `--ui`, local-only             |
+| `pnpm run db:dev:up` / `:push` / `:seed` / `:down` | Persistent local dev PostgreSQL + synthetic corpus (see above)                   |
+| `pnpm run dev:local`                               | `vite dev` against the local dev database instead of prod                        |
+| `pnpm --filter @cubby/web run db:push`             | Push the web Drizzle schema to the configured Postgres DB                        |
+| `pnpm --filter @cubby/web run build:cf`            | Build only the main web Worker                                                   |
+| `pnpm --filter @cubby/web run preview:cf`          | Run the Workers build locally                                                    |
+| `pnpm --filter @cubby/web run deploy:cf`           | Deploy to Cloudflare Workers                                                     |
+| `pnpm run deploy:all`                              | Deploy all four production Workers in dependency order                           |
+| `pnpm run wasm`                                    | Rebuild `@cubby/recipebridge` from Rust source                                   |
 
 See [docs/ci.md](docs/ci.md) for CI scoping, artifact provenance, scheduled
 coverage, deployment behavior, and the measured optimizations that should not
@@ -460,23 +475,23 @@ In dev, `await __jsProfile(5000)` in the browser console captures a CPU flame su
 
 ## 🧪 Testing
 
-| Suffix | Purpose | Runner |
-|---|---|---|
-| `*.unit.test.ts` | Unit tests | Vitest |
-| `*.integration.test.ts` | Authoritative PostgreSQL contracts | Vitest |
-| `*.spec.ts` | E2E tests | Playwright |
+| Suffix                  | Purpose                            | Runner     |
+| ----------------------- | ---------------------------------- | ---------- |
+| `*.unit.test.ts`        | Unit tests                         | Vitest     |
+| `*.integration.test.ts` | Authoritative PostgreSQL contracts | Vitest     |
+| `*.spec.ts`             | E2E tests                          | Playwright |
 
 Local and CI E2E use isolated IntegreSQL PostgreSQL clones. See `e2e-helpers.ts`
 for the shared browser fixtures.
 
 ### File Naming Conventions
 
-| Pattern | Example | Used For |
-|---|---|---|
-| `*.service.ts` | `product.service.ts` | Service layer (enrichment) |
-| `*-helpers.ts` | `database-helpers.ts` | Utility helpers |
-| `*-utils.ts` | `location-utils.ts` | Utility functions |
-| `types.ts` / `internal-types.ts` | `repo/product/types.ts` | Local type definitions |
+| Pattern                          | Example                 | Used For                   |
+| -------------------------------- | ----------------------- | -------------------------- |
+| `*.service.ts`                   | `product.service.ts`    | Service layer (enrichment) |
+| `*-helpers.ts`                   | `database-helpers.ts`   | Utility helpers            |
+| `*-utils.ts`                     | `location-utils.ts`     | Utility functions          |
+| `types.ts` / `internal-types.ts` | `repo/product/types.ts` | Local type definitions     |
 
 ## 🚀 Deployment — `apps/web` on Cloudflare Workers
 
@@ -500,13 +515,13 @@ SSR keeps Vite's unminified default: deployment trials reduced gzip size with
 minification but generally increased Worker startup time. Recheck both metrics
 before enabling it.
 
-| File | Purpose |
-|---|---|
-| [apps/web/src/cf-server.ts](apps/web/src/cf-server.ts) | Worker entry — wraps each request with `withRequestDb()` |
-| [apps/web/src/server/db.ts](apps/web/src/server/db.ts) | Per-request `pg.Pool` via `AsyncLocalStorage` (CF) or module-level pool (dev) |
-| [apps/web/src/lib/recipebridge-cf.ts](apps/web/src/lib/recipebridge-cf.ts) | WASM wrapper using `?init` pattern for CF |
-| [apps/web/wrangler.jsonc](apps/web/wrangler.jsonc) | Worker config (name, vars, Hyperdrive, compat flags) |
-| [apps/web/vite.config.ts](apps/web/vite.config.ts) | `cfWasmPlugin()` + `__CF_WORKERS__` define for dead-code elimination |
+| File                                                                       | Purpose                                                                       |
+| -------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| [apps/web/src/cf-server.ts](apps/web/src/cf-server.ts)                     | Worker entry — wraps each request with `withRequestDb()`                      |
+| [apps/web/src/server/db.ts](apps/web/src/server/db.ts)                     | Per-request `pg.Pool` via `AsyncLocalStorage` (CF) or module-level pool (dev) |
+| [apps/web/src/lib/recipebridge-cf.ts](apps/web/src/lib/recipebridge-cf.ts) | WASM wrapper using `?init` pattern for CF                                     |
+| [apps/web/wrangler.jsonc](apps/web/wrangler.jsonc)                         | Worker config (name, vars, Hyperdrive, compat flags)                          |
+| [apps/web/vite.config.ts](apps/web/vite.config.ts)                         | `cfWasmPlugin()` + `__CF_WORKERS__` define for dead-code elimination          |
 
 Key constraints:
 
@@ -541,7 +556,7 @@ Key constraints:
   carries the whole task (recipe totals, an embedding refresh, a location AI
   refresh); there is no execution table and no dead-letter queue. Every handler
   re-checks the derived state's own freshness marker (`totalsComputedAt IS
-  NULL`, the embedding text hash, the AI fingerprint cache), so duplicate,
+NULL`, the embedding text hash, the AI fingerprint cache), so duplicate,
   reordered, or redelivered messages are no-ops. Publication after a commit is
   best-effort (`waitUntil`); the stale marker on the source row is the durable
   record of pending work. A lost wakeup is repaired on read (the recipe page
@@ -549,7 +564,7 @@ Key constraints:
   polls readiness after "Index now"), by the Problems page's **Awaiting work**
   card ("Settle now" republishes exactly what the counts describe), or by the
   streaming **Repair index** maintenance action. The daily cron refreshes the
-  calendar feed and *asserts* the awaiting counts are zero (Sentry when not);
+  calendar feed and _asserts_ the awaiting counts are zero (Sentry when not);
   it never repairs, so a lost wakeup stays visible instead of being absorbed.
   Search projections are written inside the entity write transaction; location
   valuation is a SQL rollup computed on read; the problem-count badge is a KV
@@ -562,15 +577,15 @@ Key constraints:
 
 Better-Auth via `better-auth/tanstack-start`. Routed UI by `@daveyplate/better-auth-ui`.
 
-| File | Purpose |
-|---|---|
-| [apps/web/src/lib/auth.ts](apps/web/src/lib/auth.ts) | Server config |
-| [apps/web/src/lib/auth-client.ts](apps/web/src/lib/auth-client.ts) | Client (`useSession` and friends) |
-| [apps/web/src/routes/api/auth/$.ts](apps/web/src/routes/api/auth/$.ts) | API catch-all route |
-| [apps/web/src/routes/auth.$authView.tsx](apps/web/src/routes/auth.$authView.tsx) | Auth UI (sign-in/up) |
-| [apps/web/src/routes/_authenticated/account.$accountView.tsx](apps/web/src/routes/_authenticated/account.$accountView.tsx) | Account UI |
-| [apps/web/src/routes/oauth.consent.tsx](apps/web/src/routes/oauth.consent.tsx) | OAuth consent screen |
-| [OAuth/OIDC discovery routes](apps/web/src/routes/%5B.%5Dwell-known.oauth-authorization-server.ts) | OAuth/OIDC discovery documents |
+| File                                                                                                                       | Purpose                           |
+| -------------------------------------------------------------------------------------------------------------------------- | --------------------------------- |
+| [apps/web/src/lib/auth.ts](apps/web/src/lib/auth.ts)                                                                       | Server config                     |
+| [apps/web/src/lib/auth-client.ts](apps/web/src/lib/auth-client.ts)                                                         | Client (`useSession` and friends) |
+| [apps/web/src/routes/api/auth/$.ts](apps/web/src/routes/api/auth/$.ts)                                                     | API catch-all route               |
+| [apps/web/src/routes/auth.$authView.tsx](apps/web/src/routes/auth.$authView.tsx)                                           | Auth UI (sign-in/up)              |
+| [apps/web/src/routes/_authenticated/account.$accountView.tsx](apps/web/src/routes/_authenticated/account.$accountView.tsx) | Account UI                        |
+| [apps/web/src/routes/oauth.consent.tsx](apps/web/src/routes/oauth.consent.tsx)                                             | OAuth consent screen              |
+| [OAuth/OIDC discovery routes](apps/web/src/routes/%5B.%5Dwell-known.oauth-authorization-server.ts)                         | OAuth/OIDC discovery documents    |
 
 Visit <http://localhost:3000/api/auth/session> while running the app to inspect the current session, and <http://localhost:3000/api/auth/reference> (dev only) for the Scalar reference of every auth endpoint.
 
@@ -607,16 +622,16 @@ and a `Location` header. Other successful methods return 200, and missing detail
 return 404. Existing deletion guards and cascades apply. For example:
 
 ```js
-await fetch('/api/v1/recipes', {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({ name: 'Soup', meta: null, sections: [] }),
+await fetch("/api/v1/recipes", {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({ name: "Soup", meta: null, sections: [] }),
 });
 const query = new URLSearchParams({
-  nameFilter: 'Soup',
-  page: '1',
-  pageSize: '20',
-  sort: 'name,-createdAt',
+  nameFilter: "Soup",
+  page: "1",
+  pageSize: "20",
+  sort: "name,-createdAt",
 });
 await fetch(`/api/v1/recipes?${query}`);
 ```
@@ -696,7 +711,7 @@ themselves through dynamic client registration. There is no API key and no
   registers itself, sends you through sign-in and the `/oauth/consent` screen,
   and stores the resulting token.
 - **Claude Code** — the `cubby-localhost` entry in `.mcp.json` is just `{"type": "http",
-  "url": "..."}`. Authorize once with `claude mcp login cubby-localhost` (or `/mcp` →
+"url": "..."}`. Authorize once with `claude mcp login cubby-localhost` (or `/mcp` →
   authenticate); the refresh token keeps non-interactive runs (`claude -p`, the
   Agent SDK) working afterwards. **Do not add an `Authorization` header** — a
   static header suppresses the OAuth flow, and the connection just fails.
@@ -713,14 +728,14 @@ One tool renders an interactive UI in hosts that support the
 [MCP Apps extension](https://modelcontextprotocol.io/docs/extensions/apps)
 (SEP-1865) — Claude web and desktop among them:
 
-| Tool | App |
-|---|---|
+| Tool                | App                                                                                       |
+| ------------------- | ----------------------------------------------------------------------------------------- |
 | `search_usda_foods` | Pickable cards with data-type richness cues and macros; selection flows back to the agent |
 
 The USDA UI is **strictly additive** — a host without the extension ignores
 `_meta.ui.resourceUri` and gets the same `structuredContent` as before. Scope is
 deliberately narrow: an app earns its place only where the chat is the right
-home for the interaction *and* text is a bad medium for it. Tables, boards, and
+home for the interaction _and_ text is a bad medium for it. Tables, boards, and
 charts stay in the web app, one `openLink` away.
 
 `get_shopping_list` remains a plain tool with structured content and readable
@@ -746,10 +761,10 @@ between the web app and the iframes.
 
 ## 🥫 Product Types
 
-| Type | Example | Characteristics |
-|---|---|---|
-| **Specific Item** | "Kraft Macaroni & Cheese" | Has UPC, manufacturer, price, nutrition. Created via barcode scan. |
-| **Misc Collection** | `misc:random cables` | Opaque placeholder. Just a name, no details. Prefix with `misc:`. |
+| Type                | Example                   | Characteristics                                                    |
+| ------------------- | ------------------------- | ------------------------------------------------------------------ |
+| **Specific Item**   | "Kraft Macaroni & Cheese" | Has UPC, manufacturer, price, nutrition. Created via barcode scan. |
+| **Misc Collection** | `misc:random cables`      | Opaque placeholder. Just a name, no details. Prefix with `misc:`.  |
 
 ## ⚖️ Unit Conversion (WASM)
 

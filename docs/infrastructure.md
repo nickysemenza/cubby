@@ -13,21 +13,21 @@ dependency.
 
 ## Production topology
 
-| Concern | Provider | Production resource |
-|---|---|---|
-| Web application and APIs | Cloudflare Workers | Worker `cubby`, custom domain `cubby.nickysemenza.com` |
-| Purchase-import orchestration | Cloudflare Workers + Flue | Private Worker `purchase-agent`, queue `cubby-purchase-agent`, SQLite Durable Objects |
-| PostgreSQL | Neon through Cloudflare Hyperdrive | One Neon origin, two Hyperdrive configurations |
-| Images and documents | Cloudflare R2 | Bucket `foo`, public origin `https://media.nickysemenza.com` |
-| Product lookup | Cloudflare Workers | Worker `upc-lookup`, D1 `upc-lookup-db`, R2 `upc-images` |
-| USDA food data | Cloudflare Workers | Worker `usda-api`, D1 `usda-api-index`, R2 `usda-api-bundles` |
-| AI routing | Cloudflare AI Gateway | Gateway `cubby`, Workers AI binding `AI` |
-| Semantic vectors | Cloudflare Vectorize | `cubby-openai-text-embedding-3-small-1536` |
-| Gmail discovery | Google Cloud | Project `cubby-481519`, Gmail API, OAuth web client |
-| Errors | Sentry | Web/Workers project represented by the checked-in DSN; separate `cubby-apple` project |
-| Worker logs and traces | Grafana Cloud | Cloudflare OTLP destinations `grafana-logs` and `grafana-traces` |
-| Deployment | GitHub Actions | `.github/workflows/deploy.yaml` on `main` |
-| Native clients | Apple Developer/Xcode | Associated domain `cubby.nickysemenza.com`; locally installed iOS/macOS apps |
+| Concern                       | Provider                           | Production resource                                                                   |
+| ----------------------------- | ---------------------------------- | ------------------------------------------------------------------------------------- |
+| Web application and APIs      | Cloudflare Workers                 | Worker `cubby`, custom domain `cubby.nickysemenza.com`                                |
+| Purchase-import orchestration | Cloudflare Workers + Flue          | Private Worker `purchase-agent`, queue `cubby-purchase-agent`, SQLite Durable Objects |
+| PostgreSQL                    | Neon through Cloudflare Hyperdrive | One Neon origin, two Hyperdrive configurations                                        |
+| Images and documents          | Cloudflare R2                      | Bucket `foo`, public origin `https://media.nickysemenza.com`                          |
+| Product lookup                | Cloudflare Workers                 | Worker `upc-lookup`, D1 `upc-lookup-db`, R2 `upc-images`                              |
+| USDA food data                | Cloudflare Workers                 | Worker `usda-api`, D1 `usda-api-index`, R2 `usda-api-bundles`                         |
+| AI routing                    | Cloudflare AI Gateway              | Gateway `cubby`, Workers AI binding `AI`                                              |
+| Semantic vectors              | Cloudflare Vectorize               | `cubby-openai-text-embedding-3-small-1536`                                            |
+| Gmail discovery               | Google Cloud                       | Project `cubby-481519`, Gmail API, OAuth web client                                   |
+| Errors                        | Sentry                             | Web/Workers project represented by the checked-in DSN; separate `cubby-apple` project |
+| Worker logs and traces        | Grafana Cloud                      | Cloudflare OTLP destinations `grafana-logs` and `grafana-traces`                      |
+| Deployment                    | GitHub Actions                     | `.github/workflows/deploy.yaml` on `main`                                             |
+| Native clients                | Apple Developer/Xcode              | Associated domain `cubby.nickysemenza.com`; locally installed iOS/macOS apps          |
 
 The checked-in provider configurations are:
 
@@ -216,9 +216,9 @@ ceiling — revisit them together if the floor ever moves.
 Cloudflare has two Hyperdrive configurations pointing at the same direct Neon
 connection string:
 
-| Binding | Hyperdrive ID | Contract |
-|---|---|---|
-| `HYPERDRIVE` | `adc9757dfffd45bc94d5c2a66b2ad410` | Authoritative reads and writes; caching disabled; origin connection limit 12 |
+| Binding             | Hyperdrive ID                      | Contract                                                                                             |
+| ------------------- | ---------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `HYPERDRIVE`        | `adc9757dfffd45bc94d5c2a66b2ad410` | Authoritative reads and writes; caching disabled; origin connection limit 12                         |
 | `HYPERDRIVE_CACHED` | `427dd7a2876c4dccbe056d37fa7374ff` | Cache-eligible reads; 60-second max age, 15-second stale-while-revalidate; origin connection limit 5 |
 
 The IDs are checked into `apps/web/wrangler.jsonc`; the origin connection
@@ -263,10 +263,10 @@ Cloudflare Image Resizing at that origin.
 
 ### D1 and auxiliary Workers
 
-| Worker | D1 database | Database ID | Other state |
-|---|---|---|---|
-| `upc-lookup` | `upc-lookup-db` | `6c1f2074-2017-48d1-ae37-bc7002d47c64` | R2 `upc-images`; Worker secret `API_KEY` |
-| `usda-api` | `usda-api-index` | `e2e0037c-6046-4b66-85d9-03ceb0770db6` | R2 `usda-api-bundles` |
+| Worker       | D1 database      | Database ID                            | Other state                              |
+| ------------ | ---------------- | -------------------------------------- | ---------------------------------------- |
+| `upc-lookup` | `upc-lookup-db`  | `6c1f2074-2017-48d1-ae37-bc7002d47c64` | R2 `upc-images`; Worker secret `API_KEY` |
+| `usda-api`   | `usda-api-index` | `e2e0037c-6046-4b66-85d9-03ceb0770db6` | R2 `usda-api-bundles`                    |
 
 D1 migrations live beside each Worker and are an explicit operator step; the
 package deploy scripts do not apply them:
@@ -290,16 +290,16 @@ pnpm --dir apps/web exec wrangler secret put NAME --config wrangler.jsonc
 pnpm --dir apps/web exec wrangler secret list --config wrangler.jsonc
 ```
 
-| Name | Storage | Purpose |
-|---|---|---|
-| `BETTER_AUTH_SECRET` | `cubby` Worker secret | Better Auth signing/encryption |
-| `R2_ACCESS_KEY_ID` | `cubby` Worker secret | Main R2 S3 credential |
-| `R2_SECRET_ACCESS_KEY` | `cubby` Worker secret | Main R2 S3 credential |
-| `GOOGLE_CLIENT_SECRET` | `cubby` Worker secret | Google OAuth confidential credential |
-| `GOOGLE_CLIENT_ID` | Checked-in Worker `vars` value | Public Google OAuth client identifier |
-| `AI_GATEWAY_API_KEY` | Local secret only | REST fallback outside the production Workers AI binding |
-| `NOTION_API_KEY` | Optional Worker/local secret | Optional Notion integration |
-| `API_KEY` | `upc-lookup` Worker secret | Direct access to the UPC lookup Worker |
+| Name                   | Storage                        | Purpose                                                 |
+| ---------------------- | ------------------------------ | ------------------------------------------------------- |
+| `BETTER_AUTH_SECRET`   | `cubby` Worker secret          | Better Auth signing/encryption                          |
+| `R2_ACCESS_KEY_ID`     | `cubby` Worker secret          | Main R2 S3 credential                                   |
+| `R2_SECRET_ACCESS_KEY` | `cubby` Worker secret          | Main R2 S3 credential                                   |
+| `GOOGLE_CLIENT_SECRET` | `cubby` Worker secret          | Google OAuth confidential credential                    |
+| `GOOGLE_CLIENT_ID`     | Checked-in Worker `vars` value | Public Google OAuth client identifier                   |
+| `AI_GATEWAY_API_KEY`   | Local secret only              | REST fallback outside the production Workers AI binding |
+| `NOTION_API_KEY`       | Optional Worker/local secret   | Optional Notion integration                             |
+| `API_KEY`              | `upc-lookup` Worker secret     | Direct access to the UPC lookup Worker                  |
 
 OAuth client IDs, Cloudflare account IDs, resource IDs, public origins, and
 Sentry DSNs are identifiers, not credentials. They may be committed. OAuth
@@ -443,10 +443,10 @@ Destination credentials live in Cloudflare, not GitHub or this repository.
 Environment serializes and scopes production deployment. Required repository
 or environment secrets are:
 
-| Secret | Purpose |
-|---|---|
-| `CLOUDFLARE_API_TOKEN` | Deploy all four Workers and manage their declared bindings |
-| `CLAUDE_CODE_OAUTH_TOKEN` | Automated Claude workflows, not application runtime |
+| Secret                    | Purpose                                                    |
+| ------------------------- | ---------------------------------------------------------- |
+| `CLOUDFLARE_API_TOKEN`    | Deploy all four Workers and manage their declared bindings |
+| `CLAUDE_CODE_OAUTH_TOKEN` | Automated Claude workflows, not application runtime        |
 
 The Cloudflare token should be scoped to the checked-in account and only the
 resource types the deployment workflow manages. Production deploys always

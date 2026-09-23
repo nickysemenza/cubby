@@ -24,7 +24,7 @@ Location (bed/planter/area) ──< Planting >── Plant (cultivar/species; ga
 - A Planting lives in **one** Location (`locationId`, nullable) and carries
   `status: planned | growing | finished`. **Every planting this skill creates
   is `status: "planned"`, even a plan row that says "plant now."** The import
-  captures the plan's *intent*; sowing it is a later, separate edit the
+  captures the plan's _intent_; sowing it is a later, separate edit the
   household makes (setting `sowedOn` and flipping `status`) — this skill
   never claims work already done.
 - One `Project` per garden year (`kind: "garden"`) holds every Task and
@@ -36,7 +36,7 @@ Location (bed/planter/area) ──< Planting >── Plant (cultivar/species; ga
 - A `Task` exists for every calendar row and every shopping-list line. A
   planting's `taskId` points at the Task that will do the sowing/transplant,
   so "what does this plan still ask of me" is always `entity list task
-  {filters:{projectId}}`.
+{filters:{projectId}}`.
 - A Planting names its `Plant` (`plantId`), never free-text variety. A Plant
   is one cultivar ("Sun Gold F1") or, with no cultivar, the species
   ("Fenugreek"); its `gardenGuideKey` is the crop. Plant verdicts

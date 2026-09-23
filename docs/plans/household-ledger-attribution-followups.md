@@ -88,17 +88,17 @@ Verified on `main` at `537d853c6`. Do not rebuild any of this.
 
 Settled; do not relitigate without new evidence.
 
-| Decision | Why |
-|---|---|
-| Scope is bulk attribution, bulk gap links, importer guidance, and backlog fixes | Group trips are rare. The editors already exist on web and native. |
-| Code ships before the first real group-trip import, in one PR | The import then exercises the finished tools. |
-| Bulk is **replace per role**. Each role is optional; `[]` clears the role | Covers the real use ("these lines are shared by these people, equally"). Add/remove modes need a weight-conflict rule and have no use case yet. |
-| Bulk goes through the **generic kernel**, with a narrow nested-field hook | One bulk path; MCP and web both inherit it. Not a bespoke tool. |
-| Bulk is the whole friction MVP | Funders are usually derived and beneficiaries default to household, so tagging is limited to shared costs. Project defaults and prefill are backlog. |
-| Name anyone who pays you back; use an unattributed share only for truly anonymous consumption | A `LedgerTransfer` cannot reference an unknown party. An unattributed share leaves household totals correct but shows a `partial_*` gap. No pools. |
-| Repayment handling is guidance only | The pipeline never sees person-to-person payments. When discovery is built it must be review-only (`CONTEXT.md` avoids "automatic match"). |
-| The household page links per-expense gap codes only; the project section links every code | On the household page, assumed-household is the designed default and covers most of the ledger. Inside a shared-cost project it is usually wrong. |
-| The gap filter and the reports share **one** gap definition | Two hand-written predicates would drift, and the links would open lists that disagree with the counts. |
+| Decision                                                                                      | Why                                                                                                                                                  |
+| --------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Scope is bulk attribution, bulk gap links, importer guidance, and backlog fixes               | Group trips are rare. The editors already exist on web and native.                                                                                   |
+| Code ships before the first real group-trip import, in one PR                                 | The import then exercises the finished tools.                                                                                                        |
+| Bulk is **replace per role**. Each role is optional; `[]` clears the role                     | Covers the real use ("these lines are shared by these people, equally"). Add/remove modes need a weight-conflict rule and have no use case yet.      |
+| Bulk goes through the **generic kernel**, with a narrow nested-field hook                     | One bulk path; MCP and web both inherit it. Not a bespoke tool.                                                                                      |
+| Bulk is the whole friction MVP                                                                | Funders are usually derived and beneficiaries default to household, so tagging is limited to shared costs. Project defaults and prefill are backlog. |
+| Name anyone who pays you back; use an unattributed share only for truly anonymous consumption | A `LedgerTransfer` cannot reference an unknown party. An unattributed share leaves household totals correct but shows a `partial_*` gap. No pools.   |
+| Repayment handling is guidance only                                                           | The pipeline never sees person-to-person payments. When discovery is built it must be review-only (`CONTEXT.md` avoids "automatic match").           |
+| The household page links per-expense gap codes only; the project section links every code     | On the household page, assumed-household is the designed default and covers most of the ledger. Inside a shared-cost project it is usually wrong.    |
+| The gap filter and the reports share **one** gap definition                                   | Two hand-written predicates would drift, and the links would open lists that disagree with the counts.                                               |
 
 ## 4. Phase 1 — Bulk attribution
 

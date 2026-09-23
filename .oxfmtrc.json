@@ -8,6 +8,7 @@
   "jsxSingleQuote": false,
   "semi": true,
   "trailingComma": "all",
+  "proseWrap": "preserve",
   "sortImports": false,
   "sortTailwindcss": false,
   "sortPackageJson": {
@@ -33,17 +34,15 @@
     }
   ],
   "ignorePatterns": [
-    "**/*.md",
-    "**/*.mdx",
-    "**/*.toml",
-    "**/*.yaml",
-    "**/*.yml",
     "**/.output/**",
     "**/.vinxi/**",
     "**/build/**",
     "**/coverage/**",
     "**/dist/**",
     "**/drizzle/**",
+    "pnpm-lock.yaml",
+    "docs/how-values-are-determined.md",
+    "apps/apple/openapi/openapi-generator-config.yaml",
     "apps/web/src/server/db/__snapshots__/application-schema.json",
     "apps/web/src/lib/generated/http-openapi.gen.json",
     "**/node_modules/**",
@@ -54,7 +53,10 @@
     "apps/web/src/routeTree.gen.ts",
     "apps/web/wasm/**",
     "**/worker-configuration.d.ts",
-    "apps/apple/**",
-    "cubby-ffi/**"
+    "apps/apple/**/*.json",
+    "apps/apple/**/*.ts",
+    "apps/apple/**/*.tsx",
+    "apps/apple/**/*.js",
+    "apps/apple/**/*.jsx"
   ]
 }

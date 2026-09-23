@@ -20,12 +20,12 @@ the whole file.
   believable size** — a tool wearing an accessory's photo. No mechanical gate
   catches it; only looking does.
 - **Retailer titles become product names, and they lie.** Two "wrong image"
-  findings were wrong *names* with correct photos (a roller stand sold as an
+  findings were wrong _names_ with correct photos (a roller stand sold as an
   "Adjustable Steel Saw Horse"; a colour lifted from a sibling listing). Check
   whether the name is what is wrong before replacing an image; keep the retailer
   title as an alias so receipt-side searches still hit.
 - A listing title's trailing code is often a URL-slug artifact; the page's own
-  "SKU / Manufacturer's Part" line is authoritative. A title that *omits* a
+  "SKU / Manufacturer's Part" line is authoritative. A title that _omits_ a
   designation is not evidence the designation is wrong.
 - **Check the reseller before concluding the maker dropped a product** — Apple
   still listed an accessory Anker had removed, with the full Manufacturer
@@ -72,10 +72,10 @@ the whole file.
   returns HTTP 200 with a 43-byte GIF for most items.
 - **Three ways an ASIN stops naming your product**, all yielding a
   confidently-wrong image that passes every gate:
-  1. *Variation family.* The ASIN is a child; `/dp/<ASIN>` renders the family's
+  1. _Variation family._ The ASIN is a child; `/dp/<ASIN>` renders the family's
      default child. Pin with `?th=1` (and `&psc=1`), re-read the title/swatch
      before taking `#landingImage`. Re-enrichment is not idempotent otherwise.
-  2. *Dead child ASIN redirects to a live sibling.* Amazon does not 404 a retired
+  2. _Dead child ASIN redirects to a live sibling._ Amazon does not 404 a retired
      child; it 302s to a sibling variant and the served page looks normal —
      title, canonical, `currentAsin` and the detail table all read the sibling.
      **Always assert the served ASIN equals the requested one** (`location.href`,
@@ -84,10 +84,10 @@ the whole file.
      `dimensionValuesDisplayData` list omitting the requested ASIN is a symptom,
      not proof the variant never existed. Roughly half of redirects are harmless
      (a different size of the same colourway).
-  3. *ASIN reassigned* to an unrelated listing after delisting, or regional
+  3. _ASIN reassigned_ to an unrelated listing after delisting, or regional
      surfaces disagreeing (`.ca`/`.es` may still serve the original child). When
      surfaces disagree and neither matches the record, stop re-enriching from it.
-- Amazon's own order pages are the ground truth for what an ASIN *was*; the
+- Amazon's own order pages are the ground truth for what an ASIN _was_; the
   "Purchased another variation N times" banner fingerprints the family trap.
 - Symptom sweep that works without probing Amazon: compare each stored image's
   dominant colour (corner-patch background sampling) to the colour word in the
@@ -118,7 +118,7 @@ the whole file.
   ~40 rapid loads trips a session-scoped error page; open a fresh tab on the
   home page to reset.
 - A product page's header exposes `Internet # / Model # / UPC Code # / Store
-  SKU #` in one line; the cover is the `…-64_600.jpg` variant (`64_1000` for
+SKU #` in one line; the cover is the `…-64_600.jpg` variant (`64_1000` for
   full size — verify it loads). Read `new URL(src).origin + pathname` — the
   browser tool redacts URLs carrying query strings. Read a price from a
   screenshot, not page text: a half-hydrated page renders a promo banner where

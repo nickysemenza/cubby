@@ -68,6 +68,7 @@ function fixture(t: TestContext) {
     "apps/web/src/server/db/schema.ts",
     "apps/web/src/server/db/generated/entity-columns.gen.ts",
     "scripts/check-outward-text.ts",
+    "scripts/install-merge-driver.sh",
     "packages/shared/src/generated/shortcode-registry.gen.ts",
   ]) {
     mkdirSync(dirname(join(root, path)), { recursive: true });
@@ -129,6 +130,25 @@ test("commit checks the index and preserves partial staging on success and failu
       assert.equal(ok("diff", "--binary"), worktreeBefore);
       assert.equal(readFileSync(join(root, path), "utf8"), unstaged);
       assert.equal(ok("stash", "list"), "");
+    });
+  }
+});
+
+test("commit checks maintained Markdown, YAML, and TOML formatting", async (t) => {
+  for (const { path, content } of [
+    { path: "notes.md", content: "#   Heading\n" },
+    { path: "settings.yaml", content: "value:    true\n" },
+    { path: "settings.toml", content: "value= true\n" },
+  ]) {
+    await t.test(path, (t) => {
+      const { git, ok, write } = fixture(t);
+      write(path, content);
+      ok("add", "--", path);
+      const indexBefore = ok("diff", "--cached", "--binary");
+      const result = git("commit", "-m", `Fixture ${path}`);
+      assert.notEqual(result.status, 0);
+      assert.match(result.stderr + result.stdout, /oxfmt/);
+      assert.equal(ok("diff", "--cached", "--binary"), indexBefore);
     });
   }
 });

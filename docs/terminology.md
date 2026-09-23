@@ -8,7 +8,7 @@ sometimes wears three different names across layers.
 
 > **Layering reminder.** Domain compute (costing, availability, conversions)
 > lives in Rust/WASM (`recipebridge`), not TS. See [AGENTS.md](../AGENTS.md) for
-> where logic belongs. This doc is about *names*, not where logic runs.
+> where logic belongs. This doc is about _names_, not where logic runs.
 
 ## Naming policy
 
@@ -33,37 +33,37 @@ sometimes wears three different names across layers.
 - An **Allocation** (`FinancialTransactionAllocation`) is how much of one
   transaction settled one Purchase. Evidence only: its amount never enters spend.
   A transaction has either no allocations (unlinked evidence) or a set that sums
-  to its amount exactly and shares its sign. Recording a split as two *posted
-  transactions* instead is what this replaced — that made the database assert
+  to its amount exactly and shares its sign. Recording a split as two _posted
+  transactions_ instead is what this replaced — that made the database assert
   card events that never occurred.
 
 ---
 
 ## Core entities
 
-| Concept | UI label | Code / schema name | DB table | One-liner |
-|---|---|---|---|---|
-| Product | "Product" | `Product` / `product` | `Product` | A purchasable item (a specific SKU or a `misc:` placeholder). |
-| Ingredient | "Ingredient" | `Ingredient` / `ingredient` | `Ingredient` | A canonical recipe-line concept ("flour"), independent of any SKU. |
-| Inventory entry | "Inventory" / "Inventory item" | `InventoryEntry` / `inventoryEntry` | `InventoryEntry` | A quantity of one Product at one Location. |
-| USDA food | "USDA food" / "Nutrition" | `USDAFood` / `usda_food` | external (USDA service) | A FoodData Central reference food, loosely linked to a Product. |
-| Location | "Location" | `Location` / `location` | `Location` | A node in the physical storage tree (house → room → shelf → bin). |
-| Recipe | "Recipe" | `Recipe` / `recipe` | `Recipe` | A cookable thing with sections of ingredients; can itself be an ingredient. |
-| Section | "Section" | `RecipeSection` / `recipeSection` | `RecipeSection` | An ordered group of ingredient lines within a recipe ("For the sauce"). |
-| Recipe-section ingredient | (a row in a recipe) | `RecipeSectionIngredient` | `RecipeSectionIngredient` | One ingredient line: ingredient + amounts + raw line + modifier. |
-| Meal | "Meal" | `Meal` / `meal` | `Meal` | A planned eating occasion on a calendar day; groups recipes. |
-| Meal recipe | (a recipe inside a meal) | `MealRecipe` / `mealRecipe` | `MealRecipe` | A recipe planned into a meal at a `scale` multiplier. |
-| Cookbook | "Cookbook" | `Cookbook` / `cookbook` | `Cookbook` | A first-class recipe *source* — the book an EPUB-extracted recipe set came from. |
-| Project | "Project" | `Project` / `project` | `Project` | A household undertaking (furniture, renovation, …) grouping Tasks and Expenses; blocked-by edges to other Projects. |
-| Task | "Task" | `Task` / `task` | `Task` | A unit of work, optionally inside a Project; blocked-by edges to other Tasks. |
-| Vendor | "Vendor" | `Vendor` / `vendor` | `Vendor` | The roster of places money goes (name unique, website, notes). Identity only — no money. |
-| Purchase | "Purchase" | `Purchase` / `purchase` | `Purchase` | One vendor order/receipt event: identity (`vendorId` + optional `orderId`), vendor date, literal never-summed `statedTotal`, and documents. ⚠️ Renamed meaning — see below. |
-| Expense | "Expense" | `Expense` / `expense` | `Expense` | A spend-ledger line (actual, or planned via `future`), optionally inside a Project. **All money lives here.** |
-| Financial account | "Account" | `FinancialAccount` / `financialAccount` | `FinancialAccount` | A statement/receipt account identity, possibly provisional, with source aliases and `cardNumbers` — the dated history of every last-four it has presented (primary card and reissues, wallet device numbers, sibling cards, gift-card instances). |
-| Financial transaction | "Transaction" | `FinancialTransaction` / `financialTransaction` | `FinancialTransaction` | Settlement evidence with a signed amount, allocated across zero or more Purchases. Never spend. |
-| Merchant | "Merchant" | `merchant` | provider fields on `FinancialTransaction` / `StatementRow` | A provider-supplied settlement label that may name a processor or marketplace. Evidence text, not canonical Vendor identity. |
-| Allocation | "Allocation" | `FinancialTransactionAllocation` | `FinancialTransactionAllocation` | How much of one transaction settled one Purchase. Evidence only; never spend. |
-| Image | "Image" / "Photo" | `Image` / `image` | `Image` | An R2-backed image linked to a product, location, recipe, project, or purchase (such as its invoice). |
+| Concept                   | UI label                       | Code / schema name                              | DB table                                                   | One-liner                                                                                                                                                                                                                                         |
+| ------------------------- | ------------------------------ | ----------------------------------------------- | ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Product                   | "Product"                      | `Product` / `product`                           | `Product`                                                  | A purchasable item (a specific SKU or a `misc:` placeholder).                                                                                                                                                                                     |
+| Ingredient                | "Ingredient"                   | `Ingredient` / `ingredient`                     | `Ingredient`                                               | A canonical recipe-line concept ("flour"), independent of any SKU.                                                                                                                                                                                |
+| Inventory entry           | "Inventory" / "Inventory item" | `InventoryEntry` / `inventoryEntry`             | `InventoryEntry`                                           | A quantity of one Product at one Location.                                                                                                                                                                                                        |
+| USDA food                 | "USDA food" / "Nutrition"      | `USDAFood` / `usda_food`                        | external (USDA service)                                    | A FoodData Central reference food, loosely linked to a Product.                                                                                                                                                                                   |
+| Location                  | "Location"                     | `Location` / `location`                         | `Location`                                                 | A node in the physical storage tree (house → room → shelf → bin).                                                                                                                                                                                 |
+| Recipe                    | "Recipe"                       | `Recipe` / `recipe`                             | `Recipe`                                                   | A cookable thing with sections of ingredients; can itself be an ingredient.                                                                                                                                                                       |
+| Section                   | "Section"                      | `RecipeSection` / `recipeSection`               | `RecipeSection`                                            | An ordered group of ingredient lines within a recipe ("For the sauce").                                                                                                                                                                           |
+| Recipe-section ingredient | (a row in a recipe)            | `RecipeSectionIngredient`                       | `RecipeSectionIngredient`                                  | One ingredient line: ingredient + amounts + raw line + modifier.                                                                                                                                                                                  |
+| Meal                      | "Meal"                         | `Meal` / `meal`                                 | `Meal`                                                     | A planned eating occasion on a calendar day; groups recipes.                                                                                                                                                                                      |
+| Meal recipe               | (a recipe inside a meal)       | `MealRecipe` / `mealRecipe`                     | `MealRecipe`                                               | A recipe planned into a meal at a `scale` multiplier.                                                                                                                                                                                             |
+| Cookbook                  | "Cookbook"                     | `Cookbook` / `cookbook`                         | `Cookbook`                                                 | A first-class recipe _source_ — the book an EPUB-extracted recipe set came from.                                                                                                                                                                  |
+| Project                   | "Project"                      | `Project` / `project`                           | `Project`                                                  | A household undertaking (furniture, renovation, …) grouping Tasks and Expenses; blocked-by edges to other Projects.                                                                                                                               |
+| Task                      | "Task"                         | `Task` / `task`                                 | `Task`                                                     | A unit of work, optionally inside a Project; blocked-by edges to other Tasks.                                                                                                                                                                     |
+| Vendor                    | "Vendor"                       | `Vendor` / `vendor`                             | `Vendor`                                                   | The roster of places money goes (name unique, website, notes). Identity only — no money.                                                                                                                                                          |
+| Purchase                  | "Purchase"                     | `Purchase` / `purchase`                         | `Purchase`                                                 | One vendor order/receipt event: identity (`vendorId` + optional `orderId`), vendor date, literal never-summed `statedTotal`, and documents. ⚠️ Renamed meaning — see below.                                                                       |
+| Expense                   | "Expense"                      | `Expense` / `expense`                           | `Expense`                                                  | A spend-ledger line (actual, or planned via `future`), optionally inside a Project. **All money lives here.**                                                                                                                                     |
+| Financial account         | "Account"                      | `FinancialAccount` / `financialAccount`         | `FinancialAccount`                                         | A statement/receipt account identity, possibly provisional, with source aliases and `cardNumbers` — the dated history of every last-four it has presented (primary card and reissues, wallet device numbers, sibling cards, gift-card instances). |
+| Financial transaction     | "Transaction"                  | `FinancialTransaction` / `financialTransaction` | `FinancialTransaction`                                     | Settlement evidence with a signed amount, allocated across zero or more Purchases. Never spend.                                                                                                                                                   |
+| Merchant                  | "Merchant"                     | `merchant`                                      | provider fields on `FinancialTransaction` / `StatementRow` | A provider-supplied settlement label that may name a processor or marketplace. Evidence text, not canonical Vendor identity.                                                                                                                      |
+| Allocation                | "Allocation"                   | `FinancialTransactionAllocation`                | `FinancialTransactionAllocation`                           | How much of one transaction settled one Purchase. Evidence only; never spend.                                                                                                                                                                     |
+| Image                     | "Image" / "Photo"              | `Image` / `image`                               | `Image`                                                    | An R2-backed image linked to a product, location, recipe, project, or purchase (such as its invoice).                                                                                                                                             |
 
 ---
 
@@ -77,7 +77,7 @@ USDAFood  ←(loose link, fdc_id/barcode)──  Product  ──(optional FK, in
                                           └─(inventoried as)→  InventoryEntry  ──(at)→  Location
 ```
 
-- **Product** (`Product`) — a *purchasable* item. Two kinds:
+- **Product** (`Product`) — a _purchasable_ item. Two kinds:
   - **Specific item** — has UPC, manufacturer, price, nutrition (created via
     barcode scan).
   - **Misc collection** — an opaque placeholder, name only, prefixed `misc:`.
@@ -90,19 +90,19 @@ USDAFood  ←(loose link, fdc_id/barcode)──  Product  ──(optional FK, in
 - **Ingredient** (`Ingredient`) — the canonical recipe-line concept, SKU-free.
   "Flour" is one Ingredient no matter which brand of flour is on the shelf.
   Many Products can point to one Ingredient. An Ingredient whose `recipeId` is
-  set *is* a recipe (recipe-as-ingredient / sub-recipe composition). Names are
+  set _is_ a recipe (recipe-as-ingredient / sub-recipe composition). Names are
   case-insensitively unique; `aliases` and `naKinds` (coverage opt-out) hang
   off it.
 
 - **InventoryEntry** (`InventoryEntry`) — a physical fact: `amount` of one
   Product at one Location. Unique per `(productId, locationId)`. Carries a
   precomputed `valuation` (`amount.value × product.price`). **Not** the same as
-  a Product: the Product is the *what*, the InventoryEntry is the *how much,
-  where*.
+  a Product: the Product is the _what_, the InventoryEntry is the _how much,
+  where_.
 
 - **USDAFood** (`usda_food`) — nutrition reference data from USDA FoodData
   Central, served by the sibling `usda-api` worker (not a row in the main DB).
-  Linked to a Product for nutrition/cost intelligence; the link is *loose*
+  Linked to a Product for nutrition/cost intelligence; the link is _loose_
   (resolved at query time, `fdc_id`-first then barcode) — see the USDA notes in
   README.
 
@@ -255,7 +255,7 @@ its existing assignment intent. Individual and bulk discard require an explicit 
 > ⚠️ **`Purchase` is the transaction, not the ledger line.** The ledger line — a
 > name, a cost, a date, a trade — is **`Expense`**. Any older note, commit
 > message, or agent transcript saying "purchase" about a line of spend means
-> `Expense`; `Purchase` is the *transaction* the Expense was part of.
+> `Expense`; `Purchase` is the _transaction_ the Expense was part of.
 
 ```
 Vendor ──< Purchase ──< Expense
@@ -291,7 +291,7 @@ FinancialAccount ──< FinancialTransaction >──< Allocation >──< Purch
   - `purchase.date` is the **vendor order/receipt** date; `expense.date` stays the **ledger**
     date that drives monthly buckets and project windows. An invoice dated the
     3rd can clear on the 8th, and they may differ.
-  - `statedTotal` is what the paperwork *claimed*, in dollars. It is **never
+  - `statedTotal` is what the paperwork _claimed_, in dollars. It is **never
     summed into spend** — it is purely a reconciliation cue against the Purchase's
     Expenses, and a mismatch is often correct (a partial refund reduces an Expense
     without changing what the purchase paperwork stated). `reconcilePurchase` returns
@@ -305,7 +305,7 @@ FinancialAccount ──< FinancialTransaction >──< Allocation >──< Purch
   `purchaseId` is nullable: a row with no Purchase attached is exactly "no vendor
   recorded", since `purchase.vendorId` is NOT NULL.
   - `lineKind` is `principal | tax | shipping | discount | fee | tip |
-    other_adjustment`. Every kind participates in total, monthly, project,
+other_adjustment`. Every kind participates in total, monthly, project,
     Purchase-reconciliation, and vendor spend. Cost-type, trade, tool, and
     affinity analytics use only `principal` and expose the signed adjustment
     remainder separately.
@@ -315,14 +315,14 @@ FinancialAccount ──< FinancialTransaction >──< Allocation >──< Purch
     shelf's unit, so half a conduit coil binned is `-0.5`. Money direction wins,
     and the quantity's own sign is consulted only when there is no money:
 
-    | `cost` | reads as | example |
-    | --- | --- | --- |
-    | `> 0` | acquisition of `+\|qty\|` | bought 8 outlet boxes |
-    | `< 0` | exit of `−\|qty\|` | returned 8, sold one tool |
-    | `= 0`, `qty > 0` | free acquisition | promo battery, bundled accessory |
-    | `= 0`, `qty < 0` | discard / write-off | thrown away, given away |
-    | `< 0`, `qty = 0` | price concession, item KEPT | Amazon "Account adjustment", partial refund for shipping damage |
-    | `NULL` | unknown; contributes nothing, reported as uncertainty | old receipt with no count |
+    | `cost`           | reads as                                              | example                                                         |
+    | ---------------- | ----------------------------------------------------- | --------------------------------------------------------------- |
+    | `> 0`            | acquisition of `+\|qty\|`                             | bought 8 outlet boxes                                           |
+    | `< 0`            | exit of `−\|qty\|`                                    | returned 8, sold one tool                                       |
+    | `= 0`, `qty > 0` | free acquisition                                      | promo battery, bundled accessory                                |
+    | `= 0`, `qty < 0` | discard / write-off                                   | thrown away, given away                                         |
+    | `< 0`, `qty = 0` | price concession, item KEPT                           | Amazon "Account adjustment", partial refund for shipping damage |
+    | `NULL`           | unknown; contributes nothing, reported as uncertainty | old receipt with no count                                       |
 
     Zero is legal **only** on a negative-cost line — the one direction where
     "money without units" is a real event. It was banned outright until
@@ -332,6 +332,7 @@ FinancialAccount ──< FinancialTransaction >──< Allocation >──< Purch
     A discard carries **no Purchase** — there is no vendor charge behind
     throwing something away, so `purchaseId` stays null rather than attaching
     to whichever order originally bought it.
+
   - A principal amount may already include tax. Only an explicitly itemized
     ancillary amount earns its own typed Expense; no tax rate or reconciliation
     difference is used to estimate one.
@@ -343,7 +344,7 @@ Create/update inputs still **accept `vendor` as a plain name string** plus
 `orderId`, and the repo resolves them via `findOrCreateVendor` +
 `findOrCreatePurchase` inside the caller's transaction — which is what keeps MCP,
 quick-add, and the purchase-import skill unchanged across the split. The ledger's
-vendor *filter*, by contrast, is now `vendorId`-based, not a free-text match.
+vendor _filter_, by contrast, is now `vendorId`-based, not a free-text match.
 
 **Operations** (`repo/purchase.ts`): `linkExpensesToPurchase` (one invoice
 spanning trades), `splitExpense` (replaces the old `(combo, saw portion)` row-name
@@ -362,7 +363,7 @@ Two different "a recipe inside something" relationships — don't conflate them:
   (ingredient + `amounts` + `rawLine` + `modifier`). This is the recipe's own
   structure.
 - **Recipe-as-ingredient (composition).** When an `Ingredient.recipeId` is set,
-  that ingredient *is* a sub-recipe; using it in another recipe's section nests
+  that ingredient _is_ a sub-recipe; using it in another recipe's section nests
   one recipe inside another. Costing memoizes sub-recipes (with a cycle guard).
 - **MealRecipe (occurrence and preparation).** A `Meal` (a calendar day
   occasion) groups `MealRecipe` rows — each a recipe planned at a numeric
@@ -384,28 +385,28 @@ totals through their source preparation's yield.
 
 ## "capture" vs "import" vs "enrich"
 
-Three verbs that all *bring data in* but mean different things:
+Three verbs that all _bring data in_ but mean different things:
 
 - **Capture** — quick, manual, first-party data entry, usually mobile. The
   canonical case is **barcode scan → quick-create a Product / InventoryEntry**.
-  Capture is about *you* recording what you physically have. (UI: "scan",
+  Capture is about _you_ recording what you physically have. (UI: "scan",
   "quick add".)
-- **Import** — pulling a *recipe* in from an external source and converting it
+- **Import** — pulling a _recipe_ in from an external source and converting it
   into Cubby's shape (`ImportRecipe → RecipeCreateInput`, then upsert). Sources
   are tagged via `Recipe.SourceType` (the `RecipeSource` enum) — see below.
   Code: `import-recipe-convert.ts`, `upsertImportRecipe`, the `import_recipe`
   MCP tool.
 - **Enrich** — the optional **service layer** augmenting an entity with derived
-  / external data *after* it exists (the architecture's
+  / external data _after_ it exists (the architecture's
   `Router → Service (enrichment) → Repo`). The canonical case is decorating a
   Product with USDA nutrition or running portion data through WASM. Enrichment
   never owns the row; it adds to it.
 
-| Verb | Direction | Owns the row? | Typical trigger |
-|---|---|---|---|
-| Capture | user → DB | yes (creates it) | barcode scan, quick add |
-| Import | external source → DB | yes (creates it) | recipe scrape / EPUB / Notion |
-| Enrich | external/derived → existing row | no (decorates) | USDA link, WASM conversion |
+| Verb    | Direction                       | Owns the row?    | Typical trigger               |
+| ------- | ------------------------------- | ---------------- | ----------------------------- |
+| Capture | user → DB                       | yes (creates it) | barcode scan, quick add       |
+| Import  | external source → DB            | yes (creates it) | recipe scrape / EPUB / Notion |
+| Enrich  | external/derived → existing row | no (decorates)   | USDA link, WASM conversion    |
 
 ---
 
@@ -416,12 +417,12 @@ Three verbs that all *bring data in* but mean different things:
 (`SourceType` / `SourceData` / `cookbookId`) into a tagged provenance union for
 the API. Values:
 
-| `SourceType` | Meaning | `SourceData` holds | `cookbookId` |
-|---|---|---|---|
-| `Website` | Scraped/imported from a URL | the source URL | null |
-| `Book` | Extracted from a cookbook EPUB | the cookbook name | set (FK → `Cookbook`) |
-| `Notion` | Synced from a Notion page | the Notion page id | null |
-| `Other` | No identifiable source | null | null |
+| `SourceType` | Meaning                        | `SourceData` holds | `cookbookId`          |
+| ------------ | ------------------------------ | ------------------ | --------------------- |
+| `Website`    | Scraped/imported from a URL    | the source URL     | null                  |
+| `Book`       | Extracted from a cookbook EPUB | the cookbook name  | set (FK → `Cookbook`) |
+| `Notion`     | Synced from a Notion page      | the Notion page id | null                  |
+| `Other`      | No identifiable source         | null               | null                  |
 
 `SourceData` is kept synced to the cookbook name for `Book` recipes so the codec
 stays a pure recipe-row read.
@@ -430,7 +431,7 @@ stays a pure recipe-row read.
 
 ## Cookbook (the source) vs cookbook (the physical book)
 
-- **`Cookbook` (entity)** — a digital recipe *source*: the EPUB-extracted set,
+- **`Cookbook` (entity)** — a digital recipe _source_: the EPUB-extracted set,
   its assembled `ImportRecipe[]` JSON (so recipes can be re-derived without
   re-running the LLM), OPF metadata, and a cover image. `Book` recipes FK to it.
 - The **physical book on a shelf** would be a `Product` / `InventoryEntry`, and

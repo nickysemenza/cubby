@@ -16,6 +16,11 @@
       "!{workspaceRoot}/**/*.toml",
       "!{workspaceRoot}/**/*.lock"
     ],
+    "formattable": [
+      "{workspaceRoot}/**/*.{js,jsx,ts,tsx,mjs,cjs,mts,cts,json,jsonc,json5,css,scss,less,graphql,gql,md,mdx,markdown,yaml,yml,toml}",
+      "{workspaceRoot}/.oxfmtrc.json",
+      "{workspaceRoot}/.editorconfig"
+    ],
     "default": ["{projectRoot}/**/*", "sharedGlobals"],
     "sharedGlobals": [
       "{workspaceRoot}/pnpm-lock.yaml",

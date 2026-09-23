@@ -35,8 +35,7 @@ distance even. Private library counts and source records are omitted here.
   samples before relaxing the strict threshold.
 - In-app `CameraPicker` captures may never enter Photos. Pixel dimensions
   describe export paths but do not reliably identify phone photos.
-- Bursts, retakes, and duplicates can put another library asset within distance
-  6. Treating a burst twin as probably in Cubby is the desired behavior.
+- Bursts, retakes, and duplicates can put another library asset within distance 6. Treating a burst twin as probably in Cubby is the desired behavior.
 - Hashing the same bytes with Sharp and CoreGraphics can differ by at least
   eight bits. Resampler drift is large enough to break the strict threshold.
 
@@ -65,12 +64,12 @@ bad first row cannot prevent later batches from advancing.
 
 The matching tiers are:
 
-| Evidence | Verdict |
-| --- | --- |
-| hash distance 0–2 | in Cubby |
-| distance 3–6 and aspect ratio within a symmetric 2% | in Cubby |
-| distance 3–6 without the aspect gate | possible match requiring review |
-| distance greater than 6 | no match |
+| Evidence                                            | Verdict                         |
+| --------------------------------------------------- | ------------------------------- |
+| hash distance 0–2                                   | in Cubby                        |
+| distance 3–6 and aspect ratio within a symmetric 2% | in Cubby                        |
+| distance 3–6 without the aspect gate                | possible match requiring review |
+| distance greater than 6                             | no match                        |
 
 Revision one renders the complete, orientation-corrected frame at no more than
 256 pixels before hashing. The 32×32 CoreGraphics draw uses sRGB, high-quality

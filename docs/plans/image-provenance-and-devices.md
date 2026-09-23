@@ -32,13 +32,13 @@ Three problems share one root today:
 
 - **Sightings, not arrays.** Image stays one row per stored pixel set. A new
   many-row `ImageSighting` entity records each (image, member library, cloud
-  asset) and *derived* declared-`one` fields on Image summarise it — ADR
+  asset) and _derived_ declared-`one` fields on Image summarise it — ADR
   0001's Purchase-products shape (one logical relation, many provenance
   sources). A schema-wide "array + runtime clamp" construct is deferred (see
   todos).
 - **Capturer is a Ledger Party member**, resolved from the session login via
   the member-login mapping; a guest's photo can be attributed to a guest
-  party. CONTEXT.md gains *Image Sighting*, *Capture Attribution*, *Device*.
+  party. CONTEXT.md gains _Image Sighting_, _Capture Attribution_, _Device_.
 - **One master participation switch per install, mirrored to a `Device`
   entity** the job dispatcher honours; explicit manual uploads always work.
 - **Generic first.** `Device` (`DEV-`) and `ImageSighting` (`IMS-`) are
@@ -99,7 +99,7 @@ matched by a library scan regains its capture date and GPS and flips
 ## Compatibility constraints found in review
 
 - The OpenAPI emitter closed every output object (`additionalProperties:
-  false`), so the generated Swift client rejected any response with a new
+false`), so the generated Swift client rejected any response with a new
   field. Outputs are now emitted open (PR0); a build with that client must be
   installed on every household device before a server deploy adds output
   fields.
@@ -117,20 +117,20 @@ matched by a library scan regains its capture date and GPS and flips
 
 ## Delivery
 
-| PR | Scope | Status |
-| --- | --- | --- |
-| 0 | Generator emits open output schemas; regenerated `CubbyAPI`; response-body guard test | #1190 |
-| 1 | `Device` entity, companion enforcement, connections link | #1193 |
-| 2 | Native participation switch, first-sign-in sheet, gate matrix, REST identity headers, generic Device create/update | #1194 |
-| 3a | `ImageSighting` entity, Image derived fields, derivation + adapter hook, commit `library` items, `attach_files` source fix, `screenshot`, edges, runbook, glossary, ADR | #1198 |
-| 3b | `imageList` onto `listScaffold`, Image data quality, provenance heuristics + `classifyImageProvenance`, location field renderer | #1200 |
-| 4 | Native activity center, iOS bottom accessory, macOS sidebar rows, Activity "This device", `Route.localActivity`, `CubbyLink.activity` | #1192 |
-| 5 | Native library metadata on import, `LibraryMetadataSync` backfill via generic sighting create, provenance section | #1199 |
-| 6 | Server EXIF extraction background task, `backfillImageMetadata` | #1201 |
+| PR  | Scope                                                                                                                                                                   | Status |
+| --- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
+| 0   | Generator emits open output schemas; regenerated `CubbyAPI`; response-body guard test                                                                                   | #1190  |
+| 1   | `Device` entity, companion enforcement, connections link                                                                                                                | #1193  |
+| 2   | Native participation switch, first-sign-in sheet, gate matrix, REST identity headers, generic Device create/update                                                      | #1194  |
+| 3a  | `ImageSighting` entity, Image derived fields, derivation + adapter hook, commit `library` items, `attach_files` source fix, `screenshot`, edges, runbook, glossary, ADR | #1198  |
+| 3b  | `imageList` onto `listScaffold`, Image data quality, provenance heuristics + `classifyImageProvenance`, location field renderer                                         | #1200  |
+| 4   | Native activity center, iOS bottom accessory, macOS sidebar rows, Activity "This device", `Route.localActivity`, `CubbyLink.activity`                                   | #1192  |
+| 5   | Native library metadata on import, `LibraryMetadataSync` backfill via generic sighting create, provenance section                                                       | #1199  |
+| 6   | Server EXIF extraction background task, `backfillImageMetadata`                                                                                                         | #1201  |
 
 Rollout lesson: `deploy.yaml` deploys every push to `main` and never applies
 schema, while auto-merge lands a green PR the moment CI passes — so the
-schema-bearing PRs deployed *before* their runbook ran. A PR that adds a
+schema-bearing PRs deployed _before_ their runbook ran. A PR that adds a
 table or column must not be auto-merged until its runbook has been applied
 and read back (`docs/todos.md` carries the standing rule). Operator steps
 still open: apply runbook parts 1–3, then `classifyImageProvenance`

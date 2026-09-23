@@ -81,9 +81,9 @@ None of these attach a debugger; for breakpoints use the Xcode schemes below.
   drift checks, and an iOS simulator build (`scripts/apple-check.sh full`).
 - `pnpm apple test` runs package tests only. It does **not** run the hosted app tests.
 - Hosted CI runs this as two path-filtered macOS jobs instead of one: `Apple
-  package tests` runs `swift test --package-path apps/apple/CubbyKit
-  --force-resolved-versions` on the macOS host (no simulator), and `Apple
-  checks` runs `sh scripts/apple-check.sh ci` — the same formatting and drift
+package tests` runs `swift test --package-path apps/apple/CubbyKit
+--force-resolved-versions` on the macOS host (no simulator), and `Apple
+checks` runs `sh scripts/apple-check.sh ci` — the same formatting and drift
   checks, then a generic-simulator `xcodebuild build` with no tests, reusing a
   CI-cached SPM clone directory. They were one merged job that also ran
   `xcodebuild test` on a concrete simulator, but a hosted runner's first
@@ -94,7 +94,7 @@ None of these attach a debugger; for breakpoints use the Xcode schemes below.
   `xcodebuild test -scheme Cubby-iOS` locally (the scheme lists
   `package: CubbyKit/CubbyKitTests` alongside `Cubby-iOS-Tests`).
 - Run the hosted iPhone tests explicitly, using a simulator ID from `xcrun simctl
-  list devices available`:
+list devices available`:
 
   ```sh
   xcodebuild -project apps/apple/Cubby.xcodeproj -scheme Cubby-iOS \
@@ -103,7 +103,7 @@ None of these attach a debugger; for breakpoints use the Xcode schemes below.
   ```
 
 - Run Mac navigation contracts with `xcodebuild -project apps/apple/Cubby.xcodeproj
-  -scheme Cubby-macOS -destination 'platform=macOS,arch=arm64' test`, then interact
+-scheme Cubby-macOS -destination 'platform=macOS,arch=arm64' test`, then interact
   with the built app.
 - Avoid simultaneous builds sharing one DerivedData directory. The dSYM upload
   phase runs only when archiving; ordinary builds/tests do not upload symbols.
