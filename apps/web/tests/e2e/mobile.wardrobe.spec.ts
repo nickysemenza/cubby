@@ -1,5 +1,13 @@
-import { seedWardrobePrerequisites } from "./e2e-fixtures";
-import { expectViewportBounded, gotoAuthenticatedPage } from "./e2e-helpers";
+import {
+  seedProductCategoryPrerequisite,
+  seedWardrobePrerequisites,
+} from "./e2e-fixtures";
+import {
+  expectViewportBounded,
+  gotoAuthenticatedPage,
+  selectComboboxItem,
+  waitForFormHydration,
+} from "./e2e-helpers";
 import { expect, test } from "./e2e-test";
 
 test("wardrobe uses the selected owner's quantity and responds to explicit ownership edits", async ({
@@ -7,7 +15,6 @@ test("wardrobe uses the selected owner's quantity and responds to explicit owner
 }) => {
   const name = `Wardrobe ${Date.now()}`;
   const { owner, entry } = await seedWardrobePrerequisites(page, name);
-  await page.setViewportSize({ width: 390, height: 844 });
   await gotoAuthenticatedPage(
     page,
     `/collections/wardrobe/${owner.id}`,
@@ -51,4 +58,31 @@ test("wardrobe uses the selected owner's quantity and responds to explicit owner
   await expect(
     page.getByRole("link", { name: `${name} shirt`, exact: true }),
   ).toHaveCount(0);
+});
+
+test("taxonomy and hierarchy picker remain bounded on a phone", async ({
+  page,
+}) => {
+  const suffix = Date.now();
+  const rootName = `Phone taxonomy root ${suffix}`;
+  const typeName = `Phone taxonomy type ${suffix}`;
+  const root = await seedProductCategoryPrerequisite(page, { name: rootName });
+  await seedProductCategoryPrerequisite(page, {
+    name: typeName,
+    parentId: root.id,
+  });
+
+  await page.goto("/products?create=true");
+  await waitForFormHydration(page);
+  const picker = page.getByRole("dialog").getByRole("combobox", {
+    name: "Classification",
+    exact: true,
+  });
+  await selectComboboxItem(page, picker, `${rootName} / ${typeName}`);
+  await expect(picker).toHaveValue(`${rootName} / ${typeName}`);
+  await expectViewportBounded(page);
+  await page.screenshot({
+    path: test.info().outputPath("classification-phone.png"),
+    fullPage: true,
+  });
 });

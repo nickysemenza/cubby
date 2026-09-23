@@ -19,6 +19,21 @@ describe("PWA Porcelain color metadata", () => {
   });
 });
 
+describe("PWA Home Screen manifest", () => {
+  it("opens Today without changing the installed app identity", () => {
+    const manifest: unknown = JSON.parse(
+      readFileSync(resolve("public/manifest.json"), "utf8"),
+    );
+
+    expect(manifest).toMatchObject({
+      id: "/inventory/session",
+      start_url: "/",
+      scope: "/",
+      share_target: { action: "/recipes/new" },
+    });
+  });
+});
+
 describe("PWA deployment cache headers", () => {
   it("keeps hashed assets immutable", () => {
     const headers = readFileSync(resolve("public/_headers"), "utf8");

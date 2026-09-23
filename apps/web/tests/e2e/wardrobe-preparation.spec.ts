@@ -4,7 +4,6 @@ import {
   seedProductCategoryPrerequisite,
 } from "./e2e-fixtures";
 import {
-  expectViewportBounded,
   gotoAuthenticatedPage,
   openProductFromPalette,
   selectComboboxItem,
@@ -123,34 +122,6 @@ test("taxonomy edits keep product classification paths and labels separate from 
   ).toHaveCount(0);
   await page.screenshot({
     path: test.info().outputPath("product-images-desktop.png"),
-    fullPage: true,
-  });
-});
-
-test("taxonomy and hierarchy picker remain bounded on a phone", async ({
-  page,
-}) => {
-  await page.setViewportSize({ width: 390, height: 844 });
-  const suffix = Date.now();
-  const rootName = `Phone taxonomy root ${suffix}`;
-  const typeName = `Phone taxonomy type ${suffix}`;
-  const root = await seedProductCategoryPrerequisite(page, { name: rootName });
-  await seedProductCategoryPrerequisite(page, {
-    name: typeName,
-    parentId: root.id,
-  });
-
-  await page.goto("/products?create=true");
-  await waitForFormHydration(page);
-  const picker = page.getByRole("dialog").getByRole("combobox", {
-    name: "Classification",
-    exact: true,
-  });
-  await selectComboboxItem(page, picker, `${rootName} / ${typeName}`);
-  await expect(picker).toHaveValue(`${rootName} / ${typeName}`);
-  await expectViewportBounded(page);
-  await page.screenshot({
-    path: test.info().outputPath("classification-phone.png"),
     fullPage: true,
   });
 });

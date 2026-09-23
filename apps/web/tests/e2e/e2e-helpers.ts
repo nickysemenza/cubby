@@ -197,17 +197,19 @@ export async function expectViewportBounded(page: Page) {
             tag: element.tagName.toLocaleLowerCase(),
             ariaLabel: element.getAttribute("aria-label"),
             className: element.className.toString().slice(0, 160),
-            left: Math.round(rect.left),
-            right: Math.round(rect.right),
-            width: Math.round(rect.width),
+            // Unrounded: a fractional overhang (right 402.4 in a 402px
+            // viewport) still widens scrollWidth to 403, and rounding hid it.
+            left: rect.left,
+            right: rect.right,
+            width: rect.width,
             scrollWidth: element.scrollWidth,
           };
         })
         .filter(
           ({ left, right, scrollWidth, width }) =>
-            right > viewportWidth + 1 ||
-            left < -1 ||
-            scrollWidth > Math.max(width, viewportWidth) + 1,
+            right > viewportWidth ||
+            left < 0 ||
+            scrollWidth > Math.max(Math.ceil(width), viewportWidth),
         )
         .sort((a, b) => b.right - viewportWidth - (a.right - viewportWidth))
         .slice(0, 5);

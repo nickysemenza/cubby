@@ -41,10 +41,5 @@ test("Activity preserves audit links, authorization feedback, and recorded image
   await expect(
     page.getByRole("tab", { name: "Runs", exact: true }),
   ).toHaveAttribute("aria-selected", "true");
-  await page.setViewportSize({ width: 390, height: 844 });
   await expectViewportBounded(page);
-  await page.screenshot({
-    path: "/tmp/cubby-activity-mobile.png",
-    fullPage: true,
-  });
 });

@@ -82,6 +82,8 @@ if (import.meta.main) {
     for (const job of jobs) {
       if (job.conclusion !== "failure" || !job.name.startsWith("E2E tests"))
         continue;
+      // The aggregate chromium check runs no tests; its shards are counted.
+      if (job.name === "E2E tests (chromium)") continue;
       const lane = laneOf(job.name);
       laneFailures.set(lane, (laneFailures.get(lane) ?? 0) + 1);
       let log: string;

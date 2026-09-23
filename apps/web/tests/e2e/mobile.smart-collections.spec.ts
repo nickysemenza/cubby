@@ -9,7 +9,6 @@ import { expect, test } from "./e2e-test";
 test("smart Collection rules remain temporary across navigation and refresh", async ({
   page,
 }) => {
-  await page.setViewportSize({ width: 390, height: 844 });
   const suffix = Date.now();
   const productName = `E2E finishing brush ${suffix}`;
   const seeded = await seedInventoryPrerequisites(page, {
@@ -72,13 +71,6 @@ test("smart Collection rules remain temporary across navigation and refresh", as
     page.getByText("Why this Product is included", { exact: true }),
   ).toBeVisible();
   await page.keyboard.press("Escape");
-
-  await page.setViewportSize({ width: 1440, height: 900 });
-  await expectViewportBounded(page);
-  await whyIncluded.click();
-  await page.keyboard.press("Escape");
-  await page.setViewportSize({ width: 390, height: 844 });
-  await expectViewportBounded(page);
 
   const reset = page.getByRole("button", { name: "Reset to starter" });
   expect((await editorTrigger.boundingBox())?.height).toBeGreaterThanOrEqual(

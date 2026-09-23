@@ -378,6 +378,38 @@ jobs:
           path: apps/web/playwright-report/
           retention-days: 1
 
+  # One stable name for "every chromium shard passed", so the shard count can
+  # change without renaming a required check. Not yet required: the ruleset
+  # still lists the per-shard lanes. `needs.test-e2e.result` folds the webkit
+  # lane in too, so read the chromium lanes' own conclusions instead.
+  test-e2e-chromium:
+    name: E2E tests (chromium)
+    needs: test-e2e
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Require every chromium shard to pass
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        with:
+          script: |
+            const jobs = await github.paginate(
+              github.rest.actions.listJobsForWorkflowRun,
+              { ...context.repo, run_id: context.runId, per_page: 100 },
+            );
+            // Matches the matrix display name "E2E tests (chromium k/n)".
+            const shards = jobs.filter(({ name }) =>
+              /^E2E tests \(chromium \d+\/\d+\)$/.test(name),
+            );
+            for (const { name, conclusion } of shards) {
+              core.info(`${name}: ${conclusion}`);
+            }
+            if (shards.length === 0) {
+              core.setFailed("No chromium shard ran");
+            } else if (shards.some(({ conclusion }) => conclusion !== "success")) {
+              core.setFailed("A chromium shard did not succeed");
+            }
+
   # Host `swift test` for CubbyKit's package tests; not folded into test-apple
   # below. Measured 2026-09-21: running these on the iOS Simulator inside the
   # build job cost about 6 minutes to boot plus ~10 minutes of CPU starvation

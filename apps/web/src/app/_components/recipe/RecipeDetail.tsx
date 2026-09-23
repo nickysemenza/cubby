@@ -512,8 +512,11 @@ function RecipeWorkflowControls({
             onValueChange={onNutritionBasisChange}
           />
         ) : null}
+        {/* Five labelled segments measured 395px on Linux Chromium, wider
+            than a 402px phone's content box; icons keep it on one line. */}
         <ViewSwitcher
           ariaLabel="Recipe view"
+          compactOnMobile
           options={RECIPE_VIEW_OPTIONS}
           value={viewMode}
           onValueChange={setViewMode}
