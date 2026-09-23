@@ -32,6 +32,12 @@ export default defineEntity({
     },
     icons: { lucide: "CreditCard", sfSymbol: "building.columns", emoji: "🏦" },
     detail: {
+      omitRelations: {
+        vendors:
+          "Three joins through transactions; the Transactions table links each transaction's vendor.",
+        purchases:
+          "Two joins through transactions; the Transactions table links each transaction's purchase.",
+      },
       sections: [
         {
           kind: "fields",
@@ -472,6 +478,7 @@ export default defineEntity({
         columnId: "financialTransactionId",
         kind: "idMulti",
         placeholder: "Filter by related transactions id...",
+        brandRef: { entity: "financialTransaction" },
         urlOnly: true,
       },
       {
@@ -491,6 +498,7 @@ export default defineEntity({
         columnId: "purchaseId",
         kind: "idMulti",
         placeholder: "Filter by related purchases id...",
+        brandRef: { entity: "purchase" },
         urlOnly: true,
       },
       {
@@ -510,6 +518,7 @@ export default defineEntity({
         columnId: "vendorId",
         kind: "idMulti",
         placeholder: "Filter by related vendors id...",
+        brandRef: { entity: "vendor" },
         urlOnly: true,
       },
       {

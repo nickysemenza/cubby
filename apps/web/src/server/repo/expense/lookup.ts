@@ -35,6 +35,7 @@ import {
   notDeleted,
   presenceCondition,
   relations,
+  shortcodeSetCondition,
 } from "~/server/repo/database-helpers";
 import { withDisplayImages } from "~/server/repo/entity-display-image";
 import { listScaffold } from "~/server/repo/list-scaffold";
@@ -326,6 +327,15 @@ export const buildExpenseWhereClause = async (
   return expenseScaffold.where(storedFilters, [
     ...auditDateWhereConditions(expense, filters),
     ...relatedWhereConditions("expense", filters, expense.id),
+    filters.ledgerPartyId === undefined
+      ? undefined
+      : sql`EXISTS (
+          SELECT 1
+          FROM "ExpenseAttribution" ea
+          JOIN "LedgerParty" lp ON lp."id" = ea."ledgerPartyId" AND lp."deletedAt" IS NULL
+          WHERE ea."expenseId" = ${expense.id}
+            AND ea."deletedAt" IS NULL
+            AND ${shortcodeSetCondition(sql`lp."shortcode"`, filters.ledgerPartyId)})`,
     ...(options?.extraConditions ?? []),
     nameSearch,
     projectCondition,

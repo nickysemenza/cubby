@@ -524,6 +524,14 @@ export default defineEntity({
         placeholder: "Filter by seed source...",
         brandRef: { entity: "product" },
       },
+      {
+        // Plantings a garden entry is logged against (`GardenEntryPlanting`).
+        columnId: "gardenEntryId",
+        kind: "idMulti",
+        placeholder: "Filter by garden entry...",
+        brandRef: { entity: "gardenEntry" },
+        urlOnly: true,
+      },
     ],
   },
   relations: [

@@ -31,7 +31,11 @@ import {
   type ListEntity,
 } from "~/entities/generated/entity-lists.gen";
 
-import { useSectionCount, useSectionVisible } from "../data-table/detail-page";
+import {
+  useSectionCollapsed,
+  useSectionCount,
+  useSectionVisible,
+} from "../data-table/detail-page";
 import { ListWorkbench } from "../data-table/ListWorkbench";
 import {
   createCubbyColumnHelper,
@@ -64,6 +68,8 @@ export interface RelationSectionPlan {
   limit: number | null;
   /** Skip the whole section, on both platforms, when its first page is empty. */
   hideWhenEmpty: boolean;
+  /** Keep the header but fold the body away when the first page is empty. */
+  collapseWhenEmpty: boolean;
 }
 
 const isListEntity = (value: string): value is ListEntity =>
@@ -118,6 +124,7 @@ export function planRelationSection(
     | "sort"
     | "limit"
     | "hideWhenEmpty"
+    | "collapseWhenEmpty"
   >,
 ): RelationSectionPlan {
   const relation = entityManifest[entity].relationships.find(
@@ -174,6 +181,7 @@ export function planRelationSection(
     },
     limit: section.limit,
     hideWhenEmpty: section.hideWhenEmpty,
+    collapseWhenEmpty: section.collapseWhenEmpty,
   };
 }
 
@@ -438,6 +446,7 @@ export function EntityRelationTable({
     () =>
       createEntityDisplayColumns<RelationRow>(target, helper, undefined, {
         only: plan.columns ?? undefined,
+        skipSpecialized: true,
         onSaveField,
       }),
     [helper, onSaveField, plan.columns, target],
@@ -470,9 +479,9 @@ export function EntityRelationTable({
   // `useEntityList`), so this only fires once the read genuinely resolves
   // empty — never mid-fetch, and never on an error (which leaves it
   // `undefined` too since the query never completes with data).
-  useSectionVisible(
-    !(plan.hideWhenEmpty && !list.workbench.error && list.totalCount === 0),
-  );
+  const resolvedEmpty = !list.workbench.error && list.totalCount === 0;
+  useSectionVisible(!(plan.hideWhenEmpty && resolvedEmpty));
+  useSectionCollapsed(plan.collapseWhenEmpty && resolvedEmpty);
   const { singular } = entitySummary[target];
   const { pluralLabel } = entities[target];
 

@@ -19,6 +19,10 @@ export default defineEntity({
     },
     icons: { lucide: "Users", sfSymbol: "person.2", emoji: "👤" },
     detail: {
+      omitRelations: {
+        "recipes-eaten":
+          "Reachable through the Meals table on this page; the recipe rollup is three joins deep.",
+      },
       sections: [
         { kind: "slot", id: "wardrobe", title: "Wardrobe" },
         {
@@ -218,6 +222,7 @@ export default defineEntity({
         columnId: "mealId",
         kind: "idMulti",
         placeholder: "Filter by related meals id...",
+        brandRef: { entity: "meal" },
         urlOnly: true,
       },
       {
@@ -237,6 +242,7 @@ export default defineEntity({
         columnId: "recipeId",
         kind: "idMulti",
         placeholder: "Filter by related recipes id...",
+        brandRef: { entity: "recipe" },
         urlOnly: true,
       },
       {

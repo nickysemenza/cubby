@@ -612,6 +612,18 @@ const metadataSchemas = () => {
           .boolean({ error: "must be a boolean" })
           .optional()
           .default(false),
+        /** Keep the header (title, count, create) but fold the body away
+         * when the first page is empty — what a derived section defaults to. */
+        collapseWhenEmpty: z
+          .boolean({ error: "must be a boolean" })
+          .optional()
+          .default(false),
+        /** Set by the compiler on a section it derived from a `many`
+         * relation nobody declared or omitted; never declared by hand. */
+        derived: z
+          .boolean({ error: "must be a boolean" })
+          .optional()
+          .default(false),
       })
       .strict(),
     z
@@ -708,6 +720,16 @@ const metadataSchemas = () => {
             .strict()
             .prefault({}),
           sections: z.array(detailSectionSchema).optional().default([]),
+          /**
+           * `many` relations this page deliberately renders no table for,
+           * each with the reason. Every other `many` relation onto a list
+           * entity gets a derived relation section; a relation whose target
+           * has no list is recorded here by the compiler.
+           */
+          omitRelations: z
+            .record(nonEmptyString(), nonEmptyString("must give a reason"))
+            .optional()
+            .default({}),
         })
         .strict()
         .prefault({}),
@@ -1275,6 +1297,12 @@ const metadataSchemas = () => {
       provenance: z.unknown(),
       inverse: z.unknown().optional(),
       sources: z.array(entityRelationSourceMetadataSchema).optional(),
+      /** Set by the compiler on the `many` inverse it derived from another
+       * entity's `one` foreign-key relation; never declared by hand. */
+      derived: z.literal(true).optional(),
+      /** On a single-FK `one` relation: why its target gets no derived
+       * `many` inverse. */
+      inverseOmit: nonEmptyString("must give a reason").optional(),
       mutation: z
         .object({
           source: nonEmptyString(),

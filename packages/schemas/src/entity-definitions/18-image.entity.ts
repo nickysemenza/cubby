@@ -57,6 +57,10 @@ export default defineEntity({
     },
     icons: { lucide: "Image", sfSymbol: "photo", emoji: "🖼️" },
     detail: {
+      omitRelations: {
+        vendors:
+          "The associations slot lists every record that uses this image, vendor logos included.",
+      },
       sections: [
         {
           kind: "fields",

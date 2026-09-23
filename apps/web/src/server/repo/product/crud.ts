@@ -921,6 +921,15 @@ export const buildProductWhere = async (
           WHERE kit_pc."componentProductId" = ${product.id}
             AND kit_pc."deletedAt" IS NULL
             AND ${shortcodeSetCondition(sql`kit."shortcode"`, filters.kitId)})`,
+    filters.componentId === undefined
+      ? undefined
+      : sql`EXISTS (
+          SELECT 1
+          FROM "ProductComponent" component_pc
+          JOIN "Product" component ON component."id" = component_pc."componentProductId" AND component."deletedAt" IS NULL
+          WHERE component_pc."parentProductId" = ${product.id}
+            AND component_pc."deletedAt" IS NULL
+            AND ${shortcodeSetCondition(sql`component."shortcode"`, filters.componentId)})`,
     idSetPresence(
       product.id,
       filters.unitMappingPresenceFilter,

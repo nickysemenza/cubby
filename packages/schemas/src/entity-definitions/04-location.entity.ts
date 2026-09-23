@@ -29,6 +29,10 @@ export default defineEntity({
     },
     icons: { lucide: "MapPin", sfSymbol: "mappin.and.ellipse", emoji: "📍" },
     detail: {
+      omitRelations: {
+        ingredients:
+          "Derived through inventory, then product, then ingredient; the Contents table already lists what is stocked here.",
+      },
       hero: { breadcrumb: "parentId", images: true },
       sections: [
         {
@@ -701,6 +705,7 @@ export default defineEntity({
         columnId: "ingredientId",
         kind: "idMulti",
         placeholder: "Filter by related ingredients id...",
+        brandRef: { entity: "ingredient" },
         urlOnly: true,
       },
       {

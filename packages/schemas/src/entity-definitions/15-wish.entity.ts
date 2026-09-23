@@ -23,6 +23,10 @@ export default defineEntity({
     },
     icons: { lucide: "Heart", sfSymbol: "star", emoji: "⭐" },
     detail: {
+      omitRelations: {
+        candidates:
+          "The Tool alternatives section edits candidates in place with its own renderer.",
+      },
       hero: { actions: ["edit", "markPurchased"] },
       sections: [
         {
@@ -296,6 +300,7 @@ export default defineEntity({
         columnId: "productId",
         kind: "idMulti",
         placeholder: "Filter by candidate product id...",
+        brandRef: { entity: "product" },
         urlOnly: true,
       },
       {

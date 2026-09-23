@@ -50,6 +50,10 @@ export default defineEntity({
       emoji: "💸",
     },
     detail: {
+      omitRelations: {
+        transactions:
+          "The settlement slot renders the transactions that settle this expense.",
+      },
       sections: [
         {
           kind: "fields",
@@ -1223,6 +1227,15 @@ export default defineEntity({
         urlKey: "order",
         kind: "id",
         placeholder: "Filter by order id...",
+        brandRef: null,
+        urlOnly: true,
+      },
+      {
+        // Expenses attributed to a ledger party (`ExpenseAttribution`).
+        columnId: "ledgerPartyId",
+        kind: "idMulti",
+        placeholder: "Filter by attributed party...",
+        brandRef: { entity: "ledgerParty" },
         urlOnly: true,
       },
       {

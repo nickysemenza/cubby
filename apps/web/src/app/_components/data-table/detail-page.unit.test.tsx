@@ -10,6 +10,7 @@ import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 import {
   type DetailSection,
   DetailSections,
+  useSectionCollapsed,
   useSectionVisible,
 } from "./detail-page";
 
@@ -281,6 +282,29 @@ const hideableSection = (hidden: boolean): DetailSection => ({
   placement: "primary",
   headerAction: <button type="button">Add</button>,
   content: <HideableContent hidden={hidden} />,
+});
+
+// A derived relation section (`collapseWhenEmpty`) reports empty through
+// `useSectionCollapsed`; the card must keep the header and its create action
+// so an empty relation still offers its first "+ Add".
+function CollapsibleContent({ empty }: { empty: boolean }) {
+  useSectionCollapsed(empty);
+  return <p>Empty rows content</p>;
+}
+
+describe("collapseWhenEmpty relation sections", () => {
+  it("keeps the header and create action but hides the body once empty", async () => {
+    renderDetail({
+      detailSections: [
+        { ...hideableSection(false), content: <CollapsibleContent empty /> },
+      ],
+    });
+    await waitFor(() => {
+      expect(screen.queryByText("Empty rows content")).not.toBeVisible();
+    });
+    expect(screen.getByRole("heading", { name: "Relation" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Add" })).toBeVisible();
+  });
 });
 
 describe("hideWhenEmpty relation sections", () => {

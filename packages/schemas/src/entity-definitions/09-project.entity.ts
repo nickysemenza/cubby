@@ -34,6 +34,14 @@ export default defineEntity({
     },
     icons: { lucide: "Hammer", sfSymbol: "hammer", emoji: "🛠️" },
     detail: {
+      omitRelations: {
+        "blocked-by":
+          "The Dependencies section edits Blocked by and Blocking in place.",
+        "task-products":
+          "The Tasks table shows each task's subject product; Resources and Purchased products cover the rest.",
+        defaultPurchases:
+          "A subset of the Purchases table; each purchase shows its default project as a field.",
+      },
       hero: {
         chip: "status",
         stats: ["costEstimate"],
@@ -892,6 +900,7 @@ export default defineEntity({
         columnId: "projectId",
         kind: "idMulti",
         placeholder: "Filter by related blocked by id...",
+        brandRef: { entity: "project" },
         urlOnly: true,
       },
       {
@@ -911,6 +920,7 @@ export default defineEntity({
         columnId: "taskId",
         kind: "idMulti",
         placeholder: "Filter by related tasks id...",
+        brandRef: { entity: "task" },
         urlOnly: true,
       },
       {
@@ -930,6 +940,7 @@ export default defineEntity({
         columnId: "expenseId",
         kind: "idMulti",
         placeholder: "Filter by related expenses id...",
+        brandRef: { entity: "expense" },
         urlOnly: true,
       },
       {
@@ -949,6 +960,7 @@ export default defineEntity({
         columnId: "taskProductId",
         kind: "idMulti",
         placeholder: "Filter by related task products id...",
+        brandRef: { entity: "product" },
         urlOnly: true,
       },
       {
@@ -968,6 +980,7 @@ export default defineEntity({
         columnId: "purchasedProductId",
         kind: "idMulti",
         placeholder: "Filter by related purchased products id...",
+        brandRef: { entity: "product" },
         urlOnly: true,
       },
       {

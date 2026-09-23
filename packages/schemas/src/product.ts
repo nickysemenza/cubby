@@ -224,6 +224,8 @@ export const productFilterFields = {
   ...generatedProductFilterFields,
   /** Components of the given kit(s): products on their `ProductComponent` rows. */
   kitId: oneOrMany(productShortcode).optional(),
+  /** Kits containing the given component(s): the parents on their `ProductComponent` rows. */
+  componentId: oneOrMany(productShortcode).optional(),
   upcPresenceFilter: presenceFilter,
   externalIdSource: oneOrMany(externalIdSource).optional(),
   externalIdPresenceFilter: presenceFilter,

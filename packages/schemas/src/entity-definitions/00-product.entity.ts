@@ -44,6 +44,10 @@ export default defineEntity({
     },
     icons: { lucide: "Barcode", sfSymbol: "shippingbox", emoji: "📦" },
     detail: {
+      omitRelations: {
+        eaters:
+          "Who ate it is per-portion meal data; the Meals table on this page shows each meal and its eaters.",
+      },
       hero: {
         images: true,
         actions: ["edit", "addToInventory", "recordSale", "discard"],
@@ -136,6 +140,32 @@ export default defineEntity({
           filter: { descriptor: "subjectProduct" },
           columns: ["name", "status", "dueDate", "trade"],
           sort: { field: "dueDate", direction: "desc" },
+        },
+        {
+          kind: "relation",
+          id: "purchased-for-projects",
+          title: "Purchased for projects",
+          relation: "purchased-projects",
+          filter: { descriptor: "purchasedProductId" },
+          columns: ["name", "status", "kind"],
+          collapseWhenEmpty: true,
+        },
+        {
+          kind: "relation",
+          id: "wishes",
+          title: "Wishlist",
+          relation: "wishes",
+          filter: { descriptor: "related:wish.candidates" },
+          collapseWhenEmpty: true,
+        },
+        {
+          kind: "relation",
+          id: "containing-kits",
+          title: "Part of kits",
+          relation: "containing-kits",
+          filter: { descriptor: "componentId" },
+          columns: ["name", "manufacturer"],
+          collapseWhenEmpty: true,
         },
         {
           kind: "timeline",
@@ -1831,6 +1861,14 @@ export default defineEntity({
         urlOnly: true,
       },
       {
+        // Kits containing a component: parents on its `ProductComponent` rows.
+        columnId: "componentId",
+        kind: "idMulti",
+        placeholder: "Filter by component...",
+        brandRef: { entity: "product" },
+        urlOnly: true,
+      },
+      {
         columnId: "usedOnProjectId",
         kind: "idMulti",
         placeholder: "Filter by related used on projects id...",
@@ -1864,6 +1902,7 @@ export default defineEntity({
         columnId: "expenseId",
         kind: "idMulti",
         placeholder: "Filter by related expenses id...",
+        brandRef: { entity: "expense" },
         urlOnly: true,
       },
       {
@@ -1883,6 +1922,7 @@ export default defineEntity({
         columnId: "relatedInventoryId",
         kind: "idMulti",
         placeholder: "Filter by related inventory id...",
+        brandRef: { entity: "inventory" },
         urlOnly: true,
       },
       {
@@ -1902,6 +1942,7 @@ export default defineEntity({
         columnId: "wishId",
         kind: "idMulti",
         placeholder: "Filter by related wishlist candidates id...",
+        brandRef: { entity: "wish" },
         urlOnly: true,
       },
       {
@@ -1954,6 +1995,7 @@ export default defineEntity({
         columnId: "taskId",
         kind: "idMulti",
         placeholder: "Filter by related tasks id...",
+        brandRef: { entity: "task" },
         urlOnly: true,
       },
       {
@@ -1967,6 +2009,7 @@ export default defineEntity({
         columnId: "mealId",
         kind: "idMulti",
         placeholder: "Filter by related meals id...",
+        brandRef: { entity: "meal" },
         urlOnly: true,
       },
       {
@@ -1986,6 +2029,7 @@ export default defineEntity({
         columnId: "eaterId",
         kind: "idMulti",
         placeholder: "Filter by related eaters id...",
+        brandRef: { entity: "ledgerParty" },
         urlOnly: true,
       },
       {

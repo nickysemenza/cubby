@@ -3,6 +3,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { compileEntity, validateEntityIdentities } from "./compile.ts";
 import { validateDataQualityDeclarations } from "./data-quality.ts";
+import { deriveInverseRelations, deriveRelationSections } from "./derive.ts";
 import { validateRelationSections } from "./presentation.ts";
 import { browserRoutes } from "./render/routes.ts";
 import type {
@@ -397,7 +398,7 @@ export const loadEntityDeclarations = async (): Promise<CompiledEntity[]> => {
     throw new EntityDeclarationError(
       `${SPEC_DIRECTORY} has no entity declarations.`,
     );
-  const compiled = await Promise.all(
+  const loaded = await Promise.all(
     entries.map(async (entry) => {
       const module = await import(
         pathToFileURL(resolve(SPEC_DIRECTORY, entry.name)).href
@@ -409,17 +410,21 @@ export const loadEntityDeclarations = async (): Promise<CompiledEntity[]> => {
         throw new EntityDeclarationError(
           `${entry.name} exports filterSchemas; declare filters as descriptors with deriveSchema instead.`,
         );
-      const entity = compileEntity(raw, 0);
-      declarationModules.set(entity.key, {
+      declarationModules.set(String(raw.key), {
         path: `../entity-definitions/${entry.name.replace(/\.ts$/, "")}`,
         enumExports: Object.keys(module).filter((key) =>
           key.startsWith("generated"),
         ),
       });
-      return entity;
+      return raw;
     }),
   );
-  const entities = validateDataQualityDeclarations(compiled);
+  const compiled = deriveInverseRelations(loaded).map((raw) =>
+    compileEntity(raw, 0),
+  );
+  const entities = deriveRelationSections(
+    validateDataQualityDeclarations(compiled),
+  );
   const routes = new Set<string>();
   validateEntityIdentities(entities);
   validateRelationSections(entities);

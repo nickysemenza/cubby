@@ -719,6 +719,7 @@ export default defineEntity({
         columnId: "mealId",
         kind: "idMulti",
         placeholder: "Filter by related meals id...",
+        brandRef: { entity: "meal" },
         urlOnly: true,
       },
       {
@@ -748,6 +749,8 @@ export default defineEntity({
       label: "Forked from",
       target: "recipe",
       cardinality: "one",
+      inverseOmit:
+        "The recipe page is custom; a recipe's forks are reached from each fork's Forked from field.",
       provenance: {
         kind: "local-path",
         steps: [{ edge: "Recipe.forkedFromRecipeId", direction: "outgoing" }],

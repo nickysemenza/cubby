@@ -320,6 +320,8 @@ export default defineEntity({
       label: "Cover image",
       target: "image",
       cardinality: "one",
+      inverseOmit:
+        "The image's associations slot lists what uses it, cookbook covers included.",
       provenance: {
         kind: "local-path",
         steps: [{ edge: "Cookbook.coverImageId", direction: "outgoing" }],
@@ -333,6 +335,8 @@ export default defineEntity({
       label: "Product",
       target: "product",
       cardinality: "one",
+      inverseOmit:
+        "The product page's cookbooks slot already lists the cookbooks this product is.",
       provenance: {
         kind: "local-path",
         steps: [{ edge: "Cookbook.productId", direction: "outgoing" }],

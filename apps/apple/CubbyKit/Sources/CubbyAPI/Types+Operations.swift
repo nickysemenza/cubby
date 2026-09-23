@@ -1708,6 +1708,65 @@ public enum Operations {
                 public typealias LedgerPartyIdPayload = [Operations.Resources_device_list.Input.Query.LedgerPartyIdPayloadPayload]
                 /// - Remark: Generated from `#/paths/api/v1/devices/GET/query/ledgerPartyId`.
                 public var ledgerPartyId: Operations.Resources_device_list.Input.Query.LedgerPartyIdPayload?
+                /// product shortcode, e.g. PRD-4K7M
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/devices/GET/query/ProductIdPayload`.
+                public struct ProductIdPayloadPayload: Codable, Hashable, Sendable {
+                    /// product shortcode, e.g. PRD-4K7M
+                    ///
+                    /// - Remark: Generated from `#/paths/api/v1/devices/GET/query/ProductIdPayload/value1`.
+                    public var value1: Swift.String?
+                    /// - Remark: Generated from `#/paths/api/v1/devices/GET/query/ProductIdPayload/value2`.
+                    @frozen public enum Value2Payload: String, Codable, Hashable, Sendable, CaseIterable {
+                        case __unresolvableEntityFilter = "__unresolvable_entity_filter__"
+                    }
+                    /// - Remark: Generated from `#/paths/api/v1/devices/GET/query/ProductIdPayload/value2`.
+                    public var value2: Operations.Resources_device_list.Input.Query.ProductIdPayloadPayload.Value2Payload?
+                    /// Creates a new `ProductIdPayloadPayload`.
+                    ///
+                    /// - Parameters:
+                    ///   - value1: product shortcode, e.g. PRD-4K7M
+                    ///   - value2:
+                    public init(
+                        value1: Swift.String? = nil,
+                        value2: Operations.Resources_device_list.Input.Query.ProductIdPayloadPayload.Value2Payload? = nil
+                    ) {
+                        self.value1 = value1
+                        self.value2 = value2
+                    }
+                    public init(from decoder: any Swift.Decoder) throws {
+                        var errors: [any Swift.Error] = []
+                        do {
+                            self.value1 = try decoder.decodeFromSingleValueContainer()
+                        } catch {
+                            errors.append(error)
+                        }
+                        do {
+                            self.value2 = try decoder.decodeFromSingleValueContainer()
+                        } catch {
+                            errors.append(error)
+                        }
+                        try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                            [
+                                self.value1,
+                                self.value2
+                            ],
+                            type: Self.self,
+                            codingPath: decoder.codingPath,
+                            errors: errors
+                        )
+                    }
+                    public func encode(to encoder: any Swift.Encoder) throws {
+                        try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                            self.value1,
+                            self.value2
+                        ])
+                    }
+                }
+                /// - Remark: Generated from `#/paths/api/v1/devices/GET/query/productId`.
+                public typealias ProductIdPayload = [Operations.Resources_device_list.Input.Query.ProductIdPayloadPayload]
+                /// - Remark: Generated from `#/paths/api/v1/devices/GET/query/productId`.
+                public var productId: Operations.Resources_device_list.Input.Query.ProductIdPayload?
                 /// - Remark: Generated from `#/paths/api/v1/devices/GET/query/DataStatusPayload`.
                 @frozen public enum DataStatusPayloadPayload: String, Codable, Hashable, Sendable, CaseIterable {
                     case complete = "complete"
@@ -1762,6 +1821,7 @@ public enum Operations {
                 ///   - automaticWork:
                 ///   - remotePaused:
                 ///   - ledgerPartyId:
+                ///   - productId:
                 ///   - dataStatus:
                 ///   - dataGap:
                 ///   - page: Page number, starting at 1 (default 1)
@@ -1779,6 +1839,7 @@ public enum Operations {
                     automaticWork: Swift.Bool? = nil,
                     remotePaused: Swift.Bool? = nil,
                     ledgerPartyId: Operations.Resources_device_list.Input.Query.LedgerPartyIdPayload? = nil,
+                    productId: Operations.Resources_device_list.Input.Query.ProductIdPayload? = nil,
                     dataStatus: Operations.Resources_device_list.Input.Query.DataStatusPayload? = nil,
                     dataGap: Operations.Resources_device_list.Input.Query.DataGapPayload? = nil,
                     page: Swift.Int? = nil,
@@ -1796,6 +1857,7 @@ public enum Operations {
                     self.automaticWork = automaticWork
                     self.remotePaused = remotePaused
                     self.ledgerPartyId = ledgerPartyId
+                    self.productId = productId
                     self.dataStatus = dataStatus
                     self.dataGap = dataGap
                     self.page = page
@@ -3151,6 +3213,8 @@ public enum Operations {
                 public typealias DataGapPayload = [Operations.Resources_expense_list.Input.Query.DataGapPayloadPayload]
                 /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/dataGap`.
                 public var dataGap: Operations.Resources_expense_list.Input.Query.DataGapPayload?
+                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/ledgerPartyId`.
+                public var ledgerPartyId: [Swift.String]?
                 /// project shortcode, e.g. PRJ-4K7M
                 ///
                 /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/ProjectIdPayload`.
@@ -3539,6 +3603,7 @@ public enum Operations {
                 ///   - urlSearch: Substring match on url
                 ///   - dataStatus:
                 ///   - dataGap:
+                ///   - ledgerPartyId:
                 ///   - projectId:
                 ///   - includeSubProjects:
                 ///   - projectPresenceFilter:
@@ -3590,6 +3655,7 @@ public enum Operations {
                     urlSearch: Swift.String? = nil,
                     dataStatus: Operations.Resources_expense_list.Input.Query.DataStatusPayload? = nil,
                     dataGap: Operations.Resources_expense_list.Input.Query.DataGapPayload? = nil,
+                    ledgerPartyId: [Swift.String]? = nil,
                     projectId: Operations.Resources_expense_list.Input.Query.ProjectIdPayload? = nil,
                     includeSubProjects: Swift.Bool? = nil,
                     projectPresenceFilter: Operations.Resources_expense_list.Input.Query.ProjectPresenceFilterPayload? = nil,
@@ -3641,6 +3707,7 @@ public enum Operations {
                     self.urlSearch = urlSearch
                     self.dataStatus = dataStatus
                     self.dataGap = dataGap
+                    self.ledgerPartyId = ledgerPartyId
                     self.projectId = projectId
                     self.includeSubProjects = includeSubProjects
                     self.projectPresenceFilter = projectPresenceFilter
@@ -5693,6 +5760,65 @@ public enum Operations {
                 public var amountMin: Swift.Double?
                 /// - Remark: Generated from `#/paths/api/v1/financial-transactions/GET/query/amountMax`.
                 public var amountMax: Swift.Double?
+                /// ledgerTransfer shortcode, e.g. LTR-4K7M
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/financial-transactions/GET/query/LedgerTransferIdPayload`.
+                public struct LedgerTransferIdPayloadPayload: Codable, Hashable, Sendable {
+                    /// ledgerTransfer shortcode, e.g. LTR-4K7M
+                    ///
+                    /// - Remark: Generated from `#/paths/api/v1/financial-transactions/GET/query/LedgerTransferIdPayload/value1`.
+                    public var value1: Swift.String?
+                    /// - Remark: Generated from `#/paths/api/v1/financial-transactions/GET/query/LedgerTransferIdPayload/value2`.
+                    @frozen public enum Value2Payload: String, Codable, Hashable, Sendable, CaseIterable {
+                        case __unresolvableEntityFilter = "__unresolvable_entity_filter__"
+                    }
+                    /// - Remark: Generated from `#/paths/api/v1/financial-transactions/GET/query/LedgerTransferIdPayload/value2`.
+                    public var value2: Operations.Resources_financialTransaction_list.Input.Query.LedgerTransferIdPayloadPayload.Value2Payload?
+                    /// Creates a new `LedgerTransferIdPayloadPayload`.
+                    ///
+                    /// - Parameters:
+                    ///   - value1: ledgerTransfer shortcode, e.g. LTR-4K7M
+                    ///   - value2:
+                    public init(
+                        value1: Swift.String? = nil,
+                        value2: Operations.Resources_financialTransaction_list.Input.Query.LedgerTransferIdPayloadPayload.Value2Payload? = nil
+                    ) {
+                        self.value1 = value1
+                        self.value2 = value2
+                    }
+                    public init(from decoder: any Swift.Decoder) throws {
+                        var errors: [any Swift.Error] = []
+                        do {
+                            self.value1 = try decoder.decodeFromSingleValueContainer()
+                        } catch {
+                            errors.append(error)
+                        }
+                        do {
+                            self.value2 = try decoder.decodeFromSingleValueContainer()
+                        } catch {
+                            errors.append(error)
+                        }
+                        try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                            [
+                                self.value1,
+                                self.value2
+                            ],
+                            type: Self.self,
+                            codingPath: decoder.codingPath,
+                            errors: errors
+                        )
+                    }
+                    public func encode(to encoder: any Swift.Encoder) throws {
+                        try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                            self.value1,
+                            self.value2
+                        ])
+                    }
+                }
+                /// - Remark: Generated from `#/paths/api/v1/financial-transactions/GET/query/ledgerTransferId`.
+                public typealias LedgerTransferIdPayload = [Operations.Resources_financialTransaction_list.Input.Query.LedgerTransferIdPayloadPayload]
+                /// - Remark: Generated from `#/paths/api/v1/financial-transactions/GET/query/ledgerTransferId`.
+                public var ledgerTransferId: Operations.Resources_financialTransaction_list.Input.Query.LedgerTransferIdPayload?
                 /// - Remark: Generated from `#/paths/api/v1/financial-transactions/GET/query/DataStatusPayload`.
                 @frozen public enum DataStatusPayloadPayload: String, Codable, Hashable, Sendable, CaseIterable {
                     case complete = "complete"
@@ -5902,6 +6028,7 @@ public enum Operations {
                 ///   - transactionDateTo: Calendar day as "YYYY-MM-DD"
                 ///   - amountMin:
                 ///   - amountMax:
+                ///   - ledgerTransferId:
                 ///   - dataStatus:
                 ///   - dataGap:
                 ///   - accountId:
@@ -5939,6 +6066,7 @@ public enum Operations {
                     transactionDateTo: Swift.String? = nil,
                     amountMin: Swift.Double? = nil,
                     amountMax: Swift.Double? = nil,
+                    ledgerTransferId: Operations.Resources_financialTransaction_list.Input.Query.LedgerTransferIdPayload? = nil,
                     dataStatus: Operations.Resources_financialTransaction_list.Input.Query.DataStatusPayload? = nil,
                     dataGap: Operations.Resources_financialTransaction_list.Input.Query.DataGapPayload? = nil,
                     accountId: Operations.Resources_financialTransaction_list.Input.Query.AccountIdPayload? = nil,
@@ -5976,6 +6104,7 @@ public enum Operations {
                     self.transactionDateTo = transactionDateTo
                     self.amountMin = amountMin
                     self.amountMax = amountMax
+                    self.ledgerTransferId = ledgerTransferId
                     self.dataStatus = dataStatus
                     self.dataGap = dataGap
                     self.accountId = accountId
@@ -12661,6 +12790,65 @@ public enum Operations {
                 public var ingredientPresenceFilter: Operations.Resources_inventory_list.Input.Query.IngredientPresenceFilterPayload?
                 /// - Remark: Generated from `#/paths/api/v1/inventory/GET/query/ingredientSearch`.
                 public var ingredientSearch: Swift.String?
+                /// ledgerParty shortcode, e.g. LPY-4K7M
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/inventory/GET/query/OwnerLedgerPartyIdPayload`.
+                public struct OwnerLedgerPartyIdPayloadPayload: Codable, Hashable, Sendable {
+                    /// ledgerParty shortcode, e.g. LPY-4K7M
+                    ///
+                    /// - Remark: Generated from `#/paths/api/v1/inventory/GET/query/OwnerLedgerPartyIdPayload/value1`.
+                    public var value1: Swift.String?
+                    /// - Remark: Generated from `#/paths/api/v1/inventory/GET/query/OwnerLedgerPartyIdPayload/value2`.
+                    @frozen public enum Value2Payload: String, Codable, Hashable, Sendable, CaseIterable {
+                        case __unresolvableEntityFilter = "__unresolvable_entity_filter__"
+                    }
+                    /// - Remark: Generated from `#/paths/api/v1/inventory/GET/query/OwnerLedgerPartyIdPayload/value2`.
+                    public var value2: Operations.Resources_inventory_list.Input.Query.OwnerLedgerPartyIdPayloadPayload.Value2Payload?
+                    /// Creates a new `OwnerLedgerPartyIdPayloadPayload`.
+                    ///
+                    /// - Parameters:
+                    ///   - value1: ledgerParty shortcode, e.g. LPY-4K7M
+                    ///   - value2:
+                    public init(
+                        value1: Swift.String? = nil,
+                        value2: Operations.Resources_inventory_list.Input.Query.OwnerLedgerPartyIdPayloadPayload.Value2Payload? = nil
+                    ) {
+                        self.value1 = value1
+                        self.value2 = value2
+                    }
+                    public init(from decoder: any Swift.Decoder) throws {
+                        var errors: [any Swift.Error] = []
+                        do {
+                            self.value1 = try decoder.decodeFromSingleValueContainer()
+                        } catch {
+                            errors.append(error)
+                        }
+                        do {
+                            self.value2 = try decoder.decodeFromSingleValueContainer()
+                        } catch {
+                            errors.append(error)
+                        }
+                        try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                            [
+                                self.value1,
+                                self.value2
+                            ],
+                            type: Self.self,
+                            codingPath: decoder.codingPath,
+                            errors: errors
+                        )
+                    }
+                    public func encode(to encoder: any Swift.Encoder) throws {
+                        try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                            self.value1,
+                            self.value2
+                        ])
+                    }
+                }
+                /// - Remark: Generated from `#/paths/api/v1/inventory/GET/query/ownerLedgerPartyId`.
+                public typealias OwnerLedgerPartyIdPayload = [Operations.Resources_inventory_list.Input.Query.OwnerLedgerPartyIdPayloadPayload]
+                /// - Remark: Generated from `#/paths/api/v1/inventory/GET/query/ownerLedgerPartyId`.
+                public var ownerLedgerPartyId: Operations.Resources_inventory_list.Input.Query.OwnerLedgerPartyIdPayload?
                 /// - Remark: Generated from `#/paths/api/v1/inventory/GET/query/DataStatusPayload`.
                 @frozen public enum DataStatusPayloadPayload: String, Codable, Hashable, Sendable, CaseIterable {
                     case complete = "complete"
@@ -12889,6 +13077,7 @@ public enum Operations {
                 ///   - ingredientId:
                 ///   - ingredientPresenceFilter:
                 ///   - ingredientSearch:
+                ///   - ownerLedgerPartyId:
                 ///   - dataStatus:
                 ///   - dataGap:
                 ///   - productNameFilter: Filter by product name (substring)
@@ -12916,6 +13105,7 @@ public enum Operations {
                     ingredientId: [Swift.String]? = nil,
                     ingredientPresenceFilter: Operations.Resources_inventory_list.Input.Query.IngredientPresenceFilterPayload? = nil,
                     ingredientSearch: Swift.String? = nil,
+                    ownerLedgerPartyId: Operations.Resources_inventory_list.Input.Query.OwnerLedgerPartyIdPayload? = nil,
                     dataStatus: Operations.Resources_inventory_list.Input.Query.DataStatusPayload? = nil,
                     dataGap: Operations.Resources_inventory_list.Input.Query.DataGapPayload? = nil,
                     productNameFilter: Swift.String? = nil,
@@ -12943,6 +13133,7 @@ public enum Operations {
                     self.ingredientId = ingredientId
                     self.ingredientPresenceFilter = ingredientPresenceFilter
                     self.ingredientSearch = ingredientSearch
+                    self.ownerLedgerPartyId = ownerLedgerPartyId
                     self.dataStatus = dataStatus
                     self.dataGap = dataGap
                     self.productNameFilter = productNameFilter
@@ -20486,6 +20677,8 @@ public enum Operations {
                 public var taskId: [Swift.String]?
                 /// - Remark: Generated from `#/paths/api/v1/plantings/GET/query/sourceProductId`.
                 public var sourceProductId: [Swift.String]?
+                /// - Remark: Generated from `#/paths/api/v1/plantings/GET/query/gardenEntryId`.
+                public var gardenEntryId: [Swift.String]?
                 /// Calendar day as "YYYY-MM-DD"
                 ///
                 /// - Remark: Generated from `#/paths/api/v1/plantings/GET/query/activeOn`.
@@ -20530,6 +20723,7 @@ public enum Operations {
                 ///   - ingredientId:
                 ///   - taskId:
                 ///   - sourceProductId:
+                ///   - gardenEntryId:
                 ///   - activeOn: Calendar day as "YYYY-MM-DD"
                 ///   - searchQuery:
                 ///   - page: Page number, starting at 1 (default 1)
@@ -20548,6 +20742,7 @@ public enum Operations {
                     ingredientId: [Swift.String]? = nil,
                     taskId: [Swift.String]? = nil,
                     sourceProductId: [Swift.String]? = nil,
+                    gardenEntryId: [Swift.String]? = nil,
                     activeOn: Swift.String? = nil,
                     searchQuery: Swift.String? = nil,
                     page: Swift.Int? = nil,
@@ -20566,6 +20761,7 @@ public enum Operations {
                     self.ingredientId = ingredientId
                     self.taskId = taskId
                     self.sourceProductId = sourceProductId
+                    self.gardenEntryId = gardenEntryId
                     self.activeOn = activeOn
                     self.searchQuery = searchQuery
                     self.page = page
@@ -21336,6 +21532,8 @@ public enum Operations {
                 public var taskId: [Swift.String]?
                 /// - Remark: Generated from `#/paths/api/v1/plantings/timeline/GET/query/sourceProductId`.
                 public var sourceProductId: [Swift.String]?
+                /// - Remark: Generated from `#/paths/api/v1/plantings/timeline/GET/query/gardenEntryId`.
+                public var gardenEntryId: [Swift.String]?
                 /// Calendar day as "YYYY-MM-DD"
                 ///
                 /// - Remark: Generated from `#/paths/api/v1/plantings/timeline/GET/query/activeOn`.
@@ -21381,6 +21579,7 @@ public enum Operations {
                 ///   - ingredientId:
                 ///   - taskId:
                 ///   - sourceProductId:
+                ///   - gardenEntryId:
                 ///   - activeOn: Calendar day as "YYYY-MM-DD"
                 ///   - searchQuery:
                 ///   - ids:
@@ -21401,6 +21600,7 @@ public enum Operations {
                     ingredientId: [Swift.String]? = nil,
                     taskId: [Swift.String]? = nil,
                     sourceProductId: [Swift.String]? = nil,
+                    gardenEntryId: [Swift.String]? = nil,
                     activeOn: Swift.String? = nil,
                     searchQuery: Swift.String? = nil,
                     ids: [Swift.String]? = nil,
@@ -21421,6 +21621,7 @@ public enum Operations {
                     self.ingredientId = ingredientId
                     self.taskId = taskId
                     self.sourceProductId = sourceProductId
+                    self.gardenEntryId = gardenEntryId
                     self.activeOn = activeOn
                     self.searchQuery = searchQuery
                     self.ids = ids
@@ -21769,6 +21970,65 @@ public enum Operations {
                 public var updatedTo: Swift.String?
                 /// - Remark: Generated from `#/paths/api/v1/product-categories/GET/query/search`.
                 public var search: Swift.String?
+                /// productCategory shortcode, e.g. CAT-4K7M
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/product-categories/GET/query/ParentIdPayload`.
+                public struct ParentIdPayloadPayload: Codable, Hashable, Sendable {
+                    /// productCategory shortcode, e.g. CAT-4K7M
+                    ///
+                    /// - Remark: Generated from `#/paths/api/v1/product-categories/GET/query/ParentIdPayload/value1`.
+                    public var value1: Swift.String?
+                    /// - Remark: Generated from `#/paths/api/v1/product-categories/GET/query/ParentIdPayload/value2`.
+                    @frozen public enum Value2Payload: String, Codable, Hashable, Sendable, CaseIterable {
+                        case __unresolvableEntityFilter = "__unresolvable_entity_filter__"
+                    }
+                    /// - Remark: Generated from `#/paths/api/v1/product-categories/GET/query/ParentIdPayload/value2`.
+                    public var value2: Operations.Resources_productCategory_list.Input.Query.ParentIdPayloadPayload.Value2Payload?
+                    /// Creates a new `ParentIdPayloadPayload`.
+                    ///
+                    /// - Parameters:
+                    ///   - value1: productCategory shortcode, e.g. CAT-4K7M
+                    ///   - value2:
+                    public init(
+                        value1: Swift.String? = nil,
+                        value2: Operations.Resources_productCategory_list.Input.Query.ParentIdPayloadPayload.Value2Payload? = nil
+                    ) {
+                        self.value1 = value1
+                        self.value2 = value2
+                    }
+                    public init(from decoder: any Swift.Decoder) throws {
+                        var errors: [any Swift.Error] = []
+                        do {
+                            self.value1 = try decoder.decodeFromSingleValueContainer()
+                        } catch {
+                            errors.append(error)
+                        }
+                        do {
+                            self.value2 = try decoder.decodeFromSingleValueContainer()
+                        } catch {
+                            errors.append(error)
+                        }
+                        try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                            [
+                                self.value1,
+                                self.value2
+                            ],
+                            type: Self.self,
+                            codingPath: decoder.codingPath,
+                            errors: errors
+                        )
+                    }
+                    public func encode(to encoder: any Swift.Encoder) throws {
+                        try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                            self.value1,
+                            self.value2
+                        ])
+                    }
+                }
+                /// - Remark: Generated from `#/paths/api/v1/product-categories/GET/query/parentId`.
+                public typealias ParentIdPayload = [Operations.Resources_productCategory_list.Input.Query.ParentIdPayloadPayload]
+                /// - Remark: Generated from `#/paths/api/v1/product-categories/GET/query/parentId`.
+                public var parentId: Operations.Resources_productCategory_list.Input.Query.ParentIdPayload?
                 /// - Remark: Generated from `#/paths/api/v1/product-categories/GET/query/DataStatusPayload`.
                 @frozen public enum DataStatusPayloadPayload: String, Codable, Hashable, Sendable, CaseIterable {
                     case complete = "complete"
@@ -21818,6 +22078,7 @@ public enum Operations {
                 ///   - updatedFrom: Calendar day as "YYYY-MM-DD"
                 ///   - updatedTo: Calendar day as "YYYY-MM-DD"
                 ///   - search:
+                ///   - parentId:
                 ///   - dataStatus:
                 ///   - dataGap:
                 ///   - page: Page number, starting at 1 (default 1)
@@ -21830,6 +22091,7 @@ public enum Operations {
                     updatedFrom: Swift.String? = nil,
                     updatedTo: Swift.String? = nil,
                     search: Swift.String? = nil,
+                    parentId: Operations.Resources_productCategory_list.Input.Query.ParentIdPayload? = nil,
                     dataStatus: Operations.Resources_productCategory_list.Input.Query.DataStatusPayload? = nil,
                     dataGap: Operations.Resources_productCategory_list.Input.Query.DataGapPayload? = nil,
                     page: Swift.Int? = nil,
@@ -21842,6 +22104,7 @@ public enum Operations {
                     self.updatedFrom = updatedFrom
                     self.updatedTo = updatedTo
                     self.search = search
+                    self.parentId = parentId
                     self.dataStatus = dataStatus
                     self.dataGap = dataGap
                     self.page = page
@@ -23100,6 +23363,8 @@ public enum Operations {
                 public var dataGap: Operations.Resources_product_list.Input.Query.DataGapPayload?
                 /// - Remark: Generated from `#/paths/api/v1/products/GET/query/kitId`.
                 public var kitId: [Swift.String]?
+                /// - Remark: Generated from `#/paths/api/v1/products/GET/query/componentId`.
+                public var componentId: [Swift.String]?
                 /// - Remark: Generated from `#/paths/api/v1/products/GET/query/upcPresenceFilter`.
                 @frozen public enum UpcPresenceFilterPayload: String, Codable, Hashable, Sendable, CaseIterable {
                     case has = "has"
@@ -23582,6 +23847,7 @@ public enum Operations {
                 ///   - dataStatus:
                 ///   - dataGap:
                 ///   - kitId:
+                ///   - componentId:
                 ///   - upcPresenceFilter:
                 ///   - externalIdSource:
                 ///   - externalIdPresenceFilter:
@@ -23674,6 +23940,7 @@ public enum Operations {
                     dataStatus: Operations.Resources_product_list.Input.Query.DataStatusPayload? = nil,
                     dataGap: Operations.Resources_product_list.Input.Query.DataGapPayload? = nil,
                     kitId: [Swift.String]? = nil,
+                    componentId: [Swift.String]? = nil,
                     upcPresenceFilter: Operations.Resources_product_list.Input.Query.UpcPresenceFilterPayload? = nil,
                     externalIdSource: [Swift.String]? = nil,
                     externalIdPresenceFilter: Operations.Resources_product_list.Input.Query.ExternalIdPresenceFilterPayload? = nil,
@@ -23766,6 +24033,7 @@ public enum Operations {
                     self.dataStatus = dataStatus
                     self.dataGap = dataGap
                     self.kitId = kitId
+                    self.componentId = componentId
                     self.upcPresenceFilter = upcPresenceFilter
                     self.externalIdSource = externalIdSource
                     self.externalIdPresenceFilter = externalIdPresenceFilter
@@ -24726,6 +24994,8 @@ public enum Operations {
                 public var dataGap: Operations.Resources_product_timeline.Input.Query.DataGapPayload?
                 /// - Remark: Generated from `#/paths/api/v1/products/timeline/GET/query/kitId`.
                 public var kitId: [Swift.String]?
+                /// - Remark: Generated from `#/paths/api/v1/products/timeline/GET/query/componentId`.
+                public var componentId: [Swift.String]?
                 /// - Remark: Generated from `#/paths/api/v1/products/timeline/GET/query/upcPresenceFilter`.
                 @frozen public enum UpcPresenceFilterPayload: String, Codable, Hashable, Sendable, CaseIterable {
                     case has = "has"
@@ -25213,6 +25483,7 @@ public enum Operations {
                 ///   - dataStatus:
                 ///   - dataGap:
                 ///   - kitId:
+                ///   - componentId:
                 ///   - upcPresenceFilter:
                 ///   - externalIdSource:
                 ///   - externalIdPresenceFilter:
@@ -25307,6 +25578,7 @@ public enum Operations {
                     dataStatus: Operations.Resources_product_timeline.Input.Query.DataStatusPayload? = nil,
                     dataGap: Operations.Resources_product_timeline.Input.Query.DataGapPayload? = nil,
                     kitId: [Swift.String]? = nil,
+                    componentId: [Swift.String]? = nil,
                     upcPresenceFilter: Operations.Resources_product_timeline.Input.Query.UpcPresenceFilterPayload? = nil,
                     externalIdSource: [Swift.String]? = nil,
                     externalIdPresenceFilter: Operations.Resources_product_timeline.Input.Query.ExternalIdPresenceFilterPayload? = nil,
@@ -25401,6 +25673,7 @@ public enum Operations {
                     self.dataStatus = dataStatus
                     self.dataGap = dataGap
                     self.kitId = kitId
+                    self.componentId = componentId
                     self.upcPresenceFilter = upcPresenceFilter
                     self.externalIdSource = externalIdSource
                     self.externalIdPresenceFilter = externalIdPresenceFilter
@@ -27262,6 +27535,65 @@ public enum Operations {
                 public var expenseTotalMin: Swift.Double?
                 /// - Remark: Generated from `#/paths/api/v1/purchases/GET/query/expenseTotalMax`.
                 public var expenseTotalMax: Swift.Double?
+                /// vendorAccount shortcode, e.g. VACCT-4K7M
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/purchases/GET/query/VendorAccountIdPayload`.
+                public struct VendorAccountIdPayloadPayload: Codable, Hashable, Sendable {
+                    /// vendorAccount shortcode, e.g. VACCT-4K7M
+                    ///
+                    /// - Remark: Generated from `#/paths/api/v1/purchases/GET/query/VendorAccountIdPayload/value1`.
+                    public var value1: Swift.String?
+                    /// - Remark: Generated from `#/paths/api/v1/purchases/GET/query/VendorAccountIdPayload/value2`.
+                    @frozen public enum Value2Payload: String, Codable, Hashable, Sendable, CaseIterable {
+                        case __unresolvableEntityFilter = "__unresolvable_entity_filter__"
+                    }
+                    /// - Remark: Generated from `#/paths/api/v1/purchases/GET/query/VendorAccountIdPayload/value2`.
+                    public var value2: Operations.Resources_purchase_list.Input.Query.VendorAccountIdPayloadPayload.Value2Payload?
+                    /// Creates a new `VendorAccountIdPayloadPayload`.
+                    ///
+                    /// - Parameters:
+                    ///   - value1: vendorAccount shortcode, e.g. VACCT-4K7M
+                    ///   - value2:
+                    public init(
+                        value1: Swift.String? = nil,
+                        value2: Operations.Resources_purchase_list.Input.Query.VendorAccountIdPayloadPayload.Value2Payload? = nil
+                    ) {
+                        self.value1 = value1
+                        self.value2 = value2
+                    }
+                    public init(from decoder: any Swift.Decoder) throws {
+                        var errors: [any Swift.Error] = []
+                        do {
+                            self.value1 = try decoder.decodeFromSingleValueContainer()
+                        } catch {
+                            errors.append(error)
+                        }
+                        do {
+                            self.value2 = try decoder.decodeFromSingleValueContainer()
+                        } catch {
+                            errors.append(error)
+                        }
+                        try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                            [
+                                self.value1,
+                                self.value2
+                            ],
+                            type: Self.self,
+                            codingPath: decoder.codingPath,
+                            errors: errors
+                        )
+                    }
+                    public func encode(to encoder: any Swift.Encoder) throws {
+                        try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                            self.value1,
+                            self.value2
+                        ])
+                    }
+                }
+                /// - Remark: Generated from `#/paths/api/v1/purchases/GET/query/vendorAccountId`.
+                public typealias VendorAccountIdPayload = [Operations.Resources_purchase_list.Input.Query.VendorAccountIdPayloadPayload]
+                /// - Remark: Generated from `#/paths/api/v1/purchases/GET/query/vendorAccountId`.
+                public var vendorAccountId: Operations.Resources_purchase_list.Input.Query.VendorAccountIdPayload?
                 /// - Remark: Generated from `#/paths/api/v1/purchases/GET/query/DataStatusPayload`.
                 @frozen public enum DataStatusPayloadPayload: String, Codable, Hashable, Sendable, CaseIterable {
                     case complete = "complete"
@@ -27489,6 +27821,7 @@ public enum Operations {
                 ///   - statedTotalPresenceFilter:
                 ///   - expenseTotalMin:
                 ///   - expenseTotalMax:
+                ///   - vendorAccountId:
                 ///   - dataStatus:
                 ///   - dataGap:
                 ///   - vendorId:
@@ -27527,6 +27860,7 @@ public enum Operations {
                     statedTotalPresenceFilter: Operations.Resources_purchase_list.Input.Query.StatedTotalPresenceFilterPayload? = nil,
                     expenseTotalMin: Swift.Double? = nil,
                     expenseTotalMax: Swift.Double? = nil,
+                    vendorAccountId: Operations.Resources_purchase_list.Input.Query.VendorAccountIdPayload? = nil,
                     dataStatus: Operations.Resources_purchase_list.Input.Query.DataStatusPayload? = nil,
                     dataGap: Operations.Resources_purchase_list.Input.Query.DataGapPayload? = nil,
                     vendorId: Operations.Resources_purchase_list.Input.Query.VendorIdPayload? = nil,
@@ -27565,6 +27899,7 @@ public enum Operations {
                     self.statedTotalPresenceFilter = statedTotalPresenceFilter
                     self.expenseTotalMin = expenseTotalMin
                     self.expenseTotalMax = expenseTotalMax
+                    self.vendorAccountId = vendorAccountId
                     self.dataStatus = dataStatus
                     self.dataGap = dataGap
                     self.vendorId = vendorId
@@ -33317,6 +33652,65 @@ public enum Operations {
                 ///
                 /// - Remark: Generated from `#/paths/api/v1/vendors/GET/query/latestPurchaseDateTo`.
                 public var latestPurchaseDateTo: Swift.String?
+                /// image shortcode, e.g. IMG-4K7M
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/vendors/GET/query/LogoImageIdPayload`.
+                public struct LogoImageIdPayloadPayload: Codable, Hashable, Sendable {
+                    /// image shortcode, e.g. IMG-4K7M
+                    ///
+                    /// - Remark: Generated from `#/paths/api/v1/vendors/GET/query/LogoImageIdPayload/value1`.
+                    public var value1: Swift.String?
+                    /// - Remark: Generated from `#/paths/api/v1/vendors/GET/query/LogoImageIdPayload/value2`.
+                    @frozen public enum Value2Payload: String, Codable, Hashable, Sendable, CaseIterable {
+                        case __unresolvableEntityFilter = "__unresolvable_entity_filter__"
+                    }
+                    /// - Remark: Generated from `#/paths/api/v1/vendors/GET/query/LogoImageIdPayload/value2`.
+                    public var value2: Operations.Resources_vendor_list.Input.Query.LogoImageIdPayloadPayload.Value2Payload?
+                    /// Creates a new `LogoImageIdPayloadPayload`.
+                    ///
+                    /// - Parameters:
+                    ///   - value1: image shortcode, e.g. IMG-4K7M
+                    ///   - value2:
+                    public init(
+                        value1: Swift.String? = nil,
+                        value2: Operations.Resources_vendor_list.Input.Query.LogoImageIdPayloadPayload.Value2Payload? = nil
+                    ) {
+                        self.value1 = value1
+                        self.value2 = value2
+                    }
+                    public init(from decoder: any Swift.Decoder) throws {
+                        var errors: [any Swift.Error] = []
+                        do {
+                            self.value1 = try decoder.decodeFromSingleValueContainer()
+                        } catch {
+                            errors.append(error)
+                        }
+                        do {
+                            self.value2 = try decoder.decodeFromSingleValueContainer()
+                        } catch {
+                            errors.append(error)
+                        }
+                        try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                            [
+                                self.value1,
+                                self.value2
+                            ],
+                            type: Self.self,
+                            codingPath: decoder.codingPath,
+                            errors: errors
+                        )
+                    }
+                    public func encode(to encoder: any Swift.Encoder) throws {
+                        try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                            self.value1,
+                            self.value2
+                        ])
+                    }
+                }
+                /// - Remark: Generated from `#/paths/api/v1/vendors/GET/query/logoImageId`.
+                public typealias LogoImageIdPayload = [Operations.Resources_vendor_list.Input.Query.LogoImageIdPayloadPayload]
+                /// - Remark: Generated from `#/paths/api/v1/vendors/GET/query/logoImageId`.
+                public var logoImageId: Operations.Resources_vendor_list.Input.Query.LogoImageIdPayload?
                 /// - Remark: Generated from `#/paths/api/v1/vendors/GET/query/DataStatusPayload`.
                 @frozen public enum DataStatusPayloadPayload: String, Codable, Hashable, Sendable, CaseIterable {
                     case complete = "complete"
@@ -33407,6 +33801,7 @@ public enum Operations {
                 ///   - spendMax:
                 ///   - latestPurchaseDateFrom: Calendar day as "YYYY-MM-DD"
                 ///   - latestPurchaseDateTo: Calendar day as "YYYY-MM-DD"
+                ///   - logoImageId:
                 ///   - dataStatus:
                 ///   - dataGap:
                 ///   - latestPurchaseDatePresenceFilter:
@@ -33443,6 +33838,7 @@ public enum Operations {
                     spendMax: Swift.Double? = nil,
                     latestPurchaseDateFrom: Swift.String? = nil,
                     latestPurchaseDateTo: Swift.String? = nil,
+                    logoImageId: Operations.Resources_vendor_list.Input.Query.LogoImageIdPayload? = nil,
                     dataStatus: Operations.Resources_vendor_list.Input.Query.DataStatusPayload? = nil,
                     dataGap: Operations.Resources_vendor_list.Input.Query.DataGapPayload? = nil,
                     latestPurchaseDatePresenceFilter: Operations.Resources_vendor_list.Input.Query.LatestPurchaseDatePresenceFilterPayload? = nil,
@@ -33479,6 +33875,7 @@ public enum Operations {
                     self.spendMax = spendMax
                     self.latestPurchaseDateFrom = latestPurchaseDateFrom
                     self.latestPurchaseDateTo = latestPurchaseDateTo
+                    self.logoImageId = logoImageId
                     self.dataStatus = dataStatus
                     self.dataGap = dataGap
                     self.latestPurchaseDatePresenceFilter = latestPurchaseDatePresenceFilter

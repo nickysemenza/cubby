@@ -605,6 +605,7 @@ export default defineEntity({
         columnId: "expenseId",
         kind: "idMulti",
         placeholder: "Filter by related recent expenses id...",
+        brandRef: { entity: "expense" },
         urlOnly: true,
       },
       {
@@ -624,6 +625,7 @@ export default defineEntity({
         columnId: "purchaseId",
         kind: "idMulti",
         placeholder: "Filter by related purchases id...",
+        brandRef: { entity: "purchase" },
         urlOnly: true,
       },
       {
@@ -683,6 +685,7 @@ export default defineEntity({
         columnId: "financialTransactionId",
         kind: "idMulti",
         placeholder: "Filter by related financial transactions id...",
+        brandRef: { entity: "financialTransaction" },
         urlOnly: true,
       },
       {

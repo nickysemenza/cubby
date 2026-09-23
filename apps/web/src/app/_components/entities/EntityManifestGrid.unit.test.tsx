@@ -1,7 +1,41 @@
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, within } from "@testing-library/react";
+import type { ReactNode } from "react";
 import { describe, expect, it } from "vitest";
 
-import { EntityInspector, SavedViewChips } from "./EntityManifestGrid";
+import { EntityManifestGrid, SavedViewChips } from "./EntityManifestGrid";
+
+// jsdom has no ResizeObserver; the bottom "Reference graph" section
+// (`EntityReferenceGraph` → `useContainerDimensions`) needs one to mount.
+class TestResizeObserver {
+  observe() {
+    // no-op: the reference graph falls back to its initial dimensions.
+  }
+  unobserve() {
+    // no-op
+  }
+  disconnect() {
+    // no-op
+  }
+}
+global.ResizeObserver ??= TestResizeObserver;
+
+/** `EntityManifestGrid` reads the live-row-count query via `useQuery`; these
+ * tests render with `active={false}` so it never fires, but the hook still
+ * needs a `QueryClient` in context to mount at all. */
+function renderGrid(props: Parameters<typeof EntityManifestGrid>[0]) {
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false, gcTime: Infinity } },
+  });
+  function Wrapper({ children }: { children: ReactNode }) {
+    return (
+      <QueryClientProvider client={client}>{children}</QueryClientProvider>
+    );
+  }
+  return render(<EntityManifestGrid {...props} active={false} />, {
+    wrapper: Wrapper,
+  });
+}
 
 describe("SavedViewChips", () => {
   it("renders ordinary and problem-backed views in manifest order", () => {
@@ -24,164 +58,90 @@ describe("SavedViewChips", () => {
   });
 });
 
-describe("EntityInspector shortcode contracts", () => {
-  it("shows the permanent Product printed-label alias as inbound-only", () => {
-    render(<EntityInspector entity="product" count={12} />);
+function noop() {
+  // EntityManifestGrid's onSelect fires on row click; these tests only read
+  // the rendered mega table, so the callback itself is never asserted on.
+}
 
-    expect(screen.getByText("Printed-label contract")).toBeInTheDocument();
-    expect(screen.getAllByText("PRD-XXXX").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("P-XXXX").length).toBeGreaterThan(0);
-    expect(screen.getByText(/permanent inbound rewrite/i)).toBeInTheDocument();
-    expect(screen.getByText("inbound only")).toBeInTheDocument();
-    expect(screen.getByText("permanent — printed labels")).toBeInTheDocument();
+/**
+ * The mobile `EntityIndex` nav (hidden at `md:` breakpoint via CSS, which
+ * jsdom doesn't evaluate) renders every entity name as a `<button>` too, so a
+ * bare `getByText(entity)` is ambiguous. The mega table's own entity cell is
+ * the first `<td>`-descendant match in document order — the sub-row (if the
+ * entity is selected) can repeat the same word in a `target` column, but it
+ * renders after the entity's own row.
+ */
+function findEntityRow(entityName: string) {
+  const cell = screen
+    .getAllByText(entityName)
+    .find((el) => el.closest("td") !== null);
+  if (!cell) throw new Error(`entity row cell not found for ${entityName}`);
+  const row = cell.closest("tr");
+  if (!row) throw new Error(`entity row not found for ${entityName}`);
+  return row;
+}
+
+describe("EntityManifestGrid mega table: kernel action condensation", () => {
+  it("renders the full CRUD word (muted) for an entity with get/list/create/update/delete", () => {
+    // `recipe` declares get, list, search, create, update, delete —
+    // all four CRUD slots present, so it condenses to the bare word.
+    renderGrid({ selected: "recipe", onSelect: noop });
+
+    const row = findEntityRow("recipe");
+    expect(within(row).getByText("CRUD")).toBeInTheDocument();
+    // `search` isn't one of the four CRUD slots, so it renders as an extra.
+    expect(within(row).getByText("+search")).toBeInTheDocument();
   });
 
-  it("shows Location label compatibility and rejects a Recipe alias", () => {
-    const { rerender } = render(
-      <EntityInspector entity="location" count={3} />,
+  it("renders a fixed-position letter mask for an entity missing some CRUD actions", () => {
+    // `importRun` declares only get and list — read-only, no create/update/delete.
+    renderGrid({ selected: "importRun", onSelect: noop });
+
+    const row = findEntityRow("importRun");
+    expect(within(row).getByText("·R··")).toBeInTheDocument();
+  });
+
+  it("keeps the mask fixed-position for an entity missing only create", () => {
+    // `image` declares get, list, search, update, delete — no create.
+    renderGrid({ selected: "image", onSelect: noop });
+
+    const row = findEntityRow("image");
+    expect(within(row).getByText("·RUD")).toBeInTheDocument();
+  });
+});
+
+describe("EntityManifestGrid mega table: relations sub-row", () => {
+  it("exposes wish's omitted `candidates` relation and its reason", () => {
+    renderGrid({ selected: "wish", onSelect: noop });
+
+    // The selected row's relations sub-table is always expanded inline.
+    expect(screen.getByText("candidates")).toBeInTheDocument();
+    const reasonCell = screen.getByText(/Tool alternatives/);
+    expect(reasonCell).toBeInTheDocument();
+  });
+
+  it("marks task's compiler-derived `plantings` relation as derived, not declared", () => {
+    renderGrid({ selected: "task", onSelect: noop });
+
+    const plantingsRow = screen.getByText("plantings").closest("tr");
+    if (plantingsRow === null)
+      throw new Error("plantings relation row not found");
+    // Both the relationship-level origin and the detail-table status read
+    // "derived" for this row (the compiler generated the section).
+    expect(within(plantingsRow).getAllByText("derived").length).toBeGreaterThan(
+      0,
     );
-    expect(screen.getAllByText("LOC-XXXX").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("L-XXXX").length).toBeGreaterThan(0);
-
-    rerender(<EntityInspector entity="recipe" count={2} />);
-    expect(screen.getAllByText("RCP-XXXX").length).toBeGreaterThan(0);
-    expect(screen.queryByText("R-XXXX")).not.toBeInTheDocument();
-    expect(screen.getByText(/removed R- form/i)).toBeInTheDocument();
-  });
-
-  it("reports compiled filters and current transport ownership", () => {
-    render(<EntityInspector entity="product" count={12} />);
-
-    expect(
-      screen.getByText(/literal descriptors · generated bindings/),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByText("detail · list/filter · generic writes"),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByText("explicit workflow extensions only"),
-    ).toBeInTheDocument();
-  });
-
-  it("shows dedicated Start ownership for specialized browser projections", () => {
-    const { rerender } = render(<EntityInspector entity="image" count={4} />);
-    expect(
-      screen.getByText("dedicated list · detail · writes"),
-    ).toBeInTheDocument();
-
-    rerender(<EntityInspector entity="usda-food" count={0} />);
-    expect(screen.getByText("specialized list · detail")).toBeInTheDocument();
   });
 });
 
-describe("EntityInspector presentation", () => {
-  it("shows the declaration's presentation block for a gallery entity", () => {
-    render(<EntityInspector entity="product" count={12} />);
+describe("EntityManifestGrid mega table: baseline rendering", () => {
+  it("renders one row per declared entity plus the relations matrix", () => {
+    renderGrid({ selected: "product", onSelect: noop });
 
-    expect(screen.getByText("pantry")).toBeInTheDocument();
-    expect(
-      screen.getByText("Specific household products and their identity."),
-    ).toBeInTheDocument();
-    expect(screen.getByText("Barcode")).toBeInTheDocument();
-    expect(screen.getByText("shippingbox")).toBeInTheDocument();
-    expect(screen.getByText("Nothing on the shelves yet")).toBeInTheDocument();
-    expect(screen.getByText("Add Product")).toBeInTheDocument();
-    expect(
-      screen.getByText("gallery (ordered join table)"),
-    ).toBeInTheDocument();
-  });
-
-  it("distinguishes cover-only images and an entity on no wayfinding line", () => {
-    const { rerender } = render(
-      <EntityInspector entity="cookbook" count={2} />,
-    );
-    expect(screen.getByText("cover (single coverImageId)")).toBeInTheDocument();
-
-    rerender(<EntityInspector entity="image" count={5} />);
-    expect(screen.getByText("none (no wayfinding line)")).toBeInTheDocument();
-  });
-});
-
-describe("EntityInspector native coverage", () => {
-  it("shows what the native client carries, distinct from what HTTP exposes", () => {
-    render(<EntityInspector entity="product" count={12} />);
-
-    expect(screen.getByText("Native app")).toBeInTheDocument();
-    expect(screen.getByText("HTTP exposes")).toBeInTheDocument();
-    expect(screen.getByText("Native client")).toBeInTheDocument();
-    expect(screen.getByText("product.findOrCreateByUPC")).toBeInTheDocument();
-    expect(screen.getByText("house (fallback)")).toBeInTheDocument();
-  });
-
-  it("renders the section for an entity the app never touches", () => {
-    render(<EntityInspector entity="cookbook" count={2} />);
-    expect(screen.getByText("Native app")).toBeInTheDocument();
-  });
-});
-
-describe("EntityInspector sorting and edit intents", () => {
-  it("shows Product's declared sort default and a computed sort field", () => {
-    render(<EntityInspector entity="product" count={12} />);
-
-    expect(screen.getByText("Sorting")).toBeInTheDocument();
-    // `createdAt` (the default) also appears in the collapsed contract JSON,
-    // so assert presence rather than uniqueness.
-    expect(screen.getAllByText("createdAt").length).toBeGreaterThan(0);
-    // `expenseTotal` is one of product's `computed` roster entries (no
-    // `model.fields` read projection) in entity-sort.gen.ts; it also appears
-    // in the "Fields" row above, so scope the assertion to "Computed".
-    const computedRow = screen.getByText("Computed").closest("div");
-    if (computedRow === null) throw new Error("Computed row not found");
-    expect(within(computedRow).getByText("expenseTotal")).toBeInTheDocument();
-  });
-
-  it("renders the declared countFilter for the entity that has one", () => {
-    // Only `ingredient` declares a non-null `countFilter` today
-    // (`"recipeIdNull"`, set in 02-ingredient.entity.ts); re-grep
-    // entity-definitions/*.entity.ts if this ever needs to move.
-    render(<EntityInspector entity="ingredient" count={5} />);
-
-    expect(screen.getByText("Count filter")).toBeInTheDocument();
-    expect(screen.getByText("recipeIdNull")).toBeInTheDocument();
-  });
-
-  it("shows a dash for an entity with no declared countFilter", () => {
-    render(<EntityInspector entity="product" count={12} />);
-
-    const countFilterLabel = screen.getByText("Count filter");
-    const row = countFilterLabel.closest("div");
-    expect(row).not.toBeNull();
-    expect(row).toHaveTextContent("—");
-  });
-
-  it("renders an editable entity's create and update intents", () => {
-    render(<EntityInspector entity="product" count={12} />);
-
-    expect(screen.getByText("Edit intents")).toBeInTheDocument();
-    expect(screen.getByText("Create intents")).toBeInTheDocument();
-    expect(screen.getByText("Update intents")).toBeInTheDocument();
-    // "capture" and "full" are both intent names AND per-intent row labels,
-    // so multiple matches are expected.
-    expect(screen.getAllByText("capture").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("full").length).toBeGreaterThan(0);
-  });
-
-  it("shows usda-food's declared sort default and relevance as a computed sort field, and that it's not browser-editable", () => {
-    render(<EntityInspector entity="usda-food" count={0} />);
-
-    expect(screen.getByText("Sorting")).toBeInTheDocument();
-    // `fdc_id` (the default) also appears in the "Fields" chips, so assert
-    // presence rather than uniqueness.
-    expect(screen.getAllByText("fdc_id").length).toBeGreaterThan(0);
-    // `relevance` is one of usda-food's `computed` roster entries (a
-    // search-only synthetic score with no `model.fields` read projection) in
-    // entity-sort.gen.ts; it also appears in the "Fields" row above, so scope
-    // the assertion to "Computed".
-    const computedRow = screen.getByText("Computed").closest("div");
-    if (computedRow === null) throw new Error("Computed row not found");
-    expect(within(computedRow).getByText("relevance")).toBeInTheDocument();
-    // usda-food still has no entry in `entity-edit-intents.gen.ts` — read-only
-    // USDA reference data, unaffected by gaining a sort roster.
-    expect(screen.getByText("not editable in the browser")).toBeInTheDocument();
+    expect(screen.getByText("Relations matrix")).toBeInTheDocument();
+    // Spot-check a handful of entities across the roster render as rows.
+    for (const entity of ["product", "recipe", "vendor", "financialAccount"]) {
+      expect(screen.getAllByText(entity).length).toBeGreaterThan(0);
+    }
   });
 });

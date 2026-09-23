@@ -185,6 +185,32 @@ reads empty (web `GenericEntityDetail`/`entity-relation-table.tsx` and native
 `EntityDetailView` both honor it; the generator emits it onto the Swift
 `RelationSectionSpec`) — used where the section's presence is itself the
 signal, e.g. a Location only reads as a growing area once it has Plantings.
+`collapseWhenEmpty: true` instead keeps the header, `0` count and create
+button and folds only the body away.
+
+Relation tables are opt-out. Every `many` relation on a generic detail page
+renders a table: a declared `relation` section, or one the compiler derives
+(`scripts/generator/entities/derive.ts`) with `derived: true`,
+`collapseWhenEmpty: true` and the target's default columns. The derived
+section finds its filter on the target: the only id/idMulti descriptor whose
+`brandRef` names this entity and that no other section on the page already
+uses, or, among several, the one over the relation's own FK column. A
+self-relation (a product's kits vs. its components) only ever matches by FK
+column, because a lone branded filter can scope the opposite direction. When
+nothing resolves, generation fails until the relation gets a declared section
+or an entry in `detail.omitRelations: { <relation>: "<reason>" }`. A relation
+whose target has no list page is recorded there automatically. The coverage
+invariant lives in `apps/web/tooling/entity-relation-coverage.unit.test.ts`.
+
+Inverse relations are opt-out too. A `one` relation over a single outgoing FK
+(`Planting.taskId`) gives its target a derived `many` inverse
+(`task.plantings`, labelled with the source's plural) unless the target
+already declares one over the same path or the relation sets
+`inverseOmit: "<reason>"`. A `many` relation over a single incoming FK gets a
+stored `idMulti` back-filter on its target when none names this entity, so
+#1248's generated predicate serves it with no repository code. Every
+id/idMulti filter declares `brandRef` (`null` for an id that names no
+entity), so URL-only related-view filters stay usable as back-filters.
 A relation section's create button seeds the descriptor's field on the new
 record: the descriptor key itself when it is a create field there, otherwise
 the one reference field on the target whose `reference.entity` equals the
@@ -756,6 +782,8 @@ precedence rule.
 4. Set `route.list` / `route.detail` to `true` for the generic pages (a
    `null` list hand-writes its route module; detail is always generic, with
    specialized UI in detail slots); add workflow extensions where needed.
+   Every `many` relation gets a detail table and every FK a derived inverse
+   unless you omit it with a reason (`detail.omitRelations`, `inverseOmit`).
 5. Run `pnpm generate`; review generated source like handwritten source.
 6. Declare physical edge semantics and operation-specific lifecycle policies,
    when the entity participates in deletion or merge.

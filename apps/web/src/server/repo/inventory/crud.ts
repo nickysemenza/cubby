@@ -63,6 +63,7 @@ import {
   updateLiveAndReturn,
   withTransaction,
 } from "~/server/repo/database-helpers";
+import { declaredFilterPredicates } from "~/server/repo/declared-filter-predicates";
 import { createEntityReader } from "~/server/repo/entity-crud-factory";
 import { isGlobalUnknownLocation } from "~/server/repo/location";
 import { categoryDescendantsSql } from "~/server/repo/product-category-sql";
@@ -382,6 +383,9 @@ export const buildInventoryWhere = async (
     [
       ...auditDateWhereConditions(inventoryEntry, filters),
       ...relatedWhereConditions("inventory", filters, inventoryEntry.id),
+      // Stored id filters (`ownerLedgerPartyId`) come from the manifest; this
+      // hand-built where must apply them since it is not on `listScaffold`.
+      ...declaredFilterPredicates("inventory", inventoryEntry, filters),
       lexicalEligibility("inventory", inventoryEntry.id, filters.searchQuery),
       eqAnyRequested(inventoryEntry.locationId, locationIds),
       eqAnyRequested(inventoryEntry.productId, productIds),

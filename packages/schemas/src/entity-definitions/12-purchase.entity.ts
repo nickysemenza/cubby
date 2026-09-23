@@ -34,6 +34,12 @@ export default defineEntity({
     },
     icons: { lucide: "Receipt", sfSymbol: "cart", emoji: "🧾" },
     detail: {
+      omitRelations: {
+        projects:
+          "The project-allocation slot renders the split for each project.",
+        "financial-transactions":
+          "The financial-settlement slot renders the allocations with their amounts.",
+      },
       hero: { stats: ["statedTotal", "expenseTotal"], images: true },
       sections: [
         {
@@ -887,6 +893,7 @@ export default defineEntity({
         columnId: "expenseId",
         kind: "idMulti",
         placeholder: "Filter by related expenses id...",
+        brandRef: { entity: "expense" },
         urlOnly: true,
       },
       {
@@ -906,6 +913,7 @@ export default defineEntity({
         columnId: "financialTransactionId",
         kind: "idMulti",
         placeholder: "Filter by related financial transactions id...",
+        brandRef: { entity: "financialTransaction" },
         urlOnly: true,
       },
       {

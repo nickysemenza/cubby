@@ -31,6 +31,10 @@ export default defineEntity({
     },
     icons: { lucide: "Carrot", sfSymbol: "leaf", emoji: "🥕" },
     detail: {
+      omitRelations: {
+        eaters:
+          "Who ate it is per-portion meal data; the Meals table on this page shows each meal and its eaters.",
+      },
       sections: [
         {
           kind: "fields",
@@ -421,6 +425,7 @@ export default defineEntity({
         columnId: "mealId",
         kind: "idMulti",
         placeholder: "Filter by related meals id...",
+        brandRef: { entity: "meal" },
         urlOnly: true,
       },
       {
@@ -440,6 +445,7 @@ export default defineEntity({
         columnId: "eaterId",
         kind: "idMulti",
         placeholder: "Filter by related eaters id...",
+        brandRef: { entity: "ledgerParty" },
         urlOnly: true,
       },
       {
@@ -528,6 +534,8 @@ export default defineEntity({
       label: "Recipe",
       target: "recipe",
       cardinality: "one",
+      inverseOmit:
+        "The recipe page is custom; its workflow slot shows where a recipe is used as an ingredient.",
       provenance: {
         kind: "local-path",
         steps: [{ edge: "Ingredient.recipeId", direction: "outgoing" }],
