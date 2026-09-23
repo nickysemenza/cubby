@@ -90,6 +90,10 @@ describe("runAiSelection", () => {
       alternatives: [
         { candidate: { id: "b", label: "blue" }, probability: 0.05 },
       ],
+      distribution: [
+        { candidate: { id: "a", label: "red" }, probability: 0.9 },
+        { candidate: { id: "b", label: "blue" }, probability: 0.05 },
+      ],
       evaluated: true,
     });
   });
@@ -187,6 +191,7 @@ describe("runAiSelection overflow", () => {
       probability: null,
       reasoning: "closer match",
       alternatives: [],
+      distribution: [],
       evaluated: true,
     });
   });
@@ -211,6 +216,7 @@ describe("runAiSelection overflow", () => {
       probability: null,
       reasoning: "hallucinated an id",
       alternatives: [],
+      distribution: [],
       evaluated: true,
     });
   });

@@ -626,6 +626,62 @@ describe("suggestFields", () => {
     expect(jev).not.toHaveBeenCalled();
   });
 
+  it("rolls a split tree pick up to the branch that clears high confidence", async () => {
+    interface Node {
+      id: string;
+      name: string;
+      parent: string | null;
+    }
+    const tree: Node[] = [
+      { id: "CAT-AAAA", name: "Food", parent: null },
+      { id: "CAT-BBBB", name: "Prepared", parent: "CAT-AAAA" },
+      { id: "CAT-CCCC", name: "Snacks", parent: "CAT-AAAA" },
+      { id: "CAT-DDDD", name: "Household", parent: null },
+    ];
+    const spec: ReferenceSuggestSpec<Node> = {
+      kind: "reference",
+      entity: "productCategory",
+      rules: "Pick the one classification.",
+      maxCandidates: 10,
+      roster: async () => tree,
+      idOf: (c) => c.id,
+      labelOf: (c) => c.name,
+      renderLine: (c) => `${c.id} | ${c.name}`,
+      subject: (basis) => String(basis.name),
+      parentIdOf: (c) => c.parent,
+    };
+    // Order follows the roster: Food, Prepared, Snacks, Household.
+    const jev: JevPort = vi.fn(async () => ({
+      answers: {
+        selection: {
+          type: "choice" as const,
+          choice: "c1",
+          confidence: 0.7,
+          probabilities: { c0: 0.1, c1: 0.7, c2: 0.08, c3: 0.1, none: 0.02 },
+        },
+      },
+    }));
+    const out = await suggestFields(
+      fakeDb,
+      fixtureRunId,
+      {
+        entity: "product",
+        targets: ["categoryId"],
+        basis: { name: "frozen dumplings" },
+        basisMode: "suggested",
+      },
+      { jev, registry: { "product.categoryId": spec } },
+    );
+    expect(out.suggestions.categoryId).toMatchObject({
+      value: "CAT-AAAA",
+      label: "Food",
+      confidence: "high",
+    });
+    expect(out.suggestions.categoryId?.probability).toBeCloseTo(0.88);
+    // The more specific guess stays on offer as the first runner-up.
+    expect(out.suggestions.categoryId?.alternatives[0]?.value).toBe("CAT-BBBB");
+  });
+
   it("rejects an unknown target without calling the model", async () => {
     const jev = jevPortPicking();
 

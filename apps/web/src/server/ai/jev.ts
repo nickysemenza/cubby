@@ -126,8 +126,11 @@ export type JevPort = (input: JevChoiceInput) => Promise<JevChoiceResponse>;
 // public `confidence` here. Exported so a caller that computes its own
 // aggregate probability (e.g. the min across several prune-target removals)
 // can bucket it the same way instead of re-deriving the thresholds.
+/** The calibrated probability a decision needs to count as "high". */
+export const HIGH_CONFIDENCE_PROBABILITY = 0.85;
+
 export function decisionConfidence(probability: number): Confidence {
-  if (probability >= 0.85) return "high";
+  if (probability >= HIGH_CONFIDENCE_PROBABILITY) return "high";
   if (probability >= 0.6) return "medium";
   return "low";
 }

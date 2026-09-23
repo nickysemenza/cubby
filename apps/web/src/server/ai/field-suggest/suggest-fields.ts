@@ -31,6 +31,7 @@ import { z } from "zod";
 
 import { classifyWithJev } from "~/server/ai/classify";
 import { FIELD_SUGGESTION_FEATURE } from "~/server/ai/features";
+import { placeByBranch } from "~/server/ai/field-suggest/branch-confidence";
 import {
   FIELD_SUGGEST_REGISTRY,
   fieldSuggestSpecFor,
@@ -40,6 +41,7 @@ import {
 } from "~/server/ai/field-suggest/registry";
 import {
   decisionConfidence,
+  HIGH_CONFIDENCE_PROBABILITY,
   runJevChoice,
   type JevChoiceResult,
   type JevPort,
@@ -383,28 +385,58 @@ async function resolveReferenceTarget(
     jev,
   });
   if (!outcome.evaluated) return skipped("no_candidates");
-  const alternatives = mapAlternatives(
-    outcome.alternatives,
-    spec.idOf,
-    spec.labelOf,
-    spec.detailOf,
-  );
   if (outcome.selected === null) {
     return declined({
       confidence: outcome.confidence,
       probability: outcome.probability,
-      alternatives,
+      alternatives: mapAlternatives(
+        outcome.alternatives,
+        spec.idOf,
+        spec.labelOf,
+        spec.detailOf,
+      ),
     });
   }
-  const value = spec.idOf(outcome.selected);
+  const placement =
+    spec.parentIdOf && outcome.probability !== null
+      ? placeByBranch({
+          distribution: outcome.distribution,
+          selected: outcome.selected,
+          selectedProbability: outcome.probability,
+          threshold: HIGH_CONFIDENCE_PROBABILITY,
+          idOf: spec.idOf,
+          parentIdOf: spec.parentIdOf,
+        })
+      : null;
+  const selected = placement?.node ?? outcome.selected;
+  const probability = placement?.probability ?? outcome.probability;
+  const confidence = placement
+    ? decisionConfidence(placement.probability)
+    : outcome.confidence;
+  // A rolled-up pick keeps Jev's more specific guess as the first runner-up,
+  // so the picker still offers it.
+  const alternatives = mapAlternatives(
+    placement
+      ? outcome.distribution
+          .filter((entry) => entry.candidate !== selected)
+          .slice(0, 3)
+      : outcome.alternatives,
+    spec.idOf,
+    spec.labelOf,
+    spec.detailOf,
+  );
+  const reasoning = placement
+    ? `Most specific pick was ${spec.labelOf(outcome.selected)} (${Math.round((outcome.probability ?? 0) * 100)}%); the ${spec.labelOf(selected)} branch as a whole is ${Math.round(placement.probability * 100)}%.`
+    : outcome.reasoning;
+  const value = spec.idOf(selected);
   return {
     suggestion: {
       value,
-      label: spec.labelOf(outcome.selected),
-      detail: spec.detailOf?.(outcome.selected) ?? null,
-      confidence: outcome.confidence,
-      probability: outcome.probability,
-      reasoning: outcome.reasoning,
+      label: spec.labelOf(selected),
+      detail: spec.detailOf?.(selected) ?? null,
+      confidence,
+      probability,
+      reasoning,
       alternatives,
       operation: "set",
       removals: [],
@@ -413,8 +445,8 @@ async function resolveReferenceTarget(
     outcome: {
       kind: "evaluated",
       answer: "pick",
-      confidence: outcome.confidence,
-      probability: outcome.probability,
+      confidence,
+      probability,
       alternatives,
     },
   };
