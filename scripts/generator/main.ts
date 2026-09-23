@@ -20,7 +20,10 @@ import {
 } from "./entities/render/index.ts";
 import { renderKernelBindingsArtifacts } from "./entities/render/kernel-bindings.ts";
 import { renderRelationArtifacts } from "./entities/render/relations.ts";
-import { missingBrowserRouteFiles } from "./entities/render/routes.ts";
+import {
+  missingBrowserRouteFiles,
+  missingListSources,
+} from "./entities/render/routes.ts";
 import { renderSearchArtifacts } from "./entities/render/search.ts";
 import { renderTimelineArtifacts } from "./entities/render/entity-timelines.ts";
 import { renderHttpApiArtifacts } from "./http-api/openapi.ts";
@@ -72,6 +75,12 @@ const main = async () => {
   if (missingRoutes.length > 0) {
     throw new EntityDeclarationError(
       `Declared browser routes are missing hand-written route modules:\n${missingRoutes.map((path) => `- ${path}`).join("\n")}`,
+    );
+  }
+  const missingSources = missingListSources(entities);
+  if (missingSources.length > 0) {
+    throw new EntityDeclarationError(
+      `route.list is true, but these entities have no kernel list read (no create+update contract) and no list override in apps/web/src/entities/list-columns/index.ts to supply rows. Add one with a \`source\`, or declare list: null:\n${missingSources.map((key) => `- ${key}`).join("\n")}`,
     );
   }
 

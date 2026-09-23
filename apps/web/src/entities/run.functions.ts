@@ -3,6 +3,7 @@ import { defineOperationDomain } from "~/integrations/tanstack-query/operation-c
 
 /** @lintignore Discovered by the operation registry generator. */
 export const run = defineOperationDomain(runContract, {
+  list: { tags: [["run"]], cache: "browse" },
   detail: { tags: [["run"]] },
   aiUsage: { tags: [["ai", "usage"]] },
 });
