@@ -268,6 +268,34 @@ certificate and forwarded-proto handling for auth origins).
 | Preload the recipebridge WASM from the document head                                                 | six cold loads of `/` each: WASM starts ~55ms instead of ~495ms, but hydration ~1,032ms vs ~1,045ms (−1%) | rejected: the 1.3 MB download competes with the JS chunks for the same connections; not the bottleneck |
 | Trim `goto`s in the slowest specs                                                                    | analysis only                                                                                             | not pursued: the repeat loads are mostly deep links (URL state) the specs exist to test; ~4% at best   |
 
+### 2026-09-23 two-runner follow-up
+
+[#1287](https://github.com/nickysemenza/cubby/pull/1287) removed all phone and
+WebKit Playwright projects/specs and made the desktop Chromium suite run on two
+standard runners. Its exact-head PR run reached `Web checks` in **5:09**; the
+first main-push run reached it in **5:18**. These are two samples against the
+earlier ten-run **5:34** median, not a new median or a 3-minute result. The PR
+run's slowest shard was **4:52**, PostgreSQL **3:27**, and median job queue
+**3s**.
+
+The alternatives were measured on standard runners and rejected:
+
+| Experiment                           | Result                                                                                                                                                                                                                                                             |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Firefox in both desktop shards       | Failed existing browser assertions (`NS_BINDING_ABORTED`, unsupported `clipboard-read`) and was already slower; Chromium remains.                                                                                                                                  |
+| Pinned Caddy HTTPS/HTTP/2 proxy      | Local h2 asset, auth, API, and WebSocket checks passed, but both hosted shards exceeded six minutes; [run](https://github.com/nickysemenza/cubby/actions/runs/35927841410) stopped. No proxy retained.                                                             |
+| Six PostgreSQL workers               | On the same standard runner class, test step **137s** versus **129s** at four; job **3:33** versus **3:27**. [Experiment](https://github.com/nickysemenza/cubby/actions/runs/35928414452) rejected.                                                                |
+| HTTP-only tests in Worker/PostgreSQL | All **704** PostgreSQL tests and desktop checks passed at exact head, but [#1289](https://github.com/nickysemenza/cubby/pull/1289) took **5:31** to `Web checks` versus **5:09** before the move, with the same **3s** median queue. Closed under the timing rule. |
+
+The warm [#1287](https://github.com/nickysemenza/cubby/pull/1287) Apple app
+check hit both the SPM and DerivedData caches. Its iOS check step took **85s**
+and the whole Apple job **2:58**. The available step timings did not isolate
+generated-client compilation as the bottleneck, so no native build change was
+made. The broad
+entity-list PostgreSQL smoke file took **13.2s** before the read-only bounded
+concurrency change and **4.6s** and **8.4s** in two later hosted runs; it is
+being reviewed separately from the rejected HTTP tier move.
+
 ### 2026-09-23 E2E engine roles and three chromium shards
 
 Baseline: after [#1235](https://github.com/nickysemenza/cubby/pull/1235) moved

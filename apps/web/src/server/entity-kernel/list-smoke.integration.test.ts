@@ -446,6 +446,7 @@ describe("entity list smoke — dual relational/count FROM-clause aliasing", () 
     const skipped: string[] = [];
     let seed = 1000;
     let caseCount = 0;
+    const listCases: Array<() => Promise<void>> = [];
 
     const runListCase = async (
       label: string,
@@ -491,50 +492,70 @@ describe("entity list smoke — dual relational/count FROM-clause aliasing", () 
           skipped.push(`${entity} filter ${key}: ${sample.reason}`);
           continue;
         }
-        await runListCase(`${entity} filter ${key}`, () =>
-          executeEntity(kernelCtx, {
-            action: "list",
-            entity,
-            filters: { [key]: sample.value },
-            pagination: { pageIndex: 0, pageSize: 20 },
-          }),
+        listCases.push(() =>
+          runListCase(`${entity} filter ${key}`, () =>
+            executeEntity(kernelCtx, {
+              action: "list",
+              entity,
+              filters: { [key]: sample.value },
+              pagination: { pageIndex: 0, pageSize: 20 },
+            }),
+          ),
         );
 
         const unmatched = hasRows
           ? unmatchedIdSample(sample.value, seededCodes)
           : null;
         if (unmatched === null) continue;
-        caseCount += 1;
-        try {
-          const result = await executeEntity(kernelCtx, {
-            action: "list",
-            entity,
-            filters: { [key]: unmatched },
-            pagination: { pageIndex: 0, pageSize: 1 },
-          });
-          if (result.meta.totalCount !== 0)
+        listCases.push(async () => {
+          caseCount += 1;
+          try {
+            const result = await executeEntity(kernelCtx, {
+              action: "list",
+              entity,
+              filters: { [key]: unmatched },
+              pagination: { pageIndex: 0, pageSize: 1 },
+            });
+            if (result.meta.totalCount !== 0)
+              failures.push(
+                `${entity} filter ${key}=${String(unmatched)}: matched ${result.meta.totalCount} row(s) — the filter is accepted but not applied`,
+              );
+          } catch (err) {
             failures.push(
-              `${entity} filter ${key}=${String(unmatched)}: matched ${result.meta.totalCount} row(s) — the filter is accepted but not applied`,
+              `${entity} filter ${key} (unmatched): ${describeError(err)}`,
             );
-        } catch (err) {
-          failures.push(
-            `${entity} filter ${key} (unmatched): ${describeError(err)}`,
-          );
-        }
+          }
+        });
       }
 
       for (const orderBy of binding.sort.fields) {
-        await runListCase(`${entity} sort ${orderBy} asc`, () =>
-          executeEntity(kernelCtx, {
-            action: "list",
-            entity,
-            filters: {},
-            sort: [{ orderBy, direction: "asc" }],
-            pagination: { pageIndex: 0, pageSize: 20 },
-          }),
+        listCases.push(() =>
+          runListCase(`${entity} sort ${orderBy} asc`, () =>
+            executeEntity(kernelCtx, {
+              action: "list",
+              entity,
+              filters: {},
+              sort: [{ orderBy, direction: "asc" }],
+              pagination: { pageIndex: 0, pageSize: 20 },
+            }),
+          ),
         );
       }
     }
+
+    // All probes only read the seeded universe. Bound concurrency below the
+    // file's pool size so independent SQL plans can overlap without making
+    // this one integration file monopolize PostgreSQL during the full suite.
+    let nextCase = 0;
+    await Promise.all(
+      Array.from({ length: 4 }, async () => {
+        while (nextCase < listCases.length) {
+          const run = listCases[nextCase++];
+          if (!run) throw new Error("Missing list probe");
+          await run();
+        }
+      }),
+    );
 
     // The kernel's `filters.ids` scan and per-entity `list()` both go through
     // the relational builder, but ingredient's `readIntent: "ids"` bulk-scan
@@ -576,5 +597,5 @@ describe("entity list smoke — dual relational/count FROM-clause aliasing", () 
       failures.join("\n"),
       `${failures.length} of ${caseCount} list case(s) threw a FROM-clause/plan error or ignored a filter:\n${failures.join("\n")}\n`,
     ).toBe("");
-  }, 180_000); // ~1k sequential kernel/repo round trips; default 10s times out under load.
+  }, 180_000); // The full entity matrix still needs headroom under CI load.
 });
