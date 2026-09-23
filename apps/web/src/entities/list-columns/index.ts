@@ -12,6 +12,7 @@ import { inventoryListOverride } from "./inventory";
 import { locationListOverride } from "./location";
 import { mealListOverride } from "./meal";
 import { productListOverride } from "./product";
+import { productCategoryListOverride } from "./product-category";
 import { purchaseListOverride } from "./purchase";
 import { recipeListOverride } from "./recipe";
 import { taskListOverride } from "./task";
@@ -36,6 +37,7 @@ export const listOverrides: ListOverrideRegistry = {
   location: locationListOverride,
   meal: mealListOverride,
   product: productListOverride,
+  productCategory: productCategoryListOverride,
   purchase: purchaseListOverride,
   recipe: recipeListOverride,
   task: taskListOverride,
