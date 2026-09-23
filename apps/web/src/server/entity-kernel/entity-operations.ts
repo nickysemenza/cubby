@@ -10,6 +10,7 @@ import {
 } from "@cubby/schemas/identifiers";
 import {
   buildPaginatedResponse,
+  listGroupSummarySchema,
   normalizeSorts,
   type PaginationParams,
 } from "@cubby/schemas/pagination";
@@ -141,7 +142,10 @@ const parseSorts = <
   // when the transport omitted one — otherwise relevance is unreachable.
   if (allowEmpty && value === undefined) return [];
   const normalized = normalizeSorts(
-    value ?? { orderBy: binding.sort.default, direction: "desc" },
+    value ?? {
+      orderBy: binding.sort.default,
+      direction: binding.sort.direction,
+    },
   );
   for (const sort of normalized) {
     const result = field.safeParse(sort.orderBy);
@@ -416,6 +420,12 @@ export const defineEntityOperations = <
                   .record(z.string(), z.number())
                   .optional()
                   .parse(mediaPage.sums)
+              : undefined,
+            "groups" in mediaPage
+              ? z
+                  .array(listGroupSummarySchema)
+                  .optional()
+                  .parse(mediaPage.groups)
               : undefined,
           ),
         }),

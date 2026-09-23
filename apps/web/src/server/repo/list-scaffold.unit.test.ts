@@ -64,6 +64,16 @@ describe("listScaffold", () => {
       expect(renderWhereSql(clauses[2])).toContain('"shortcode"');
     });
 
+    it("keeps group order ahead of relevance when a search has no explicit sort", () => {
+      const clauses = scaffold.orderBy(
+        [],
+        { groupBy: "status" },
+        { searchQuery: "short task" },
+      );
+      expect(renderWhereSql(clauses[0])).toContain('"status" asc nulls last');
+      expect(renderWhereSql(clauses[1])).toContain('"SearchDocument"');
+    });
+
     it("keeps an explicit sort authoritative and uses shortcode before the private id", () => {
       const clauses = scaffold.orderBy(
         [{ orderBy: "name", direction: "asc" }],

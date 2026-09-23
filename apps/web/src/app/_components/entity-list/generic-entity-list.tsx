@@ -420,6 +420,11 @@ function ServerListBody({
                   error={list.workbench.error}
                   infiniteScroll={list.workbench.infiniteScroll}
                   compact={density === "compact"}
+                  groupConfig={
+                    list.workbench.grouped
+                      ? list.workbench.groupConfig
+                      : undefined
+                  }
                   onRetry={() =>
                     void list.workbench.refreshControls.onRefresh()
                   }

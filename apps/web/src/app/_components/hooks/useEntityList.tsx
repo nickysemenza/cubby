@@ -403,8 +403,38 @@ export function useEntityList<
     groupBy: groupByField,
   });
 
-  const { data, totalCount, sums, isLoading, error, timing, refreshControls } =
-    infiniteResult;
+  const {
+    data,
+    totalCount,
+    sums,
+    groups,
+    isLoading,
+    error,
+    timing,
+    refreshControls,
+  } = infiniteResult;
+  const effectiveGroupConfig = useMemo(() => {
+    if (!groupConfig || !grouped || !groups) return groupConfig;
+    if (entity === "product") {
+      const categoryRow = z.object({
+        category: z.object({ id: z.string() }).nullable().optional(),
+      });
+      return {
+        ...groupConfig,
+        groups,
+        keyFn: (item: TData) =>
+          categoryRow.safeParse(item).data?.category?.id ?? "__unclassified__",
+      };
+    }
+    if (entity === "location") {
+      return {
+        ...groupConfig,
+        groups,
+        keyFn: (item: TData) => groupConfig.keyFn(item) ?? "__unspecified__",
+      };
+    }
+    return groupConfig;
+  }, [entity, groupConfig, grouped, groups]);
 
   const serverTotals = useMemo(
     () => ({ totalCount, sums }),
@@ -584,7 +614,7 @@ export function useEntityList<
       refreshControls,
       grouped,
       onGroupedChange,
-      groupConfig,
+      groupConfig: effectiveGroupConfig,
     },
     currentFilters,
     mappingsMap,

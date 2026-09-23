@@ -35,7 +35,7 @@ import {
   type ProductUpdateInput,
 } from "@cubby/schemas/product";
 import { relatedViewKeySchema } from "@cubby/schemas/related-view";
-import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
+import { formatCategoryLabel, UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
 import {
   and,
   asc,
@@ -47,6 +47,7 @@ import {
   or,
   sql,
   sum,
+  type SQL,
 } from "drizzle-orm";
 import type { PgColumn } from "drizzle-orm/pg-core";
 import { uniq } from "es-toolkit";
@@ -322,6 +323,74 @@ const productListOrderBy = (
     },
     filters,
   );
+
+const loadProductCategoryGroups = async (
+  db: Database,
+  whereClause: SQL | undefined,
+  sorts: SortParams[],
+) => {
+  const counts = await getDb(db)
+    .select({
+      categoryId: product.categoryId,
+      count: sql<number>`count(*)::int`,
+    })
+    .from(product)
+    .where(whereClause)
+    .groupBy(product.categoryId);
+  const summaries = await loadCategorySummaries(db);
+  const direction =
+    sorts.find((sort) => sort.orderBy === "category")?.direction ?? "asc";
+  const groups: Array<{
+    key: string;
+    label: string;
+    count: number;
+    categoryId: ProductCategoryId | null;
+  }> = [];
+  let unclassifiedCount = 0;
+  for (const { categoryId, count } of counts) {
+    const category = categoryId ? summaries.get(categoryId) : null;
+    if (!category) {
+      unclassifiedCount += count;
+      continue;
+    }
+    groups.push({
+      key: category.id,
+      label: formatCategoryLabel(category),
+      count,
+      categoryId,
+    });
+  }
+  if (unclassifiedCount > 0)
+    groups.push({
+      key: "__unclassified__",
+      label: "Unclassified",
+      count: unclassifiedCount,
+      categoryId: null,
+    });
+  return groups.sort((a, b) =>
+    a.categoryId === null
+      ? 1
+      : b.categoryId === null
+        ? -1
+        : (a.label.localeCompare(b.label) || a.key.localeCompare(b.key)) *
+          (direction === "desc" ? -1 : 1),
+  );
+};
+
+const productCategoryGroupOrder = (
+  groups: Awaited<ReturnType<typeof loadProductCategoryGroups>>,
+): SQL | null =>
+  groups.some((group) => group.categoryId !== null)
+    ? sql`case ${sql.join(
+        groups
+          .filter((group) => group.categoryId !== null)
+          .map(
+            (group, index) =>
+              sql`when ${product.categoryId} = ${group.categoryId} then ${index}`,
+          ),
+        sql` `,
+      )} else ${groups.length} end asc`
+    : null;
 
 const PRODUCT_DETAIL_OPERATION = startOperationDefinition("entity.detail");
 
@@ -1003,7 +1072,19 @@ export const productList = async (
     };
   }
 
-  const orderByArray = productListOrderBy(sorts, groupBy, filters);
+  const groups =
+    groupBy === "category" && readIntent === "page"
+      ? await loadProductCategoryGroups(db, whereClause, sorts)
+      : null;
+  const groupOrder = groups ? productCategoryGroupOrder(groups) : null;
+  const orderByArray = [
+    ...(groupOrder ? [groupOrder] : []),
+    ...productListOrderBy(
+      sorts,
+      groupBy === "category" ? undefined : groupBy,
+      filters,
+    ),
+  ];
 
   const { take, skip } = productScaffold.page(pagination);
   const skipAggregates = readIntent === "sample";
@@ -1096,7 +1177,7 @@ export const productList = async (
   const priceSum = Number(aggregates[0]?.priceSum ?? 0);
   const expenseTotalSum = Number(expenseAggregates[0]?.expenseTotalSum ?? 0);
 
-  return {
+  const result = {
     data: productsWithUnitPrices,
     count: totalCount,
     sums: {
@@ -1104,6 +1185,12 @@ export const productList = async (
       expenseTotal: Number.isNaN(expenseTotalSum) ? 0 : expenseTotalSum,
     },
   };
+  return groups
+    ? {
+        ...result,
+        groups: groups.map(({ key, label, count }) => ({ key, label, count })),
+      }
+    : result;
 };
 
 type ProductListRelations = Pick<

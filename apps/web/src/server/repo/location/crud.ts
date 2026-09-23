@@ -852,7 +852,7 @@ export const locationList = async (
   const orderByClause = locationScaffold.orderBy(
     sorts,
     {
-      groupBy,
+      groupBy: groupBy === "type" ? undefined : groupBy,
       // `valuation` is computed on read, not a stored column; sort by direct
       // value because that is what the list cell renders in compact mode.
       resolve: (s) => {
@@ -890,6 +890,20 @@ export const locationList = async (
     },
     filters,
   );
+
+  const groupDirection =
+    sorts.find((sort) => sort.orderBy === "type")?.direction ?? "asc";
+  const groupOrder = sql`${location.type} ${sql.raw(groupDirection)} nulls last`;
+  const groups =
+    groupBy === "type" && readIntent === "page"
+      ? await getDb(db)
+          .select({ type: location.type, count: sql<number>`count(*)::int` })
+          .from(location)
+          .where(whereClause)
+          .groupBy(location.type)
+          .orderBy(groupOrder)
+      : null;
+  if (groups) orderByClause.unshift(groupOrder);
 
   const { take, skip } = locationScaffold.page(pagination);
 
@@ -936,7 +950,20 @@ export const locationList = async (
       dataQualities.get(row.id)!,
     ),
   );
-  return { data: items, count: totalCount };
+  const result = {
+    data: items,
+    count: totalCount,
+  };
+  return groups
+    ? {
+        ...result,
+        groups: groups.map(({ type, count }) => ({
+          key: type ?? "__unspecified__",
+          label: type ?? "(unspecified)",
+          count,
+        })),
+      }
+    : result;
 };
 
 /**

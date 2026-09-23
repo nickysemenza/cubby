@@ -1,3 +1,4 @@
+import type { ListGroupSummary } from "@cubby/schemas/pagination";
 import { useMemo } from "react";
 
 export interface GroupConfig<TItem> {
@@ -6,10 +7,18 @@ export interface GroupConfig<TItem> {
   /** Extract the group key from an item. Null/undefined becomes "(unspecified)". */
   keyFn: (item: TItem) => string | null | undefined;
   colorFn: (key: string) => string;
+  /** Ordered summaries of the entire filtered set, including unloaded pages. */
+  groups?: readonly ListGroupSummary[];
 }
 
 type GroupedVirtualItem<TItem> =
-  | { kind: "header"; title: string; count: number; color: string }
+  | {
+      kind: "header";
+      key?: string;
+      title: string;
+      count: number;
+      color: string;
+    }
   | { kind: "row"; item: TItem };
 
 export function useGroupedList<TItem>(
@@ -32,20 +41,25 @@ export function useGroupedList<TItem>(
       }
     }
 
-    const sections = Array.from(groups.entries());
-    sections.sort(([a], [b]) => {
-      if (a === "(unspecified)") return 1;
-      if (b === "(unspecified)") return -1;
-      return a.localeCompare(b);
-    });
+    const sections = groupConfig.groups
+      ? groupConfig.groups.map(
+          (summary) => [summary.key, groups.get(summary.key) ?? []] as const,
+        )
+      : Array.from(groups.entries()).sort(([a], [b]) => {
+          if (a === "(unspecified)") return 1;
+          if (b === "(unspecified)") return -1;
+          return a.localeCompare(b);
+        });
 
     const result: GroupedVirtualItem<TItem>[] = [];
-    for (const [title, items] of sections) {
+    for (const [key, items] of sections) {
+      const summary = groupConfig.groups?.find((group) => group.key === key);
       result.push({
         kind: "header",
-        title,
-        count: items.length,
-        color: groupConfig.colorFn(title),
+        key: summary?.key,
+        title: summary?.label ?? key,
+        count: summary?.count ?? items.length,
+        color: groupConfig.colorFn(key),
       });
       for (const item of items) {
         result.push({ kind: "row", item });

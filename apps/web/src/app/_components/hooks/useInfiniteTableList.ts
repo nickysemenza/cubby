@@ -1,3 +1,4 @@
+import type { ListGroupSummary } from "@cubby/schemas/pagination";
 import { keepPreviousData, useInfiniteQuery } from "@tanstack/react-query";
 import { useCallback, useMemo, useRef } from "react";
 
@@ -52,6 +53,7 @@ interface UseInfiniteTableListReturn<TData extends IdentifiedListRow> {
   totalCount: number;
   /** Server-computed full-filtered-set column sums (footer totals). */
   sums?: Record<string, number>;
+  groups?: ListGroupSummary[];
   isLoading: boolean;
   error: Error | null;
   tableState: TableStateReturn;
@@ -171,6 +173,7 @@ export function useInfiniteTableList<
   // the freshest after mutations invalidate/refetch.
   const totalCount = infiniteData?.pages[0]?.meta?.totalCount ?? 0;
   const sums = infiniteData?.pages.at(-1)?.meta?.sums;
+  const groups = infiniteData?.pages[0]?.meta?.groups;
 
   type FetchResult = Awaited<ReturnType<typeof fetchNextPage>>;
   const nextPageInFlightRef = useRef<Promise<FetchResult> | null>(null);
@@ -268,6 +271,7 @@ export function useInfiniteTableList<
     data,
     totalCount,
     sums,
+    groups,
     isLoading,
     error: error instanceof Error ? error : null,
     tableState,

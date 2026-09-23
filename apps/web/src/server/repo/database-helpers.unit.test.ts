@@ -104,6 +104,23 @@ describe("buildOrderBy", () => {
     expect(sql[0]).toContain('"Product"."categoryId" asc nulls last');
     expect(sql.at(-1)).toContain('"Product"."id" asc');
   });
+
+  it("promotes a later group-field sort ahead of the other sorts", () => {
+    const clauses = renderSql(
+      buildOrderBy(
+        product,
+        [
+          { orderBy: "name", direction: "asc" },
+          { orderBy: "categoryId", direction: "desc" },
+        ],
+        ["name", "categoryId"],
+        { groupBy: "categoryId" },
+      ),
+    );
+    expect(clauses).toHaveLength(3);
+    expect(clauses[0]).toContain('"Product"."categoryId" desc nulls last');
+    expect(clauses[1]).toContain('"Product"."name" asc');
+  });
 });
 
 describe("eqAnyOrPresence", () => {

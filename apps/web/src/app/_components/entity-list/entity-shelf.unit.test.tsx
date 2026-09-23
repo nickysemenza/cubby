@@ -12,6 +12,32 @@ afterEach(() => {
 });
 
 describe("entity cards", () => {
+  it.each([false, true])(
+    "shows every server group and full count with compact=%s before later cards load",
+    (compact) => {
+      render(
+        <ShelfGrid
+          items={[{ id: "loaded", group: "b" }]}
+          renderCard={(item) => <div key={item.id}>{item.id}</div>}
+          groups={[
+            { key: "a", label: "First group", count: 4 },
+            { key: "b", label: "Second group", count: 9 },
+          ]}
+          getGroupKey={(item) => item.group}
+          compact={compact}
+        />,
+      );
+      expect(
+        screen
+          .getAllByRole("heading", { level: 2 })
+          .map((heading) => heading.textContent),
+      ).toEqual(["First group", "Second group"]);
+      expect(screen.getByText("4")).toBeVisible();
+      expect(screen.getByText("9")).toBeVisible();
+      expect(screen.getByText("loaded")).toBeVisible();
+    },
+  );
+
   it("uses uploaded image records directly and keeps unfinished uploads as icon tiles", () => {
     harness = createBrowserTestHarness();
     render(

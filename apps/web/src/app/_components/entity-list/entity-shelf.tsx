@@ -9,6 +9,7 @@ import {
   ShelfEmpty,
   ShelfGrid,
 } from "~/app/_components/data-table/shelf";
+import type { GroupConfig } from "~/app/_components/data-table/useGroupedList";
 import type { InfiniteScrollControls } from "~/app/_components/hooks/useInfiniteTableList";
 import { entities, entityDetailParams } from "~/entities/entities";
 import { renderDetailFieldValue } from "~/entities/entity-display";
@@ -80,6 +81,7 @@ export function EntityShelf<TRow extends { id: string }>({
   error,
   infiniteScroll,
   compact = false,
+  groupConfig,
   onInspect,
   onRowHover,
   onRowHoverEnd,
@@ -92,6 +94,7 @@ export function EntityShelf<TRow extends { id: string }>({
   error?: unknown;
   infiniteScroll?: InfiniteScrollControls;
   compact?: boolean;
+  groupConfig?: GroupConfig<TRow>;
   onInspect?: (record: TRow) => void;
   onRowHover?: (record: TRow) => void;
   onRowHoverEnd?: (record: TRow) => void;
@@ -106,6 +109,8 @@ export function EntityShelf<TRow extends { id: string }>({
       error={error}
       infiniteScroll={infiniteScroll}
       compact={compact}
+      groups={groupConfig?.groups}
+      getGroupKey={groupConfig?.keyFn}
       onRetry={onRetry}
       emptyState={<ShelfEmpty entity={entity} label={emptyState.title} />}
       renderCard={(record) => {
