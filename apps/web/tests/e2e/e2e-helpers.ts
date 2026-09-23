@@ -3,7 +3,6 @@ import {
   expect,
   type Locator,
   type Page,
-  type Route,
   test,
   type TestInfo,
 } from "@playwright/test";
@@ -35,71 +34,6 @@ export function uniqueName(testInfo: TestInfo, label: string): string {
     Date.now().toString(36).slice(-5),
   ].join("");
   return `${label} ${token}`;
-}
-
-/**
- * Assert that `locator` does not move while requests matching `routeGlob`
- * (and `options.match`) settle — the shape of late content, such as an async
- * suggestion, shifting a control out from under a tap. Matching requests are
- * held from before `options.during` (typically the navigation) until the first
- * measurement, so that measurement always precedes their responses.
- */
-export async function expectStableLayoutWhile(
-  page: Page,
-  routeGlob: string,
-  locator: Locator,
-  options: {
-    during?: () => Promise<void>;
-    match?: (route: Route) => boolean;
-  } = {},
-) {
-  const held: Route[] = [];
-  let holding = true;
-  const release = () =>
-    Promise.all(held.splice(0).map((route) => route.fallback()));
-  const handler = async (route: Route) => {
-    if (holding && (options.match?.(route) ?? true)) held.push(route);
-    else await route.fallback();
-  };
-  await page.route(routeGlob, handler);
-  try {
-    await options.during?.();
-    await expect(locator).toBeVisible();
-    // Let everything not held settle first, so the comparison below isolates
-    // what the held responses change.
-    let settled = await locator.boundingBox();
-    await expect
-      .poll(async () => {
-        const previous = settled;
-        await page.waitForTimeout(250);
-        settled = await locator.boundingBox();
-        return (
-          settled?.y === previous?.y && settled?.height === previous?.height
-        );
-      })
-      .toBe(true);
-    const before = settled;
-    expect(held.length, `no request matched ${routeGlob}`).toBeGreaterThan(0);
-    holding = false;
-    const responses = held.map((route) => route.request().response());
-    await release();
-    await Promise.all(responses);
-    await page.waitForLoadState("networkidle");
-    // Let React commit what the responses changed before measuring again.
-    await page.evaluate(
-      () =>
-        new Promise((resolve) =>
-          requestAnimationFrame(() => requestAnimationFrame(resolve)),
-        ),
-    );
-    const after = await locator.boundingBox();
-    expect(after?.y).toBeCloseTo(before?.y ?? Number.NaN, 0);
-    expect(after?.height).toBeCloseTo(before?.height ?? Number.NaN, 0);
-  } finally {
-    holding = false;
-    await release();
-    await page.unroute(routeGlob, handler);
-  }
 }
 
 /** Read an expense through the public API, for `expect.poll` after a UI write. */

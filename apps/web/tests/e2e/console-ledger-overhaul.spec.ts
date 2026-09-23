@@ -1,8 +1,6 @@
 import { expect, test } from "./e2e-test";
 import { gotoAuthenticatedPage } from "./e2e-helpers";
 
-// The phone half (bottom navigation instead of the sidebar) lives in
-// `mobile.console-ledger-overhaul.spec.ts`.
 test("desktop workspace sidebar marks the current page and collapses", async ({
   page,
 }) => {

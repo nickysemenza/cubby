@@ -77,8 +77,6 @@ test("card density adapts to the work surface and stays temporary through filter
   await expectViewportBounded(page);
   await page.screenshot({ path: testInfo.outputPath("desktop-compact.png") });
 
-  // The phone Cards menu and card navigation are covered by
-  // `mobile.card-layout.spec.ts`.
   await page.reload();
   await expect(grid).toHaveAttribute("data-compact", "false");
 });

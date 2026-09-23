@@ -182,7 +182,6 @@ test("core entity list, detail, and mutation ride named Start operations", async
   for (const requestId of requestIds) expect(requestId).toBe(canaryRequestId);
 });
 
-// The phone sheet half lives in `mobile.start-entity-transport.spec.ts`.
 test("server error references remain usable on desktop", async ({
   page,
   context,

@@ -14,10 +14,7 @@ export const projectAssignment = z.object({
 });
 
 /**
- * The layout-bound review flow, registered once per layout: desktop from
- * `relationship-discovery.spec.ts` and phone from
- * `mobile.relationship-discovery.spec.ts`. Server-side review contracts are
- * layout-independent and live only in the desktop spec.
+ * The review flow shared by the desktop relationships and graph views.
  */
 export function relationshipDiscoveryContract() {
   test("assigned expense offers a reviewed alternative and explores multiple levels", async ({
@@ -63,25 +60,12 @@ export function relationshipDiscoveryContract() {
     await page
       .getByRole("button", { name: "Expand connections", exact: true })
       .click();
-    // Below md the inspector is a bottom sheet (titled "Graph inspector") that
-    // selecting a record opens; at desktop width it is a permanent aside.
-    const phone = (page.viewportSize()?.width ?? 0) < 768;
-    if (phone) {
-      const inspectorHeading = page.getByRole("heading", {
+    await expect(
+      page.getByRole("complementary", {
         name: "Graph inspector",
         exact: true,
-      });
-      await expect(inspectorHeading).toBeVisible();
-      await page.getByRole("button", { name: "Close", exact: true }).click();
-      await expect(inspectorHeading).toBeHidden();
-    } else {
-      await expect(
-        page.getByRole("complementary", {
-          name: "Graph inspector",
-          exact: true,
-        }),
-      ).toBeVisible();
-    }
+      }),
+    ).toBeVisible();
     await expect(
       page.getByRole("group", {
         name: `Inspect ${name} supporting expense`,

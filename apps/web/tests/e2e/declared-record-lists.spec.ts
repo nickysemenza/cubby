@@ -7,8 +7,7 @@ import { expect, test } from "./e2e-test";
 
 // Desktop-only: this is the SSR + cross-page navigation proof for declared
 // record-list columns. Per-column rendering itself is guarded by
-// `entity-display.<entity>.unit.test.tsx`; the mobile viewport case for this
-// same fixture lives in `mobile.entity-views.spec.ts`.
+// `entity-display.<entity>.unit.test.tsx`.
 test("declared record lists retain identities, relationships and amounts on desktop", async ({
   page,
 }) => {
