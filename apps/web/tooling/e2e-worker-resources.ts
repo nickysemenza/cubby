@@ -3,6 +3,7 @@ interface Closeable {
 }
 
 export interface E2EWorkerResources {
+  proxy?: Closeable;
   harness?: Closeable;
   database?: Closeable;
   objectStorage?: Closeable;
@@ -14,6 +15,7 @@ export async function closeE2EWorkerResources(
 ): Promise<void> {
   const errors: unknown[] = [];
   for (const [label, resource] of [
+    ["proxy", resources.proxy],
     ["harness", resources.harness],
     ["database", resources.database],
     ["object storage", resources.objectStorage],

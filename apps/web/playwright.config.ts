@@ -81,6 +81,7 @@ export default defineConfig({
   use: {
     /* Base URL to use in actions like `await page.goto('/')`. */
     baseURL: "http://localhost:3001",
+    ignoreHTTPSErrors: process.env.CUBBY_E2E_HTTP2 === "1",
 
     /* retries: 0 means "on-first-retry" never fires — there is no retry to
        collect a trace on. Record on the first (only) failure instead. */

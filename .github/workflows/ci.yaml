@@ -269,6 +269,7 @@ jobs:
             shard: "2/2"
     env:
       NODE_OPTIONS: "--max-old-space-size=4096"
+      CUBBY_E2E_HTTP2: "1"
       E2E_TEST_USER_EMAIL: nicky@test.com
       E2E_TEST_USER_PASSWORD: password1234
       BETTER_AUTH_SECRET: ci-secret-TbGFDRAbhlR8e3RaXsfHR9CQ7r4nIc9
@@ -321,6 +322,14 @@ jobs:
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}-${{ matrix.browser }}
+      - name: Install pinned E2E HTTPS proxy
+        run: |
+          curl -fsSL --retry 2 \
+            -o "$RUNNER_TEMP/caddy.tar.gz" \
+            https://github.com/caddyserver/caddy/releases/download/v2.11.4/caddy_2.11.4_linux_amd64.tar.gz
+          echo "527fbf917c39189a1e3b31d34fa955601680b2d5c8055d2a87b8b9588dec7bb9  $RUNNER_TEMP/caddy.tar.gz" | sha256sum --check
+          tar -xzf "$RUNNER_TEMP/caddy.tar.gz" -C "$RUNNER_TEMP" caddy
+          echo "CUBBY_E2E_CADDY_BIN=$RUNNER_TEMP/caddy" >> "$GITHUB_ENV"
       - name: Wait for the tested Cloudflare bundle
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         with:

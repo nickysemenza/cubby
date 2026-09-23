@@ -12,6 +12,7 @@ import {
   type E2EWorkerResources,
 } from "../../tooling/e2e-worker-resources";
 import { createE2EDatabase } from "./e2e-database";
+import { startE2EHttp2Proxy } from "./e2e-http2-proxy";
 import { createE2EObjectStorage } from "./e2e-object-storage";
 import {
   ensureHarnessServiceBundles,
@@ -75,7 +76,8 @@ export function createHarness(
         configPath: e2eConfigPath,
         vars: {
           ALLOW_SIGNUP: "true",
-          INSECURE_AUTH_COOKIES: "true",
+          INSECURE_AUTH_COOKIES:
+            process.env.CUBBY_E2E_HTTP2 === "1" ? "false" : "true",
           E2E_AUTH_TEST_MODE: "true",
           DATABASE_URL: databaseUrl,
           R2_ENDPOINT: objectStorageUrl,
@@ -156,6 +158,7 @@ async function authenticate(
   const context = await request.newContext({
     baseURL,
     extraHTTPHeaders: { Origin: baseURL },
+    ignoreHTTPSErrors: true,
   });
   try {
     const signUp = await context.post("/api/auth/sign-up/email", {
@@ -225,8 +228,14 @@ export async function createE2EWorkerRuntime({
     );
     resources.harness = harness;
     const { url } = await harness.listen();
-    const baseURL = url.origin;
     logPhase("harness create+listen");
+    const proxy =
+      process.env.CUBBY_E2E_HTTP2 === "1"
+        ? await startE2EHttp2Proxy(url.origin)
+        : undefined;
+    resources.proxy = proxy;
+    const baseURL = proxy?.baseURL ?? url.origin;
+    if (proxy) logPhase("https proxy");
     const identity = authenticated ? await authenticate(baseURL) : undefined;
     const storageState = identity?.storageState ?? { cookies: [], origins: [] };
     logPhase("auth");
