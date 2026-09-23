@@ -52,7 +52,7 @@ describe("the crate catalog backs every registered chat model", () => {
 
   it("prices provider-specific cache reads and writes", () => {
     expect(
-      estimateAiUsageCostUsd("anthropic", REASONING_MODEL, {
+      estimateAiUsageCostUsd("openai", REASONING_MODEL, {
         inputTokens: 1000,
         outputTokens: 1000,
         cacheReadTokens: 10_000,
@@ -67,7 +67,7 @@ describe("the registry is the routing seam", () => {
     expect(getChatModelConfig(FAST_MODEL)).toMatchObject({
       provider: "openai",
       route: "openai-responses",
-      wireModel: "gpt-5.6-luna",
+      wireModel: "gpt-6-luna",
     });
     expect(getChatModelConfig(VISION_BATCH_MODEL)).toMatchObject({
       provider: "google",
@@ -75,9 +75,9 @@ describe("the registry is the routing seam", () => {
       wireModel: "google-ai-studio/gemini-2.5-flash",
     });
     expect(getChatModelConfig(REASONING_MODEL)).toMatchObject({
-      provider: "anthropic",
-      route: "anthropic",
-      wireModel: "claude-sonnet-5",
+      provider: "openai",
+      route: "openai-responses",
+      wireModel: "gpt-6-sol",
     });
   });
 });

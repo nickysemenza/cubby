@@ -33,7 +33,7 @@ describe("tier factories resolve the registry's wire model and route", () => {
   it("sends the fast tier to OpenAI's Responses API", () => {
     const adapter = fastAdapter(opts);
     expect(adapter.name).toBe("openai");
-    expect(adapter.model).toBe("gpt-5.6-luna");
+    expect(adapter.model).toBe("gpt-6-luna");
   });
 
   it("sends the vision batch tier to the gateway's compat route", () => {
@@ -41,10 +41,10 @@ describe("tier factories resolve the registry's wire model and route", () => {
     expect(adapter.model).toBe("google-ai-studio/gemini-2.5-flash");
   });
 
-  it("sends the reasoning tier to Anthropic Messages", () => {
+  it("sends the reasoning tier to OpenAI Responses", () => {
     const adapter = reasoningAdapter(opts);
-    expect(adapter.name).toBe("anthropic");
-    expect(adapter.model).toBe("claude-sonnet-5");
+    expect(adapter.name).toBe("openai");
+    expect(adapter.model).toBe("gpt-6-sol");
   });
 
   it("routes any registered model the same way through chatAdapterFor", () => {
@@ -137,12 +137,12 @@ describe("usageFor", () => {
   it("derives the provider from the registry rather than assuming Anthropic", () => {
     expect(
       usageFor(FAST_MODEL, { db, runId, feature: "f", operation: "o" }),
-    ).toMatchObject({ provider: "openai", model: "gpt-5.6-luna" });
+    ).toMatchObject({ provider: "openai", model: "gpt-6-luna" });
     expect(
       usageFor(VISION_BATCH_MODEL, { db, runId, feature: "f", operation: "o" }),
     ).toMatchObject({ provider: "google", model: "gemini-2.5-flash" });
     expect(
       usageFor(REASONING_MODEL, { db, runId, feature: "f", operation: "o" }),
-    ).toMatchObject({ provider: "anthropic", model: "claude-sonnet-5" });
+    ).toMatchObject({ provider: "openai", model: "gpt-6-sol" });
   });
 });

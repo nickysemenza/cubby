@@ -63,12 +63,15 @@ type AiModelConfig =
   | DecisionAiModelConfig;
 
 const supportedChatModel = z.enum([
+  "gpt-6-luna",
+  "gpt-6-sol",
   "gpt-5.6-luna",
   "gpt-5.6-terra",
   "gpt-5.6-sol",
   "gemini-2.5-flash",
   "gemini-2.5-flash-lite",
   "claude-sonnet-5",
+  "claude-opus-5-5",
   "claude-haiku-4-5",
 ]);
 export type SupportedChatModel = z.infer<typeof supportedChatModel>;
@@ -87,10 +90,12 @@ const supportedAiModel = z.enum([
 type SupportedAiModel = z.infer<typeof supportedAiModel>;
 
 /** The three measured tiers every feature is assigned to. */
-export const FAST_MODEL = "gpt-5.6-luna" satisfies SupportedChatModel;
+export const FAST_MODEL = "gpt-6-luna" satisfies SupportedChatModel;
 export const VISION_BATCH_MODEL =
   "gemini-2.5-flash" satisfies SupportedChatModel;
-export const REASONING_MODEL = "claude-sonnet-5" satisfies SupportedChatModel;
+export const REASONING_MODEL = "gpt-6-sol" satisfies SupportedChatModel;
+export const AUDIT_RECOVERY_MODEL =
+  "claude-opus-5-5" satisfies SupportedChatModel;
 /**
  * The decision tier's model: TypeSafe's Jev, a closed-set decision model
  * served by Workers AI over its native route rather than a chat one, so it
@@ -118,6 +123,22 @@ const UNCATALOGED_MODELS = [
 ] as const satisfies readonly AiModel[];
 
 const AI_MODEL_REGISTRY = {
+  "gpt-6-luna": {
+    role: "chat",
+    provider: "openai",
+    route: "openai-responses",
+    wireModel: "gpt-6-luna",
+    vision: true,
+    cachePricing: { read: 0.01, write: 0.125 },
+  },
+  "gpt-6-sol": {
+    role: "chat",
+    provider: "openai",
+    route: "openai-responses",
+    wireModel: "gpt-6-sol",
+    vision: true,
+    cachePricing: { read: 0.2, write: 2.5 },
+  },
   "gpt-5.6-luna": {
     role: "chat",
     provider: "openai",
@@ -165,6 +186,15 @@ const AI_MODEL_REGISTRY = {
     wireModel: "claude-sonnet-5",
     vision: true,
     cachePricing: { read: 0.2, write: 2.5 },
+    adaptiveThinking: true,
+  },
+  "claude-opus-5-5": {
+    role: "chat",
+    provider: "anthropic",
+    route: "anthropic",
+    wireModel: "claude-opus-5-5",
+    vision: true,
+    cachePricing: { read: 0.2, write: 5 },
     adaptiveThinking: true,
   },
   "claude-haiku-4-5": {

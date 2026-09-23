@@ -583,7 +583,15 @@ example vegetable` must not resolve to the weight of an entire linked bag
   known outcomes and measured provider decisions. The current static Product
   reuse fixture checks a result shape; it does not establish decision accuracy
   or calibrate confidence thresholds. Evaluate the current shared-agent path
-  and its bounded decisions without committing private source material.
+  and its bounded decisions without committing private source material. Include
+  GPT-6 Luna/Sol and Opus 5.5 on a fixed purchase extraction, audit, and
+  coordinator corpus; compare task success, latency, and total cost per run
+  before changing the automatic tier choices again.
+
+- **Cookbook fallback evaluation.** Run the six-book answer-key corpus against
+  GPT-6 Luna as the second ladder reader and compare its full-book recall,
+  escalation rate, latency, and cost with GPT-5.6 Luna. Keep Gemini 2.5 Flash
+  as the evaluated first reader until a broader test supports a change.
 
 - **CalDAV event deletion.** The HTTP adapter returns 405 for DELETE and directs
   users to Cubby. Resolve the [deferred client-precondition policy](caldav.md#storage-and-writes)

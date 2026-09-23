@@ -29,10 +29,10 @@ import {
   imageDescriptionResult,
 } from "@cubby/schemas/image-processing";
 import {
-  type ImportAuditOutput,
+  type ImportAuditModelOutput,
   type ImportExtractionModelOutput,
   type OrderMailClassification,
-  importAuditOutput,
+  importAuditModelOutput,
   importExtractionModelOutput,
   orderMailClassification,
 } from "@cubby/schemas/purchase-import";
@@ -55,11 +55,7 @@ import {
   type SupportedChatModel,
   VISION_BATCH_MODEL,
 } from "~/server/ai/models";
-import type {
-  AnthropicEffort,
-  CompatEffort,
-  OpenAiEffort,
-} from "~/server/clients/ai-adapters";
+import type { CompatEffort, OpenAiEffort } from "~/server/clients/ai-adapters";
 
 /** Embeddings share the catalog, while retaining their vector runner. */
 export type AiTier =
@@ -103,7 +99,7 @@ interface AiFeatureShared {
 type AiChatFeatureTier = (
   | { tier: "fast"; effort: OpenAiEffort }
   | { tier: "visionBatch"; effort?: CompatEffort }
-  | { tier: "reasoning"; effort?: AnthropicEffort }
+  | { tier: "reasoning"; effort: OpenAiEffort }
 ) & {
   /** Output cap. Reasoning/thinking tokens count against it on every tier. */
   maxTokens: number;
@@ -234,7 +230,7 @@ export const PURCHASE_IMPORT_REVERSAL_KIND_FEATURE = defineFeature({
 }) satisfies AiDecisionFeature;
 
 // ---------------------------------------------------------------------------
-// Fast tier — GPT-5.6 Luna. Identification, detection, and oversized
+// Fast tier — GPT-6 Luna. Identification, detection, and oversized
 // selection.
 // ---------------------------------------------------------------------------
 
@@ -334,7 +330,7 @@ export const IMAGE_DESCRIPTION_FEATURE = defineFeature({
   AiAnalysisFeature<ImageDescriptionResult>;
 
 // ---------------------------------------------------------------------------
-// Reasoning tier — Claude Sonnet 5. The accuracy tier.
+// Reasoning tier — GPT-6 Sol. The accuracy tier.
 // ---------------------------------------------------------------------------
 
 export const RECIPE_FLOW_PRIMARY_FEATURE = defineFeature({
@@ -357,8 +353,8 @@ export const PURCHASE_IMPORT_AUDIT_FEATURE = defineFeature({
   effort: "high",
   cache: true,
   promptVersion: "2026-09-19.1",
-  schema: importAuditOutput,
-}) satisfies AiStructuredFeature<ImportAuditOutput>;
+  schema: importAuditModelOutput,
+}) satisfies AiStructuredFeature<ImportAuditModelOutput>;
 
 export const PURCHASE_IMPORT_REPAIR_FEATURE = defineFeature({
   feature: "purchase-import-repair",

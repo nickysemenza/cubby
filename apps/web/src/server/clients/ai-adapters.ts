@@ -93,6 +93,18 @@ function openaiAdapter<TModel extends Parameters<typeof createOpenaiChat>[0]>(
   });
 }
 
+// The installed TanStack catalog trails the provider's newly released ids.
+// The Responses adapter sends its model argument verbatim; keep the cast at
+// this boundary until TanStack adds GPT-6 to its type catalog.
+function newOpenaiAdapter(
+  model: typeof FAST_MODEL | typeof REASONING_MODEL,
+  opts: GatewayCallOptions,
+) {
+  // SAFETY: TanStack forwards this literal id to Responses without parsing it;
+  // the registry limits callers to GPT-6 ids verified through the gateway.
+  return openaiAdapter(model as Parameters<typeof createOpenaiChat>[0], opts);
+}
+
 function compatAdapter<TModel extends string>(
   wireModel: TModel,
   opts: GatewayCallOptions,
@@ -111,12 +123,10 @@ function compatAdapter<TModel extends string>(
 }
 
 /**
- * GPT-5.6 Luna on `/openai/responses`: 0.6 s to first token, image input,
- * strict JSON, reasoning effort `none`..`max`. The classification and
- * identification tier.
+ * GPT-6 Luna on `/openai/responses`: classification and identification.
  */
 export function fastAdapter(opts: GatewayCallOptions) {
-  return openaiAdapter(getChatModelConfig(FAST_MODEL).wireModel, opts);
+  return newOpenaiAdapter(getChatModelConfig(FAST_MODEL).wireModel, opts);
 }
 
 /**
@@ -128,9 +138,9 @@ export function visionBatchAdapter(opts: GatewayCallOptions) {
   return compatAdapter(getChatModelConfig(VISION_BATCH_MODEL).wireModel, opts);
 }
 
-/** Claude Sonnet 5 on `/anthropic/v1/messages`: the accuracy tier. */
+/** GPT-6 Sol on `/openai/responses`: the accuracy tier. */
 export function reasoningAdapter(opts: GatewayCallOptions) {
-  return anthropicAdapter(getChatModelConfig(REASONING_MODEL).wireModel, opts);
+  return newOpenaiAdapter(getChatModelConfig(REASONING_MODEL).wireModel, opts);
 }
 
 /**
@@ -146,16 +156,26 @@ export function chatAdapterFor(
   const config = getChatModelConfig(model);
   switch (config.route) {
     case "anthropic":
-      return anthropicAdapter(config.wireModel, opts);
+      // SAFETY: the registry's Anthropic route supplies provider wire ids;
+      // TanStack's catalog predates Opus 5.5 but forwards the id unchanged.
+      return anthropicAdapter(
+        config.wireModel as Parameters<typeof createAnthropicChat>[0],
+        opts,
+      );
     case "openai-responses":
-      return openaiAdapter(config.wireModel, opts);
+      // SAFETY: all registry rows on this route are OpenAI Responses ids;
+      // TanStack's type catalog predates GPT-6 but forwards the id unchanged.
+      return openaiAdapter(
+        config.wireModel as Parameters<typeof createOpenaiChat>[0],
+        opts,
+      );
     case "compat":
       return compatAdapter(config.wireModel, opts);
   }
 }
 
 type AnthropicTierOptions =
-  AnthropicChatModelProviderOptionsByName[typeof REASONING_MODEL];
+  AnthropicChatModelProviderOptionsByName["claude-sonnet-5"];
 export type AnthropicEffort = NonNullable<
   NonNullable<AnthropicTierOptions["output_config"]>["effort"]
 >;
@@ -180,8 +200,7 @@ export function anthropicOptions(args: {
   return options;
 }
 
-type OpenAiTierOptions =
-  OpenAIChatModelProviderOptionsByName[typeof FAST_MODEL];
+type OpenAiTierOptions = OpenAIChatModelProviderOptionsByName["gpt-5.6-luna"];
 export type OpenAiEffort = NonNullable<
   NonNullable<OpenAiTierOptions["reasoning"]>["effort"]
 >;

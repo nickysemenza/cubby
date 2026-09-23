@@ -23,6 +23,7 @@ import {
   importRunPurpose,
   importRunTrigger,
   importRunTargetState,
+  importCoordinatorModel,
   importRunScope,
   type BrowserBridgeOperation,
   type ImportRunTrigger,
@@ -393,7 +394,7 @@ export async function startOrResumeImportRun(
             ? importRunId.parse(input.predecessorRunId)
             : null,
           trigger,
-          coordinatorModel: input.coordinatorModel ?? "gpt-5.6-terra",
+          coordinatorModel: input.coordinatorModel ?? "gpt-6-sol",
           skillRevision: input.skillRevision ?? "purchase-import@1",
           runtimeRevision: input.runtimeRevision ?? "flue@1",
           agentSessionId: `import-run:${id}`,
@@ -519,6 +520,7 @@ export async function startTargetedImportRun(
         purpose,
         trigger,
         dispatchEventId: eventId,
+        coordinatorModel: "gpt-6-sol",
         agentSessionId: `import-run:${id}`,
       })
       .returning({
@@ -3191,9 +3193,9 @@ export async function controlImportRun(
           dispatchRunId: scope.public.runId,
           dispatchPublicId: input.runPublicId,
           dispatchPurpose: locked.purpose,
-          dispatchCoordinatorModel: z
-            .enum(["gpt-5.6-terra", "gpt-5.6-sol"])
-            .parse(locked.coordinatorModel),
+          dispatchCoordinatorModel: importCoordinatorModel.parse(
+            locked.coordinatorModel,
+          ),
           dispatchEventId,
         };
       }
@@ -3246,6 +3248,7 @@ export async function controlImportRun(
             purpose: "purchase_validation",
             trigger: "manual",
             status: isUnavailable ? "needs_review" : "dispatch_failed",
+            coordinatorModel: locked.coordinatorModel,
             dispatchEventId,
             failureCode: isUnavailable ? "no_evidence_available" : null,
             dispatchError: isUnavailable
@@ -3290,11 +3293,15 @@ export async function controlImportRun(
           successorRunId: successorId,
           successorRunPublicId: successor.publicId,
           successorStatus: successor.status,
-          successorCoordinatorModel: "gpt-5.6-terra" as const,
+          successorCoordinatorModel: importCoordinatorModel.parse(
+            locked.coordinatorModel,
+          ),
           dispatchRunId: null,
           dispatchPublicId: successor.publicId,
           dispatchPurpose: "purchase_validation" as const,
-          dispatchCoordinatorModel: "gpt-5.6-terra" as const,
+          dispatchCoordinatorModel: importCoordinatorModel.parse(
+            locked.coordinatorModel,
+          ),
           dispatchEventId,
           created: true,
         };
@@ -3329,9 +3336,9 @@ export async function controlImportRun(
             successorRunId: existingSuccessor.id,
             successorRunPublicId: existingSuccessor.publicId,
             successorStatus: existingSuccessor.status,
-            successorCoordinatorModel: z
-              .enum(["gpt-5.6-terra", "gpt-5.6-sol"])
-              .parse(existingSuccessor.coordinatorModel),
+            successorCoordinatorModel: importCoordinatorModel.parse(
+              existingSuccessor.coordinatorModel,
+            ),
             created: false,
           };
         }
@@ -3356,7 +3363,9 @@ export async function controlImportRun(
             trigger: locked.trigger,
             dispatchEventId,
             coordinatorModel:
-              input.action === "escalate_sol" ? "gpt-5.6-sol" : "gpt-5.6-terra",
+              input.action === "escalate_sol"
+                ? "gpt-6-sol"
+                : locked.coordinatorModel,
             skillRevision: locked.skillRevision,
             runtimeRevision: locked.runtimeRevision,
             decisionRevision: locked.decisionRevision + 1,
@@ -3427,13 +3436,17 @@ export async function controlImportRun(
           successorRunPublicId: successor.publicId,
           successorStatus: successor.status,
           successorCoordinatorModel:
-            input.action === "escalate_sol" ? "gpt-5.6-sol" : "gpt-5.6-terra",
+            input.action === "escalate_sol"
+              ? "gpt-6-sol"
+              : importCoordinatorModel.parse(locked.coordinatorModel),
           created: true,
           dispatchRunId: successorId,
           dispatchPublicId: successor.publicId,
           dispatchPurpose: locked.purpose,
           dispatchCoordinatorModel:
-            input.action === "escalate_sol" ? "gpt-5.6-sol" : "gpt-5.6-terra",
+            input.action === "escalate_sol"
+              ? "gpt-6-sol"
+              : importCoordinatorModel.parse(locked.coordinatorModel),
           dispatchEventId,
         };
       }

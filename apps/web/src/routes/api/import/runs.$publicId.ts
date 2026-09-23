@@ -223,7 +223,7 @@ export const Route = createFileRoute("/api/import/runs/$publicId")({
                   runId: control.dispatchRunId,
                   purpose: importRunPurpose.parse(control.dispatchPurpose),
                   coordinatorModel: z
-                    .enum(["gpt-5.6-terra", "gpt-5.6-sol"])
+                    .enum(["gpt-5.6-terra", "gpt-5.6-sol", "gpt-6-sol"])
                     .parse(control.dispatchCoordinatorModel),
                   eventId: control.dispatchEventId,
                   type: "start_or_resume",

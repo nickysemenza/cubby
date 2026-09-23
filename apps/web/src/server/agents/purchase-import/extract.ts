@@ -3,11 +3,15 @@ import {
   browserCapture,
   type BrowserCapture,
   type ImportExtractionOutcome,
+  importAuditModelOutput,
+  normalizeImportAuditModelOutput,
   normalizeImportExtractionModelOutput,
 } from "@cubby/schemas/purchase-import";
 import type { ModelMessage } from "@tanstack/ai";
 import { and, eq } from "drizzle-orm";
+import { z } from "zod";
 
+import { recordAiUsage } from "~/server/ai-usage";
 import {
   PURCHASE_IMPORT_AUDIT_FEATURE,
   PURCHASE_IMPORT_EXTRACTION_FEATURE,
@@ -15,7 +19,13 @@ import {
   PURCHASE_IMPORT_MAIL_FEATURE,
   PURCHASE_IMPORT_REPAIR_FEATURE,
 } from "~/server/ai/features";
+import {
+  AUDIT_RECOVERY_MODEL,
+  estimateAiUsageCostUsd,
+} from "~/server/ai/models";
 import { runStructuredFeature } from "~/server/ai/run-feature";
+import { cachedCall } from "~/server/clients/ai-adapters";
+import { gatewayBaseURL, gatewayFetch } from "~/server/clients/ai-gateway";
 import type { Database } from "~/server/db";
 import { image } from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
@@ -164,20 +174,127 @@ export function purchaseRepairRequest(capture: BrowserCapture) {
 }
 
 /** Loaded lazily by the purchase-import service to keep its bootstrap small. */
-export const auditPurchaseImportBatch = async (args: {
-  db: Database;
-  runId: string;
-  renderedBatch: PurchaseAuditRenderedBatch;
-}) =>
-  runStructuredFeature(
-    PURCHASE_IMPORT_AUDIT_FEATURE,
-    purchaseAuditPrompt(args.renderedBatch),
+const auditRecoveryResponse = z.object({
+  content: z.array(z.object({ type: z.string(), text: z.string().optional() })),
+  usage: z.object({ input_tokens: z.number(), output_tokens: z.number() }),
+});
+
+export interface PurchaseAuditPorts {
+  runStructured: typeof runStructuredFeature;
+  gateway: typeof gatewayFetch;
+  usage: typeof recordAiUsage;
+}
+
+const productionPurchaseAuditPorts: PurchaseAuditPorts = {
+  runStructured: runStructuredFeature,
+  gateway: gatewayFetch,
+  usage: recordAiUsage,
+};
+
+async function recoverPurchaseAudit(
+  args: {
+    db: Database;
+    runId: string;
+    renderedBatch: PurchaseAuditRenderedBatch;
+  },
+  ports: PurchaseAuditPorts,
+) {
+  const started = Date.now();
+  const request = purchaseAuditPrompt(args.renderedBatch);
+  const schema = z.toJSONSchema(importAuditModelOutput);
+  // Anthropic accepts the same portable object as OpenAI once the generated
+  // dialect marker is removed. No union or numeric bounds reach the provider.
+  const { $schema: _dialect, ...outputSchema } = schema;
+  const fetchThroughGateway = ports.gateway(
+    "anthropic",
+    cachedCall({
+      metadata: {
+        feature: "purchase-import-audit",
+        operation: "purchaseImport.audit.recovery",
+      },
+    }),
+  );
+  const response = await fetchThroughGateway(
+    `${gatewayBaseURL("anthropic")}/v1/messages`,
     {
-      db: args.db,
-      operation: "purchaseImport.audit",
-      runId: importRunId.parse(args.runId),
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "anthropic-version": "2023-06-01",
+      },
+      body: JSON.stringify({
+        model: AUDIT_RECOVERY_MODEL,
+        max_tokens: PURCHASE_IMPORT_AUDIT_FEATURE.maxTokens,
+        thinking: { type: "adaptive" },
+        output_config: {
+          effort: "high",
+          format: { type: "json_schema", schema: outputSchema },
+        },
+        system: request.systemPrompts.join("\n\n"),
+        messages: request.messages,
+      }),
     },
   );
+  if (!response.ok)
+    throw new Error(
+      `Audit recovery failed (${response.status}): ${await response.text()}`,
+    );
+  const body = auditRecoveryResponse.parse(await response.json());
+  await ports.usage(args.db, {
+    provider: "anthropic",
+    model: AUDIT_RECOVERY_MODEL,
+    feature: PURCHASE_IMPORT_AUDIT_FEATURE.feature,
+    operation: "purchaseImport.audit.recovery",
+    runId: importRunId.parse(args.runId),
+    inputTokens: body.usage.input_tokens,
+    outputTokens: body.usage.output_tokens,
+    estimatedCost: estimateAiUsageCostUsd("anthropic", AUDIT_RECOVERY_MODEL, {
+      inputTokens: body.usage.input_tokens,
+      outputTokens: body.usage.output_tokens,
+    }),
+    durationMs: Date.now() - started,
+  });
+  const text = body.content
+    .filter((part) => part.type === "text")
+    .map((part) => part.text ?? "")
+    .join("");
+  return normalizeImportAuditModelOutput(
+    importAuditModelOutput.parse(JSON.parse(text)),
+  );
+}
+
+export const auditPurchaseImportBatch = async (
+  args: {
+    db: Database;
+    runId: string;
+    renderedBatch: PurchaseAuditRenderedBatch;
+  },
+  ports: PurchaseAuditPorts = productionPurchaseAuditPorts,
+) => {
+  try {
+    return normalizeImportAuditModelOutput(
+      await ports.runStructured(
+        PURCHASE_IMPORT_AUDIT_FEATURE,
+        purchaseAuditPrompt(args.renderedBatch),
+        {
+          db: args.db,
+          operation: "purchaseImport.audit",
+          runId: importRunId.parse(args.runId),
+        },
+      ),
+    );
+  } catch (primaryError) {
+    try {
+      return await recoverPurchaseAudit(args, ports);
+    } catch (recoveryError) {
+      throw new AggregateError(
+        [primaryError, recoveryError],
+        "Purchase import audit failed on both models",
+        { cause: recoveryError },
+      );
+    }
+  }
+};
 
 export const extractPurchaseEvidence = async (args: {
   db: Database;

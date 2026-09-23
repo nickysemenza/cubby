@@ -235,6 +235,7 @@ export async function submitReceiptEvidence(
           ? importRunId.parse(row.receiptRunId)
           : null,
         trigger: "discovery",
+        coordinatorModel: "gpt-6-sol",
         agentSessionId: `import-run:${runId}`,
         dispatchEventId,
       })

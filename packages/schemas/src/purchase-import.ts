@@ -672,11 +672,17 @@ export const browserBridgeServerMessage = z.discriminatedUnion("type", [
   }),
 ]);
 
+export const importCoordinatorModel = z.enum([
+  "gpt-5.6-terra",
+  "gpt-5.6-sol",
+  "gpt-6-sol",
+]);
+
 export const purchaseAgentEvent = z.object({
   version: z.literal(1),
   runId: z.uuid(),
   purpose: importRunPurpose.optional(),
-  coordinatorModel: z.enum(["gpt-5.6-terra", "gpt-5.6-sol"]).optional(),
+  coordinatorModel: importCoordinatorModel.optional(),
   eventId: z.string().trim().min(1).max(256),
   type: z.enum([
     "start_or_resume",
@@ -1062,3 +1068,38 @@ export const importAuditOutput = z.object({
   findings: z.array(importAuditFinding),
 });
 export type ImportAuditOutput = z.infer<typeof importAuditOutput>;
+
+// Both OpenAI and Anthropic accept this required-field wire shape. The
+// application validates the decoded fix against the domain union afterward;
+// that union emits `oneOf`, which OpenAI's structured output rejects.
+export const importAuditModelOutput = z.object({
+  findings: z.array(
+    z.object({
+      kind: importFindingKind,
+      targetPurchaseId: z.string(),
+      summary: z.string(),
+      probability: z.number(),
+      proposedFixJson: z.string().nullable(),
+    }),
+  ),
+});
+export type ImportAuditModelOutput = z.infer<typeof importAuditModelOutput>;
+
+export function normalizeImportAuditModelOutput(
+  output: ImportAuditModelOutput,
+): ImportAuditOutput {
+  return importAuditOutput.parse({
+    findings: output.findings.map(({ proposedFixJson, ...finding }) => {
+      const proposedFix =
+        proposedFixJson === null
+          ? null
+          : proposedImportFix.parse(JSON.parse(proposedFixJson));
+      if (
+        proposedFix &&
+        !["relink_product", "replace_aggregate_line"].includes(proposedFix.kind)
+      )
+        throw new Error(`Audit cannot propose ${proposedFix.kind}`);
+      return { ...finding, proposedFix };
+    }),
+  });
+}

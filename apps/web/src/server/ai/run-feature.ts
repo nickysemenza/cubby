@@ -282,7 +282,7 @@ export async function runStructuredFeature<T>(
             reasoningAdapter(plan.call),
             { streaming },
           ),
-          modelOptions: anthropicOptions({
+          modelOptions: openaiOptions({
             maxTokens: spec.maxTokens,
             effort: spec.effort,
           }),

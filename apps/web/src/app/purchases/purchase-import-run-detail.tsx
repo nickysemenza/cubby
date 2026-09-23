@@ -143,13 +143,13 @@ function RunControl({ run }: { run: ImportRunDetail }) {
 function TerminalRunControls({ run }: { run: ImportRunDetail }) {
   const queryClient = useQueryClient();
   const retry = useMutation({
-    mutationFn: async (action: "retry" | "escalate_sol") => {
+    mutationFn: async () => {
       const response = await fetch(
         `/api/import/runs/${encodeURIComponent(run.publicId)}`,
         {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action }),
+          body: JSON.stringify({ action: "retry" }),
         },
       );
       return readJsonOrThrow(
@@ -182,18 +182,10 @@ function TerminalRunControls({ run }: { run: ImportRunDetail }) {
           type="button"
           size="sm"
           variant="outline"
-          onClick={() => retry.mutate("retry")}
+          onClick={() => retry.mutate()}
           disabled={retry.isPending}
         >
-          Retry with Terra
-        </Button>
-        <Button
-          type="button"
-          size="sm"
-          onClick={() => retry.mutate("escalate_sol")}
-          disabled={retry.isPending}
-        >
-          Escalate to Sol
+          Retry import
         </Button>
       </div>
       {retry.isError ? (
