@@ -365,7 +365,9 @@ describe("entity graph repository", () => {
     expect(new Set(itemIds)).toHaveLength(3);
   });
 
-  it("reads task plantings through the declared inverse with counts and pages", async () => {
+  // `task.plantings` is a compiler-derived inverse of `Planting.taskId`, so it
+  // is a manifest relation now rather than a runtime `inverse:*` branch.
+  it("reads task plantings through the derived inverse with counts and pages", async () => {
     const crop = await createIngredient(
       ctx.db,
       { name: "Task graph crop", aliases: [] },
@@ -395,7 +397,7 @@ describe("entity graph repository", () => {
     );
     const taskInput = {
       roots: [{ entityType: "task" as const, entityId: task.output.id }],
-      relationshipKeys: ["inverse:planting.task"],
+      relationshipKeys: ["plantings"],
       limit: 1,
     };
     const first = await getEntityGraph(ctx.db, taskInput);
@@ -411,7 +413,7 @@ describe("entity graph repository", () => {
       (page) => page.branches[0]?.items.map((item) => item.entityId) ?? [],
     );
     expect(first.branches[0]).toMatchObject({
-      relationshipKey: "inverse:planting.task",
+      relationshipKey: "plantings",
       target: "planting",
       totalCount: 3,
       nextOffset: 1,

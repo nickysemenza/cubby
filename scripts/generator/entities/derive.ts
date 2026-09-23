@@ -269,7 +269,7 @@ type RelationSection = Extract<
 >;
 
 /** A list entity: the generic list contract the relation table renders. */
-export const hasEntityList = (entity: CompiledEntity) =>
+const hasEntityList = (entity: CompiledEntity) =>
   entity.contract !== null &&
   entity.contract.create !== null &&
   entity.contract.update !== null &&
