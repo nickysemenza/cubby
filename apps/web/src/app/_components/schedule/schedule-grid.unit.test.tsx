@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   ScheduleGrid,
   scheduleDayIndex,
+  scheduleScrollLeft,
   type ScheduleRow,
 } from "./schedule-grid";
 
@@ -52,6 +53,15 @@ describe("ScheduleGrid", () => {
       scheduleDayIndex("2026-03-10")! - scheduleDayIndex("2026-03-08")!,
     ).toBe(2);
     expect(scheduleDayIndex("2026-02-30")).toBeNull();
+  });
+
+  it("centers the focus day in the date area and clamps at window edges", () => {
+    const start = scheduleDayIndex("2015-01-01")!;
+    const today = scheduleDayIndex("2026-09-23")!;
+    const left = scheduleScrollLeft(today, start, 4, 900, 20_000);
+    expect(left).toBeCloseTo((today - start + 0.5) * 4 - (900 - 368) / 2);
+    expect(scheduleScrollLeft(start, start, 4, 900, 20_000)).toBe(0);
+    expect(scheduleScrollLeft(start + 100, start, 4, 900, 640)).toBe(108);
   });
 
   it("keeps an undated lane and renders multiple milestones on one row", () => {

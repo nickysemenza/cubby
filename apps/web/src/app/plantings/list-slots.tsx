@@ -1,5 +1,4 @@
 import type { ListSlotId } from "@cubby/schemas/entity-manifest";
-import { plantingGuides } from "@cubby/schemas/garden-guides";
 import { Link } from "@tanstack/react-router";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useMemo } from "react";
@@ -8,10 +7,7 @@ import type {
   ListSlotComponent,
   ListSlotProps,
 } from "~/app/_components/entity-list/list-slot-types";
-import {
-  ScheduleGrid,
-  type ScheduleRow,
-} from "~/app/_components/schedule/schedule-grid";
+import { ScheduleGrid } from "~/app/_components/schedule/schedule-grid";
 import {
   usePlantingRecords,
   usePlantRecords,
@@ -20,6 +16,7 @@ import {
   plantingScheduleRows,
   yearWindow,
 } from "~/app/garden-workbench/garden-schedule";
+import { usePlantingScheduleLabel } from "~/app/garden-workbench/planting-schedule-label";
 import { ErrorDisplay } from "~/components/feedback/error-display";
 import { Row, Stack } from "~/components/layout";
 import { usePageCount } from "~/components/page/Page";
@@ -30,39 +27,6 @@ function searchYear(value: ListSlotProps["search"]["year"]): number {
   return Number.isInteger(parsed) && parsed >= 2000 && parsed <= 2100
     ? parsed
     : new Date().getUTCFullYear();
-}
-
-function scheduleLabel(row: ScheduleRow) {
-  if (row.id.startsWith("guide:")) {
-    const sourceId = row.id.split(":")[2];
-    const source = plantingGuides.sources.find(
-      (entry) => entry.id === sourceId,
-    );
-    if (source)
-      return (
-        <a
-          href={source.url}
-          target="_blank"
-          rel="noreferrer"
-          title={source.name}
-          className="min-w-0 truncate text-primary hover:underline focus-visible:underline"
-        >
-          {source.name}
-        </a>
-      );
-  }
-  if (!row.id.startsWith("planting:")) return row.name;
-  const shortcode = row.id.slice("planting:".length);
-  return (
-    <Link
-      to="/plantings/$shortcode"
-      params={{ shortcode }}
-      title={row.name}
-      className="min-w-0 truncate text-primary hover:underline focus-visible:underline"
-    >
-      {row.name}
-    </Link>
-  );
 }
 
 function PlantingsScheduleSlot({ search, navigate }: ListSlotProps) {
@@ -82,6 +46,7 @@ function PlantingsScheduleSlot({ search, navigate }: ListSlotProps) {
     [plantingRead.records, year, guideKeyByPlant],
   );
   const window = useMemo(() => yearWindow(year), [year]);
+  const scheduleLabel = usePlantingScheduleLabel(rows, plantingRead.records);
 
   return (
     <Stack gap="md">

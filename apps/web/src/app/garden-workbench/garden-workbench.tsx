@@ -7,7 +7,6 @@ import {
   gardenPractice,
   gardenPracticeSources,
 } from "@cubby/schemas/garden-practice";
-import { Link } from "@tanstack/react-router";
 import { CalendarRange, ListChecks, Sprout } from "lucide-react";
 import { useMemo } from "react";
 
@@ -35,6 +34,7 @@ import {
   plantingScheduleRows,
   yearWindow,
 } from "./garden-schedule";
+import { usePlantingScheduleLabel } from "./planting-schedule-label";
 
 export type GardenMode = "timing" | "practice" | "plan";
 
@@ -160,36 +160,6 @@ function sourceFromRow(row: ScheduleRow) {
   return plantingGuides.sources.find((source) => source.id === sourceId);
 }
 
-function scheduleLabel(row: ScheduleRow) {
-  const source = sourceFromRow(row);
-  if (source) {
-    return (
-      <a
-        href={source.url}
-        target="_blank"
-        rel="noreferrer"
-        title={source.name}
-        className="min-w-0 truncate text-primary hover:underline"
-      >
-        {source.name}
-      </a>
-    );
-  }
-  if (row.id.startsWith("planting:")) {
-    return (
-      <Link
-        to="/plantings/$shortcode"
-        params={{ shortcode: row.id.slice("planting:".length) }}
-        title={row.name}
-        className="min-w-0 truncate text-primary hover:underline"
-      >
-        {row.name}
-      </Link>
-    );
-  }
-  return row.name;
-}
-
 function SourceNotes({ rows }: { rows: readonly ScheduleRow[] }) {
   const sourceIds = new Set(
     rows.flatMap((row) => {
@@ -230,6 +200,7 @@ function SourceNotes({ rows }: { rows: readonly ScheduleRow[] }) {
 function TimingView({ year, crop }: { year: number; crop?: GardenCropKey }) {
   const rows = useMemo(() => guideScheduleRows(year, crop), [year, crop]);
   const window = useMemo(() => yearWindow(year), [year]);
+  const scheduleLabel = usePlantingScheduleLabel(rows, []);
   return (
     <Stack gap="md">
       <div>
@@ -315,6 +286,7 @@ function PlanView({
     ];
   }, [crop, location, plantings.records, plants.records, year]);
   const window = useMemo(() => yearWindow(year), [year]);
+  const scheduleLabel = usePlantingScheduleLabel(rows, plantings.records);
   const error = plantings.error ?? plants.error;
   return (
     <Stack gap="md">

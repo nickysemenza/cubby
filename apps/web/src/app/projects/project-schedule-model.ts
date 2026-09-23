@@ -14,6 +14,7 @@ export interface ProjectScheduleEntry {
   expandable?: boolean;
   expanded?: boolean;
   meta: string;
+  metaShort: string;
   segments: Array<{
     id: string;
     label: string;
@@ -67,6 +68,7 @@ function projectEntry(
     expandable,
     expanded,
     meta: `Project · ${project.status.replaceAll("_", " ")}${source}`,
+    metaShort: project.status.replaceAll("_", " "),
     segments,
     noDateLabel: dated ? undefined : "No dates",
     blockedByIds: project.blockedByIds,
@@ -103,6 +105,7 @@ function taskEntry(
     expandable,
     expanded,
     meta: `Task · ${task.status.replaceAll("_", " ")}${!start && end ? " · Due end only" : ""}`,
+    metaShort: task.status.replaceAll("_", " "),
     segments,
     noDateLabel: dated ? undefined : "No due date",
     blockedByIds: task.blockedByIds,

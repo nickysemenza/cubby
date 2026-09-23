@@ -1,7 +1,13 @@
 import type { CalendarScheduleOut } from "@cubby/schemas/calendar";
-import { Link, useNavigate } from "@tanstack/react-router";
+import type { EntityRef } from "@cubby/schemas/entity";
+import { useNavigate } from "@tanstack/react-router";
 import { useMemo } from "react";
 
+import {
+  entityDisplayImageKey,
+  useEntityDisplayImages,
+} from "~/app/_components/entity-media/entity-display-images";
+import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import {
   ScheduleGrid,
   type ScheduleRow,
@@ -42,6 +48,7 @@ export function calendarScheduleRows(data: CalendarScheduleOut): ScheduleRow[] {
       meta: [TASK_STATUS_LABELS[task.status], task.projectName]
         .filter(Boolean)
         .join(" · "),
+      metaShort: TASK_STATUS_LABELS[task.status],
       segments,
       noDateLabel: "No due date",
     };
@@ -53,6 +60,7 @@ export function calendarScheduleRows(data: CalendarScheduleOut): ScheduleRow[] {
     meta: [planting.locationName, planting.plannedWindow]
       .filter(Boolean)
       .join(" · "),
+    metaShort: planting.locationName ?? undefined,
     segments: milestoneFields.flatMap(([field, label]) => {
       const date = planting[field];
       return date
@@ -98,27 +106,49 @@ interface CalendarScheduleProps {
 export function CalendarSchedule({ data, window }: CalendarScheduleProps) {
   const navigate = useNavigate();
   const rows = useMemo(() => calendarScheduleRows(data), [data]);
+  const refs = useMemo<EntityRef[]>(
+    () => [
+      ...data.tasks.map((task) => ({
+        entityType: "task" as const,
+        entityId: task.id,
+      })),
+      ...data.plantings.map((planting) => ({
+        entityType: "planting" as const,
+        entityId: planting.id,
+      })),
+    ],
+    [data],
+  );
+  const images = useEntityDisplayImages(refs);
   const renderLabel = (row: ScheduleRow) => {
     if (row.id.startsWith("task:")) {
+      const id = row.id.slice("task:".length);
       return (
-        <Link
-          {...entityDetailLink("task", row.id.slice("task:".length))}
-          title={row.name}
-          className="truncate hover:text-primary hover:underline focus-visible:ring-2 focus-visible:ring-ring"
-        >
-          {row.name}
-        </Link>
+        <EntityInlineLink
+          entity="task"
+          data={{ id, name: row.name }}
+          displayImage={
+            images[
+              entityDisplayImageKey({ entityType: "task", entityId: id })
+            ] ?? null
+          }
+          truncate
+        />
       );
     }
     if (row.id.startsWith("planting:")) {
+      const id = row.id.slice("planting:".length);
       return (
-        <Link
-          {...entityDetailLink("planting", row.id.slice("planting:".length))}
-          title={row.name}
-          className="truncate hover:text-primary hover:underline focus-visible:ring-2 focus-visible:ring-ring"
-        >
-          {row.name}
-        </Link>
+        <EntityInlineLink
+          entity="planting"
+          data={{ id, name: row.name }}
+          displayImage={
+            images[
+              entityDisplayImageKey({ entityType: "planting", entityId: id })
+            ] ?? null
+          }
+          truncate
+        />
       );
     }
     return row.name;

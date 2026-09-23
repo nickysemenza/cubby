@@ -1,3 +1,5 @@
+import type { DisplayImageSummary } from "@cubby/schemas/display-images";
+import type { EntityRef } from "@cubby/schemas/entity";
 import { MAX_PAGE_SIZE } from "@cubby/schemas/pagination";
 import type { ProjectOut, TaskOut } from "@cubby/schemas/project";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
@@ -7,6 +9,12 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { z } from "zod";
 
 import type { ListSlotProps } from "~/app/_components/entity-list/list-slot-types";
+import {
+  entityDisplayImageKey,
+  type EntityDisplayImageMap,
+  useEntityDisplayImages,
+} from "~/app/_components/entity-media/entity-display-images";
+import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import { flattenUniquePageItems } from "~/app/_components/hooks/infinite-page-utils";
 import {
   ScheduleGrid,
@@ -35,6 +43,17 @@ import {
 import { project } from "./project.functions";
 
 const EMPTY_TASKS: TaskOut[] = [];
+
+function seedProjectImages(
+  projects: readonly { id: string; displayImages: DisplayImageSummary[] }[],
+): EntityDisplayImageMap {
+  return Object.fromEntries(
+    projects.map((project) => [
+      entityDisplayImageKey({ entityType: "project", entityId: project.id }),
+      project.displayImages[0] ?? null,
+    ]),
+  );
+}
 
 function useLoadRemainingPages(query: {
   hasNextPage: boolean;
@@ -130,11 +149,13 @@ function ProjectScheduleSurface({
   rows,
   onToggle,
   ariaLabel,
+  seededImages,
 }: {
   allRows: ProjectScheduleEntry[];
   rows: ProjectScheduleEntry[];
   onToggle: (id: string) => void;
   ariaLabel: string;
+  seededImages: EntityDisplayImageMap;
 }) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const byId = useMemo(
@@ -147,6 +168,11 @@ function ProjectScheduleSurface({
   );
   const selected = selectedId ? byId.get(selectedId) : undefined;
   const window = useMemo(() => projectScheduleWindow(allRows), [allRows]);
+  const refs = useMemo<EntityRef[]>(
+    () => allRows.map((row) => ({ entityType: row.entity, entityId: row.id })),
+    [allRows],
+  );
+  const images = useEntityDisplayImages(refs, seededImages);
   const renderLabel = useCallback(
     (row: ScheduleRow) => {
       const entry = byId.get(row.id);
@@ -154,14 +180,20 @@ function ProjectScheduleSurface({
       const count = entry.blockedByIds.length + entry.blockingIds.length;
       return (
         <span className="flex w-full min-w-0 items-center gap-1">
-          <Link
-            to={entities[entry.entity].routes.detail}
-            params={entityDetailParams(entry.id)}
-            title={entry.name}
-            className="min-w-0 flex-1 truncate rounded-sm text-foreground hover:text-primary hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
-          >
-            {entry.name}
-          </Link>
+          <EntityInlineLink
+            entity={entry.entity}
+            data={{ id: entry.id, name: entry.name }}
+            displayImage={
+              images[
+                entityDisplayImageKey({
+                  entityType: entry.entity,
+                  entityId: entry.id,
+                })
+              ] ?? null
+            }
+            truncate
+            className="min-w-0 flex-1"
+          />
           {count > 0 && (
             <button
               type="button"
@@ -181,7 +213,7 @@ function ProjectScheduleSurface({
         </span>
       );
     },
-    [byId, selectedId],
+    [byId, images, selectedId],
   );
 
   return (
@@ -266,6 +298,7 @@ export function ProjectScheduleListSlot({ search }: ListSlotProps) {
     () => buildPortfolioScheduleRows(projects, collapsed),
     [projects, collapsed],
   );
+  const seededImages = useMemo(() => seedProjectImages(projects), [projects]);
   const toggle = useCallback((id: string) => {
     setCollapsed((current) => {
       const next = new Set(current);
@@ -297,6 +330,7 @@ export function ProjectScheduleListSlot({ search }: ListSlotProps) {
       rows={rows}
       onToggle={toggle}
       ariaLabel="Project schedule"
+      seededImages={seededImages}
     />
   );
 }
@@ -330,6 +364,10 @@ export function ProjectScheduleDetail({
   const rows = useMemo(
     () => buildDetailScheduleRows(record, descendants, tasks, collapsed),
     [record, descendants, tasks, collapsed],
+  );
+  const seededImages = useMemo(
+    () => seedProjectImages(descendants),
+    [descendants],
   );
   const toggle = useCallback((id: string) => {
     setCollapsed((current) => {
@@ -369,6 +407,7 @@ export function ProjectScheduleDetail({
       rows={rows}
       onToggle={toggle}
       ariaLabel={`${record.name} schedule`}
+      seededImages={seededImages}
     />
   );
 }

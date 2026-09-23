@@ -113,6 +113,7 @@ export function guideScheduleRows(
         name: source?.name ?? window.sourceId,
         depth: 1,
         meta: `${methodLabels[window.method]} · ${window.microclimate}${window.monthPart ? " · half-month precision" : " · month precision"}`,
+        metaShort: methodLabels[window.method],
         segments: guideWindowSegments(window, year, id),
       });
     }
@@ -229,6 +230,7 @@ export function plantingScheduleRows(
             name: planting.displayName,
             depth: 1,
             meta: `${planting.status}${planting.plannedWindow ? ` · Planned window: ${planting.plannedWindow}` : ""}`,
+            metaShort: planting.status.replaceAll("_", " "),
             segments,
             noDateLabel:
               segments.length === 0
