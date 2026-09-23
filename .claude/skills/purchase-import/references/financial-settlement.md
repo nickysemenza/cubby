@@ -435,8 +435,14 @@ credit to zero the spend (keeping `productQuantity` clear on the charge lines so
 no phantom unit enters the derived-price sample), with the outstanding money as
 `status: "expected"` refunds per funding account, and a matching posted draw for
 any gift-card leg. A stored-value refund may come back on a different card than
-the one debited; keep one generic stored-value account per vendor and record
-each physical card as a `physical_card` entry in `cardNumbers` rather than one
-account per card. Where a vendor's phone/online support
+the one debited; keep one stored-value account per vendor **per owner**, with
+`providerVendorId` set to the vendor and `ledgerPartyId` to the member whose
+balance it is (null only for a card the household shares), and record each
+physical card as a `physical_card` entry in `cardNumbers` rather than one
+account per card. A unique index allows one live account per provider and
+owner. To find the account a gift-card leg drew on, list `financialAccount`
+filtered by `providerVendorId` = the purchase's vendor and `ledgerPartyId` =
+the member of the purchase's vendor account; with no vendor account and more
+than one candidate, ask rather than pick. Where a vendor's phone/online support
 does nothing, a physical return desk can recall the original receipt and issue
 the refund directly.

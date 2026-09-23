@@ -91,6 +91,7 @@ describe("useEntityEditSession", () => {
             record: {
               id: "FAC-4K7M",
               name: "Household card",
+              providerVendorId: null,
               provisional: false,
               inventoryOwnerDefaultEnabled: false,
               sourceAliases,

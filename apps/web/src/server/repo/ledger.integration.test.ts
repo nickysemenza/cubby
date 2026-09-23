@@ -76,6 +76,7 @@ describe("consolidated household ledger", () => {
           provisional: false,
           sourceAliases: [],
           ledgerPartyId: guest.output.id,
+          providerVendorId: null,
           inventoryOwnerDefaultEnabled: false,
           notes: null,
         },

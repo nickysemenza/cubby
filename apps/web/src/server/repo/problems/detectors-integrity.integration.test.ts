@@ -591,6 +591,12 @@ const SOURCE_FACTORIES = {
     mkOrderMail(db, {
       ledgerPartyId: parseEntityId("ledgerParty", targetId),
     }),
+  "FinancialAccount.providerVendorId": (db, targetId) =>
+    insertWithShortcode(db, "financialAccount", {
+      name: uniq("Stored value"),
+      identity: { kind: "stored_value", provider: "Synthetic store" },
+      providerVendorId: parseEntityId("vendor", targetId),
+    }),
   "VendorAccount.vendorId": async (db, targetId) => {
     const party = await mkLedgerParty(db);
     return insertWithShortcode(db, "vendorAccount", {
@@ -1695,11 +1701,11 @@ const derivedMustTargetLiveEdges = deriveMustTargetLiveEdges();
 describe("findReferentialLivenessViolations", () => {
   const ctx = withTestDb();
 
-  it("derives 139 must-target-live edges from INCOMING_EDGES × ENTITY_EDGE_SEMANTICS", () => {
+  it("derives 140 must-target-live edges from INCOMING_EDGES × ENTITY_EDGE_SEMANTICS", () => {
     // Mirrors EXPECTED_EDGE_COUNT in detectors-integrity.ts — an independent
     // spot check computed from the same two source-of-truth maps, not from the
     // detector's own (unexported) derivation.
-    expect(derivedMustTargetLiveEdges).toHaveLength(139);
+    expect(derivedMustTargetLiveEdges).toHaveLength(140);
   });
 
   it("the hand-written fixture map covers exactly the derived edges (a new edge fails here, not silently)", () => {

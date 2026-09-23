@@ -228,6 +228,7 @@ extension EntityDescriptor {
                 case "vendorId": query.vendorId = value.strings
                 case "vendorPresenceFilter": query.vendorPresenceFilter = try value.enumCase(name)
                 case "vendorSearch": query.vendorSearch = try value.string(name)
+                case "providerVendorId": query.providerVendorId = value.strings.map { .init(value1: $0) }
                 case "ledgerPartyId": query.ledgerPartyId = value.strings.map { .init(value1: $0) }
                 case "search": query.search = try value.string(name)
                 case "provisional": query.provisional = try value.bool(name)

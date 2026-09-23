@@ -1357,12 +1357,25 @@ export const financialAccount = pgTable(
   "FinancialAccount",
   generatedFinancialAccountColumns({
     ledgerParty: (): AnyPgColumn => ledgerParty.id,
+    vendor: (): AnyPgColumn => vendor.id,
   }),
   (table) => [
     shortcodeUnique("FinancialAccount", table.shortcode),
     index("FinancialAccount_name_idx").on(table.name),
     index("FinancialAccount_provisional_idx").on(table.provisional),
     index("FinancialAccount_ledgerPartyId_idx").on(table.ledgerPartyId),
+    // One live balance per provider and owner, so settlement can resolve a
+    // gift-card leg from (purchase vendor, vendor-account member) alone. NULL
+    // owners stay distinct: a household card coexists with members' balances.
+    uniqueIndex("FinancialAccount_provider_owner_key")
+      .on(table.providerVendorId, table.ledgerPartyId)
+      .where(
+        sql`${table.providerVendorId} IS NOT NULL AND ${table.deletedAt} IS NULL`,
+      ),
+    check(
+      "FinancialAccount_providerVendor_stored_value_check",
+      sql`${table.providerVendorId} IS NULL OR ${table.identity}->>'kind' = 'stored_value'`,
+    ),
   ],
 );
 

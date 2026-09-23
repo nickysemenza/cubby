@@ -83,6 +83,12 @@ import {
 import { getR2PublicUrl } from "~/server/utils/r2-public-url";
 
 export const VENDOR_DELETE_EDGE_POLICY = {
+  "FinancialAccount.providerVendorId": {
+    code: "block-stored-value-accounts",
+    effect: "block",
+    description:
+      "A stored-value account retains the vendor that owes its balance.",
+  },
   "ImportRun.vendorId": {
     code: "block-import-runs",
     effect: "block",
@@ -117,6 +123,12 @@ export const VENDOR_DELETE_EDGE_POLICY = {
 } as const satisfies IncomingEdgePolicy<"vendor", OperationDisposition>;
 
 export const VENDOR_MERGE_EDGE_POLICY = {
+  "FinancialAccount.providerVendorId": {
+    code: "block-stored-value-accounts",
+    effect: "block",
+    description:
+      "Stored-value accounts must be reassigned explicitly before merging vendors; each provider and owner holds at most one live balance.",
+  },
   "ImportRun.vendorId": {
     code: "block-import-runs",
     effect: "block",
