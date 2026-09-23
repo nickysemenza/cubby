@@ -64,7 +64,7 @@ struct PhotoGridCellState: Equatable, Sendable {
     /// The server failure is retained for inspector context even when cached positive candidates
     /// still give the grid a useful strong/possible state.
     var serverError: String? = nil
-    /// On-device classification status (B3/B4): drives the grid cell's 6pt dot. Defaulted so
+    /// On-device classification status (B3/B4): drives the grid badge's category tint. Defaulted so
     /// existing call sites that predate the classification sweep still compile unchanged.
     var analysis: PhotoAnalysisStatus = .pending
     /// Developer overlays layer 1: how long the on-device classifier took, and its top label —
@@ -144,7 +144,7 @@ struct PhotoGridCellState: Equatable, Sendable {
     }
 }
 
-/// The grid dot's tint: the first `PhotoImportCatalog.categories` entry a photo's hits contain,
+/// The grid badge's category tint: the first `PhotoImportCatalog.categories` entry a photo's hits contain,
 /// colored by its *index* into the token ramp — never by category key, so no category name is a
 /// Swift literal here.
 enum PhotoCategoryTint {

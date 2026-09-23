@@ -841,8 +841,8 @@ private struct PhotoLibraryPreview: View {
         .environment(\.developerOverlays, true)
 }
 
-/// A grid tile's bottom chrome over its image: the match badge (trailing), the analysis dot
-/// (leading), and — developer overlays only — the classify caption. Split out of
+/// A grid tile's bottom chrome over its image: the match badge (trailing, tinted by category) and
+/// — developer overlays only — the classify caption. Split out of
 /// `PhotoLibraryCell` so it previews over a fixture image without a `PHAsset`.
 private struct PhotoCellChrome: View {
     let state: PhotoGridCellState
@@ -858,7 +858,6 @@ private struct PhotoCellChrome: View {
                 DevOverlayText(topLabel, overMedia: true)
             }
             HStack(alignment: .center, spacing: 3) {
-                analysisDot
                 if developerOverlays, let classifyTime {
                     // Ahead of the spacer, which otherwise splits the free width with it.
                     DevOverlayText(classifyTime, overMedia: true).layoutPriority(1)
@@ -873,17 +872,6 @@ private struct PhotoCellChrome: View {
 
     private var classifyTime: String? { state.classifyMs.map { "\(Int($0))ms" } }
 
-    /// B4's grid dot: absent while pending, `.secondary` once analysed with no category hit,
-    /// category-tinted (by ramp index, never by key) once a hit lands.
-    @ViewBuilder private var analysisDot: some View {
-        switch state.analysis {
-        case .pending:
-            EmptyView()
-        case .analysed(let categories):
-            Circle().fill(PhotoCategoryTint.color(for: categories) ?? Color.secondary)
-                .frame(width: 6, height: 6)
-        }
-    }
 }
 
 #Preview("Cell chrome — developer overlays") {

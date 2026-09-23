@@ -75,7 +75,7 @@ final class PhotoMatchStore {
     @ObservationIgnored private var matchErrorsByID: [String: String] = [:]
     @ObservationIgnored private var cellStateBoxes: [String: PhotoGridCellStateBox] = [:]
     /// Populated by `PhotoLibraryStore`'s batch read on refresh and by the classification sweep as
-    /// it finishes each photo (B4's grid dot; developer overlays layer 1's timing/label). Absent
+    /// it finishes each photo (B4's badge tint; developer overlays layer 1's timing/label). Absent
     /// means "not looked at yet by either path".
     @ObservationIgnored private var analysisByID: [String: PhotoAssetSnapshot] = [:]
     @ObservationIgnored private var uncoalescedClassifiedCount = 0
@@ -203,7 +203,7 @@ final class PhotoMatchStore {
         }
     }
 
-    /// Publishes a batch of analysis snapshots into the per-id cell state (B4's grid dot; developer
+    /// Publishes a batch of analysis snapshots into the per-id cell state (B4's badge tint; developer
     /// overlays layer 1's timing/label). Each cell's own box (`publishCellStates` below) updates
     /// immediately regardless of batch size — this call site is the only observer that needs a
     /// per-photo signal. `revision` itself is left untouched (a sweep classifying thousands of
