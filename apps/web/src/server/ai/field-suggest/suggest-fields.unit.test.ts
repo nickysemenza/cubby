@@ -456,6 +456,25 @@ describe("suggestFields", () => {
         expect(jev).not.toHaveBeenCalled();
       },
     },
+    {
+      name: "an enum target asks Jev only about its narrowed candidates",
+      entity: "productCategory",
+      targets: ["feature"],
+      basis: { name: "Garden" },
+      jev: jevPortPicking("supplies:"),
+      registry: {
+        "productCategory.feature": {
+          ...FIELD_SUGGEST_REGISTRY["productCategory.feature"],
+          candidates: async () => ["supplies", "storage"],
+        },
+      },
+      assert: (out, jev) => {
+        expect(out.suggestions.feature?.value).toBe("supplies");
+        const criteria =
+          vi.mocked(jev).mock.calls[0]?.[0].questions.selection.criteria;
+        expect(Object.values(criteria ?? {}).join("\n")).not.toContain("food:");
+      },
+    },
   ];
 
   it.each(cases)(
@@ -580,6 +599,31 @@ describe("suggestFields", () => {
     );
     expect(trade?.[0].state).not.toContain("Kitchen Remodel");
     expect(labels.mock.calls.flat()).not.toContain("PRJ-AAAA");
+  });
+
+  it("never suggests a child category's feature", async () => {
+    // Regression: every new child category showed a "Suggested food"
+    // sparkle. It already inherits its root's binding, and applying the
+    // suggestion would violate `ProductCategory_feature_live_unique`.
+    const parentId = testShortcode("productCategory", "CAT-2ABC");
+    const jev = jevPortPicking("food:");
+    const out = await suggestFields(
+      fakeDb,
+      fixtureRunId,
+      {
+        entity: "productCategory",
+        targets: ["feature"],
+        basis: { name: "Produce", parentId },
+        basisMode: "suggested",
+      },
+      { jev, resolveLabels: async () => new Map([[parentId, "Food"]]) },
+    );
+    expect(out.suggestions.feature).toBeNull();
+    expect(out.outcomes?.feature).toEqual({
+      kind: "skipped",
+      reason: "no_candidates",
+    });
+    expect(jev).not.toHaveBeenCalled();
   });
 
   it("rejects an unknown target without calling the model", async () => {

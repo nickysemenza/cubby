@@ -23,7 +23,7 @@ import {
   productCategoryFeature,
   productCategorySummary,
 } from "@cubby/schemas/product-category-fields";
-import { and, asc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNotNull, sql } from "drizzle-orm";
 import { uniq } from "es-toolkit";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
@@ -658,6 +658,19 @@ export async function listProductCategoryTreeOptions(db: Database) {
       feature: closestPathFeature(path),
     };
   });
+}
+
+/** Features already bound to a live category; each binds at most one. */
+export async function listBoundCategoryFeatures(
+  db: Database,
+): Promise<ProductCategoryFeature[]> {
+  const rows = await unwrapDb(db)
+    .select({ feature: productCategory.feature })
+    .from(productCategory)
+    .where(
+      and(isNotNull(productCategory.feature), notDeleted(productCategory)),
+    );
+  return rows.flatMap(({ feature }) => parseFeature(feature) ?? []);
 }
 
 /** One batched summary map for callers that already have category ids in rows. */
