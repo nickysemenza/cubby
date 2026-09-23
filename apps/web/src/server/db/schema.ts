@@ -1047,7 +1047,6 @@ export const planting = pgTable(
   }),
   (table) => [
     shortcodeUnique("Planting", table.shortcode),
-    index("Planting_ingredientId_idx").on(table.ingredientId),
     index("Planting_plantId_idx").on(table.plantId),
     index("Planting_sourceProductId_idx").on(table.sourceProductId),
     index("Planting_locationId_idx").on(table.locationId),

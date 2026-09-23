@@ -152,8 +152,6 @@ export default defineEntity({
           update: z.boolean().optional(),
         },
       },
-      // LEGACY: storage-only until the garden Plant backfill drops it.
-      { key: "gardenGuideKey", kind: "text", nullable: true, readKey: null },
       {
         key: "id",
         kind: "identifier",
@@ -215,7 +213,6 @@ export default defineEntity({
         specialized: "text-array",
       },
       { key: "usuallyOnHand", default: "literal", defaultValue: false },
-      "gardenGuideKey",
       { key: "createdAt", default: "now" },
       { key: "updatedAt", default: "now", specialized: "updated-at" },
       "deletedAt",

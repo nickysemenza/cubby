@@ -409,9 +409,7 @@ export const createPlanting = async (
   actor: ActorContext,
 ) =>
   withTransaction(db, async (tx) => {
-    const plantId = data.plantId
-      ? await required(tx, data.plantId, "plant")
-      : null;
+    const plantId = await required(tx, data.plantId, "plant");
     const sourceProductId = data.sourceProductId
       ? await required(tx, data.sourceProductId, "product")
       : null;
@@ -509,9 +507,7 @@ export const updatePlanting = async (
     }
     const plantId =
       data.plantId !== undefined
-        ? data.plantId
-          ? await required(tx, data.plantId, "plant")
-          : null
+        ? await required(tx, data.plantId, "plant")
         : undefined;
     const sourceProductId =
       data.sourceProductId !== undefined

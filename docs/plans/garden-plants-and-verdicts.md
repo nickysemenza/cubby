@@ -225,19 +225,26 @@ month arrays only.
 One PR; brief downtime or breakage is accepted. Remeasure counts at execution
 (2026-09-21: 61 plantings, ~35 seed Products, 5 garden projects).
 
-1. `db:push` the additions only from the branch (Plant table, new columns;
-   old columns stay).
-2. Run the backfill script against prod, dry-run report first. For each
-   distinct (`Planting.ingredientId`, trimmed lower-cased `variety`), create a
-   Plant named from the variety (or the ingredient when null) with the
-   ingredient's `gardenGuideKey` and `ingredientId`; set `Planting.plantId`.
-   For each Product with `growsIngredientId`, use the Plant of the plantings
-   that source it (`sourceProductId`), else a species-level Plant for that
-   ingredient; set `growsPlantId`.
-3. Merge and deploy code that no longer declares the old columns.
-4. `db:push` the drops: `Planting.variety`, `Planting.ingredientId`,
+The PR has two commits. The **expand** commit ("Add Plant entity…") keeps
+the legacy columns declared as hidden storage and carries the backfill
+script; the **contract** commit drops them and deletes the script.
+
+1. Check out the expand commit and `db:push` against prod. It adds the Plant
+   table and new columns, makes `Planting.ingredientId` nullable, and drops
+   the FK constraints on the two legacy columns; nothing is removed.
+2. From the same checkout, `pnpm --dir apps/web db:backfill-garden-plants`
+   (dry run, prints a report), then again with `--write`. For each distinct
+   (`Planting.ingredientId`, trimmed lower-cased `variety`) it creates a Plant
+   named from the variety (or the ingredient when null) with the
+   ingredient's `gardenGuideKey` and `ingredientId`, and sets
+   `Planting.plantId`. Each Product with `growsIngredientId` takes the Plant
+   its plantings grew (`sourceProductId`), else a species-level Plant for that
+   ingredient. Idempotent; verified on synthetic data.
+3. Merge the PR and deploy.
+4. From main, `db:push` the drops: `Planting.variety`, `Planting.ingredientId`,
    `Ingredient.gardenGuideKey`, `Product.growsIngredientId`; `plantId`
-   becomes required.
+   becomes NOT NULL (fails loudly if any planting was missed). Read the
+   schema back.
 5. Judgment calls over MCP afterwards: merge case-variant Plants; resolve
    "Unknown" tomatoes and "roma" to species rows; merge the stray `Sungold`
    ingredient; mark cleared-out beds' rows `finished`.

@@ -328,6 +328,8 @@ async function seedReferenceUniverse(db: Database): Promise<ReferenceUniverse> {
   const project = await seed("project");
   await seed("vendor");
   await seed("ingredient");
+  // Before planting: a planting's required plantId resolves through it.
+  await seed("plant");
   const purchase = await seed("purchase");
 
   // oxlint-disable-next-line anti-slop/no-known-value-widening, anti-slop/no-unsafe-dictionary-type -- see the walker block comment above

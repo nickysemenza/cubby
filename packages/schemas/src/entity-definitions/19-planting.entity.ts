@@ -103,15 +103,14 @@ export default defineEntity({
       {
         key: "plantId",
         kind: "identifier",
-        nullable: true,
         reference: { entity: "plant" },
         label: "Plant",
         control: { kind: "specialized", renderer: "entity-select" },
         display: { list: true, detail: true },
         validation: {
-          read: plantShortcode.nullable(),
-          create: plantShortcode.nullable().default(null),
-          update: plantShortcode.nullable().optional(),
+          read: plantShortcode,
+          create: plantShortcode,
+          update: plantShortcode.optional(),
         },
       },
       {
@@ -193,14 +192,6 @@ export default defineEntity({
           update: plantingStatus.optional(),
         },
       },
-      // LEGACY: storage-only until the garden Plant backfill drops them.
-      {
-        key: "ingredientId",
-        kind: "identifier",
-        nullable: true,
-        readKey: null,
-      },
-      { key: "variety", kind: "text", nullable: true, readKey: null },
       {
         key: "quantity",
         kind: "text",
@@ -434,8 +425,6 @@ export default defineEntity({
         specialized: "primary-key:PlantingId",
       },
       { key: "shortcode", specialized: "shortcode" },
-      "ingredientId",
-      "variety",
       { key: "plantId", reference: "plant" },
       "outcome",
       { key: "sourceProductId", reference: "product" },
@@ -771,13 +760,6 @@ export default defineEntity({
     mcp: ["get", "list", "create", "update", "delete", "bulkUpdate"],
     dataQuality: {
       checks: [
-        {
-          id: "planting_plant",
-          facet: "identity",
-          weight: 1,
-          label: "Plant",
-          message: "No plant is recorded for this planting.",
-        },
         {
           id: "planting_location",
           facet: "linkage",

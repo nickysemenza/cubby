@@ -1177,7 +1177,7 @@ extension EntityDescriptor {
             switch wireKey {
                 case "status": ["planned", "growing", "finished"]
                 case "dataStatus": ["complete", "needs_data", "defect"]
-                case "dataGap": ["planting_plant", "planting_location"]
+                case "dataGap": ["planting_location"]
                 case "groupBy": ["createdAt", "updatedAt", "status", "sowedOn", "finishedOn"]
                 default: nil
             }

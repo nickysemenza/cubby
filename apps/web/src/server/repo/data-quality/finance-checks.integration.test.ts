@@ -362,7 +362,7 @@ describe("data quality: finance and project entities", () => {
     });
   });
 
-  it("planting: plant and location (location only once no longer planned)", async () => {
+  it("planting: location (only once no longer planned)", async () => {
     const crop = await createPlantFixture(
       ctx.db,
       { name: "DQ planting crop" },
@@ -373,7 +373,11 @@ describe("data quality: finance and project entities", () => {
       makeLocationInput({ name: "DQ planting bed", type: "bed" }),
       TEST_ACTOR,
     );
-    const gap = await createPlanting(ctx.db, { status: "growing" }, TEST_ACTOR);
+    const gap = await createPlanting(
+      ctx.db,
+      { plantId: crop.id, status: "growing" },
+      TEST_ACTOR,
+    );
     const complete = await createPlanting(
       ctx.db,
       {
@@ -397,8 +401,7 @@ describe("data quality: finance and project entities", () => {
       completeId,
     ]);
     const gapChecks = hydrated.get(gapId)?.gaps.map((g) => g.check);
-    expect(gapChecks).toContain("planting_plant");
-    expect(gapChecks).toContain("planting_location");
+    expect(gapChecks).toEqual(["planting_location"]);
     expect(hydrated.get(completeId)).toMatchObject({
       status: "complete",
       gaps: [],

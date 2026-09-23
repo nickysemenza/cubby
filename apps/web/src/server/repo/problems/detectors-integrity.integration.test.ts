@@ -175,11 +175,11 @@ const mkLocation = (db: Database) =>
 
 const mkPlanting = async (db: Database) => {
   const [crop, growingLocation] = await Promise.all([
-    mkIngredient(db),
+    mkPlant(db),
     mkLocation(db),
   ]);
   return insertWithShortcode(db, "planting", {
-    ingredientId: crop.id,
+    plantId: crop.id,
     locationId: growingLocation.id,
     status: "growing",
   });
@@ -943,6 +943,7 @@ const SOURCE_FACTORIES = {
 
   "Planting.sourceProductId": async (db, targetId) => {
     return insertWithShortcode(db, "planting", {
+      plantId: (await mkPlant(db)).id,
       sourceProductId: parseEntityId("product", targetId),
       status: "planned",
     });
@@ -950,6 +951,7 @@ const SOURCE_FACTORIES = {
 
   "Planting.taskId": async (db, targetId) => {
     return insertWithShortcode(db, "planting", {
+      plantId: (await mkPlant(db)).id,
       taskId: parseEntityId("task", targetId),
       status: "planned",
     });
@@ -1132,6 +1134,7 @@ const SOURCE_FACTORIES = {
 
   "Planting.locationId": async (db, targetId) => {
     return insertWithShortcode(db, "planting", {
+      plantId: (await mkPlant(db)).id,
       locationId: parseEntityId("location", targetId),
       status: "growing",
     });

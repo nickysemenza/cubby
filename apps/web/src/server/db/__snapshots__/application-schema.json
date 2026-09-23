@@ -7852,12 +7852,6 @@
           "notNull": true,
           "default": false
         },
-        "gardenGuideKey": {
-          "name": "gardenGuideKey",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
         "createdAt": {
           "name": "createdAt",
           "type": "timestamp",
@@ -12259,12 +12253,6 @@
           "primaryKey": false,
           "notNull": true
         },
-        "ingredientId": {
-          "name": "ingredientId",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
         "sourceProductId": {
           "name": "sourceProductId",
           "type": "uuid",
@@ -12289,12 +12277,6 @@
           "primaryKey": false,
           "notNull": true,
           "default": "'planned'"
-        },
-        "variety": {
-          "name": "variety",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
         },
         "quantity": {
           "name": "quantity",
@@ -12356,7 +12338,7 @@
           "name": "plantId",
           "type": "uuid",
           "primaryKey": false,
-          "notNull": false
+          "notNull": true
         },
         "outcome": {
           "name": "outcome",
@@ -12377,21 +12359,6 @@
             }
           ],
           "isUnique": true,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "Planting_ingredientId_idx": {
-          "name": "Planting_ingredientId_idx",
-          "columns": [
-            {
-              "expression": "ingredientId",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
           "concurrently": false,
           "method": "btree",
           "with": {}
@@ -12614,12 +12581,6 @@
         },
         "ingredientId": {
           "name": "ingredientId",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "growsIngredientId": {
-          "name": "growsIngredientId",
           "type": "uuid",
           "primaryKey": false,
           "notNull": false

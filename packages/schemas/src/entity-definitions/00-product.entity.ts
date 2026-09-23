@@ -552,13 +552,6 @@ export default defineEntity({
           update: plantShortcode.nullable().optional(),
         },
       },
-      // LEGACY: storage-only until the garden Plant backfill drops it.
-      {
-        key: "growsIngredientId",
-        kind: "identifier",
-        nullable: true,
-        readKey: null,
-      },
       {
         key: "price",
         kind: "number",
@@ -1221,7 +1214,6 @@ export default defineEntity({
       "deletedAt",
       { key: "ingredientId", reference: "ingredient" },
       { key: "growsPlantId", reference: "plant" },
-      "growsIngredientId",
       { key: "categoryId", reference: "productCategory" },
       {
         key: "tags",
