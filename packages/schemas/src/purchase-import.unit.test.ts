@@ -76,7 +76,7 @@ describe("purchase import contracts", () => {
               proposedFixJson: JSON.stringify({
                 kind: "create_refund",
                 purchaseId: finding.targetPurchaseId,
-                amount: 10,
+                amount: -10,
                 title: "Unsupported refund",
               }),
             },
