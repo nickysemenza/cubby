@@ -45,6 +45,7 @@ extension OperationRoute {
         OperationRoute(operationID: "cookbook.detail", method: .get, path: "/api/v1/cookbook/detail", pathParameters: [], queryParameters: ["shortcode"], hasBody: false),
         OperationRoute(operationID: "cookbook.list", method: .get, path: "/api/v1/cookbook/list", pathParameters: [], queryParameters: [], hasBody: false),
         OperationRoute(operationID: "dashboard.counts", method: .get, path: "/api/v1/dashboard/counts", pathParameters: [], queryParameters: [], hasBody: false),
+        OperationRoute(operationID: "entity.connectedRecords", method: .post, path: "/api/v1/entity/connectedRecords", pathParameters: [], queryParameters: [], hasBody: true),
         OperationRoute(operationID: "entity.connections", method: .get, path: "/api/v1/entity/connections", pathParameters: [], queryParameters: ["id", "limitPerGroup", "operation"], hasBody: false),
         OperationRoute(operationID: "entity.explore", method: .post, path: "/api/v1/entity/explore", pathParameters: [], queryParameters: [], hasBody: true),
         OperationRoute(operationID: "entity.filterOptions", method: .post, path: "/api/v1/entity/filterOptions", pathParameters: [], queryParameters: [], hasBody: true),

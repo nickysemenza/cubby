@@ -25,6 +25,7 @@ import { Route as AuthenticatedAiSmokeTestRouteImport } from './routes/_authenti
 import { Route as AuthenticatedAiUsageRouteImport } from './routes/_authenticated/ai-usage'
 import { Route as AuthenticatedBackgroundJobsRouteImport } from './routes/_authenticated/background-jobs'
 import { Route as AuthenticatedCalendarRouteImport } from './routes/_authenticated/calendar'
+import { Route as AuthenticatedConnectionsRouteImport } from './routes/_authenticated/connections'
 import { Route as AuthenticatedDesignRouteImport } from './routes/_authenticated/design'
 import { Route as AuthenticatedEntitiesRouteImport } from './routes/_authenticated/entities'
 import { Route as AuthenticatedGardenWorkbenchRouteImport } from './routes/_authenticated/garden-workbench'
@@ -237,6 +238,12 @@ const AuthenticatedCalendarRoute = AuthenticatedCalendarRouteImport.update({
   path: '/calendar',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
+const AuthenticatedConnectionsRoute =
+  AuthenticatedConnectionsRouteImport.update({
+    id: '/connections',
+    path: '/connections',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
 const AuthenticatedDesignRoute = AuthenticatedDesignRouteImport.update({
   id: '/design',
   path: '/design',
@@ -971,6 +978,7 @@ export interface FileRoutesByFullPath {
   '/ai-usage': typeof AuthenticatedAiUsageRoute
   '/background-jobs': typeof AuthenticatedBackgroundJobsRoute
   '/calendar': typeof AuthenticatedCalendarRoute
+  '/connections': typeof AuthenticatedConnectionsRoute
   '/design': typeof AuthenticatedDesignRoute
   '/entities': typeof AuthenticatedEntitiesRoute
   '/garden-workbench': typeof AuthenticatedGardenWorkbenchRoute
@@ -1113,6 +1121,7 @@ export interface FileRoutesByTo {
   '/ai-usage': typeof AuthenticatedAiUsageRoute
   '/background-jobs': typeof AuthenticatedBackgroundJobsRoute
   '/calendar': typeof AuthenticatedCalendarRoute
+  '/connections': typeof AuthenticatedConnectionsRoute
   '/design': typeof AuthenticatedDesignRoute
   '/entities': typeof AuthenticatedEntitiesRoute
   '/garden-workbench': typeof AuthenticatedGardenWorkbenchRoute
@@ -1258,6 +1267,7 @@ export interface FileRoutesById {
   '/_authenticated/ai-usage': typeof AuthenticatedAiUsageRoute
   '/_authenticated/background-jobs': typeof AuthenticatedBackgroundJobsRoute
   '/_authenticated/calendar': typeof AuthenticatedCalendarRoute
+  '/_authenticated/connections': typeof AuthenticatedConnectionsRoute
   '/_authenticated/design': typeof AuthenticatedDesignRoute
   '/_authenticated/entities': typeof AuthenticatedEntitiesRoute
   '/_authenticated/garden-workbench': typeof AuthenticatedGardenWorkbenchRoute
@@ -1403,6 +1413,7 @@ export interface FileRouteTypes {
     | '/ai-usage'
     | '/background-jobs'
     | '/calendar'
+    | '/connections'
     | '/design'
     | '/entities'
     | '/garden-workbench'
@@ -1545,6 +1556,7 @@ export interface FileRouteTypes {
     | '/ai-usage'
     | '/background-jobs'
     | '/calendar'
+    | '/connections'
     | '/design'
     | '/entities'
     | '/garden-workbench'
@@ -1689,6 +1701,7 @@ export interface FileRouteTypes {
     | '/_authenticated/ai-usage'
     | '/_authenticated/background-jobs'
     | '/_authenticated/calendar'
+    | '/_authenticated/connections'
     | '/_authenticated/design'
     | '/_authenticated/entities'
     | '/_authenticated/garden-workbench'
@@ -1964,6 +1977,13 @@ declare module '@tanstack/react-router' {
       path: '/calendar'
       fullPath: '/calendar'
       preLoaderRoute: typeof AuthenticatedCalendarRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/connections': {
+      id: '/_authenticated/connections'
+      path: '/connections'
+      fullPath: '/connections'
+      preLoaderRoute: typeof AuthenticatedConnectionsRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
     '/_authenticated/design': {
@@ -2859,6 +2879,7 @@ interface AuthenticatedRouteChildren {
   AuthenticatedAiUsageRoute: typeof AuthenticatedAiUsageRoute
   AuthenticatedBackgroundJobsRoute: typeof AuthenticatedBackgroundJobsRoute
   AuthenticatedCalendarRoute: typeof AuthenticatedCalendarRoute
+  AuthenticatedConnectionsRoute: typeof AuthenticatedConnectionsRoute
   AuthenticatedDesignRoute: typeof AuthenticatedDesignRoute
   AuthenticatedEntitiesRoute: typeof AuthenticatedEntitiesRoute
   AuthenticatedGardenWorkbenchRoute: typeof AuthenticatedGardenWorkbenchRoute
@@ -2963,6 +2984,7 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedAiUsageRoute: AuthenticatedAiUsageRoute,
   AuthenticatedBackgroundJobsRoute: AuthenticatedBackgroundJobsRoute,
   AuthenticatedCalendarRoute: AuthenticatedCalendarRoute,
+  AuthenticatedConnectionsRoute: AuthenticatedConnectionsRoute,
   AuthenticatedDesignRoute: AuthenticatedDesignRoute,
   AuthenticatedEntitiesRoute: AuthenticatedEntitiesRoute,
   AuthenticatedGardenWorkbenchRoute: AuthenticatedGardenWorkbenchRoute,

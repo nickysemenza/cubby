@@ -415,6 +415,14 @@ public struct ReadOnlyRule: Codable, Sendable, Hashable {
   public let fields: [String]
 }
 
+/// One curated indirect table on a generic detail screen.
+public struct ConnectedViewSpec: Codable, Sendable, Hashable, Identifiable {
+  public var id: String { key }
+  public let key: String
+  public let title: String
+  public let target: EntityKey
+}
+
 /// The declaration's `presentation` block with its defaults resolved: what the generic
 /// list, detail and editor screens render. Field keys are `FieldDescriptor.key`s; action keys
 /// are the web verb vocabulary and render natively only where a slot registry provides them.
@@ -426,6 +434,7 @@ public struct EntityPresentation: Codable, Sendable, Hashable {
   public let heroImages: Bool
   public let heroActions: [EntityHeroActionID]
   public let detailSections: [DetailSection]
+  public let connectedViews: [ConnectedViewSpec]
   public let listViews: [ListView]
   /// Shelf card subtitle fields, in order; empty when there is no shelf view.
   public let shelfSubtitle: [String]
@@ -685,6 +694,7 @@ public enum EntityCatalog {
         DetailSection(id: "locations", title: "Serving as locations", placement: .primary, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "locations", filterDescriptor: "product", prefill: nil, columns: nil, sort: nil, limit: nil, hideWhenEmpty: false, collapseWhenEmpty: true))),
         DetailSection(id: "devices", title: "Devices", placement: .primary, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "devices", filterDescriptor: "productId", prefill: nil, columns: nil, sort: nil, limit: nil, hideWhenEmpty: false, collapseWhenEmpty: true)))
       ],
+      connectedViews: [ConnectedViewSpec(key: "recipes", title: "Recipes", target: .recipe)],
       listViews: [.table, .shelf, .timeline],
       shelfSubtitle: ["price", "category"],
       listActions: ["addToInventory", "discard", "setStockTracking", "printLabels", "merge", "delete"],
@@ -784,6 +794,7 @@ public enum EntityCatalog {
         DetailSection(id: EntityDetailSlotID.recipeWorkflow.rawValue, title: nil, placement: .full, collapsed: false, explanationField: nil, kind: .slot),
         DetailSection(id: "meals", title: "Meals", placement: .primary, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "meals", filterDescriptor: "recipeId", prefill: nil, columns: ["date", "name", "mealType"], sort: SectionSort(field: "date", direction: .desc), limit: nil, hideWhenEmpty: false, collapseWhenEmpty: false)))
       ],
+      connectedViews: [ConnectedViewSpec(key: "products", title: "Ingredient products", target: .product), ConnectedViewSpec(key: "inventory", title: "Ingredient stock", target: .inventory), ConnectedViewSpec(key: "purchases", title: "Ingredient purchases", target: .purchase)],
       listViews: [.table, .shelf],
       shelfSubtitle: [],
       listActions: ["delete"],
@@ -863,6 +874,7 @@ public enum EntityCatalog {
         DetailSection(id: "recipes", title: "Appears in recipes", placement: .primary, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "recipes", filterDescriptor: "related:recipe.ingredients", prefill: nil, columns: ["name", "tags", "meals"], sort: nil, limit: nil, hideWhenEmpty: false, collapseWhenEmpty: false))),
         DetailSection(id: "meals", title: "Eaten at meals", placement: .primary, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "meals", filterDescriptor: "foodIngredientId", prefill: nil, columns: nil, sort: nil, limit: nil, hideWhenEmpty: false, collapseWhenEmpty: true)))
       ],
+      connectedViews: [ConnectedViewSpec(key: "inventory", title: "Stock", target: .inventory), ConnectedViewSpec(key: "purchases", title: "Purchases", target: .purchase), ConnectedViewSpec(key: "expenses", title: "Expense history", target: .expense), ConnectedViewSpec(key: "vendors", title: "Vendors", target: .vendor), ConnectedViewSpec(key: "locations", title: "Stocked locations", target: .location)],
       listViews: [.table, .shelf],
       shelfSubtitle: [],
       listActions: ["setUsuallyOnHand", "merge", "delete"],
@@ -930,6 +942,7 @@ public enum EntityCatalog {
         DetailSection(id: "recipes", title: "Recipes", placement: .primary, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "recipes", filterDescriptor: "source", prefill: nil, columns: ["name", "tags", "costTotal"], sort: nil, limit: nil, hideWhenEmpty: false, collapseWhenEmpty: false))),
         DetailSection(id: EntityDetailSlotID.cookbookImportProgress.rawValue, title: "Import", placement: .primary, collapsed: false, explanationField: nil, kind: .slot)
       ],
+      connectedViews: [ConnectedViewSpec(key: "ingredients", title: "Ingredients", target: .ingredient), ConnectedViewSpec(key: "meals", title: "Meals", target: .meal), ConnectedViewSpec(key: "products", title: "Ingredient products", target: .product)],
       listViews: [.table, .shelf],
       shelfSubtitle: [],
       listActions: [],
@@ -1024,6 +1037,7 @@ public enum EntityCatalog {
         DetailSection(id: "plantings", title: "Plantings", placement: .supporting, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "plantings", filterDescriptor: "locationId", prefill: nil, columns: nil, sort: nil, limit: nil, hideWhenEmpty: true, collapseWhenEmpty: false))),
         DetailSection(id: "garden-entries", title: "Garden entries", placement: .supporting, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "garden-entries", filterDescriptor: "locationId", prefill: nil, columns: nil, sort: SectionSort(field: "observedOn", direction: .desc), limit: nil, hideWhenEmpty: true, collapseWhenEmpty: false)))
       ],
+      connectedViews: [ConnectedViewSpec(key: "products", title: "Stored products", target: .product), ConnectedViewSpec(key: "purchases", title: "Stored product purchases", target: .purchase), ConnectedViewSpec(key: "expenses", title: "Stored product expenses", target: .expense), ConnectedViewSpec(key: "plants", title: "Plants", target: .plant), ConnectedViewSpec(key: "tasks", title: "Planting tasks", target: .task), ConnectedViewSpec(key: "projects", title: "Planting projects", target: .project)],
       listViews: [.slot(id: EntityListSlotID.locationGallery.rawValue, label: "Contents", searchKeys: []), .table, .slot(id: EntityListSlotID.locationVisualizations.rawValue, label: "Visualizations", searchKeys: []), .shelf],
       shelfSubtitle: ["type"],
       listActions: ["moveUnder", "delete"],
@@ -1104,6 +1118,7 @@ public enum EntityCatalog {
       detailSections: [
         DetailSection(id: "inventory-details", title: "Inventory item details", placement: .primary, collapsed: false, explanationField: nil, kind: .fields(["productId", "locationId", "amount", "placement", "ownershipMode", "ownerLedgerPartyId", "effectiveOwnership", "verifiedAt"]))
       ],
+      connectedViews: [ConnectedViewSpec(key: "purchases", title: "Purchases", target: .purchase), ConnectedViewSpec(key: "expenses", title: "Expense history", target: .expense), ConnectedViewSpec(key: "tasks", title: "Product tasks", target: .task), ConnectedViewSpec(key: "projects", title: "Purchased for projects", target: .project), ConnectedViewSpec(key: "vendors", title: "Vendors", target: .vendor), ConnectedViewSpec(key: "meals", title: "Meals", target: .meal), ConnectedViewSpec(key: "plant", title: "Plant", target: .plant)],
       listViews: [.table, .shelf],
       shelfSubtitle: [],
       listActions: ["moveTo", "delete"],
@@ -1192,6 +1207,7 @@ public enum EntityCatalog {
         DetailSection(id: EntityDetailSlotID.mealNutrition.rawValue, title: "Nutrition", placement: .primary, collapsed: false, explanationField: "totals", kind: .slot),
         DetailSection(id: "meal-details", title: "Meal details", placement: .supporting, collapsed: false, explanationField: nil, kind: .fields(["date", "name", "mealType", "mealKind", "recipeNames", "sortOrder", "createdAt", "updatedAt"]))
       ],
+      connectedViews: [ConnectedViewSpec(key: "purchases", title: "Food purchases", target: .purchase), ConnectedViewSpec(key: "ingredients", title: "Recipe ingredients", target: .ingredient)],
       listViews: [.slot(id: EntityListSlotID.mealCalendar.rawValue, label: "Calendar", searchKeys: ["period", "week", "date"]), .slot(id: EntityListSlotID.mealNutrition.rawValue, label: "Nutrition", searchKeys: ["date"]), .table, .shelf],
       shelfSubtitle: [],
       listActions: ["delete"],
@@ -1277,6 +1293,7 @@ public enum EntityCatalog {
         DetailSection(id: "devices", title: "Devices", placement: .primary, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "devices", filterDescriptor: "ledgerPartyId", prefill: nil, columns: nil, sort: nil, limit: nil, hideWhenEmpty: false, collapseWhenEmpty: true))),
         DetailSection(id: "image-sightings", title: "Image sightings", placement: .primary, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "image-sightings", filterDescriptor: "ledgerPartyId", prefill: nil, columns: nil, sort: nil, limit: nil, hideWhenEmpty: false, collapseWhenEmpty: true)))
       ],
+      connectedViews: [ConnectedViewSpec(key: "products", title: "Owned or used products", target: .product), ConnectedViewSpec(key: "purchases", title: "Expense purchases", target: .purchase), ConnectedViewSpec(key: "projects", title: "Expense projects", target: .project)],
       listViews: [.table, .shelf],
       shelfSubtitle: [],
       listActions: ["delete"],
@@ -1347,6 +1364,7 @@ public enum EntityCatalog {
         DetailSection(id: "evidence", title: "Evidence transactions", placement: .primary, collapsed: false, explanationField: nil, kind: .fields(["evidenceTransactionIds"])),
         DetailSection(id: "evidence-transactions", title: "Evidence transactions", placement: .primary, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "evidence-transactions", filterDescriptor: "ledgerTransferId", prefill: nil, columns: nil, sort: nil, limit: nil, hideWhenEmpty: false, collapseWhenEmpty: true)))
       ],
+      connectedViews: [ConnectedViewSpec(key: "purchases", title: "Evidence purchases", target: .purchase)],
       listViews: [.table, .shelf],
       shelfSubtitle: [],
       listActions: ["delete"],
@@ -1477,6 +1495,7 @@ public enum EntityCatalog {
         DetailSection(id: "notes", title: "Notes", placement: .supporting, collapsed: false, explanationField: nil, kind: .fields(["notes"])),
         DetailSection(id: EntityDetailSlotID.projectAnalytics.rawValue, title: "Analytics", placement: .full, collapsed: true, explanationField: nil, kind: .slot)
       ],
+      connectedViews: [ConnectedViewSpec(key: "plantings", title: "Task plantings", target: .planting), ConnectedViewSpec(key: "plants", title: "Task plants", target: .plant), ConnectedViewSpec(key: "garden-entries", title: "Task garden entries", target: .gardenEntry), ConnectedViewSpec(key: "transactions", title: "Expense transactions", target: .financialTransaction)],
       listViews: [.table, .slot(id: EntityListSlotID.projectSchedule.rawValue, label: "Schedule", searchKeys: ["rows"]), .slot(id: EntityListSlotID.projectOverview.rawValue, label: "Overview", searchKeys: ["rows"]), .slot(id: EntityListSlotID.projectAnalytics.rawValue, label: "Analytics", searchKeys: []), .shelf],
       shelfSubtitle: [],
       listActions: ["setStatus", "delete"],
@@ -1579,6 +1598,7 @@ public enum EntityCatalog {
         DetailSection(id: "subtasks", title: "Subtasks", placement: .primary, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "subtasks", filterDescriptor: "parentTask", prefill: nil, columns: ["name", "status", "dueDate"], sort: nil, limit: nil, hideWhenEmpty: false, collapseWhenEmpty: false))),
         DetailSection(id: "plantings", title: "Plantings", placement: .primary, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "plantings", filterDescriptor: "taskId", prefill: nil, columns: nil, sort: nil, limit: nil, hideWhenEmpty: false, collapseWhenEmpty: true)))
       ],
+      connectedViews: [ConnectedViewSpec(key: "purchases", title: "Subject purchases", target: .purchase), ConnectedViewSpec(key: "expenses", title: "Subject expenses", target: .expense), ConnectedViewSpec(key: "inventory", title: "Subject stock", target: .inventory), ConnectedViewSpec(key: "vendors", title: "Subject vendors", target: .vendor), ConnectedViewSpec(key: "plants", title: "Plants", target: .plant), ConnectedViewSpec(key: "garden-entries", title: "Garden entries", target: .gardenEntry)],
       listViews: [.table, .slot(id: EntityListSlotID.taskAgenda.rawValue, label: "Next", searchKeys: []), .slot(id: EntityListSlotID.taskBoard.rawValue, label: "Board", searchKeys: ["cols", "lane", "q"]), .timeline, .shelf],
       shelfSubtitle: ["status"],
       listActions: ["bulkEdit", "delete"],
@@ -1680,6 +1700,7 @@ public enum EntityCatalog {
         DetailSection(id: "accounts", title: "Accounts", placement: .primary, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "accounts", filterDescriptor: "providerVendorId", prefill: nil, columns: nil, sort: nil, limit: nil, hideWhenEmpty: false, collapseWhenEmpty: true))),
         DetailSection(id: "vendor-accounts", title: "Vendor accounts", placement: .primary, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "vendor-accounts", filterDescriptor: "vendorId", prefill: nil, columns: nil, sort: nil, limit: nil, hideWhenEmpty: false, collapseWhenEmpty: true)))
       ],
+      connectedViews: [ConnectedViewSpec(key: "inventory", title: "Stock from purchased products", target: .inventory), ConnectedViewSpec(key: "plantings", title: "Plantings from purchased products", target: .planting)],
       listViews: [.table, .shelf],
       shelfSubtitle: [],
       listActions: ["merge", "delete"],
@@ -1797,6 +1818,7 @@ public enum EntityCatalog {
         DetailSection(id: EntityDetailSlotID.purchaseReconciliation.rawValue, title: "Reconciliation", placement: .supporting, collapsed: false, explanationField: "reconciliation", kind: .slot),
         DetailSection(id: EntityDetailSlotID.purchaseFinancialSettlement.rawValue, title: "Financial settlement", placement: .supporting, collapsed: false, explanationField: "financialReconciliation", kind: .slot)
       ],
+      connectedViews: [ConnectedViewSpec(key: "inventory", title: "Purchased product stock", target: .inventory), ConnectedViewSpec(key: "tasks", title: "Purchased product tasks", target: .task), ConnectedViewSpec(key: "plantings", title: "Purchased product plantings", target: .planting), ConnectedViewSpec(key: "plants", title: "Purchased plants", target: .plant)],
       listViews: [.table, .shelf],
       shelfSubtitle: [],
       listActions: ["merge", "delete"],
@@ -1885,6 +1907,7 @@ public enum EntityCatalog {
         DetailSection(id: "overview", title: "Overview", placement: .supporting, collapsed: false, explanationField: nil, kind: .fields(["name", "identity", "provisional", "sourceAliases", "cardNumbers", "providerVendorId", "ledgerPartyId", "inventoryOwnerDefaultEnabled", "notes", "transactionCount", "createdAt", "updatedAt"])),
         DetailSection(id: "transactions", title: "Transactions", placement: .primary, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "transactions", filterDescriptor: "accountId", prefill: nil, columns: ["merchant", "amount", "kind", "status", "postedDate"], sort: SectionSort(field: "postedDate", direction: .desc), limit: nil, hideWhenEmpty: false, collapseWhenEmpty: false)))
       ],
+      connectedViews: [ConnectedViewSpec(key: "expenses", title: "Settlement expenses", target: .expense), ConnectedViewSpec(key: "products", title: "Settlement products", target: .product), ConnectedViewSpec(key: "projects", title: "Settlement projects", target: .project)],
       listViews: [.table, .shelf],
       shelfSubtitle: [],
       listActions: ["delete"],
@@ -1992,6 +2015,7 @@ public enum EntityCatalog {
         DetailSection(id: "purchase", title: "Purchase", placement: .primary, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "purchase", filterDescriptor: "financialTransactionId", prefill: nil, columns: nil, sort: nil, limit: nil, hideWhenEmpty: false, collapseWhenEmpty: true))),
         DetailSection(id: "vendor", title: "Vendor", placement: .primary, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "vendor", filterDescriptor: "financialTransactionId", prefill: nil, columns: nil, sort: nil, limit: nil, hideWhenEmpty: false, collapseWhenEmpty: true)))
       ],
+      connectedViews: [ConnectedViewSpec(key: "projects", title: "Projects", target: .project)],
       listViews: [.table, .shelf],
       shelfSubtitle: [],
       listActions: ["delete"],
@@ -2059,6 +2083,7 @@ public enum EntityCatalog {
         DetailSection(id: "overview", title: "Overview", placement: .supporting, collapsed: false, explanationField: nil, kind: .fields(["name", "notes", "acquiredAt", "createdAt", "updatedAt"])),
         DetailSection(id: "candidates", title: "Candidate alternatives", placement: .primary, collapsed: false, explanationField: nil, kind: .fields(["candidates"]))
       ],
+      connectedViews: [ConnectedViewSpec(key: "purchases", title: "Candidate purchases", target: .purchase), ConnectedViewSpec(key: "inventory", title: "Candidate stock", target: .inventory), ConnectedViewSpec(key: "vendors", title: "Candidate vendors", target: .vendor)],
       listViews: [.table, .shelf],
       shelfSubtitle: [],
       listActions: ["markPurchased", "delete"],
@@ -2178,6 +2203,7 @@ public enum EntityCatalog {
         DetailSection(id: "purchase", title: "Purchase", placement: .supporting, collapsed: false, explanationField: nil, kind: .fields(["purchaseId"])),
         DetailSection(id: EntityDetailSlotID.expenseSettlement.rawValue, title: "Settlement", placement: .supporting, collapsed: false, explanationField: nil, kind: .slot)
       ],
+      connectedViews: [ConnectedViewSpec(key: "inventory", title: "Product stock", target: .inventory), ConnectedViewSpec(key: "plantings", title: "Product plantings", target: .planting), ConnectedViewSpec(key: "plant", title: "Plant", target: .plant), ConnectedViewSpec(key: "vendor", title: "Purchase vendor", target: .vendor)],
       listViews: [.table, .slot(id: EntityListSlotID.expenseAnalytics.rawValue, label: "Analytics", searchKeys: ["analyzeRows", "analyzeColumns", "analyzeMetric", "analyzeCompare", "analyzeShow"]), .shelf],
       shelfSubtitle: [],
       listActions: ["bulkEdit", "delete"],
@@ -2231,6 +2257,7 @@ public enum EntityCatalog {
       detailSections: [
         DetailSection(id: "overview", title: "Overview", placement: .primary, collapsed: false, explanationField: nil, kind: .fields(["fdc_id", "brandedFoodInfo", "foodInfo", "legacyFoodInfo", "nutritionInfo", "portionInfoRaw", "inferredUnitMappings", "linkedProducts"]))
       ],
+      connectedViews: [],
       listViews: [.table, .shelf],
       shelfSubtitle: [],
       listActions: [],
@@ -2329,6 +2356,7 @@ public enum EntityCatalog {
         DetailSection(id: EntityDetailSlotID.imageAssociations.rawValue, title: "Used by", placement: .primary, collapsed: false, explanationField: nil, kind: .slot),
         DetailSection(id: "sightings", title: "Sightings", placement: .supporting, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "sightings", filterDescriptor: "imageId", prefill: nil, columns: ["ledgerPartyName", "deviceName", "capturedAt", "matchKind"], sort: nil, limit: nil, hideWhenEmpty: true, collapseWhenEmpty: false)))
       ],
+      connectedViews: [ConnectedViewSpec(key: "reporting-devices", title: "Reporting devices", target: .device)],
       listViews: [.table, .shelf],
       shelfSubtitle: ["contentType"],
       listActions: ["delete"],
@@ -2416,6 +2444,7 @@ public enum EntityCatalog {
         DetailSection(id: "garden-history", title: "Journal", placement: .primary, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "entries", filterDescriptor: "journalPlantingId", prefill: RelationSectionPrefill(field: "plantingIds"), columns: ["kind", "observedOn", "locationId", "note", "harvestAmount"], sort: SectionSort(field: "observedOn", direction: .desc), limit: nil, hideWhenEmpty: false, collapseWhenEmpty: false))),
         DetailSection(id: "overview", title: "Planting details", placement: .supporting, collapsed: false, explanationField: nil, kind: .fields(["plantId", "status", "outcome", "locationId", "sourceProductId", "quantity", "plannedWindow", "sowedOn", "transplantedOn", "finishedOn", "notes", "taskId", "expectedHarvest", "guideSowWindow", "guideTransplantWindow"]))
       ],
+      connectedViews: [ConnectedViewSpec(key: "products", title: "Cultivar products", target: .product), ConnectedViewSpec(key: "purchases", title: "Source purchases", target: .purchase), ConnectedViewSpec(key: "expenses", title: "Source expenses", target: .expense), ConnectedViewSpec(key: "project", title: "Task project", target: .project), ConnectedViewSpec(key: "ingredient", title: "Plant ingredient", target: .ingredient)],
       listViews: [.table, .slot(id: EntityListSlotID.plantingSchedule.rawValue, label: "Schedule", searchKeys: ["year"]), .timeline, .shelf],
       shelfSubtitle: [],
       listActions: ["delete"],
@@ -2490,6 +2519,7 @@ public enum EntityCatalog {
         DetailSection(id: "entry", title: "Entry", placement: .primary, collapsed: false, explanationField: nil, kind: .fields(["kind", "observedOn", "locationId", "plantings", "note", "harvestAmount"])),
         DetailSection(id: "plantings", title: "Plantings", placement: .primary, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "plantings", filterDescriptor: "gardenEntryId", prefill: nil, columns: nil, sort: nil, limit: nil, hideWhenEmpty: false, collapseWhenEmpty: true)))
       ],
+      connectedViews: [ConnectedViewSpec(key: "plants", title: "Plants", target: .plant), ConnectedViewSpec(key: "products", title: "Planting products", target: .product), ConnectedViewSpec(key: "tasks", title: "Planting tasks", target: .task), ConnectedViewSpec(key: "projects", title: "Planting projects", target: .project), ConnectedViewSpec(key: "purchases", title: "Planting product purchases", target: .purchase)],
       listViews: [.table, .timeline, .shelf],
       shelfSubtitle: [],
       listActions: ["delete"],
@@ -2558,6 +2588,7 @@ public enum EntityCatalog {
         DetailSection(id: "overview", title: "Overview", placement: .supporting, collapsed: false, explanationField: nil, kind: .fields(["label", "vendorId", "ledgerPartyId", "inventoryOwnerDefaultEnabled", "status", "browser", "lastRunAt", "lastSuccessAt", "createdAt", "updatedAt"])),
         DetailSection(id: "purchases", title: "Purchases", placement: .primary, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "purchases", filterDescriptor: "vendorAccountId", prefill: nil, columns: nil, sort: nil, limit: nil, hideWhenEmpty: false, collapseWhenEmpty: true)))
       ],
+      connectedViews: [ConnectedViewSpec(key: "products", title: "Purchased products", target: .product), ConnectedViewSpec(key: "expenses", title: "Expenses", target: .expense), ConnectedViewSpec(key: "projects", title: "Projects", target: .project)],
       listViews: [.table, .shelf],
       shelfSubtitle: [],
       listActions: ["delete"],
@@ -2627,6 +2658,7 @@ public enum EntityCatalog {
         DetailSection(id: "products", title: "Products", placement: .primary, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "products", filterDescriptor: "category", prefill: nil, columns: ["name", "manufacturer", "category", "onHandUnits"], sort: nil, limit: nil, hideWhenEmpty: false, collapseWhenEmpty: false))),
         DetailSection(id: "children", title: "Subcategories", placement: .primary, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "children", filterDescriptor: "parentId", prefill: nil, columns: nil, sort: nil, limit: nil, hideWhenEmpty: false, collapseWhenEmpty: true)))
       ],
+      connectedViews: [ConnectedViewSpec(key: "inventory", title: "Product stock", target: .inventory), ConnectedViewSpec(key: "purchases", title: "Product purchases", target: .purchase), ConnectedViewSpec(key: "expenses", title: "Product expenses", target: .expense), ConnectedViewSpec(key: "tasks", title: "Product tasks", target: .task), ConnectedViewSpec(key: "projects", title: "Purchased projects", target: .project), ConnectedViewSpec(key: "vendors", title: "Product vendors", target: .vendor)],
       listViews: [.table, .slot(id: EntityListSlotID.productCategoryHierarchy.rawValue, label: "Hierarchy", searchKeys: []), .shelf],
       shelfSubtitle: [],
       listActions: ["delete"],
@@ -2717,6 +2749,7 @@ public enum EntityCatalog {
         DetailSection(id: EntityDetailSlotID.importRunChanges.rawValue, title: "Changes", placement: .primary, collapsed: false, explanationField: nil, kind: .slot),
         DetailSection(id: "runtime", title: "Runtime", placement: .supporting, collapsed: true, explanationField: nil, kind: .fields(["coordinatorModel", "skillRevision", "runtimeRevision", "decisionRevision", "dispatchAttempts", "dispatchError", "coordinatorStartedAt", "auditedAt", "predecessorRunId", "createdAt", "updatedAt"]))
       ],
+      connectedViews: [ConnectedViewSpec(key: "products", title: "Imported products", target: .product), ConnectedViewSpec(key: "expenses", title: "Imported expenses", target: .expense), ConnectedViewSpec(key: "projects", title: "Imported projects", target: .project)],
       listViews: [.table, .shelf],
       shelfSubtitle: [],
       listActions: [],
@@ -2792,6 +2825,7 @@ public enum EntityCatalog {
         DetailSection(id: "overview", title: "Overview", placement: .supporting, collapsed: false, explanationField: nil, kind: .fields(["name", "platform", "appVersion", "osVersion", "lastSeenAt", "automaticWork", "remotePaused", "ledgerPartyId", "productId", "installationId", "createdAt", "updatedAt"])),
         DetailSection(id: "image-sightings", title: "Image sightings", placement: .primary, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "image-sightings", filterDescriptor: "deviceId", prefill: nil, columns: nil, sort: nil, limit: nil, hideWhenEmpty: false, collapseWhenEmpty: true)))
       ],
+      connectedViews: [ConnectedViewSpec(key: "images", title: "Sighting images", target: .image), ConnectedViewSpec(key: "owners", title: "Sighting owners", target: .ledgerParty)],
       listViews: [.table, .shelf],
       shelfSubtitle: [],
       listActions: ["delete"],
@@ -2871,6 +2905,7 @@ public enum EntityCatalog {
       detailSections: [
         DetailSection(id: "overview", title: "Overview", placement: .supporting, collapsed: false, explanationField: nil, kind: .fields(["imageId", "ledgerPartyId", "deviceId", "assetKey", "sourceType", "mediaSubtypes", "originalFilename", "pixelWidth", "pixelHeight", "hasAdjustments", "capturedAt", "capturedAtOffsetMinutes", "addedAt", "location", "placeName", "camera", "matchKind", "hashDistance", "aspectGate", "observedAt", "createdAt", "updatedAt"]))
       ],
+      connectedViews: [ConnectedViewSpec(key: "captured-by", title: "Image captured by", target: .ledgerParty), ConnectedViewSpec(key: "reporter-owner", title: "Reporter owner", target: .ledgerParty)],
       listViews: [.table, .shelf],
       shelfSubtitle: [],
       listActions: ["delete"],
@@ -2948,6 +2983,7 @@ public enum EntityCatalog {
         DetailSection(id: "products", title: "Seeds and plants", placement: .primary, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "products", filterDescriptor: "growsPlant", prefill: nil, columns: ["name", "manufacturer", "onHandUnits"], sort: nil, limit: nil, hideWhenEmpty: true, collapseWhenEmpty: false))),
         DetailSection(id: "overview", title: "Plant details", placement: .supporting, collapsed: false, explanationField: nil, kind: .fields(["name", "gardenGuideKey", "verdict", "ingredientId", "latinName", "breeding", "daysFromSowMin", "daysFromSowMax", "daysFromTransplantMin", "daysFromTransplantMax", "routes", "guideSowWindow", "guideTransplantWindow", "notes"]))
       ],
+      connectedViews: [ConnectedViewSpec(key: "purchases", title: "Purchases", target: .purchase), ConnectedViewSpec(key: "expenses", title: "Expense history", target: .expense), ConnectedViewSpec(key: "inventory", title: "Seed and plant stock", target: .inventory), ConnectedViewSpec(key: "locations", title: "Stocked locations", target: .location), ConnectedViewSpec(key: "vendors", title: "Vendors", target: .vendor), ConnectedViewSpec(key: "tasks", title: "Tasks", target: .task), ConnectedViewSpec(key: "projects", title: "Projects", target: .project), ConnectedViewSpec(key: "garden-entries", title: "Garden entries", target: .gardenEntry), ConnectedViewSpec(key: "recipes", title: "Recipes", target: .recipe), ConnectedViewSpec(key: "meals", title: "Meals", target: .meal)],
       listViews: [.table, .shelf],
       shelfSubtitle: [],
       listActions: ["delete"],
