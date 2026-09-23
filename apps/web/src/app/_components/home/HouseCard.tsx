@@ -59,6 +59,24 @@ export function taskBriefingSecondary(
   return parts.length > 0 ? parts.join(" · ") : null;
 }
 
+export function TaskBriefingEvidenceLine({
+  briefing,
+}: {
+  briefing: TodayBriefingCounts | undefined;
+}) {
+  return (
+    <p className="mt-2 flex flex-wrap gap-x-2 font-mono text-2xs text-muted-foreground uppercase">
+      {taskBriefingEvidence(briefing)
+        ?.split(" · ")
+        .map((part) => (
+          <span key={part} className="whitespace-nowrap">
+            {part}
+          </span>
+        ))}
+    </p>
+  );
+}
+
 function TodayTaskRow({ task: item }: { task: TaskTodayBriefingItemOut }) {
   const taskImage = useEntityDisplayImage({
     entityType: "task",
@@ -158,15 +176,7 @@ export function TodayAttention() {
           </Button>
         </p>
       ) : (
-        <p className="mt-2 flex flex-wrap gap-x-2 font-mono text-2xs text-muted-foreground uppercase">
-          {taskBriefingEvidence(briefing.data)
-            ?.split(" · ")
-            .map((part) => (
-              <span key={part} className="whitespace-nowrap">
-                {part}
-              </span>
-            ))}
-        </p>
+        <TaskBriefingEvidenceLine briefing={briefing.data} />
       )}
 
       <div className="mt-2 border-y border-border">

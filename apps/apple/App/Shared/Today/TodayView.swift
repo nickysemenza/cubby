@@ -244,9 +244,9 @@ struct TodayContent: View {
                     ViewThatFits(in: .horizontal) {
                         HStack(alignment: .top, spacing: PorcelainTokens.Space.lg) {
                             macWorkColumn
-                                .frame(minWidth: 500, maxWidth: .infinity, alignment: .topLeading)
+                                .frame(width: 620, alignment: .topLeading)
                             macMealsColumn
-                                .frame(minWidth: 280, maxWidth: 340, alignment: .topLeading)
+                                .frame(width: 300, alignment: .topLeading)
                         }
                         VStack(alignment: .leading, spacing: PorcelainTokens.Space.lg) {
                             macWorkColumn

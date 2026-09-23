@@ -38,16 +38,6 @@ struct BrowseRootView: View {
                     }
                 }
             }
-            let media = descriptorsMatchingQuery.filter {
-                $0.domain == nil && $0.key.nativeActions.contains(.list)
-            }.sorted { $0.plural < $1.plural }
-            if !media.isEmpty {
-                Section {
-                    ForEach(media, id: \.key) { descriptor in row(for: descriptor) }
-                } header: {
-                    headerTitle("Media")
-                }
-            }
         }
         .listStyle(.plain)
         .porcelainScreen()

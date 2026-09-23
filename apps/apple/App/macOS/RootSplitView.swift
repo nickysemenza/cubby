@@ -96,17 +96,6 @@ struct RootSplitView: View {
                     }
                 }
             }
-            let media = EntityCatalog.all.filter {
-                $0.domain == nil && $0.key.nativeActions.contains(.list)
-            }.sorted { $0.plural < $1.plural }
-            if !media.isEmpty {
-                Section("Media") {
-                    ForEach(media, id: \.key) { descriptor in
-                        entitySidebarLabel(descriptor)
-                            .tag(SidebarDestination.entity(descriptor.key))
-                    }
-                }
-            }
         }
         .listStyle(.sidebar)
         .accessibilityIdentifier("sidebar.destinations")
