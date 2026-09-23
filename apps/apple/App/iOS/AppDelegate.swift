@@ -5,6 +5,14 @@ import UIKit
 /// `CubbyLink` navigation, for both a cold launch (`connectionOptions.shortcutItem`) and a
 /// shortcut invoked while the app is already running (`performActionFor`).
 final class AppDelegate: NSObject, UIApplicationDelegate {
+    func application(
+        _ application: UIApplication,
+        didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
+    ) -> Bool {
+        PhotoBackgroundProcessing.register()
+        return true
+    }
+
     /// A link that arrived before `AppModel.active` existed. In practice this should never be
     /// read: `CubbyApp.init` sets `AppModel.active` while building the `App` value, and a
     /// `@UIApplicationDelegateAdaptor`'s delegate — and the scene lifecycle that follows it — are

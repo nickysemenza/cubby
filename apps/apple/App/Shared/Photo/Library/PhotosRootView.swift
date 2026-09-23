@@ -47,7 +47,9 @@ struct PhotosRootView: View {
             Button("Add to import run…") {
                 guard let items = pendingSelection else { return }
                 runBatch = PhotoImportRunBatch(
-                    items: items, flow: PhotoImportRunFlow(client: appModel.client))
+                    items: items,
+                    flow: PhotoImportRunFlow(
+                        client: appModel.client, activityCenter: appModel.backgroundActivity))
                 pendingSelection = nil
             }
             Button("Cancel", role: .cancel) { pendingSelection = nil }
@@ -155,6 +157,7 @@ private struct PhotoLibraryBrowser: View {
     @State private var pickerIDs: [String] = []
     @State private var preview: AssetPreview?
     @State private var session = UUID()
+    @State private var ownsLibrarySession = false
     @State private var loading: Task<Void, Never>?
     @State private var selectionError: String?
     @State private var loadingSelection = false
@@ -302,9 +305,17 @@ private struct PhotoLibraryBrowser: View {
                 }
             }
         }
-        .task { await library.activate(session, matches: matches, client: appModel.client) }
+        .task {
+            if !picker && appModel.participation.automaticWork {
+                appModel.requestAutomaticPhotoMatching()
+            } else {
+                ownsLibrarySession = true
+                await library.activate(session, matches: matches, client: appModel.client)
+            }
+        }
         .onDisappear {
-            library.deactivate(session); loading?.cancel()
+            if ownsLibrarySession { library.deactivate(session) }
+            loading?.cancel()
         }
         .onChange(of: scenePhase) { _, phase in
             guard phase == .active else { return }

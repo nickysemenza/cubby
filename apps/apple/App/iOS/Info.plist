@@ -2,6 +2,10 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>BGTaskSchedulerPermittedIdentifiers</key>
+	<array>
+		<string>com.nickysemenza.cubby.photo-matching</string>
+	</array>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
@@ -50,6 +54,8 @@
 	<string>Cubby scans barcodes to add items to a location.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Cubby uses selected photos for garden journals and product images.</string>
+	<key>NSSupportsLiveActivities</key>
+	<true/>
 	<key>UIApplicationShortcutItems</key>
 	<array>
 		<dict>
@@ -76,6 +82,10 @@
 			<key>UIApplicationShortcutItemType</key>
 			<string>cubby://search</string>
 		</dict>
+	</array>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>processing</string>
 	</array>
 	<key>UILaunchScreen</key>
 	<dict/>

@@ -158,6 +158,11 @@ targets:
     # link. iOS-only: merged (deep-merge, not replaced) with the shared template's `info.properties`.
     info:
       properties:
+        BGTaskSchedulerPermittedIdentifiers:
+          - com.nickysemenza.cubby.photo-matching
+        NSSupportsLiveActivities: true
+        UIBackgroundModes:
+          - processing
         UIApplicationShortcutItems:
           - UIApplicationShortcutItemType: cubby://capture
             UIApplicationShortcutItemTitle: Scan
@@ -175,6 +180,26 @@ targets:
         # macOS target has no test bundle, so its Debug config is untouched.
         Debug:
           ENABLE_TESTABILITY: YES
+    dependencies:
+      - target: CubbyLiveActivity
+        embed: true
+  CubbyLiveActivity:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: App/LiveActivity
+      - path: App/iOS/DeviceWorkAttributes.swift
+    info:
+      path: App/LiveActivity/Info.plist
+      properties:
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.nickysemenza.cubby.LiveActivity
+        SWIFT_DEFAULT_ACTOR_ISOLATION: MainActor
   Cubby-macOS:
     templates: [CubbyApp]
     templateAttributes:

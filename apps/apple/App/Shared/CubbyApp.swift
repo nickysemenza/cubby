@@ -61,9 +61,17 @@ struct CubbyApp: App {
                     DockBadge.clear()
                 #endif
                 model.setCompanionSceneActive(scenePhase == .active)
+                #if os(iOS)
+                    DeviceWorkLiveActivityCoordinator.shared.start(
+                        model: model, foreground: scenePhase == .active)
+                #endif
             }
             .onChange(of: scenePhase) { _, phase in
                 model.setCompanionSceneActive(phase == .active)
+                #if os(iOS)
+                    DeviceWorkLiveActivityCoordinator.shared.setForeground(phase == .active)
+                    if phase == .background { PhotoBackgroundProcessing.scheduleIfNeeded(model: model) }
+                #endif
             }
             .onOpenURL { url in
                 if let link = CubbyLink(url: url) { model.navigator.open(link) }
