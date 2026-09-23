@@ -10,7 +10,7 @@ export const importRunTrigger = z.enum([
   "manual",
   "backfill",
   // A short-lived run that only groups AI work: created already `completed`,
-  // hidden from default lists, and never blocks ledger-party delete/merge.
+  // and never blocks ledger-party delete/merge.
   "ephemeral",
 ]);
 export const importRunStatus = z.enum([

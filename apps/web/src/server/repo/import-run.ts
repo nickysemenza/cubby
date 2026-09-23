@@ -6,7 +6,7 @@ import {
   type ImportRunPurpose,
 } from "@cubby/schemas/import-run-fields";
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
-import { and, eq, ne, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { importRun } from "~/server/db/schema";
@@ -154,9 +154,6 @@ const buildWhere = (filters: ImportRunFilters) =>
       sql`(SELECT shortcode FROM "LedgerParty" WHERE id = "ImportRun"."ledgerPartyId")`,
       filters.ledgerPartyId,
     ),
-    filters.includeEphemeral || filters.purpose !== undefined
-      ? undefined
-      : ne(importRun.trigger, "ephemeral"),
   ]);
 
 export async function listImportRuns(
