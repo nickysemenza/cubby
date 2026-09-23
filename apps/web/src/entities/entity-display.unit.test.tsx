@@ -18,6 +18,10 @@ import {
   createCubbyColumnHelper,
   type CubbyColumnDef,
 } from "~/app/_components/data-table/table-features";
+import {
+  EntityDisplayImagesProvider,
+  entityDisplayImageKey,
+} from "~/app/_components/entity-media/entity-display-images";
 import { useStandardColumns } from "~/app/_components/hooks/useStandardColumns";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
@@ -212,6 +216,42 @@ describe("declared entity displays", () => {
       screen.getByRole("button", { name: "Edit party" }),
     ).toBeInTheDocument();
     expect(screen.queryByText("Created At")).not.toBeInTheDocument();
+  });
+
+  it("leads manifest reference links with the target's identity mark", () => {
+    const harness = createBrowserTestHarness();
+    render(
+      <EntityDisplayImagesProvider
+        refs={[]}
+        seeded={{
+          [entityDisplayImageKey({
+            entityType: "image",
+            entityId: "IMG-TEST",
+          })]: { url: "https://images.example/sighting.jpg" },
+          [entityDisplayImageKey({
+            entityType: "ledgerParty",
+            entityId: "LPY-TEST",
+          })]: null,
+        }}
+      >
+        <EntityBasicInfo
+          entity="imageSighting"
+          fields={["imageId", "ledgerPartyId"]}
+          cohortLinks={false}
+          record={{ imageId: "IMG-TEST", ledgerPartyId: "LPY-TEST" }}
+        />
+      </EntityDisplayImagesProvider>,
+      { wrapper: harness.wrapper },
+    );
+
+    expect(
+      screen.getByRole("link", { name: "IMG-TEST" }).querySelector("img"),
+    ).toHaveAttribute("src", "https://images.example/sighting.jpg");
+    // No cover: the entity icon holds the mark's box instead of an image.
+    const party = screen.getByRole("link", { name: "LPY-TEST" });
+    expect(party.querySelector("img")).toBeNull();
+    expect(party.querySelector("[aria-hidden] svg")).not.toBeNull();
+    harness.dispose();
   });
 
   it("preserves false and zero as visible values", () => {
