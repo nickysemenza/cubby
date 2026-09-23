@@ -494,7 +494,7 @@ export function ScheduleGrid({
                   )
                 }
                 className={cn(
-                  "relative flex border-b border-border/70 text-sm focus-visible:z-20 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
+                  "relative flex border-b border-border/70 text-[13px]/5 focus-visible:z-20 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
                   row.group ? "bg-muted/50 font-semibold" : "hover:bg-muted/40",
                 )}
                 style={{ height: ROW_HEIGHT }}

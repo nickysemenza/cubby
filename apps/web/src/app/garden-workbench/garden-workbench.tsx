@@ -47,6 +47,7 @@ const modes = [
 const crops = [...gardenCropKeys].sort((a, b) =>
   cropName(a).localeCompare(cropName(b)),
 );
+const EMPTY_PLANTINGS = [] as const;
 
 const startLabels = {
   direct: "Direct sow",
@@ -200,7 +201,7 @@ function SourceNotes({ rows }: { rows: readonly ScheduleRow[] }) {
 function TimingView({ year, crop }: { year: number; crop?: GardenCropKey }) {
   const rows = useMemo(() => guideScheduleRows(year, crop), [year, crop]);
   const window = useMemo(() => yearWindow(year), [year]);
-  const scheduleLabel = usePlantingScheduleLabel(rows, []);
+  const scheduleLabel = usePlantingScheduleLabel(rows, EMPTY_PLANTINGS);
   return (
     <Stack gap="md">
       <div>
