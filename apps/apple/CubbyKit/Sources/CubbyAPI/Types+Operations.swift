@@ -4723,6 +4723,65 @@ public enum Operations {
                 public var vendorPresenceFilter: Operations.Resources_financialAccount_list.Input.Query.VendorPresenceFilterPayload?
                 /// - Remark: Generated from `#/paths/api/v1/financial-accounts/GET/query/vendorSearch`.
                 public var vendorSearch: Swift.String?
+                /// vendor shortcode, e.g. VEN-4K7M
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/financial-accounts/GET/query/ProviderVendorIdPayload`.
+                public struct ProviderVendorIdPayloadPayload: Codable, Hashable, Sendable {
+                    /// vendor shortcode, e.g. VEN-4K7M
+                    ///
+                    /// - Remark: Generated from `#/paths/api/v1/financial-accounts/GET/query/ProviderVendorIdPayload/value1`.
+                    public var value1: Swift.String?
+                    /// - Remark: Generated from `#/paths/api/v1/financial-accounts/GET/query/ProviderVendorIdPayload/value2`.
+                    @frozen public enum Value2Payload: String, Codable, Hashable, Sendable, CaseIterable {
+                        case __unresolvableEntityFilter = "__unresolvable_entity_filter__"
+                    }
+                    /// - Remark: Generated from `#/paths/api/v1/financial-accounts/GET/query/ProviderVendorIdPayload/value2`.
+                    public var value2: Operations.Resources_financialAccount_list.Input.Query.ProviderVendorIdPayloadPayload.Value2Payload?
+                    /// Creates a new `ProviderVendorIdPayloadPayload`.
+                    ///
+                    /// - Parameters:
+                    ///   - value1: vendor shortcode, e.g. VEN-4K7M
+                    ///   - value2:
+                    public init(
+                        value1: Swift.String? = nil,
+                        value2: Operations.Resources_financialAccount_list.Input.Query.ProviderVendorIdPayloadPayload.Value2Payload? = nil
+                    ) {
+                        self.value1 = value1
+                        self.value2 = value2
+                    }
+                    public init(from decoder: any Swift.Decoder) throws {
+                        var errors: [any Swift.Error] = []
+                        do {
+                            self.value1 = try decoder.decodeFromSingleValueContainer()
+                        } catch {
+                            errors.append(error)
+                        }
+                        do {
+                            self.value2 = try decoder.decodeFromSingleValueContainer()
+                        } catch {
+                            errors.append(error)
+                        }
+                        try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                            [
+                                self.value1,
+                                self.value2
+                            ],
+                            type: Self.self,
+                            codingPath: decoder.codingPath,
+                            errors: errors
+                        )
+                    }
+                    public func encode(to encoder: any Swift.Encoder) throws {
+                        try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                            self.value1,
+                            self.value2
+                        ])
+                    }
+                }
+                /// - Remark: Generated from `#/paths/api/v1/financial-accounts/GET/query/providerVendorId`.
+                public typealias ProviderVendorIdPayload = [Operations.Resources_financialAccount_list.Input.Query.ProviderVendorIdPayloadPayload]
+                /// - Remark: Generated from `#/paths/api/v1/financial-accounts/GET/query/providerVendorId`.
+                public var providerVendorId: Operations.Resources_financialAccount_list.Input.Query.ProviderVendorIdPayload?
                 /// ledgerParty shortcode, e.g. LPY-4K7M
                 ///
                 /// - Remark: Generated from `#/paths/api/v1/financial-accounts/GET/query/LedgerPartyIdPayload`.
@@ -4872,6 +4931,7 @@ public enum Operations {
                 ///   - vendorId:
                 ///   - vendorPresenceFilter:
                 ///   - vendorSearch:
+                ///   - providerVendorId:
                 ///   - ledgerPartyId:
                 ///   - search:
                 ///   - provisional:
@@ -4901,6 +4961,7 @@ public enum Operations {
                     vendorId: [Swift.String]? = nil,
                     vendorPresenceFilter: Operations.Resources_financialAccount_list.Input.Query.VendorPresenceFilterPayload? = nil,
                     vendorSearch: Swift.String? = nil,
+                    providerVendorId: Operations.Resources_financialAccount_list.Input.Query.ProviderVendorIdPayload? = nil,
                     ledgerPartyId: Operations.Resources_financialAccount_list.Input.Query.LedgerPartyIdPayload? = nil,
                     search: Swift.String? = nil,
                     provisional: Swift.Bool? = nil,
@@ -4930,6 +4991,7 @@ public enum Operations {
                     self.vendorId = vendorId
                     self.vendorPresenceFilter = vendorPresenceFilter
                     self.vendorSearch = vendorSearch
+                    self.providerVendorId = providerVendorId
                     self.ledgerPartyId = ledgerPartyId
                     self.search = search
                     self.provisional = provisional
