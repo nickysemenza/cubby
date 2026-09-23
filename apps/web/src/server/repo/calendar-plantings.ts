@@ -4,9 +4,10 @@ import type {
   CalendarRangeInput,
 } from "@cubby/schemas/calendar";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
+import type { ProjectId } from "@cubby/schemas/identifiers";
 import { addDays } from "date-fns";
-import type { AnyColumn } from "drizzle-orm";
-import { and, eq, gte, isNotNull, lte, or } from "drizzle-orm";
+import type { AnyColumn, SQL } from "drizzle-orm";
+import { and, eq, gte, isNotNull, isNull, lte, or, sql } from "drizzle-orm";
 
 import { formatPlainDate, parsePlainDate } from "~/lib/plain-date";
 import type { Database } from "~/server/db";
@@ -14,6 +15,7 @@ import { location, plant, planting } from "~/server/db/schema";
 import { plantingDisplayName } from "~/server/repo/garden";
 
 import { getDb, notDeleted } from "./database-helpers";
+import { effectiveTaskProjectSql } from "./task-project-inheritance";
 
 const shiftPlainDate = (value: string, amount: number) =>
   formatPlainDate(addDays(parsePlainDate(value), amount));
@@ -34,6 +36,29 @@ const MILESTONES = Object.keys(
   MILESTONE_COLUMNS,
 ) as CalendarPlantingMilestone[];
 
+/** A Planting has no direct Project. Its linked Task supplies the effective
+ * Project, including Task inheritance; a missing/deleted Task is unassigned. */
+export const plantingLinkedProjectSql: SQL<ProjectId | null> = sql`(
+  SELECT ${effectiveTaskProjectSql("linked_task")}
+  FROM "Task" linked_task
+  WHERE linked_task."id" = "Planting"."taskId"
+    AND linked_task."deletedAt" IS NULL
+)`;
+
+const milestoneInRange = (input: CalendarRangeInput, endInclusive: string) =>
+  or(
+    ...MILESTONES.map((milestone) =>
+      and(
+        isNotNull(MILESTONE_COLUMNS[milestone]),
+        gte(MILESTONE_COLUMNS[milestone], input.startDate),
+        lte(MILESTONE_COLUMNS[milestone], endInclusive),
+      ),
+    ),
+  );
+
+const noMilestone = () =>
+  and(...MILESTONES.map((milestone) => isNull(MILESTONE_COLUMNS[milestone])));
+
 /**
  * One bounded read of every planting with at least one lifecycle milestone
  * (`sowedOn`/`transplantedOn`/`finishedOn`) inside the queried range. A row
@@ -45,6 +70,7 @@ export const loadCalendarPlantings = (
   db: Database,
   input: CalendarRangeInput,
   endInclusive: string,
+  projectCondition?: SQL,
 ) => {
   if (input.kinds && !input.kinds.includes("planting")) {
     return Promise.resolve([]);
@@ -66,18 +92,29 @@ export const loadCalendarPlantings = (
     .where(
       and(
         notDeleted(planting),
-        or(
-          ...MILESTONES.map((milestone) =>
-            and(
-              isNotNull(MILESTONE_COLUMNS[milestone]),
-              gte(MILESTONE_COLUMNS[milestone], input.startDate),
-              lte(MILESTONE_COLUMNS[milestone], endInclusive),
-            ),
-          ),
-        ),
+        milestoneInRange(input, endInclusive),
+        projectCondition,
       ),
     );
 };
+
+/** The Schedule includes fully undated Plantings in every visible window. */
+export const loadSchedulePlantingIds = (
+  db: Database,
+  input: CalendarRangeInput,
+  endInclusive: string,
+  projectCondition?: SQL,
+) =>
+  getDb(db)
+    .select({ id: planting.id })
+    .from(planting)
+    .where(
+      and(
+        notDeleted(planting),
+        or(milestoneInRange(input, endInclusive), noMilestone()),
+        projectCondition,
+      ),
+    );
 
 /** Row shape `mapPlantingItems` maps from — kept structural (not tied to the
  * query builder's inferred type) so it doubles as a pure unit-test fixture

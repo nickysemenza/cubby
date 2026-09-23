@@ -49,6 +49,7 @@ export default defineEntity({
       },
       sections: [
         { kind: "slot", id: "budget", title: "Budget" },
+        { kind: "slot", id: "schedule", title: "Schedule", placement: "full" },
         {
           kind: "slot",
           id: "contribution",
@@ -165,6 +166,12 @@ export default defineEntity({
     list: {
       views: [
         "table",
+        {
+          kind: "slot",
+          id: "schedule",
+          label: "Schedule",
+          searchKeys: ["rows"],
+        },
         {
           kind: "slot",
           id: "overview",

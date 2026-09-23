@@ -4,8 +4,9 @@ import type {
   CalendarItemKind,
   CalendarRangeInput,
   CalendarRangeOut,
+  CalendarScheduleOut,
 } from "@cubby/schemas/calendar";
-import { parseShortcodeFor } from "@cubby/schemas/identifiers";
+import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import {
   MEAL_TYPE_LABELS,
   type MealType,
@@ -32,7 +33,12 @@ import { formatPlainDate, parsePlainDate } from "~/lib/plain-date";
 import type { Database } from "~/server/db";
 import { expense, project, purchase, task } from "~/server/db/schema";
 
-import { loadCalendarPlantings, mapPlantingItems } from "./calendar-plantings";
+import {
+  loadCalendarPlantings,
+  loadSchedulePlantingIds,
+  mapPlantingItems,
+  plantingLinkedProjectSql,
+} from "./calendar-plantings";
 import { loadDataQualities } from "./data-quality";
 import { getDb, notDeleted, relations } from "./database-helpers";
 import { eqAny, presenceCondition } from "./database-helpers/query";
@@ -43,6 +49,7 @@ import {
 } from "./expense-project-allocation";
 import { dbExpenseToAPI } from "./expense/helpers";
 import { chargeCondition } from "./expense/lookup";
+import { getPlanting } from "./garden";
 import { getMealsByDateRange } from "./meal";
 import { getProductCoverImageUrlsByProductIds } from "./product";
 import {
@@ -52,6 +59,7 @@ import {
 } from "./project/subtree";
 import { getRecipeCoverImageUrlsByShortcodes } from "./recipe";
 import { resolveAllPresent } from "./shortcode-resolver";
+import { getTasksByIDs } from "./task";
 import {
   effectiveTaskProjectSql,
   effectiveTaskTradeSql,
@@ -504,7 +512,12 @@ export async function getCalendarRange(
     loadCalendarTasks(db, input, endInclusive, scope),
     loadCalendarExpenses(db, input, endInclusive, scope, vendorIds),
     loadCalendarProjects(db, input, scope),
-    loadCalendarPlantings(db, input, endInclusive),
+    loadCalendarPlantings(
+      db,
+      input,
+      endInclusive,
+      projectScopeOn(plantingLinkedProjectSql, input, scope),
+    ),
     // The date fold stays WHOLE-TREE on purpose. `aggregateSubtreeDates`
     // folds a parent's window up from its descendants, so scoping the fold to
     // the filtered set would make a filtered-in parent lose the window its
@@ -538,4 +551,87 @@ export async function getCalendarRange(
     ...mapPlantingItems(plantingRows, input),
   ]);
   return { items, days: summarizeCalendarDays(input, items) };
+}
+
+/** One read for the two-kind Schedule workbench. The window selects dated
+ * records by overlap, while records with no date remain available in its
+ * undated lanes. Kind-prefixed meal/expense/project filters are inapplicable. */
+export async function getCalendarSchedule(
+  db: Database,
+  input: CalendarRangeInput,
+): Promise<CalendarScheduleOut> {
+  const endInclusive = shiftPlainDate(input.endDateExclusive, -1);
+  const scope = await loadCalendarProjectScope(db, input, false);
+  const wantsTask = !input.kinds || input.kinds.includes("task");
+  const wantsPlanting = !input.kinds || input.kinds.includes("planting");
+  const [taskIds, plantingIds] = await Promise.all([
+    wantsTask
+      ? getDb(db)
+          .select({ id: task.id })
+          .from(task)
+          .where(
+            and(
+              notDeleted(task),
+              or(
+                and(isNull(task.dueDate), isNull(task.dueEndDate)),
+                and(
+                  lte(
+                    sql`coalesce(${task.dueDate}, ${task.dueEndDate})`,
+                    endInclusive,
+                  ),
+                  gte(
+                    sql`coalesce(${task.dueEndDate}, ${task.dueDate})`,
+                    input.startDate,
+                  ),
+                ),
+              ),
+              eqAny(task.status, input.taskStatus),
+              input.taskTrade
+                ? inArray(
+                    effectiveTaskTradeSql("Task"),
+                    [input.taskTrade].flat(),
+                  )
+                : undefined,
+              projectScopeOn(effectiveTaskProjectSql("Task"), input, scope),
+            ),
+          )
+      : [],
+    wantsPlanting
+      ? loadSchedulePlantingIds(
+          db,
+          input,
+          endInclusive,
+          projectScopeOn(plantingLinkedProjectSql, input, scope),
+        )
+      : [],
+  ]);
+  const [tasks, plantings] = await Promise.all([
+    getTasksByIDs(
+      db,
+      taskIds.map((row) => row.id),
+    ),
+    Promise.all(
+      plantingIds.map((row) =>
+        getPlanting(db, parseEntityId("planting", row.id)),
+      ),
+    ),
+  ]);
+  tasks.sort(
+    (a, b) =>
+      (a.dueDate ?? a.dueEndDate ?? "9999-12-31").localeCompare(
+        b.dueDate ?? b.dueEndDate ?? "9999-12-31",
+      ) || a.name.localeCompare(b.name),
+  );
+  plantings.sort(
+    (a, b) =>
+      (
+        a.sowedOn ??
+        a.transplantedOn ??
+        a.finishedOn ??
+        "9999-12-31"
+      ).localeCompare(
+        b.sowedOn ?? b.transplantedOn ?? b.finishedOn ?? "9999-12-31",
+      ) || a.displayName.localeCompare(b.displayName),
+  );
+  return { tasks, plantings };
 }

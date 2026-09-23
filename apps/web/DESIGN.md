@@ -132,9 +132,10 @@ data calm; graphite typography carries hierarchy; cobalt identifies
 interaction; five stable domain lines make the application navigable without
 coloring every row.
 
-Information density is asymmetric by design. Desktop record grids are
-dense, while forms, dashboards, detail content, and phone flows retain
-normal breathing room and 44px interaction targets. Selection opens context
+Information density is asymmetric by design. Desktop record grids, schedules,
+and repeated detail facts are dense by default; forms, image-led galleries,
+continuous reading, and phone flows retain normal breathing room and 44px
+interaction targets. Selection opens context
 without losing place: a docked inspector on wide desktop, a right sheet at
 intermediate widths, and the complete canonical detail route on phone.
 
@@ -146,7 +147,7 @@ theatrical.
 **Key Characteristics:**
 
 - Light-only Porcelain canvas, white working planes, graphite type, cool rules.
-- Dense 32px record grids; normal-density content everywhere else.
+- Dense 32px record and schedule rows; compact desktop detail sections.
 - Cobalt interaction plus five expressive, stable domain lines.
 - Truthful direct relationships before derived evidence.
 - Compact wide-desktop inspection and native-feeling phone routes.
@@ -398,7 +399,7 @@ subresource operations remain local.
 
 ### Do:
 
-- **Do** keep tables dense and the rest of the product at normal density.
+- **Do** keep repeated desktop records, schedules, and detail facts dense.
 - **Do** use the five domain lines consistently for navigation and identity.
 - **Do** show direct relationships before derived evidence and label provenance.
 - **Do** distinguish loading, empty, error, permission, disabled, and offline
@@ -416,7 +417,7 @@ subresource operations remain local.
 - **Don't** turn every section or record into an equal-weight card.
 - **Don't** use a domain hue as status, or red for anything except destructive
   and error meaning.
-- **Don't** make non-table surfaces globally dense or squeeze desktop grids into
-  phone viewports.
+- **Don't** compress forms, galleries, or reading content, or squeeze desktop
+  grids into phone viewports.
 - **Don't** invent relationships, inventory automation, spend metrics, or
   multi-user coordination that Cubby does not maintain.

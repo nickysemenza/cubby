@@ -19,6 +19,7 @@ import {
   projectSubtreeExpensesFilters,
   projectSubtreeTasksFilters,
 } from "./project-query-params";
+import { ProjectScheduleDetail } from "./project-schedule";
 
 const NO_TASKS: TaskOut[] = [];
 const NO_EXPENSES: ExpenseOut[] = [];
@@ -47,6 +48,10 @@ export const ProjectBudget: DetailSlotComponent<"project"> = ({
 export const ProjectContribution: DetailSlotComponent<"project"> = ({
   record: project,
 }) => <ProjectContributionSection projectId={project.id} />;
+
+export const ProjectSchedule: DetailSlotComponent<"project"> = ({
+  record: project,
+}) => <ProjectScheduleDetail projectId={project.id} record={project} />;
 
 /**
  * Spending/task charts scoped to this project PLUS its whole sub-project

@@ -27,6 +27,7 @@ import { Route as AuthenticatedBackgroundJobsRouteImport } from './routes/_authe
 import { Route as AuthenticatedCalendarRouteImport } from './routes/_authenticated/calendar'
 import { Route as AuthenticatedDesignRouteImport } from './routes/_authenticated/design'
 import { Route as AuthenticatedEntitiesRouteImport } from './routes/_authenticated/entities'
+import { Route as AuthenticatedGardenWorkbenchRouteImport } from './routes/_authenticated/garden-workbench'
 import { Route as AuthenticatedGraphRouteImport } from './routes/_authenticated/graph'
 import { Route as AuthenticatedHouseholdContributionRouteImport } from './routes/_authenticated/household-contribution'
 import { Route as AuthenticatedLabelsRouteImport } from './routes/_authenticated/labels'
@@ -246,6 +247,12 @@ const AuthenticatedEntitiesRoute = AuthenticatedEntitiesRouteImport.update({
   path: '/entities',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
+const AuthenticatedGardenWorkbenchRoute =
+  AuthenticatedGardenWorkbenchRouteImport.update({
+    id: '/garden-workbench',
+    path: '/garden-workbench',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
 const AuthenticatedGraphRoute = AuthenticatedGraphRouteImport.update({
   id: '/graph',
   path: '/graph',
@@ -966,6 +973,7 @@ export interface FileRoutesByFullPath {
   '/calendar': typeof AuthenticatedCalendarRoute
   '/design': typeof AuthenticatedDesignRoute
   '/entities': typeof AuthenticatedEntitiesRoute
+  '/garden-workbench': typeof AuthenticatedGardenWorkbenchRoute
   '/graph': typeof AuthenticatedGraphRoute
   '/household-contribution': typeof AuthenticatedHouseholdContributionRoute
   '/labels': typeof AuthenticatedLabelsRoute
@@ -1107,6 +1115,7 @@ export interface FileRoutesByTo {
   '/calendar': typeof AuthenticatedCalendarRoute
   '/design': typeof AuthenticatedDesignRoute
   '/entities': typeof AuthenticatedEntitiesRoute
+  '/garden-workbench': typeof AuthenticatedGardenWorkbenchRoute
   '/graph': typeof AuthenticatedGraphRoute
   '/household-contribution': typeof AuthenticatedHouseholdContributionRoute
   '/labels': typeof AuthenticatedLabelsRoute
@@ -1251,6 +1260,7 @@ export interface FileRoutesById {
   '/_authenticated/calendar': typeof AuthenticatedCalendarRoute
   '/_authenticated/design': typeof AuthenticatedDesignRoute
   '/_authenticated/entities': typeof AuthenticatedEntitiesRoute
+  '/_authenticated/garden-workbench': typeof AuthenticatedGardenWorkbenchRoute
   '/_authenticated/graph': typeof AuthenticatedGraphRoute
   '/_authenticated/household-contribution': typeof AuthenticatedHouseholdContributionRoute
   '/_authenticated/labels': typeof AuthenticatedLabelsRoute
@@ -1395,6 +1405,7 @@ export interface FileRouteTypes {
     | '/calendar'
     | '/design'
     | '/entities'
+    | '/garden-workbench'
     | '/graph'
     | '/household-contribution'
     | '/labels'
@@ -1536,6 +1547,7 @@ export interface FileRouteTypes {
     | '/calendar'
     | '/design'
     | '/entities'
+    | '/garden-workbench'
     | '/graph'
     | '/household-contribution'
     | '/labels'
@@ -1679,6 +1691,7 @@ export interface FileRouteTypes {
     | '/_authenticated/calendar'
     | '/_authenticated/design'
     | '/_authenticated/entities'
+    | '/_authenticated/garden-workbench'
     | '/_authenticated/graph'
     | '/_authenticated/household-contribution'
     | '/_authenticated/labels'
@@ -1965,6 +1978,13 @@ declare module '@tanstack/react-router' {
       path: '/entities'
       fullPath: '/entities'
       preLoaderRoute: typeof AuthenticatedEntitiesRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/garden-workbench': {
+      id: '/_authenticated/garden-workbench'
+      path: '/garden-workbench'
+      fullPath: '/garden-workbench'
+      preLoaderRoute: typeof AuthenticatedGardenWorkbenchRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
     '/_authenticated/graph': {
@@ -2841,6 +2861,7 @@ interface AuthenticatedRouteChildren {
   AuthenticatedCalendarRoute: typeof AuthenticatedCalendarRoute
   AuthenticatedDesignRoute: typeof AuthenticatedDesignRoute
   AuthenticatedEntitiesRoute: typeof AuthenticatedEntitiesRoute
+  AuthenticatedGardenWorkbenchRoute: typeof AuthenticatedGardenWorkbenchRoute
   AuthenticatedGraphRoute: typeof AuthenticatedGraphRoute
   AuthenticatedHouseholdContributionRoute: typeof AuthenticatedHouseholdContributionRoute
   AuthenticatedLabelsRoute: typeof AuthenticatedLabelsRoute
@@ -2944,6 +2965,7 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedCalendarRoute: AuthenticatedCalendarRoute,
   AuthenticatedDesignRoute: AuthenticatedDesignRoute,
   AuthenticatedEntitiesRoute: AuthenticatedEntitiesRoute,
+  AuthenticatedGardenWorkbenchRoute: AuthenticatedGardenWorkbenchRoute,
   AuthenticatedGraphRoute: AuthenticatedGraphRoute,
   AuthenticatedHouseholdContributionRoute:
     AuthenticatedHouseholdContributionRoute,

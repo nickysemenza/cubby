@@ -2,7 +2,7 @@ import { calendarRangeInput } from "@cubby/schemas/calendar";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { getCalendarRange } from "./calendar";
+import { getCalendarRange, getCalendarSchedule } from "./calendar";
 import { insertWithShortcode } from "./shortcode-utils";
 
 describe("calendar effective attribution", () => {
@@ -115,5 +115,79 @@ describe("calendar effective attribution", () => {
       projectName: project.name,
       trade: "building",
     });
+  });
+
+  it("scopes linked plantings through task inheritance and retains undated schedule rows", async () => {
+    const project = await insertWithShortcode(ctx.db, "project", {
+      name: "Calendar garden project",
+      defaultTrade: "building",
+    });
+    const parent = await insertWithShortcode(ctx.db, "task", {
+      name: "Parent garden work",
+      projectId: project.id,
+      projectMode: "explicit",
+    });
+    const linkedTask = await insertWithShortcode(ctx.db, "task", {
+      name: "Undated linked work",
+      parentTaskId: parent.id,
+      projectMode: "inherit",
+    });
+    const crop = await insertWithShortcode(ctx.db, "plant", {
+      name: "Example crop",
+    });
+    const linked = await insertWithShortcode(ctx.db, "planting", {
+      plantId: crop.id,
+      taskId: linkedTask.id,
+      status: "planned",
+      sowedOn: "2026-09-20",
+      transplantedOn: "2026-09-22",
+    });
+    const unlinked = await insertWithShortcode(ctx.db, "planting", {
+      plantId: crop.id,
+      status: "planned",
+      sowedOn: "2026-09-20",
+    });
+    const undated = await insertWithShortcode(ctx.db, "planting", {
+      plantId: crop.id,
+      status: "planned",
+    });
+    const input = calendarRangeInput.parse({
+      startDate: "2026-09-20",
+      endDateExclusive: "2026-09-21",
+      projectId: project.shortcode,
+      kinds: ["task", "planting"],
+    });
+
+    const month = await getCalendarRange(ctx.db, input);
+    expect(month.items.filter((item) => item.kind === "planting")).toEqual([
+      expect.objectContaining({ id: linked.shortcode }),
+    ]);
+
+    const schedule = await getCalendarSchedule(ctx.db, input);
+    expect(schedule.tasks).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: linkedTask.shortcode, dueDate: null }),
+      ]),
+    );
+    expect(schedule.plantings).toEqual([
+      expect.objectContaining({
+        id: linked.shortcode,
+        sowedOn: "2026-09-20",
+        transplantedOn: "2026-09-22",
+      }),
+    ]);
+
+    const unassigned = await getCalendarSchedule(
+      ctx.db,
+      calendarRangeInput.parse({
+        startDate: "2026-09-20",
+        endDateExclusive: "2026-09-21",
+        kinds: ["planting"],
+        projectPresenceFilter: "none",
+      }),
+    );
+    expect(unassigned.plantings.map((row) => row.id).sort()).toEqual(
+      [unlinked.shortcode, undated.shortcode].sort(),
+    );
   });
 });

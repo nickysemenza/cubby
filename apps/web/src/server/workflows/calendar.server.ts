@@ -4,7 +4,7 @@ import type { UserId } from "@cubby/schemas/identifiers";
 import type { CalDavCollection } from "~/server/calendar/caldav-types";
 import { calendarFeedStateFor } from "~/server/calendar/client";
 import type { Database } from "~/server/db";
-import { getCalendarRange } from "~/server/repo/calendar";
+import { getCalendarRange, getCalendarSchedule } from "~/server/repo/calendar";
 import {
   bindWorkflow,
   defineWorkflowOperation,
@@ -42,6 +42,10 @@ function calendarOperation<Input, Output, Args extends readonly unknown[]>(
 export const getCalendarRangeWorkflow = defineWorkflowOperation(
   "calendar.range",
   (db: Database, input: CalendarRangeInput) => getCalendarRange(db, input),
+);
+export const getCalendarScheduleWorkflow = defineWorkflowOperation(
+  "calendar.schedule",
+  (db: Database, input: CalendarRangeInput) => getCalendarSchedule(db, input),
 );
 export const getCalendarFeedWorkflow = calendarOperation(
   "calendar.feed",

@@ -40,6 +40,13 @@ function CalendarBody() {
   // `useMemo` dependency of the query range downstream — building it inline
   // would allocate a fresh object every render and churn the range.
   const filters = useMemo(() => buildCalendarFilters(search), [search]);
+  const filterBarSearch = useMemo(() => {
+    if (search.period !== "schedule") return search;
+    const kinds = filters.kinds
+      ?.filter((kind) => kind === "task" || kind === "planting")
+      .join(",");
+    return { ...search, kinds: kinds || undefined };
+  }, [filters, search]);
   // Stable, so `ManifestFilterBar`'s `commit` callback — and the draft effect
   // that depends on it — don't churn every render. `LedgerFilters` gets this
   // for free from its `[table]` dep; the URL-backed bar has to say it.
@@ -54,7 +61,11 @@ function CalendarBody() {
 
   return (
     <>
-      <CalendarFilterBar search={search} onSearchChange={onSearchChange} />
+      <CalendarFilterBar
+        search={filterBarSearch}
+        onSearchChange={onSearchChange}
+        mode={search.period === "schedule" ? "schedule" : "calendar"}
+      />
       <UnifiedCalendar
         period={search.period ?? "month"}
         date={search.date}
@@ -65,6 +76,7 @@ function CalendarBody() {
             search: (previous) => ({
               ...previous,
               period: period === "month" ? undefined : period,
+              day: period === "schedule" ? undefined : previous.day,
             }),
             replace: true,
           })

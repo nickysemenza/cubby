@@ -118,7 +118,10 @@ export default defineEntity({
         },
       ],
     },
-    list: { actions: ["delete"] },
+    list: {
+      actions: ["delete"],
+      links: [{ label: "Garden workbench", path: "/garden-workbench" }],
+    },
   },
   model: {
     fields: [
