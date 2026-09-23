@@ -249,6 +249,27 @@ from a partial or stale run.
 | --- | ---: | --- | --- | --- | ---: |
 | [#1102](https://github.com/nickysemenza/cubby/pull/1102) / `ac4aad71` | not captured | validation 168s; auxiliary 54s; Rust 21s; web node 97s; web UI 67s; PostgreSQL 121s; Chromium 358s; WebKit 183s; Apple checks 647s; Apple package 308s | macOS pnpm-store hit (732 MiB; setup 72s); Rust FFI target hits | no | 82s |
 
+### 2026-09-23 E2E page-load cost
+
+[#1247](https://github.com/nickysemenza/cubby/pull/1247) and
+[#1251](https://github.com/nickysemenza/cubby/pull/1251) made every run report
+page loads (helper `goto`/reload plus hydration) and their phases. On CI's
+chromium shards, page loads are **45–51%** of test time at ~2.4s each. The
+server is not the cost: locally, first byte arrives at ~140ms and
+DOMContentLoaded at ~280ms, but hydration lands at ~1–2.4s. Before hydrating,
+each load pulls ~200–250 small JS chunks over the harness's **HTTP/1.1**,
+which allows six connections per host. A chunk waits a median 130–190ms in
+the queue for 9–13ms on the wire. Production is served over HTTP/2 or
+HTTP/3, so this queueing is mostly a harness artifact. An HTTPS/HTTP/2 front
+proxy for the harness is the remaining lever; it was deferred (TLS
+certificate and forwarded-proto handling for auth origins).
+
+| Change | Samples | Result |
+| --- | --- | --- |
+| Two Playwright workers per chromium shard ([#1250](https://github.com/nickysemenza/cubby/pull/1250)) | slowest shard 249/306/250/247/244s (p50 **249s** vs 257s, −3%), no failures | rejected: the workers split one 4-vCPU runner and the same six connections |
+| Preload the recipebridge WASM from the document head | six cold loads of `/` each: WASM starts ~55ms instead of ~495ms, but hydration ~1,032ms vs ~1,045ms (−1%) | rejected: the 1.3 MB download competes with the JS chunks for the same connections; not the bottleneck |
+| Trim `goto`s in the slowest specs | analysis only | not pursued: the repeat loads are mostly deep links (URL state) the specs exist to test; ~4% at best |
+
 ### 2026-09-23 E2E engine roles and three chromium shards
 
 Baseline: after [#1235](https://github.com/nickysemenza/cubby/pull/1235) moved
