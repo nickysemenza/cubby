@@ -589,6 +589,17 @@ export function EntityRelationTable({
           mode="embedded"
           toolbarMode="none"
           ariaLabel={title}
+          renderMobileRowFooter={(row) => {
+            const item = evidence.get(row.id);
+            return item ? (
+              <div className="border-t border-border/60 pt-2">
+                <span className="text-xs text-muted-foreground">
+                  Connected through
+                </span>
+                <RecordPaths paths={item.paths} />
+              </div>
+            ) : null;
+          }}
         />
       </EvidenceContext.Provider>
       {evidenceQuery.isError ? (

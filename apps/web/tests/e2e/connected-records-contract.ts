@@ -75,4 +75,43 @@ export async function plantTaskConnection(page: Page) {
   await expect(
     page.locator(`a[href="/plantings/${planting.id}"]`).first(),
   ).toBeVisible();
+
+  await gotoAuthenticatedPage(page, `/products/${seed.product.id}`);
+  const productPurchases = page.locator("#purchases");
+  await expect(
+    productPurchases
+      .locator(`a[href="/purchases/${seed.purchase.id}"]`)
+      .first(),
+  ).toBeVisible();
+  await expect(
+    productPurchases.getByText("Connected through").last(),
+  ).toBeVisible();
+  await expect(
+    productPurchases.getByText(/record hops?/u).first(),
+  ).toBeVisible();
+
+  await gotoAuthenticatedPage(page, `/vendors/${vendor.id}`);
+  const purchasedProducts = page.locator("#purchased-products");
+  await expect(
+    purchasedProducts.locator(`a[href="/products/${seed.product.id}"]`).first(),
+  ).toBeVisible();
+  await expect(
+    purchasedProducts.getByText("Connected through").last(),
+  ).toBeVisible();
+  await expect(
+    purchasedProducts.getByText(/record hops?/u).first(),
+  ).toBeVisible();
+
+  await gotoAuthenticatedPage(page, `/projects/${project.id}`);
+  const projectTasks = page.locator("#tasks");
+  await expect(
+    projectTasks.locator(`a[href="/tasks/${task.id}"]`).first(),
+  ).toBeVisible();
+  await expect(projectTasks.getByText("1 record hop")).toBeVisible();
+  await expect(
+    page
+      .locator("#connected-plantings")
+      .locator(`a[href="/plantings/${planting.id}"]`)
+      .first(),
+  ).toBeVisible();
 }
