@@ -4,16 +4,21 @@ import type {
   AuditLogListOut,
 } from "@cubby/schemas/audit";
 import {
-  auditSourceSchema,
+  auditChannelSchema,
   type ActorContext,
-  type AuditSource,
+  type AuditChannel,
 } from "@cubby/schemas/context";
 import { entityRefKey } from "@cubby/schemas/entity";
 import {
   entityManifest,
   type ShortcodeEntity,
 } from "@cubby/schemas/entity-manifest";
-import { parseEntityRef } from "@cubby/schemas/identifiers";
+import {
+  type DeviceId,
+  type ImportRunId,
+  parseEntityRef,
+  parseShortcodeFor,
+} from "@cubby/schemas/identifiers";
 import {
   and,
   desc,
@@ -28,6 +33,7 @@ import {
 import { z } from "zod";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
+import { oauthClient } from "~/server/db/auth.schema";
 import { EDGE_KEY_TARGET_ENTITY } from "~/server/db/entity-incoming-edges";
 import { auditLog } from "~/server/db/schema";
 import { eqAny, unwrapDb } from "~/server/repo/database-helpers";
@@ -110,12 +116,14 @@ type AuditLogUser = {
 
 type AuditLogRow = Omit<
   typeof auditLog.$inferSelect,
-  "action" | "changes" | "source"
+  "action" | "changes" | "channel"
 > & {
   action: AuditAction;
   changes: AuditChanges | null;
-  source: AuditSource;
+  channel: AuditChannel;
   user: AuditLogUser;
+  device: { shortcode: string; name: string } | null;
+  run: { shortcode: string } | null;
 };
 
 const AUDIT_CURSOR_PREFIX = "v1.";
@@ -211,6 +219,14 @@ export function diffUnorderedIdSet<T extends string>(
   return { from: [...before], to: [...after] };
 }
 
+const auditActorColumns = (actor: ActorContext) => ({
+  userId: actor.userId,
+  channel: actor.channel,
+  oauthClientId: actor.oauthClientId,
+  deviceId: actor.deviceId,
+  runId: actor.runId,
+});
+
 /**
  * Insert an audit log entry.
  */
@@ -219,14 +235,15 @@ export async function logAuditEntry(
   actor: ActorContext,
   entry: AuditEntryInput,
 ): Promise<void> {
-  await unwrapDb(db).insert(auditLog).values({
-    entityType: entry.entityType,
-    entityId: entry.entityId,
-    action: entry.action,
-    changes: entry.changes,
-    userId: actor.userId,
-    source: actor.source,
-  });
+  await unwrapDb(db)
+    .insert(auditLog)
+    .values({
+      entityType: entry.entityType,
+      entityId: entry.entityId,
+      action: entry.action,
+      changes: entry.changes,
+      ...auditActorColumns(actor),
+    });
 }
 
 /**
@@ -245,8 +262,7 @@ export async function logAuditEntries(
     entityId: entry.entityId,
     action: entry.action,
     changes: entry.changes,
-    userId: actor.userId,
-    source: actor.source,
+    ...auditActorColumns(actor),
   }));
 
   await unwrapDb(db).insert(auditLog).values(auditRecords);
@@ -321,6 +337,19 @@ function remapChangeShortcodes(
   return remapped;
 }
 
+/** OAuth client display names, resolved at read time (clients can be renamed). */
+async function lookupOauthClientNames(
+  db: Database,
+  clientIds: readonly string[],
+): Promise<Map<string, string | null>> {
+  if (clientIds.length === 0) return new Map();
+  const rows = await unwrapDb(db)
+    .select({ clientId: oauthClient.clientId, name: oauthClient.name })
+    .from(oauthClient)
+    .where(inArray(oauthClient.clientId, [...new Set(clientIds)]));
+  return new Map(rows.map((row) => [row.clientId, row.name]));
+}
+
 /**
  * Query audit log entries with pagination.
  */
@@ -335,7 +364,11 @@ export async function getAuditLog(
      * on the browser/MCP audit input, whose subject is a single shortcode.
      */
     entityIds?: readonly string[];
-    source?: AuditSource | AuditSource[];
+    channel?: AuditChannel | AuditChannel[];
+    oauthClientId?: string;
+    /** Device and Run uuids; the workflow resolves the public shortcodes. */
+    deviceId?: DeviceId;
+    runId?: ImportRunId;
     // Both ISO date strings, same encoding as `cursor` below — inclusive
     // bounds on `createdAt`.
     createdAtFrom?: string;
@@ -359,10 +392,12 @@ export async function getAuditLog(
     conditions.push(inArray(auditLog.entityId, [...params.entityIds]));
   }
 
-  const sourceCondition = eqAny(auditLog.source, params.source);
-  if (sourceCondition) {
-    conditions.push(sourceCondition);
-  }
+  const channelCondition = eqAny(auditLog.channel, params.channel);
+  if (channelCondition) conditions.push(channelCondition);
+  if (params.oauthClientId)
+    conditions.push(eq(auditLog.oauthClientId, params.oauthClientId));
+  if (params.deviceId) conditions.push(eq(auditLog.deviceId, params.deviceId));
+  if (params.runId) conditions.push(eq(auditLog.runId, params.runId));
 
   if (params.createdAtFrom) {
     conditions.push(gte(auditLog.createdAt, new Date(params.createdAtFrom)));
@@ -405,6 +440,8 @@ export async function getAuditLog(
           image: true,
         },
       },
+      device: { columns: { shortcode: true, name: true } },
+      run: { columns: { shortcode: true } },
     },
   });
 
@@ -415,7 +452,7 @@ export async function getAuditLog(
   ).map((entry) => ({
     ...entry,
     action: auditActionSchema.parse(entry.action),
-    source: auditSourceSchema.parse(entry.source),
+    channel: auditChannelSchema.parse(entry.channel),
     changes:
       entry.changes == null ? null : auditChangesSchema.parse(entry.changes),
   }));
@@ -431,32 +468,67 @@ export async function getAuditLog(
   // together so the name resolution costs no extra round-trip latency. The
   // shortcode side additionally covers every FK-shaped value inside each
   // entry's `changes` diff; a name is only wanted for the entry's own subject.
-  const [shortcodeByRef, nameByRef, displayImageByRef] = await Promise.all([
-    lookupShortcodes(db, [
-      ...entryRefs,
-      ...returnEntries.flatMap((entry) =>
-        collectChangeRefs(entry.entityType, entry.changes),
+  const [shortcodeByRef, nameByRef, displayImageByRef, clientNames] =
+    await Promise.all([
+      lookupShortcodes(db, [
+        ...entryRefs,
+        ...returnEntries.flatMap((entry) =>
+          collectChangeRefs(entry.entityType, entry.changes),
+        ),
+      ]),
+      lookupEntityLabels(db, entryRefs),
+      resolveEntityDisplayImages(
+        db,
+        entryRefs.map(({ entity, id }) => ({
+          entityType: entity,
+          entityId: id,
+        })),
       ),
-    ]),
-    lookupEntityLabels(db, entryRefs),
-    resolveEntityDisplayImages(
-      db,
-      entryRefs.map(({ entity, id }) => ({ entityType: entity, entityId: id })),
-    ),
-  ]);
+      lookupOauthClientNames(
+        db,
+        returnEntries.flatMap((entry) => entry.oauthClientId ?? []),
+      ),
+    ]);
 
   return {
-    entries: returnEntries.map(({ id, entityId, changes, ...entry }) => ({
-      ...entry,
-      entryKey: encodeAuditCursor({ id, createdAt: entry.createdAt }),
-      entityId:
-        shortcodeByRef.get(entityRefKey(entry.entityType, entityId)) ?? null,
-      entityName:
-        nameByRef.get(entityRefKey(entry.entityType, entityId)) ?? null,
-      displayImage:
-        displayImageByRef.get(entityRefKey(entry.entityType, entityId)) ?? null,
-      changes: remapChangeShortcodes(entry.entityType, changes, shortcodeByRef),
-    })),
+    entries: returnEntries.map(
+      ({
+        id,
+        entityId,
+        changes,
+        oauthClientId,
+        deviceId: _deviceId,
+        runId: _runId,
+        device,
+        run,
+        ...entry
+      }) => ({
+        ...entry,
+        oauthClient: oauthClientId
+          ? { id: oauthClientId, name: clientNames.get(oauthClientId) ?? null }
+          : null,
+        device: device
+          ? {
+              id: parseShortcodeFor("device", device.shortcode),
+              name: device.name,
+            }
+          : null,
+        runId: run ? parseShortcodeFor("importRun", run.shortcode) : null,
+        entryKey: encodeAuditCursor({ id, createdAt: entry.createdAt }),
+        entityId:
+          shortcodeByRef.get(entityRefKey(entry.entityType, entityId)) ?? null,
+        entityName:
+          nameByRef.get(entityRefKey(entry.entityType, entityId)) ?? null,
+        displayImage:
+          displayImageByRef.get(entityRefKey(entry.entityType, entityId)) ??
+          null,
+        changes: remapChangeShortcodes(
+          entry.entityType,
+          changes,
+          shortcodeByRef,
+        ),
+      }),
+    ),
     nextCursor,
   };
 }

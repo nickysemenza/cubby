@@ -59,6 +59,12 @@ const capabilityMatrix = {
     "finalize",
     "match_proposal",
   ]),
+  // Runs that only group AI work never authorize purchase-agent writes.
+  ai_suggest: new Set(),
+  ai_action: new Set(),
+  background: new Set(),
+  file_import: new Set(),
+  legacy: new Set(),
 } satisfies Record<ImportRunPurpose, ReadonlySet<Capability>>;
 
 export function capabilityForPurchaseAgentTool(

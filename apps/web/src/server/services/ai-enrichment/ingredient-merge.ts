@@ -9,6 +9,7 @@
 
 import type { Confidence } from "@cubby/schemas/ai";
 import {
+  type ImportRunId,
   type IngredientId,
   type IngredientShortcode,
   parseShortcodeFor,
@@ -52,10 +53,17 @@ export interface IngredientMergeSuggestion {
 export async function suggestIngredientMerge(
   db: Database,
   source: { id: IngredientId; name: string },
+  runId: ImportRunId,
   ai: IngredientMergeAiPort = productionIngredientMergeAiPort,
   shortlistPort?: MergeShortlistPort,
 ): Promise<IngredientMergeSuggestion> {
-  const shortlist = await buildMergeShortlist(db, source, 20, shortlistPort);
+  const shortlist = await buildMergeShortlist(
+    db,
+    source,
+    runId,
+    20,
+    shortlistPort,
+  );
   if (shortlist.length === 0) {
     return {
       target: null,
@@ -71,6 +79,7 @@ export async function suggestIngredientMerge(
       candidates: shortlist,
       usage: {
         db,
+        runId,
         operation: "suggestIngredientMerge",
         cacheStatus: "none",
         entity: { entityType: "ingredient", entityId: source.id },
@@ -104,13 +113,14 @@ interface IngredientMergeBatchSuggestion extends IngredientMergeSuggestion {
 export async function suggestIngredientMergeBatch(
   db: Database,
   sources: { id: IngredientId; shortcode: IngredientShortcode; name: string }[],
+  runId: ImportRunId,
 ): Promise<IngredientMergeBatchSuggestion[]> {
   const capped = sources.slice(0, 20);
   const out: IngredientMergeBatchSuggestion[] = [];
   for (let i = 0; i < capped.length; i += 5) {
     const batch = capped.slice(i, i + 5);
     const results = await Promise.allSettled(
-      batch.map((s) => suggestIngredientMerge(db, s)),
+      batch.map((s) => suggestIngredientMerge(db, s, runId)),
     );
     results.forEach((result, j) => {
       const source = batch[j]!;

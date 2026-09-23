@@ -56,7 +56,7 @@ export function PurchaseImportRun({ id }: AgentProps) {
 
   // The run is named by its private id everywhere the agent speaks: the
   // public code can change without touching durable Flue state.
-  useResponseStart(() => ({ jobKind: "purchase_import_run", runId }));
+  useResponseStart(() => ({ runId }));
   useResponseFinish(({ response }) => ({
     usage: response.usage,
   }));

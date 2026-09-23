@@ -17,6 +17,7 @@ import {
   importRun,
   importRunOperation,
 } from "~/server/db/schema";
+import { ensureRun } from "~/server/runs/ensure-run";
 
 import {
   activityDevices,
@@ -56,6 +57,7 @@ describe("activity image processing projection", () => {
       processorRevision: IMAGE_SUBJECT_LIFT_PROCESSOR_REVISION,
     });
     if (!jobId) throw new Error("Expected image processing job");
+    const runId = await ensureRun(ctx.db, ctx.actor, { purpose: "background" });
     const [submission, laterSubmission] = await getDb(ctx.db)
       .insert(imageProcessingSubmission)
       .values([{}, {}])
@@ -109,6 +111,7 @@ describe("activity image processing projection", () => {
           provider: "test",
           model: "test-model",
           operation: "imageDescription",
+          runId,
           jobKind: "image_processing_attempt",
           jobId: firstAttempt,
           estimatedCost: 0.12,
@@ -119,6 +122,7 @@ describe("activity image processing projection", () => {
           provider: "test",
           model: "test-model",
           operation: "imageDescription",
+          runId,
           jobKind: "image_processing_attempt",
           jobId: laterAttempt,
           estimatedCost: 0.34,
@@ -172,6 +176,7 @@ describe("activity image processing projection", () => {
           provider: "legacy",
           model: "legacy-model",
           operation: "imageDescription",
+          runId,
           jobKind: "describe_image",
           jobId: legacyJob,
           estimatedCost: 0.5,
@@ -182,6 +187,7 @@ describe("activity image processing projection", () => {
           provider: "cloud",
           model: "retry-model",
           operation: "imageDescription",
+          runId,
           jobKind: "image_processing_attempt",
           jobId: legacyRetryAttempt,
           estimatedCost: 0.2,

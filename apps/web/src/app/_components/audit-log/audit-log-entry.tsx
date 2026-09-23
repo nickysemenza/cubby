@@ -320,6 +320,28 @@ function LedgerAuditEntry({
   );
 }
 
+/** "Claude · Kitchen iPad · RUN-4K7M": the client, device and run behind a write. */
+const auditVia = (entry: AuditLogEntry): string | null => {
+  const parts = [
+    entry.oauthClient ? (entry.oauthClient.name ?? "OAuth client") : null,
+    entry.device ? (entry.device.name ?? entry.device.id) : null,
+    entry.runId,
+  ].filter((part): part is string => part !== null);
+  return parts.length > 0 ? parts.join(" · ") : null;
+};
+
+function AuditActor({ entry }: { entry: AuditLogEntry }) {
+  const via = auditVia(entry);
+  return (
+    <>
+      <Description as="span">
+        by {entry.user ? (entry.user.name ?? entry.user.email) : "System"}
+      </Description>
+      {via && <Description as="span">via {via}</Description>}
+    </>
+  );
+}
+
 const auditUserInitials = (user: AuditLogEntry["user"]): string => {
   if (!user?.name) return "SY";
   return user.name
@@ -409,13 +431,7 @@ export function AuditLogEntryComponent({
                   {action.label}
                 </Badge>
 
-                {entry.user ? (
-                  <Description as="span">
-                    by {entry.user.name ?? entry.user.email}
-                  </Description>
-                ) : (
-                  <Description as="span">by System</Description>
-                )}
+                <AuditActor entry={entry} />
 
                 <span className="text-xs text-muted-foreground">
                   <HoverableTimestamp timestamp={entry.createdAt} />

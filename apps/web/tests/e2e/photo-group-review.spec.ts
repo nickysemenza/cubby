@@ -11,7 +11,7 @@ test("reviews, approves, and discards proposed photo groups on the photo-invento
 
   await gotoAuthenticatedPage(
     page,
-    `/import-runs/${seed.runId}`,
+    `/runs/${seed.runId}`,
     page.getByRole("heading", { name: "Proposed items" }),
   );
 

@@ -1,4 +1,4 @@
-import type { RecipeId } from "@cubby/schemas/identifiers";
+import type { ImportRunId, RecipeId } from "@cubby/schemas/identifiers";
 import type { RecipeOut } from "@cubby/schemas/recipe";
 import {
   type RecipeFlowAiPlan,
@@ -271,6 +271,7 @@ async function recordFlowCacheHit(
   db: Database,
   recipeId: RecipeId,
   candidate: FlowCandidate,
+  runId: ImportRunId,
   ports: RecipeFlowPorts,
 ): Promise<void> {
   const feature = FLOW_FEATURES.find(
@@ -282,6 +283,7 @@ async function recordFlowCacheHit(
     provider: providerFor(feature.model),
     model: feature.model,
     operation: "generateRecipeFlow",
+    runId,
     durationMs: 0,
     cacheStatus: "hit",
     entity: { entityType: "recipe", entityId: recipeId },
@@ -300,6 +302,7 @@ async function persistFlowArtifact(
 export async function generateRecipeFlow(
   db: Database,
   input: RecipeFlowGenerateRequest,
+  runId: ImportRunId,
   ports: RecipeFlowPorts = productionRecipeFlowPorts,
 ): Promise<RecipeFlowArtifact> {
   const [recipe, candidates] = await Promise.all([
@@ -319,7 +322,7 @@ export async function generateRecipeFlow(
       candidate.result.contentFingerprint === fingerprint,
   );
   if (current && !input.force) {
-    await recordFlowCacheHit(db, input.id, current, ports);
+    await recordFlowCacheHit(db, input.id, current, runId, ports);
     return current.result;
   }
 
@@ -328,6 +331,7 @@ export async function generateRecipeFlow(
     guidance,
     {
       db,
+      runId,
       operation: "generateRecipeFlow",
       cacheStatus: "miss",
       entity: { entityType: "recipe", entityId: input.id },

@@ -145,7 +145,7 @@ describe("implementSubscriptionDomain", () => {
         actor: {
           userId: testUserId("subscription-domain-user"),
           sessionId: null,
-          source: "ui",
+          channel: "web",
         },
       }),
     );

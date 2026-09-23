@@ -1,3 +1,4 @@
+import { importRunId } from "@cubby/schemas/identifiers";
 import {
   browserCapture,
   type BrowserCapture,
@@ -18,6 +19,7 @@ import { runStructuredFeature } from "~/server/ai/run-feature";
 import type { Database } from "~/server/db";
 import { image } from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
+import { ensureRun, systemActor } from "~/server/runs/ensure-run";
 import { getR2PublicUrl } from "~/server/utils/r2-public-url";
 
 import {
@@ -61,7 +63,7 @@ export const extractPurchaseCapture = async (args: {
     await runStructuredFeature(PURCHASE_IMPORT_EXTRACTION_FEATURE, request, {
       db: args.db,
       operation: "purchaseImport.extract",
-      job: { kind: "purchase_import_run", id: args.runId },
+      runId: importRunId.parse(args.runId),
     }),
   );
   const validation = validateExtraction(first);
@@ -110,7 +112,7 @@ export const extractPurchaseCapture = async (args: {
       {
         db: args.db,
         operation: "purchaseImport.repair",
-        job: { kind: "purchase_import_run", id: args.runId },
+        runId: importRunId.parse(args.runId),
       },
     ),
   );
@@ -137,7 +139,7 @@ export const auditPurchaseImportBatch = async (args: {
     {
       db: args.db,
       operation: "purchaseImport.audit",
-      job: { kind: "purchase_import_run", id: args.runId },
+      runId: importRunId.parse(args.runId),
     },
   );
 
@@ -183,7 +185,7 @@ export const extractPurchaseEvidence = async (args: {
       {
         db: args.db,
         operation: "purchaseImport.extractReceipt",
-        job: { kind: "purchase_import_run", id: args.runId },
+        runId: importRunId.parse(args.runId),
         validate: (output) =>
           validateExtraction(normalizeImportExtractionModelOutput(output)),
       },
@@ -209,8 +211,13 @@ export const classifyOrderMail = async (args: {
   subject: string;
   receivedAt: string;
   content: unknown;
-}) =>
-  runStructuredFeature(
+}) => {
+  // No purchase-import run exists yet at this point — an inbound mail poll
+  // has no user behind it, so this books under the system actor.
+  const runId = await ensureRun(args.db, systemActor(), {
+    purpose: "background",
+  });
+  return runStructuredFeature(
     PURCHASE_IMPORT_MAIL_FEATURE,
     {
       systemPrompts: [
@@ -230,7 +237,9 @@ export const classifyOrderMail = async (args: {
     },
     {
       db: args.db,
+      runId,
       operation: "purchaseImport.classifyMail",
       job: { kind: "purchase_import_mail", id: args.messageId },
     },
   );
+};

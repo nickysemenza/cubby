@@ -69,7 +69,7 @@ describe("HTTP boundary", () => {
       actor: {
         userId: "user-fixture",
         sessionId: "session-fixture",
-        source: "api",
+        channel: "api",
       },
     });
     expect(ports.dispatch).toHaveBeenCalledWith(
@@ -198,7 +198,7 @@ describe("HTTP boundary", () => {
       actor: {
         userId: "user-fixture",
         sessionId: "session-fixture",
-        source: "api",
+        channel: "api",
       },
     });
   });

@@ -4,7 +4,7 @@ import { taxonomyRootFixtures } from "./product-category-fixtures";
 import { AsyncLocalStorage } from "node:async_hooks";
 import {
   type ActorContext,
-  type AuditSource,
+  type AuditChannel,
   buildActorContext,
 } from "@cubby/schemas/context";
 import {
@@ -126,10 +126,9 @@ export const TEST_HOME_SHORTCODE = testShortcode("location", "LOC-HM3E");
  * `buildTestDB()` returns — import this instead of redefining a local
  * `TEST_ACTOR` (or `testUserId("test-user-id")`) per file.
  */
-export const TEST_ACTOR: ActorContext = {
-  userId: testUserId(TEST_USER_ID),
-  source: "ui",
-};
+export const TEST_ACTOR: ActorContext = buildActorContext(
+  testUserId(TEST_USER_ID),
+);
 
 async function getTemplateHash(): Promise<string> {
   return getIntegreSQL().hashFiles(schemaTemplateInputs);
@@ -429,8 +428,8 @@ export async function closeTestDb() {
  * Pass `source` for suites that audit as something other than the UI (the
  * cookbook/EPUB importers stamp `"epub_import"`).
  */
-export function withTestDb(source: AuditSource = "ui"): TestDbContext {
-  const actor = buildActorContext(testUserId(TEST_USER_ID), source);
+export function withTestDb(channel: AuditChannel = "web"): TestDbContext {
+  const actor = buildActorContext(testUserId(TEST_USER_ID), channel);
   interface TestDbState {
     db: Database | null;
   }

@@ -1,3 +1,4 @@
+import type { ImportRunId } from "@cubby/schemas/identifiers";
 import { embed } from "@tanstack/ai";
 import {
   createOpenaiEmbedding,
@@ -14,6 +15,7 @@ import {
   type GatewayMetadata,
 } from "~/server/clients/ai-gateway";
 import type { Database } from "~/server/db";
+import { ensureRun, systemActor } from "~/server/runs/ensure-run";
 import { TraceNames, withTrace } from "~/server/tracing";
 
 import {
@@ -93,6 +95,16 @@ export async function embedTexts(
   opts?: {
     operation?: string;
     db?: Database;
+    /**
+     * Every AI call belongs to a run. Most `embedTexts` callers sit several
+     * layers below the request handler that could mint one (generic search
+     * infrastructure fanned out across many read paths) — omitted, this
+     * books the call under a `background`-purpose run rather than forcing
+     * that plumbing everywhere `db` is threaded. Those land in one system
+     * run per day, not one per search. A caller that already has the
+     * request's `ai_action` (or an inherited) run should pass it.
+     */
+    runId?: ImportRunId;
     feature?: string;
     entity?: { entityType: string; entityId: string };
   },
@@ -128,11 +140,18 @@ export async function embedTexts(
     });
 
     if (opts?.db) {
+      const runId =
+        opts.runId ??
+        (await ensureRun(opts.db, systemActor(), {
+          purpose: "background",
+          clientKey: `embeddings:${new Date().toISOString().slice(0, 10)}`,
+        }));
       await ports.recordAiUsage(opts.db, {
         feature,
         provider: config.provider,
         model: config.model,
         operation,
+        runId,
         inputTokens:
           result.usage?.promptTokens ?? result.usage?.totalTokens ?? null,
         outputTokens: null,
@@ -167,7 +186,7 @@ export async function embedTexts(
 
 export async function embedQuery(
   query: string,
-  opts?: { db?: Database },
+  opts?: { db?: Database; runId?: ImportRunId },
 ): Promise<number[] | null> {
   if (!semanticEmbeddingsConfigured()) return null;
   const normalized = query.trim().replace(/\s+/g, " ").toLowerCase();
@@ -177,6 +196,7 @@ export async function embedQuery(
   const [embedding] = await embedTexts([normalized], {
     operation: "queryEmbedding",
     db: opts?.db,
+    runId: opts?.runId,
     feature: "semantic-query",
   });
   if (!embedding) return null;

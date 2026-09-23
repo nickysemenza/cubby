@@ -16,6 +16,7 @@ import type {
 import { EMPTY_MUTATION_SIDE_EFFECTS } from "@cubby/schemas/background-jobs";
 import type { ActorContext } from "@cubby/schemas/context";
 import {
+  type ImportRunId,
   type LocationId,
   type ProductId,
   type ProductShortcode,
@@ -202,6 +203,7 @@ async function recordLocationAiUsage(
     cacheStatus: "hit" | "miss";
     durationMs: number;
     locationId: LocationId;
+    runId: ImportRunId;
   },
 ): Promise<void> {
   await recordAiUsage(db, {
@@ -209,6 +211,7 @@ async function recordLocationAiUsage(
     provider: providerFor(input.feature.model),
     model: input.feature.model,
     operation: input.operation,
+    runId: input.runId,
     inputTokens: null,
     outputTokens: null,
     durationMs: input.durationMs,
@@ -236,6 +239,7 @@ export interface LocationDescriptionResult extends LocationDescription {
 export async function describeLocation(
   db: Database,
   locationId: LocationId,
+  runId: ImportRunId,
   ai: LocationVisionAiPort = productionLocationVisionAiPort,
 ): Promise<LocationDescriptionResult> {
   const location = await getLocationById(db, locationId);
@@ -285,6 +289,7 @@ export async function describeLocation(
       cacheStatus: "hit",
       durationMs: 0,
       locationId,
+      runId,
     });
     return {
       ...cached.result,
@@ -298,6 +303,7 @@ export async function describeLocation(
     location.name,
     {
       db,
+      runId,
       operation: "locationDescription",
       cacheStatus: "miss",
       entity: { entityType: "location", entityId: locationId },
@@ -474,6 +480,7 @@ export interface DetectedInventoryResult extends DetectedInventory {
 export async function detectInventoryItems(
   db: Database,
   locationId: LocationId,
+  runId: ImportRunId,
   ai: LocationVisionAiPort = productionLocationVisionAiPort,
 ): Promise<DetectedInventoryResult> {
   const location = await getLocationById(db, locationId);
@@ -507,6 +514,7 @@ export async function detectInventoryItems(
       cacheStatus: "hit",
       durationMs: 0,
       locationId,
+      runId,
     });
   } else {
     raw = await ai.detectInventoryItems(
@@ -514,6 +522,7 @@ export async function detectInventoryItems(
       location.name,
       {
         db,
+        runId,
         operation: "locationInventoryDetection",
         cacheStatus: "miss",
         entity: { entityType: "location", entityId: locationId },

@@ -129,7 +129,7 @@ function runProjection(partyId: string | null): SQL {
       END AS "subjectName",
       CASE
         WHEN v.shortcode IS NOT NULL THEN '/vendors/' || v.shortcode
-        WHEN r.purpose = 'photo_inventory' THEN '/import-runs/' || r.shortcode
+        WHEN r.purpose = 'photo_inventory' THEN '/runs/' || r.shortcode
       END AS "subjectHref",
       r.status AS state,
       r.status IN ('running', 'paused_auth', 'paused_offline', 'paused_approval') AS active,
@@ -147,12 +147,10 @@ function runProjection(partyId: string | null): SQL {
       ) execution) AS executors,
       CASE WHEN EXISTS(
         SELECT 1 FROM "AiUsage" u
-        WHERE u."deletedAt" IS NULL AND u."jobKind" = 'purchase_import_run'
-          AND u."jobId" = r.id::text AND u."estimatedCost" IS NULL
+        WHERE u."deletedAt" IS NULL AND u."runId" = r.id AND u."estimatedCost" IS NULL
       ) THEN NULL ELSE (
         SELECT sum(u."estimatedCost") FROM "AiUsage" u
-        WHERE u."deletedAt" IS NULL AND u."jobKind" = 'purchase_import_run'
-          AND u."jobId" = r.id::text
+        WHERE u."deletedAt" IS NULL AND u."runId" = r.id
       ) END AS "estimatedCost",
       coalesce(r."dispatchError", r."failureCode") AS error,
       EXISTS(SELECT 1 FROM "ImportRunOperation" o WHERE o."runId" = r.id) AS "hasDiagnostics",

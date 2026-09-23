@@ -44,6 +44,10 @@ export const aiUsageTelemetrySchema = z.strictObject({
   provider: z.string().min(1),
   model: z.string().min(1),
   operation: z.string().min(1),
+  // The Run the call belongs to. Optional only so messages queued by the
+  // preceding deployment still validate; the consumer files those, and any
+  // whose run no longer exists, under the legacy run.
+  runId: z.uuid().optional(),
   // A durable import/audit job can issue several model calls. Keep the
   // correlation optional so queue messages from the preceding deployment
   // continue to validate and land as ungrouped historical telemetry.

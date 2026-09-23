@@ -1,5 +1,7 @@
-import { type AuditSource, buildActorContext } from "@cubby/schemas/context";
+import { type AuditChannel, buildActorContext } from "@cubby/schemas/context";
 import {
+  type DeviceId,
+  type ImportRunId,
   type LedgerPartyId,
   type LedgerPartyShortcode,
   type UserId,
@@ -17,7 +19,7 @@ import { USDAClient } from "~/server/clients/usda";
 import { readDatabaseFreshness } from "~/server/database-freshness/client";
 import type { Database } from "~/server/db";
 import { boundedStaleDb, db } from "~/server/db";
-import { ledgerParty } from "~/server/db/schema";
+import { device, ledgerParty } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
 import {
   decideReadConsistency,
@@ -75,8 +77,33 @@ export const buildCrudServices = (
 export type RequestActor = {
   userId: UserId;
   sessionId: string | null;
-  source: AuditSource;
+  channel: AuditChannel;
+  /** The MCP OAuth client (JWT `azp`). */
+  oauthClientId?: string | null;
+  /** A run the credential is scoped to, e.g. Flue's delegation token. */
+  runId?: ImportRunId | null;
 };
+
+// Positive hits only: a device registered after a miss must resolve next time.
+const deviceIdByInstallation = new Map<string, DeviceId>();
+
+/** The Apple install behind `X-Cubby-Device`; null for unknown or absent. */
+async function resolveRequestDevice(
+  database: Database,
+  headers: Headers,
+): Promise<DeviceId | null> {
+  const installationId = headers.get("x-cubby-device")?.trim().toLowerCase();
+  if (!installationId) return null;
+  const cached = deviceIdByInstallation.get(installationId);
+  if (cached) return cached;
+  const [row] = await getDb(database)
+    .select({ id: device.id })
+    .from(device)
+    .where(and(eq(device.installationId, installationId), notDeleted(device)))
+    .limit(1);
+  if (row) deviceIdByInstallation.set(installationId, row.id);
+  return row?.id ?? null;
+}
 
 export type CurrentParty = {
   id: LedgerPartyId;
@@ -137,15 +164,20 @@ export const createRequestContext = async (opts: {
       } satisfies ReadConsistencyDecision,
     };
 
+    const deviceId = await resolveRequestDevice(crudServices.db, opts.headers);
     if (opts.actor) {
-      const { userId, sessionId, source } = opts.actor;
-      const requestOrigin: RequestOrigin = source === "mcp" ? "mcp" : "api";
+      const { userId, sessionId, channel, oauthClientId, runId } = opts.actor;
+      const requestOrigin: RequestOrigin = channel === "mcp" ? "mcp" : "api";
       return {
         ...crudServices,
         ...readSelection,
         auth: { userId, sessionId },
         currentParty: async () => await currentParty(crudServices.db, userId),
-        actorContext: buildActorContext(userId, source),
+        actorContext: buildActorContext(userId, channel, {
+          oauthClientId,
+          deviceId,
+          runId,
+        }),
         requestOrigin,
         ...opts,
       };
@@ -170,7 +202,7 @@ export const createRequestContext = async (opts: {
         ? async () => await currentParty(crudServices.db, authenticatedUserId)
         : null,
       actorContext: authenticatedUserId
-        ? buildActorContext(authenticatedUserId, "ui")
+        ? buildActorContext(authenticatedUserId, "web", { deviceId })
         : null,
       requestOrigin,
       ...opts,

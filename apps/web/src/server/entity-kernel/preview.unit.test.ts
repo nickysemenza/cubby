@@ -1,24 +1,30 @@
 import type { FieldSuggestionsOut } from "@cubby/schemas/ai";
+import { importRunId } from "@cubby/schemas/identifiers";
 import { fromPartial } from "@total-typescript/shoehorn";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { EntityKernelContext } from "./adapter";
 import { previewEntity, type PreviewEntityPorts } from "./preview";
 
+const fixtureRunId = importRunId.parse("00000000-0000-4000-8000-000000000001");
+
 const mocks = {
   suggestFields: vi.fn<PreviewEntityPorts["suggest"]>(),
   resolveExpense: vi.fn<PreviewEntityPorts["resolveExpense"]>(),
   resolveTask: vi.fn<PreviewEntityPorts["resolveTask"]>(),
+  ensureRun: vi.fn<PreviewEntityPorts["ensureRun"]>(),
 };
 const ports: PreviewEntityPorts = {
   suggest: mocks.suggestFields,
   resolveExpense: mocks.resolveExpense,
   resolveTask: mocks.resolveTask,
+  ensureRun: mocks.ensureRun,
 };
 
 describe("previewEntity field suggestions", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.ensureRun.mockResolvedValue(fixtureRunId);
   });
 
   it("detects adjustment drafts before requesting project suggestions", async () => {
@@ -78,8 +84,9 @@ describe("previewEntity field suggestions", () => {
           }
         : fieldResolutions;
     });
-    mocks.suggestFields.mockImplementation(async (db, input) => {
+    mocks.suggestFields.mockImplementation(async (db, runId, input) => {
       void db;
+      void runId;
       expect(input.basis).toMatchObject({
         parentTaskId: null,
         projectId: null,
@@ -135,7 +142,7 @@ describe("previewEntity field suggestions", () => {
     );
 
     expect(mocks.suggestFields).toHaveBeenCalledTimes(2);
-    expect(mocks.suggestFields.mock.calls.map(([, input]) => input)).toEqual(
+    expect(mocks.suggestFields.mock.calls.map(([, , input]) => input)).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           basisMode: "suggested",
@@ -227,7 +234,7 @@ describe("previewEntity field suggestions", () => {
     // a plain `set` suggestion at high confidence. A `remove` suggestion must
     // stay excluded from that regardless: its `value` is a joined removal
     // string, never a valid replacement for the field.
-    expect(mocks.suggestFields.mock.calls[0]?.[1]).toMatchObject({
+    expect(mocks.suggestFields.mock.calls[0]?.[2]).toMatchObject({
       basisMode: "suggested",
       targets: ["tags"],
     });

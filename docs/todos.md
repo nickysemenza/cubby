@@ -373,6 +373,37 @@ history is the archive. Permanent product constraints live in the
 
 ## Requires database changes
 
+- **Carry the member through queued AI work.** Search-query embeddings,
+  image-processing dispatch, location AI refresh and inbound purchase-mail
+  classification run under `systemActor()` because no actor reaches them
+  (`server/semantic/embeddings.ts`, `image-processing/dispatch.ts`,
+  `background-tasks/handle.ts`, `agents/purchase-import/extract.ts`). The
+  system actor is meant only for work with no member present: thread the
+  request actor (or its `runId`) into the queue messages and the search read
+  path so these runs name the member who caused them. The Flue provider
+  (`apps/purchase-agent/src/cubby-ai-provider.ts`) still tags gateway metadata
+  with `jobKind: "purchase_import_run"`; send the run id once Flue exposes the
+  current run to module-scope providers.
+
+- **Give AI runs a detail view.** `/runs/:shortcode` renders the purchase-
+  import run page, which scopes to a member party, so `ai_suggest` /
+  `ai_action` / `background` runs (no party) have no page. Show their AI
+  usage and audit entries (`AiUsage.runId`, `AuditLog.runId`) instead.
+
+- **Finish the `ImportRun` → `Run` rename.** Runs now group all AI work
+  (`ai_suggest`, `ai_action`, `background`, `file_import`, `legacy` purposes),
+  but only the UI label and `/runs` route were renamed. Still named
+  `ImportRun*`: the parent table, entity key, `ImportRunId` type, the child
+  tables (`ImportRunTarget`, `…OrderCandidate`, `…Evidence`, `…Mutation`,
+  `…Operation`, `…Progress`, `…ControlEvent`), `ImportSourceClaim.firstRunId`/
+  `lastRunId`, `Purchase.importRunId`, `ImportFinding.importRunId`, raw-SQL
+  name strings (`repo/activity.ts`, `problems/detectors-integrity.ts`,
+  edge-policy keys), and the generated Apple types. Leave Flue runtime
+  identifiers (Durable Object `purchase-import-run`, `finish_import_run` /
+  `stop_import_run_for_review` tools) unchanged, because a separately deployed
+  worker and in-flight runs depend on them. Ship it as a
+  `scripts/cutovers/*.sql` cutover, not `db:push`.
+
 - **Schema-bearing PRs must not auto-merge ahead of their runbook.**
   `deploy.yaml` deploys every `main` push and never applies schema; the
   image-provenance PRs (#1193, #1198, #1201) auto-merged green and deployed

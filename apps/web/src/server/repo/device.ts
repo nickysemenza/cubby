@@ -51,9 +51,14 @@ import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import { deriveAndStoreImageCapture } from "~/server/services/image-capture-derivation";
 
 /** `ImageSighting.deviceId` cascades: a sighting reported by a device is
- * meaningless once that device is gone. Every other incoming edge to Device
- * is empty. */
+ * meaningless once that device is gone. `AuditLog.deviceId` is cleared. */
 export const DEVICE_DELETE_EDGE_POLICY = {
+  "AuditLog.deviceId": {
+    code: "clearFk",
+    effect: "detach",
+    description:
+      "Audit entries outlive the install; they keep their other attribution.",
+  },
   "ImageSighting.deviceId": {
     code: "cascade-sightings",
     effect: "hard-delete",

@@ -1,8 +1,11 @@
+import { importRunId } from "@cubby/schemas/identifiers";
 import { describe, expect, it, vi } from "vitest";
 
 import { Database } from "~/server/db";
 
 import { type AiUsagePort, recordAiUsage } from "./ai-usage";
+
+const runId = importRunId.parse("00000000-0000-4000-8000-000000000001");
 
 describe("recordAiUsage", () => {
   it("preserves AI usage fields in the queued event", async () => {
@@ -19,6 +22,7 @@ describe("recordAiUsage", () => {
         provider: "openai",
         model: "text-embedding-3-small",
         operation: "embed",
+        runId,
         jobKind: "purchase_import",
         jobId: "IMRUN-fixture",
         inputTokens: 12,
@@ -38,6 +42,7 @@ describe("recordAiUsage", () => {
       expect.objectContaining({
         type: "ai_usage",
         feature: "embeddings",
+        runId,
         jobKind: "purchase_import",
         jobId: "IMRUN-fixture",
         inputTokens: 12,

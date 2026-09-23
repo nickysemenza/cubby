@@ -46,7 +46,7 @@ export const createTestRequestContext = (
       ? async () => await currentParty(db, auth.userId!)
       : null,
     isSystemRequest: false,
-    actorContext: auth.userId ? buildActorContext(auth.userId, "ui") : null,
+    actorContext: auth.userId ? buildActorContext(auth.userId, "web") : null,
     requestOrigin,
     headers: opts.headers ?? new Headers(),
   };

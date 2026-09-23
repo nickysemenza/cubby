@@ -1,5 +1,5 @@
 import type { AuditEntityType } from "@cubby/schemas/audit";
-import type { AuditSource } from "@cubby/schemas/context";
+import type { AuditChannel } from "@cubby/schemas/context";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { uniqBy } from "es-toolkit";
 import { Activity, CircleAlert } from "lucide-react";
@@ -39,7 +39,7 @@ const productionOperations: AuditLogListOperations = {
 interface AuditLogListProps {
   entityType?: AuditEntityType;
   entityId?: string;
-  source?: AuditSource;
+  channel?: AuditChannel;
   showEntityLink?: boolean;
   /** Number of entries per page (default 20) */
   limit?: number;
@@ -54,7 +54,7 @@ interface AuditLogListProps {
 export function AuditLogList({
   entityType,
   entityId,
-  source,
+  channel,
   showEntityLink = true,
   limit = 20,
   variant = "default",
@@ -85,7 +85,7 @@ export function AuditLogList({
       {
         entityType,
         entityId,
-        source,
+        channel,
         limit,
       },
       {

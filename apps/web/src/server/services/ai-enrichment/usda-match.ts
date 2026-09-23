@@ -7,7 +7,7 @@
 // in a single call via `runAiSelection` (no agentic search loop).
 
 import type { Confidence } from "@cubby/schemas/ai";
-import type { IngredientId } from "@cubby/schemas/identifiers";
+import type { ImportRunId, IngredientId } from "@cubby/schemas/identifiers";
 import type { FoodSummaryWithLinkedProducts } from "@cubby/schemas/usda";
 
 import { runAiSelection } from "~/server/ai/selection";
@@ -44,7 +44,7 @@ export async function suggestUsdaFood(
   usdaService: UsdaLookupPort,
   db: Database,
   ingredientName: string,
-  opts: { ingredientId?: IngredientId } = {},
+  opts: { runId: ImportRunId; ingredientId?: IngredientId },
   ai: UsdaMatchAiPort = productionUsdaMatchAiPort,
 ): Promise<UsdaFoodSuggestion> {
   const shortlist = await buildUsdaShortlist(usdaService, ingredientName);
@@ -61,6 +61,7 @@ export async function suggestUsdaFood(
     candidates: shortlist,
     usage: {
       db,
+      runId: opts.runId,
       operation: "suggestUsdaFood",
       cacheStatus: "none",
       entity: opts.ingredientId
@@ -89,7 +90,7 @@ export interface UsdaMatchPorts<TDatabase> {
     service: UsdaLookupPort,
     database: TDatabase,
     name: string,
-    options?: { ingredientId?: IngredientId },
+    options: { runId: ImportRunId; ingredientId?: IngredientId },
   ) => Promise<UsdaFoodSuggestion>;
 }
 
@@ -114,6 +115,7 @@ async function suggestUsdaFoodBatchWithPorts<TDatabase>(
   usdaService: UsdaLookupPort,
   db: TDatabase,
   ingredients: { id: IngredientId; name: string }[],
+  runId: ImportRunId,
   ports: UsdaMatchPorts<TDatabase>,
 ): Promise<UsdaFoodBatchSuggestion[]> {
   const capped = ingredients.slice(0, 20);
@@ -122,7 +124,10 @@ async function suggestUsdaFoodBatchWithPorts<TDatabase>(
     const batch = capped.slice(i, i + 5);
     const results = await Promise.allSettled(
       batch.map((item) =>
-        ports.suggest(usdaService, db, item.name, { ingredientId: item.id }),
+        ports.suggest(usdaService, db, item.name, {
+          runId,
+          ingredientId: item.id,
+        }),
       ),
     );
     for (const [j, result] of results.entries()) {
@@ -155,7 +160,15 @@ export function createUsdaMatchService<TDatabase>(
       service: UsdaLookupPort,
       database: TDatabase,
       ingredients: { id: IngredientId; name: string }[],
-    ) => suggestUsdaFoodBatchWithPorts(service, database, ingredients, ports),
+      runId: ImportRunId,
+    ) =>
+      suggestUsdaFoodBatchWithPorts(
+        service,
+        database,
+        ingredients,
+        runId,
+        ports,
+      ),
   };
 }
 

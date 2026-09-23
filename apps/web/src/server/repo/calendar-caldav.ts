@@ -1,4 +1,5 @@
 /** PostgreSQL half of CalDAV: canonical projections and entity-kernel writes. */
+import { buildActorContext } from "@cubby/schemas/context";
 import {
   mealShortcode,
   parseShortcodeFor,
@@ -131,7 +132,7 @@ const caldavContext = (
   const context: EntityKernelContext = {
     ...buildCrudServices(db),
     readDb: db,
-    actorContext: { userId: actorId, source: "caldav" },
+    actorContext: buildActorContext(actorId, "caldav"),
   };
   if (hooks) context.caldavHooks = hooks;
   return context;

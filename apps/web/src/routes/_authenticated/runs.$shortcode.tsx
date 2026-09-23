@@ -4,9 +4,9 @@ import { ImportRunDetailPage } from "~/app/purchases/purchase-import-run-detail"
 import { Page } from "~/components/page/Page";
 import { pageTitle } from "~/lib/page-title";
 
-export const Route = createFileRoute("/_authenticated/import-runs/$shortcode")({
+export const Route = createFileRoute("/_authenticated/runs/$shortcode")({
   head: ({ params }) => ({
-    meta: [{ title: pageTitle(`Import ${params.shortcode}`) }],
+    meta: [{ title: pageTitle(`Run ${params.shortcode}`) }],
   }),
   component: ImportRunRoute,
 });
@@ -14,12 +14,7 @@ export const Route = createFileRoute("/_authenticated/import-runs/$shortcode")({
 function ImportRunRoute() {
   const { shortcode } = Route.useParams();
   return (
-    <Page
-      variant="list"
-      title="Import run"
-      bodyGutter="standard"
-      decoration="none"
-    >
+    <Page variant="list" title="Run" bodyGutter="standard" decoration="none">
       <ImportRunDetailPage publicId={shortcode} />
     </Page>
   );

@@ -1,5 +1,6 @@
 import { aiContract, aiStreamsContract } from "~/contracts/ai.contract";
 import { implementOperationDomain } from "~/server/operation-domain.server";
+import { ensureRun } from "~/server/runs/ensure-run";
 import { implementSubscriptionDomain } from "~/server/subscription-domain.server";
 import {
   approveDetectedInventoryItemWorkflow,
@@ -19,21 +20,40 @@ import {
 
 /** AI reads are authoritative: suggestions must see the row just written. */
 export const aiHandlers = implementOperationDomain(aiContract, {
-  describeLocation: (context, input) =>
-    describeLocationWorkflow(context.db, input),
-  detectInventoryItems: (context, input) =>
-    detectInventoryItemsWorkflow(context.db, input),
+  describeLocation: async (context, input) => {
+    const runId = await ensureRun(context.db, context.actorContext, {
+      purpose: "ai_action",
+    });
+    return describeLocationWorkflow({ db: context.db, runId }, input);
+  },
+  detectInventoryItems: async (context, input) => {
+    const runId = await ensureRun(context.db, context.actorContext, {
+      purpose: "ai_action",
+    });
+    return detectInventoryItemsWorkflow({ db: context.db, runId }, input);
+  },
   approveDetectedInventoryItem: (context, input) =>
     approveDetectedInventoryItemWorkflow(context, input),
-  identifyProduct: (context, input) =>
-    identifyProductWorkflow(context.db, input),
+  identifyProduct: async (context, input) => {
+    const runId = await ensureRun(context.db, context.actorContext, {
+      purpose: "ai_action",
+    });
+    return identifyProductWorkflow({ db: context.db, runId }, input);
+  },
   suggestUsdaFood: suggestUsdaFoodWorkflow,
   suggestUsdaFoodBatch: suggestUsdaFoodBatchWorkflow,
-  suggestIngredientMergeBatch: (context, input) =>
-    suggestIngredientMergeBatchWorkflow(context.db, input),
-  suggestFields: (context, input) => suggestFieldsWorkflow(context.db, input),
+  suggestIngredientMergeBatch: async (context, input) => {
+    const runId = await ensureRun(context.db, context.actorContext, {
+      purpose: "ai_action",
+    });
+    return suggestIngredientMergeBatchWorkflow(
+      { db: context.db, runId },
+      input,
+    );
+  },
+  suggestFields: (context, input) => suggestFieldsWorkflow(context, input),
   suggestExternalIdKind: (context, input) =>
-    suggestExternalIdKindWorkflow(context.db, input),
+    suggestExternalIdKindWorkflow(context, input),
   usageRecent: {
     run: (context, input) => listAiUsageRecentWorkflow(context.db, input),
   },

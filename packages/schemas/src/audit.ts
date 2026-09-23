@@ -1,8 +1,13 @@
 import { z } from "zod";
-import { auditSourceSchema } from "./context";
+import { auditChannelSchema } from "./context";
 import { entitySchema } from "./entity";
 import { auditableEntities, type ShortcodeEntity } from "./entity-manifest";
-import { anyShortcodeSchema, nonEmptyTuple } from "./identifiers";
+import {
+  anyShortcodeSchema,
+  deviceShortcode,
+  importRunShortcode,
+  nonEmptyTuple,
+} from "./identifiers";
 import { imageUrlSummary } from "./image-summary";
 import { oneOrMany } from "./pagination";
 
@@ -22,13 +27,12 @@ const auditableEntityIdSchema = anyShortcodeSchema(
 export const auditLogListInput = z.object({
   entityType: auditEntitySchema.optional(),
   entityId: auditableEntityIdSchema.optional(),
-  /**
-   * `oneOrMany`: deliberately reuses `auditSourceSchema` rather than a
-   * narrower enum — see that schema's doc comment for why `source` is
-   * open-ended (the `script:<slug>` template-literal arm). Resolved with
-   * `eqAny` in the repo.
-   */
-  source: oneOrMany(auditSourceSchema).optional(),
+  channel: oneOrMany(auditChannelSchema).optional(),
+  /** An OAuth client id (not a Cubby entity), e.g. the one Claude registered. */
+  oauthClient: z.string().min(1).optional(),
+  deviceId: deviceShortcode.optional(),
+  /** Everything one Run wrote, e.g. an import or an agent session. */
+  runId: importRunShortcode.optional(),
   // Date bounds stay ISO strings over the wire. `cursor` below is opaque (and
   // the repo continues accepting the former ISO cursor for compatibility).
   createdAtFrom: z
@@ -110,7 +114,15 @@ export const auditLogEntryOut = z.object({
   action: auditLogActionSchema,
   changes: z.record(z.string(), auditLogChangeSchema).nullable(),
   userId: z.string(),
-  source: auditSourceSchema,
+  channel: auditChannelSchema,
+  /** The MCP OAuth client; its name is resolved at read time. */
+  oauthClient: z
+    .object({ id: z.string(), name: z.string().nullable() })
+    .nullable(),
+  device: z
+    .object({ id: deviceShortcode, name: z.string().nullable() })
+    .nullable(),
+  runId: importRunShortcode.nullable(),
   createdAt: z.date(),
   user: auditLogUserOut,
 });

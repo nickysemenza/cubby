@@ -8,6 +8,7 @@ import { ENTITY_SCHEMA_BINDINGS } from "~/server/generated/entity-bindings.gen";
 import { generatedMcpEntityActionEntities } from "~/server/generated/entity-kernel-entities.gen";
 import { resolveDraftExpenseFields } from "~/server/repo/expense-inheritance";
 import { resolveDraftTaskFields } from "~/server/repo/task-project-inheritance";
+import { ensureRun } from "~/server/runs/ensure-run";
 
 import type { EntityKernelContext } from "./adapter";
 
@@ -75,12 +76,16 @@ export interface PreviewEntityPorts {
   suggest: typeof suggestFields;
   resolveExpense: typeof resolveDraftExpenseFields;
   resolveTask: typeof resolveDraftTaskFields;
+  /** Ported so a unit test's fake `EntityKernelContext` (no real db/actor)
+   * never exercises the real run-lookup query. */
+  ensureRun: typeof ensureRun;
 }
 
 const productionPreviewPorts: PreviewEntityPorts = {
   suggest: suggestFields,
   resolveExpense: resolveDraftExpenseFields,
   resolveTask: resolveDraftTaskFields,
+  ensureRun,
 };
 
 async function applyPreviewSuggestions(args: {
@@ -164,12 +169,17 @@ async function applyPreviewSuggestions(args: {
     (field) => !suggestedSet.has(field),
   );
 
+  const runId = await args.ports.ensureRun(
+    args.context.db,
+    args.context.actorContext,
+    { purpose: "ai_action" },
+  );
   const runBatch = async (
     basisMode: "suggested" | "provided",
     targets: readonly string[],
   ) => {
     if (targets.length === 0) return;
-    const result = await args.ports.suggest(args.context.db, {
+    const result = await args.ports.suggest(args.context.db, runId, {
       basisMode,
       entity: args.entity,
       targets: [...targets],

@@ -2,7 +2,7 @@ import {
   type CountableEntity,
   countableEntities,
 } from "@cubby/schemas/entity-manifest";
-import { type SQL, sql } from "drizzle-orm";
+import { type SQL, and, ne, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import type { Database } from "~/server/db";
@@ -73,7 +73,8 @@ const COUNT_WHERE = {
   wish: (db) => buildWishWhere(db, {}),
   planting: () => buildPlantingWhere(),
   gardenEntry: () => buildGardenEntryWhere(),
-  importRun: () => notDeleted(importRun),
+  importRun: () =>
+    and(notDeleted(importRun), ne(importRun.trigger, "ephemeral")),
   imageSighting: () => notDeleted(imageSighting),
 } satisfies Record<CountableEntity, CountWhere>;
 

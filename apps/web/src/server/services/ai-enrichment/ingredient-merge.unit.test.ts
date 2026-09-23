@@ -1,3 +1,4 @@
+import { importRunId } from "@cubby/schemas/identifiers";
 import { testEntityId, testShortcode } from "@cubby/schemas/testing";
 import { describe, expect, it } from "vitest";
 
@@ -19,6 +20,7 @@ const db = new Database(() => {
   );
 });
 
+const runId = importRunId.parse("00000000-0000-4000-8000-000000000009");
 const sourceId = testEntityId("ingredient", "source");
 const source = { id: sourceId, name: "scallion" };
 
@@ -57,7 +59,13 @@ describe("suggestIngredientMerge", () => {
       },
     };
 
-    const result = await suggestIngredientMerge(db, source, ai, shortlistPort);
+    const result = await suggestIngredientMerge(
+      db,
+      source,
+      runId,
+      ai,
+      shortlistPort,
+    );
 
     expect(calls).toBe(1);
     expect(result.target).toEqual({
@@ -80,7 +88,7 @@ describe("suggestIngredientMerge", () => {
     };
 
     await expect(
-      suggestIngredientMerge(db, source, ai, shortlistPort),
+      suggestIngredientMerge(db, source, runId, ai, shortlistPort),
     ).resolves.toEqual({
       target: null,
       confidence: "low",
@@ -104,7 +112,7 @@ describe("suggestIngredientMerge", () => {
       },
     };
 
-    await suggestIngredientMerge(db, source, ai, shortlistPort);
+    await suggestIngredientMerge(db, source, runId, ai, shortlistPort);
 
     expect(renderedLines.some((line) => line.includes(green.id))).toBe(true);
     expect(renderedLines.some((line) => line.includes(cilantro.id))).toBe(true);
@@ -127,7 +135,7 @@ describe("suggestIngredientMerge", () => {
     };
 
     await expect(
-      suggestIngredientMerge(db, source, ai, shortlistPortOf([])),
+      suggestIngredientMerge(db, source, runId, ai, shortlistPortOf([])),
     ).resolves.toEqual({
       target: null,
       confidence: "low",
@@ -148,7 +156,7 @@ describe("suggestIngredientMergeBatch", () => {
       };
     });
 
-    const results = await suggestIngredientMergeBatch(db, sources);
+    const results = await suggestIngredientMergeBatch(db, sources, runId);
 
     expect(results).toHaveLength(20);
   });
@@ -165,7 +173,7 @@ describe("suggestIngredientMergeBatch", () => {
       name: "coriander",
     };
 
-    const results = await suggestIngredientMergeBatch(db, [badSource]);
+    const results = await suggestIngredientMergeBatch(db, [badSource], runId);
 
     expect(results).toEqual([
       {

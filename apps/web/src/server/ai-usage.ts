@@ -1,3 +1,5 @@
+import type { ImportRunId } from "@cubby/schemas/identifiers";
+
 import { getErrorMessage } from "~/lib/error-utils";
 import type { Database } from "~/server/db";
 import { emitTelemetry } from "~/server/telemetry";
@@ -17,6 +19,8 @@ export type RecordAiUsageInput = {
   estimatedCost?: number | null;
   feature: string;
   operation: string;
+  /** Every AI call belongs to a run; see `ensureRun`. */
+  runId: ImportRunId;
   jobKind?: string | null;
   jobId?: string | null;
   inputTokens?: number | null;
@@ -51,6 +55,7 @@ export async function recordAiUsage(
       provider: input.provider,
       model: input.model,
       operation: input.operation,
+      runId: input.runId,
       jobKind: input.jobKind ?? null,
       jobId: input.jobId ?? null,
       inputTokens: input.inputTokens ?? null,

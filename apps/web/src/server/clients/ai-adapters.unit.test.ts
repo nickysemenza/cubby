@@ -1,3 +1,4 @@
+import { importRunId } from "@cubby/schemas/identifiers";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
@@ -131,16 +132,17 @@ describe("usageFor", () => {
   // SAFETY: the usage context only carries the database to the middleware,
   // which this test never runs.
   const db = {} as Database;
+  const runId = importRunId.parse("00000000-0000-4000-8000-000000000001");
 
   it("derives the provider from the registry rather than assuming Anthropic", () => {
     expect(
-      usageFor(FAST_MODEL, { db, feature: "f", operation: "o" }),
+      usageFor(FAST_MODEL, { db, runId, feature: "f", operation: "o" }),
     ).toMatchObject({ provider: "openai", model: "gpt-5.6-luna" });
     expect(
-      usageFor(VISION_BATCH_MODEL, { db, feature: "f", operation: "o" }),
+      usageFor(VISION_BATCH_MODEL, { db, runId, feature: "f", operation: "o" }),
     ).toMatchObject({ provider: "google", model: "gemini-2.5-flash" });
     expect(
-      usageFor(REASONING_MODEL, { db, feature: "f", operation: "o" }),
+      usageFor(REASONING_MODEL, { db, runId, feature: "f", operation: "o" }),
     ).toMatchObject({ provider: "anthropic", model: "claude-sonnet-5" });
   });
 });

@@ -74,6 +74,8 @@ import type { EdgeLiveness, EdgeRole } from "@cubby/schemas/entity-integrity";
 import type { AnyColumn } from "drizzle-orm";
 
 import {
+  aiUsage,
+  auditLog,
   cookbook,
   device,
   expense,
@@ -1218,6 +1220,28 @@ export const ENTITY_EDGES = {
   // run (purchases it touched, claims it advanced, findings it produced) are
   // `history`, mirroring vendorAccount's own edges above.
   importRun: edges({
+    "AuditLog.runId": {
+      column: auditLog.runId,
+      role: "history",
+      label: "audit entries",
+      description: "An audit entry written as part of this run.",
+      liveness: {
+        kind: "allow-target-deleted",
+        reason:
+          "Append-only provenance: an audit entry keeps naming the run it belonged to.",
+      },
+    },
+    "AiUsage.runId": {
+      column: aiUsage.runId,
+      role: "history",
+      label: "AI usage",
+      description: "One model call made as part of this run.",
+      liveness: {
+        kind: "allow-target-deleted",
+        reason:
+          "Append-only provenance: a usage row keeps naming the run it was billed to.",
+      },
+    },
     "Purchase.importRunId": {
       column: purchase.importRunId,
       role: "history",
@@ -1339,6 +1363,18 @@ export const ENTITY_EDGES = {
   }),
   "usda-food": edges({}),
   device: edges({
+    "AuditLog.deviceId": {
+      column: auditLog.deviceId,
+      role: "history",
+      label: "audit entries",
+      description:
+        "An audit entry written from this install; the column is cleared when the device goes.",
+      liveness: {
+        kind: "allow-target-deleted",
+        reason:
+          "Append-only provenance: an audit entry keeps naming the install it came from.",
+      },
+    },
     "ImageSighting.deviceId": {
       column: imageSighting.deviceId,
       role: "owned-child",

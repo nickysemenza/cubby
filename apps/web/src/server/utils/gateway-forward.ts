@@ -1,3 +1,4 @@
+import type { ImportRunId } from "@cubby/schemas/identifiers";
 import {
   gatewayForwardInput,
   gatewayForwardOut,
@@ -187,6 +188,7 @@ function usageRecord(
   usage: GatewayCallUsage,
   durationMs: number,
   gatewayHit: boolean,
+  runId: ImportRunId,
 ): AiUsageRecord {
   const cacheStatus = gatewayHit
     ? "hit"
@@ -200,6 +202,7 @@ function usageRecord(
     provider: usage.provider,
     model,
     operation: purpose ? `cookbook.${purpose}` : "cookbook.extract",
+    runId,
     inputTokens: usage.usage.input_tokens,
     outputTokens: usage.usage.output_tokens,
     estimatedCost: gatewayHit ? 0 : usage.cost_usd,
@@ -219,7 +222,7 @@ function usageRecord(
  */
 export async function forwardGatewayRequest(
   request: GatewayForwardRequest,
-  opts: { db?: Database; feature: string },
+  opts: { db?: Database; runId?: ImportRunId; feature: string },
   port: GatewayForwardPort = productionGatewayForwardPort,
 ): Promise<GatewayForwardResponse> {
   const metadata = metadataWithFeature(request.headers, opts.feature);
@@ -240,10 +243,18 @@ export async function forwardGatewayRequest(
     opts.db && response.ok && model ? port.callUsage(model, body) : null;
   const gatewayHit =
     response.headers.get(GATEWAY_CACHE_STATUS)?.toUpperCase() === "HIT";
-  if (opts.db && model && usage) {
+  if (opts.db && opts.runId && model && usage) {
     await port.recordUsage(
       opts.db,
-      usageRecord(opts.feature, model, purpose, usage, durationMs, gatewayHit),
+      usageRecord(
+        opts.feature,
+        model,
+        purpose,
+        usage,
+        durationMs,
+        gatewayHit,
+        opts.runId,
+      ),
     );
   }
 

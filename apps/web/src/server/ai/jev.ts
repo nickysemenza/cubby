@@ -198,6 +198,7 @@ async function requestJev(
         model: feature.model,
         feature: feature.feature,
         operation: ctx.operation,
+        runId: ctx.runId,
         jobKind: ctx.job?.kind ?? null,
         jobId: ctx.job?.id ?? null,
         inputTokens: parsed?.usage?.input_tokens ?? null,

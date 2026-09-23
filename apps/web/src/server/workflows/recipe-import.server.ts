@@ -54,6 +54,11 @@ import {
 import { findParentRecipeIdsBatch } from "~/server/repo/recipe/totals";
 import { bindShortcodeResolver } from "~/server/repo/shortcode-resolver";
 import {
+  actorWithRun,
+  cookbookImportRunInput,
+  ensureRun,
+} from "~/server/runs/ensure-run";
+import {
   type ImageUrlImportPort,
   importRecipeImageFromUrl,
   productionRecipeImageImportPort,
@@ -175,11 +180,16 @@ export const upsertCookbookWorkflow = bindWorkflow(
   workflow<AuthenticatedStartOperationContext, UpsertCookbookInput>(
     "recipe.upsertCookbook",
   )
-    .commit("upserted", ({ context }, { input }) =>
-      upsertCookbook(context.db, input, {
-        ...context.actorContext,
-        source: "epub_import",
-      }),
+    // Before the commit: the run must not roll back with a failed upsert.
+    .call("actor", ({ context }, { input }) =>
+      actorWithRun(
+        context.db,
+        context.actorContext,
+        cookbookImportRunInput(input.name),
+      ),
+    )
+    .commit("upserted", ({ context }, { input, actor }) =>
+      upsertCookbook(context.db, input, actor),
     )
     .effect("sideEffects", ({ context }, { upserted }) =>
       runMutationSideEffects(context.db, {
@@ -387,13 +397,21 @@ const cookbookImportDefinition = defineBulkWorkflow({
         `Recipe ${input.sourceRecipeId} is not in this cookbook's extraction`,
       );
     })
-    .commit("imported", ({ context }, { input, recipe }) =>
+    // Before the commit: the run must not roll back with a failed item.
+    .call("actor", ({ context }, { input }) =>
+      actorWithRun(
+        context.db,
+        context.actorContext,
+        cookbookImportRunInput(input.cookbook.name),
+      ),
+    )
+    .commit("imported", ({ context }, { input, recipe, actor }) =>
       upsertCookbookRecipeFromCookbook(
         recipe.recipe,
         recipe.chapter,
         input.cookbook,
         context.db,
-        { ...context.actorContext, source: "epub_import" },
+        actor,
         input.importContext,
       ),
     )
@@ -845,9 +863,17 @@ export const reprocessCookbookWorkflow = Object.assign(
 type GatewayForwardInput = z.output<typeof gatewayForwardInput>;
 export const forwardGatewayRequestWorkflow = defineWorkflowOperation(
   "recipe.forwardGatewayRequest",
-  (context: AuthenticatedStartOperationContext, input: GatewayForwardInput) =>
-    forwardGatewayRequest(input, {
+  async (
+    context: AuthenticatedStartOperationContext,
+    input: GatewayForwardInput,
+  ) => {
+    const runId = await ensureRun(context.db, context.actorContext, {
+      purpose: "ai_action",
+    });
+    return forwardGatewayRequest(input, {
       db: context.db,
+      runId,
       feature: "cookbook-epub-parsing",
-    }),
+    });
+  },
 );

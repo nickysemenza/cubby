@@ -6,7 +6,7 @@ import {
   type ImportRunPurpose,
 } from "@cubby/schemas/import-run-fields";
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, ne, sql } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { importRun } from "~/server/db/schema";
@@ -43,8 +43,12 @@ const columns = {
   vendorName: sql<
     string | null
   >`(SELECT name FROM "Vendor" WHERE id = "ImportRun"."vendorId")`,
-  ledgerPartyShortcode: sql<string>`(SELECT shortcode FROM "LedgerParty" WHERE id = "ImportRun"."ledgerPartyId")`,
-  ledgerPartyName: sql<string>`(SELECT name FROM "LedgerParty" WHERE id = "ImportRun"."ledgerPartyId")`,
+  ledgerPartyShortcode: sql<
+    string | null
+  >`(SELECT shortcode FROM "LedgerParty" WHERE id = "ImportRun"."ledgerPartyId")`,
+  ledgerPartyName: sql<
+    string | null
+  >`(SELECT name FROM "LedgerParty" WHERE id = "ImportRun"."ledgerPartyId")`,
   predecessorShortcode: sql<
     string | null
   >`(SELECT shortcode FROM "ImportRun" p WHERE p.id = "ImportRun"."predecessorRunId")`,
@@ -79,8 +83,8 @@ type ImportRunRow = {
   vendorAccountLabel: string | null;
   vendorShortcode: string | null;
   vendorName: string | null;
-  ledgerPartyShortcode: string;
-  ledgerPartyName: string;
+  ledgerPartyShortcode: string | null;
+  ledgerPartyName: string | null;
   predecessorShortcode: string | null;
   actorName: string;
   startedAt: Date;
@@ -108,20 +112,27 @@ const PURPOSE_LABEL = {
   purchase_validation: "Purchase validation",
   product_enrichment: "Product enrichment",
   photo_inventory: "Photo inventory",
+  ai_suggest: "AI suggestions",
+  ai_action: "AI action",
+  background: "Background",
+  file_import: "File import",
+  legacy: "Legacy",
 } satisfies Record<ImportRunPurpose, string>;
 
 const toOut = (row: ImportRunRow): ImportRunOut =>
   importRunOut.parse({
     ...row,
     id: parseShortcodeFor("importRun", String(row.shortcode)),
-    displayName: `${row.vendorName ?? row.ledgerPartyName} · ${PURPOSE_LABEL[importRunPurpose.parse(row.purpose)]}`,
+    displayName: `${row.vendorName ?? row.ledgerPartyName ?? row.actorName} · ${PURPOSE_LABEL[importRunPurpose.parse(row.purpose)]}`,
     vendorAccountId: row.vendorAccountShortcode
       ? parseShortcodeFor("vendorAccount", row.vendorAccountShortcode)
       : null,
     vendorId: row.vendorShortcode
       ? parseShortcodeFor("vendor", row.vendorShortcode)
       : null,
-    ledgerPartyId: parseShortcodeFor("ledgerParty", row.ledgerPartyShortcode),
+    ledgerPartyId: row.ledgerPartyShortcode
+      ? parseShortcodeFor("ledgerParty", row.ledgerPartyShortcode)
+      : null,
     predecessorRunId: row.predecessorShortcode
       ? parseShortcodeFor("importRun", row.predecessorShortcode)
       : null,
@@ -143,6 +154,9 @@ const buildWhere = (filters: ImportRunFilters) =>
       sql`(SELECT shortcode FROM "LedgerParty" WHERE id = "ImportRun"."ledgerPartyId")`,
       filters.ledgerPartyId,
     ),
+    filters.includeEphemeral || filters.purpose !== undefined
+      ? undefined
+      : ne(importRun.trigger, "ephemeral"),
   ]);
 
 export async function listImportRuns(

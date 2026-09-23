@@ -4,8 +4,10 @@ import type {
 } from "@cubby/schemas/ai";
 import type { AuditEntityType } from "@cubby/schemas/audit";
 import type { Amount } from "@cubby/schemas/codec";
+import type { AuditChannel } from "@cubby/schemas/context";
 import type { Entity } from "@cubby/schemas/entity-core";
 import type {
+  DeviceId,
   ExpenseAttributionId,
   ExpenseId,
   FinancialAccountId,
@@ -1553,9 +1555,10 @@ export const importRun = pgTable(
       .$type<UserId>()
       .references(() => user.id),
     actorEmail: text("actorEmail").notNull(),
-    actorLedgerPartyShortcode: text("actorLedgerPartyShortcode").notNull(),
-    actorLedgerPartyName: text("actorLedgerPartyName").notNull(),
-    actorLedgerPartyKind: text("actorLedgerPartyKind").notNull(),
+    // Null when the actor has no member party (the system user).
+    actorLedgerPartyShortcode: text("actorLedgerPartyShortcode"),
+    actorLedgerPartyName: text("actorLedgerPartyName"),
+    actorLedgerPartyKind: text("actorLedgerPartyKind"),
     predecessorRunId: uuid("predecessorRunId")
       .$type<ImportRunId>()
       .references((): AnyPgColumn => importRun.id),
@@ -1566,6 +1569,14 @@ export const importRun = pgTable(
     historyCursorUrl: text("historyCursorUrl"),
     /** Set when a listing had no next page or predated the account cursor. */
     historyExhaustedAt: timestamp("historyExhaustedAt", { mode: "date" }),
+    // Caller attribution for the work the run groups (see `ActorContext`).
+    channel: text("channel").notNull().$type<AuditChannel>().default("web"),
+    // Deliberately not FKs, like `McpToolCall.clientId`: a run keeps naming
+    // the client and install that started it after either is removed.
+    oauthClientId: text("oauthClientId"),
+    deviceId: uuid("deviceId").$type<DeviceId>(),
+    /** Client-minted grouping key, e.g. one Jev pass per page mount. */
+    clientKey: text("clientKey"),
   },
   (table) => [
     shortcodeUnique("ImportRun", table.shortcode),
@@ -1579,15 +1590,26 @@ export const importRun = pgTable(
     ),
     check(
       "ImportRun_trigger_check",
-      sql`${table.trigger} IN ('foreground', 'discovery', 'manual', 'backfill')`,
+      sql`${table.trigger} IN ('foreground', 'discovery', 'manual', 'backfill', 'ephemeral')`,
     ),
+    check(
+      "ImportRun_import_party_check",
+      sql`${table.purpose} NOT IN ('account_sync', 'purchase_validation', 'product_enrichment', 'photo_inventory') OR (${table.ledgerPartyId} IS NOT NULL AND ${table.actorLedgerPartyShortcode} IS NOT NULL)`,
+    ),
+    check(
+      "ImportRun_channel_check",
+      sql`${table.channel} IN ('web', 'api', 'mcp', 'caldav', 'system')`,
+    ),
+    uniqueIndex("ImportRun_clientKey_unique")
+      .on(table.clientKey)
+      .where(sql`${table.clientKey} IS NOT NULL`),
     check(
       "ImportRun_status_check",
       sql`${table.status} IN ('running', 'paused_auth', 'paused_offline', 'paused_approval', 'needs_review', 'completed', 'failed', 'dispatch_failed')`,
     ),
     check(
       "ImportRun_purpose_check",
-      sql`${table.purpose} IN ('account_sync', 'purchase_validation', 'product_enrichment', 'photo_inventory')`,
+      sql`${table.purpose} IN ('account_sync', 'purchase_validation', 'product_enrichment', 'photo_inventory', 'ai_suggest', 'ai_action', 'background', 'file_import', 'legacy')`,
     ),
     check(
       "ImportRun_photo_inventory_no_vendor_check",
@@ -3510,6 +3532,11 @@ export const aiUsage = pgTable(
     provider: text("provider").notNull(),
     model: text("model").notNull(),
     operation: text("operation").notNull(),
+    // Every AI call belongs to a Run, which carries the caller attribution.
+    runId: uuid("runId")
+      .notNull()
+      .$type<ImportRunId>()
+      .references(() => importRun.id),
     jobKind: text("jobKind"),
     jobId: text("jobId"),
     inputTokens: integer("inputTokens"),
@@ -3541,6 +3568,7 @@ export const aiUsage = pgTable(
     ),
     index("AiUsage_entity_idx").on(table.entityType, table.entityId),
     index("AiUsage_job_idx").on(table.jobKind, table.jobId),
+    index("AiUsage_run_idx").on(table.runId),
   ],
 );
 
@@ -3606,16 +3634,27 @@ export const auditLog = pgTable(
       .notNull()
       .$type<UserId>()
       .references(() => user.id),
-    // Deliberately plain text, not a pg enum: see `auditSourceSchema`, which
-    // allows the application sources plus an open-ended `script:<slug>` for
-    // one-off maintenance scripts. A DB-level enum would have made those writes
-    // fail instead of the reads, which is worse — losing the row loses the
-    // provenance this column exists to record.
-    source: text("source").notNull().default("ui"),
+    channel: text("channel").notNull().$type<AuditChannel>().default("web"),
+    // Deliberately not an FK: revoking an OAuth client deletes it, while the
+    // audit trail must keep the caller identity.
+    oauthClientId: text("oauthClientId"),
+    deviceId: uuid("deviceId")
+      .$type<DeviceId>()
+      .references(() => device.id, { onDelete: "set null" }),
+    runId: uuid("runId")
+      .$type<ImportRunId>()
+      .references(() => importRun.id, { onDelete: "set null" }),
     createdAt: timestamp("createdAt", { mode: "date" }).notNull().defaultNow(),
   },
   (table) => [
     index("AuditLog_createdAt_idx").on(table.createdAt.desc()),
+    index("AuditLog_runId_idx")
+      .on(table.runId)
+      .where(sql`${table.runId} IS NOT NULL`),
+    check(
+      "AuditLog_channel_check",
+      sql`${table.channel} IN ('web', 'api', 'mcp', 'caldav', 'system')`,
+    ),
     index("AuditLog_entityType_entityId_createdAt_idx").on(
       table.entityType,
       table.entityId,
@@ -3628,6 +3667,14 @@ export const auditLogRelations = relations(auditLog, ({ one }) => ({
   user: one(user, {
     fields: [auditLog.userId],
     references: [user.id],
+  }),
+  device: one(device, {
+    fields: [auditLog.deviceId],
+    references: [device.id],
+  }),
+  run: one(importRun, {
+    fields: [auditLog.runId],
+    references: [importRun.id],
   }),
 }));
 

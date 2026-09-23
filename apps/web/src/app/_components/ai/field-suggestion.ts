@@ -213,6 +213,9 @@ export interface FieldSuggestionSource {
   /** Bare manifest field keys of `entity` being requested this call. */
   readonly targets: readonly string[];
   readonly basis: Record<string, string | null>;
+  /** One id per page mount, grouping every call this page makes into one
+   * `ai_suggest` run. Omit to fall back to a per-call `ai_action` run. */
+  readonly runKey?: string;
 }
 
 /** Transport-injection seam, mirroring `LocationFieldWithAIOperations` and
@@ -285,6 +288,7 @@ export function useEntitySuggestionsQuery({
     entity: effective.entity,
     targets: [...effective.targets],
     basis: effective.basis,
+    runKey: effective.runKey,
   });
   const query = useQuery({
     ...opts,

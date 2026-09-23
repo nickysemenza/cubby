@@ -62,6 +62,10 @@ export interface FieldSuggestionContextValue {
   clearAutoFilled: (field: string) => void;
   /** Whether `field` currently holds this provider's own untouched write. */
   isAutoFilled: (field: string) => boolean;
+  /** This mount's `ai_suggest` grouping id — a row-level suggestion mounted
+   * inside this form (e.g. `ExternalIdKindSuggestion`) reuses it instead of
+   * opening its own `ai_action` run per row. */
+  readonly runKey: string;
 }
 
 const FieldSuggestionContext =
@@ -179,6 +183,9 @@ export function FieldSuggestionProvider({
   children: ReactNode;
 }) {
   const form = useFormContext();
+  // One id per page mount, grouping every suggestFields call this provider
+  // makes into one `ai_suggest` run.
+  const [runKey] = useState(() => crypto.randomUUID());
   const recordResolutions = useMemo(() => {
     const parsed = resolutionRecordSchema.safeParse(record);
     return parsed.success ? (parsed.data.fieldResolutions ?? {}) : {};
@@ -349,9 +356,17 @@ export function FieldSuggestionProvider({
             entity,
             targets: suggestedTargets,
             basis: debouncedBasis,
+            runKey,
           }
         : null,
-    [entity, suggestedTargets, sufficient, basisSettled, debouncedBasis],
+    [
+      entity,
+      suggestedTargets,
+      sufficient,
+      basisSettled,
+      debouncedBasis,
+      runKey,
+    ],
   );
   const alternativeSource = useMemo(
     () =>
@@ -361,9 +376,17 @@ export function FieldSuggestionProvider({
             entity,
             targets: alternativeTargets,
             basis: debouncedBasis,
+            runKey,
           }
         : null,
-    [entity, alternativeTargets, sufficient, basisSettled, debouncedBasis],
+    [
+      entity,
+      alternativeTargets,
+      sufficient,
+      basisSettled,
+      debouncedBasis,
+      runKey,
+    ],
   );
 
   const suggestedQuery = useEntitySuggestionsQuery({
@@ -465,6 +488,7 @@ export function FieldSuggestionProvider({
       markAutoFilled,
       clearAutoFilled,
       isAutoFilled,
+      runKey,
     }),
     [
       suggestedSource,
@@ -481,6 +505,7 @@ export function FieldSuggestionProvider({
       markAutoFilled,
       clearAutoFilled,
       isAutoFilled,
+      runKey,
     ],
   );
 

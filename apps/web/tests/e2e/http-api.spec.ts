@@ -115,14 +115,14 @@ test("API keys execute typed operations, preserve validation, and revoke immedia
       query: {
         entityType: "vendor",
         entityId: result.item.id,
-        source: "api",
+        channel: "api",
       },
     });
     expect(audit.status).toBe(200);
     if (audit.status !== 200) throw new Error("Audit failed");
     expect(audit.body.entries).toEqual([
       expect.objectContaining({
-        source: "api",
+        channel: "api",
         action: "create",
         userId: key.referenceId,
         createdAt: expect.stringMatching(/^\d{4}-/u),

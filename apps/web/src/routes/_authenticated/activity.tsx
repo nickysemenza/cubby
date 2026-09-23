@@ -1,6 +1,6 @@
 import { activityKind, activityRunId } from "@cubby/schemas/activity";
 import { auditEntitySchema } from "@cubby/schemas/audit";
-import { auditSourceSchema } from "@cubby/schemas/context";
+import { auditChannelSchema } from "@cubby/schemas/context";
 import { useQuery } from "@tanstack/react-query";
 import {
   createFileRoute,
@@ -50,11 +50,7 @@ const searchSchema = z.object({
   // The feed's only controls — `auditLogListInput` already accepts both,
   // this just exposes them (and keeps a filtered view linkable/refreshable).
   entityType: auditEntitySchema.optional().catch(undefined),
-  // Accepts the full `auditSourceSchema` (including a deep-linked
-  // `script:<slug>` value) even though the UI select below only offers the
-  // closed `APPLICATION_AUDIT_SOURCES` set — the open-ended `script:` family
-  // has no bounded picklist to enumerate.
-  source: auditSourceSchema.optional().catch(undefined),
+  channel: auditChannelSchema.optional().catch(undefined),
 });
 
 const searchDefaults = {
@@ -70,7 +66,7 @@ const searchDefaults = {
   sort: undefined,
   deviceId: undefined,
   entityType: undefined,
-  source: undefined,
+  channel: undefined,
 } as const;
 
 // Bound to a const, not inlined into the options object below: see
@@ -96,12 +92,12 @@ export const Route = createFileRoute("/_authenticated/activity")({
     kind: search.kind,
     executor: search.executor,
     entityType: search.entityType,
-    source: search.source,
+    channel: search.channel,
   }),
   loader: async ({ context, deps }) => {
     void context.queryClient.prefetchInfiniteQuery(
       auditLogListOptions(
-        { limit: 20, entityType: deps.entityType, source: deps.source },
+        { limit: 20, entityType: deps.entityType, channel: deps.channel },
         { getNextPageParam: (lastPage) => lastPage.nextCursor },
       ),
     );
@@ -119,7 +115,7 @@ function ActivityBody() {
     from,
     kind,
     selectedRun,
-    source,
+    channel,
     state,
     subjectId,
     submissionId,
@@ -127,7 +123,7 @@ function ActivityBody() {
   } = search;
   const sort = search.sort ?? "newest";
   const view =
-    search.tab ?? search.view ?? (entityType || source ? "changes" : "runs");
+    search.tab ?? search.view ?? (entityType || channel ? "changes" : "runs");
   const navigate = useNavigate({ from: Route.fullPath });
   const submission = useQuery({
     ...activity.submission.queryOptions({ id: submissionId ?? "IPS-000000" }),
@@ -222,12 +218,12 @@ function ActivityBody() {
       <TabsContent value="changes">
         <ActivityChanges
           entityType={entityType}
-          source={source}
+          channel={channel}
           onEntityTypeChange={(next) =>
             navigate({ search: (prev) => ({ ...prev, entityType: next }) })
           }
-          onSourceChange={(next) =>
-            navigate({ search: (prev) => ({ ...prev, source: next }) })
+          onChannelChange={(next) =>
+            navigate({ search: (prev) => ({ ...prev, channel: next }) })
           }
         />
       </TabsContent>

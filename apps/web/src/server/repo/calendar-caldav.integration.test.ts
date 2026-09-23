@@ -55,7 +55,7 @@ describe("CalDAV canonical mutation seam", () => {
       }),
     );
     const audit = await getDb(ctx.db).query.auditLog.findMany({
-      where: (row, { eq }) => eq(row.source, "caldav"),
+      where: (row, { eq }) => eq(row.channel, "caldav"),
     });
     expect(audit).toHaveLength(1);
   });

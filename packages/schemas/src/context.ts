@@ -1,62 +1,52 @@
 import { z } from "zod";
-import type { UserId } from "./identifiers";
+import type { DeviceId, ImportRunId, UserId } from "./identifiers";
 
 /**
- * The closed set of sources the application itself writes.
- *
- * `csv_import` / `sheets_import` are no longer produced by any code path, but
- * `sheets_import` still labels 1322 historical rows from the Notion migration —
- * they stay because this schema has to *read* what the table already contains.
+ * How a write entered the app. Who and what did it are separate columns:
+ * `oauthClientId` names the MCP client (Claude, ChatGPT, Codex, Flue),
+ * `deviceId` names the Apple install (`X-Cubby-Device`), and `runId` names the
+ * Run that grouped the work. `system` is only for work with no user present
+ * (crons, retries); anything a member starts is attributed to that member.
  */
-export const APPLICATION_AUDIT_SOURCES = [
-  "ui",
-  "csv_import",
-  "sheets_import",
-  "epub_import",
+export const AUDIT_CHANNELS = [
+  "web",
   "api",
   "mcp",
   "caldav",
+  "system",
 ] as const;
+export const auditChannelSchema = z.enum(AUDIT_CHANNELS);
+export type AuditChannel = z.infer<typeof auditChannelSchema>;
 
-/**
- * Source of an action for audit logging.
- *
- * Open-ended on purpose: a one-off maintenance script is a legitimate actor, and
- * a closed enum turned that into an outage. Rows written by out-of-band
- * scripts during an expense-import pass (`script:url-cleanup-…`,
- * `script:home-depot-export-…`, …) sat outside the enum, so `auditLog.list`
- * failed **output** validation — and because one bad row rejects the whole
- * array, the activity feed and the home page rendered an error rather than
- * dropping a single entry.
- *
- * Widening the read schema rather than normalizing those rows is deliberate:
- * provenance is the entire job of this column, and "which script touched this"
- * is worth more than enum tidiness. The `script:` prefix keeps the value
- * self-describing and keeps the type a template literal rather than a bare
- * `string`, so a future `switch` can still branch on the application sources
- * and treat `script:*` as one fallback arm.
- */
-export const auditSourceSchema = z.union([
-  z.enum(APPLICATION_AUDIT_SOURCES),
-  // Non-empty slug: bare "script:" carries no provenance, so it is not valid.
-  z.templateLiteral(["script:", z.string().min(1)]),
-]);
-export type AuditSource = z.infer<typeof auditSourceSchema>;
-
-export function isScriptAuditSource(
-  source: AuditSource,
-): source is `script:${string}` {
-  return source.startsWith("script:");
+export interface ActorAttribution {
+  oauthClientId: string | null;
+  deviceId: DeviceId | null;
+  runId: ImportRunId | null;
 }
 
-export interface ActorContext {
+export interface ActorContext extends ActorAttribution {
   userId: UserId;
-  source: AuditSource;
+  channel: AuditChannel;
 }
 
 export function buildActorContext(
   userId: UserId,
-  source: AuditSource = "ui",
+  channel: AuditChannel = "web",
+  attribution: Partial<ActorAttribution> = {},
 ): ActorContext {
-  return { userId, source };
+  return {
+    userId,
+    channel,
+    oauthClientId: attribution.oauthClientId ?? null,
+    deviceId: attribution.deviceId ?? null,
+    runId: attribution.runId ?? null,
+  };
+}
+
+/** The actor with `runId` set, unless an enclosing run already owns the work. */
+export function actorInRun(
+  actor: ActorContext,
+  runId: ImportRunId,
+): ActorContext {
+  return actor.runId ? actor : { ...actor, runId };
 }

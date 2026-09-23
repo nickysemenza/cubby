@@ -1,4 +1,4 @@
-import type { ActorContext } from "@cubby/schemas/context";
+import { type ActorContext, buildActorContext } from "@cubby/schemas/context";
 import { testEntityId, testUserId } from "@cubby/schemas/testing";
 import { describe, it } from "vitest";
 
@@ -11,7 +11,7 @@ import type { ChildCascade } from "~/server/repo/removal";
 import type { RemovableEntity } from "./core";
 import { removeEntity } from "./entity";
 
-const ACTOR: ActorContext = { userId: testUserId("user-1"), source: "ui" };
+const ACTOR: ActorContext = buildActorContext(testUserId("user-1"));
 
 const ids = <E extends RemovableEntity>(entity: E, ...seeds: string[]) =>
   seeds.map((seed) => testEntityId(entity, seed));

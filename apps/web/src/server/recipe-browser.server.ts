@@ -4,6 +4,7 @@ import {
   suggestionsContract,
 } from "~/contracts/recipe.contract";
 import { implementOperationDomain } from "~/server/operation-domain.server";
+import { ensureRun } from "~/server/runs/ensure-run";
 import { implementSubscriptionDomain } from "~/server/subscription-domain.server";
 import * as imports from "~/server/workflows/recipe-import.server";
 import * as recipe from "~/server/workflows/recipe.server";
@@ -34,8 +35,12 @@ export const recipeHandlers = implementOperationDomain(recipeDomainContract, {
       context.services.recipeCosting,
     ),
   getFlow: (context, input) => recipe.getFlowWorkflow(context.db, input),
-  generateFlow: (context, input) =>
-    recipe.generateFlowWorkflow(context.db, input),
+  generateFlow: async (context, input) => {
+    const runId = await ensureRun(context.db, context.actorContext, {
+      purpose: "ai_action",
+    });
+    return recipe.generateFlowWorkflow({ db: context.db, runId }, input);
+  },
   harvestEquivalences: (context) =>
     recipe.harvestEquivalencesWorkflow(context.db, context.usdaClient),
   scrape: (_context, input) => imports.scrapeWorkflow(input),

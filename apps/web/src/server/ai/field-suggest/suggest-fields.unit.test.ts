@@ -2,6 +2,7 @@ import type {
   FieldSuggestionsInput,
   FieldSuggestionsOut,
 } from "@cubby/schemas/ai";
+import { importRunId } from "@cubby/schemas/identifiers";
 import { TRADE_LABELS } from "@cubby/schemas/project";
 import { testShortcode } from "@cubby/schemas/testing";
 import { describe, expect, it, vi } from "vitest";
@@ -23,6 +24,7 @@ import { suggestFields } from "./suggest-fields";
 // vocabulary/rules, no DB) or a `ports.registry` fake, and label resolution
 // goes through `ports.resolveLabels` — nothing in this file ever touches `db`.
 const fakeDb = {} as Database;
+const fixtureRunId = importRunId.parse("00000000-0000-4000-8000-000000000001");
 
 type JevInput = Parameters<JevPort>[0];
 
@@ -461,6 +463,7 @@ describe("suggestFields", () => {
     async ({ entity, targets, basis, jev, registry, assert }) => {
       const out = await suggestFields(
         fakeDb,
+        fixtureRunId,
         { entity, targets, basis, basisMode: "suggested" },
         { jev, registry },
       );
@@ -537,6 +540,7 @@ describe("suggestFields", () => {
       };
       const result = suggestFields(
         fakeDb,
+        fixtureRunId,
         {
           entity: "meal",
           targets: ["mealType", "mealKind"],
@@ -556,6 +560,7 @@ describe("suggestFields", () => {
     const labels = vi.fn(async () => new Map<string, string>());
     await suggestFields(
       fakeDb,
+      fixtureRunId,
       {
         entity: "expense",
         targets: ["projectId", "trade"],
@@ -583,6 +588,7 @@ describe("suggestFields", () => {
     await expect(
       suggestFields(
         fakeDb,
+        fixtureRunId,
         {
           basisMode: "provided",
           entity: "task",
@@ -605,6 +611,7 @@ describe("suggestFields", () => {
       await expect(
         suggestFields(
           fakeDb,
+          fixtureRunId,
           {
             basisMode: "provided",
             entity: "expense",
@@ -624,6 +631,7 @@ describe("suggestFields", () => {
   it("resolves automatic principal line kinds before asking for projects", async () => {
     const result = await suggestFields(
       fakeDb,
+      fixtureRunId,
       {
         basisMode: "suggested",
         entity: "expense",
@@ -654,6 +662,7 @@ describe("suggestFields", () => {
     };
     const result = await suggestFields(
       fakeDb,
+      fixtureRunId,
       {
         basisMode: "suggested",
         entity: "expense",
@@ -701,6 +710,7 @@ describe("suggestFields", () => {
     };
     const result = await suggestFields(
       fakeDb,
+      fixtureRunId,
       {
         basisMode: "suggested",
         entity: "task",
@@ -752,6 +762,7 @@ describe("suggestFields", () => {
     };
     const result = await suggestFields(
       fakeDb,
+      fixtureRunId,
       {
         basisMode: "provided",
         entity: "task",
@@ -790,6 +801,7 @@ describe("suggestFields", () => {
     };
     const result = await suggestFields(
       fakeDb,
+      fixtureRunId,
       {
         basisMode: "suggested",
         entity: "task",
@@ -838,6 +850,7 @@ describe("suggestFields", () => {
     // must chain the value `projectId` itself just resolved.
     const chained = await suggestFields(
       fakeDb,
+      fixtureRunId,
       {
         basisMode: "suggested",
         entity: "expense",
@@ -862,6 +875,7 @@ describe("suggestFields", () => {
     const explicitJev = jevPortPicking("Deck Build", "electrical:");
     const explicit = await suggestFields(
       fakeDb,
+      fixtureRunId,
       {
         basisMode: "suggested",
         entity: "expense",

@@ -270,6 +270,7 @@ function suggestionRequestsForRecord(
   entity: StandardEntity,
   record: SuggestionRecord,
   targets: ReturnType<typeof suggestTargetsFor>,
+  runKey: string,
 ) {
   const basis = recordSuggestionBasis(entity, targets, record);
   if (!isBasisSufficient(entity, targets, basis)) return [];
@@ -318,6 +319,7 @@ function suggestionRequestsForRecord(
               basisMode: "suggested" as const,
               targets: suggested,
               basis,
+              runKey,
             },
           },
         ]
@@ -331,6 +333,7 @@ function suggestionRequestsForRecord(
               basisMode: "provided" as const,
               targets: alternatives,
               basis,
+              runKey,
             },
           },
         ]
@@ -344,6 +347,7 @@ function suggestionRequestsForRecord(
               basisMode: "provided" as const,
               targets: pruneTargets,
               basis,
+              runKey,
             },
           },
         ]
@@ -436,6 +440,7 @@ function requestsForRecords(
   entity: StandardEntity,
   records: readonly unknown[],
   targets: SuggestTargets,
+  runKey: string,
 ) {
   return records.flatMap((raw) => {
     const parsed = recordSchema.safeParse(raw);
@@ -445,7 +450,7 @@ function requestsForRecords(
       targets.targets.length === 0
     )
       return [];
-    return suggestionRequestsForRecord(entity, parsed.data, targets);
+    return suggestionRequestsForRecord(entity, parsed.data, targets, runKey);
   });
 }
 
@@ -537,8 +542,11 @@ function BoundRecordSuggestions({
   const update = useEntityCommands(entity, { mutationPort });
   const [correctionRecord, setCorrectionRecord] =
     useState<SuggestionRecord | null>(null);
+  // One id per page mount, groups every suggestFields call this provider
+  // makes into one `ai_suggest` run instead of a run per row/field.
+  const [runKey] = useState(() => crypto.randomUUID());
   const targets = visibleSuggestTargets(entity, fieldKeys);
-  const requests = requestsForRecords(entity, records, targets);
+  const requests = requestsForRecords(entity, records, targets, runKey);
   // Identical records can share one query, while each row retains its own review state.
   const sources = [
     ...new Map(

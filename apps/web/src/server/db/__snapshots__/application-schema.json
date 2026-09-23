@@ -436,6 +436,12 @@
           "type": "timestamp",
           "primaryKey": false,
           "notNull": false
+        },
+        "runId": {
+          "name": "runId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
         }
       },
       "indexes": {
@@ -522,9 +528,38 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
+        },
+        "AiUsage_run_idx": {
+          "name": "AiUsage_run_idx",
+          "columns": [
+            {
+              "expression": "runId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
-      "foreignKeys": {},
+      "foreignKeys": {
+        "AiUsage_runId_ImportRun_id_fk": {
+          "name": "AiUsage_runId_ImportRun_id_fk",
+          "tableFrom": "AiUsage",
+          "tableTo": "ImportRun",
+          "columnsFrom": [
+            "runId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
@@ -777,19 +812,37 @@
           "primaryKey": false,
           "notNull": true
         },
-        "source": {
-          "name": "source",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'ui'"
-        },
         "createdAt": {
           "name": "createdAt",
           "type": "timestamp",
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
+        },
+        "channel": {
+          "name": "channel",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'web'"
+        },
+        "oauthClientId": {
+          "name": "oauthClientId",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "deviceId": {
+          "name": "deviceId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "runId": {
+          "name": "runId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
         }
       },
       "indexes": {
@@ -834,6 +887,22 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
+        },
+        "AuditLog_runId_idx": {
+          "name": "AuditLog_runId_idx",
+          "columns": [
+            {
+              "expression": "runId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "\"AuditLog\".\"runId\" IS NOT NULL",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
       "foreignKeys": {
@@ -849,12 +918,43 @@
           ],
           "onDelete": "no action",
           "onUpdate": "no action"
+        },
+        "AuditLog_deviceId_Device_id_fk": {
+          "name": "AuditLog_deviceId_Device_id_fk",
+          "tableFrom": "AuditLog",
+          "tableTo": "Device",
+          "columnsFrom": [
+            "deviceId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        },
+        "AuditLog_runId_ImportRun_id_fk": {
+          "name": "AuditLog_runId_ImportRun_id_fk",
+          "tableFrom": "AuditLog",
+          "tableTo": "ImportRun",
+          "columnsFrom": [
+            "runId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
-      "checkConstraints": {},
+      "checkConstraints": {
+        "AuditLog_channel_check": {
+          "name": "AuditLog_channel_check",
+          "value": "\"AuditLog\".\"channel\" IN ('web', 'api', 'mcp', 'caldav', 'system')"
+        }
+      },
       "isRLSEnabled": false
     },
     "public.Cookbook": {
@@ -5690,7 +5790,7 @@
           "name": "ledgerPartyId",
           "type": "uuid",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
         },
         "actorName": {
           "name": "actorName",
@@ -5872,19 +5972,19 @@
           "name": "actorLedgerPartyShortcode",
           "type": "text",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
         },
         "actorLedgerPartyName": {
           "name": "actorLedgerPartyName",
           "type": "text",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
         },
         "actorLedgerPartyKind": {
           "name": "actorLedgerPartyKind",
           "type": "text",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
         },
         "predecessorRunId": {
           "name": "predecessorRunId",
@@ -5913,6 +6013,31 @@
         "historyExhaustedAt": {
           "name": "historyExhaustedAt",
           "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "channel": {
+          "name": "channel",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'web'"
+        },
+        "oauthClientId": {
+          "name": "oauthClientId",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "deviceId": {
+          "name": "deviceId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "clientKey": {
+          "name": "clientKey",
+          "type": "text",
           "primaryKey": false,
           "notNull": false
         }
@@ -6006,6 +6131,22 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
+        },
+        "ImportRun_clientKey_unique": {
+          "name": "ImportRun_clientKey_unique",
+          "columns": [
+            {
+              "expression": "clientKey",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"ImportRun\".\"clientKey\" IS NOT NULL",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
       "foreignKeys": {
@@ -6081,7 +6222,7 @@
       "checkConstraints": {
         "ImportRun_trigger_check": {
           "name": "ImportRun_trigger_check",
-          "value": "\"ImportRun\".\"trigger\" IN ('foreground', 'discovery', 'manual', 'backfill')"
+          "value": "\"ImportRun\".\"trigger\" IN ('foreground', 'discovery', 'manual', 'backfill', 'ephemeral')"
         },
         "ImportRun_status_check": {
           "name": "ImportRun_status_check",
@@ -6089,11 +6230,19 @@
         },
         "ImportRun_purpose_check": {
           "name": "ImportRun_purpose_check",
-          "value": "\"ImportRun\".\"purpose\" IN ('account_sync', 'purchase_validation', 'product_enrichment', 'photo_inventory')"
+          "value": "\"ImportRun\".\"purpose\" IN ('account_sync', 'purchase_validation', 'product_enrichment', 'photo_inventory', 'ai_suggest', 'ai_action', 'background', 'file_import', 'legacy')"
         },
         "ImportRun_photo_inventory_no_vendor_check": {
           "name": "ImportRun_photo_inventory_no_vendor_check",
           "value": "\"ImportRun\".\"purpose\" <> 'photo_inventory' OR \"ImportRun\".\"vendorAccountId\" IS NULL"
+        },
+        "ImportRun_channel_check": {
+          "name": "ImportRun_channel_check",
+          "value": "\"ImportRun\".\"channel\" IN ('web', 'api', 'mcp', 'caldav', 'system')"
+        },
+        "ImportRun_import_party_check": {
+          "name": "ImportRun_import_party_check",
+          "value": "\"ImportRun\".\"purpose\" NOT IN ('account_sync', 'purchase_validation', 'product_enrichment', 'photo_inventory') OR (\"ImportRun\".\"ledgerPartyId\" IS NOT NULL AND \"ImportRun\".\"actorLedgerPartyShortcode\" IS NOT NULL)"
         }
       },
       "isRLSEnabled": false
