@@ -13,6 +13,7 @@ import Foundation
 /// - `cubby://search` opens the Search tab (home-screen quick action).
 /// - `cubby://dev` opens the Dev screen.
 /// - `cubby://activity` opens the Activity list; `cubby://activity/<IPR-…|RUN-…>` opens one run
+/// - `cubby://activity/local/<id>` opens one running device-local activity.
 ///   (the server `ActivityRun` id shape — `packages/schemas/src/activity.ts`'s `activityRunId` —
 ///   is not a catalog entity shortcode, so it is validated here rather than through `CubbyLabel`).
 ///
@@ -31,6 +32,7 @@ public enum CubbyLink: Sendable, Hashable {
     case search
     case dev
     case activity(run: String?)
+    case localActivity(String)
 
     public static let scheme = "cubby"
 
@@ -75,6 +77,9 @@ public enum CubbyLink: Sendable, Hashable {
         case ("activity", 1):
             guard let run = Self.activityRunID(segments[0]) else { return nil }
             self = .activity(run: run)
+        case ("activity", 2):
+            guard segments[0] == "local", let id = Self.localActivityID(segments[1]) else { return nil }
+            self = .localActivity(id)
         default:
             return nil
         }
@@ -93,6 +98,13 @@ public enum CubbyLink: Sendable, Hashable {
             return value
         }
         return nil
+    }
+
+    private static func localActivityID(_ raw: String) -> String? {
+        guard !raw.isEmpty, raw.count <= 100,
+            raw.allSatisfy({ $0.isASCII && ($0.isLetter || $0.isNumber || $0 == "-") })
+        else { return nil }
+        return raw
     }
 
     public var url: URL {
@@ -121,6 +133,9 @@ public enum CubbyLink: Sendable, Hashable {
         case .activity(let run):
             components.host = "activity"
             components.path = run.map { "/\($0)" } ?? ""
+        case .localActivity(let id):
+            components.host = "activity"
+            components.path = "/local/\(id)"
         }
         // Every component above is scheme-safe ASCII, so this cannot fail.
         return components.url!

@@ -201,6 +201,55 @@ public actor PhotoAnalysisStore {
             try Self.upsertHash(
                 in: db, localIdentifier: localIdentifier, modificationDate: modificationDate,
                 perceptualHash: perceptualHash, revision: revision)
+            try db.execute(
+                sql: "DELETE FROM photo_match_cloud_deferred WHERE local_identifier = ?",
+                arguments: [localIdentifier])
+        }
+    }
+
+    /// A local-only hash request can fail for an iCloud-only asset. Keep that outcome until
+    /// PhotoKit reports a change or the user explicitly refreshes; otherwise every scheduled
+    /// background pass would retry the same unavailable assets forever.
+    public func deferCloudHash(localIdentifier: String, modificationDate: Date?) throws {
+        try database.write { db in
+            try db.execute(
+                sql: """
+                    INSERT INTO photo_match_cloud_deferred (local_identifier, modification_date)
+                    VALUES (?, ?)
+                    ON CONFLICT(local_identifier) DO UPDATE SET modification_date = excluded.modification_date
+                    """,
+                arguments: [localIdentifier, modificationDate?.timeIntervalSinceReferenceDate])
+        }
+    }
+
+    public func clearDeferredCloudHashes(_ localIdentifiers: [String]) throws {
+        guard !localIdentifiers.isEmpty else { return }
+        try database.write { db in
+            let statement = try db.cachedStatement(
+                sql: "DELETE FROM photo_match_cloud_deferred WHERE local_identifier = ?")
+            for id in localIdentifiers { try statement.execute(arguments: [id]) }
+        }
+    }
+
+    public func deferredCloudHashes(for localIdentifiers: [String]) throws -> [String: Date?] {
+        guard !localIdentifiers.isEmpty else { return [:] }
+        return try database.read { db in
+            var results: [String: Date?] = [:]
+            for start in stride(from: 0, to: localIdentifiers.count, by: 900) {
+                let ids = Array(localIdentifiers[start..<min(start + 900, localIdentifiers.count)])
+                let placeholders = Array(repeating: "?", count: ids.count).joined(separator: ", ")
+                let rows = try Row.fetchCursor(
+                    db,
+                    sql:
+                        "SELECT local_identifier, modification_date FROM photo_match_cloud_deferred WHERE local_identifier IN (\(placeholders))",
+                    arguments: StatementArguments(ids))
+                while let row = try rows.next() {
+                    let value: Double? = row["modification_date"]
+                    results[row["local_identifier"]] = .some(
+                        value.map(Date.init(timeIntervalSinceReferenceDate:)))
+                }
+            }
+            return results
         }
     }
 
@@ -429,6 +478,10 @@ public actor PhotoAnalysisStore {
             let removed = db.changesCount
             try db.execute(
                 sql: "DELETE FROM photo_match WHERE local_identifier NOT IN (SELECT id FROM live_asset)")
+            try db.execute(
+                sql:
+                    "DELETE FROM photo_match_cloud_deferred WHERE local_identifier NOT IN (SELECT id FROM live_asset)"
+            )
             try db.execute(sql: "DELETE FROM live_asset")
             return removed
         }
@@ -663,6 +716,12 @@ public actor PhotoAnalysisStore {
                 table.column("image_id", .text).notNull()
                 table.column("digest", .integer).notNull()
                 table.primaryKey(["host", "image_id"])
+            }
+        }
+        migrator.registerMigration("v4_photo_match_cloud_deferred") { db in
+            try db.create(table: "photo_match_cloud_deferred") { table in
+                table.column("local_identifier", .text).primaryKey()
+                table.column("modification_date", .double)
             }
         }
         return migrator

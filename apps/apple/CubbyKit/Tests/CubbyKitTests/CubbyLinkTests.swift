@@ -41,6 +41,8 @@ struct CubbyLinkTests {
         #expect(link("cubby://activity/PRD-2345") == nil)
         #expect(link("cubby://activity/RUN-") == nil)
         #expect(link("cubby://activity/nope") == nil)
+        #expect(link("cubby://activity/local/photo-library-scan") == .localActivity("photo-library-scan"))
+        #expect(link("cubby://activity/local/../photos") == nil)
     }
 
     @Test func rejectsWrongSchemeHostOrScope() {
@@ -82,6 +84,7 @@ struct CubbyLinkTests {
             .activity(run: nil),
             .activity(run: "RUN-EXAMPLE"),
             .activity(run: "IPR-EXAMPLE"),
+            .localActivity("photo-library-scan"),
         ]
         for original in links {
             #expect(CubbyLink(url: original.url) == original)

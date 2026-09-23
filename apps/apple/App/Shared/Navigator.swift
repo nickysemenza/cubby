@@ -142,6 +142,8 @@ final class Navigator {
             openDev()
         case .activity(let run):
             openActivity(run.map { .serverRun($0) })
+        case .localActivity(let id):
+            openActivity(.localActivity(id))
         }
     }
 
