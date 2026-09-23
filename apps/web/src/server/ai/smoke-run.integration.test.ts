@@ -15,31 +15,36 @@ import { PURCHASE_IMPORT_MAIL_FEATURE } from "./features";
 import type { StructuredRunPorts } from "./run-feature";
 import { runAiSmoke } from "./smoke-run";
 
+function fakeChat<T extends object>(response: T) {
+  const calls: unknown[] = [];
+  const capture = async (
+    args: Parameters<StructuredRunPorts["chat"]>[0],
+  ): Promise<string> => {
+    calls.push(args);
+    const widened: unknown = response;
+    // SAFETY: the runner validates the returned fixture against the mail schema.
+    // This port has the full generic chat signature only for the smoke test.
+    return widened as string;
+  };
+  // SAFETY: capture observes the options and returns the fixture for the
+  // non-streaming structured branch exercised by this test.
+  const ports: StructuredRunPorts = {
+    chat: capture as StructuredRunPorts["chat"],
+  };
+  return { calls, ports };
+}
+
 describe("AI smoke dispatch", () => {
   const ctx = withTestDb();
 
   it("routes order mail through its production request without workflow writes", async () => {
-    const calls: unknown[] = [];
-    const capture = async (
-      args: Parameters<StructuredRunPorts["chat"]>[0],
-    ): Promise<string> => {
-      calls.push(args);
-      const response = {
-        event: "other",
-        orderId: null,
-        amount: null,
-        currency: null,
-        occurredAt: null,
-      };
-      // SAFETY: the runner validates the returned fixture against the mail schema.
-      // This port has the full generic chat signature only for the smoke test.
-      return response as string;
-    };
-    // SAFETY: capture observes the options and returns the fixture for the
-    // non-streaming structured branch exercised by this test.
-    const ports: StructuredRunPorts = {
-      chat: capture as StructuredRunPorts["chat"],
-    };
+    const { calls, ports } = fakeChat({
+      event: "other",
+      orderId: null,
+      amount: null,
+      currency: null,
+      occurredAt: null,
+    });
     const actor = requireActor(
       createTestRequestContext(ctx.db, {
         auth: { userId: ctx.actor.userId },
