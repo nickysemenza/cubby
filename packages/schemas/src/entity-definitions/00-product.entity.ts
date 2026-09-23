@@ -467,7 +467,13 @@ export default defineEntity({
           kind: "specialized",
           renderer: "entity-select",
           suggest: {
-            basis: ["name", "manufacturer", "notes", "classificationEvidence"],
+            basis: [
+              "name",
+              "manufacturer",
+              "model",
+              "notes",
+              "classificationEvidence",
+            ],
           },
         },
         display: {
