@@ -123,15 +123,6 @@ const resultName = (
   return parsed.name || fallback;
 };
 
-/**
- * `EntityIntentFields` renders every "capture"-roster field generically,
- * `name` focused first (its own special case, mirroring the old hand-rolled
- * `focusOnMount`). Two behaviors the hand-rolled version had are accepted
- * losses (see the plan): the "Planned" switch's date label no longer flips
- * between "Expected date"/"Expense date" (`future`'s manifest checkbox has a
- * fixed label), and the vendor placeholder no longer varies with
- * `context.disposition` ("Sold to / given to" vs "Where from?").
- */
 function ExpenseSettleFields({ record }: EntityEditorFieldsProps) {
   return (
     <EntityIntentFields

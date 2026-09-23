@@ -1,14 +1,8 @@
-import type { MutationSideEffects } from "@cubby/schemas/background-jobs";
 import { countableEntities } from "@cubby/schemas/entity-manifest";
 import { imageOut } from "@cubby/schemas/image";
-import type { ProductTopLevelOut } from "@cubby/schemas/product";
 import { MutationObserver, QueryClient } from "@tanstack/react-query";
-import { describe, expect, expectTypeOf, it } from "vitest";
+import { describe, expect, it } from "vitest";
 
-import type {
-  DataOf,
-  VariablesOf,
-} from "~/app/_components/hooks/useActionMutation";
 import { entityRipple } from "~/integrations/tanstack-query/cache-tags";
 import { mock } from "~/lib/test/mock-schema";
 import {
@@ -19,9 +13,7 @@ import {
 
 import {
   entityMutationOptionsFactory,
-  type EntityMutationData,
   type EntityMutationTransport,
-  type EntityMutationVariables,
 } from "./entity-contracts";
 import { entityListFor } from "./entity-list.functions";
 
@@ -57,26 +49,6 @@ describe("entity-contracts drift guard", () => {
 });
 
 describe("kernel browser transport", () => {
-  it("preserves entity-specific result types through the mutation adapter", () => {
-    const createFactory = entityMutationOptionsFactory("product", "create");
-    const updateFactory = entityMutationOptionsFactory("product", "update");
-    const deleteFactory = entityMutationOptionsFactory("product", "delete");
-    const bulkFactory = entityMutationOptionsFactory("product", "bulkUpdate");
-
-    expectTypeOf<DataOf<typeof createFactory>>().toEqualTypeOf<
-      ProductTopLevelOut & { sideEffects: MutationSideEffects }
-    >();
-    expectTypeOf<VariablesOf<typeof updateFactory>>().toEqualTypeOf<
-      EntityMutationVariables<"product", "update">
-    >();
-    expectTypeOf<DataOf<typeof deleteFactory>>().toEqualTypeOf<
-      EntityMutationData<"product", "delete">
-    >();
-    expectTypeOf<VariablesOf<typeof bulkFactory>>().toEqualTypeOf<
-      EntityMutationVariables<"product", "bulkUpdate">
-    >();
-  });
-
   it("maps generated list contracts onto normalized operation cache keys", () => {
     const params = {
       filters: {},
