@@ -1,4 +1,9 @@
-import { aiSmokeInputs, type AiSmokeScenario } from "@cubby/schemas/ai-smoke";
+import {
+  aiSmokeInputs,
+  aiSmokeRunOut,
+  aiSmokeScenarioSchema,
+  type AiSmokeScenario,
+} from "@cubby/schemas/ai-smoke";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { z } from "zod";
@@ -16,7 +21,6 @@ import {
 import { Spinner } from "~/components/ui/spinner";
 import { getErrorMessage } from "~/lib/error-utils";
 import { formatDuration } from "~/lib/format-duration";
-import { getAiSmokeCatalog, runAiSmokeCase } from "~/server-functions/ai-smoke";
 
 import {
   AiSmokeForm,
@@ -24,8 +28,8 @@ import {
   type SmokeFormValue,
 } from "./ai-smoke-form";
 
-type SmokeResult = Awaited<ReturnType<typeof runAiSmokeCase>>;
-type Scenario = Awaited<ReturnType<typeof getAiSmokeCatalog>>[number];
+type SmokeResult = z.infer<typeof aiSmokeRunOut>;
+type Scenario = z.infer<typeof aiSmokeScenarioSchema>;
 type SmokeOperations = {
   catalog: () => Promise<Scenario[]>;
   run: (
@@ -34,8 +38,14 @@ type SmokeOperations = {
   ) => Promise<SmokeResult>;
 };
 const productionSmokeOperations: SmokeOperations = {
-  catalog: () => getAiSmokeCatalog(),
-  run: (scenario, input) => runAiSmokeCase({ data: { scenario, input } }),
+  catalog: async () => {
+    const { getAiSmokeCatalog } = await import("~/server-functions/ai-smoke");
+    return getAiSmokeCatalog();
+  },
+  run: async (scenario, input) => {
+    const { runAiSmokeCase } = await import("~/server-functions/ai-smoke");
+    return runAiSmokeCase({ data: { scenario, input } });
+  },
 };
 
 const sourcePrerequisites = {
