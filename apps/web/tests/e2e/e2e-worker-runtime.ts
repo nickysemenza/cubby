@@ -83,6 +83,10 @@ export function createHarness(
           R2_ACCESS_KEY_ID: "dummy",
           R2_SECRET_ACCESS_KEY: "dummy",
           USDA_API_URL: "http://127.0.0.1:9/",
+          // Keyless like CI (emptyStringAsUndefined), so a local .env key never
+          // turns E2E into slow, billed, nondeterministic model calls: every
+          // AI operation takes the same fast "not configured" path everywhere.
+          AI_GATEWAY_API_KEY: "",
         },
         secrets: {
           BETTER_AUTH_SECRET:

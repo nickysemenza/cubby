@@ -6,7 +6,7 @@ import { importRun } from "~/server/db/schema";
 import { ensureRun } from "~/server/runs/ensure-run";
 
 import { getDb } from "./database-helpers";
-import { getImportRunByShortcode } from "./import-run";
+import { getImportRunByShortcode, listImportRuns } from "./import-run";
 
 describe("getImportRunByShortcode", () => {
   const ctx = withTestDb();
@@ -28,5 +28,36 @@ describe("getImportRunByShortcode", () => {
       ledgerPartyId: null,
       ledgerPartyName: null,
     });
+  });
+});
+
+describe("listImportRuns", () => {
+  const ctx = withTestDb();
+
+  // Regression: the list once hid ephemeral runs unless a special flag was
+  // set, so every Jev pass and AI action was missing from `/runs`.
+  it("lists ephemeral AI runs unfiltered and by trigger", async () => {
+    await ensureRun(ctx.db, ctx.actor, { purpose: "ai_suggest" });
+    const page = { pageIndex: 0, pageSize: 50 };
+
+    const all = await listImportRuns(ctx.db, {}, [], page);
+    const ephemeral = await listImportRuns(
+      ctx.db,
+      { trigger: ["ephemeral"] },
+      [],
+      page,
+    );
+    const manual = await listImportRuns(
+      ctx.db,
+      { trigger: ["manual"] },
+      [],
+      page,
+    );
+
+    expect(all.data).toEqual([
+      expect.objectContaining({ purpose: "ai_suggest", trigger: "ephemeral" }),
+    ]);
+    expect(ephemeral.data).toHaveLength(1);
+    expect(manual.data).toHaveLength(0);
   });
 });
