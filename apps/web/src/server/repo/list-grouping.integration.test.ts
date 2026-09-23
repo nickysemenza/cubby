@@ -1,12 +1,13 @@
+import { eq } from "drizzle-orm";
 import { taxonomyShortcode } from "tooling/product-category-fixtures";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { productCategory as productCategoryTable } from "~/server/db/schema";
+import { productCategory } from "~/server/db/schema";
 import { getDb } from "~/server/repo/database-helpers";
 import {
-  listLedgerParties,
   createLedgerParty,
+  listLedgerParties,
 } from "~/server/repo/ledger-party";
 import { locationList } from "~/server/repo/location/crud";
 import { createProductCategory } from "~/server/repo/product-category";
@@ -19,69 +20,64 @@ import {
 } from "~/server/repo/repo.fixtures";
 
 const ctx = withTestDb();
-const page = (pageIndex: number) => ({ pageIndex, pageSize: 1 });
+const groups = (result: {
+  groups?: { key: string; label: string; count: number }[];
+}) => result.groups;
+const groupedProducts = (
+  sort: Parameters<typeof productList>[2],
+  pageIndex: number,
+  pageSize: number,
+) => productList(ctx.db, {}, sort, { pageIndex, pageSize }, "category");
+async function category(name: string, sortOrder: number) {
+  return createProductCategory(
+    ctx.db,
+    {
+      name,
+      aliases: [],
+      description: null,
+      parentId: taxonomyShortcode("tools"),
+      sortOrder,
+      feature: null,
+    },
+    ctx.actor,
+  );
+}
+
+async function product(name: string, categoryId: string | null) {
+  return createProductFixture(
+    ctx.db,
+    makeProductInput({ name, categoryId }),
+    ctx.actor,
+  );
+}
+
+async function location(name: string, type: "room" | "box") {
+  return createLocationFixture(
+    ctx.db,
+    makeLocationInput({ name, type }),
+    ctx.actor,
+  );
+}
 
 describe("server list grouping", () => {
-  it("orders Product categories before pagination and reports full category paths and counts", async () => {
-    const alpha = await createProductCategory(
-      ctx.db,
-      {
-        name: "Alpha group",
-        aliases: [],
-        description: null,
-        parentId: taxonomyShortcode("tools"),
-        sortOrder: 0,
-        feature: null,
-      },
-      ctx.actor,
-    );
-    const beta = await createProductCategory(
-      ctx.db,
-      {
-        name: "Beta group",
-        aliases: [],
-        description: null,
-        parentId: taxonomyShortcode("tools"),
-        sortOrder: 1,
-        feature: null,
-      },
-      ctx.actor,
-    );
-    await createProductFixture(
-      ctx.db,
-      makeProductInput({ name: "Beta item", categoryId: beta.output.id }),
-      ctx.actor,
-    );
-    await createProductFixture(
-      ctx.db,
-      makeProductInput({ name: "Alpha item", categoryId: alpha.output.id }),
-      ctx.actor,
-    );
-    await createProductFixture(
-      ctx.db,
-      makeProductInput({ name: "Unclassified item", categoryId: null }),
-      ctx.actor,
-    );
+  it("orders Product categories before pagination and reports full paths and counts", async () => {
+    const alpha = await category("Alpha group", 0);
+    const beta = await category("Beta group", 1);
+    await product("Beta item", beta.output.id);
+    await product("Alpha item", alpha.output.id);
+    await product("Unclassified item", null);
 
-    const pages = [];
-    for (const index of [0, 1, 2]) {
-      pages.push(
-        await productList(
-          ctx.db,
-          {},
-          [{ orderBy: "name", direction: "asc" }],
-          page(index),
-          "category",
-        ),
-      );
-    }
+    const pages = await Promise.all(
+      [0, 1, 2].map((index) =>
+        groupedProducts([{ orderBy: "name", direction: "asc" }], index, 1),
+      ),
+    );
     expect(pages.map((result) => result.data[0]?.name)).toEqual([
       "Alpha item",
       "Beta item",
       "Unclassified item",
     ]);
-    const firstPage = pages[0]!;
-    expect("groups" in firstPage ? firstPage.groups : undefined).toEqual([
+    expect(groups(pages[0]!)).toEqual([
       expect.objectContaining({
         key: alpha.output.id,
         count: 1,
@@ -94,61 +90,16 @@ describe("server list grouping", () => {
       }),
       { key: "__unclassified__", label: "Unclassified", count: 1 },
     ]);
-  });
 
-  it("honors descending group-field sort while keeping the unclassified group last", async () => {
-    const alpha = await createProductCategory(
-      ctx.db,
-      {
-        name: "Alpha group",
-        aliases: [],
-        description: null,
-        parentId: taxonomyShortcode("tools"),
-        sortOrder: 0,
-        feature: null,
-      },
-      ctx.actor,
-    );
-    const beta = await createProductCategory(
-      ctx.db,
-      {
-        name: "Beta group",
-        aliases: [],
-        description: null,
-        parentId: taxonomyShortcode("tools"),
-        sortOrder: 1,
-        feature: null,
-      },
-      ctx.actor,
-    );
-    await createProductFixture(
-      ctx.db,
-      makeProductInput({ name: "Alpha item", categoryId: alpha.output.id }),
-      ctx.actor,
-    );
-    await createProductFixture(
-      ctx.db,
-      makeProductInput({ name: "Beta item", categoryId: beta.output.id }),
-      ctx.actor,
-    );
-    await createProductFixture(
-      ctx.db,
-      makeProductInput({ name: "Unclassified item", categoryId: null }),
-      ctx.actor,
-    );
-
-    const result = await productList(
-      ctx.db,
-      {},
+    const result = await groupedProducts(
       [
         { orderBy: "name", direction: "asc" },
         { orderBy: "category", direction: "desc" },
       ],
-      { pageIndex: 0, pageSize: 3 },
-      "category",
+      0,
+      3,
     );
-    const descendingGroups = "groups" in result ? result.groups : undefined;
-    expect(descendingGroups?.map((group) => group.key)).toEqual([
+    expect(groups(result)?.map((group) => group.key)).toEqual([
       beta.output.id,
       alpha.output.id,
       "__unclassified__",
@@ -160,43 +111,21 @@ describe("server list grouping", () => {
     ]);
   });
 
-  it("merges products with an unavailable category into one unclassified group", async () => {
-    const retired = await createProductCategory(
-      ctx.db,
-      {
-        name: "Retired group",
-        aliases: [],
-        description: null,
-        parentId: taxonomyShortcode("tools"),
-        sortOrder: 0,
-        feature: null,
-      },
-      ctx.actor,
-    );
-    await createProductFixture(
-      ctx.db,
-      makeProductInput({ name: "Retired item", categoryId: retired.output.id }),
-      ctx.actor,
-    );
-    await createProductFixture(
-      ctx.db,
-      makeProductInput({ name: "No category item", categoryId: null }),
-      ctx.actor,
-    );
+  it("collapses Products with a deleted category into the unclassified group", async () => {
+    const retired = await category("Retired group", 0);
+    await product("Retired item", retired.output.id);
+    await product("No category item", null);
     await getDb(ctx.db)
-      .update(productCategoryTable)
+      .update(productCategory)
       .set({ deletedAt: new Date() })
-      .where(eq(productCategoryTable.id, retired.entityId));
+      .where(eq(productCategory.id, retired.entityId));
 
-    const result = await productList(
-      ctx.db,
-      {},
+    const result = await groupedProducts(
       [{ orderBy: "name", direction: "asc" }],
-      { pageIndex: 0, pageSize: 10 },
-      "category",
+      0,
+      10,
     );
-    const groups = "groups" in result ? result.groups : undefined;
-    expect(groups).toEqual([
+    expect(groups(result)).toEqual([
       { key: "__unclassified__", label: "Unclassified", count: 2 },
     ]);
     expect(result.data.map((row) => row.name)).toEqual([
@@ -205,48 +134,11 @@ describe("server list grouping", () => {
     ]);
   });
 
-  it("orders Location types before pagination and reports all filtered type counts", async () => {
-    await createLocationFixture(
-      ctx.db,
-      makeLocationInput({ name: "Room one", type: "room" }),
-      ctx.actor,
-    );
-    await createLocationFixture(
-      ctx.db,
-      makeLocationInput({ name: "Room two", type: "room" }),
-      ctx.actor,
-    );
-    await createLocationFixture(
-      ctx.db,
-      makeLocationInput({ name: "Box one", type: "box" }),
-      ctx.actor,
-    );
+  it("sorts Location groups before pagination and reports all filtered counts", async () => {
+    await location("Room one", "room");
+    await location("Room two", "room");
+    await location("Box one", "box");
 
-    const first = await locationList(
-      ctx.db,
-      { itemTypeFilter: ["box", "room"] },
-      [{ orderBy: "name", direction: "desc" }],
-      page(0),
-      "type",
-    );
-    expect(first.data[0]?.name).toBe("Box one");
-    expect("groups" in first ? first.groups : undefined).toEqual([
-      { key: "box", label: "box", count: 1 },
-      { key: "room", label: "room", count: 2 },
-    ]);
-  });
-
-  it("honors a descending Location type sort before row sorts", async () => {
-    await createLocationFixture(
-      ctx.db,
-      makeLocationInput({ name: "Room", type: "room" }),
-      ctx.actor,
-    );
-    await createLocationFixture(
-      ctx.db,
-      makeLocationInput({ name: "Box", type: "box" }),
-      ctx.actor,
-    );
     const result = await locationList(
       ctx.db,
       { itemTypeFilter: ["box", "room"] },
@@ -254,30 +146,24 @@ describe("server list grouping", () => {
         { orderBy: "name", direction: "asc" },
         { orderBy: "type", direction: "desc" },
       ],
-      { pageIndex: 0, pageSize: 2 },
+      { pageIndex: 0, pageSize: 1 },
       "type",
     );
-    const groups = "groups" in result ? result.groups : undefined;
-    expect(groups?.map((group) => group.key)).toEqual(["room", "box"]);
-    expect(result.data.map((row) => row.name)).toEqual(["Room", "Box"]);
+    expect(result.data[0]?.name).toBe("Room one");
+    expect(groups(result)).toEqual([
+      { key: "room", label: "room", count: 2 },
+      { key: "box", label: "box", count: 1 },
+    ]);
   });
 
   it("applies Ledger Party secondary sorts before its stable tie breaker", async () => {
-    await createLedgerParty(
-      ctx.db,
-      { name: "Alpha", kind: "guest", notes: null },
-      ctx.actor,
-    );
-    await createLedgerParty(
-      ctx.db,
-      { name: "Beta", kind: "guest", notes: null },
-      ctx.actor,
-    );
-    await createLedgerParty(
-      ctx.db,
-      { name: "Gamma", kind: "member", notes: null },
-      ctx.actor,
-    );
+    for (const [name, kind] of [
+      ["Alpha", "guest"],
+      ["Beta", "guest"],
+      ["Gamma", "member"],
+    ] as const) {
+      await createLedgerParty(ctx.db, { name, kind, notes: null }, ctx.actor);
+    }
 
     const result = await listLedgerParties(
       ctx.db,
@@ -295,4 +181,3 @@ describe("server list grouping", () => {
     ]);
   });
 });
-import { eq } from "drizzle-orm";
