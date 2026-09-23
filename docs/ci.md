@@ -262,6 +262,17 @@ HTTP/3, so this queueing is mostly a harness artifact. An HTTPS/HTTP/2 front
 proxy for the harness is the remaining lever; it was deferred (TLS
 certificate and forwarded-proto handling for auth origins).
 
+The later two-shard Chromium run [#1287](https://github.com/nickysemenza/cubby/pull/1287)
+finished in 5:10 from trigger to `Web checks`; its slowest E2E shard took 4:52.
+A pinned Caddy HTTPS/HTTP/2 proxy passed focused asset, auth, API, and WebSocket
+checks locally, but both hosted shards exceeded six minutes, so the
+[experiment](https://github.com/nickysemenza/cubby/actions/runs/35927841410)
+was stopped and not retained. The existing client code-splitting groups remain
+the place to address individually measured page-load requests. A
+[six-worker PostgreSQL comparison](https://github.com/nickysemenza/cubby/actions/runs/35928414452)
+also lost to four workers on the same standard runner: test step 137s versus
+129s, full PostgreSQL job 3:33 versus 3:27, so the CI worker count stays four.
+
 | Change                                                                                               | Samples                                                                                                   | Result                                                                                                 |
 | ---------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
 | Two Playwright workers per chromium shard ([#1250](https://github.com/nickysemenza/cubby/pull/1250)) | slowest shard 249/306/250/247/244s (p50 **249s** vs 257s, −3%), no failures                               | rejected: the workers split one 4-vCPU runner and the same six connections                             |
