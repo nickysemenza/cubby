@@ -13,8 +13,8 @@ test:file:postgres src/...`. Read a failed run's ending and
 unchanged tier to rediscover its failures.
 
 One root agent owns any broad validation that the change needs. A subagent runs
-only focused tests and return their result, command, duration, relevant output, and
-limits. Reuse valid results at handoff; choose checks for the changed behavior
+only focused tests and returns its result, command, duration, relevant output,
+and limits. Reuse valid results at handoff; choose checks for the changed behavior
 rather than running a blanket `pnpm check` or affected suite. Keep expensive
 local gates sequential.
 

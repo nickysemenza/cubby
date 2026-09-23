@@ -32,7 +32,8 @@ is host state; these supported pairs are the Cubby routing contract.
 | Hard diagnosis, cross-subsystem work | `gpt-6-sol` / high | opus / medium |
 | Independent broad or high-risk review | `gpt-6-sol` / high | opus / high |
 
-Read-only delegated lanes run at low effort. Escalate when evidence conflicts or
+Search and extraction lanes run at low effort; diagnosis and review lanes
+start at their table effort. Escalate when evidence conflicts or
 a diagnosis has a demonstrated gap. Do not escalate just because the repository
 is large. On Claude, raise effort before changing model; use `xhigh`/`max` only
 where a quality gain was measured. In Anthropic's testing Opus 5.5 at medium
