@@ -1188,6 +1188,11 @@ history is the archive. Permanent product constraints live in the
   sheet state/lifecycle comprehensive only when a concrete re-presentation,
   cancellation, or saving handoff fails. Port one complete detail/list slot or
   action loop at a time, preserving existing contracts and specialized behavior.
+  The current concrete action gap is `NativePresentationCoverage.heroAction`:
+  add-to-inventory, bulk edit, delete, discard, mark-purchased, record-sale,
+  and set-status are declared but explicitly unsupported on native. Choose the
+  recurring verbs first, and preserve each web confirmation and impact preview.
+  Inventory ownership remains a native supplement.
   Owners: `apps/apple/App/Shared` and the generated `EntityCatalog`; build/capability
   context lives in [the native README](../apps/apple/README.md).
 
@@ -1450,7 +1455,24 @@ history is the archive. Permanent product constraints live in the
 
 ## Next pass
 
-Deferred from the 2026-09 manifest-rendering PRs; unordered.
+Deferred from the 2026-09 manifest-rendering and deletion/parity PRs; unordered.
+
+- **Declare generic list grouping once.** Product and Location enable grouping
+  in their web list-column overrides, while their repositories separately
+  implement full-filter counts and group-first order. Put the grouping contract
+  on the entity declaration and generate or validate both bindings, including
+  Product's computed category path and the shared null-group keys. Reject a new
+  generic grouped view without full-set metadata so page-local counts cannot
+  silently return (`apps/web/src/app/_components/entity-list/generic-entity-list.tsx`,
+  `apps/web/src/server/repo/product/crud.ts`,
+  `apps/web/src/server/repo/location/crud.ts`).
+
+- **Profile test cost before another pruning pass.** [PR #1273](https://github.com/nickysemenza/cubby/pull/1273) reduced literal
+  test declarations but did not show an overall CI speed gain: web node and
+  Apple checks ran longer while PostgreSQL ran faster than successful main
+  #1272. Compare several exact-head runs and per-suite timings, then
+  consolidate costly duplicate behavior coverage or fixture setup without
+  weakening the merge gate. The one-run comparison is in that PR's report.
 
 - **Expose recipebridge conversion, needs, costing and nutrition via cubby-ffi**
   only alongside the first native screen that scales a recipe or prices a meal.
