@@ -95,7 +95,7 @@ describe("upsertRecipe", () => {
             .insert(recipe)
             .values({
               name,
-              shortcode: "RACER1",
+              shortcode: "RCP-7K9M",
               SourceType: "Website",
               SourceData: "https://example.com/winner",
             })

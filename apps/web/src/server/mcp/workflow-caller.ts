@@ -17,6 +17,7 @@ import {
   clearDataException,
   setDataException,
 } from "~/server/repo/data-quality";
+import { getEntityConnections } from "~/server/repo/entity-edge-source";
 import { previewFinancialStatementImport } from "~/server/repo/financial-statement-preview";
 import {
   getImageProcessingReadProjection,
@@ -153,6 +154,12 @@ const callerDomains = {
       (context: CallerContext) =>
       (input: Parameters<typeof previewOperation>[1]) =>
         previewOperation(context.readDb, input, new Date()),
+  },
+  entityGraph: {
+    connections:
+      (context: CallerContext) =>
+      (input: Parameters<typeof getEntityConnections>[1]) =>
+        getEntityConnections(context.readDb, input),
   },
   expense: {
     analytics:

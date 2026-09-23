@@ -5,6 +5,7 @@
 import {
   locationId as locationIdSchema,
   type LocationId,
+  parseEntityId,
   parseShortcodeFor,
   productId as productIdSchema,
 } from "@cubby/schemas/identifiers";
@@ -19,12 +20,11 @@ import { z } from "zod";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
+  entityAttachment,
   type image,
   inventoryEntry,
   location,
-  locationImage,
   product,
-  productImage,
 } from "~/server/db/schema";
 import { loadDataQualities } from "~/server/repo/data-quality";
 import {
@@ -144,7 +144,7 @@ export const buildLocationTree = async (db: Database, rootId?: LocationId) => {
           },
           with: {
             images: {
-              where: notDeleted(productImage),
+              where: notDeleted(entityAttachment),
               orderBy: imageOrder,
               with: { image: true },
             },
@@ -171,14 +171,14 @@ export const buildLocationTree = async (db: Database, rootId?: LocationId) => {
   const locationIds = locationRows.map((loc) => loc.id);
   const loadLocationImages = () =>
     locationIds.length > 0
-      ? getDb(db).query.locationImage.findMany({
+      ? getDb(db).query.entityAttachment.findMany({
           // Spread first, then override `where`: the preset carries its own
           // `notDeleted` filter, which would otherwise clobber the id predicate
           // and fetch every location's images.
           ...relations.location.withImages.with.images,
           where: and(
-            inArray(locationImage.locationId, locationIds),
-            notDeleted(locationImage),
+            inArray(entityAttachment.subjectEntityId, locationIds),
+            notDeleted(entityAttachment),
           ),
         })
       : Promise.resolve([]);
@@ -200,9 +200,10 @@ export const buildLocationTree = async (db: Database, rootId?: LocationId) => {
     Array<{ image: typeof image.$inferSelect }>
   >();
   for (const locImg of allLocationImages) {
-    const existing = imagesByLocationId.get(locImg.locationId) ?? [];
+    const locationId = parseEntityId("location", locImg.subjectEntityId);
+    const existing = imagesByLocationId.get(locationId) ?? [];
     existing.push(locImg);
-    imagesByLocationId.set(locImg.locationId, existing);
+    imagesByLocationId.set(locationId, existing);
   }
 
   for (const loc of locationRows) {

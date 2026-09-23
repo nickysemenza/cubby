@@ -3,7 +3,7 @@ import { testShortcode } from "@cubby/schemas/testing";
 import { countTestDbQueries, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { inventoryEntry, location, productImage } from "~/server/db/schema";
+import { entityAttachment, inventoryEntry, location } from "~/server/db/schema";
 
 import { getDb } from "./database-helpers";
 import { getEntityGraphPaths } from "./entity-graph-paths";
@@ -29,8 +29,8 @@ describe("entity graph path repository", () => {
     );
     const cover = await createImageFixture(ctx.db, "path-cover");
     await getDb(ctx.db)
-      .insert(productImage)
-      .values({ productId: product.entityId, imageId: cover.id });
+      .insert(entityAttachment)
+      .values({ subjectEntityId: product.entityId, imageId: cover.id });
     const vendor = await createVendor(
       ctx.db,
       {

@@ -761,6 +761,70 @@ describe("shared entity Relations", () => {
     ).toBeVisible();
   });
 
+  it("shows physical connections separately from derived relationships", async () => {
+    const image = { entityType: "image", entityId: "IMG-4K7M" } as const;
+    const operations = {
+      ...entityGraph,
+      explore: entityGraph.explore.withTransport(async () => initial),
+      graph: entityGraph.graph.withTransport(async () => initial),
+      connections: entityGraph.connections.withTransport(async ({ input }) => ({
+        id: input.id,
+        kind: "cookbook",
+        redirectedFrom: null,
+        groups: [
+          {
+            direction: "incoming",
+            edgeKey: "EntityAttachment.imageId",
+            label: "Photos",
+            role: "media",
+            otherKind: "image",
+            count: 1,
+            items: [{ id: image.entityId, kind: "image", name: "Cover photo" }],
+            disposition: null,
+          },
+        ],
+      })),
+    };
+    render(
+      <EntityRelations
+        entity="cookbook"
+        sourceId={root.entityId}
+        operations={operations}
+      />,
+      { wrapper: harness.wrapper },
+    );
+    expect(
+      await screen.findByRole("heading", { name: "Physical connections" }),
+    ).toBeVisible();
+    expect(screen.getByRole("link", { name: "Cover photo" })).toBeVisible();
+  });
+
+  it("hides the physical connections section when there are no groups", async () => {
+    const operations = {
+      ...entityGraph,
+      explore: entityGraph.explore.withTransport(async () => initial),
+      graph: entityGraph.graph.withTransport(async () => initial),
+      connections: entityGraph.connections.withTransport(async ({ input }) => ({
+        id: input.id,
+        kind: "cookbook",
+        redirectedFrom: null,
+        groups: [],
+      })),
+    };
+    render(
+      <EntityRelations
+        entity="cookbook"
+        sourceId={root.entityId}
+        operations={operations}
+      />,
+      { wrapper: harness.wrapper },
+    );
+    await screen.findByRole("heading", { name: "Recipes" });
+    expect(
+      screen.queryByRole("heading", { name: "Physical connections" }),
+    ).not.toBeInTheDocument();
+  });
+
   it("offers a retry after an initial transport failure", async () => {
     let failed = true;
     const operations = {

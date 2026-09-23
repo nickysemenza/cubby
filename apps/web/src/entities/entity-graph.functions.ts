@@ -16,4 +16,7 @@ export const entityGraph = defineOperationDomain(entityGraphContract, {
   graphPaths: {
     tags: [["relatedData"], ...allEntities.map((entity) => [entity] as const)],
   },
+  connections: {
+    tags: [["relatedData"], ...allEntities.map((entity) => [entity] as const)],
+  },
 });

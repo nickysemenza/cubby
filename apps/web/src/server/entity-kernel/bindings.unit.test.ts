@@ -205,7 +205,7 @@ describe("entity kernel bindings", () => {
       deletedReferences: [{ entity: "project" as const, id: "PRJ-4K7M" }],
       affectedEdges: [
         {
-          edge: "ProjectImage.projectId",
+          edge: "EntityAttachment.subjectEntityId",
           effect: "soft-delete" as const,
           changed: 2,
         },

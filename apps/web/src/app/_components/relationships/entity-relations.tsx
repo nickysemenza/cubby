@@ -19,6 +19,7 @@ import {
   type EntityRecommendationOperations,
 } from "~/app/_components/relatedness/entity-recommendations";
 import { EntityGraphPicker } from "~/app/_components/relationships/entity-graph-picker";
+import { PhysicalConnectionsPanel } from "~/app/_components/relationships/physical-connections";
 import { inventory } from "~/app/inventory/inventory.functions";
 import { ErrorDisplay } from "~/components/feedback/error-display";
 import { Row, Stack } from "~/components/layout";
@@ -98,6 +99,7 @@ type EntityGraphOperations = {
   explore: typeof entityGraph.explore;
   graph: typeof entityGraph.graph;
   graphPaths?: typeof entityGraph.graphPaths;
+  connections?: typeof entityGraph.connections;
 };
 
 export interface EntityRecommendationActionOperations {
@@ -388,6 +390,7 @@ function useEntityRelationsModel({
     root,
     rootKey,
     router,
+    operations,
     current,
     trail,
     cursor,
@@ -464,6 +467,7 @@ function EntityRelationsContent(
   const {
     root,
     router,
+    operations,
     current,
     trail,
     cursor,
@@ -663,6 +667,7 @@ function EntityRelationsContent(
           room for another.
         </p>
       )}
+      <PhysicalConnectionsPanel subject={selectedRef} operations={operations} />
     </Stack>
   );
 }

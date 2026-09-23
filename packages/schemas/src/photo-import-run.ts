@@ -64,10 +64,13 @@ const commitPhotoGroupInventory = z.object({
 export type CommitPhotoGroupInventory = z.infer<
   typeof commitPhotoGroupInventory
 >;
-/** What a proposal stores beside its `inventoryLocationId` FK column. */
+/**
+ * What a proposal stores beside its `inventoryLocationId` and
+ * `inventoryOwnerPartyId` FK columns.
+ */
 export type PhotoGroupStoredInventory = Omit<
   CommitPhotoGroupInventory,
-  "locationId"
+  "locationId" | "ownerPartyId"
 >;
 
 /** The writer's per-call cap on `images` and on `skip`. */

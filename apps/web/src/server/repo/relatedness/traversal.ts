@@ -16,7 +16,12 @@ interface EdgeSpec {
   edgeKey: string;
   sourceTable: string;
   sourceColumn: string;
-  targetTable: string;
+  /**
+   * One table for an ordinary FK. `EntityAttachment.subjectEntityId` names any
+   * attachable entity, so it lists each; entity ids are unique across tables,
+   * which keeps the join exact without a kind filter.
+   */
+  targetTables: readonly string[];
   sourceSoftDeletable: boolean;
 }
 
@@ -64,11 +69,12 @@ const edgeIndex = (): ReadonlyMap<string, EdgeSpec> => {
         );
       }
       const config = getTableConfig(column.table);
+      const known = specs.get(edgeKey);
       specs.set(edgeKey, {
         edgeKey,
         sourceTable: config.name,
         sourceColumn: column.name,
-        targetTable: entityTable(target),
+        targetTables: [...(known?.targetTables ?? []), entityTable(target)],
         sourceSoftDeletable: config.columns.some(
           (candidate) => candidate.name === "deletedAt",
         ),
@@ -91,7 +97,7 @@ const edgeIndex = (): ReadonlyMap<string, EdgeSpec> => {
           edgeKey,
           sourceTable: config.name,
           sourceColumn: column.name,
-          targetTable,
+          targetTables: [targetTable],
           sourceSoftDeletable: config.columns.some(
             (candidate) => candidate.name === "deletedAt",
           ),
@@ -142,6 +148,18 @@ function edgeCondition(
   return sql`${sql.raw(`${sourceAlias}."${edge.sourceColumn}"`)} = ${target}`;
 }
 
+const outgoingTarget = (edge: EdgeSpec, to: Entity | undefined): string => {
+  const [only, ...others] = edge.targetTables;
+  if (only !== undefined && others.length === 0) return only;
+  const table = to === undefined ? undefined : entityTable(to);
+  if (table === undefined || !edge.targetTables.includes(table)) {
+    throw new Error(
+      `Path ${edge.edgeKey} (outgoing) targets ${edge.targetTables.join(" | ")}; name the destination as the final step.`,
+    );
+  }
+  return table;
+};
+
 /**
  * Compile a manifest-only path into structural joins. `aliasPrefix` is trusted
  * server code, and lets two paths meet at a hub without alias collisions.
@@ -150,7 +168,15 @@ export const compileTraversal = (
   from: Entity,
   steps: readonly RelationshipPathStep[],
   aliasPrefix: string,
-  aliases?: { root?: string; leaf?: string },
+  aliases?: {
+    root?: string;
+    leaf?: string;
+    /**
+     * The path's destination. Required only when the final step follows a
+     * multi-target edge outward (an Image back to whatever it is attached to).
+     */
+    to?: Entity;
+  },
 ): Traversal => {
   const rootTable = entityTable(from);
   const rootAlias = aliases?.root ?? `${aliasPrefix}0`;
@@ -166,13 +192,18 @@ export const compileTraversal = (
         ? aliases.leaf
         : `${aliasPrefix}${index + 1}`;
     const outgoing = step.direction === "outgoing";
-    const expected = outgoing ? edge.sourceTable : edge.targetTable;
-    if (currentTable !== expected) {
+    const expected = outgoing ? [edge.sourceTable] : edge.targetTables;
+    if (!expected.includes(currentTable)) {
       throw new Error(
-        `Path ${step.edge} (${step.direction}) cannot follow ${currentTable}; expected ${expected}`,
+        `Path ${step.edge} (${step.direction}) cannot follow ${currentTable}; expected ${expected.join(" | ")}`,
       );
     }
-    const nextTable = outgoing ? edge.targetTable : edge.sourceTable;
+    const nextTable = outgoing
+      ? outgoingTarget(
+          edge,
+          index === steps.length - 1 ? aliases?.to : undefined,
+        )
+      : edge.sourceTable;
     hops.push({
       table: nextTable,
       alias,

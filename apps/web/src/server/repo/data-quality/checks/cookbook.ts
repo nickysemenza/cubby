@@ -18,12 +18,13 @@ const hasFewerLiveRecipesThanSource = (
   WHERE dq_ckb_recipe."cookbookId" = ${t.id} AND dq_ckb_recipe."deletedAt" IS NULL
 ))`;
 
-// `Cookbook.coverImageId` is a direct FK to Image (no join table, unlike a
-// gallery's attachment row) — a set but non-displayable image (e.g. a PDF) is
-// the same as no cover.
+// The cover is the cookbook's one `cover` attachment (ADR 0006); a set but
+// non-displayable image (e.g. a PDF) is the same as no cover.
 const hasDisplayableCover = (t: Cookbook) => sql`EXISTS (
-  SELECT 1 FROM "Image" dq_ckb_img
-  WHERE dq_ckb_img."id" = ${t.coverImageId} AND dq_ckb_img."deletedAt" IS NULL
+  SELECT 1 FROM "EntityAttachment" dq_ckb_att
+  JOIN "Image" dq_ckb_img ON dq_ckb_img."id" = dq_ckb_att."imageId"
+  WHERE dq_ckb_att."subjectEntityId" = ${t.id} AND dq_ckb_att."role" = 'cover'
+    AND dq_ckb_att."deletedAt" IS NULL AND dq_ckb_img."deletedAt" IS NULL
     AND ${sql.raw(displayableImageRawSql("dq_ckb_img"))}
 )`;
 
@@ -35,8 +36,7 @@ export const cookbookChecks = defineEntityChecks({
       missing: hasFewerLiveRecipesThanSource,
     },
     cookbook_cover: {
-      missing: (t) =>
-        sql`(${t.coverImageId} IS NULL OR NOT ${hasDisplayableCover(t)})`,
+      missing: (t) => sql`NOT ${hasDisplayableCover(t)}`,
     },
   },
 });

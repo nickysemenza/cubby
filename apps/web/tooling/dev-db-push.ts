@@ -2,6 +2,7 @@ import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 
 import { ensureDbExtensions } from "./db-extensions";
+import { installEntityIdentityTriggers } from "../src/server/db/entity-identity-schema";
 import { assertDevDatabaseUrl } from "./dev-db-guard";
 import { toPushSchemaDatabase } from "./drizzle-kit-interop";
 
@@ -21,6 +22,8 @@ async function main(): Promise<void> {
       "public",
     ]);
     await apply();
+    // drizzle-kit push does not manage triggers (ADR 0006).
+    await installEntityIdentityTriggers(db);
     console.log("[dev-db] Schema pushed");
   } finally {
     await pool.end();

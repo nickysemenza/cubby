@@ -114,14 +114,6 @@ export default defineEntity({
       { key: "rawJson", kind: "json", readKey: null },
       { key: "report", kind: "json", nullable: true, readKey: null },
       {
-        key: "coverImageId",
-        kind: "identifier",
-        nullable: true,
-        label: "Cover Image ID",
-        readKey: null,
-        reference: { entity: "image" },
-      },
-      {
         key: "productId",
         kind: "identifier",
         nullable: true,
@@ -264,7 +256,6 @@ export default defineEntity({
       // Stored at upsert (recipe items in the tree), so browse and problem
       // detection never walk the JSON.
       { key: "sourceRecipeCount", default: "literal", defaultValue: 0 },
-      { key: "coverImageId", reference: "image" },
       { key: "productId", reference: "product" },
       { key: "importedAt", default: "now" },
       { key: "createdAt", default: "now" },
@@ -324,10 +315,16 @@ export default defineEntity({
         "The image's associations slot lists what uses it, cookbook covers included.",
       provenance: {
         kind: "local-path",
-        steps: [{ edge: "Cookbook.coverImageId", direction: "outgoing" }],
+        steps: [
+          { edge: "EntityAttachment.subjectEntityId", direction: "incoming" },
+          { edge: "EntityAttachment.imageId", direction: "outgoing" },
+        ],
       },
       inverse: {
-        steps: [{ edge: "Cookbook.coverImageId", direction: "incoming" }],
+        steps: [
+          { edge: "EntityAttachment.imageId", direction: "incoming" },
+          { edge: "EntityAttachment.subjectEntityId", direction: "outgoing" },
+        ],
       },
     },
     {

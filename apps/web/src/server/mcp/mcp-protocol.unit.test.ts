@@ -227,7 +227,13 @@ describe("MCP protocol smoke", () => {
     const runEntity: ExecuteEntity = async () => ({
       action: "get",
       entity: "product",
-      item: { ...product, displayImages: [], attachments: [] },
+      item: {
+        ...product,
+        displayImages: [],
+        attachments: [],
+        redirectedFrom: null,
+        previousShortcodes: [],
+      },
     });
     const server = new McpServer({ name: "test", version: "1.0.0" });
     registerEntityTools(server, runEntity);
@@ -275,7 +281,13 @@ describe("MCP protocol smoke", () => {
     const runEntity: ExecuteEntity = async () => ({
       action: "get",
       entity: "product",
-      item: { ...product, displayImages: [], attachments: [] },
+      item: {
+        ...product,
+        displayImages: [],
+        attachments: [],
+        redirectedFrom: null,
+        previousShortcodes: [],
+      },
     });
     const summaryServer = new McpServer({ name: "test", version: "1.0.0" });
     const fullServer = new McpServer({ name: "test", version: "1.0.0" });
@@ -430,12 +442,24 @@ describe("MCP protocol smoke", () => {
         ? {
             action: "get",
             entity: "product",
-            item: { ...product, displayImages: [], attachments: [] },
+            item: {
+              ...product,
+              displayImages: [],
+              attachments: [],
+              redirectedFrom: null,
+              previousShortcodes: [],
+            },
           }
         : {
             action: "get",
             entity: "ingredient",
-            item: { ...ingredient, displayImages: [], attachments: [] },
+            item: {
+              ...ingredient,
+              displayImages: [],
+              attachments: [],
+              redirectedFrom: null,
+              previousShortcodes: [],
+            },
           };
     const server = new McpServer({ name: "test", version: "1.0.0" });
     registerEntityTools(server, runEntity);

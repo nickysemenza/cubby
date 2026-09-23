@@ -21,6 +21,7 @@ import { isUnspecifiedManufacturer } from "~/lib/manufacturer-utils";
 import { proposeSizeFromTitle } from "~/lib/title-unit-size";
 import type { UPCLookupClient } from "~/server/clients/upc-lookup";
 import type { Database } from "~/server/db";
+import { findOrphanEntities } from "~/server/repo/entity-edge-source";
 import {
   countDependencyCycles,
   countEntitiesMissingEmbeddings,
@@ -235,6 +236,17 @@ export const diagnosticAdapters = {
     sample: (db, _options, limit) =>
       healthySample(findOrphanedProducts(db), limit),
     count: async (db) => healthyCount((await findOrphanedProducts(db)).length),
+  },
+  "unconnected-entities": {
+    sample: async (db, _options, limit) => {
+      const { items, count } = await findOrphanEntities(db, { limit });
+      return { items, count, status: { state: "healthy" } };
+    },
+    // `findOrphanEntities` reports the true total via a window function
+    // computed before its LIMIT is applied, so one row is enough to read it —
+    // LIMIT 0 would return no rows at all, and with them the total.
+    count: async (db) =>
+      healthyCount((await findOrphanEntities(db, { limit: 1 })).count),
   },
   "partially-imported-cookbooks": {
     sample: (db, _options, limit) =>

@@ -6,12 +6,12 @@ import { countTestDbQueries, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import {
+  entityAttachment,
   expense,
   image,
   inventoryEntry,
   location,
   product,
-  productImage,
   purchase,
   purchaseProduct,
 } from "~/server/db/schema";
@@ -80,8 +80,8 @@ describe("entity graph repository", () => {
 
     const cover = await createImageFixture(ctx.db, "graph-cover");
     await getDb(ctx.db)
-      .insert(productImage)
-      .values({ productId: product.entityId, imageId: cover.id });
+      .insert(entityAttachment)
+      .values({ subjectEntityId: product.entityId, imageId: cover.id });
 
     const read = () =>
       getEntityGraph(ctx.db, {

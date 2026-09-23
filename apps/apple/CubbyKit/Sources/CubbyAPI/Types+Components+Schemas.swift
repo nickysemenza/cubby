@@ -2919,6 +2919,10 @@ extension Components {
             public var displayImages: Components.Schemas.DisplayImagesField
             /// - Remark: Generated from `#/components/schemas/DeviceDetail/attachments`.
             public var attachments: Components.Schemas.EntityAttachmentList
+            /// - Remark: Generated from `#/components/schemas/DeviceDetail/redirectedFrom`.
+            public var redirectedFrom: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/DeviceDetail/previousShortcodes`.
+            public var previousShortcodes: Components.Schemas.InputShared681004346C78D5F3
             /// Creates a new `DeviceDetail`.
             ///
             /// - Parameters:
@@ -2940,6 +2944,8 @@ extension Components {
             ///   - dataQuality:
             ///   - displayImages:
             ///   - attachments:
+            ///   - redirectedFrom:
+            ///   - previousShortcodes:
             public init(
                 id: Components.Schemas.DeviceShortcode,
                 installationId: Swift.String,
@@ -2958,7 +2964,9 @@ extension Components {
                 updatedAt: Foundation.Date,
                 dataQuality: Components.Schemas.DataQuality,
                 displayImages: Components.Schemas.DisplayImagesField,
-                attachments: Components.Schemas.EntityAttachmentList
+                attachments: Components.Schemas.EntityAttachmentList,
+                redirectedFrom: Swift.String? = nil,
+                previousShortcodes: Components.Schemas.InputShared681004346C78D5F3
             ) {
                 self.id = id
                 self.installationId = installationId
@@ -2978,6 +2986,8 @@ extension Components {
                 self.dataQuality = dataQuality
                 self.displayImages = displayImages
                 self.attachments = attachments
+                self.redirectedFrom = redirectedFrom
+                self.previousShortcodes = previousShortcodes
             }
             public enum CodingKeys: String, CodingKey {
                 case id
@@ -2998,6 +3008,8 @@ extension Components {
                 case dataQuality
                 case displayImages
                 case attachments
+                case redirectedFrom
+                case previousShortcodes
             }
         }
         /// - Remark: Generated from `#/components/schemas/DeviceListItem`.
@@ -3410,6 +3422,23 @@ extension Components {
         }
         /// - Remark: Generated from `#/components/schemas/EdgeKey`.
         public typealias EdgeKey = Swift.String
+        /// - Remark: Generated from `#/components/schemas/EdgeRole`.
+        @frozen public enum EdgeRole: String, Codable, Hashable, Sendable, CaseIterable {
+            case ownedChild = "owned-child"
+            case association = "association"
+            case composition = "composition"
+            case metadata = "metadata"
+            case acquisition = "acquisition"
+            case history = "history"
+            case hierarchy = "hierarchy"
+            case dependency = "dependency"
+            case contents = "contents"
+            case media = "media"
+            case ledger = "ledger"
+            case transaction = "transaction"
+            case reference = "reference"
+            case usage = "usage"
+        }
         /// - Remark: Generated from `#/components/schemas/EffectiveInventoryOwnership`.
         public struct EffectiveInventoryOwnership: Codable, Hashable, Sendable {
             /// - Remark: Generated from `#/components/schemas/EffectiveInventoryOwnership/mode`.
@@ -3705,6 +3734,134 @@ extension Components {
             case attachment = "attachment"
             case cover = "cover"
             case logo = "logo"
+        }
+        /// - Remark: Generated from `#/components/schemas/EntityConnectionDirection`.
+        @frozen public enum EntityConnectionDirection: String, Codable, Hashable, Sendable, CaseIterable {
+            case incoming = "incoming"
+            case outgoing = "outgoing"
+        }
+        /// - Remark: Generated from `#/components/schemas/EntityConnectionGroup`.
+        public struct EntityConnectionGroup: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/EntityConnectionGroup/direction`.
+            public var direction: Components.Schemas.EntityConnectionDirection
+            /// - Remark: Generated from `#/components/schemas/EntityConnectionGroup/edgeKey`.
+            public var edgeKey: Swift.String
+            /// - Remark: Generated from `#/components/schemas/EntityConnectionGroup/label`.
+            public var label: Swift.String
+            /// - Remark: Generated from `#/components/schemas/EntityConnectionGroup/role`.
+            public var role: Components.Schemas.EdgeRole
+            /// - Remark: Generated from `#/components/schemas/EntityConnectionGroup/otherKind`.
+            public var otherKind: Components.Schemas.Entity
+            /// - Remark: Generated from `#/components/schemas/EntityConnectionGroup/count`.
+            public var count: Swift.Int
+            /// - Remark: Generated from `#/components/schemas/EntityConnectionGroup/items`.
+            public var items: [Components.Schemas.EntityConnectionItem]
+            /// - Remark: Generated from `#/components/schemas/EntityConnectionGroup/disposition`.
+            public var disposition: Components.Schemas.OperationDisposition?
+            /// Creates a new `EntityConnectionGroup`.
+            ///
+            /// - Parameters:
+            ///   - direction:
+            ///   - edgeKey:
+            ///   - label:
+            ///   - role:
+            ///   - otherKind:
+            ///   - count:
+            ///   - items:
+            ///   - disposition:
+            public init(
+                direction: Components.Schemas.EntityConnectionDirection,
+                edgeKey: Swift.String,
+                label: Swift.String,
+                role: Components.Schemas.EdgeRole,
+                otherKind: Components.Schemas.Entity,
+                count: Swift.Int,
+                items: [Components.Schemas.EntityConnectionItem],
+                disposition: Components.Schemas.OperationDisposition? = nil
+            ) {
+                self.direction = direction
+                self.edgeKey = edgeKey
+                self.label = label
+                self.role = role
+                self.otherKind = otherKind
+                self.count = count
+                self.items = items
+                self.disposition = disposition
+            }
+            public enum CodingKeys: String, CodingKey {
+                case direction
+                case edgeKey
+                case label
+                case role
+                case otherKind
+                case count
+                case items
+                case disposition
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/EntityConnectionItem`.
+        public struct EntityConnectionItem: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/EntityConnectionItem/id`.
+            public var id: Swift.String
+            /// - Remark: Generated from `#/components/schemas/EntityConnectionItem/kind`.
+            public var kind: Components.Schemas.Entity
+            /// - Remark: Generated from `#/components/schemas/EntityConnectionItem/name`.
+            public var name: Swift.String?
+            /// Creates a new `EntityConnectionItem`.
+            ///
+            /// - Parameters:
+            ///   - id:
+            ///   - kind:
+            ///   - name:
+            public init(
+                id: Swift.String,
+                kind: Components.Schemas.Entity,
+                name: Swift.String? = nil
+            ) {
+                self.id = id
+                self.kind = kind
+                self.name = name
+            }
+            public enum CodingKeys: String, CodingKey {
+                case id
+                case kind
+                case name
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/EntityConnectionsOut`.
+        public struct EntityConnectionsOut: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/EntityConnectionsOut/id`.
+            public var id: Swift.String
+            /// - Remark: Generated from `#/components/schemas/EntityConnectionsOut/kind`.
+            public var kind: Components.Schemas.Entity
+            /// - Remark: Generated from `#/components/schemas/EntityConnectionsOut/redirectedFrom`.
+            public var redirectedFrom: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/EntityConnectionsOut/groups`.
+            public var groups: [Components.Schemas.EntityConnectionGroup]
+            /// Creates a new `EntityConnectionsOut`.
+            ///
+            /// - Parameters:
+            ///   - id:
+            ///   - kind:
+            ///   - redirectedFrom:
+            ///   - groups:
+            public init(
+                id: Swift.String,
+                kind: Components.Schemas.Entity,
+                redirectedFrom: Swift.String? = nil,
+                groups: [Components.Schemas.EntityConnectionGroup]
+            ) {
+                self.id = id
+                self.kind = kind
+                self.redirectedFrom = redirectedFrom
+                self.groups = groups
+            }
+            public enum CodingKeys: String, CodingKey {
+                case id
+                case kind
+                case redirectedFrom
+                case groups
+            }
         }
         /// - Remark: Generated from `#/components/schemas/EntityGraphBranch`.
         public struct EntityGraphBranch: Codable, Hashable, Sendable {
@@ -5072,6 +5229,10 @@ extension Components {
             public var displayImages: Components.Schemas.DisplayImagesField
             /// - Remark: Generated from `#/components/schemas/ExpenseDetail/attachments`.
             public var attachments: Components.Schemas.EntityAttachmentList
+            /// - Remark: Generated from `#/components/schemas/ExpenseDetail/redirectedFrom`.
+            public var redirectedFrom: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/ExpenseDetail/previousShortcodes`.
+            public var previousShortcodes: Components.Schemas.InputShared681004346C78D5F3
             /// Creates a new `ExpenseDetail`.
             ///
             /// - Parameters:
@@ -5109,6 +5270,8 @@ extension Components {
             ///   - dataQuality:
             ///   - displayImages:
             ///   - attachments:
+            ///   - redirectedFrom:
+            ///   - previousShortcodes:
             public init(
                 fieldResolutions: Components.Schemas.OptionalFieldResolutions? = nil,
                 projectAllocations: Components.Schemas.OptionalProjectAllocations? = nil,
@@ -5143,7 +5306,9 @@ extension Components {
                 updatedAt: Foundation.Date,
                 dataQuality: Components.Schemas.DataQuality,
                 displayImages: Components.Schemas.DisplayImagesField,
-                attachments: Components.Schemas.EntityAttachmentList
+                attachments: Components.Schemas.EntityAttachmentList,
+                redirectedFrom: Swift.String? = nil,
+                previousShortcodes: Components.Schemas.InputShared681004346C78D5F3
             ) {
                 self.fieldResolutions = fieldResolutions
                 self.projectAllocations = projectAllocations
@@ -5179,6 +5344,8 @@ extension Components {
                 self.dataQuality = dataQuality
                 self.displayImages = displayImages
                 self.attachments = attachments
+                self.redirectedFrom = redirectedFrom
+                self.previousShortcodes = previousShortcodes
             }
             public enum CodingKeys: String, CodingKey {
                 case fieldResolutions
@@ -5215,6 +5382,8 @@ extension Components {
                 case dataQuality
                 case displayImages
                 case attachments
+                case redirectedFrom
+                case previousShortcodes
             }
         }
         /// - Remark: Generated from `#/components/schemas/ExpenseLineBasis`.
@@ -6522,6 +6691,10 @@ extension Components {
             public var displayImages: Components.Schemas.DisplayImagesField
             /// - Remark: Generated from `#/components/schemas/FinancialAccountDetail/attachments`.
             public var attachments: Components.Schemas.EntityAttachmentList
+            /// - Remark: Generated from `#/components/schemas/FinancialAccountDetail/redirectedFrom`.
+            public var redirectedFrom: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/FinancialAccountDetail/previousShortcodes`.
+            public var previousShortcodes: Components.Schemas.InputShared681004346C78D5F3
             /// Creates a new `FinancialAccountDetail`.
             ///
             /// - Parameters:
@@ -6543,6 +6716,8 @@ extension Components {
             ///   - dataQuality:
             ///   - displayImages:
             ///   - attachments:
+            ///   - redirectedFrom:
+            ///   - previousShortcodes:
             public init(
                 id: Components.Schemas.FinancialAccountShortcode,
                 name: Swift.String,
@@ -6561,7 +6736,9 @@ extension Components {
                 updatedAt: Foundation.Date,
                 dataQuality: Components.Schemas.DataQuality,
                 displayImages: Components.Schemas.DisplayImagesField,
-                attachments: Components.Schemas.EntityAttachmentList
+                attachments: Components.Schemas.EntityAttachmentList,
+                redirectedFrom: Swift.String? = nil,
+                previousShortcodes: Components.Schemas.InputShared681004346C78D5F3
             ) {
                 self.id = id
                 self.name = name
@@ -6581,6 +6758,8 @@ extension Components {
                 self.dataQuality = dataQuality
                 self.displayImages = displayImages
                 self.attachments = attachments
+                self.redirectedFrom = redirectedFrom
+                self.previousShortcodes = previousShortcodes
             }
             public enum CodingKeys: String, CodingKey {
                 case id
@@ -6601,6 +6780,8 @@ extension Components {
                 case dataQuality
                 case displayImages
                 case attachments
+                case redirectedFrom
+                case previousShortcodes
             }
         }
         /// - Remark: Generated from `#/components/schemas/FinancialAccountIdentity`.
@@ -7860,6 +8041,10 @@ extension Components {
             public var displayImages: Components.Schemas.DisplayImagesField
             /// - Remark: Generated from `#/components/schemas/FinancialTransactionDetail/attachments`.
             public var attachments: Components.Schemas.EntityAttachmentList
+            /// - Remark: Generated from `#/components/schemas/FinancialTransactionDetail/redirectedFrom`.
+            public var redirectedFrom: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/FinancialTransactionDetail/previousShortcodes`.
+            public var previousShortcodes: Components.Schemas.InputShared681004346C78D5F3
             /// Creates a new `FinancialTransactionDetail`.
             ///
             /// - Parameters:
@@ -7886,6 +8071,8 @@ extension Components {
             ///   - dataQuality:
             ///   - displayImages:
             ///   - attachments:
+            ///   - redirectedFrom:
+            ///   - previousShortcodes:
             public init(
                 id: Components.Schemas.FinancialTransactionShortcode,
                 accountId: Components.Schemas.FinancialAccountShortcode,
@@ -7909,7 +8096,9 @@ extension Components {
                 updatedAt: Foundation.Date,
                 dataQuality: Components.Schemas.DataQuality,
                 displayImages: Components.Schemas.DisplayImagesField,
-                attachments: Components.Schemas.EntityAttachmentList
+                attachments: Components.Schemas.EntityAttachmentList,
+                redirectedFrom: Swift.String? = nil,
+                previousShortcodes: Components.Schemas.InputShared681004346C78D5F3
             ) {
                 self.id = id
                 self.accountId = accountId
@@ -7934,6 +8123,8 @@ extension Components {
                 self.dataQuality = dataQuality
                 self.displayImages = displayImages
                 self.attachments = attachments
+                self.redirectedFrom = redirectedFrom
+                self.previousShortcodes = previousShortcodes
             }
             public enum CodingKeys: String, CodingKey {
                 case id
@@ -7959,6 +8150,8 @@ extension Components {
                 case dataQuality
                 case displayImages
                 case attachments
+                case redirectedFrom
+                case previousShortcodes
             }
         }
         /// - Remark: Generated from `#/components/schemas/FinancialTransactionListItem`.
@@ -8869,6 +9062,10 @@ extension Components {
             public var displayImages: Components.Schemas.DisplayImagesField
             /// - Remark: Generated from `#/components/schemas/GardenEntryDetail/attachments`.
             public var attachments: Components.Schemas.EntityAttachmentList
+            /// - Remark: Generated from `#/components/schemas/GardenEntryDetail/redirectedFrom`.
+            public var redirectedFrom: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/GardenEntryDetail/previousShortcodes`.
+            public var previousShortcodes: Components.Schemas.InputShared681004346C78D5F3
             /// Creates a new `GardenEntryDetail`.
             ///
             /// - Parameters:
@@ -8888,6 +9085,8 @@ extension Components {
             ///   - dataQuality:
             ///   - displayImages:
             ///   - attachments:
+            ///   - redirectedFrom:
+            ///   - previousShortcodes:
             public init(
                 id: Components.Schemas.GardenEntryShortcode,
                 locationId: Components.Schemas.LocationShortcode,
@@ -8904,7 +9103,9 @@ extension Components {
                 updatedAt: Foundation.Date,
                 dataQuality: Components.Schemas.DataQuality,
                 displayImages: Components.Schemas.DisplayImagesField,
-                attachments: Components.Schemas.EntityAttachmentList
+                attachments: Components.Schemas.EntityAttachmentList,
+                redirectedFrom: Swift.String? = nil,
+                previousShortcodes: Components.Schemas.InputShared681004346C78D5F3
             ) {
                 self.id = id
                 self.locationId = locationId
@@ -8922,6 +9123,8 @@ extension Components {
                 self.dataQuality = dataQuality
                 self.displayImages = displayImages
                 self.attachments = attachments
+                self.redirectedFrom = redirectedFrom
+                self.previousShortcodes = previousShortcodes
             }
             public enum CodingKeys: String, CodingKey {
                 case id
@@ -8940,6 +9143,8 @@ extension Components {
                 case dataQuality
                 case displayImages
                 case attachments
+                case redirectedFrom
+                case previousShortcodes
             }
         }
         /// - Remark: Generated from `#/components/schemas/GardenEntryKind`.
@@ -14469,6 +14674,10 @@ extension Components {
             public var displayImages: Components.Schemas.DisplayImagesField
             /// - Remark: Generated from `#/components/schemas/ImageSightingDetail/attachments`.
             public var attachments: Components.Schemas.EntityAttachmentList
+            /// - Remark: Generated from `#/components/schemas/ImageSightingDetail/redirectedFrom`.
+            public var redirectedFrom: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/ImageSightingDetail/previousShortcodes`.
+            public var previousShortcodes: Components.Schemas.InputShared681004346C78D5F3
             /// Creates a new `ImageSightingDetail`.
             ///
             /// - Parameters:
@@ -14498,6 +14707,8 @@ extension Components {
             ///   - updatedAt:
             ///   - displayImages:
             ///   - attachments:
+            ///   - redirectedFrom:
+            ///   - previousShortcodes:
             public init(
                 id: Components.Schemas.ImageSightingShortcode,
                 imageId: Components.Schemas.ImageShortcode,
@@ -14524,7 +14735,9 @@ extension Components {
                 createdAt: Foundation.Date,
                 updatedAt: Foundation.Date,
                 displayImages: Components.Schemas.DisplayImagesField,
-                attachments: Components.Schemas.EntityAttachmentList
+                attachments: Components.Schemas.EntityAttachmentList,
+                redirectedFrom: Swift.String? = nil,
+                previousShortcodes: Components.Schemas.InputShared681004346C78D5F3
             ) {
                 self.id = id
                 self.imageId = imageId
@@ -14552,6 +14765,8 @@ extension Components {
                 self.updatedAt = updatedAt
                 self.displayImages = displayImages
                 self.attachments = attachments
+                self.redirectedFrom = redirectedFrom
+                self.previousShortcodes = previousShortcodes
             }
             public enum CodingKeys: String, CodingKey {
                 case id
@@ -14580,6 +14795,8 @@ extension Components {
                 case updatedAt
                 case displayImages
                 case attachments
+                case redirectedFrom
+                case previousShortcodes
             }
         }
         /// - Remark: Generated from `#/components/schemas/ImageSightingListItem`.
@@ -16121,6 +16338,10 @@ extension Components {
             public var displayImages: Components.Schemas.DisplayImagesField
             /// - Remark: Generated from `#/components/schemas/IngredientDetail/attachments`.
             public var attachments: Components.Schemas.EntityAttachmentList
+            /// - Remark: Generated from `#/components/schemas/IngredientDetail/redirectedFrom`.
+            public var redirectedFrom: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/IngredientDetail/previousShortcodes`.
+            public var previousShortcodes: Components.Schemas.InputShared681004346C78D5F3
             /// Creates a new `IngredientDetail`.
             ///
             /// - Parameters:
@@ -16138,6 +16359,8 @@ extension Components {
             ///   - product:
             ///   - displayImages:
             ///   - attachments:
+            ///   - redirectedFrom:
+            ///   - previousShortcodes:
             public init(
                 id: Components.Schemas.IngredientShortcode,
                 name: Swift.String,
@@ -16152,7 +16375,9 @@ extension Components {
                 appearsInRecipes: Components.Schemas.OutputSharedF6568EEE6A12E98E,
                 product: Components.Schemas.OutputSharedB5A49AD64401213B,
                 displayImages: Components.Schemas.DisplayImagesField,
-                attachments: Components.Schemas.EntityAttachmentList
+                attachments: Components.Schemas.EntityAttachmentList,
+                redirectedFrom: Swift.String? = nil,
+                previousShortcodes: Components.Schemas.InputShared681004346C78D5F3
             ) {
                 self.id = id
                 self.name = name
@@ -16168,6 +16393,8 @@ extension Components {
                 self.product = product
                 self.displayImages = displayImages
                 self.attachments = attachments
+                self.redirectedFrom = redirectedFrom
+                self.previousShortcodes = previousShortcodes
             }
             public enum CodingKeys: String, CodingKey {
                 case id
@@ -16184,6 +16411,8 @@ extension Components {
                 case product
                 case displayImages
                 case attachments
+                case redirectedFrom
+                case previousShortcodes
             }
         }
         /// - Remark: Generated from `#/components/schemas/IngredientListItem`.
@@ -17300,6 +17529,10 @@ extension Components {
             public var displayImages: Components.Schemas.DisplayImagesField
             /// - Remark: Generated from `#/components/schemas/InventoryDetail/attachments`.
             public var attachments: Components.Schemas.EntityAttachmentList
+            /// - Remark: Generated from `#/components/schemas/InventoryDetail/redirectedFrom`.
+            public var redirectedFrom: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/InventoryDetail/previousShortcodes`.
+            public var previousShortcodes: Components.Schemas.InputShared681004346C78D5F3
             /// Creates a new `InventoryDetail`.
             ///
             /// - Parameters:
@@ -17319,6 +17552,8 @@ extension Components {
             ///   - displayName:
             ///   - displayImages:
             ///   - attachments:
+            ///   - redirectedFrom:
+            ///   - previousShortcodes:
             public init(
                 id: Components.Schemas.InventoryShortcode,
                 amount: Components.Schemas.OutputShared7B935813BE75656E,
@@ -17335,7 +17570,9 @@ extension Components {
                 location: Components.Schemas.LocationOut,
                 displayName: Swift.String,
                 displayImages: Components.Schemas.DisplayImagesField,
-                attachments: Components.Schemas.EntityAttachmentList
+                attachments: Components.Schemas.EntityAttachmentList,
+                redirectedFrom: Swift.String? = nil,
+                previousShortcodes: Components.Schemas.InputShared681004346C78D5F3
             ) {
                 self.id = id
                 self.amount = amount
@@ -17353,6 +17590,8 @@ extension Components {
                 self.displayName = displayName
                 self.displayImages = displayImages
                 self.attachments = attachments
+                self.redirectedFrom = redirectedFrom
+                self.previousShortcodes = previousShortcodes
             }
             public enum CodingKeys: String, CodingKey {
                 case id
@@ -17371,6 +17610,8 @@ extension Components {
                 case displayName
                 case displayImages
                 case attachments
+                case redirectedFrom
+                case previousShortcodes
             }
         }
         /// - Remark: Generated from `#/components/schemas/InventoryDetailProductOut`.
@@ -18521,6 +18762,10 @@ extension Components {
             public var displayImages: Components.Schemas.DisplayImagesField
             /// - Remark: Generated from `#/components/schemas/LedgerPartyDetail/attachments`.
             public var attachments: Components.Schemas.EntityAttachmentList
+            /// - Remark: Generated from `#/components/schemas/LedgerPartyDetail/redirectedFrom`.
+            public var redirectedFrom: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/LedgerPartyDetail/previousShortcodes`.
+            public var previousShortcodes: Components.Schemas.InputShared681004346C78D5F3
             /// Creates a new `LedgerPartyDetail`.
             ///
             /// - Parameters:
@@ -18533,6 +18778,8 @@ extension Components {
             ///   - dataQuality:
             ///   - displayImages:
             ///   - attachments:
+            ///   - redirectedFrom:
+            ///   - previousShortcodes:
             public init(
                 id: Components.Schemas.LedgerPartyShortcode,
                 name: Swift.String,
@@ -18542,7 +18789,9 @@ extension Components {
                 updatedAt: Foundation.Date,
                 dataQuality: Components.Schemas.DataQuality,
                 displayImages: Components.Schemas.DisplayImagesField,
-                attachments: Components.Schemas.EntityAttachmentList
+                attachments: Components.Schemas.EntityAttachmentList,
+                redirectedFrom: Swift.String? = nil,
+                previousShortcodes: Components.Schemas.InputShared681004346C78D5F3
             ) {
                 self.id = id
                 self.name = name
@@ -18553,6 +18802,8 @@ extension Components {
                 self.dataQuality = dataQuality
                 self.displayImages = displayImages
                 self.attachments = attachments
+                self.redirectedFrom = redirectedFrom
+                self.previousShortcodes = previousShortcodes
             }
             public enum CodingKeys: String, CodingKey {
                 case id
@@ -18564,6 +18815,8 @@ extension Components {
                 case dataQuality
                 case displayImages
                 case attachments
+                case redirectedFrom
+                case previousShortcodes
             }
         }
         /// - Remark: Generated from `#/components/schemas/LedgerPartyKind`.
@@ -19264,6 +19517,10 @@ extension Components {
             public var displayImages: Components.Schemas.DisplayImagesField
             /// - Remark: Generated from `#/components/schemas/LedgerTransferDetail/attachments`.
             public var attachments: Components.Schemas.EntityAttachmentList
+            /// - Remark: Generated from `#/components/schemas/LedgerTransferDetail/redirectedFrom`.
+            public var redirectedFrom: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/LedgerTransferDetail/previousShortcodes`.
+            public var previousShortcodes: Components.Schemas.InputShared681004346C78D5F3
             /// Creates a new `LedgerTransferDetail`.
             ///
             /// - Parameters:
@@ -19283,6 +19540,8 @@ extension Components {
             ///   - dataQuality:
             ///   - displayImages:
             ///   - attachments:
+            ///   - redirectedFrom:
+            ///   - previousShortcodes:
             public init(
                 id: Components.Schemas.LedgerTransferShortcode,
                 fromPartyId: Components.Schemas.LedgerPartyShortcode,
@@ -19299,7 +19558,9 @@ extension Components {
                 updatedAt: Foundation.Date,
                 dataQuality: Components.Schemas.DataQuality,
                 displayImages: Components.Schemas.DisplayImagesField,
-                attachments: Components.Schemas.EntityAttachmentList
+                attachments: Components.Schemas.EntityAttachmentList,
+                redirectedFrom: Swift.String? = nil,
+                previousShortcodes: Components.Schemas.InputShared681004346C78D5F3
             ) {
                 self.id = id
                 self.fromPartyId = fromPartyId
@@ -19317,6 +19578,8 @@ extension Components {
                 self.dataQuality = dataQuality
                 self.displayImages = displayImages
                 self.attachments = attachments
+                self.redirectedFrom = redirectedFrom
+                self.previousShortcodes = previousShortcodes
             }
             public enum CodingKeys: String, CodingKey {
                 case id
@@ -19335,6 +19598,8 @@ extension Components {
                 case dataQuality
                 case displayImages
                 case attachments
+                case redirectedFrom
+                case previousShortcodes
             }
         }
         /// - Remark: Generated from `#/components/schemas/LedgerTransferEvidenceTransactionIds`.
@@ -19884,6 +20149,10 @@ extension Components {
             public var displayImages: Components.Schemas.DisplayImagesField
             /// - Remark: Generated from `#/components/schemas/LocationDetail/attachments`.
             public var attachments: Components.Schemas.EntityAttachmentList
+            /// - Remark: Generated from `#/components/schemas/LocationDetail/redirectedFrom`.
+            public var redirectedFrom: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/LocationDetail/previousShortcodes`.
+            public var previousShortcodes: Components.Schemas.InputShared681004346C78D5F3
             /// Creates a new `LocationDetail`.
             ///
             /// - Parameters:
@@ -19909,6 +20178,8 @@ extension Components {
             ///   - inventoryItems:
             ///   - displayImages:
             ///   - attachments:
+            ///   - redirectedFrom:
+            ///   - previousShortcodes:
             public init(
                 id: Components.Schemas.LocationShortcode,
                 name: Swift.String,
@@ -19931,7 +20202,9 @@ extension Components {
                 totalItemCount: Swift.Int? = nil,
                 inventoryItems: Components.Schemas.OutputShared4FF32B3A3639E5F8? = nil,
                 displayImages: Components.Schemas.DisplayImagesField,
-                attachments: Components.Schemas.EntityAttachmentList
+                attachments: Components.Schemas.EntityAttachmentList,
+                redirectedFrom: Swift.String? = nil,
+                previousShortcodes: Components.Schemas.InputShared681004346C78D5F3
             ) {
                 self.id = id
                 self.name = name
@@ -19955,6 +20228,8 @@ extension Components {
                 self.inventoryItems = inventoryItems
                 self.displayImages = displayImages
                 self.attachments = attachments
+                self.redirectedFrom = redirectedFrom
+                self.previousShortcodes = previousShortcodes
             }
             public enum CodingKeys: String, CodingKey {
                 case id
@@ -19979,6 +20254,8 @@ extension Components {
                 case inventoryItems
                 case displayImages
                 case attachments
+                case redirectedFrom
+                case previousShortcodes
             }
         }
         /// - Remark: Generated from `#/components/schemas/LocationEnsureGlobalUnknownInput`.
@@ -20809,6 +21086,10 @@ extension Components {
             public var displayImages: Components.Schemas.DisplayImagesField
             /// - Remark: Generated from `#/components/schemas/MealDetail/attachments`.
             public var attachments: Components.Schemas.EntityAttachmentList
+            /// - Remark: Generated from `#/components/schemas/MealDetail/redirectedFrom`.
+            public var redirectedFrom: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/MealDetail/previousShortcodes`.
+            public var previousShortcodes: Components.Schemas.InputShared681004346C78D5F3
             /// Creates a new `MealDetail`.
             ///
             /// - Parameters:
@@ -20828,6 +21109,8 @@ extension Components {
             ///   - dataQuality:
             ///   - displayImages:
             ///   - attachments:
+            ///   - redirectedFrom:
+            ///   - previousShortcodes:
             public init(
                 id: Components.Schemas.MealShortcode,
                 date: Components.Schemas.PlainDate,
@@ -20844,7 +21127,9 @@ extension Components {
                 updatedAt: Foundation.Date,
                 dataQuality: Components.Schemas.DataQuality,
                 displayImages: Components.Schemas.DisplayImagesField,
-                attachments: Components.Schemas.EntityAttachmentList
+                attachments: Components.Schemas.EntityAttachmentList,
+                redirectedFrom: Swift.String? = nil,
+                previousShortcodes: Components.Schemas.InputShared681004346C78D5F3
             ) {
                 self.id = id
                 self.date = date
@@ -20862,6 +21147,8 @@ extension Components {
                 self.dataQuality = dataQuality
                 self.displayImages = displayImages
                 self.attachments = attachments
+                self.redirectedFrom = redirectedFrom
+                self.previousShortcodes = previousShortcodes
             }
             public enum CodingKeys: String, CodingKey {
                 case id
@@ -20880,6 +21167,8 @@ extension Components {
                 case dataQuality
                 case displayImages
                 case attachments
+                case redirectedFrom
+                case previousShortcodes
             }
         }
         /// - Remark: Generated from `#/components/schemas/MealFoodAmount`.
@@ -22555,6 +22844,35 @@ extension Components {
                 case date
                 case name
                 case mealType
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/OperationDisposition`.
+        public struct OperationDisposition: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/OperationDisposition/code`.
+            public var code: Swift.String
+            /// - Remark: Generated from `#/components/schemas/OperationDisposition/effect`.
+            public var effect: Components.Schemas.OperationEffect
+            /// - Remark: Generated from `#/components/schemas/OperationDisposition/description`.
+            public var description: Swift.String
+            /// Creates a new `OperationDisposition`.
+            ///
+            /// - Parameters:
+            ///   - code:
+            ///   - effect:
+            ///   - description:
+            public init(
+                code: Swift.String,
+                effect: Components.Schemas.OperationEffect,
+                description: Swift.String
+            ) {
+                self.code = code
+                self.effect = effect
+                self.description = description
+            }
+            public enum CodingKeys: String, CodingKey {
+                case code
+                case effect
+                case description
             }
         }
         /// - Remark: Generated from `#/components/schemas/OperationEffect`.
@@ -24562,6 +24880,10 @@ extension Components {
             public var displayImages: Components.Schemas.DisplayImagesField
             /// - Remark: Generated from `#/components/schemas/PlantDetail/attachments`.
             public var attachments: Components.Schemas.EntityAttachmentList
+            /// - Remark: Generated from `#/components/schemas/PlantDetail/redirectedFrom`.
+            public var redirectedFrom: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/PlantDetail/previousShortcodes`.
+            public var previousShortcodes: Components.Schemas.InputShared681004346C78D5F3
             /// Creates a new `PlantDetail`.
             ///
             /// - Parameters:
@@ -24587,6 +24909,8 @@ extension Components {
             ///   - dataQuality:
             ///   - displayImages:
             ///   - attachments:
+            ///   - redirectedFrom:
+            ///   - previousShortcodes:
             public init(
                 id: Components.Schemas.PlantShortcode,
                 name: Swift.String,
@@ -24609,7 +24933,9 @@ extension Components {
                 updatedAt: Foundation.Date,
                 dataQuality: Components.Schemas.DataQuality,
                 displayImages: Components.Schemas.DisplayImagesField,
-                attachments: Components.Schemas.EntityAttachmentList
+                attachments: Components.Schemas.EntityAttachmentList,
+                redirectedFrom: Swift.String? = nil,
+                previousShortcodes: Components.Schemas.InputShared681004346C78D5F3
             ) {
                 self.id = id
                 self.name = name
@@ -24633,6 +24959,8 @@ extension Components {
                 self.dataQuality = dataQuality
                 self.displayImages = displayImages
                 self.attachments = attachments
+                self.redirectedFrom = redirectedFrom
+                self.previousShortcodes = previousShortcodes
             }
             public enum CodingKeys: String, CodingKey {
                 case id
@@ -24657,6 +24985,8 @@ extension Components {
                 case dataQuality
                 case displayImages
                 case attachments
+                case redirectedFrom
+                case previousShortcodes
             }
         }
         /// - Remark: Generated from `#/components/schemas/PlantingCreateInput`.
@@ -24800,6 +25130,10 @@ extension Components {
             public var displayImages: Components.Schemas.DisplayImagesField
             /// - Remark: Generated from `#/components/schemas/PlantingDetail/attachments`.
             public var attachments: Components.Schemas.EntityAttachmentList
+            /// - Remark: Generated from `#/components/schemas/PlantingDetail/redirectedFrom`.
+            public var redirectedFrom: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/PlantingDetail/previousShortcodes`.
+            public var previousShortcodes: Components.Schemas.InputShared681004346C78D5F3
             /// Creates a new `PlantingDetail`.
             ///
             /// - Parameters:
@@ -24831,6 +25165,8 @@ extension Components {
             ///   - dataQuality:
             ///   - displayImages:
             ///   - attachments:
+            ///   - redirectedFrom:
+            ///   - previousShortcodes:
             public init(
                 id: Components.Schemas.PlantingShortcode,
                 plantId: Components.Schemas.PlantShortcode,
@@ -24859,7 +25195,9 @@ extension Components {
                 updatedAt: Foundation.Date,
                 dataQuality: Components.Schemas.DataQuality,
                 displayImages: Components.Schemas.DisplayImagesField,
-                attachments: Components.Schemas.EntityAttachmentList
+                attachments: Components.Schemas.EntityAttachmentList,
+                redirectedFrom: Swift.String? = nil,
+                previousShortcodes: Components.Schemas.InputShared681004346C78D5F3
             ) {
                 self.id = id
                 self.plantId = plantId
@@ -24889,6 +25227,8 @@ extension Components {
                 self.dataQuality = dataQuality
                 self.displayImages = displayImages
                 self.attachments = attachments
+                self.redirectedFrom = redirectedFrom
+                self.previousShortcodes = previousShortcodes
             }
             public enum CodingKeys: String, CodingKey {
                 case id
@@ -24919,6 +25259,8 @@ extension Components {
                 case dataQuality
                 case displayImages
                 case attachments
+                case redirectedFrom
+                case previousShortcodes
             }
         }
         /// - Remark: Generated from `#/components/schemas/PlantingListItem`.
@@ -25836,6 +26178,8 @@ extension Components {
                 public var duplicateProductIdentities: Swift.Double
                 /// - Remark: Generated from `#/components/schemas/ProblemsCount/byType/orphanedProducts`.
                 public var orphanedProducts: Swift.Double
+                /// - Remark: Generated from `#/components/schemas/ProblemsCount/byType/unconnectedEntities`.
+                public var unconnectedEntities: Swift.Double
                 /// - Remark: Generated from `#/components/schemas/ProblemsCount/byType/partiallyImportedCookbooks`.
                 public var partiallyImportedCookbooks: Swift.Double
                 /// - Remark: Generated from `#/components/schemas/ProblemsCount/byType/soldButStillStocked`.
@@ -25941,6 +26285,7 @@ extension Components {
                 ///   - duplicateInventory:
                 ///   - duplicateProductIdentities:
                 ///   - orphanedProducts:
+                ///   - unconnectedEntities:
                 ///   - partiallyImportedCookbooks:
                 ///   - soldButStillStocked:
                 ///   - kitsCountedTwice:
@@ -25995,6 +26340,7 @@ extension Components {
                     duplicateInventory: Swift.Double,
                     duplicateProductIdentities: Swift.Double,
                     orphanedProducts: Swift.Double,
+                    unconnectedEntities: Swift.Double,
                     partiallyImportedCookbooks: Swift.Double,
                     soldButStillStocked: Swift.Double,
                     kitsCountedTwice: Swift.Double,
@@ -26049,6 +26395,7 @@ extension Components {
                     self.duplicateInventory = duplicateInventory
                     self.duplicateProductIdentities = duplicateProductIdentities
                     self.orphanedProducts = orphanedProducts
+                    self.unconnectedEntities = unconnectedEntities
                     self.partiallyImportedCookbooks = partiallyImportedCookbooks
                     self.soldButStillStocked = soldButStillStocked
                     self.kitsCountedTwice = kitsCountedTwice
@@ -26104,6 +26451,7 @@ extension Components {
                     case duplicateInventory
                     case duplicateProductIdentities
                     case orphanedProducts
+                    case unconnectedEntities
                     case partiallyImportedCookbooks
                     case soldButStillStocked
                     case kitsCountedTwice
@@ -26259,6 +26607,10 @@ extension Components {
             public var displayImages: Components.Schemas.DisplayImagesField
             /// - Remark: Generated from `#/components/schemas/ProductCategoryDetail/attachments`.
             public var attachments: Components.Schemas.EntityAttachmentList
+            /// - Remark: Generated from `#/components/schemas/ProductCategoryDetail/redirectedFrom`.
+            public var redirectedFrom: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/ProductCategoryDetail/previousShortcodes`.
+            public var previousShortcodes: Components.Schemas.InputShared681004346C78D5F3
             /// Creates a new `ProductCategoryDetail`.
             ///
             /// - Parameters:
@@ -26278,6 +26630,8 @@ extension Components {
             ///   - dataQuality:
             ///   - displayImages:
             ///   - attachments:
+            ///   - redirectedFrom:
+            ///   - previousShortcodes:
             public init(
                 fieldResolutions: Components.Schemas.OptionalFieldResolutions? = nil,
                 id: Components.Schemas.ProductCategoryShortcode,
@@ -26294,7 +26648,9 @@ extension Components {
                 updatedAt: Foundation.Date,
                 dataQuality: Components.Schemas.DataQuality,
                 displayImages: Components.Schemas.DisplayImagesField,
-                attachments: Components.Schemas.EntityAttachmentList
+                attachments: Components.Schemas.EntityAttachmentList,
+                redirectedFrom: Swift.String? = nil,
+                previousShortcodes: Components.Schemas.InputShared681004346C78D5F3
             ) {
                 self.fieldResolutions = fieldResolutions
                 self.id = id
@@ -26312,6 +26668,8 @@ extension Components {
                 self.dataQuality = dataQuality
                 self.displayImages = displayImages
                 self.attachments = attachments
+                self.redirectedFrom = redirectedFrom
+                self.previousShortcodes = previousShortcodes
             }
             public enum CodingKeys: String, CodingKey {
                 case fieldResolutions
@@ -26330,6 +26688,8 @@ extension Components {
                 case dataQuality
                 case displayImages
                 case attachments
+                case redirectedFrom
+                case previousShortcodes
             }
         }
         /// - Remark: Generated from `#/components/schemas/ProductCategoryFeature`.
@@ -26970,6 +27330,10 @@ extension Components {
             public var displayImages: Components.Schemas.DisplayImagesField
             /// - Remark: Generated from `#/components/schemas/ProductDetail/attachments`.
             public var attachments: Components.Schemas.EntityAttachmentList
+            /// - Remark: Generated from `#/components/schemas/ProductDetail/redirectedFrom`.
+            public var redirectedFrom: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/ProductDetail/previousShortcodes`.
+            public var previousShortcodes: Components.Schemas.InputShared681004346C78D5F3
             /// Creates a new `ProductDetail`.
             ///
             /// - Parameters:
@@ -27014,6 +27378,8 @@ extension Components {
             ///   - quantityVariance:
             ///   - displayImages:
             ///   - attachments:
+            ///   - redirectedFrom:
+            ///   - previousShortcodes:
             public init(
                 id: Components.Schemas.ProductShortcode,
                 name: Swift.String,
@@ -27055,7 +27421,9 @@ extension Components {
                 onHandUnits: Swift.Double? = nil,
                 quantityVariance: Swift.Double? = nil,
                 displayImages: Components.Schemas.DisplayImagesField,
-                attachments: Components.Schemas.EntityAttachmentList
+                attachments: Components.Schemas.EntityAttachmentList,
+                redirectedFrom: Swift.String? = nil,
+                previousShortcodes: Components.Schemas.InputShared681004346C78D5F3
             ) {
                 self.id = id
                 self.name = name
@@ -27098,6 +27466,8 @@ extension Components {
                 self.quantityVariance = quantityVariance
                 self.displayImages = displayImages
                 self.attachments = attachments
+                self.redirectedFrom = redirectedFrom
+                self.previousShortcodes = previousShortcodes
             }
             public enum CodingKeys: String, CodingKey {
                 case id
@@ -27141,6 +27511,8 @@ extension Components {
                 case quantityVariance
                 case displayImages
                 case attachments
+                case redirectedFrom
+                case previousShortcodes
             }
         }
         /// - Remark: Generated from `#/components/schemas/ProductFindOrCreateByCodeInput`.
@@ -28969,6 +29341,10 @@ extension Components {
             public var displayImages: Components.Schemas.DisplayImagesField
             /// - Remark: Generated from `#/components/schemas/ProjectDetail/attachments`.
             public var attachments: Components.Schemas.EntityAttachmentList
+            /// - Remark: Generated from `#/components/schemas/ProjectDetail/redirectedFrom`.
+            public var redirectedFrom: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/ProjectDetail/previousShortcodes`.
+            public var previousShortcodes: Components.Schemas.InputShared681004346C78D5F3
             /// Creates a new `ProjectDetail`.
             ///
             /// - Parameters:
@@ -28998,6 +29374,8 @@ extension Components {
             ///   - dataQuality:
             ///   - displayImages:
             ///   - attachments:
+            ///   - redirectedFrom:
+            ///   - previousShortcodes:
             public init(
                 fieldResolutions: Components.Schemas.OptionalFieldResolutions? = nil,
                 id: Components.Schemas.ProjectShortcode,
@@ -29024,7 +29402,9 @@ extension Components {
                 dates: Components.Schemas.ProjectOutputFieldsProjectDateWindow,
                 dataQuality: Components.Schemas.DataQuality,
                 displayImages: Components.Schemas.DisplayImagesField,
-                attachments: Components.Schemas.EntityAttachmentList
+                attachments: Components.Schemas.EntityAttachmentList,
+                redirectedFrom: Swift.String? = nil,
+                previousShortcodes: Components.Schemas.InputShared681004346C78D5F3
             ) {
                 self.fieldResolutions = fieldResolutions
                 self.id = id
@@ -29052,6 +29432,8 @@ extension Components {
                 self.dataQuality = dataQuality
                 self.displayImages = displayImages
                 self.attachments = attachments
+                self.redirectedFrom = redirectedFrom
+                self.previousShortcodes = previousShortcodes
             }
             public enum CodingKeys: String, CodingKey {
                 case fieldResolutions
@@ -29080,6 +29462,8 @@ extension Components {
                 case dataQuality
                 case displayImages
                 case attachments
+                case redirectedFrom
+                case previousShortcodes
             }
         }
         /// - Remark: Generated from `#/components/schemas/ProjectKind`.
@@ -29887,6 +30271,10 @@ extension Components {
             public var displayImages: Components.Schemas.DisplayImagesField
             /// - Remark: Generated from `#/components/schemas/PurchaseDetail/attachments`.
             public var attachments: Components.Schemas.EntityAttachmentList
+            /// - Remark: Generated from `#/components/schemas/PurchaseDetail/redirectedFrom`.
+            public var redirectedFrom: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/PurchaseDetail/previousShortcodes`.
+            public var previousShortcodes: Components.Schemas.InputShared681004346C78D5F3
             /// Creates a new `PurchaseDetail`.
             ///
             /// - Parameters:
@@ -29916,6 +30304,8 @@ extension Components {
             ///   - dataQuality:
             ///   - displayImages:
             ///   - attachments:
+            ///   - redirectedFrom:
+            ///   - previousShortcodes:
             public init(
                 id: Components.Schemas.PurchaseShortcode,
                 vendorId: Components.Schemas.VendorShortcode,
@@ -29942,7 +30332,9 @@ extension Components {
                 updatedAt: Foundation.Date,
                 dataQuality: Components.Schemas.DataQuality,
                 displayImages: Components.Schemas.DisplayImagesField,
-                attachments: Components.Schemas.EntityAttachmentList
+                attachments: Components.Schemas.EntityAttachmentList,
+                redirectedFrom: Swift.String? = nil,
+                previousShortcodes: Components.Schemas.InputShared681004346C78D5F3
             ) {
                 self.id = id
                 self.vendorId = vendorId
@@ -29970,6 +30362,8 @@ extension Components {
                 self.dataQuality = dataQuality
                 self.displayImages = displayImages
                 self.attachments = attachments
+                self.redirectedFrom = redirectedFrom
+                self.previousShortcodes = previousShortcodes
             }
             public enum CodingKeys: String, CodingKey {
                 case id
@@ -29998,6 +30392,8 @@ extension Components {
                 case dataQuality
                 case displayImages
                 case attachments
+                case redirectedFrom
+                case previousShortcodes
             }
         }
         /// - Remark: Generated from `#/components/schemas/PurchaseFieldsPurchaseDocumentKind`.
@@ -30675,6 +31071,10 @@ extension Components {
             public var displayImages: Components.Schemas.DisplayImagesField
             /// - Remark: Generated from `#/components/schemas/RecipeDetail/attachments`.
             public var attachments: Components.Schemas.EntityAttachmentList
+            /// - Remark: Generated from `#/components/schemas/RecipeDetail/redirectedFrom`.
+            public var redirectedFrom: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/RecipeDetail/previousShortcodes`.
+            public var previousShortcodes: Components.Schemas.InputShared681004346C78D5F3
             /// Creates a new `RecipeDetail`.
             ///
             /// - Parameters:
@@ -30696,6 +31096,8 @@ extension Components {
             ///   - dataQuality:
             ///   - displayImages:
             ///   - attachments:
+            ///   - redirectedFrom:
+            ///   - previousShortcodes:
             public init(
                 id: Components.Schemas.RecipeShortcode,
                 name: Swift.String,
@@ -30714,7 +31116,9 @@ extension Components {
                 forkedFromRecipeName: Swift.String? = nil,
                 dataQuality: Components.Schemas.DataQuality,
                 displayImages: Components.Schemas.DisplayImagesField,
-                attachments: Components.Schemas.EntityAttachmentList
+                attachments: Components.Schemas.EntityAttachmentList,
+                redirectedFrom: Swift.String? = nil,
+                previousShortcodes: Components.Schemas.InputShared681004346C78D5F3
             ) {
                 self.id = id
                 self.name = name
@@ -30734,6 +31138,8 @@ extension Components {
                 self.dataQuality = dataQuality
                 self.displayImages = displayImages
                 self.attachments = attachments
+                self.redirectedFrom = redirectedFrom
+                self.previousShortcodes = previousShortcodes
             }
             public enum CodingKeys: String, CodingKey {
                 case id
@@ -30754,6 +31160,8 @@ extension Components {
                 case dataQuality
                 case displayImages
                 case attachments
+                case redirectedFrom
+                case previousShortcodes
             }
         }
         /// - Remark: Generated from `#/components/schemas/RecipeDetailMcpOut`.
@@ -33472,6 +33880,10 @@ extension Components {
             public var displayImages: Components.Schemas.DisplayImagesField
             /// - Remark: Generated from `#/components/schemas/TaskDetail/attachments`.
             public var attachments: Components.Schemas.EntityAttachmentList
+            /// - Remark: Generated from `#/components/schemas/TaskDetail/redirectedFrom`.
+            public var redirectedFrom: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/TaskDetail/previousShortcodes`.
+            public var previousShortcodes: Components.Schemas.InputShared681004346C78D5F3
             /// Creates a new `TaskDetail`.
             ///
             /// - Parameters:
@@ -33499,6 +33911,8 @@ extension Components {
             ///   - dataQuality:
             ///   - displayImages:
             ///   - attachments:
+            ///   - redirectedFrom:
+            ///   - previousShortcodes:
             public init(
                 fieldResolutions: Components.Schemas.OptionalFieldResolutions? = nil,
                 id: Components.Schemas.TaskShortcode,
@@ -33523,7 +33937,9 @@ extension Components {
                 updatedAt: Foundation.Date,
                 dataQuality: Components.Schemas.DataQuality,
                 displayImages: Components.Schemas.DisplayImagesField,
-                attachments: Components.Schemas.EntityAttachmentList
+                attachments: Components.Schemas.EntityAttachmentList,
+                redirectedFrom: Swift.String? = nil,
+                previousShortcodes: Components.Schemas.InputShared681004346C78D5F3
             ) {
                 self.fieldResolutions = fieldResolutions
                 self.id = id
@@ -33549,6 +33965,8 @@ extension Components {
                 self.dataQuality = dataQuality
                 self.displayImages = displayImages
                 self.attachments = attachments
+                self.redirectedFrom = redirectedFrom
+                self.previousShortcodes = previousShortcodes
             }
             public enum CodingKeys: String, CodingKey {
                 case fieldResolutions
@@ -33575,6 +33993,8 @@ extension Components {
                 case dataQuality
                 case displayImages
                 case attachments
+                case redirectedFrom
+                case previousShortcodes
             }
         }
         /// - Remark: Generated from `#/components/schemas/TaskListItem`.
@@ -34933,6 +35353,10 @@ extension Components {
             public var displayImages: Components.Schemas.DisplayImagesField
             /// - Remark: Generated from `#/components/schemas/VendorAccountDetail/attachments`.
             public var attachments: Components.Schemas.EntityAttachmentList
+            /// - Remark: Generated from `#/components/schemas/VendorAccountDetail/redirectedFrom`.
+            public var redirectedFrom: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/VendorAccountDetail/previousShortcodes`.
+            public var previousShortcodes: Components.Schemas.InputShared681004346C78D5F3
             /// Creates a new `VendorAccountDetail`.
             ///
             /// - Parameters:
@@ -34952,6 +35376,8 @@ extension Components {
             ///   - updatedAt:
             ///   - displayImages:
             ///   - attachments:
+            ///   - redirectedFrom:
+            ///   - previousShortcodes:
             public init(
                 id: Components.Schemas.VendorAccountShortcode,
                 label: Swift.String,
@@ -34968,7 +35394,9 @@ extension Components {
                 createdAt: Foundation.Date,
                 updatedAt: Foundation.Date,
                 displayImages: Components.Schemas.DisplayImagesField,
-                attachments: Components.Schemas.EntityAttachmentList
+                attachments: Components.Schemas.EntityAttachmentList,
+                redirectedFrom: Swift.String? = nil,
+                previousShortcodes: Components.Schemas.InputShared681004346C78D5F3
             ) {
                 self.id = id
                 self.label = label
@@ -34986,6 +35414,8 @@ extension Components {
                 self.updatedAt = updatedAt
                 self.displayImages = displayImages
                 self.attachments = attachments
+                self.redirectedFrom = redirectedFrom
+                self.previousShortcodes = previousShortcodes
             }
             public enum CodingKeys: String, CodingKey {
                 case id
@@ -35004,6 +35434,8 @@ extension Components {
                 case updatedAt
                 case displayImages
                 case attachments
+                case redirectedFrom
+                case previousShortcodes
             }
         }
         /// - Remark: Generated from `#/components/schemas/VendorAccountListItem`.
@@ -35462,6 +35894,10 @@ extension Components {
             public var displayImages: Components.Schemas.DisplayImagesField
             /// - Remark: Generated from `#/components/schemas/VendorDetail/attachments`.
             public var attachments: Components.Schemas.EntityAttachmentList
+            /// - Remark: Generated from `#/components/schemas/VendorDetail/redirectedFrom`.
+            public var redirectedFrom: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/VendorDetail/previousShortcodes`.
+            public var previousShortcodes: Components.Schemas.InputShared681004346C78D5F3
             /// Creates a new `VendorDetail`.
             ///
             /// - Parameters:
@@ -35484,6 +35920,8 @@ extension Components {
             ///   - dataQuality:
             ///   - displayImages:
             ///   - attachments:
+            ///   - redirectedFrom:
+            ///   - previousShortcodes:
             public init(
                 id: Components.Schemas.VendorShortcode,
                 name: Swift.String,
@@ -35503,7 +35941,9 @@ extension Components {
                 updatedAt: Foundation.Date,
                 dataQuality: Components.Schemas.DataQuality,
                 displayImages: Components.Schemas.DisplayImagesField,
-                attachments: Components.Schemas.EntityAttachmentList
+                attachments: Components.Schemas.EntityAttachmentList,
+                redirectedFrom: Swift.String? = nil,
+                previousShortcodes: Components.Schemas.InputShared681004346C78D5F3
             ) {
                 self.id = id
                 self.name = name
@@ -35524,6 +35964,8 @@ extension Components {
                 self.dataQuality = dataQuality
                 self.displayImages = displayImages
                 self.attachments = attachments
+                self.redirectedFrom = redirectedFrom
+                self.previousShortcodes = previousShortcodes
             }
             public enum CodingKeys: String, CodingKey {
                 case id
@@ -35545,6 +35987,8 @@ extension Components {
                 case dataQuality
                 case displayImages
                 case attachments
+                case redirectedFrom
+                case previousShortcodes
             }
         }
         /// - Remark: Generated from `#/components/schemas/VendorDomainList`.
@@ -35995,6 +36439,10 @@ extension Components {
             public var displayImages: Components.Schemas.DisplayImagesField
             /// - Remark: Generated from `#/components/schemas/WishDetail/attachments`.
             public var attachments: Components.Schemas.EntityAttachmentList
+            /// - Remark: Generated from `#/components/schemas/WishDetail/redirectedFrom`.
+            public var redirectedFrom: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/WishDetail/previousShortcodes`.
+            public var previousShortcodes: Components.Schemas.InputShared681004346C78D5F3
             /// Creates a new `WishDetail`.
             ///
             /// - Parameters:
@@ -36010,6 +36458,8 @@ extension Components {
             ///   - dataQuality:
             ///   - displayImages:
             ///   - attachments:
+            ///   - redirectedFrom:
+            ///   - previousShortcodes:
             public init(
                 id: Components.Schemas.WishShortcode,
                 name: Swift.String,
@@ -36022,7 +36472,9 @@ extension Components {
                 updatedAt: Foundation.Date,
                 dataQuality: Components.Schemas.DataQuality,
                 displayImages: Components.Schemas.DisplayImagesField,
-                attachments: Components.Schemas.EntityAttachmentList
+                attachments: Components.Schemas.EntityAttachmentList,
+                redirectedFrom: Swift.String? = nil,
+                previousShortcodes: Components.Schemas.InputShared681004346C78D5F3
             ) {
                 self.id = id
                 self.name = name
@@ -36036,6 +36488,8 @@ extension Components {
                 self.dataQuality = dataQuality
                 self.displayImages = displayImages
                 self.attachments = attachments
+                self.redirectedFrom = redirectedFrom
+                self.previousShortcodes = previousShortcodes
             }
             public enum CodingKeys: String, CodingKey {
                 case id
@@ -36050,6 +36504,8 @@ extension Components {
                 case dataQuality
                 case displayImages
                 case attachments
+                case redirectedFrom
+                case previousShortcodes
             }
         }
         /// - Remark: Generated from `#/components/schemas/WishListItem`.

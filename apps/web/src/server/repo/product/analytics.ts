@@ -17,11 +17,11 @@ import {
 
 import type { Database } from "~/server/db";
 import {
+  entityAttachment,
   image,
   inventoryEntry,
   product,
   productExternalId,
-  productImage,
 } from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
 import { displayableImageWhere } from "~/server/repo/image-displayability";
@@ -92,16 +92,16 @@ export const findProductsWithNoImages = async (
     })
     .from(product)
     .leftJoin(
-      productImage,
+      entityAttachment,
       and(
-        eq(productImage.productId, product.id),
-        notDeleted(productImage),
-        sql`${productImage.purpose} IS DISTINCT FROM 'label'`,
+        eq(entityAttachment.subjectEntityId, product.id),
+        notDeleted(entityAttachment),
+        sql`${entityAttachment.purpose} IS DISTINCT FROM 'label'`,
       ),
     )
     .leftJoin(
       image,
-      and(eq(image.id, productImage.imageId), displayableImageWhere),
+      and(eq(image.id, entityAttachment.imageId), displayableImageWhere),
     )
     .where(and(...conditions))
     .groupBy(product.id)
@@ -140,13 +140,13 @@ export const countProductsWithNoImagesWithGtin = async (
         notExists(
           dbClient
             .select({ one: sql`1` })
-            .from(productImage)
-            .innerJoin(image, eq(image.id, productImage.imageId))
+            .from(entityAttachment)
+            .innerJoin(image, eq(image.id, entityAttachment.imageId))
             .where(
               and(
-                eq(productImage.productId, product.id),
-                notDeleted(productImage),
-                sql`${productImage.purpose} IS DISTINCT FROM 'label'`,
+                eq(entityAttachment.subjectEntityId, product.id),
+                notDeleted(entityAttachment),
+                sql`${entityAttachment.purpose} IS DISTINCT FROM 'label'`,
                 displayableImageWhere,
               ),
             ),

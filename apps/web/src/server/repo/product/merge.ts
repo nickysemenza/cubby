@@ -33,19 +33,19 @@ import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import {
   cookbook,
   device,
-  photoGroupProposal,
+  entityAttachment,
   expense,
-  inventoryEntry,
-  importRunTarget,
   importRunEvidence,
+  importRunTarget,
+  inventoryEntry,
   location,
   mealFoodEntry,
+  photoGroupProposal,
   planting,
   product,
   productComponent,
   productConversionCoverage,
   productExternalId,
-  productImage,
   productUnitMappings,
   projectToolUsage,
   purchaseProduct,
@@ -75,7 +75,7 @@ import {
   getCategoryFeature,
   resolveProductCategory,
 } from "~/server/repo/product-category";
-import { deleteProductMatchCandidatesTx } from "~/server/repo/product-match-candidate";
+import { repointProductMatchCandidatesTx } from "~/server/repo/product-match-candidate";
 import { cascadeRemoval } from "~/server/repo/removal";
 
 import { validateLiveEffectiveTrades } from "../inheritance-validation";
@@ -106,7 +106,7 @@ export const PRODUCT_MERGE_EDGE_POLICY = {
     description:
       "A merged product's stock moves onto the survivor; entries in a location the survivor already stocks are summed into the survivor's entry and the absorbed one is soft-deleted.",
   },
-  "ProductImage.productId": {
+  "EntityAttachment.subjectEntityId": {
     code: "move-dedupe-shared-image",
     effect: "move-dedupe",
     description:
@@ -179,16 +179,16 @@ export const PRODUCT_MERGE_EDGE_POLICY = {
       "Absorbed products' conversion projections are discarded; the survivor is marked stale and rebuilt from the merged graph.",
   },
   "ProductMatchCandidate.productAId": {
-    code: "discard-match-review",
-    effect: "hard-delete",
+    code: "repoint-match-review",
+    effect: "repoint",
     description:
-      "Match-queue reviews naming a merged-away product are discarded, so the merged pair itself cannot survive as a self-pair.",
+      "Match-queue reviews naming a merged-away product move onto the survivor so agent evidence survives; the merged pair itself is dropped as a self-pair and a colliding pair folds, keeping any dismissal.",
   },
   "ProductMatchCandidate.productBId": {
-    code: "discard-match-review",
-    effect: "hard-delete",
+    code: "repoint-match-review",
+    effect: "repoint",
     description:
-      "Match-queue reviews naming a merged-away product are discarded, so the merged pair itself cannot survive as a self-pair.",
+      "Match-queue reviews naming a merged-away product move onto the survivor so agent evidence survives; the merged pair itself is dropped as a self-pair and a colliding pair folds, keeping any dismissal.",
   },
   "Planting.sourceProductId": {
     code: "preserve-garden-source",
@@ -863,25 +863,28 @@ async function buildProductMergePlan(
     kind: externalIdKind.parse(row.kind),
   }));
   const imageRows = (
-    await db.query.productImage.findMany({
+    await db.query.entityAttachment.findMany({
       where: and(
-        inArray(productImage.productId, ids),
-        notDeleted(productImage),
+        inArray(entityAttachment.subjectEntityId, ids),
+        notDeleted(entityAttachment),
       ),
       columns: {
         id: true,
-        productId: true,
+        subjectEntityId: true,
         imageId: true,
         purpose: true,
         sortOrder: true,
         createdAt: true,
       },
       with: { image: { columns: { sha256: true } } },
-      orderBy: [asc(productImage.sortOrder), asc(productImage.createdAt)],
+      orderBy: [
+        asc(entityAttachment.sortOrder),
+        asc(entityAttachment.createdAt),
+      ],
     })
-  ).map((row): ProductImageAssociationRow => ({
+  ).map(({ subjectEntityId, ...row }): ProductImageAssociationRow => ({
     ...row,
-    productId: parseEntityId("product", row.productId),
+    productId: parseEntityId("product", subjectEntityId),
     sha256: row.image.sha256,
   }));
   const projectUseRows = (
@@ -1442,14 +1445,19 @@ export const mergeProducts = async (
       const purpose = rows.find((row) => row.purpose !== null)?.purpose;
       if (purpose)
         await tx
-          .update(productImage)
+          .update(entityAttachment)
           .set({ purpose })
-          .where(eq(productImage.id, into.id));
+          .where(eq(entityAttachment.id, into.id));
     }
     summary.imagesMoved = await foldAssociation(tx, {
       column: "productId",
-      table: productImage,
-      repointValues: (productId) => ({ productId }),
+      table: entityAttachment,
+      // A retry key was scoped to the loser; it must not become reusable
+      // against the survivor (ADR 0006).
+      repointValues: (subjectEntityId) => ({
+        subjectEntityId,
+        idempotencyKey: null,
+      }),
       softDeleteValues: (deletedAt) => ({ deletedAt }),
       rows: plan.images.rows,
       keepId,
@@ -1459,13 +1467,16 @@ export const mergeProducts = async (
     });
     if (summary.imagesMoved > 0 && survivorImagesBefore.length > 0) {
       const survivorFirst = new Set(survivorImagesBefore.map((row) => row.id));
-      const afterFold = await tx.query.productImage.findMany({
+      const afterFold = await tx.query.entityAttachment.findMany({
         where: and(
-          eq(productImage.productId, keepId),
-          notDeleted(productImage),
+          eq(entityAttachment.subjectEntityId, keepId),
+          notDeleted(entityAttachment),
         ),
         columns: { id: true },
-        orderBy: [asc(productImage.sortOrder), asc(productImage.createdAt)],
+        orderBy: [
+          asc(entityAttachment.sortOrder),
+          asc(entityAttachment.createdAt),
+        ],
       });
       const ordered = [
         ...survivorImagesBefore.map((row) => row.id),
@@ -1475,9 +1486,9 @@ export const mergeProducts = async (
       ];
       for (const [index, id] of ordered.entries()) {
         await tx
-          .update(productImage)
+          .update(entityAttachment)
           .set({ sortOrder: index })
-          .where(eq(productImage.id, id));
+          .where(eq(entityAttachment.id, id));
       }
     }
     summary.projectUsesMoved = await foldAssociation(tx, {
@@ -1730,7 +1741,7 @@ export const mergeProducts = async (
       })
       .where(eq(product.id, keepId));
 
-    await deleteProductMatchCandidatesTx(tx, plan.loserIds);
+    await repointProductMatchCandidatesTx(tx, keepId, plan.loserIds);
 
     if (plan.conversionCoverage.length > 0) {
       await tx.delete(productConversionCoverage).where(
@@ -2118,8 +2129,9 @@ export const previewMergeProducts = async (
       ),
     }),
     impact({
-      disposition: PRODUCT_MERGE_EDGE_POLICY["ProductImage.productId"],
-      edgeKey: "ProductImage.productId",
+      disposition:
+        PRODUCT_MERGE_EDGE_POLICY["EntityAttachment.subjectEntityId"],
+      edgeKey: "EntityAttachment.subjectEntityId",
       label: "image associations moved",
       byTargetId: byProduct(plan.images.collision.repoint),
     }),
@@ -2130,7 +2142,7 @@ export const previewMergeProducts = async (
         description:
           "The survivor already has this image, so the duplicate association is soft-deleted and the survivor's existing image order wins.",
       },
-      edgeKey: "ProductImage.productId",
+      edgeKey: "EntityAttachment.subjectEntityId",
       label: "duplicate image associations dropped",
       byTargetId: byProduct(
         plan.images.collision.absorb.flatMap(({ rows }) => rows),

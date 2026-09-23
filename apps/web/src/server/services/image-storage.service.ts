@@ -76,7 +76,6 @@ type AttachedImageRecord = {
   key: string;
   filename: string;
   contentType: string;
-  idempotencyKey: string | null;
 };
 
 type StagedImageRecord = Pick<
@@ -718,7 +717,8 @@ const attachmentResponse = <TDatabase>(
     kind: row.contentType === PDF_CONTENT_TYPE ? "document" : "image",
     entityType: input.entityType,
     entityId: input.entityId,
-    idempotencyKey: row.idempotencyKey,
+    // The key lives on the attachment (ADR 0006); a reuse matched this one.
+    idempotencyKey: input.idempotencyKey ?? null,
     reused,
   };
   if (cleanupWarning) response.cleanupWarning = cleanupWarning;

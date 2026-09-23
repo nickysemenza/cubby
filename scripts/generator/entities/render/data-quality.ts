@@ -114,7 +114,7 @@ export const renderDataQualityArtifacts = (
           [entity.key, JSON.stringify(entity.dataQuality.related)] as const,
       ),
     ) +
-    "\n/** Entities whose table carries a `dataExceptions` jsonb column. */\n" +
+    "\n/** Entities that may record `DataException` rows (ADR 0006). */\n" +
     record(
       "dataQualityExceptionEntities",
       "Record<ScoredEntity, boolean>",

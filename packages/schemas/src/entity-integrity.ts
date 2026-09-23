@@ -22,7 +22,7 @@ export const edgeKeySchema = z
   )
   // The test fixture generator can't synthesize a string matching a regex, so
   // hand it one real edge key. See `mockValueHint` in lib/test/mock-schema.ts.
-  .meta({ mockValue: "PurchaseImage.imageId" });
+  .meta({ mockValue: "EntityAttachment.imageId" });
 export type EdgeKey = z.infer<typeof edgeKeySchema>;
 
 /**

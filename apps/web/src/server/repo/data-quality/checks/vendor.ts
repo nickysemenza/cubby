@@ -14,11 +14,13 @@ const hasLivePurchase = (t: Vendor) => sql`EXISTS (
   WHERE dq_ven_p."vendorId" = ${t.id} AND dq_ven_p."deletedAt" IS NULL
 )`;
 
-// `Vendor.logoImageId` is a direct FK to Image (no join table) — a set but
+// The logo is the vendor's one `logo` attachment (ADR 0006); a set but
 // non-displayable image is the same as no logo.
 const hasDisplayableLogo = (t: Vendor) => sql`EXISTS (
-  SELECT 1 FROM "Image" dq_ven_img
-  WHERE dq_ven_img."id" = ${t.logoImageId} AND dq_ven_img."deletedAt" IS NULL
+  SELECT 1 FROM "EntityAttachment" dq_ven_att
+  JOIN "Image" dq_ven_img ON dq_ven_img."id" = dq_ven_att."imageId"
+  WHERE dq_ven_att."subjectEntityId" = ${t.id} AND dq_ven_att."role" = 'logo'
+    AND dq_ven_att."deletedAt" IS NULL AND dq_ven_img."deletedAt" IS NULL
     AND ${sql.raw(displayableImageRawSql("dq_ven_img"))}
 )`;
 
@@ -29,15 +31,18 @@ export const vendorChecks = defineEntityChecks({
     vendor_order_evidence: {
       expected: hasLivePurchase,
       missing: (t) => sql`${t.orderEvidence} IS NULL`,
+      fingerprint: (t) => [sql`${t.orderEvidence}`],
     },
     vendor_logo: {
       expected: hasLivePurchase,
-      missing: (t) =>
-        sql`(${t.logoImageId} IS NULL OR NOT ${hasDisplayableLogo(t)})`,
+      missing: (t) => sql`NOT ${hasDisplayableLogo(t)}`,
+      // A new website is new evidence for a logo search.
+      fingerprint: (t) => [sql`${t.website}`, hasDisplayableLogo(t)],
     },
     vendor_website: {
       expected: hasLivePurchase,
       missing: (t) => sql`(${t.website} IS NULL OR trim(${t.website}) = '')`,
+      fingerprint: (t) => [sql`${t.name}`, sql`${t.website}`],
     },
   },
 });

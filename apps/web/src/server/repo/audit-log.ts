@@ -38,6 +38,7 @@ import { EDGE_KEY_TARGET_ENTITY } from "~/server/db/entity-incoming-edges";
 import { auditLog } from "~/server/db/schema";
 import { eqAny, unwrapDb } from "~/server/repo/database-helpers";
 import { resolveEntityDisplayImages } from "~/server/repo/entity-display-image";
+import { identityShortcodes } from "~/server/repo/entity-identity";
 import type { RemovalAuditEntry } from "~/server/repo/removal/core";
 import {
   type EntityRef,
@@ -468,27 +469,36 @@ export async function getAuditLog(
   // together so the name resolution costs no extra round-trip latency. The
   // shortcode side additionally covers every FK-shaped value inside each
   // entry's `changes` diff; a name is only wanted for the entry's own subject.
-  const [shortcodeByRef, nameByRef, displayImageByRef, clientNames] =
-    await Promise.all([
-      lookupShortcodes(db, [
-        ...entryRefs,
-        ...returnEntries.flatMap((entry) =>
-          collectChangeRefs(entry.entityType, entry.changes),
-        ),
-      ]),
-      lookupEntityLabels(db, entryRefs),
-      resolveEntityDisplayImages(
-        db,
-        entryRefs.map(({ entity, id }) => ({
-          entityType: entity,
-          entityId: id,
-        })),
+  const [
+    shortcodeByRef,
+    nameByRef,
+    displayImageByRef,
+    clientNames,
+    identities,
+  ] = await Promise.all([
+    lookupShortcodes(db, [
+      ...entryRefs,
+      ...returnEntries.flatMap((entry) =>
+        collectChangeRefs(entry.entityType, entry.changes),
       ),
-      lookupOauthClientNames(
-        db,
-        returnEntries.flatMap((entry) => entry.oauthClientId ?? []),
-      ),
-    ]);
+    ]),
+    lookupEntityLabels(db, entryRefs),
+    resolveEntityDisplayImages(
+      db,
+      entryRefs.map(({ entity, id }) => ({
+        entityType: entity,
+        entityId: id,
+      })),
+    ),
+    lookupOauthClientNames(
+      db,
+      returnEntries.flatMap((entry) => entry.oauthClientId ?? []),
+    ),
+    identityShortcodes(
+      db,
+      returnEntries.map((entry) => entry.entityId),
+    ),
+  ]);
 
   return {
     entries: returnEntries.map(
@@ -515,8 +525,12 @@ export async function getAuditLog(
           : null,
         runId: run ? parseShortcodeFor("importRun", run.shortcode) : null,
         entryKey: encodeAuditCursor({ id, createdAt: entry.createdAt }),
+        // `Entity` still knows a hard-deleted payload's code.
         entityId:
-          shortcodeByRef.get(entityRefKey(entry.entityType, entityId)) ?? null,
+          shortcodeByRef.get(entityRefKey(entry.entityType, entityId)) ??
+          identities.get(entityId)?.shortcode ??
+          null,
+        canonicalEntityId: identities.get(entityId)?.canonicalShortcode ?? null,
         entityName:
           nameByRef.get(entityRefKey(entry.entityType, entityId)) ?? null,
         displayImage:

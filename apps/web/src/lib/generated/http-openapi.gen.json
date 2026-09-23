@@ -2277,6 +2277,73 @@
         }
       }
     },
+    "/api/v1/entity/connections": {
+      "get": {
+        "tags": [
+          "entity"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^(?:PRD-|RCP-|ING-|CKB-|LOC-|INV-|MEL-|LPY-|LTR-|PRJ-|TSK-|VEN-|PUR-|FAC-|FTX-|WSH-|EXP-|IMG-|PLT-|GDE-|VACCT-|CAT-|RUN-|DEV-|IMS-|PLANT-)[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$"
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "operation",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "delete",
+                "merge"
+              ]
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "limitPerGroup",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50
+            },
+            "style": "form",
+            "explode": true
+          }
+        ],
+        "operationId": "entity.connections",
+        "responses": {
+          "200": {
+            "description": "200",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EntityConnectionsOut"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/entity/explore": {
       "post": {
         "tags": [
@@ -27696,31 +27763,6 @@
             "explode": true
           },
           {
-            "name": "logoImageId",
-            "in": "query",
-            "schema": {
-              "type": "array",
-              "items": {
-                "anyOf": [
-                  {
-                    "type": "string",
-                    "pattern": "^IMG-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
-                    "description": "image shortcode, e.g. IMG-4K7M"
-                  },
-                  {
-                    "type": "string",
-                    "const": "__unresolvable_entity_filter__"
-                  }
-                ],
-                "type": "string",
-                "pattern": "^IMG-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
-                "description": "image shortcode, e.g. IMG-4K7M"
-              }
-            },
-            "style": "form",
-            "explode": true
-          },
-          {
             "name": "dataStatus",
             "in": "query",
             "schema": {
@@ -29950,6 +29992,13 @@
             ],
             "pattern": "^(?:PRD-|RCP-|ING-|CKB-|LOC-|INV-|MEL-|LPY-|LTR-|PRJ-|TSK-|VEN-|PUR-|FAC-|FTX-|WSH-|EXP-|PLT-|GDE-|VACCT-|CAT-|DEV-|IMS-|PLANT-)[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$"
           },
+          "canonicalEntityId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^(?:PRD-|RCP-|ING-|CKB-|LOC-|INV-|MEL-|LPY-|LTR-|PRJ-|TSK-|VEN-|PUR-|FAC-|FTX-|WSH-|EXP-|PLT-|GDE-|VACCT-|CAT-|DEV-|IMS-|PLANT-)[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$"
+          },
           "entityName": {
             "type": [
               "string",
@@ -30080,6 +30129,7 @@
           "entryKey",
           "entityType",
           "entityId",
+          "canonicalEntityId",
           "entityName",
           "action",
           "changes",
@@ -35277,6 +35327,15 @@
           },
           "attachments": {
             "$ref": "#/components/schemas/EntityAttachmentList"
+          },
+          "redirectedFrom": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "previousShortcodes": {
+            "$ref": "#/components/schemas/InputShared681004346C78D5F3"
           }
         },
         "required": [
@@ -35295,7 +35354,9 @@
           "updatedAt",
           "dataQuality",
           "displayImages",
-          "attachments"
+          "attachments",
+          "redirectedFrom",
+          "previousShortcodes"
         ]
       },
       "DeviceListItem": {
@@ -36551,6 +36612,107 @@
           "attachment",
           "cover",
           "logo"
+        ]
+      },
+      "EntityConnectionDirection": {
+        "type": "string",
+        "enum": [
+          "incoming",
+          "outgoing"
+        ]
+      },
+      "EntityConnectionGroup": {
+        "type": "object",
+        "properties": {
+          "direction": {
+            "$ref": "#/components/schemas/EntityConnectionDirection"
+          },
+          "edgeKey": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "role": {
+            "$ref": "#/components/schemas/EdgeRole"
+          },
+          "otherKind": {
+            "$ref": "#/components/schemas/Entity"
+          },
+          "count": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EntityConnectionItem"
+            }
+          },
+          "disposition": {
+            "$ref": "#/components/schemas/OperationDisposition"
+          }
+        },
+        "required": [
+          "direction",
+          "edgeKey",
+          "label",
+          "role",
+          "otherKind",
+          "count",
+          "items"
+        ]
+      },
+      "EntityConnectionItem": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/Entity"
+          },
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "name"
+        ]
+      },
+      "EntityConnectionsOut": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/Entity"
+          },
+          "redirectedFrom": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "groups": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EntityConnectionGroup"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "redirectedFrom",
+          "groups"
         ]
       },
       "EntityDeleteResult": {
@@ -38570,6 +38732,15 @@
           },
           "attachments": {
             "$ref": "#/components/schemas/EntityAttachmentList"
+          },
+          "redirectedFrom": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "previousShortcodes": {
+            "$ref": "#/components/schemas/InputShared681004346C78D5F3"
           }
         },
         "required": [
@@ -38594,7 +38765,9 @@
           "updatedAt",
           "dataQuality",
           "displayImages",
-          "attachments"
+          "attachments",
+          "redirectedFrom",
+          "previousShortcodes"
         ]
       },
       "ExpenseFacetCountsInput": {
@@ -40388,6 +40561,15 @@
           },
           "attachments": {
             "$ref": "#/components/schemas/EntityAttachmentList"
+          },
+          "redirectedFrom": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "previousShortcodes": {
+            "$ref": "#/components/schemas/InputShared681004346C78D5F3"
           }
         },
         "required": [
@@ -40406,7 +40588,9 @@
           "updatedAt",
           "dataQuality",
           "displayImages",
-          "attachments"
+          "attachments",
+          "redirectedFrom",
+          "previousShortcodes"
         ]
       },
       "FinancialAccountIdentity": {
@@ -41363,6 +41547,15 @@
           },
           "attachments": {
             "$ref": "#/components/schemas/EntityAttachmentList"
+          },
+          "redirectedFrom": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "previousShortcodes": {
+            "$ref": "#/components/schemas/InputShared681004346C78D5F3"
           }
         },
         "required": [
@@ -41383,7 +41576,9 @@
           "updatedAt",
           "dataQuality",
           "displayImages",
-          "attachments"
+          "attachments",
+          "redirectedFrom",
+          "previousShortcodes"
         ]
       },
       "FinancialTransactionListItem": {
@@ -42096,6 +42291,15 @@
           },
           "attachments": {
             "$ref": "#/components/schemas/EntityAttachmentList"
+          },
+          "redirectedFrom": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "previousShortcodes": {
+            "$ref": "#/components/schemas/InputShared681004346C78D5F3"
           }
         },
         "required": [
@@ -42114,7 +42318,9 @@
           "updatedAt",
           "dataQuality",
           "displayImages",
-          "attachments"
+          "attachments",
+          "redirectedFrom",
+          "previousShortcodes"
         ]
       },
       "GardenEntryKind": {
@@ -46299,6 +46505,15 @@
           },
           "attachments": {
             "$ref": "#/components/schemas/EntityAttachmentList"
+          },
+          "redirectedFrom": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "previousShortcodes": {
+            "$ref": "#/components/schemas/InputShared681004346C78D5F3"
           }
         },
         "required": [
@@ -46325,7 +46540,9 @@
           "createdAt",
           "updatedAt",
           "displayImages",
-          "attachments"
+          "attachments",
+          "redirectedFrom",
+          "previousShortcodes"
         ]
       },
       "ImageSightingListItem": {
@@ -48311,6 +48528,15 @@
           },
           "attachments": {
             "$ref": "#/components/schemas/EntityAttachmentList"
+          },
+          "redirectedFrom": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "previousShortcodes": {
+            "$ref": "#/components/schemas/InputShared681004346C78D5F3"
           }
         },
         "required": [
@@ -48326,7 +48552,9 @@
           "appearsInRecipes",
           "product",
           "displayImages",
-          "attachments"
+          "attachments",
+          "redirectedFrom",
+          "previousShortcodes"
         ]
       },
       "IngredientEnrichmentWorkbenchInput": {
@@ -50094,6 +50322,15 @@
           },
           "attachments": {
             "$ref": "#/components/schemas/EntityAttachmentList"
+          },
+          "redirectedFrom": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "previousShortcodes": {
+            "$ref": "#/components/schemas/InputShared681004346C78D5F3"
           }
         },
         "required": [
@@ -50110,7 +50347,9 @@
           "location",
           "displayName",
           "displayImages",
-          "attachments"
+          "attachments",
+          "redirectedFrom",
+          "previousShortcodes"
         ]
       },
       "InventoryDetailProductOut": {
@@ -51191,6 +51430,15 @@
           },
           "attachments": {
             "$ref": "#/components/schemas/EntityAttachmentList"
+          },
+          "redirectedFrom": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "previousShortcodes": {
+            "$ref": "#/components/schemas/InputShared681004346C78D5F3"
           }
         },
         "required": [
@@ -51202,7 +51450,9 @@
           "updatedAt",
           "dataQuality",
           "displayImages",
-          "attachments"
+          "attachments",
+          "redirectedFrom",
+          "previousShortcodes"
         ]
       },
       "LedgerPartyKind": {
@@ -51749,6 +51999,15 @@
           },
           "attachments": {
             "$ref": "#/components/schemas/EntityAttachmentList"
+          },
+          "redirectedFrom": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "previousShortcodes": {
+            "$ref": "#/components/schemas/InputShared681004346C78D5F3"
           }
         },
         "required": [
@@ -51767,7 +52026,9 @@
           "updatedAt",
           "dataQuality",
           "displayImages",
-          "attachments"
+          "attachments",
+          "redirectedFrom",
+          "previousShortcodes"
         ]
       },
       "LedgerTransferEvidenceTransactionIds": {
@@ -52350,6 +52611,15 @@
           },
           "attachments": {
             "$ref": "#/components/schemas/EntityAttachmentList"
+          },
+          "redirectedFrom": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "previousShortcodes": {
+            "$ref": "#/components/schemas/InputShared681004346C78D5F3"
           }
         },
         "required": [
@@ -52364,7 +52634,9 @@
           "updatedAt",
           "dataQuality",
           "displayImages",
-          "attachments"
+          "attachments",
+          "redirectedFrom",
+          "previousShortcodes"
         ]
       },
       "LocationEnsureGlobalUnknownInput": {
@@ -53993,6 +54265,15 @@
           },
           "attachments": {
             "$ref": "#/components/schemas/EntityAttachmentList"
+          },
+          "redirectedFrom": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "previousShortcodes": {
+            "$ref": "#/components/schemas/InputShared681004346C78D5F3"
           }
         },
         "required": [
@@ -54010,7 +54291,9 @@
           "updatedAt",
           "dataQuality",
           "displayImages",
-          "attachments"
+          "attachments",
+          "redirectedFrom",
+          "previousShortcodes"
         ]
       },
       "MealFoodAmount": {
@@ -58149,6 +58432,15 @@
           },
           "attachments": {
             "$ref": "#/components/schemas/EntityAttachmentList"
+          },
+          "redirectedFrom": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "previousShortcodes": {
+            "$ref": "#/components/schemas/InputShared681004346C78D5F3"
           }
         },
         "required": [
@@ -58169,7 +58461,9 @@
           "updatedAt",
           "dataQuality",
           "displayImages",
-          "attachments"
+          "attachments",
+          "redirectedFrom",
+          "previousShortcodes"
         ]
       },
       "PlantingCreateInput": {
@@ -58362,6 +58656,15 @@
           },
           "attachments": {
             "$ref": "#/components/schemas/EntityAttachmentList"
+          },
+          "redirectedFrom": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "previousShortcodes": {
+            "$ref": "#/components/schemas/InputShared681004346C78D5F3"
           }
         },
         "required": [
@@ -58383,7 +58686,9 @@
           "updatedAt",
           "dataQuality",
           "displayImages",
-          "attachments"
+          "attachments",
+          "redirectedFrom",
+          "previousShortcodes"
         ]
       },
       "PlantingListItem": {
@@ -59194,6 +59499,9 @@
               "orphanedProducts": {
                 "type": "number"
               },
+              "unconnectedEntities": {
+                "type": "number"
+              },
               "partiallyImportedCookbooks": {
                 "type": "number"
               },
@@ -59347,6 +59655,7 @@
               "duplicateInventory",
               "duplicateProductIdentities",
               "orphanedProducts",
+              "unconnectedEntities",
               "partiallyImportedCookbooks",
               "soldButStillStocked",
               "kitsCountedTwice",
@@ -59466,6 +59775,12 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/OrphanedProduct"
+            }
+          },
+          "unconnectedEntities": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EntityConnectionItem"
             }
           },
           "partiallyImportedCookbooks": {
@@ -59671,6 +59986,7 @@
           "duplicateInventory",
           "duplicateProductIdentities",
           "orphanedProducts",
+          "unconnectedEntities",
           "partiallyImportedCookbooks",
           "soldButStillStocked",
           "kitsCountedTwice",
@@ -60016,6 +60332,15 @@
           },
           "attachments": {
             "$ref": "#/components/schemas/EntityAttachmentList"
+          },
+          "redirectedFrom": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "previousShortcodes": {
+            "$ref": "#/components/schemas/InputShared681004346C78D5F3"
           }
         },
         "required": [
@@ -60031,7 +60356,9 @@
           "updatedAt",
           "dataQuality",
           "displayImages",
-          "attachments"
+          "attachments",
+          "redirectedFrom",
+          "previousShortcodes"
         ]
       },
       "ProductCategoryDistributionOut": {
@@ -60757,6 +61084,15 @@
           },
           "attachments": {
             "$ref": "#/components/schemas/EntityAttachmentList"
+          },
+          "redirectedFrom": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "previousShortcodes": {
+            "$ref": "#/components/schemas/InputShared681004346C78D5F3"
           }
         },
         "required": [
@@ -60791,7 +61127,9 @@
           "onHandUnits",
           "quantityVariance",
           "displayImages",
-          "attachments"
+          "attachments",
+          "redirectedFrom",
+          "previousShortcodes"
         ]
       },
       "ProductDiscardInput": {
@@ -65606,6 +65944,15 @@
           },
           "attachments": {
             "$ref": "#/components/schemas/EntityAttachmentList"
+          },
+          "redirectedFrom": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "previousShortcodes": {
+            "$ref": "#/components/schemas/InputShared681004346C78D5F3"
           }
         },
         "required": [
@@ -65625,7 +65972,9 @@
           "dates",
           "dataQuality",
           "displayImages",
-          "attachments"
+          "attachments",
+          "redirectedFrom",
+          "previousShortcodes"
         ]
       },
       "ProjectFilterOptionsOut": {
@@ -67881,6 +68230,15 @@
           },
           "attachments": {
             "$ref": "#/components/schemas/EntityAttachmentList"
+          },
+          "redirectedFrom": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "previousShortcodes": {
+            "$ref": "#/components/schemas/InputShared681004346C78D5F3"
           }
         },
         "required": [
@@ -67904,7 +68262,9 @@
           "updatedAt",
           "dataQuality",
           "displayImages",
-          "attachments"
+          "attachments",
+          "redirectedFrom",
+          "previousShortcodes"
         ]
       },
       "PurchaseFieldsPurchaseDocumentKind": {
@@ -68951,6 +69311,15 @@
           },
           "attachments": {
             "$ref": "#/components/schemas/EntityAttachmentList"
+          },
+          "redirectedFrom": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "previousShortcodes": {
+            "$ref": "#/components/schemas/InputShared681004346C78D5F3"
           }
         },
         "required": [
@@ -68964,7 +69333,9 @@
           "forkedFromRecipeName",
           "dataQuality",
           "displayImages",
-          "attachments"
+          "attachments",
+          "redirectedFrom",
+          "previousShortcodes"
         ]
       },
       "RecipeDetailMcpOut": {
@@ -75037,6 +75408,15 @@
           },
           "attachments": {
             "$ref": "#/components/schemas/EntityAttachmentList"
+          },
+          "redirectedFrom": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "previousShortcodes": {
+            "$ref": "#/components/schemas/InputShared681004346C78D5F3"
           }
         },
         "required": [
@@ -75057,7 +75437,9 @@
           "updatedAt",
           "dataQuality",
           "displayImages",
-          "attachments"
+          "attachments",
+          "redirectedFrom",
+          "previousShortcodes"
         ]
       },
       "TaskFilters": {
@@ -77177,6 +77559,15 @@
           },
           "attachments": {
             "$ref": "#/components/schemas/EntityAttachmentList"
+          },
+          "redirectedFrom": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "previousShortcodes": {
+            "$ref": "#/components/schemas/InputShared681004346C78D5F3"
           }
         },
         "required": [
@@ -77195,7 +77586,9 @@
           "createdAt",
           "updatedAt",
           "displayImages",
-          "attachments"
+          "attachments",
+          "redirectedFrom",
+          "previousShortcodes"
         ]
       },
       "VendorAccountListItem": {
@@ -77637,6 +78030,15 @@
           },
           "attachments": {
             "$ref": "#/components/schemas/EntityAttachmentList"
+          },
+          "redirectedFrom": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "previousShortcodes": {
+            "$ref": "#/components/schemas/InputShared681004346C78D5F3"
           }
         },
         "required": [
@@ -77655,7 +78057,9 @@
           "updatedAt",
           "dataQuality",
           "displayImages",
-          "attachments"
+          "attachments",
+          "redirectedFrom",
+          "previousShortcodes"
         ]
       },
       "VendorDomainList": {
@@ -78224,6 +78628,15 @@
           },
           "attachments": {
             "$ref": "#/components/schemas/EntityAttachmentList"
+          },
+          "redirectedFrom": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "previousShortcodes": {
+            "$ref": "#/components/schemas/InputShared681004346C78D5F3"
           }
         },
         "required": [
@@ -78237,7 +78650,9 @@
           "updatedAt",
           "dataQuality",
           "displayImages",
-          "attachments"
+          "attachments",
+          "redirectedFrom",
+          "previousShortcodes"
         ]
       },
       "WishListItem": {

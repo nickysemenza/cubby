@@ -33,6 +33,7 @@ import {
   AlertTriangle,
   Download,
   ImageOff,
+  Link2Off,
   ListFilter,
   type LucideIcon,
   Network,
@@ -949,6 +950,22 @@ const DECLARED_SECTIONS = [
           />
         ),
       },
+    }),
+  }),
+  section({
+    id: "unconnected-entities",
+    label: "Unconnected",
+    select: (p) => p.unconnectedEntities,
+    problemKeys: ["unconnectedEntities"],
+    icon: Link2Off,
+    renderItem: (item) => ({
+      key: `${item.kind}:${item.id}`,
+      title: item.name ?? item.id,
+      subtitle: entityLabel(item.kind),
+      route:
+        isBrowserRoutedEntity(item.kind) && item.kind !== "usda-food"
+          ? entityDetailLink(item.kind, item.id)
+          : undefined,
     }),
   }),
   section({

@@ -37,7 +37,7 @@ import {
   imageProcessingAttempt,
   imageProcessingSubmissionJob,
 } from "~/server/db/image-processing-schema";
-import { aiAnalysis, image, productImage } from "~/server/db/schema";
+import { aiAnalysis, entityAttachment, image } from "~/server/db/schema";
 import {
   isCurrentPreferredImageDescription,
   parseImageDescriptionInputFingerprint,
@@ -111,11 +111,13 @@ const isAttachedOnlyAsLabel = async (
 ): Promise<boolean> => {
   const [attachments] = await tx
     .select({
-      hasLabel: sql<boolean>`bool_or(${productImage.purpose} = 'label')`,
-      hasItem: sql<boolean>`bool_or(${productImage.purpose} IS DISTINCT FROM 'label')`,
+      hasLabel: sql<boolean>`bool_or(${entityAttachment.purpose} = 'label')`,
+      hasItem: sql<boolean>`bool_or(${entityAttachment.purpose} IS DISTINCT FROM 'label')`,
     })
-    .from(productImage)
-    .where(and(eq(productImage.imageId, imageId), notDeleted(productImage)));
+    .from(entityAttachment)
+    .where(
+      and(eq(entityAttachment.imageId, imageId), notDeleted(entityAttachment)),
+    );
   return attachments?.hasLabel === true && attachments.hasItem !== true;
 };
 

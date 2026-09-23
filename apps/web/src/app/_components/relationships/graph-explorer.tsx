@@ -30,6 +30,7 @@ import { EntityGraphPicker } from "./entity-graph-picker";
 import { graphBranchKey, graphRefKey } from "./entity-graph-state";
 import type { GraphMapCamera } from "./graph-map-canvas";
 import { graphBranchCount, parseGraphRecord } from "./graph-map-state";
+import { PhysicalConnectionsPanel } from "./physical-connections";
 import {
   useGraphExplorer,
   type GraphExplorerOperations,
@@ -135,6 +136,7 @@ export function GraphExplorer({
       <GraphRecordInspector
         model={model}
         root={root}
+        operations={operations}
         onRootChange={onRootChange}
         onClearPath={clearPath}
         onResetCamera={() => {
@@ -383,12 +385,14 @@ export function GraphExplorer({
 function GraphRecordInspector({
   model,
   root,
+  operations,
   onRootChange,
   onResetCamera,
   onClearPath,
 }: {
   model: ReturnType<typeof useGraphExplorer>;
   root: EntityRef;
+  operations: GraphExplorerOperations;
   onRootChange: (root: EntityRef) => void;
   onResetCamera: () => void;
   onClearPath: () => void;
@@ -539,6 +543,10 @@ function GraphRecordInspector({
               );
             })}
           </Stack>
+          <PhysicalConnectionsPanel
+            subject={selected}
+            operations={operations}
+          />
         </>
       ) : (
         <p className="text-sm text-muted-foreground">

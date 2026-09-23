@@ -29,6 +29,7 @@ import {
 import { z } from "zod";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
+import { entityIdentity } from "~/server/db/schema";
 
 import {
   FindOrCreateConflictError,
@@ -70,16 +71,19 @@ const parseShortcodeRow = <T extends ShortcodeType>(
   return { ...rest, shortcode: parseShortcodeFor(entity, shortcode) };
 };
 
-/** Whether ANY row — live or soft-deleted — already holds this code. */
+/**
+ * Whether any identity — live, soft-deleted, or hard-deleted — ever held this
+ * code. Reads `Entity` rather than the payload table because a hard-deleted
+ * payload's code survives only there.
+ */
 const shortcodeTaken = async (
   db: Database | DrizzleTransaction,
-  table: ShortcodeTable,
   code: string,
 ): Promise<boolean> => {
   const existing = await unwrapDb(db)
     .select({ one: sql<number>`1` })
-    .from(table)
-    .where(eq(table.shortcode, code))
+    .from(entityIdentity)
+    .where(eq(entityIdentity.shortcode, code))
     .limit(1);
   return existing.length > 0;
 };
@@ -97,10 +101,9 @@ export async function generateUniqueShortcode<T extends ShortcodeType>(
   entity: T,
   generator: ShortcodeGeneratorPort = productionShortcodeGeneratorPort,
 ): Promise<ShortcodeFor<T>> {
-  const table = SHORTCODE_TABLE[entity];
   for (let i = 0; i < MAX_RETRIES; i++) {
     const code = generator.generate(entity);
-    if (!(await shortcodeTaken(db, table, code))) {
+    if (!(await shortcodeTaken(db, code))) {
       return code;
     }
   }
@@ -138,13 +141,21 @@ const isShortcodeCollision = <TError>(
   const parsedError = databaseErrorNodeSchema.safeParse(error);
   if (!parsedError.success) return false;
 
-  const indexName = `${tableName}_shortcode_unique`;
+  // The identity trigger's insert into `Entity` rejects a code whose payload
+  // was hard-deleted, which the payload's own index can no longer see.
+  const indexNames = [
+    `${tableName}_shortcode_unique`,
+    "Entity_shortcode_unique",
+  ];
   const { code, constraint, message, cause } = parsedError.data;
   if (
     code === "23505" &&
     // `constraint` is populated by node-postgres; the message check covers a
     // driver or wrapper that only preserves the text.
-    (constraint === indexName || (message?.includes(indexName) ?? false))
+    indexNames.some(
+      (indexName) =>
+        constraint === indexName || (message?.includes(indexName) ?? false),
+    )
   ) {
     return true;
   }
@@ -221,7 +232,7 @@ export async function findOrCreateWithShortcode<T extends ShortcodeType>(
       },
     }).catch(async (error) => {
       if (!(error instanceof FindOrCreateConflictError)) throw error;
-      if (mintedShortcode && (await shortcodeTaken(db, table, mintedShortcode)))
+      if (mintedShortcode && (await shortcodeTaken(db, mintedShortcode)))
         return null; // the code we minted is gone — retry with a fresh one
       throw new Error(
         `findOrCreateWithShortcode(${entity}): the insert conflicted on a unique index that \`where\` does not cover (the minted shortcode was still free), so the winner cannot be re-found. Check every unique index on ${getTableName(table)} against the values being inserted.`,

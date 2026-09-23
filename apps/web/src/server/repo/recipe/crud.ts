@@ -40,13 +40,13 @@ import { recipeOutSignature } from "~/lib/recipe-signature";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import {
+  entityAttachment,
   image,
   ingredient,
   meal,
   mealRecipe,
   mealRecipePortion,
   recipe,
-  recipeImage,
   recipeSection,
   recipeSectionIngredient,
 } from "~/server/db/schema";
@@ -111,7 +111,7 @@ export const RECIPE_DELETE_EDGE_POLICY = {
     description:
       "Meal-plan associations are soft-deleted with the recipe; the meals themselves are not.",
   },
-  "RecipeImage.recipeId": {
+  "EntityAttachment.subjectEntityId": {
     code: "soft-delete-association",
     effect: "soft-delete",
     description:
@@ -173,22 +173,25 @@ export const getRecipeCoverImageUrlsByShortcodes = async (
   const rows = await getDb(db)
     .select({ shortcode: recipe.shortcode, key: image.key })
     .from(recipe)
-    .innerJoin(recipeImage, eq(recipeImage.recipeId, recipe.id))
-    .innerJoin(image, eq(image.id, recipeImage.imageId))
+    .innerJoin(
+      entityAttachment,
+      eq(entityAttachment.subjectEntityId, recipe.id),
+    )
+    .innerJoin(image, eq(image.id, entityAttachment.imageId))
     .where(
       and(
         inArray(recipe.shortcode, ids),
         notDeleted(recipe),
-        notDeleted(recipeImage),
+        notDeleted(entityAttachment),
         notDeleted(image),
         displayableImageWhere,
       ),
     )
     .orderBy(
       recipe.shortcode,
-      asc(recipeImage.sortOrder),
-      asc(recipeImage.createdAt),
-      asc(recipeImage.id),
+      asc(entityAttachment.sortOrder),
+      asc(entityAttachment.createdAt),
+      asc(entityAttachment.id),
     );
 
   for (const row of rows) {
@@ -421,11 +424,17 @@ export const buildRecipeWhere = async (
 
   // PDFs are documents, not displayable recipe images.
   const recipeIdsWithImages = dbClient
-    .select({ recipeId: recipeImage.recipeId })
-    .from(recipeImage)
-    .innerJoin(image, and(eq(image.id, recipeImage.imageId), notDeleted(image)))
+    .select({ recipeId: entityAttachment.subjectEntityId })
+    .from(entityAttachment)
+    .innerJoin(
+      image,
+      and(eq(image.id, entityAttachment.imageId), notDeleted(image)),
+    )
     .where(
-      and(notDeleted(recipeImage), ne(image.contentType, PDF_CONTENT_TYPE)),
+      and(
+        notDeleted(entityAttachment),
+        ne(image.contentType, PDF_CONTENT_TYPE),
+      ),
     );
 
   const recipeIdsWithInstructions = dbClient
@@ -796,9 +805,10 @@ export const duplicateRecipe = async (
           "image",
           source.images.map((img) => img.id),
         );
-        await tx.insert(recipeImage).values(
+        await tx.insert(entityAttachment).values(
           imageIds.map((imageId, i) => ({
-            recipeId: createdRecipeId,
+            subjectEntityId: createdRecipeId,
+            role: "attachment" as const,
             imageId,
             sortOrder: i,
           })),
@@ -1138,13 +1148,13 @@ export const deleteRecipes = async (
           ),
         );
 
-    // Declaring recipeImage lets removeEntity reap unreferenced Image/R2 rows.
+    // Declaring entityAttachment lets removeEntity reap unreferenced Image/R2 rows.
     return await removeEntity(tx, {
       entity: "recipe",
       ids,
       removal: "soft",
       actor,
-      children: [imageCascadeChild(imageJoinBindings.recipe)],
+      children: [imageCascadeChild()],
       extraCounts: {
         cascadedSections: sectionsByRecipe,
         cascadedIngredients: ingredientsByRecipe,

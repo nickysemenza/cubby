@@ -677,9 +677,11 @@ export async function seedPurchaseHeicAttachment(page: Page, name: string) {
     contentType: "image/heic",
     size: 100,
   });
-  await db.insert(schema.purchaseImage).values({
-    purchaseId: owner.id,
+  await db.insert(schema.entityAttachment).values({
+    subjectEntityId: owner.id,
+    role: "attachment",
     imageId: attached.id,
+    documentKind: "other",
   });
   return { purchase, filename: attached.filename };
 }

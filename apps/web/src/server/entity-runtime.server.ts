@@ -30,6 +30,7 @@ import {
 import { runEntityTimeline } from "~/server/entity-timeline";
 import { implementOperationDomain } from "~/server/operation-domain.server";
 import { getEntityCounts } from "~/server/repo/dashboard";
+import { getEntityConnections } from "~/server/repo/entity-edge-source";
 import { getEntityGraph } from "~/server/repo/entity-graph";
 import { getEntityGraphExplore } from "~/server/repo/entity-graph-explore";
 import { getEntityGraphPaths } from "~/server/repo/entity-graph-paths";
@@ -125,6 +126,8 @@ export const entityGraphHandlers = implementOperationDomain(
     explore: (context, input) => getEntityGraphExplore(context.readDb, input),
     graph: (context, input) => getEntityGraph(context.readDb, input),
     graphPaths: (context, input) => getEntityGraphPaths(context.readDb, input),
+    connections: (context, input) =>
+      getEntityConnections(context.readDb, input),
   },
 );
 

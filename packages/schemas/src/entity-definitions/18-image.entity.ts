@@ -57,10 +57,6 @@ export default defineEntity({
     },
     icons: { lucide: "Image", sfSymbol: "photo", emoji: "🖼️" },
     detail: {
-      omitRelations: {
-        vendors:
-          "The associations slot lists every record that uses this image, vendor logos included.",
-      },
       sections: [
         {
           kind: "fields",
@@ -550,15 +546,6 @@ export default defineEntity({
         },
       },
       { key: "shortcode", kind: "text", readKey: null },
-      { key: "targetType", kind: "enum", nullable: true, readKey: null },
-      {
-        key: "targetId",
-        kind: "identifier",
-        nullable: true,
-        label: "Target ID",
-        readKey: null,
-      },
-      { key: "idempotencyKey", kind: "text", nullable: true, readKey: null },
       { key: "deletedAt", kind: "timestamp", nullable: true, readKey: null },
     ],
     storage: [
@@ -611,9 +598,6 @@ export default defineEntity({
       },
       "metadataRevision",
       { key: "embeddedMetadata", specialized: "json:embeddedMetadata" },
-      { key: "targetType", specialized: "enum:targetType" },
-      "targetId",
-      "idempotencyKey",
       { key: "createdAt", default: "now" },
       { key: "updatedAt", default: "now", specialized: "updated-at" },
       "deletedAt",

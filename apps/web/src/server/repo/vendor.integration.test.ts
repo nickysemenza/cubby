@@ -12,9 +12,9 @@ import { describe, expect, it } from "vitest";
 
 import {
   auditLog,
+  entityAttachment,
   expense,
   purchase,
-  purchaseImage,
   vendor,
 } from "~/server/db/schema";
 
@@ -342,8 +342,8 @@ describe("vendor repository — mergeVendors", () => {
       size: 100,
       status: "UPLOADED",
     });
-    const join = await insertAndReturn(ctx.db, purchaseImage, {
-      purchaseId,
+    const join = await insertAndReturn(ctx.db, entityAttachment, {
+      subjectEntityId: purchaseId,
       imageId: img.id,
     });
     return { imageId: img.id, joinId: join.id };
@@ -475,19 +475,19 @@ describe("vendor repository — mergeVendors", () => {
       "survivor line",
     ]);
 
-    const survivorDocs = await getDb(ctx.db).query.purchaseImage.findMany({
+    const survivorDocs = await getDb(ctx.db).query.entityAttachment.findMany({
       where: and(
-        eq(purchaseImage.purchaseId, survivor),
-        notDeleted(purchaseImage),
+        eq(entityAttachment.subjectEntityId, survivor),
+        notDeleted(entityAttachment),
       ),
     });
     expect(survivorDocs.map((d) => d.imageId).sort()).toEqual(
       [survivorDoc.imageId, deadDoc.imageId].sort(),
     );
     const [oldJoin] = await getDb(ctx.db)
-      .select({ deletedAt: purchaseImage.deletedAt })
-      .from(purchaseImage)
-      .where(eq(purchaseImage.id, deadDoc.joinId));
+      .select({ deletedAt: entityAttachment.deletedAt })
+      .from(entityAttachment)
+      .where(eq(entityAttachment.id, deadDoc.joinId));
     expect(oldJoin?.deletedAt).not.toBeNull();
 
     expect((await chargeRow(dead))?.deletedAt).not.toBeNull();

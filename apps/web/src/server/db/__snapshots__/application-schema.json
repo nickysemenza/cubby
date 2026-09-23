@@ -950,6 +950,21 @@
           ],
           "onDelete": "set null",
           "onUpdate": "no action"
+        },
+        "AuditLog_entity_fk": {
+          "name": "AuditLog_entity_fk",
+          "tableFrom": "AuditLog",
+          "tableTo": "Entity",
+          "columnsFrom": [
+            "entityId",
+            "entityType"
+          ],
+          "columnsTo": [
+            "id",
+            "kind"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -1024,12 +1039,6 @@
           "primaryKey": false,
           "notNull": true,
           "default": 0
-        },
-        "coverImageId": {
-          "name": "coverImageId",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
         },
         "productId": {
           "name": "productId",
@@ -1112,21 +1121,6 @@
           "method": "btree",
           "with": {}
         },
-        "Cookbook_coverImageId_idx": {
-          "name": "Cookbook_coverImageId_idx",
-          "columns": [
-            {
-              "expression": "coverImageId",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
         "Cookbook_productId_idx": {
           "name": "Cookbook_productId_idx",
           "columns": [
@@ -1159,19 +1153,6 @@
         }
       },
       "foreignKeys": {
-        "Cookbook_coverImageId_Image_id_fk": {
-          "name": "Cookbook_coverImageId_Image_id_fk",
-          "tableFrom": "Cookbook",
-          "tableTo": "Image",
-          "columnsFrom": [
-            "coverImageId"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
         "Cookbook_productId_Product_id_fk": {
           "name": "Cookbook_productId_Product_id_fk",
           "tableFrom": "Cookbook",
@@ -1181,6 +1162,21 @@
           ],
           "columnsTo": [
             "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "Cookbook_entity_identity_fk": {
+          "name": "Cookbook_entity_identity_fk",
+          "tableFrom": "Cookbook",
+          "tableTo": "Entity",
+          "columnsFrom": [
+            "id",
+            "shortcode"
+          ],
+          "columnsTo": [
+            "id",
+            "shortcode"
           ],
           "onDelete": "no action",
           "onUpdate": "no action"
@@ -1381,6 +1377,21 @@
           ],
           "onDelete": "no action",
           "onUpdate": "no action"
+        },
+        "Device_entity_identity_fk": {
+          "name": "Device_entity_identity_fk",
+          "tableFrom": "Device",
+          "tableTo": "Entity",
+          "columnsFrom": [
+            "id",
+            "shortcode"
+          ],
+          "columnsTo": [
+            "id",
+            "shortcode"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -1558,7 +1569,23 @@
           "with": {}
         }
       },
-      "foreignKeys": {},
+      "foreignKeys": {
+        "EntityEmbedding_entity_fk": {
+          "name": "EntityEmbedding_entity_fk",
+          "tableFrom": "EntityEmbedding",
+          "tableTo": "Entity",
+          "columnsFrom": [
+            "entityId",
+            "entityType"
+          ],
+          "columnsTo": [
+            "id",
+            "kind"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
@@ -1870,6 +1897,21 @@
           ],
           "columnsTo": [
             "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "Expense_entity_identity_fk": {
+          "name": "Expense_entity_identity_fk",
+          "tableFrom": "Expense",
+          "tableTo": "Entity",
+          "columnsFrom": [
+            "id",
+            "shortcode"
+          ],
+          "columnsTo": [
+            "id",
+            "shortcode"
           ],
           "onDelete": "no action",
           "onUpdate": "no action"
@@ -2289,6 +2331,21 @@
           ],
           "onDelete": "no action",
           "onUpdate": "no action"
+        },
+        "FinancialAccount_entity_identity_fk": {
+          "name": "FinancialAccount_entity_identity_fk",
+          "tableFrom": "FinancialAccount",
+          "tableTo": "Entity",
+          "columnsFrom": [
+            "id",
+            "shortcode"
+          ],
+          "columnsTo": [
+            "id",
+            "shortcode"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -2593,6 +2650,21 @@
           ],
           "onDelete": "no action",
           "onUpdate": "no action"
+        },
+        "FinancialTransaction_entity_identity_fk": {
+          "name": "FinancialTransaction_entity_identity_fk",
+          "tableFrom": "FinancialTransaction",
+          "tableTo": "Entity",
+          "columnsFrom": [
+            "id",
+            "shortcode"
+          ],
+          "columnsTo": [
+            "id",
+            "shortcode"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -2882,142 +2954,18 @@
           ],
           "onDelete": "no action",
           "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.GardenEntryImage": {
-      "name": "GardenEntryImage",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
         },
-        "gardenEntryId": {
-          "name": "gardenEntryId",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "imageId": {
-          "name": "imageId",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "sortOrder": {
-          "name": "sortOrder",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 0
-        },
-        "createdAt": {
-          "name": "createdAt",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updatedAt": {
-          "name": "updatedAt",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "deletedAt": {
-          "name": "deletedAt",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": false
-        }
-      },
-      "indexes": {
-        "GardenEntryImage_gardenEntryId_imageId_key": {
-          "name": "GardenEntryImage_gardenEntryId_imageId_key",
-          "columns": [
-            {
-              "expression": "gardenEntryId",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "imageId",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "where": "\"GardenEntryImage\".\"deletedAt\" IS NULL",
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "GardenEntryImage_gardenEntryId_idx": {
-          "name": "GardenEntryImage_gardenEntryId_idx",
-          "columns": [
-            {
-              "expression": "gardenEntryId",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "GardenEntryImage_imageId_idx": {
-          "name": "GardenEntryImage_imageId_idx",
-          "columns": [
-            {
-              "expression": "imageId",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "GardenEntryImage_gardenEntryId_GardenEntry_id_fk": {
-          "name": "GardenEntryImage_gardenEntryId_GardenEntry_id_fk",
-          "tableFrom": "GardenEntryImage",
-          "tableTo": "GardenEntry",
+        "GardenEntry_entity_identity_fk": {
+          "name": "GardenEntry_entity_identity_fk",
+          "tableFrom": "GardenEntry",
+          "tableTo": "Entity",
           "columnsFrom": [
-            "gardenEntryId"
+            "id",
+            "shortcode"
           ],
           "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "GardenEntryImage_imageId_Image_id_fk": {
-          "name": "GardenEntryImage_imageId_Image_id_fk",
-          "tableFrom": "GardenEntryImage",
-          "tableTo": "Image",
-          "columnsFrom": [
-            "imageId"
-          ],
-          "columnsTo": [
-            "id"
+            "id",
+            "shortcode"
           ],
           "onDelete": "no action",
           "onUpdate": "no action"
@@ -3359,24 +3307,6 @@
           "primaryKey": false,
           "notNull": false
         },
-        "targetType": {
-          "name": "targetType",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "targetId": {
-          "name": "targetId",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "idempotencyKey": {
-          "name": "idempotencyKey",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
         "createdAt": {
           "name": "createdAt",
           "type": "timestamp",
@@ -3460,34 +3390,6 @@
           "method": "btree",
           "with": {}
         },
-        "Image_attachment_idempotency_key": {
-          "name": "Image_attachment_idempotency_key",
-          "columns": [
-            {
-              "expression": "targetType",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "targetId",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "idempotencyKey",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "where": "\"Image\".\"idempotencyKey\" IS NOT NULL AND \"Image\".\"deletedAt\" IS NULL",
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
         "Image_capturedByPartyId_idx": {
           "name": "Image_capturedByPartyId_idx",
           "columns": [
@@ -3514,6 +3416,21 @@
           ],
           "columnsTo": [
             "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "Image_entity_identity_fk": {
+          "name": "Image_entity_identity_fk",
+          "tableFrom": "Image",
+          "tableTo": "Entity",
+          "columnsFrom": [
+            "id",
+            "shortcode"
+          ],
+          "columnsTo": [
+            "id",
+            "shortcode"
           ],
           "onDelete": "no action",
           "onUpdate": "no action"
@@ -4965,6 +4882,21 @@
           ],
           "onDelete": "no action",
           "onUpdate": "no action"
+        },
+        "ImageSighting_entity_identity_fk": {
+          "name": "ImageSighting_entity_identity_fk",
+          "tableFrom": "ImageSighting",
+          "tableTo": "Entity",
+          "columnsFrom": [
+            "id",
+            "shortcode"
+          ],
+          "columnsTo": [
+            "id",
+            "shortcode"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -6263,6 +6195,21 @@
           ],
           "columnsTo": [
             "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "ImportRun_entity_identity_fk": {
+          "name": "ImportRun_entity_identity_fk",
+          "tableFrom": "ImportRun",
+          "tableTo": "Entity",
+          "columnsFrom": [
+            "id",
+            "shortcode"
+          ],
+          "columnsTo": [
+            "id",
+            "shortcode"
           ],
           "onDelete": "no action",
           "onUpdate": "no action"
@@ -8008,6 +7955,21 @@
           ],
           "onDelete": "no action",
           "onUpdate": "no action"
+        },
+        "Ingredient_entity_identity_fk": {
+          "name": "Ingredient_entity_identity_fk",
+          "tableFrom": "Ingredient",
+          "tableTo": "Entity",
+          "columnsFrom": [
+            "id",
+            "shortcode"
+          ],
+          "columnsTo": [
+            "id",
+            "shortcode"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -8261,6 +8223,21 @@
           ],
           "onDelete": "no action",
           "onUpdate": "no action"
+        },
+        "InventoryEntry_entity_identity_fk": {
+          "name": "InventoryEntry_entity_identity_fk",
+          "tableFrom": "InventoryEntry",
+          "tableTo": "Entity",
+          "columnsFrom": [
+            "id",
+            "shortcode"
+          ],
+          "columnsTo": [
+            "id",
+            "shortcode"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -8465,6 +8442,21 @@
           ],
           "columnsTo": [
             "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "LedgerParty_entity_identity_fk": {
+          "name": "LedgerParty_entity_identity_fk",
+          "tableFrom": "LedgerParty",
+          "tableTo": "Entity",
+          "columnsFrom": [
+            "id",
+            "shortcode"
+          ],
+          "columnsTo": [
+            "id",
+            "shortcode"
           ],
           "onDelete": "no action",
           "onUpdate": "no action"
@@ -8831,6 +8823,21 @@
           ],
           "onDelete": "no action",
           "onUpdate": "no action"
+        },
+        "LedgerTransfer_entity_identity_fk": {
+          "name": "LedgerTransfer_entity_identity_fk",
+          "tableFrom": "LedgerTransfer",
+          "tableTo": "Entity",
+          "columnsFrom": [
+            "id",
+            "shortcode"
+          ],
+          "columnsTo": [
+            "id",
+            "shortcode"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -9170,142 +9177,18 @@
           ],
           "onDelete": "no action",
           "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.LocationImage": {
-      "name": "LocationImage",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
         },
-        "locationId": {
-          "name": "locationId",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "imageId": {
-          "name": "imageId",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "sortOrder": {
-          "name": "sortOrder",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 0
-        },
-        "createdAt": {
-          "name": "createdAt",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updatedAt": {
-          "name": "updatedAt",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "deletedAt": {
-          "name": "deletedAt",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": false
-        }
-      },
-      "indexes": {
-        "LocationImage_locationId_imageId_key": {
-          "name": "LocationImage_locationId_imageId_key",
-          "columns": [
-            {
-              "expression": "locationId",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "imageId",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "where": "\"LocationImage\".\"deletedAt\" IS NULL",
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "LocationImage_locationId_idx": {
-          "name": "LocationImage_locationId_idx",
-          "columns": [
-            {
-              "expression": "locationId",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "LocationImage_imageId_idx": {
-          "name": "LocationImage_imageId_idx",
-          "columns": [
-            {
-              "expression": "imageId",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "LocationImage_locationId_Location_id_fk": {
-          "name": "LocationImage_locationId_Location_id_fk",
-          "tableFrom": "LocationImage",
-          "tableTo": "Location",
+        "Location_entity_identity_fk": {
+          "name": "Location_entity_identity_fk",
+          "tableFrom": "Location",
+          "tableTo": "Entity",
           "columnsFrom": [
-            "locationId"
+            "id",
+            "shortcode"
           ],
           "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "LocationImage_imageId_Image_id_fk": {
-          "name": "LocationImage_imageId_Image_id_fk",
-          "tableFrom": "LocationImage",
-          "tableTo": "Image",
-          "columnsFrom": [
-            "imageId"
-          ],
-          "columnsTo": [
-            "id"
+            "id",
+            "shortcode"
           ],
           "onDelete": "no action",
           "onUpdate": "no action"
@@ -9724,7 +9607,23 @@
           "with": {}
         }
       },
-      "foreignKeys": {},
+      "foreignKeys": {
+        "Meal_entity_identity_fk": {
+          "name": "Meal_entity_identity_fk",
+          "tableFrom": "Meal",
+          "tableTo": "Entity",
+          "columnsFrom": [
+            "id",
+            "shortcode"
+          ],
+          "columnsTo": [
+            "id",
+            "shortcode"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
@@ -9954,145 +9853,6 @@
           "value": "(\"MealFoodEntry\".\"sourceKind\" = 'ingredient' AND \"MealFoodEntry\".\"ingredientId\" IS NOT NULL AND \"MealFoodEntry\".\"productId\" IS NULL AND (\"MealFoodEntry\".\"amount\" IS NOT NULL OR \"MealFoodEntry\".\"grams\" IS NOT NULL) AND \"MealFoodEntry\".\"name\" IS NULL AND \"MealFoodEntry\".\"nutrients\" IS NULL) OR (\"MealFoodEntry\".\"sourceKind\" = 'product' AND \"MealFoodEntry\".\"ingredientId\" IS NULL AND \"MealFoodEntry\".\"productId\" IS NOT NULL AND (\"MealFoodEntry\".\"amount\" IS NOT NULL OR \"MealFoodEntry\".\"grams\" IS NOT NULL) AND \"MealFoodEntry\".\"name\" IS NULL AND \"MealFoodEntry\".\"nutrients\" IS NULL) OR (\"MealFoodEntry\".\"sourceKind\" = 'manual' AND \"MealFoodEntry\".\"ingredientId\" IS NULL AND \"MealFoodEntry\".\"productId\" IS NULL AND length(trim(\"MealFoodEntry\".\"name\")) > 0 AND \"MealFoodEntry\".\"name\" IS NOT NULL AND \"MealFoodEntry\".\"nutrients\" IS NOT NULL AND jsonb_typeof(\"MealFoodEntry\".\"nutrients\") = 'object' AND \"MealFoodEntry\".\"nutrients\" <> '{}'::jsonb)"
         }
       },
-      "isRLSEnabled": false
-    },
-    "public.MealImage": {
-      "name": "MealImage",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "mealId": {
-          "name": "mealId",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "imageId": {
-          "name": "imageId",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "sortOrder": {
-          "name": "sortOrder",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 0
-        },
-        "createdAt": {
-          "name": "createdAt",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updatedAt": {
-          "name": "updatedAt",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "deletedAt": {
-          "name": "deletedAt",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": false
-        }
-      },
-      "indexes": {
-        "MealImage_mealId_imageId_key": {
-          "name": "MealImage_mealId_imageId_key",
-          "columns": [
-            {
-              "expression": "mealId",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "imageId",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "where": "\"MealImage\".\"deletedAt\" IS NULL",
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "MealImage_mealId_idx": {
-          "name": "MealImage_mealId_idx",
-          "columns": [
-            {
-              "expression": "mealId",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "MealImage_imageId_idx": {
-          "name": "MealImage_imageId_idx",
-          "columns": [
-            {
-              "expression": "imageId",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "MealImage_mealId_Meal_id_fk": {
-          "name": "MealImage_mealId_Meal_id_fk",
-          "tableFrom": "MealImage",
-          "tableTo": "Meal",
-          "columnsFrom": [
-            "mealId"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "MealImage_imageId_Image_id_fk": {
-          "name": "MealImage_imageId_Image_id_fk",
-          "tableFrom": "MealImage",
-          "tableTo": "Image",
-          "columnsFrom": [
-            "imageId"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
       "isRLSEnabled": false
     },
     "public.MealRecipe": {
@@ -12497,6 +12257,21 @@
           ],
           "onDelete": "no action",
           "onUpdate": "no action"
+        },
+        "Planting_entity_identity_fk": {
+          "name": "Planting_entity_identity_fk",
+          "tableFrom": "Planting",
+          "tableTo": "Entity",
+          "columnsFrom": [
+            "id",
+            "shortcode"
+          ],
+          "columnsTo": [
+            "id",
+            "shortcode"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -12627,13 +12402,6 @@
           "type": "jsonb",
           "primaryKey": false,
           "notNull": false
-        },
-        "dataExceptions": {
-          "name": "dataExceptions",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'[]'::jsonb"
         },
         "growsPlantId": {
           "name": "growsPlantId",
@@ -12878,6 +12646,21 @@
           ],
           "onDelete": "no action",
           "onUpdate": "no action"
+        },
+        "Product_entity_identity_fk": {
+          "name": "Product_entity_identity_fk",
+          "tableFrom": "Product",
+          "tableTo": "Entity",
+          "columnsFrom": [
+            "id",
+            "shortcode"
+          ],
+          "columnsTo": [
+            "id",
+            "shortcode"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -13057,6 +12840,21 @@
           ],
           "columnsTo": [
             "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "ProductCategory_entity_identity_fk": {
+          "name": "ProductCategory_entity_identity_fk",
+          "tableFrom": "ProductCategory",
+          "tableTo": "Entity",
+          "columnsFrom": [
+            "id",
+            "shortcode"
+          ],
+          "columnsTo": [
+            "id",
+            "shortcode"
           ],
           "onDelete": "no action",
           "onUpdate": "no action"
@@ -13519,156 +13317,6 @@
         "ProductExternalId_gtin_digits_check": {
           "name": "ProductExternalId_gtin_digits_check",
           "value": "\"ProductExternalId\".\"source\" <> 'gtin' OR \"ProductExternalId\".\"externalId\" ~ '^[0-9]{14}$'"
-        }
-      },
-      "isRLSEnabled": false
-    },
-    "public.ProductImage": {
-      "name": "ProductImage",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "productId": {
-          "name": "productId",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "imageId": {
-          "name": "imageId",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "sortOrder": {
-          "name": "sortOrder",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 0
-        },
-        "purpose": {
-          "name": "purpose",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "createdAt": {
-          "name": "createdAt",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updatedAt": {
-          "name": "updatedAt",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "deletedAt": {
-          "name": "deletedAt",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": false
-        }
-      },
-      "indexes": {
-        "ProductImage_productId_imageId_key": {
-          "name": "ProductImage_productId_imageId_key",
-          "columns": [
-            {
-              "expression": "productId",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "imageId",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "where": "\"ProductImage\".\"deletedAt\" IS NULL",
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "ProductImage_productId_idx": {
-          "name": "ProductImage_productId_idx",
-          "columns": [
-            {
-              "expression": "productId",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "ProductImage_imageId_idx": {
-          "name": "ProductImage_imageId_idx",
-          "columns": [
-            {
-              "expression": "imageId",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "ProductImage_productId_Product_id_fk": {
-          "name": "ProductImage_productId_Product_id_fk",
-          "tableFrom": "ProductImage",
-          "tableTo": "Product",
-          "columnsFrom": [
-            "productId"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "ProductImage_imageId_Image_id_fk": {
-          "name": "ProductImage_imageId_Image_id_fk",
-          "tableFrom": "ProductImage",
-          "tableTo": "Image",
-          "columnsFrom": [
-            "imageId"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {
-        "ProductImage_purpose_check": {
-          "name": "ProductImage_purpose_check",
-          "value": "\"ProductImage\".\"purpose\" IS NULL OR \"ProductImage\".\"purpose\" IN ('item', 'label')"
         }
       },
       "isRLSEnabled": false
@@ -14183,6 +13831,21 @@
           ],
           "onDelete": "no action",
           "onUpdate": "no action"
+        },
+        "Project_entity_identity_fk": {
+          "name": "Project_entity_identity_fk",
+          "tableFrom": "Project",
+          "tableTo": "Entity",
+          "columnsFrom": [
+            "id",
+            "shortcode"
+          ],
+          "columnsTo": [
+            "id",
+            "shortcode"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -14304,145 +13967,6 @@
           "value": "\"ProjectDependency\".\"projectId\" <> \"ProjectDependency\".\"blockedByProjectId\""
         }
       },
-      "isRLSEnabled": false
-    },
-    "public.ProjectImage": {
-      "name": "ProjectImage",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "projectId": {
-          "name": "projectId",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "imageId": {
-          "name": "imageId",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "sortOrder": {
-          "name": "sortOrder",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 0
-        },
-        "createdAt": {
-          "name": "createdAt",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updatedAt": {
-          "name": "updatedAt",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "deletedAt": {
-          "name": "deletedAt",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": false
-        }
-      },
-      "indexes": {
-        "ProjectImage_projectId_imageId_key": {
-          "name": "ProjectImage_projectId_imageId_key",
-          "columns": [
-            {
-              "expression": "projectId",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "imageId",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "where": "\"ProjectImage\".\"deletedAt\" IS NULL",
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "ProjectImage_projectId_idx": {
-          "name": "ProjectImage_projectId_idx",
-          "columns": [
-            {
-              "expression": "projectId",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "ProjectImage_imageId_idx": {
-          "name": "ProjectImage_imageId_idx",
-          "columns": [
-            {
-              "expression": "imageId",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "ProjectImage_projectId_Project_id_fk": {
-          "name": "ProjectImage_projectId_Project_id_fk",
-          "tableFrom": "ProjectImage",
-          "tableTo": "Project",
-          "columnsFrom": [
-            "projectId"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "ProjectImage_imageId_Image_id_fk": {
-          "name": "ProjectImage_imageId_Image_id_fk",
-          "tableFrom": "ProjectImage",
-          "tableTo": "Image",
-          "columnsFrom": [
-            "imageId"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
       "isRLSEnabled": false
     },
     "public.ProjectToolUsage": {
@@ -14647,13 +14171,6 @@
           "type": "text",
           "primaryKey": false,
           "notNull": false
-        },
-        "dataExceptions": {
-          "name": "dataExceptions",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'[]'::jsonb"
         },
         "createdAt": {
           "name": "createdAt",
@@ -14878,6 +14395,21 @@
           ],
           "onDelete": "no action",
           "onUpdate": "no action"
+        },
+        "Purchase_entity_identity_fk": {
+          "name": "Purchase_entity_identity_fk",
+          "tableFrom": "Purchase",
+          "tableTo": "Entity",
+          "columnsFrom": [
+            "id",
+            "shortcode"
+          ],
+          "columnsTo": [
+            "id",
+            "shortcode"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -14889,152 +14421,6 @@
           "value": "\"Purchase\".\"statedTotal\" IS NULL OR abs(\"Purchase\".\"statedTotal\" * 100 - round(\"Purchase\".\"statedTotal\" * 100)) < 0.0000001"
         }
       },
-      "isRLSEnabled": false
-    },
-    "public.PurchaseImage": {
-      "name": "PurchaseImage",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "purchaseId": {
-          "name": "purchaseId",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "imageId": {
-          "name": "imageId",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "sortOrder": {
-          "name": "sortOrder",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 0
-        },
-        "documentKind": {
-          "name": "documentKind",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'other'"
-        },
-        "createdAt": {
-          "name": "createdAt",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updatedAt": {
-          "name": "updatedAt",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "deletedAt": {
-          "name": "deletedAt",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": false
-        }
-      },
-      "indexes": {
-        "PurchaseImage_purchaseId_imageId_key": {
-          "name": "PurchaseImage_purchaseId_imageId_key",
-          "columns": [
-            {
-              "expression": "purchaseId",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "imageId",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "where": "\"PurchaseImage\".\"deletedAt\" IS NULL",
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "PurchaseImage_purchaseId_idx": {
-          "name": "PurchaseImage_purchaseId_idx",
-          "columns": [
-            {
-              "expression": "purchaseId",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "PurchaseImage_imageId_idx": {
-          "name": "PurchaseImage_imageId_idx",
-          "columns": [
-            {
-              "expression": "imageId",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "PurchaseImage_purchaseId_Purchase_id_fk": {
-          "name": "PurchaseImage_purchaseId_Purchase_id_fk",
-          "tableFrom": "PurchaseImage",
-          "tableTo": "Purchase",
-          "columnsFrom": [
-            "purchaseId"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "PurchaseImage_imageId_Image_id_fk": {
-          "name": "PurchaseImage_imageId_Image_id_fk",
-          "tableFrom": "PurchaseImage",
-          "tableTo": "Image",
-          "columnsFrom": [
-            "imageId"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
       "isRLSEnabled": false
     },
     "public.PurchasePaymentEvidence": {
@@ -15621,142 +15007,18 @@
           ],
           "onDelete": "no action",
           "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.RecipeImage": {
-      "name": "RecipeImage",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
         },
-        "recipeId": {
-          "name": "recipeId",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "imageId": {
-          "name": "imageId",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "sortOrder": {
-          "name": "sortOrder",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 0
-        },
-        "createdAt": {
-          "name": "createdAt",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updatedAt": {
-          "name": "updatedAt",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "deletedAt": {
-          "name": "deletedAt",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": false
-        }
-      },
-      "indexes": {
-        "RecipeImage_recipeId_imageId_key": {
-          "name": "RecipeImage_recipeId_imageId_key",
-          "columns": [
-            {
-              "expression": "recipeId",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "imageId",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "where": "\"RecipeImage\".\"deletedAt\" IS NULL",
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "RecipeImage_recipeId_idx": {
-          "name": "RecipeImage_recipeId_idx",
-          "columns": [
-            {
-              "expression": "recipeId",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "RecipeImage_imageId_idx": {
-          "name": "RecipeImage_imageId_idx",
-          "columns": [
-            {
-              "expression": "imageId",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "RecipeImage_recipeId_Recipe_id_fk": {
-          "name": "RecipeImage_recipeId_Recipe_id_fk",
-          "tableFrom": "RecipeImage",
-          "tableTo": "Recipe",
+        "Recipe_entity_identity_fk": {
+          "name": "Recipe_entity_identity_fk",
+          "tableFrom": "Recipe",
+          "tableTo": "Entity",
           "columnsFrom": [
-            "recipeId"
+            "id",
+            "shortcode"
           ],
           "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "RecipeImage_imageId_Image_id_fk": {
-          "name": "RecipeImage_imageId_Image_id_fk",
-          "tableFrom": "RecipeImage",
-          "tableTo": "Image",
-          "columnsFrom": [
-            "imageId"
-          ],
-          "columnsTo": [
-            "id"
+            "id",
+            "shortcode"
           ],
           "onDelete": "no action",
           "onUpdate": "no action"
@@ -16213,7 +15475,23 @@
           "with": {}
         }
       },
-      "foreignKeys": {},
+      "foreignKeys": {
+        "SearchDocument_entity_fk": {
+          "name": "SearchDocument_entity_fk",
+          "tableFrom": "SearchDocument",
+          "tableTo": "Entity",
+          "columnsFrom": [
+            "entityId",
+            "entityType"
+          ],
+          "columnsTo": [
+            "id",
+            "kind"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
@@ -17189,6 +16467,21 @@
           ],
           "onDelete": "no action",
           "onUpdate": "no action"
+        },
+        "Task_entity_identity_fk": {
+          "name": "Task_entity_identity_fk",
+          "tableFrom": "Task",
+          "tableTo": "Entity",
+          "columnsFrom": [
+            "id",
+            "shortcode"
+          ],
+          "columnsTo": [
+            "id",
+            "shortcode"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -17310,145 +16603,6 @@
           "value": "\"TaskDependency\".\"taskId\" <> \"TaskDependency\".\"blockedByTaskId\""
         }
       },
-      "isRLSEnabled": false
-    },
-    "public.TaskImage": {
-      "name": "TaskImage",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "taskId": {
-          "name": "taskId",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "imageId": {
-          "name": "imageId",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "sortOrder": {
-          "name": "sortOrder",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 0
-        },
-        "createdAt": {
-          "name": "createdAt",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updatedAt": {
-          "name": "updatedAt",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "deletedAt": {
-          "name": "deletedAt",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": false
-        }
-      },
-      "indexes": {
-        "TaskImage_taskId_imageId_key": {
-          "name": "TaskImage_taskId_imageId_key",
-          "columns": [
-            {
-              "expression": "taskId",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "imageId",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "where": "\"TaskImage\".\"deletedAt\" IS NULL",
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "TaskImage_taskId_idx": {
-          "name": "TaskImage_taskId_idx",
-          "columns": [
-            {
-              "expression": "taskId",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "TaskImage_imageId_idx": {
-          "name": "TaskImage_imageId_idx",
-          "columns": [
-            {
-              "expression": "imageId",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "TaskImage_taskId_Task_id_fk": {
-          "name": "TaskImage_taskId_Task_id_fk",
-          "tableFrom": "TaskImage",
-          "tableTo": "Task",
-          "columnsFrom": [
-            "taskId"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "TaskImage_imageId_Image_id_fk": {
-          "name": "TaskImage_imageId_Image_id_fk",
-          "tableFrom": "TaskImage",
-          "tableTo": "Image",
-          "columnsFrom": [
-            "imageId"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
       "isRLSEnabled": false
     },
     "public.UpcLookupCache": {
@@ -17633,12 +16787,6 @@
           "primaryKey": false,
           "notNull": false
         },
-        "logoImageId": {
-          "name": "logoImageId",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
         "orderUrlTemplate": {
           "name": "orderUrlTemplate",
           "type": "text",
@@ -17736,33 +16884,20 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
-        },
-        "Vendor_logoImageId_idx": {
-          "name": "Vendor_logoImageId_idx",
-          "columns": [
-            {
-              "expression": "logoImageId",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
         }
       },
       "foreignKeys": {
-        "Vendor_logoImageId_Image_id_fk": {
-          "name": "Vendor_logoImageId_Image_id_fk",
+        "Vendor_entity_identity_fk": {
+          "name": "Vendor_entity_identity_fk",
           "tableFrom": "Vendor",
-          "tableTo": "Image",
+          "tableTo": "Entity",
           "columnsFrom": [
-            "logoImageId"
+            "id",
+            "shortcode"
           ],
           "columnsTo": [
-            "id"
+            "id",
+            "shortcode"
           ],
           "onDelete": "no action",
           "onUpdate": "no action"
@@ -17974,6 +17109,21 @@
           ],
           "onDelete": "no action",
           "onUpdate": "no action"
+        },
+        "VendorAccount_entity_identity_fk": {
+          "name": "VendorAccount_entity_identity_fk",
+          "tableFrom": "VendorAccount",
+          "tableTo": "Entity",
+          "columnsFrom": [
+            "id",
+            "shortcode"
+          ],
+          "columnsTo": [
+            "id",
+            "shortcode"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -18145,7 +17295,23 @@
           "with": {}
         }
       },
-      "foreignKeys": {},
+      "foreignKeys": {
+        "Wish_entity_identity_fk": {
+          "name": "Wish_entity_identity_fk",
+          "tableFrom": "Wish",
+          "tableTo": "Entity",
+          "columnsFrom": [
+            "id",
+            "shortcode"
+          ],
+          "columnsTo": [
+            "id",
+            "shortcode"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
@@ -18395,6 +17561,18 @@
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
+        },
+        "productCreateCategoryId": {
+          "name": "productCreateCategoryId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "inventoryOwnerPartyId": {
+          "name": "inventoryOwnerPartyId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
         }
       },
       "indexes": {
@@ -18483,6 +17661,32 @@
           "tableTo": "Location",
           "columnsFrom": [
             "inventoryLocationId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "PhotoGroupProposal_inventoryOwnerPartyId_LedgerParty_id_fk": {
+          "name": "PhotoGroupProposal_inventoryOwnerPartyId_LedgerParty_id_fk",
+          "tableFrom": "PhotoGroupProposal",
+          "tableTo": "LedgerParty",
+          "columnsFrom": [
+            "inventoryOwnerPartyId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "PhotoGroupProposal_productCreateCategoryId_fk": {
+          "name": "PhotoGroupProposal_productCreateCategoryId_fk",
+          "tableFrom": "PhotoGroupProposal",
+          "tableTo": "ProductCategory",
+          "columnsFrom": [
+            "productCreateCategoryId"
           ],
           "columnsTo": [
             "id"
@@ -18667,6 +17871,485 @@
           ],
           "columnsTo": [
             "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "Plant_entity_identity_fk": {
+          "name": "Plant_entity_identity_fk",
+          "tableFrom": "Plant",
+          "tableTo": "Entity",
+          "columnsFrom": [
+            "id",
+            "shortcode"
+          ],
+          "columnsTo": [
+            "id",
+            "shortcode"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.Entity": {
+      "name": "Entity",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "kind": {
+          "name": "kind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "shortcode": {
+          "name": "shortcode",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "deletedAt": {
+          "name": "deletedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "mergedIntoId": {
+          "name": "mergedIntoId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "Entity_shortcode_unique": {
+          "name": "Entity_shortcode_unique",
+          "columns": [
+            {
+              "expression": "shortcode",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "Entity_mergedIntoId_idx": {
+          "name": "Entity_mergedIntoId_idx",
+          "columns": [
+            {
+              "expression": "mergedIntoId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "Entity_mergedIntoId_Entity_id_fk": {
+          "name": "Entity_mergedIntoId_Entity_id_fk",
+          "tableFrom": "Entity",
+          "tableTo": "Entity",
+          "columnsFrom": [
+            "mergedIntoId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "Entity_id_shortcode_key": {
+          "name": "Entity_id_shortcode_key",
+          "nullsNotDistinct": false,
+          "columns": [
+            "id",
+            "shortcode"
+          ]
+        },
+        "Entity_id_kind_key": {
+          "name": "Entity_id_kind_key",
+          "nullsNotDistinct": false,
+          "columns": [
+            "id",
+            "kind"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "Entity_kind_check": {
+          "name": "Entity_kind_check",
+          "value": "\"Entity\".\"kind\" IN ('product', 'recipe', 'ingredient', 'cookbook', 'location', 'inventory', 'meal', 'ledgerParty', 'ledgerTransfer', 'project', 'task', 'vendor', 'purchase', 'financialAccount', 'financialTransaction', 'wish', 'expense', 'image', 'planting', 'gardenEntry', 'vendorAccount', 'productCategory', 'importRun', 'device', 'imageSighting', 'plant')"
+        },
+        "Entity_shortcode_prefix_check": {
+          "name": "Entity_shortcode_prefix_check",
+          "value": "\"Entity\".\"shortcode\" IS NULL OR CASE \"Entity\".\"kind\" WHEN 'product' THEN \"Entity\".\"shortcode\" LIKE 'PRD-%' WHEN 'recipe' THEN \"Entity\".\"shortcode\" LIKE 'RCP-%' WHEN 'ingredient' THEN \"Entity\".\"shortcode\" LIKE 'ING-%' WHEN 'cookbook' THEN \"Entity\".\"shortcode\" LIKE 'CKB-%' WHEN 'location' THEN \"Entity\".\"shortcode\" LIKE 'LOC-%' WHEN 'inventory' THEN \"Entity\".\"shortcode\" LIKE 'INV-%' WHEN 'meal' THEN \"Entity\".\"shortcode\" LIKE 'MEL-%' WHEN 'ledgerParty' THEN \"Entity\".\"shortcode\" LIKE 'LPY-%' WHEN 'ledgerTransfer' THEN \"Entity\".\"shortcode\" LIKE 'LTR-%' WHEN 'project' THEN \"Entity\".\"shortcode\" LIKE 'PRJ-%' WHEN 'task' THEN \"Entity\".\"shortcode\" LIKE 'TSK-%' WHEN 'vendor' THEN \"Entity\".\"shortcode\" LIKE 'VEN-%' WHEN 'purchase' THEN \"Entity\".\"shortcode\" LIKE 'PUR-%' WHEN 'financialAccount' THEN \"Entity\".\"shortcode\" LIKE 'FAC-%' WHEN 'financialTransaction' THEN \"Entity\".\"shortcode\" LIKE 'FTX-%' WHEN 'wish' THEN \"Entity\".\"shortcode\" LIKE 'WSH-%' WHEN 'expense' THEN \"Entity\".\"shortcode\" LIKE 'EXP-%' WHEN 'image' THEN \"Entity\".\"shortcode\" LIKE 'IMG-%' WHEN 'planting' THEN \"Entity\".\"shortcode\" LIKE 'PLT-%' WHEN 'gardenEntry' THEN \"Entity\".\"shortcode\" LIKE 'GDE-%' WHEN 'vendorAccount' THEN \"Entity\".\"shortcode\" LIKE 'VACCT-%' WHEN 'productCategory' THEN \"Entity\".\"shortcode\" LIKE 'CAT-%' WHEN 'importRun' THEN \"Entity\".\"shortcode\" LIKE 'RUN-%' WHEN 'device' THEN \"Entity\".\"shortcode\" LIKE 'DEV-%' WHEN 'imageSighting' THEN \"Entity\".\"shortcode\" LIKE 'IMS-%' WHEN 'plant' THEN \"Entity\".\"shortcode\" LIKE 'PLANT-%' ELSE false END"
+        },
+        "Entity_merge_not_self_check": {
+          "name": "Entity_merge_not_self_check",
+          "value": "\"Entity\".\"mergedIntoId\" IS NULL OR \"Entity\".\"mergedIntoId\" <> \"Entity\".\"id\""
+        },
+        "Entity_merged_is_deleted_check": {
+          "name": "Entity_merged_is_deleted_check",
+          "value": "\"Entity\".\"mergedIntoId\" IS NULL OR \"Entity\".\"deletedAt\" IS NOT NULL"
+        },
+        "Entity_live_has_shortcode_check": {
+          "name": "Entity_live_has_shortcode_check",
+          "value": "\"Entity\".\"deletedAt\" IS NOT NULL OR \"Entity\".\"shortcode\" IS NOT NULL"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.EntityAttachment": {
+      "name": "EntityAttachment",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "subjectEntityId": {
+          "name": "subjectEntityId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "imageId": {
+          "name": "imageId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "role": {
+          "name": "role",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'attachment'"
+        },
+        "sortOrder": {
+          "name": "sortOrder",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "purpose": {
+          "name": "purpose",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "documentKind": {
+          "name": "documentKind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "idempotencyKey": {
+          "name": "idempotencyKey",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updatedAt": {
+          "name": "updatedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "deletedAt": {
+          "name": "deletedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "EntityAttachment_subject_image_key": {
+          "name": "EntityAttachment_subject_image_key",
+          "columns": [
+            {
+              "expression": "subjectEntityId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "imageId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"EntityAttachment\".\"deletedAt\" IS NULL",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "EntityAttachment_subject_singular_role_key": {
+          "name": "EntityAttachment_subject_singular_role_key",
+          "columns": [
+            {
+              "expression": "subjectEntityId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "role",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"EntityAttachment\".\"role\" IN ('cover', 'logo') AND \"EntityAttachment\".\"deletedAt\" IS NULL",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "EntityAttachment_subject_idempotency_key": {
+          "name": "EntityAttachment_subject_idempotency_key",
+          "columns": [
+            {
+              "expression": "subjectEntityId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "idempotencyKey",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"EntityAttachment\".\"idempotencyKey\" IS NOT NULL AND \"EntityAttachment\".\"deletedAt\" IS NULL",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "EntityAttachment_subject_order_idx": {
+          "name": "EntityAttachment_subject_order_idx",
+          "columns": [
+            {
+              "expression": "subjectEntityId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "sortOrder",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "EntityAttachment_imageId_idx": {
+          "name": "EntityAttachment_imageId_idx",
+          "columns": [
+            {
+              "expression": "imageId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "EntityAttachment_subjectEntityId_Entity_id_fk": {
+          "name": "EntityAttachment_subjectEntityId_Entity_id_fk",
+          "tableFrom": "EntityAttachment",
+          "tableTo": "Entity",
+          "columnsFrom": [
+            "subjectEntityId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "EntityAttachment_imageId_Image_id_fk": {
+          "name": "EntityAttachment_imageId_Image_id_fk",
+          "tableFrom": "EntityAttachment",
+          "tableTo": "Image",
+          "columnsFrom": [
+            "imageId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "EntityAttachment_role_check": {
+          "name": "EntityAttachment_role_check",
+          "value": "\"EntityAttachment\".\"role\" IN ('attachment', 'cover', 'logo')"
+        },
+        "EntityAttachment_purpose_check": {
+          "name": "EntityAttachment_purpose_check",
+          "value": "\"EntityAttachment\".\"purpose\" IS NULL OR \"EntityAttachment\".\"purpose\" IN ('item', 'label')"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.DataException": {
+      "name": "DataException",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "entityId": {
+          "name": "entityId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "entityKind": {
+          "name": "entityKind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "check": {
+          "name": "check",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "reason": {
+          "name": "reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "note": {
+          "name": "note",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "fingerprint": {
+          "name": "fingerprint",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updatedAt": {
+          "name": "updatedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "DataException_entity_check_key": {
+          "name": "DataException_entity_check_key",
+          "columns": [
+            {
+              "expression": "entityId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "check",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "DataException_entity_fk": {
+          "name": "DataException_entity_fk",
+          "tableFrom": "DataException",
+          "tableTo": "Entity",
+          "columnsFrom": [
+            "entityId",
+            "entityKind"
+          ],
+          "columnsTo": [
+            "id",
+            "kind"
           ],
           "onDelete": "no action",
           "onUpdate": "no action"

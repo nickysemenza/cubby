@@ -3,7 +3,7 @@ import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { locationImage, product, productImage } from "~/server/db/schema";
+import { entityAttachment, product } from "~/server/db/schema";
 import { createUploadedImageRecord } from "~/server/repo/image";
 import { getR2PublicUrl } from "~/server/utils/r2-public-url";
 
@@ -59,8 +59,8 @@ describe("entity media public display images", () => {
       contentType: "image/jpeg",
       size: 100,
     });
-    await getDb(ctx.db).insert(productImage).values({
-      productId: pictured.entityId,
+    await getDb(ctx.db).insert(entityAttachment).values({
+      subjectEntityId: pictured.entityId,
       imageId: cover.id,
       sortOrder: 0,
     });
@@ -70,8 +70,8 @@ describe("entity media public display images", () => {
       contentType: "image/jpeg",
       size: 100,
     });
-    await getDb(ctx.db).insert(productImage).values({
-      productId: deleted.entityId,
+    await getDb(ctx.db).insert(entityAttachment).values({
+      subjectEntityId: deleted.entityId,
       imageId: deletedCover.id,
       sortOrder: 0,
     });
@@ -81,8 +81,8 @@ describe("entity media public display images", () => {
       contentType: "image/jpeg",
       size: 100,
     });
-    await getDb(ctx.db).insert(locationImage).values({
-      locationId: picturedLocation.entityId,
+    await getDb(ctx.db).insert(entityAttachment).values({
+      subjectEntityId: picturedLocation.entityId,
       imageId: locationCover.id,
       sortOrder: 0,
     });

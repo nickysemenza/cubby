@@ -2,6 +2,7 @@ import { testShortcode } from "@cubby/schemas/testing";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
+import { entityGraph } from "~/entities/entity-graph.functions";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import {
@@ -37,11 +38,15 @@ function deleteCommands(
 function DeleteActionHarness({
   commands,
   onResolved,
+  connections,
 }: {
   commands: DeleteEntityActionCommands;
   onResolved: (success: boolean) => void;
+  connections?: typeof entityGraph.connections;
 }) {
-  const action = useDeleteEntityAction("expense", commands);
+  const action = useDeleteEntityAction("expense", commands, {
+    impactPreviewOperations: { connections },
+  });
   const stageDelete = () => {
     const pending = action.run?.([expenseRow]);
     if (pending) void pending.then((result) => onResolved(result.success));
@@ -131,5 +136,58 @@ describe("generated CRUD delete action", () => {
     ).toBeVisible();
     expect(resolved).toEqual([]);
     expect(harness.router.state.location.pathname).toBe("/");
+  });
+
+  it("shows an advisory connection impact preview without gating the confirm action", async () => {
+    const resolved: boolean[] = [];
+    const connections = entityGraph.connections.withTransport(
+      async ({ input }) => ({
+        id: input.id,
+        kind: "expense",
+        redirectedFrom: null,
+        groups: [
+          {
+            direction: "incoming",
+            edgeKey: "ExpenseSplit.expenseId",
+            label: "Expense splits",
+            role: "owned-child",
+            otherKind: "expense",
+            count: 2,
+            items: [],
+            disposition: {
+              code: "block-live-splits",
+              effect: "block",
+              description: "Remove the splits first.",
+            },
+          },
+        ],
+      }),
+    );
+    render(
+      <DeleteActionHarness
+        commands={deleteCommands(async (ids) => ({
+          ok: true,
+          entity: "expense",
+          id: ids[0] ?? "",
+          changed: true,
+        }))}
+        onResolved={(success) => resolved.push(success)}
+        connections={connections}
+      />,
+      { wrapper: harness.wrapper },
+    );
+
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Stage expense deletion" }),
+    );
+    expect(await screen.findByText("Blocks the delete")).toBeVisible();
+    expect(screen.getByText("Remove the splits first.")).toBeVisible();
+
+    // Advisory only: the preview never disables or changes the confirm
+    // action, even when it surfaces a blocking disposition.
+    const confirm = screen.getByRole("button", { name: "Delete" });
+    expect(confirm).toBeEnabled();
+    fireEvent.click(confirm);
+    await waitFor(() => expect(resolved).toEqual([true]));
   });
 });

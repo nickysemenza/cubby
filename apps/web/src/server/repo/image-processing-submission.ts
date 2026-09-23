@@ -2,7 +2,7 @@ import type { ImageProcessingJobKind } from "@cubby/schemas/image-processing";
 import { and, eq, isNull } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
-import { productImage } from "~/server/db/schema";
+import { entityAttachment } from "~/server/db/schema";
 import { getDb, withTransactionDatabase } from "~/server/repo/database-helpers";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 
@@ -47,10 +47,13 @@ export async function persistImageProcessingSubmission(
     // Labels are supporting evidence: describe them, but never spend a
     // subject-lift job on package text. Null is the legacy item role.
     const productAttachments = await getDb(transactionDb)
-      .select({ purpose: productImage.purpose })
-      .from(productImage)
+      .select({ purpose: entityAttachment.purpose })
+      .from(entityAttachment)
       .where(
-        and(eq(productImage.imageId, imageId), isNull(productImage.deletedAt)),
+        and(
+          eq(entityAttachment.imageId, imageId),
+          isNull(entityAttachment.deletedAt),
+        ),
       );
     const labelOnly =
       productAttachments.length > 0 &&
