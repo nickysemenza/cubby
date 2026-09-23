@@ -87,22 +87,11 @@ describe("MCP pagination", () => {
 });
 
 describe("normalizeSorts", () => {
-  it("wraps a single sort object into a one-element array", () => {
-    expect(normalizeSorts({ orderBy: "name", direction: "asc" })).toEqual([
-      { orderBy: "name", direction: "asc" },
-    ]);
-  });
-
-  it("passes a stacked sort through in order", () => {
-    expect(
-      normalizeSorts([
-        { orderBy: "location", direction: "asc" },
-        { orderBy: "price", direction: "desc" },
-      ]),
-    ).toEqual([
-      { orderBy: "location", direction: "asc" },
-      { orderBy: "price", direction: "desc" },
-    ]);
+  it("keeps a single sort and a stack in order", () => {
+    const first = { orderBy: "location", direction: "asc" as const };
+    const second = { orderBy: "price", direction: "desc" as const };
+    expect(normalizeSorts(first)).toEqual([first]);
+    expect(normalizeSorts([first, second])).toEqual([first, second]);
   });
 
   it("dedupes by orderBy, first occurrence wins", () => {

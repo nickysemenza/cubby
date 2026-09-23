@@ -1,8 +1,4 @@
 import type { ActorContext } from "@cubby/schemas/context";
-/**
- * Location CRUD operations.
- * Core create, read, update, delete, list operations for locations.
- */
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 import {
@@ -25,6 +21,7 @@ import type {
 import { locationPickerSortableFields } from "@cubby/schemas/location";
 import {
   buildTakeSkip,
+  LOCATION_UNSPECIFIED_GROUP_KEY,
   type PaginationParams,
   type SortParams,
 } from "@cubby/schemas/pagination";
@@ -958,7 +955,7 @@ export const locationList = async (
     ? {
         ...result,
         groups: groups.map(({ type, count }) => ({
-          key: type ?? "__unspecified__",
+          key: type ?? LOCATION_UNSPECIFIED_GROUP_KEY,
           label: type ?? "(unspecified)",
           count,
         })),

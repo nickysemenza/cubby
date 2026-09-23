@@ -45,7 +45,10 @@ describe("useGroupedList", () => {
   });
 
   it("uses server headings and full counts before all rows are loaded", () => {
-    const data: Item[] = [{ id: "b", group: "B" }];
+    const data: Item[] = [
+      { id: "b", group: "B" },
+      { id: "c", group: "C" },
+    ];
     const config = {
       ...groupConfig,
       groups: [
@@ -70,6 +73,14 @@ describe("useGroupedList", () => {
         color: "color:B",
       },
       { kind: "row", item: data[0] },
+      {
+        kind: "header",
+        key: undefined,
+        title: "C",
+        count: 1,
+        color: "color:C",
+      },
+      { kind: "row", item: data[1] },
     ]);
   });
 });

@@ -47,7 +47,7 @@ describe("useDesktopGroupedRows", () => {
   });
 
   it("uses full filtered counts and group order across unloaded pages", () => {
-    const rows = [row("B", 0)];
+    const rows = [row("B", 0), row("C", 1)];
     const config = {
       ...groupConfig,
       groups: [
@@ -74,6 +74,14 @@ describe("useDesktopGroupedRows", () => {
         color: "color:B",
       },
       { kind: "row", rowIndex: 0, groupRowIndex: 0 },
+      {
+        kind: "header",
+        key: undefined,
+        title: "C",
+        count: 1,
+        color: "color:C",
+      },
+      { kind: "row", rowIndex: 1, groupRowIndex: 0 },
     ]);
   });
 });

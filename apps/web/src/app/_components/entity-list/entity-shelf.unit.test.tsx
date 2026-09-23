@@ -17,7 +17,10 @@ describe("entity cards", () => {
     (compact) => {
       render(
         <ShelfGrid
-          items={[{ id: "loaded", group: "b" }]}
+          items={[
+            { id: "loaded", group: "b" },
+            { id: "unlisted", group: "c" },
+          ]}
           renderCard={(item) => <div key={item.id}>{item.id}</div>}
           groups={[
             { key: "a", label: "First group", count: 4 },
@@ -31,10 +34,11 @@ describe("entity cards", () => {
         screen
           .getAllByRole("heading", { level: 2 })
           .map((heading) => heading.textContent),
-      ).toEqual(["First group", "Second group"]);
+      ).toEqual(["First group", "Second group", "c"]);
       expect(screen.getByText("4")).toBeVisible();
       expect(screen.getByText("9")).toBeVisible();
       expect(screen.getByText("loaded")).toBeVisible();
+      expect(screen.getByText("unlisted")).toBeVisible();
     },
   );
 

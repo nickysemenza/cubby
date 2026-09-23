@@ -599,7 +599,7 @@ export const renderEntityArtifacts = (
   const queryListResultVariants = schemaEntitySpecs
     .map(
       ({ key, contract }) =>
-        `z.object({action:z.literal("list"),entity:z.literal(${JSON.stringify(key)}),items:z.array(withEntityListMedia(${contract.list.export})),meta:generatedEntityListMetaSchema})`,
+        `z.object({action:z.literal("list"),entity:z.literal(${JSON.stringify(key)}),items:z.array(withEntityListMedia(${contract.list.export})),meta:paginatedMetaSchema})`,
     )
     .join(",\n  ");
   const mcpQueryGetResultVariants = schemaEntitySpecs
@@ -621,7 +621,7 @@ export const renderEntityArtifacts = (
     )
     .map(
       ({ key, contract }) =>
-        `z.object({action:z.literal("list"),entity:z.literal(${JSON.stringify(key)}),items:z.array(withEntityListMedia(${contract.mcpList.export})),meta:generatedEntityListMetaSchema})`,
+        `z.object({action:z.literal("list"),entity:z.literal(${JSON.stringify(key)}),items:z.array(withEntityListMedia(${contract.mcpList.export})),meta:paginatedMetaSchema})`,
     )
     .join(",\n  ");
   // A declared field list is compiled into `.pick({...}).strict()` on the
@@ -1403,7 +1403,7 @@ export const renderEntityArtifacts = (
         generatedHeader +
         'import { mutationSideEffectsSchema } from "@cubby/schemas/background-jobs";\n' +
         'import { withEntityDetailMedia, withEntityListMedia } from "@cubby/schemas/entity-read-media";\n' +
-        'import { MAX_PAGE_SIZE } from "@cubby/schemas/pagination";\n' +
+        'import { paginatedMetaSchema } from "@cubby/schemas/pagination";\n' +
         'import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";\n' +
         `${schemaImports}\n` +
         'import { z } from "zod";\n\n' +
@@ -1468,12 +1468,6 @@ export const renderEntityArtifacts = (
         "\n" +
         `export const generatedEntityMutationCreateResultSchema = z.discriminatedUnion("entity", [\n  ${mutationResultVariants("create")}\n]);\n\n` +
         `export const generatedEntityMutationUpdateResultSchema = z.discriminatedUnion("entity", [\n  ${mutationResultVariants("update")}\n]);\n` +
-        "\nconst generatedEntityListMetaSchema = z.object({\n" +
-        "  pageIndex: z.number().int().nonnegative(),\n" +
-        "  pageSize: z.number().int().positive().max(MAX_PAGE_SIZE),\n" +
-        "  totalCount: z.number().int().nonnegative(),\n" +
-        "  sums: z.record(z.string(), z.number()).optional(),\n" +
-        "});\n\n" +
         "// One generated query result per correlated entity output.\n// oxfmt-ignore\n" +
         `export const generatedEntityGetResultSchema = z.discriminatedUnion("entity", [\n  ${queryGetResultVariants}\n]);\n\n` +
         "// One generated query result per correlated entity output.\n// oxfmt-ignore\n" +

@@ -1,10 +1,15 @@
 import type { ProductCategoryShortcode } from "@cubby/schemas/identifiers";
+import { testUserId } from "@cubby/schemas/testing";
 import { eq } from "drizzle-orm";
 import { taxonomyShortcode } from "tooling/product-category-fixtures";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { ledgerParty, productCategory } from "~/server/db/schema";
+import {
+  entityKernelContextSchema,
+  executeEntity,
+} from "~/server/entity-kernel";
 import { getDb } from "~/server/repo/database-helpers";
 import {
   createLedgerParty,
@@ -19,6 +24,7 @@ import {
   makeLocationInput,
   makeProductInput,
 } from "~/server/repo/repo.fixtures";
+import { createTestRequestContext } from "~/server/testing/request-context";
 
 const ctx = withTestDb();
 const groups = (result: {
@@ -68,7 +74,7 @@ describe("server list grouping", () => {
   it("orders Product categories before pagination and reports full paths and counts", async () => {
     const alpha = await category("Alpha group", 0);
     const beta = await category("Beta group", 1);
-    await product("Beta item", beta.output.id);
+    const betaProduct = await product("Beta item", beta.output.id);
     await product("Alpha item", alpha.output.id);
     await product("Unclassified item", null);
 
@@ -114,6 +120,39 @@ describe("server list grouping", () => {
       "Alpha item",
       "Unclassified item",
     ]);
+
+    const kernelContext = entityKernelContextSchema.parse(
+      createTestRequestContext(ctx.db, {
+        auth: { userId: testUserId("test-user-id") },
+      }),
+    );
+    const grouped = await executeEntity(kernelContext, {
+      action: "list",
+      entity: "product",
+      filters: {},
+      groupBy: "category",
+      pagination: { pageIndex: 0, pageSize: 1 },
+    });
+    expect(grouped.meta.groups).toEqual(groups(pages[0]!));
+    const restricted = await executeEntity(kernelContext, {
+      action: "list",
+      entity: "product",
+      filters: { ids: [betaProduct.id] },
+      groupBy: "category",
+      pagination: { pageIndex: 0, pageSize: 1 },
+    });
+    expect(restricted.meta.groups).toBeUndefined();
+
+    const categories = await executeEntity(kernelContext, {
+      action: "list",
+      entity: "productCategory",
+      filters: {},
+      pagination: { pageIndex: 0, pageSize: 100 },
+    });
+    const ids = categories.items.map((item) => item.id);
+    expect(ids.indexOf(alpha.output.id)).toBeLessThan(
+      ids.indexOf(beta.output.id),
+    );
   });
 
   it("collapses Products with a deleted category into the unclassified group", async () => {

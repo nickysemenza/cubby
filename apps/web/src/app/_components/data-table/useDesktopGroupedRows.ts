@@ -2,7 +2,7 @@ import type { RowData } from "@tanstack/react-table";
 import { useMemo } from "react";
 
 import type { CubbyRow as Row } from "./table-features";
-import type { GroupConfig } from "./useGroupedList";
+import { orderedGroupSections, type GroupConfig } from "./useGroupedList";
 
 type DesktopGroupItem =
   | {
@@ -43,21 +43,15 @@ export function useDesktopGroupedRows<TItem extends RowData>(
     }
 
     const items: DesktopGroupItem[] = [];
-    const sections = groupConfig.groups
-      ? groupConfig.groups.map(
-          (summary) => [summary.key, groups.get(summary.key) ?? []] as const,
-        )
-      : Array.from(groups.entries());
-    for (const [key, rowIndexes] of sections) {
-      const summary = groupConfig.groups?.find((group) => group.key === key);
+    for (const section of orderedGroupSections(groups, groupConfig.groups)) {
       items.push({
         kind: "header",
-        key: summary?.key,
-        title: summary?.label ?? key,
-        count: summary?.count ?? rowIndexes.length,
-        color: groupConfig.colorFn(key),
+        key: section.serverKey,
+        title: section.label,
+        count: section.count,
+        color: groupConfig.colorFn(section.key),
       });
-      for (const [groupRowIndex, rowIndex] of rowIndexes.entries()) {
+      for (const [groupRowIndex, rowIndex] of section.items.entries()) {
         items.push({
           kind: "row",
           rowIndex,

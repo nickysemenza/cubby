@@ -14,6 +14,7 @@ import { cn } from "~/lib/utils";
 
 import { useInfiniteScrollSentinel } from "../hooks/useInfiniteScrollSentinel";
 import type { InfiniteScrollControls } from "../hooks/useInfiniteTableList";
+import { orderedGroupSections } from "./useGroupedList";
 
 export interface GroupedFlowGroup<T> {
   id: string;
@@ -280,7 +281,14 @@ function shelfItems<T>(
   getGroupKey?: (item: T) => string | null | undefined,
 ): ReactNode[] {
   if (!groups) return items.map(renderCard);
-  return groups.flatMap((group) => [
+  const groupedItems = new Map<string, T[]>();
+  for (const item of items) {
+    const key = getGroupKey?.(item) ?? "(unspecified)";
+    const section = groupedItems.get(key);
+    if (section) section.push(item);
+    else groupedItems.set(key, [item]);
+  }
+  return orderedGroupSections(groupedItems, groups).flatMap((group) => [
     <div
       key={`group-${group.key}`}
       className="col-span-full flex items-baseline gap-2 border-y border-[var(--border)] bg-muted/40 px-2 py-2"
@@ -290,9 +298,7 @@ function shelfItems<T>(
         {group.count}
       </span>
     </div>,
-    ...items
-      .filter((item) => getGroupKey?.(item) === group.key)
-      .map(renderCard),
+    ...group.items.map(renderCard),
   ]);
 }
 

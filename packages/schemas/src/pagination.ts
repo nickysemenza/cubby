@@ -2,6 +2,8 @@ import { UNRESOLVABLE_ENTITY_FILTER } from "@cubby/shared";
 import { z } from "zod";
 
 export const MAX_PAGE_SIZE = 500;
+export const PRODUCT_UNCLASSIFIED_GROUP_KEY = "__unclassified__";
+export const LOCATION_UNSPECIFIED_GROUP_KEY = "__unspecified__";
 
 const sortParams = z.object({
   orderBy: z.string().default("createdAt"),

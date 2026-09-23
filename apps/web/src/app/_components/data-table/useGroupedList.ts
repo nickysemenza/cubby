@@ -21,6 +21,31 @@ type GroupedVirtualItem<TItem> =
     }
   | { kind: "row"; item: TItem };
 
+export function orderedGroupSections<T>(
+  groups: ReadonlyMap<string, T[]>,
+  summaries?: readonly ListGroupSummary[],
+) {
+  const seen = new Set(summaries?.map((group) => group.key));
+  return [
+    ...(summaries?.map((group) => ({
+      key: group.key,
+      serverKey: group.key,
+      label: group.label,
+      count: group.count,
+      items: groups.get(group.key) ?? [],
+    })) ?? []),
+    ...Array.from(groups.entries())
+      .filter(([key]) => !seen.has(key))
+      .map(([key, items]) => ({
+        key,
+        serverKey: undefined,
+        label: key,
+        count: items.length,
+        items,
+      })),
+  ];
+}
+
 export function useGroupedList<TItem>(
   data: TItem[],
   groupConfig: GroupConfig<TItem> | undefined,
@@ -41,27 +66,29 @@ export function useGroupedList<TItem>(
       }
     }
 
-    const sections = groupConfig.groups
-      ? groupConfig.groups.map(
-          (summary) => [summary.key, groups.get(summary.key) ?? []] as const,
-        )
-      : Array.from(groups.entries()).sort(([a], [b]) => {
-          if (a === "(unspecified)") return 1;
-          if (b === "(unspecified)") return -1;
-          return a.localeCompare(b);
-        });
+    const sortedGroups = groupConfig.groups
+      ? groups
+      : new Map(
+          Array.from(groups.entries()).sort(([a], [b]) => {
+            if (a === "(unspecified)") return 1;
+            if (b === "(unspecified)") return -1;
+            return a.localeCompare(b);
+          }),
+        );
 
     const result: GroupedVirtualItem<TItem>[] = [];
-    for (const [key, items] of sections) {
-      const summary = groupConfig.groups?.find((group) => group.key === key);
+    for (const section of orderedGroupSections(
+      sortedGroups,
+      groupConfig.groups,
+    )) {
       result.push({
         kind: "header",
-        key: summary?.key,
-        title: summary?.label ?? key,
-        count: summary?.count ?? items.length,
-        color: groupConfig.colorFn(key),
+        key: section.serverKey,
+        title: section.label,
+        count: section.count,
+        color: groupConfig.colorFn(section.key),
       });
-      for (const item of items) {
+      for (const item of section.items) {
         result.push({ kind: "row", item });
       }
     }

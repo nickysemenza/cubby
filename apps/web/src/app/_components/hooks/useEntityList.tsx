@@ -3,6 +3,10 @@ import {
   entityInspectorMetadata,
   type BrowserRoutedEntity,
 } from "@cubby/schemas/entity-manifest";
+import {
+  LOCATION_UNSPECIFIED_GROUP_KEY,
+  PRODUCT_UNCLASSIFIED_GROUP_KEY,
+} from "@cubby/schemas/pagination";
 import type { UnitMapping } from "@cubby/schemas/unitmapping";
 import { useSearch } from "@tanstack/react-router";
 import type { ReactNode } from "react";
@@ -423,14 +427,16 @@ export function useEntityList<
         ...groupConfig,
         groups,
         keyFn: (item: TData) =>
-          categoryRow.safeParse(item).data?.category?.id ?? "__unclassified__",
+          categoryRow.safeParse(item).data?.category?.id ??
+          PRODUCT_UNCLASSIFIED_GROUP_KEY,
       };
     }
     if (entity === "location") {
       return {
         ...groupConfig,
         groups,
-        keyFn: (item: TData) => groupConfig.keyFn(item) ?? "__unspecified__",
+        keyFn: (item: TData) =>
+          groupConfig.keyFn(item) ?? LOCATION_UNSPECIFIED_GROUP_KEY,
       };
     }
     return groupConfig;

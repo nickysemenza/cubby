@@ -20,6 +20,7 @@ import type { ImageOut } from "@cubby/schemas/image";
 import { preferredImageUrl } from "@cubby/schemas/image-summary";
 import {
   buildTakeSkip,
+  PRODUCT_UNCLASSIFIED_GROUP_KEY,
   type PaginationParams,
   type SortParams,
 } from "@cubby/schemas/pagination";
@@ -361,7 +362,7 @@ const loadProductCategoryGroups = async (
   }
   if (unclassifiedCount > 0)
     groups.push({
-      key: "__unclassified__",
+      key: PRODUCT_UNCLASSIFIED_GROUP_KEY,
       label: "Unclassified",
       count: unclassifiedCount,
       categoryId: null,
