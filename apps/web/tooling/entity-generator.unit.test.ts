@@ -1243,6 +1243,56 @@ describe("typed entity compiler", () => {
       expect(() => stored(descriptor)).toThrow(message);
   });
 
+  // Regression: Run's purpose filter was a hand copy of the field's options.
+  // The enum gained AI purposes, the copy did not, and every AI Run was
+  // unreachable from the Runs list filter and its URL schema.
+  it("derives enum filter options from the field and rejects a stale copy", () => {
+    const status = {
+      key: "status",
+      kind: "enum",
+      control: {
+        kind: "select",
+        options: [
+          { value: "open", label: "Open" },
+          { value: "done", label: "Done" },
+        ],
+      },
+      validation: {
+        read: z.enum(["open", "done"]),
+        create: null,
+        update: null,
+      },
+    };
+    const compile = (options: Array<{ value: string; label: string }> | null) =>
+      compileEntityDeclarations([
+        {
+          ...base,
+          model: {
+            ...model,
+            fields: [...model.fields, status],
+            storage: ["name", "status"],
+          },
+          filters: {
+            descriptors: [
+              {
+                columnId: "status",
+                kind: "multiselect",
+                placeholder: "x",
+                options,
+              },
+            ],
+          },
+        },
+      ])[0]?.filterDescriptors[0]?.options;
+    expect(compile(null)).toEqual([
+      { value: "open", label: "Open" },
+      { value: "done", label: "Done" },
+    ]);
+    expect(() => compile([{ value: "open", label: "Open" }])).toThrow(
+      "options must match status's control options",
+    );
+  });
+
   it("checks every presentation declaration against the fields, relations and capabilities", () => {
     const presented = {
       ...base,

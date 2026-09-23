@@ -46751,6 +46751,19 @@
               }
             ]
           },
+          "trigger": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ImportRunTrigger"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/ImportRunTrigger"
+                }
+              }
+            ]
+          },
           "vendorAccountId": {
             "anyOf": [
               {
@@ -46789,9 +46802,6 @@
                 }
               }
             ]
-          },
-          "includeEphemeral": {
-            "type": "boolean"
           }
         }
       },

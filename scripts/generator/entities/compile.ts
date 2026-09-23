@@ -699,6 +699,51 @@ const validateFilterReference = (
   }
 };
 
+/**
+ * A select filter over an enum field takes the field's options, so a value
+ * added to the enum reaches the filter menu and its URL schema. A declared
+ * copy (kept for per-option colors) must name exactly the field's values:
+ * a copy that fell behind the enum once hid every AI Run from `/runs`.
+ */
+const enumFilterOptions = (
+  value: RawFilterDescriptor,
+  kind: FilterDescriptor["kind"],
+  modelField: EntityField | undefined,
+  context: string,
+): FilterDescriptor["options"] => {
+  const declared = value.options ?? null;
+  const fieldOptions = modelField?.control?.options ?? null;
+  // A descriptor bound to its own param (`field`) has its own vocabulary,
+  // such as inventory placement's `all`.
+  const filtersField = value.field == null || value.field === value.columnId;
+  if (
+    (kind !== "select" && kind !== "multiselect") ||
+    modelField?.kind !== "enum" ||
+    fieldOptions === null ||
+    !filtersField
+  )
+    return declared;
+  if (declared === null)
+    return value.optionsRef != null ||
+      value.optionsKey != null ||
+      value.schemaRef != null
+      ? null
+      : fieldOptions.map(({ value: option, label }) => ({
+          value: option,
+          label,
+        }));
+  const declaredValues = declared
+    .filter((option) => option.meta !== true)
+    .map((option) => option.value)
+    .sort();
+  const fieldValues = fieldOptions.map((option) => option.value).sort();
+  if (declaredValues.join("\0") !== fieldValues.join("\0"))
+    throw new EntityDeclarationError(
+      `${context} options must match ${value.columnId}'s control options (${fieldValues.join(", ")}); omit them to derive from the field.`,
+    );
+  return declared;
+};
+
 const filterDescriptor = (
   value: RawFilterDescriptor,
   fields: readonly EntityField[],
@@ -709,14 +754,14 @@ const filterDescriptor = (
   if (parsedKind === undefined) {
     throw new EntityDeclarationError(`${context}.kind is unsupported.`);
   }
-  const options = value.options ?? null;
   const optionsRef = value.optionsRef ?? null;
-  if (options !== null && optionsRef !== null) {
+  if (value.options != null && optionsRef !== null) {
     throw new EntityDeclarationError(
       `${context} cannot declare both options and optionsRef.`,
     );
   }
   const modelField = fields.find((field) => field.key === value.columnId);
+  const options = enumFilterOptions(value, parsedKind, modelField, context);
   validateFilterReference(value, parsedKind, context);
   validateDerivedFilter(value, parsedKind, modelField, context);
   const stored = validateStoredFilter(value, parsedKind, storage, context);

@@ -16,11 +16,6 @@ export const importRunListResponse =
   createPaginatedResponseSchema(importRunOut);
 export const importRunFilterFields = {
   ...generatedRunFilterFields,
-  /**
-   * Ephemeral runs (one per Jev pass or AI action) are hidden unless this is
-   * set or a `purpose` filter asks for them explicitly.
-   */
-  includeEphemeral: z.boolean().optional(),
 };
 export const importRunFilters = z.object(importRunFilterFields);
 export type ImportRunFilters = z.infer<typeof importRunFilters>;

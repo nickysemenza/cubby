@@ -6,7 +6,7 @@ import {
   type ImportRunPurpose,
 } from "@cubby/schemas/import-run-fields";
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
-import { and, eq, ne, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { importRun } from "~/server/db/schema";
@@ -139,12 +139,7 @@ const toOut = (row: ImportRunRow): ImportRunOut =>
 
 const scaffold = listScaffold("importRun", importRun);
 
-const buildWhere = (filters: ImportRunFilters) =>
-  scaffold.where(filters, [
-    filters.includeEphemeral || filters.purpose !== undefined
-      ? undefined
-      : ne(importRun.trigger, "ephemeral"),
-  ]);
+const buildWhere = (filters: ImportRunFilters) => scaffold.where(filters);
 
 export async function listImportRuns(
   db: Database,
