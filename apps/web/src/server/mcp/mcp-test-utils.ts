@@ -36,6 +36,7 @@ const unavailableCaller = {
     clearException: unavailableCallerMethod,
   },
   entityIntegrity: { previewOperation: unavailableCallerMethod },
+  entityGraph: { connections: unavailableCallerMethod },
   expense: {
     analytics: unavailableCallerMethod,
     match: unavailableCallerMethod,
@@ -142,6 +143,7 @@ export function createCallerWithOverrides(
       ...unavailableCaller.entityIntegrity,
       ...caller.entityIntegrity,
     },
+    entityGraph: { ...unavailableCaller.entityGraph, ...caller.entityGraph },
     expense: { ...unavailableCaller.expense, ...caller.expense },
     plant: { ...unavailableCaller.plant, ...caller.plant },
     financialTransaction: {

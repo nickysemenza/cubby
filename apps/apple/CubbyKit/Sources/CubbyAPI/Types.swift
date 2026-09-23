@@ -53,6 +53,9 @@ public protocol APIProtocol: Sendable {
     /// - Remark: HTTP `PATCH /api/v1/devices/{id}`.
     /// - Remark: Generated from `#/paths//api/v1/devices/{id}/patch(resources.device.update)`.
     func resources_device_update(_ input: Operations.Resources_device_update.Input) async throws -> Operations.Resources_device_update.Output
+    /// - Remark: HTTP `GET /api/v1/entity/connections`.
+    /// - Remark: Generated from `#/paths//api/v1/entity/connections/get(entity.connections)`.
+    func entity_connections(_ input: Operations.Entity_connections.Input) async throws -> Operations.Entity_connections.Output
     /// - Remark: HTTP `POST /api/v1/entity/explore`.
     /// - Remark: Generated from `#/paths//api/v1/entity/explore/post(entity.explore)`.
     func entity_explore(_ input: Operations.Entity_explore.Input) async throws -> Operations.Entity_explore.Output
@@ -657,6 +660,17 @@ extension APIProtocol {
             path: path,
             headers: headers,
             body: body
+        ))
+    }
+    /// - Remark: HTTP `GET /api/v1/entity/connections`.
+    /// - Remark: Generated from `#/paths//api/v1/entity/connections/get(entity.connections)`.
+    public func entity_connections(
+        query: Operations.Entity_connections.Input.Query,
+        headers: Operations.Entity_connections.Input.Headers = .init()
+    ) async throws -> Operations.Entity_connections.Output {
+        try await entity_connections(Operations.Entity_connections.Input(
+            query: query,
+            headers: headers
         ))
     }
     /// - Remark: HTTP `POST /api/v1/entity/explore`.

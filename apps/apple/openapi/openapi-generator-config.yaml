@@ -47,6 +47,7 @@ filter:
     - cookbook.detail
     - cookbook.list
     - dashboard.counts
+    - entity.connections
     - entity.explore
     - entity.graph
     - entity.graphPaths

@@ -2,6 +2,8 @@ import { z } from "zod";
 
 import { entitySchema } from "./entity-core";
 import { edgeRoleSchema, operationDispositionSchema } from "./entity-integrity";
+import { shortcodeEntities } from "./entity-manifest";
+import { anyShortcodeSchema, nonEmptyTuple } from "./identifier-fields";
 
 /**
  * One-hop physical connections of an entity, read from the generated
@@ -15,7 +17,7 @@ export type EntityConnectionDirection = z.infer<
 
 export const entityConnectionsInput = z.object({
   /** Any entity's public code; a merged-away code reads its survivor. */
-  id: z.string().trim().min(1),
+  id: anyShortcodeSchema(nonEmptyTuple(shortcodeEntities)),
   /**
    * Attach each incoming group's declared disposition for this operation —
    * the delete/merge impact preview. Advisory: the mutation re-checks.
