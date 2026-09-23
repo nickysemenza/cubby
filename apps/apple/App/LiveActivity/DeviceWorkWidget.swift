@@ -13,8 +13,20 @@ struct DeviceWorkWidget: Widget {
                         Text("+\(context.state.additionalCount)").font(.caption).foregroundStyle(.secondary)
                     }
                 }
-                Text(context.state.detail).font(.caption).foregroundStyle(.secondary)
+                HStack {
+                    Text(context.state.detail)
+                    Spacer()
+                    if let progress = context.state.progress {
+                        Text(progress, format: .percent.precision(.fractionLength(0)))
+                            .monospacedDigit()
+                    }
+                }
+                .font(.caption)
+                .foregroundStyle(.secondary)
                 if let progress = context.state.progress { ProgressView(value: progress) }
+                if let remaining = context.state.estimatedRemaining {
+                    Text("\(remaining) left").font(.caption2).foregroundStyle(.secondary)
+                }
             }
             .padding()
             .widgetURL(URL(string: "cubby://activity/local/\(context.state.localActivityID)"))
@@ -32,6 +44,9 @@ struct DeviceWorkWidget: Widget {
                     VStack(alignment: .leading) {
                         Text(context.state.detail).font(.caption)
                         if let progress = context.state.progress { ProgressView(value: progress) }
+                        if let remaining = context.state.estimatedRemaining {
+                            Text("\(remaining) left").font(.caption2).foregroundStyle(.secondary)
+                        }
                     }
                 }
             } compactLeading: {

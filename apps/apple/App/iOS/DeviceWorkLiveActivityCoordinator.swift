@@ -35,10 +35,49 @@ struct DeviceWorkLiveSelection: Equatable {
             additionalCount: eligible.count - 1)
     }
 
-    var contentState: DeviceWorkAttributes.ContentState {
+    func contentState(estimatedRemaining: String? = nil) -> DeviceWorkAttributes.ContentState {
         .init(
             title: title, detail: detail, progress: progress,
+            estimatedRemaining: estimatedRemaining,
             additionalCount: additionalCount, localActivityID: id)
+    }
+}
+
+/// Estimate from the last minute of observed progress. A restarted or different task discards
+/// the old rate, and a short sample span cannot produce a useful estimate.
+struct DeviceWorkProgressETA {
+    private struct Sample {
+        let at: Date
+        let progress: Double
+    }
+
+    private var taskID: String?
+    private var samples: [Sample] = []
+
+    mutating func record(_ selection: DeviceWorkLiveSelection?, at now: Date) {
+        guard let selection, let progress = selection.progress, progress < 1 else {
+            taskID = nil
+            samples = []
+            return
+        }
+        if taskID != selection.id || (samples.last.map { progress < $0.progress } ?? false) {
+            taskID = selection.id
+            samples = []
+        }
+        samples.append(Sample(at: now, progress: progress))
+        if let firstInWindow = samples.firstIndex(where: { now.timeIntervalSince($0.at) <= 60 }),
+            firstInWindow > 1
+        {
+            samples.removeFirst(firstInWindow - 1)
+        }
+    }
+
+    func remaining(at now: Date) -> TimeInterval? {
+        guard let first = samples.first, let last = samples.last else { return nil }
+        let span = last.at.timeIntervalSince(first.at)
+        let advanced = last.progress - first.progress
+        guard span >= 10, advanced > 0 else { return nil }
+        return max(0, (1 - last.progress) * span / advanced - now.timeIntervalSince(last.at))
     }
 }
 
@@ -50,8 +89,9 @@ final class DeviceWorkLiveActivityCoordinator {
     private var foreground = false
     private var loop: Task<Void, Never>?
     private var observing = false
-    private var lastPublished: DeviceWorkLiveSelection?
+    private var lastPublished: DeviceWorkAttributes.ContentState?
     private var lastUpdate = Date.distantPast
+    private var progressETA = DeviceWorkProgressETA()
 
     func start(model: AppModel, foreground: Bool) {
         self.model = model
@@ -99,6 +139,7 @@ final class DeviceWorkLiveActivityCoordinator {
     private func reconcile() async {
         guard let model, model.phase != .restoring else { return }
         let snapshot = DeviceWorkLiveSelection.select(model.backgroundActivity.visibleActivities, at: .now)
+        progressETA.record(snapshot, at: .now)
         let activities = Activity<DeviceWorkAttributes>.activities
         for extra in activities.dropFirst() { await extra.end(nil, dismissalPolicy: .immediate) }
         guard let snapshot else {
@@ -106,27 +147,28 @@ final class DeviceWorkLiveActivityCoordinator {
             lastPublished = nil
             return
         }
+        let state = snapshot.contentState(
+            estimatedRemaining: progressETA.remaining(at: .now).map(PhotoStageETA.format))
         if let activity = activities.first {
-            let changedTask = lastPublished?.id != snapshot.id
-            let changedProgress = abs((lastPublished?.progress ?? 0) - (snapshot.progress ?? 0)) >= 0.01
+            let changedTask = lastPublished?.localActivityID != state.localActivityID
             let due = Date.now.timeIntervalSince(lastUpdate) >= 15
-            guard changedTask || (due && (snapshot != lastPublished || changedProgress)) else { return }
+            guard changedTask || (due && state != lastPublished) else { return }
             await activity.update(
-                ActivityContent(state: snapshot.contentState, staleDate: Date.now.addingTimeInterval(90)))
+                ActivityContent(state: state, staleDate: Date.now.addingTimeInterval(90)))
         } else {
             guard foreground, ActivityAuthorizationInfo().areActivitiesEnabled else { return }
             do {
                 _ = try Activity.request(
                     attributes: DeviceWorkAttributes(sessionID: UUID().uuidString),
                     content: ActivityContent(
-                        state: snapshot.contentState, staleDate: Date.now.addingTimeInterval(90)),
+                        state: state, staleDate: Date.now.addingTimeInterval(90)),
                     pushType: nil)
             } catch {
                 Diagnostics.report(error, context: "deviceWork.liveActivity.start")
                 return
             }
         }
-        lastPublished = snapshot
+        lastPublished = state
         lastUpdate = .now
     }
 }

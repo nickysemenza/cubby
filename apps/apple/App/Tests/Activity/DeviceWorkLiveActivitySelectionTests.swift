@@ -39,7 +39,33 @@ struct DeviceWorkLiveActivitySelectionTests {
         #expect(selected.id == "upload")
         #expect(selected.additionalCount == 1)
         #expect(selected.progress == 0.2)
-        #expect(selected.contentState.localActivityID == "upload")
+        #expect(selected.contentState().localActivityID == "upload")
         #expect(DeviceWorkLiveSelection.select([], at: now) == nil)
+    }
+
+    @Test func estimateNeedsObservedProgressAndResetsForAnotherTask() throws {
+        let now = Date.now
+        var estimate = DeviceWorkProgressETA()
+        let first = try #require(
+            DeviceWorkLiveSelection.select(
+                [activity(id: "scan", kind: .libraryScan, age: 40, progress: 0.2)], at: now))
+        estimate.record(first, at: now)
+        #expect(estimate.remaining(at: now) == nil)
+
+        let advanced = try #require(
+            DeviceWorkLiveSelection.select(
+                [activity(id: "scan", kind: .libraryScan, age: 60, progress: 0.4)],
+                at: now.addingTimeInterval(20)))
+        estimate.record(advanced, at: now.addingTimeInterval(20))
+        #expect(estimate.remaining(at: now.addingTimeInterval(20)) == 60)
+
+        let other = try #require(
+            DeviceWorkLiveSelection.select(
+                [activity(id: "upload", kind: .upload, age: 40, progress: 0.5)],
+                at: now.addingTimeInterval(20)))
+        estimate.record(other, at: now.addingTimeInterval(20))
+        #expect(estimate.remaining(at: now.addingTimeInterval(20)) == nil)
+        estimate.record(nil, at: now.addingTimeInterval(21))
+        #expect(estimate.remaining(at: now.addingTimeInterval(21)) == nil)
     }
 }

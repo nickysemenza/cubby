@@ -6,6 +6,7 @@ nonisolated struct DeviceWorkAttributes: ActivityAttributes {
         let title: String
         let detail: String
         let progress: Double?
+        let estimatedRemaining: String?
         let additionalCount: Int
         let localActivityID: String
     }
