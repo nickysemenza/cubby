@@ -36,9 +36,9 @@ import {
   navItemLinkProps,
   primaryNavGroups,
   settingsNavItem,
-  todayNavItems,
   useActiveTo,
 } from "./nav-items";
+import { NavigationCountBadge } from "./navigation-count-badge";
 import {
   SidebarRailGroup as RailGroupFlyout,
   SidebarRailLeaf as RailLeaf,
@@ -291,7 +291,6 @@ function WorkspaceSidebar({
         aria-label="Cubby"
       >
         <SidebarHome active={activeTo === homeNavItem.to} expanded={expanded} />
-        <SidebarToday activeTo={activeTo} expanded={expanded} />
         {primaryNavGroups.map((group) => (
           <SidebarGroup
             key={group.label}
@@ -396,34 +395,6 @@ function SidebarUtilityLinks({
         </div>
       )}
     </div>
-  );
-}
-
-function SidebarToday({
-  activeTo,
-  expanded,
-}: {
-  activeTo: string | undefined;
-  expanded: boolean;
-}) {
-  return (
-    <section className="mb-4 border-y border-border py-2" aria-label="Today">
-      {expanded && <p className="hidden px-2 pb-1 eyebrow lg:block">Today</p>}
-      {todayNavItems.map((item) => (
-        <div key={item.to}>
-          <div className={cn("md:block", expanded && "lg:hidden")}>
-            <Suspense fallback={<SidebarRailLeafFallback item={item} />}>
-              <RailLeaf item={item} active={activeTo === item.to} />
-            </Suspense>
-          </div>
-          {expanded && (
-            <div className="hidden lg:block">
-              <SidebarFullLeaf item={item} active={activeTo === item.to} />
-            </div>
-          )}
-        </div>
-      ))}
-    </section>
   );
 }
 
@@ -542,6 +513,7 @@ function SidebarFullLeaf({ item, active }: { item: NavItem; active: boolean }) {
     >
       <Icon className="size-3.5 shrink-0" />
       <span className="min-w-0 truncate">{item.label}</span>
+      {item.entity && <NavigationCountBadge entity={item.entity} />}
     </Link>
   );
 }

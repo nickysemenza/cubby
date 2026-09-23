@@ -91,6 +91,10 @@ struct TodayModelTests {
         await waitUntil { Self.loadedTaskName(model.tasks) == "Water seedlings" }
         #expect(model.mealsIsLoading && model.problemsIsLoading)
         #expect(Self.loadedTaskName(model.tasks) == "Water seedlings")
+        if case .loaded(let briefing) = model.tasks {
+            #expect(briefing.dueThisWeekCount == 1)
+            #expect(briefing.laterCount == 2)
+        }
         TodayModelStub.respond(to: firstPending, status: 500, data: Self.failurePayload)
         TodayModelStub.respond(to: secondPending, status: 500, data: Self.failurePayload)
         pendingContinuation.finish()
@@ -136,15 +140,15 @@ struct TodayModelTests {
     }
 
     nonisolated private static let tasksPayload = Data(
-        #"{"next":[{"id":"TSK-2345","name":"Water seedlings","status":"not_started","dueDate":null,"dueEndDate":null,"projectId":null,"projectName":null}],"nextCount":1,"laterCount":0,"blockedCount":0,"overdueCount":0,"dueThisWeekCount":0}"#
+        #"{"next":[{"id":"TSK-2345","name":"Water seedlings","status":"not_started","dueDate":null,"dueEndDate":null,"projectId":null,"projectName":null}],"nextCount":1,"laterCount":2,"blockedCount":0,"overdueCount":0,"dueThisWeekCount":1}"#
             .utf8
     )
     nonisolated private static let failurePayload = Data(
         #"{"code":"TEST","message":"Still offline"}"#.utf8)
 
-    private static func loadedTaskName(_ state: TodaySectionState<[TaskTodayBriefingItemOut]>) -> String? {
+    private static func loadedTaskName(_ state: TodaySectionState<TaskTodayBriefingOut>) -> String? {
         guard case .loaded(let tasks) = state else { return nil }
-        return tasks.first?.name
+        return tasks.next.first?.name
     }
 
     private func waitUntil(_ condition: @MainActor () -> Bool) async {

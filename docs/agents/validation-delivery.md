@@ -9,10 +9,14 @@ the exact final head before merge; a green earlier commit is not evidence for a
 later one. Validate deploy-only steps against CI token scopes because PR jobs do
 not exercise them. Prefer a fresh branch after a squash merge.
 
-Changes to phone navigation, safe areas, keyboard behavior, or installed-PWA
-launch/return need a physical iPhone Safari and installed-PWA pass before
-merge. Record device, modes, affected workflow, observation, and remaining
-gap. WebKit and simulator tests are automated coverage, not device signoff.
+For phone navigation labels, ordering, badges, and ordinary links, verify the
+phone-width layout and interaction with browser tests, then use WebKit CI as the
+merge gate. Require a physical iPhone Safari and installed-PWA pass before
+merge when a change depends on device behavior: safe areas, touch gestures,
+keyboard or focus behavior, browser permissions, or installed-PWA launch,
+return, and navigation history. Record the device, modes, affected workflow,
+observation, and remaining gap for that pass. WebKit and simulator tests do
+not sign off those device-dependent behaviors.
 
 Apply the [repository privacy rule](../../AGENTS.md): use synthetic data in
 repository content and outward-facing engineering text, keep personal/household

@@ -24,6 +24,7 @@ import {
   settingsNavItem,
   workspaceUtilitySections,
 } from "./nav-items";
+import { NavigationCountBadge } from "./navigation-count-badge";
 
 export type WorkspaceNavigatorView = "household" | "utility";
 
@@ -90,6 +91,7 @@ function NavigatorLink({
     >
       <Icon className="size-3.5 shrink-0" aria-hidden />
       <span className="min-w-0 flex-1 break-words">{item.label}</span>
+      {item.entity && <NavigationCountBadge entity={item.entity} />}
       {section && (
         <span className="shrink-0 font-mono text-2xs text-slate uppercase">
           {section}

@@ -76,7 +76,7 @@ test("core entity list, detail, and mutation ride named Start operations", async
   // server, where no browser request is issued and nothing is observable.
   await page
     .getByLabel("Workspace navigation")
-    .getByRole("link", { name: "Products", exact: true })
+    .getByRole("link", { name: /^Products(?: [\d,]+ records)?$/ })
     .click();
   await expect(page).toHaveURL(/\/products$/u, { timeout: 15000 });
   await expect(page.getByRole("heading", { name: "Products" })).toBeVisible({
@@ -206,7 +206,7 @@ test("server error references remain usable on desktop", async ({
   });
   await page
     .getByLabel("Workspace navigation")
-    .getByRole("link", { name: "Products", exact: true })
+    .getByRole("link", { name: /^Products(?: [\d,]+ records)?$/ })
     .click();
   await expect(
     page.getByText("Server request failed (HTTP 500)", { exact: true }).first(),

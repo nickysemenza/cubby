@@ -22,6 +22,7 @@ import {
   type NavItem,
   navItemLinkProps,
 } from "./nav-items";
+import { NavigationCountBadge } from "./navigation-count-badge";
 
 export function SidebarRailGroup({
   group,
@@ -136,6 +137,7 @@ function SidebarFlyoutItem({
     >
       <Icon />
       {item.label}
+      {item.entity && <NavigationCountBadge entity={item.entity} />}
     </DropdownMenuItem>
   );
 }

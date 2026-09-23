@@ -1,14 +1,19 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
+import { dashboard } from "~/lib/dashboard.functions";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
+import { mobileHouseholdItems } from "./nav-items";
 import { WorkspaceNavigator } from "./workspace-navigator";
 
 let harness: ReturnType<typeof createBrowserTestHarness>;
 
 beforeEach(() => {
   harness = createBrowserTestHarness();
+  const queryKey = dashboard.counts.queryOptions().queryKey;
+  harness.queryClient.setQueryDefaults(queryKey, { staleTime: Infinity });
+  harness.queryClient.setQueryData(queryKey, {});
 });
 
 afterEach(() => {
@@ -30,6 +35,23 @@ function renderNavigator() {
 }
 
 describe("WorkspaceNavigator interactions", () => {
+  it("announces loaded roster counts but leaves workbenches unnumbered", () => {
+    const queryKey = dashboard.counts.queryOptions().queryKey;
+    harness.queryClient.setQueryData(queryKey, {
+      project: 0,
+    });
+    expect(
+      mobileHouseholdItems.find((item) => item.to === "/projects")?.entity,
+    ).toBe("project");
+    renderNavigator();
+    expect(
+      screen.getAllByRole("link", { name: /Projects/ })[0],
+    ).toHaveTextContent("0 records");
+    expect(
+      screen.getAllByRole("link", { name: "Household calendar" }).length,
+    ).toBeGreaterThan(0);
+  });
+
   it("marks active destinations and closes on navigation", () => {
     const openChanges = renderNavigator();
     expect(

@@ -2652,6 +2652,18 @@ extension Components {
             public var plant: Swift.Int
             /// - Remark: Generated from `#/components/schemas/DashboardCountsOut/usdaFoods`.
             public var usdaFoods: Swift.Int
+            /// - Remark: Generated from `#/components/schemas/DashboardCountsOut/usdaFoodsAvailable`.
+            public var usdaFoodsAvailable: Swift.Bool?
+            /// - Remark: Generated from `#/components/schemas/DashboardCountsOut/ledgerParty`.
+            public var ledgerParty: Swift.Int?
+            /// - Remark: Generated from `#/components/schemas/DashboardCountsOut/ledgerTransfer`.
+            public var ledgerTransfer: Swift.Int?
+            /// - Remark: Generated from `#/components/schemas/DashboardCountsOut/vendorAccount`.
+            public var vendorAccount: Swift.Int?
+            /// - Remark: Generated from `#/components/schemas/DashboardCountsOut/productCategory`.
+            public var productCategory: Swift.Int?
+            /// - Remark: Generated from `#/components/schemas/DashboardCountsOut/device`.
+            public var device: Swift.Int?
             /// Creates a new `DashboardCountsOut`.
             ///
             /// - Parameters:
@@ -2677,6 +2689,12 @@ extension Components {
             ///   - imageSighting:
             ///   - plant:
             ///   - usdaFoods:
+            ///   - usdaFoodsAvailable:
+            ///   - ledgerParty:
+            ///   - ledgerTransfer:
+            ///   - vendorAccount:
+            ///   - productCategory:
+            ///   - device:
             public init(
                 product: Swift.Int,
                 recipe: Swift.Int,
@@ -2699,7 +2717,13 @@ extension Components {
                 importRun: Swift.Int,
                 imageSighting: Swift.Int,
                 plant: Swift.Int,
-                usdaFoods: Swift.Int
+                usdaFoods: Swift.Int,
+                usdaFoodsAvailable: Swift.Bool? = nil,
+                ledgerParty: Swift.Int? = nil,
+                ledgerTransfer: Swift.Int? = nil,
+                vendorAccount: Swift.Int? = nil,
+                productCategory: Swift.Int? = nil,
+                device: Swift.Int? = nil
             ) {
                 self.product = product
                 self.recipe = recipe
@@ -2723,6 +2747,12 @@ extension Components {
                 self.imageSighting = imageSighting
                 self.plant = plant
                 self.usdaFoods = usdaFoods
+                self.usdaFoodsAvailable = usdaFoodsAvailable
+                self.ledgerParty = ledgerParty
+                self.ledgerTransfer = ledgerTransfer
+                self.vendorAccount = vendorAccount
+                self.productCategory = productCategory
+                self.device = device
             }
             public enum CodingKeys: String, CodingKey {
                 case product
@@ -2747,6 +2777,12 @@ extension Components {
                 case imageSighting
                 case plant
                 case usdaFoods
+                case usdaFoodsAvailable
+                case ledgerParty
+                case ledgerTransfer
+                case vendorAccount
+                case productCategory
+                case device
             }
         }
         /// - Remark: Generated from `#/components/schemas/DataExceptionReason`.

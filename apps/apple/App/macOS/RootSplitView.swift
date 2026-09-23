@@ -91,18 +91,7 @@ struct RootSplitView: View {
                             $0.key.domain == domain && $0.key.nativeActions.contains(.list)
                         }.sorted { $0.plural < $1.plural }, id: \.key
                     ) { descriptor in
-                        Label(descriptor.plural, systemImage: descriptor.sfSymbol)
-                            .tag(SidebarDestination.entity(descriptor.key))
-                    }
-                }
-            }
-            let media = EntityCatalog.all.filter {
-                $0.domain == nil && $0.key.nativeActions.contains(.list)
-            }.sorted { $0.plural < $1.plural }
-            if !media.isEmpty {
-                Section("Media") {
-                    ForEach(media, id: \.key) { descriptor in
-                        Label(descriptor.plural, systemImage: descriptor.sfSymbol)
+                        entitySidebarLabel(descriptor)
                             .tag(SidebarDestination.entity(descriptor.key))
                     }
                 }
@@ -111,6 +100,16 @@ struct RootSplitView: View {
         .listStyle(.sidebar)
         .accessibilityIdentifier("sidebar.destinations")
         .navigationSplitViewColumnWidth(min: 180, ideal: 220, max: 280)
+    }
+
+    private func entitySidebarLabel(_ descriptor: EntityDescriptor) -> some View {
+        HStack {
+            Label(descriptor.plural, systemImage: descriptor.sfSymbol)
+            Spacer(minLength: 4)
+            if let count = model.browseCounts.count(for: descriptor.key) {
+                NativeCountBadge(count: count)
+            }
+        }
     }
 
     @ViewBuilder private var browserList: some View {

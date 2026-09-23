@@ -122,7 +122,8 @@ struct MealNutritionCompactView: View {
 
     var body: some View {
         if summary.people.isEmpty {
-            Text("No portions entered yet.")
+            Text("No food logged yet. Add a portion to see nutrition.")
+                .font(.porcelainLabel)
                 .foregroundStyle(.secondary)
         } else {
             ForEach(summary.people) { person in

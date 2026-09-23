@@ -43,6 +43,18 @@ struct TodayView: View {
             }
         }
         .navigationTitle("Today")
+        #if os(iOS)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    NavigationLink {
+                        SettingsView()
+                    } label: {
+                        Image(systemName: "gearshape")
+                    }
+                    .accessibilityLabel("Settings")
+                }
+            }
+        #endif
         .task(id: model.host) {
             today = nil
             nutrition = nil
@@ -90,7 +102,7 @@ struct TodayView: View {
 
 struct TodayContent: View {
     let dateText: String
-    let tasks: TodaySectionState<[TaskTodayBriefingItemOut]>
+    let tasks: TodaySectionState<TaskTodayBriefingOut>
     let meals: TodaySectionState<[MealListItem]>
     let problems: TodaySectionState<ProblemsCount>
     var nutrition: TodaySectionState<MealNutritionOut> = .loading
@@ -124,14 +136,19 @@ struct TodayContent: View {
                 Section {
                     Text(dateText).foregroundStyle(.secondary)
                 }
-                Section("Tasks") {
+                Section("Next up") {
                     switch tasks {
                     case .loading: LoadingIndicator(label: "Loading tasks")
                     case .failed(let message):
                         failure(message, isLoading: tasksIsLoading, retry: onRetryTasks ?? onRefresh)
-                    case .loaded(let rows):
-                        if rows.isEmpty { Text("Nothing due").foregroundStyle(.secondary) }
-                        ForEach(rows) { task in
+                    case .loaded(let briefing):
+                        Text(taskSummary(briefing))
+                            .font(.porcelainLabel)
+                            .foregroundStyle(.secondary)
+                        if briefing.next.isEmpty {
+                            Text("Nothing ready right now").foregroundStyle(.secondary)
+                        }
+                        ForEach(briefing.next) { task in
                             NavigationLink(value: Route.entityDetail(.task, id: task.id)) {
                                 TaskRow(task: task)
                             }
@@ -177,29 +194,24 @@ struct TodayContent: View {
                             retry: onRetryNutrition ?? onRefresh)
                     }
                 }
-                Section("Problems") {
+                Section("Status") {
                     switch problems {
                     case .loading: LoadingIndicator(label: "Loading problems")
                     case .failed(let message):
                         failure(message, isLoading: problemsIsLoading, retry: onRetryProblems ?? onRefresh)
                     case .loaded(let counts):
-                        LabeledContent("Open problems", value: counts.total.formatted())
-                        LabeledContent("Coverage", value: counts.coverageTotal.formatted())
+                        Text(
+                            "\(counts.total.formatted()) problems · \(counts.coverageTotal.formatted()) coverage gaps"
+                        )
+                        .font(.porcelainLabel)
+                        .foregroundStyle(.secondary)
                     }
                     if let problemsError {
                         failure(
                             problemsError, isLoading: problemsIsLoading, retry: onRetryProblems ?? onRefresh)
                     }
                 }
-                Section("Shortcuts") {
-                    NavigationLink(value: Route.entityList(.product)) {
-                        Label("Browse products", systemImage: "shippingbox")
-                    }
-                    Button {
-                        model.navigator.section = .capture
-                    } label: {
-                        Label("Capture", systemImage: "barcode.viewfinder")
-                    }
+                Section("Quick actions") {
                     Button {
                         model.navigator.section = .capture
                         model.navigator.paths[.capture] = [.audit(locationID: nil)]
@@ -213,11 +225,6 @@ struct TodayContent: View {
                         model.navigator.openIdentify()
                     } label: {
                         Label("Identify a photo", systemImage: "camera.metering.center.weighted")
-                    }
-                    NavigationLink {
-                        SettingsView()
-                    } label: {
-                        Label("Settings", systemImage: "gearshape")
                     }
                 }
             }
@@ -236,14 +243,14 @@ struct TodayContent: View {
 
                     ViewThatFits(in: .horizontal) {
                         HStack(alignment: .top, spacing: PorcelainTokens.Space.lg) {
-                            macPrimaryColumn
-                                .frame(minWidth: 500, maxWidth: .infinity, alignment: .topLeading)
-                            macSecondaryColumn
-                                .frame(minWidth: 280, maxWidth: 340, alignment: .topLeading)
+                            macWorkColumn
+                                .frame(width: 620, alignment: .topLeading)
+                            macMealsColumn
+                                .frame(width: 300, alignment: .topLeading)
                         }
                         VStack(alignment: .leading, spacing: PorcelainTokens.Space.lg) {
-                            macPrimaryColumn
-                            macSecondaryColumn
+                            macWorkColumn
+                            macMealsColumn
                         }
                     }
                 }
@@ -257,7 +264,7 @@ struct TodayContent: View {
             .accessibilityIdentifier("today.sections")
         }
 
-        private var macPrimaryColumn: some View {
+        private var macMealsColumn: some View {
             VStack(alignment: .leading, spacing: PorcelainTokens.Space.lg) {
                 dashboardPanel("Meals today", systemImage: "fork.knife") {
                     switch meals {
@@ -299,16 +306,21 @@ struct TodayContent: View {
             }
         }
 
-        private var macSecondaryColumn: some View {
+        private var macWorkColumn: some View {
             VStack(alignment: .leading, spacing: PorcelainTokens.Space.lg) {
-                dashboardPanel("Tasks", systemImage: "checklist") {
+                dashboardPanel("Next up", systemImage: "checklist") {
                     switch tasks {
                     case .loading: LoadingIndicator(label: "Loading tasks")
                     case .failed(let message):
                         failure(message, isLoading: tasksIsLoading, retry: onRetryTasks ?? onRefresh)
-                    case .loaded(let rows):
-                        if rows.isEmpty { Text("Nothing due").foregroundStyle(.secondary) }
-                        ForEach(rows) { task in
+                    case .loaded(let briefing):
+                        Text(taskSummary(briefing))
+                            .font(.porcelainLabel)
+                            .foregroundStyle(.secondary)
+                        if briefing.next.isEmpty {
+                            Text("Nothing ready right now").foregroundStyle(.secondary)
+                        }
+                        ForEach(briefing.next) { task in
                             NavigationLink(value: Route.entityDetail(.task, id: task.id)) {
                                 TaskRow(task: task)
                             }
@@ -319,14 +331,17 @@ struct TodayContent: View {
                     }
                 }
 
-                dashboardPanel("Problems", systemImage: "exclamationmark.triangle") {
+                dashboardPanel("Status", systemImage: "exclamationmark.triangle") {
                     switch problems {
                     case .loading: LoadingIndicator(label: "Loading problems")
                     case .failed(let message):
                         failure(message, isLoading: problemsIsLoading, retry: onRetryProblems ?? onRefresh)
                     case .loaded(let counts):
-                        LabeledContent("Open problems", value: counts.total.formatted())
-                        LabeledContent("Coverage", value: counts.coverageTotal.formatted())
+                        Text(
+                            "\(counts.total.formatted()) problems · \(counts.coverageTotal.formatted()) coverage gaps"
+                        )
+                        .font(.porcelainLabel)
+                        .foregroundStyle(.secondary)
                     }
                     if let problemsError {
                         failure(
@@ -334,21 +349,13 @@ struct TodayContent: View {
                     }
                 }
 
-                dashboardPanel("Shortcuts", systemImage: "arrow.up.right.square") {
+                dashboardPanel("Quick actions", systemImage: "arrow.up.right.square") {
                     macShortcuts
                 }
             }
         }
 
         @ViewBuilder private var macShortcuts: some View {
-            NavigationLink(value: Route.entityList(.product)) {
-                Label("Browse products", systemImage: "shippingbox")
-            }
-            Button {
-                model.navigator.section = .capture
-            } label: {
-                Label("Capture", systemImage: "barcode.viewfinder")
-            }
             Button {
                 model.navigator.section = .capture
                 model.navigator.paths[.capture] = [.audit(locationID: nil)]
@@ -363,7 +370,6 @@ struct TodayContent: View {
             } label: {
                 Label("Identify a photo", systemImage: "camera.metering.center.weighted")
             }
-            SettingsLink { Label("Settings", systemImage: "gearshape") }
         }
 
         private func dashboardPanel<Content: View>(
@@ -387,6 +393,18 @@ struct TodayContent: View {
             if isLoading { LoadingIndicator(label: "Retrying") }
             Button("Retry") { Task { await retry() } }.disabled(isLoading)
         }
+    }
+
+    private func taskSummary(_ briefing: TaskTodayBriefingOut) -> String {
+        let parts = [
+            briefing.overdueCount > 0 ? "\(briefing.overdueCount) overdue" : nil,
+            briefing.dueThisWeekCount > 0 ? "\(briefing.dueThisWeekCount) due this week" : nil,
+            briefing.blockedCount > 0 ? "\(briefing.blockedCount) blocked" : nil,
+            briefing.nextCount > briefing.next.count
+                ? "\(briefing.nextCount - briefing.next.count) more ready" : nil,
+            briefing.laterCount > 0 ? "\(briefing.laterCount) later" : nil,
+        ].compactMap { $0 }
+        return parts.isEmpty ? "Nothing urgent is due" : parts.joined(separator: " · ")
     }
 }
 
@@ -482,7 +500,7 @@ private func formattedDueDate(_ raw: String) -> String {
     NavigationStack {
         TodayContent(
             dateText: "Friday, September 11",
-            tasks: .loaded(PreviewFixtures.sampleTodayTasks),
+            tasks: .loaded(PreviewFixtures.sampleTodayBriefing),
             meals: .loaded(PreviewFixtures.sampleTodayMeals),
             problems: .loaded(PreviewFixtures.sampleTodayProblems),
             nutrition: .loaded(PreviewFixtures.sampleMealNutrition),
@@ -497,7 +515,10 @@ private func formattedDueDate(_ raw: String) -> String {
     NavigationStack {
         TodayContent(
             dateText: "Friday, September 11",
-            tasks: .loaded([]),
+            tasks: .loaded(
+                TaskTodayBriefingOut(
+                    next: [], nextCount: 0, laterCount: 0, blockedCount: 0,
+                    overdueCount: 0, dueThisWeekCount: 0)),
             meals: .loaded([]),
             problems: .loaded(PreviewFixtures.sampleTodayProblems),
             nutrition: .loaded(MealNutritionOut(meals: [], people: [])),
@@ -521,12 +542,40 @@ private func formattedDueDate(_ raw: String) -> String {
     }
 }
 
+#Preview("Today — dark", traits: .modifier(SignedInPreview())) {
+    NavigationStack {
+        TodayContent(
+            dateText: "Friday, September 11",
+            tasks: .loaded(PreviewFixtures.sampleTodayBriefing),
+            meals: .loaded(PreviewFixtures.sampleTodayMeals),
+            problems: .loaded(PreviewFixtures.sampleTodayProblems),
+            nutrition: .loaded(PreviewFixtures.sampleMealNutrition),
+            onRefresh: {}
+        )
+    }
+    .preferredColorScheme(.dark)
+}
+
+#Preview("Today — large text", traits: .modifier(SignedInPreview())) {
+    NavigationStack {
+        TodayContent(
+            dateText: "Friday, September 11",
+            tasks: .loaded(PreviewFixtures.sampleTodayBriefing),
+            meals: .loaded(PreviewFixtures.sampleTodayMeals),
+            problems: .loaded(PreviewFixtures.sampleTodayProblems),
+            nutrition: .loaded(PreviewFixtures.sampleMealNutrition),
+            onRefresh: {}
+        )
+    }
+    .environment(\.dynamicTypeSize, .accessibility2)
+}
+
 #if os(macOS)
     #Preview("Today — narrow Mac") {
         NavigationStack {
             TodayContent(
                 dateText: "Friday, September 11",
-                tasks: .loaded(PreviewFixtures.sampleTodayTasks),
+                tasks: .loaded(PreviewFixtures.sampleTodayBriefing),
                 meals: .loaded(PreviewFixtures.sampleTodayMeals),
                 problems: .loaded(PreviewFixtures.sampleTodayProblems),
                 nutrition: .loaded(PreviewFixtures.sampleMealNutrition),

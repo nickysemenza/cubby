@@ -10,17 +10,19 @@ struct BrowseRootView: View {
 
     var body: some View {
         List {
-            Section {
-                Button {
-                    model.navigator.openGraph()
-                } label: {
-                    Label("Graph", systemImage: "point.3.connected.trianglepath.dotted")
-                        .frame(minHeight: PorcelainTokens.touchTarget)
+            #if os(iOS)
+                Section {
+                    Button {
+                        model.navigator.openGraph()
+                    } label: {
+                        Label("Graph", systemImage: "point.3.connected.trianglepath.dotted")
+                            .frame(minHeight: PorcelainTokens.touchTarget)
+                    }
+                    .listRowInsets(browseRowInsets)
+                } header: {
+                    headerTitle("Explore")
                 }
-                .listRowInsets(browseRowInsets)
-            } header: {
-                headerTitle("Explore")
-            }
+            #endif
             ForEach(AppDomain.allCases) { domain in
                 let group = descriptors(in: domain)
                 if !group.rows.isEmpty || !group.unlisted.isEmpty {
@@ -34,16 +36,6 @@ struct BrowseRootView: View {
                     } header: {
                         header(for: domain)
                     }
-                }
-            }
-            let media = descriptorsMatchingQuery.filter {
-                $0.domain == nil && $0.key.nativeActions.contains(.list)
-            }.sorted { $0.plural < $1.plural }
-            if !media.isEmpty {
-                Section {
-                    ForEach(media, id: \.key) { descriptor in row(for: descriptor) }
-                } header: {
-                    headerTitle("Media")
                 }
             }
         }
@@ -184,13 +176,24 @@ private struct EntityBrowseRow: View {
             Text(descriptor.plural)
                 .font(.porcelainBody)
             Spacer(minLength: PorcelainTokens.Space.sm)
-            if let count {
-                Text(count.formatted())
-                    .font(.porcelainData)
-                    .foregroundStyle(PorcelainTokens.graphiteSecondary)
-            }
+            if let count { NativeCountBadge(count: count) }
         }
         .frame(minHeight: PorcelainTokens.touchTarget)
+    }
+}
+
+struct NativeCountBadge: View {
+    let count: Int
+
+    var body: some View {
+        Text(count.formatted())
+            .font(.porcelainData)
+            .foregroundStyle(PorcelainTokens.graphiteSecondary)
+            .padding(.horizontal, PorcelainTokens.Space.xs)
+            .padding(.vertical, 2)
+            .background(PorcelainTokens.canvas, in: RoundedRectangle(cornerRadius: 4))
+            .overlay(RoundedRectangle(cornerRadius: 4).strokeBorder(.quaternary))
+            .accessibilityLabel("\(count.formatted()) records")
     }
 }
 

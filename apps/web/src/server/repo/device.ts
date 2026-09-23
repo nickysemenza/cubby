@@ -151,7 +151,7 @@ const toOut = async (
   });
 };
 
-const buildWhere = (filters: DeviceFilters) =>
+export const buildDeviceWhere = (filters: DeviceFilters) =>
   scaffold.where(filters, [...auditDateWhereConditions(device, filters)]);
 
 export async function listDevices(
@@ -160,7 +160,7 @@ export async function listDevices(
   sorts: SortParams[],
   pagination: PaginationParams,
 ) {
-  const where = buildWhere(filters);
+  const where = buildDeviceWhere(filters);
   const { take, skip } = scaffold.page(pagination);
   const { data, count } = await executeListQueryWithCount(
     getDb(db)
