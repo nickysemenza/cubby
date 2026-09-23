@@ -1,42 +1,12 @@
 import { describe, expect, it } from "vitest";
 
-import { buildCategoryHierarchy, nestProductCategories } from "./category-tree";
+import { buildCategoryHierarchy } from "./category-tree";
 
 const cat = (
   id: string,
   parentId: string | null,
   feature: "tools" | "food" | null = null,
 ) => ({ id, parentId, name: id, feature });
-
-type Outline = string | Record<string, Outline[]>;
-
-const outline = (rows: ReturnType<typeof nestProductCategories>): Outline[] =>
-  rows.map((row) =>
-    row.subRows ? { [row.id]: outline(row.subRows) } : row.id,
-  );
-
-describe("nestProductCategories", () => {
-  it.each([
-    {
-      name: "nests children and keeps sibling order",
-      rows: [
-        cat("tools", null),
-        cat("screws", "hw"),
-        cat("hw", "tools"),
-        cat("nails", "hw"),
-      ],
-      expected: [{ tools: [{ hw: ["screws", "nails"] }] }],
-    },
-    {
-      // A search match or an unloaded page must never hide a row.
-      name: "promotes a row whose parent is missing to a root",
-      rows: [cat("screws", "hw"), cat("food", null)],
-      expected: ["screws", "food"],
-    },
-  ])("$name", ({ rows, expected }) => {
-    expect(outline(nestProductCategories(rows))).toEqual(expected);
-  });
-});
 
 describe("buildCategoryHierarchy", () => {
   it("rolls direct counts up and inherits the closest feature", () => {

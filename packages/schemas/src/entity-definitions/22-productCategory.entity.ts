@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { optionalFieldResolutionsSchema } from "../field-resolution.js";
 import { productCategoryShortcode } from "../identifier-fields.js";
 import { productCategoryFeature } from "../product-category-fields.js";
 import { defineEntity } from "./definition.js";
@@ -41,19 +42,38 @@ export default defineEntity({
             "sortOrder",
             "feature",
             "path",
+            "productCount",
             "createdAt",
             "updatedAt",
           ],
+        },
+        {
+          kind: "relation",
+          id: "products",
+          title: "Products",
+          relation: "products",
+          filter: { descriptor: "category" },
+          columns: ["name", "manufacturer", "category", "onHandUnits"],
         },
       ],
     },
     list: {
       views: ["table", { kind: "slot", id: "hierarchy", label: "Hierarchy" }],
+      tree: { parentField: "parentId" },
       actions: ["delete"],
     },
   },
   model: {
     fields: [
+      {
+        key: "fieldResolutions",
+        kind: "json",
+        validation: {
+          read: optionalFieldResolutionsSchema,
+          create: null,
+          update: null,
+        },
+      },
       {
         key: "name",
         kind: "text",
@@ -95,7 +115,13 @@ export default defineEntity({
         label: "Parent category",
         reference: { entity: "productCategory" },
         control: { kind: "specialized", renderer: "entity-select" },
-        display: { list: true, detail: true, columnId: "parentName" },
+        display: {
+          list: true,
+          detail: true,
+          columnId: "parentName",
+          // The declared tree already shows each row under its parent.
+          listHidden: true,
+        },
         validation: {
           read: productCategoryShortcode.nullable(),
           create: productCategoryShortcode.nullable().default(null),
@@ -120,22 +146,86 @@ export default defineEntity({
         control: {
           kind: "select",
           options: [
-            { value: "food", label: "Food" },
-            { value: "books", label: "Books" },
-            { value: "tools", label: "Tools" },
-            { value: "tool-consumables", label: "Tool consumables" },
-            { value: "tool-accessories", label: "Tool accessories" },
-            { value: "storage", label: "Storage" },
-            { value: "hardware", label: "Hardware" },
-            { value: "electronics", label: "Electronics" },
-            { value: "software", label: "Software" },
-            { value: "household", label: "Household" },
-            { value: "supplies", label: "Supplies" },
-            { value: "apparel", label: "Apparel" },
+            {
+              value: "food",
+              label: "Food",
+              description:
+                "Expenses with no project fall to the household project, and the unit-mapping check covers these products. Required for products linked to an ingredient or a USDA food.",
+            },
+            {
+              value: "books",
+              label: "Books",
+              description: "Required for products that carry an ISBN.",
+            },
+            {
+              value: "tools",
+              label: "Tools",
+              description:
+                "Reusable project resources: tool matrix and gallery, wishlist candidates. Data quality expects a model number.",
+            },
+            {
+              value: "tool-consumables",
+              label: "Tool consumables",
+              description:
+                "Blades, bits, abrasives. Classification only: color, icon, and the category-family filter.",
+            },
+            {
+              value: "tool-accessories",
+              label: "Tool accessories",
+              description:
+                "Attachments and add-ons for tools. Classification only: color, icon, and the category-family filter.",
+            },
+            {
+              value: "storage",
+              label: "Storage",
+              description:
+                "Bins, totes, shelving. Data quality expects a model number.",
+            },
+            {
+              value: "hardware",
+              label: "Hardware",
+              description:
+                "Fasteners and fittings. Classification only: color, icon, and the category-family filter.",
+            },
+            {
+              value: "electronics",
+              label: "Electronics",
+              description:
+                "Devices and components. Data quality expects a model number.",
+            },
+            {
+              value: "software",
+              label: "Software",
+              description:
+                "Licenses and subscriptions. Can be used as a reusable project resource.",
+            },
+            {
+              value: "household",
+              label: "Household",
+              description:
+                "General household goods. Data quality expects a model number.",
+            },
+            {
+              value: "supplies",
+              label: "Supplies",
+              description:
+                "Tape, paper, cleaning. Classification only: color, icon, and the category-family filter.",
+            },
+            {
+              value: "apparel",
+              label: "Apparel",
+              description:
+                "Clothing and wearables. Classification only: color, icon, and the category-family filter.",
+            },
           ],
           suggest: { basis: ["name", "parentId"] },
         },
-        display: { detail: true },
+        display: {
+          list: true,
+          detail: true,
+          width: "md",
+          mobile: { slot: "meta", priority: 10 },
+        },
         validation: {
           read: productCategoryFeature.nullable(),
           create: productCategoryFeature.nullable().default(null),
@@ -182,6 +272,32 @@ export default defineEntity({
             )
             .min(1)
             .max(3),
+          create: null,
+          update: null,
+        },
+      },
+      {
+        key: "productCount",
+        kind: "number",
+        label: "Products",
+        display: {
+          list: true,
+          detail: true,
+          width: "sm",
+          mobile: { slot: "meta", priority: 20 },
+        },
+        provenance: {
+          kind: "derived",
+          sources: [{ entity: "product", relation: "products" }],
+        },
+        explanation: {
+          ruleId: "productCategory.product-count",
+          description:
+            "Live products in this category or any category below it.",
+          readPath: "productCount",
+        },
+        validation: {
+          read: z.number().int().min(0),
           create: null,
           update: null,
         },
@@ -274,6 +390,7 @@ export default defineEntity({
       update: ["full", "identity"],
     },
     output: [
+      "fieldResolutions",
       "id",
       "name",
       "aliases",
@@ -283,6 +400,7 @@ export default defineEntity({
       "feature",
       "parentName",
       "path",
+      "productCount",
       "createdAt",
       "updatedAt",
     ],
@@ -331,6 +449,19 @@ export default defineEntity({
       },
       inverse: {
         steps: [{ edge: "ProductCategory.parentId", direction: "incoming" }],
+      },
+    },
+    {
+      key: "products",
+      label: "Products",
+      target: "product",
+      cardinality: "many",
+      provenance: {
+        kind: "local-path",
+        steps: [{ edge: "Product.categoryId", direction: "incoming" }],
+      },
+      inverse: {
+        steps: [{ edge: "Product.categoryId", direction: "outgoing" }],
       },
     },
   ],

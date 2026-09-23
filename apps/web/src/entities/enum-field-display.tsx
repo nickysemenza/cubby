@@ -73,6 +73,7 @@ export function enumDisplayValue(
     label: option?.label ?? raw,
     color: option?.color ?? UNKNOWN_ENUM_COLOR,
     icon: option?.icon,
+    description: option?.description,
   };
 }
 

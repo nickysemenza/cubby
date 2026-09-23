@@ -19,6 +19,7 @@ export type { AppErrorReason } from "./error-utils";
 export {
   inventoryPlacementValues,
   getCategoryColor,
+  getFeatureColor,
   formatCategoryLabel,
 } from "./category-theme";
 export type { InventoryPlacement, ProductCategory } from "./category-theme";

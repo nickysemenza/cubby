@@ -6,6 +6,7 @@ import {
 } from "@cubby/schemas/entity-fields";
 import {
   entityInspectorMetadata,
+  entityManifest,
   type BrowserRoutedEntity,
 } from "@cubby/schemas/entity-manifest";
 import { generatedEntitySort } from "@cubby/schemas/entity-sort";
@@ -237,7 +238,14 @@ function readScalarField<TRecord extends object>(
     throw new Error(`Display field ${field.key} needs a renderer`);
   // SAFETY: The generated model owns the read key; its scalar schema checks the value
   // before rendering, including absent fields in partial detail responses.
-  const value = record[field.readKey as keyof TRecord];
+  const stored = record[field.readKey as keyof TRecord];
+  // An empty stored value that the row reports as inherited displays the
+  // inherited value; its `FieldResolutionBadge` names where it came from.
+  const inherited = fieldResolutionFor(record, field.key);
+  const value =
+    (stored === undefined || stored === null) && inherited?.mode === "inherit"
+      ? inherited.value
+      : stored;
   if (value === undefined || value === null)
     return { kind: "empty", raw: value === undefined ? undefined : null };
   switch (field.kind) {
@@ -360,6 +368,38 @@ function cohortDescriptorFor(entity: Entity, field: DisplayField) {
 }
 
 /**
+ * The filtered list a derived count opens: its one `{ entity, relation }`
+ * provenance source, scoped by the filter that entity's relation section for
+ * the same relation declares. The section is the only place the manifest
+ * names that scope, so a count with no section stays a plain number.
+ */
+function relationCountFilter(entity: Entity, field: DisplayField) {
+  if (field.kind !== "number" || field.provenance?.kind !== "derived")
+    return null;
+  const [source, ...others] = field.provenance.sources;
+  if (!source?.relation || others.length > 0) return null;
+  const section = entitySummary[entity].detail.sections.find(
+    (candidate) =>
+      candidate.kind === "relation" && candidate.relation === source.relation,
+  );
+  if (section?.kind !== "relation") return null;
+  const target = entityManifest[entity].relationships.find(
+    (relation) => relation.key === source.relation,
+  )?.target;
+  if (target === undefined || !isBrowserRoutedEntity(target)) return null;
+  const descriptor = entityInspectorMetadata[target].filterDescriptors.find(
+    (candidate) => candidate.columnId === section.filter.descriptor,
+  );
+  return descriptor
+    ? {
+        to: entities[target].routes.list,
+        urlKey: descriptor.urlKey,
+        plural: entityPluralLabel(target).toLocaleLowerCase(),
+      }
+    : null;
+}
+
+/**
  * "Show all <plural> with <label> <value>" beside a field that a list filter
  * can select on. Reference and enum fields get one icon link; a text-array
  * with a multiselect filter links every value.
@@ -369,6 +409,17 @@ function cohortFilterAction<TRecord extends object>(
   record: TRecord,
   field: DisplayField,
 ): ReactNode {
+  const countFilter = relationCountFilter(entity, field);
+  const recordId = explainedRecordSchema.safeParse(record);
+  if (countFilter !== null && recordId.success) {
+    return (
+      <EntityFilterLink
+        to={countFilter.to}
+        search={{ [countFilter.urlKey]: recordId.data.id }}
+        label={`Show all ${countFilter.plural}`}
+      />
+    );
+  }
   if (!isBrowserRoutedEntity(entity)) return undefined;
   const descriptor = cohortDescriptorFor(entity, field);
   if (descriptor === null) return undefined;
@@ -1266,6 +1317,7 @@ export function createEntityDisplayColumns<TRecord extends object>(
         );
         continue;
       }
+      const countFilter = relationCountFilter(entity, field);
       add(
         helper.accessor(
           (record) => readScalarField(entity, record, field).raw,
@@ -1281,17 +1333,39 @@ export function createEntityDisplayColumns<TRecord extends object>(
                 : undefined,
               className: widthClassName(field.display.width),
               numeric:
-                format === "currency" || format === "signedCurrency"
+                format === "currency" ||
+                format === "signedCurrency" ||
+                countFilter !== null
                   ? true
                   : undefined,
               mobile: toMobileColumnMeta(field.display.mobile),
               cellData: cellDataForField<TRecord>(entity, field),
             }),
-            cell: ({ row }) =>
-              renderFormattedScalar(
-                format,
-                readScalarField(entity, row.original, field),
-              ) ?? <NoneValue />,
+            cell: ({ row }) => {
+              const value = readScalarField(entity, row.original, field);
+              const rendered = renderFormattedScalar(format, value) ?? (
+                <NoneValue />
+              );
+              const recordId = explainedRecordSchema.safeParse(row.original);
+              if (
+                countFilter === null ||
+                !recordId.success ||
+                value.kind !== "number" ||
+                value.raw === 0
+              )
+                return rendered;
+              return (
+                <EntityFilterLink
+                  variant="value"
+                  to={countFilter.to}
+                  search={{ [countFilter.urlKey]: recordId.data.id }}
+                  label={`Show ${value.raw} ${countFilter.plural}`}
+                  className="tabular-nums"
+                >
+                  {rendered}
+                </EntityFilterLink>
+              );
+            },
           },
         ),
       );

@@ -205,6 +205,8 @@ const metadataSchemas = () => {
             .object({
               value: nonEmptyString(),
               label: nonEmptyString(),
+              /** What choosing this option means, shown where it is displayed. */
+              description: nonEmptyString().optional(),
             })
             .strict(),
         )
@@ -727,6 +729,17 @@ const metadataSchemas = () => {
           /** A custom list transport's search parameter (for example USDA's nameFilter). */
           primarySearch: z
             .object({ key: nonEmptyString(), placeholder: nonEmptyString() })
+            .strict()
+            .nullable()
+            .optional()
+            .default(null),
+          /**
+           * Nest the table under a self-reference: each row sits under the
+           * row its `parentField` names. A row whose parent is not loaded (a
+           * search match) stays at the top, so filtering never hides it.
+           */
+          tree: z
+            .object({ parentField: fieldKey })
             .strict()
             .nullable()
             .optional()

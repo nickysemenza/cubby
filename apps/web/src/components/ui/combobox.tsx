@@ -34,6 +34,8 @@ export interface FilterableComboboxItem {
    * `LedgerFilters` and the collapsed multi-select summary.
    */
   detail?: string;
+  /** What choosing the option means — a tooltip wherever the value is shown. */
+  description?: string;
   /**
    * A meta option is a predicate ABOUT the data (e.g. "Has project" / "(none)"
    * nullable-filter sentinels), not a value drawn FROM it — it renders in the

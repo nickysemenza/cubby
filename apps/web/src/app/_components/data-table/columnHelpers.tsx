@@ -1677,7 +1677,11 @@ export function renderOptionCell(
   if (value == null || value === "") return <NoneValue />;
   const option = colorizeSelectOptions(options).find((o) => o.value === value);
   return (
-    <EnumPill icon={option?.icon} color={option?.color ?? "var(--slate)"}>
+    <EnumPill
+      icon={option?.icon}
+      color={option?.color ?? "var(--slate)"}
+      description={option?.description}
+    >
       {option?.label ?? value}
       {detail != null ? (
         <span className="ml-1 tabular-nums opacity-70">{detail}</span>
