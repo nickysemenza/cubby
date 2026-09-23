@@ -864,9 +864,12 @@ history is the archive. Permanent product constraints live in the
 - **Narrow the `e2e` Nx target's inputs, then cache it.** `nx affected`
   treats all of `apps/web/src/**` as an e2e input. The target is uncached
   (container side effects), so explicit `verify:local` runs always pay for
-  Playwright; pushes run no validation. Decide which paths genuinely change
-  browser behavior (routes, app shells, the worker entry, `tests/e2e/**`) and
-  whether a cache hit on an unchanged tree is acceptable evidence.
+  Playwright; pushes run no validation. `apps/web/tests/e2e/spec-areas.ts` now
+  maps every spec to the routes/feature dirs/contracts it exercises for local
+  selection (`pnpm --dir apps/web test:e2e:affected`), but that's a
+  developer-loop narrowing, not an Nx input — deciding whether a cache hit on
+  an unchanged tree is acceptable evidence for the Nx target, and whether to
+  reuse this same manifest for it, is still open.
 
 - **Consumable vs durable as a Product attribute.** The distinction is
   currently encoded by convention as "expense on `PRJ-HSHD` vs no project",
