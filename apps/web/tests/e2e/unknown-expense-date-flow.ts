@@ -53,6 +53,7 @@ export async function clearExpenseDatesInBrowser(page: Page, baseURL: string) {
       .getByRole("checkbox", { name: "Select row" })
       .click();
   }
+  await recordProgrammaticFocus(page);
   await page
     .locator("[data-bulk-action-bar]")
     .getByRole("button", { name: "Bulk edit...", exact: true })
@@ -77,7 +78,14 @@ export async function clearExpenseDatesInBrowser(page: Page, baseURL: string) {
     )
     .toBe(true);
   await unknown.focus();
-  await expect(unknown).toBeFocused();
+  // Still flaky on CI after the waits above (focus leaves and never returns),
+  // and not reproducible locally: on failure, name who holds focus and which
+  // programmatic focus() calls ran, so the next occurrence carries the thief.
+  await expect(unknown)
+    .toBeFocused()
+    .catch(async (error: Error) => {
+      throw new Error(`${error.message}\n${await focusReport(page)}`);
+    });
   await page.keyboard.press("Space");
   await expect(unknown).toHaveAttribute("aria-pressed", "true");
   await expectViewportBounded(page);
@@ -88,4 +96,37 @@ export async function clearExpenseDatesInBrowser(page: Page, baseURL: string) {
     date: null,
   });
   return item.id;
+}
+
+async function recordProgrammaticFocus(page: Page) {
+  await page.evaluate(() => {
+    const log: string[] = [];
+    const original = HTMLElement.prototype.focus;
+    HTMLElement.prototype.focus = function (
+      this: HTMLElement,
+      options?: FocusOptions,
+    ) {
+      const label =
+        this.getAttribute("aria-label") ?? this.textContent?.slice(0, 40);
+      const stack = new Error().stack?.split("\n").slice(2, 6).join(" | ");
+      log.push(`${this.tagName} "${label ?? ""}" <- ${stack ?? "?"}`);
+      if (log.length > 8) log.shift();
+      document.documentElement.dataset.e2eFocusLog = JSON.stringify(log);
+      original.call(this, options);
+    };
+  });
+}
+
+const focusLog = z.array(z.string());
+
+async function focusReport(page: Page) {
+  const { active, log } = await page.evaluate(() => ({
+    active: document.activeElement?.outerHTML.slice(0, 200) ?? "none",
+    log: document.documentElement.dataset.e2eFocusLog ?? "[]",
+  }));
+  return [
+    `Focused instead: ${active}`,
+    "Recent focus() calls:",
+    ...focusLog.parse(JSON.parse(log)),
+  ].join("\n");
 }
