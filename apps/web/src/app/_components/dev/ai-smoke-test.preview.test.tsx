@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { page } from "vitest/browser";
 
@@ -31,6 +31,11 @@ describe("AI smoke page layout", () => {
       expect(
         await screen.findByRole("heading", { name: "Embeddings" }),
       ).toBeInTheDocument();
+      fireEvent.change(screen.getByLabelText("Entity"), {
+        target: { value: "project" },
+      });
+      fireEvent.click(screen.getByLabelText("defaultTrade"));
+      expect(screen.getByLabelText("Basis · kind")).toBeInTheDocument();
       expect(container.scrollWidth).toBeLessThanOrEqual(width);
       expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(width);
       expect(screen.getAllByRole("button", { name: "Run" })).toHaveLength(23);

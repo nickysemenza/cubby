@@ -1,6 +1,7 @@
 import { fieldSuggestionsInput } from "@cubby/schemas/ai";
 import { aiSmokeInputs, type AiSmokeScenario } from "@cubby/schemas/ai-smoke";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
+import { projectKindValues } from "@cubby/schemas/project-fields";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { z } from "zod";
@@ -369,6 +370,11 @@ function FieldSuggestionFields({
       {basisKeys.map((key) => {
         const field = fields.find((candidate) => candidate.key === key);
         const reference = field?.reference?.entity;
+        const options =
+          field?.control?.options ??
+          (entity === "project" && key === "kind"
+            ? projectKindValues.map((value) => ({ value, label: value }))
+            : null);
         const pickable =
           reference &&
           [
@@ -398,6 +404,26 @@ function FieldSuggestionFields({
               }
             />
           </div>
+        ) : options ? (
+          <label key={key} className="grid gap-1 text-sm font-medium">
+            Basis · {key}
+            <NativeSelect
+              value={basis[key] ?? ""}
+              onChange={(event) =>
+                onChange({
+                  ...value,
+                  basis: { ...basis, [key]: event.target.value || null },
+                })
+              }
+            >
+              <option value="">Unspecified</option>
+              {options.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </NativeSelect>
+          </label>
         ) : (
           <label key={key} className="grid gap-1 text-sm font-medium">
             Basis · {key}

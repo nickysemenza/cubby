@@ -58,6 +58,12 @@ describe("AI smoke form", () => {
       target: { value: "suggested" },
     });
     expect(screen.getByLabelText("Basis mode")).toHaveValue("suggested");
+    fireEvent.change(screen.getByLabelText("Entity"), {
+      target: { value: "project" },
+    });
+    fireEvent.click(screen.getByLabelText("defaultTrade"));
+    expect(screen.getByLabelText("Basis · kind")).toHaveValue("");
+    expect(screen.getByLabelText("Basis · kind").tagName).toBe("SELECT");
   });
 
   it("switches an audit between synthetic inputs and a public Run picker", () => {
