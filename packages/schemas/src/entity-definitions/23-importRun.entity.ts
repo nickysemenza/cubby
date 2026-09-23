@@ -33,8 +33,14 @@ export default defineEntity({
   route: {
     basePath: "runs",
     list: true,
-    // The hand-written page stays until the generic detail carries its slots.
-    detail: null,
+    // No create/update contract, so outside the kernel detail roster: the
+    // generic page reads the run through its own query.
+    detail: {
+      query: {
+        module: "~/entities/run.functions",
+        export: "runDetailQuery",
+      },
+    },
   },
   table: "ImportRun",
   identifiers: { brand: "ImportRunId", shortcode: "RUN-" },
@@ -56,7 +62,9 @@ export default defineEntity({
     detail: {
       hero: {
         chip: "status",
-        stats: ["ordersSeen", "imported", "updated", "skipped"],
+        // Order counts belong to import runs only; the `import-workflow`
+        // slot renders them, so AI runs don't show four zeros.
+        stats: [],
         breadcrumb: "vendorAccountId",
         actions: [],
       },
@@ -80,13 +88,11 @@ export default defineEntity({
             "notes",
           ],
         },
-        {
-          kind: "fields",
-          id: "counts",
-          title: "Orders",
-          placement: "supporting",
-          fields: ["ordersSeen", "imported", "updated", "skipped"],
-        },
+        // Each slot's web fill decides by `purpose` whether it applies.
+        { kind: "slot", id: "import-workflow", title: "Import" },
+        { kind: "slot", id: "photo-batch", title: "Photos" },
+        { kind: "slot", id: "ai-usage", title: "AI usage" },
+        { kind: "slot", id: "changes", title: "Changes" },
         {
           kind: "fields",
           id: "runtime",
@@ -225,25 +231,25 @@ export default defineEntity({
       {
         key: "ordersSeen",
         kind: "number",
-        display: { list: true, detail: true, width: "sm" },
+        display: { list: true, width: "sm" },
         validation: readOnly(z.number().int().nonnegative()),
       },
       {
         key: "imported",
         kind: "number",
-        display: { list: true, detail: true, width: "sm" },
+        display: { list: true, width: "sm" },
         validation: readOnly(z.number().int().nonnegative()),
       },
       {
         key: "updated",
         kind: "number",
-        display: { list: true, detail: true, width: "sm" },
+        display: { list: true, width: "sm" },
         validation: readOnly(z.number().int().nonnegative()),
       },
       {
         key: "skipped",
         kind: "number",
-        display: { list: true, detail: true, width: "sm" },
+        display: { list: true, width: "sm" },
         validation: readOnly(z.number().int().nonnegative()),
       },
       {
@@ -335,7 +341,9 @@ export default defineEntity({
       {
         key: "ledgerPartyName",
         kind: "text",
-        validation: readOnly(z.string()),
+        // Null with `ledgerPartyId` on runs that group AI work.
+        nullable: true,
+        validation: readOnly(z.string().nullable()),
       },
       {
         key: "id",

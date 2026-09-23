@@ -20,7 +20,8 @@ struct PhotoMatchStoreTests {
                 storedCandidates: [candidate], strongDirectOwnerShortcodes: [owner],
                 possibleDirectOwnerShortcodes: [owner], hasKnownResult: true, isPending: false,
                 indexIsComplete: true, serverError: nil)
-            #expect(state.ownerBadgeText == owner + (confidence == .possible ? "?" : ""))
+            #expect(
+                state.ownerBadgeText == PhotoGridBadge.prefix(owner) + (confidence == .possible ? "?" : ""))
         }
     }
 
@@ -34,7 +35,7 @@ struct PhotoMatchStoreTests {
         let query = HashQuery(perceptualHash: .init(value: 0), aspectRatio: 1)
         await store.registerBatch(["cached-asset": query])
         let box = store.cellStateBox(for: "cached-asset")
-        #expect(box.state.ownerBadgeText == "PRD-2345")
+        #expect(box.state.ownerBadgeText == "PRD")
         let revision = store.revision
         await store.register(id: "cached-asset", query: query)
         #expect(store.revision == revision)
@@ -46,11 +47,62 @@ struct PhotoMatchStoreTests {
         store.reset()
     }
 
+    // MARK: - Saved results
+
+    private func index(_ items: [(id: String, hash: String)]) -> String {
+        let rows = items.map {
+            #"{"id":"\#($0.id)","perceptualHash":"\#($0.hash)","sourceFingerprint":null,"width":100,"height":100,"directOwnerShortcodes":[]}"#
+        }
+        return #"{"algorithmRevision":1,"items":[\#(rows.joined(separator: ","))],"repair":[]}"#
+    }
+
+    @Test func registerBatchReturnsWhatItPublishedAndSeedingSkipsMatching() async throws {
+        let store = PhotoMatchStore()
+        await store.refresh(client: try client(index: index([("IMG-2345", "0000000000000000")])))
+        let near = HashQuery(perceptualHash: .init(value: 0), aspectRatio: 1)
+        let published = await store.registerBatch(["scanned": near])
+        #expect(published["scanned"]?.map(\.id) == [ImageCode("IMG-2345")])
+        // A seeded result is installed as-is: this query matches nothing in the index, so seeing
+        // the saved candidate proves no matching ran.
+        let saved = DedupCandidate(
+            id: ImageCode("IMG-2345"), basis: .content, confidence: .strong, distance: 1)
+        let revision = store.revision
+        store.seedServerMatches([
+            "seeded": (HashQuery(perceptualHash: .init(value: .max), aspectRatio: 1), [saved])
+        ])
+        #expect(store.revision == revision + 1)
+        #expect(store.hasKnownResult(for: "seeded"))
+        #expect(store.storedCandidates(for: "seeded") == [saved])
+        store.reset()
+    }
+
+    // Regression: once results persist, a refresh (every reconcile, every import) must not
+    // re-match every known photo against the whole index — only against entries that changed.
+    @Test func refreshAppliesOnlyChangedEntriesToPhotosWithAResult() async throws {
+        let store = PhotoMatchStore()
+        await store.refresh(client: try client(index: index([("IMG-KEEP", "ffffffffffffffff")])))
+        // Deliberately not what a full match would produce for IMG-KEEP: it must survive untouched.
+        let saved = DedupCandidate(
+            id: ImageCode("IMG-KEEP"), basis: .content, confidence: .strong, distance: 1)
+        store.seedServerMatches([
+            "photo": (HashQuery(perceptualHash: .init(value: 0), aspectRatio: 1), [saved])
+        ])
+        await store.refresh(
+            client: try client(
+                index: index([("IMG-KEEP", "ffffffffffffffff"), ("IMG-NEW", "0000000000000000")])))
+        #expect(
+            store.storedCandidates(for: "photo").map(\.id) == [ImageCode("IMG-NEW"), ImageCode("IMG-KEEP")])
+        // Removing the entry drops its candidate; the unchanged one is still left alone.
+        await store.refresh(client: try client(index: index([("IMG-KEEP", "ffffffffffffffff")])))
+        #expect(store.storedCandidates(for: "photo") == [saved])
+        store.reset()
+    }
+
     @Test func ownerBadgeUsesDeterministicPrimaryAndOverflowCount() {
-        #expect(PhotoGridBadge.text(for: ["MEAL-9", "PRJ-2", "TASK-2", "MEAL-9"]) == "MEAL-9+2")
-        #expect(PhotoGridBadge.text(for: ["TASK-2"]) == "TASK-2")
+        #expect(PhotoGridBadge.text(for: ["MEAL-9", "PRJ-2", "TASK-2", "MEAL-9"]) == "MEAL+2")
+        #expect(PhotoGridBadge.text(for: ["TASK-2"]) == "TASK")
         #expect(PhotoGridBadge.text(for: ["", ""]) == nil)
-        #expect(PhotoGridBadge.possibleText(for: ["MEAL-9", "PRJ-2", "MEAL-9"]) == "MEAL-9+1?")
+        #expect(PhotoGridBadge.possibleText(for: ["MEAL-9", "PRJ-2", "MEAL-9"]) == "MEAL+1?")
         #expect(PhotoGridBadge.accessibilityDescription(for: ["LOC-4K7M"]) == "Owned by LOC-4K7M")
     }
 
@@ -89,7 +141,7 @@ struct PhotoMatchStoreTests {
         #expect(state.represented)
         #expect(!state.possibleMatch)
         #expect(state.known)
-        #expect(state.badgeText == "PRJ-2")
+        #expect(state.badgeText == "PRJ")
         #expect(state.accessibilityStatus == "Owned by PRJ-2")
 
         let ownerless = PhotoGridCellState.derive(
@@ -107,7 +159,7 @@ struct PhotoMatchStoreTests {
             isPending: false, indexIsComplete: true, serverError: nil)
         #expect(!state.represented)
         #expect(state.possibleMatch)
-        #expect(state.ownerBadgeText == "MEAL-9+1?")
+        #expect(state.ownerBadgeText == "MEAL+1?")
         #expect(state.accessibilityStatus == "Possible Cubby match with MEAL-9, PRJ-2")
     }
 
@@ -158,7 +210,7 @@ struct PhotoMatchStoreTests {
             possibleDirectOwnerShortcodes: ["PRJ-2"], hasKnownResult: true,
             isPending: false, indexIsComplete: true, serverError: nil)
         #expect(state.matchState == .strong)
-        #expect(state.ownerBadgeText == "MEAL-9+1")
+        #expect(state.ownerBadgeText == "MEAL+1")
     }
 
     @Test func perIDBoxPublishesCheckingAndFailureWithoutTouchingOtherBoxes() async throws {
@@ -257,7 +309,7 @@ struct PhotoMatchStoreTests {
         let strongStore = PhotoMatchStore()
         let strongItem = try selection(hash: "0123456789abcdef")
         try await strongStore.check([strongItem], client: strongClient)
-        #expect(strongStore.ownerBadge(for: strongItem.id) == "TASK-2")
+        #expect(strongStore.ownerBadge(for: strongItem.id) == "TASK")
     }
 
     @Test func failedRefreshPreservesKnownNoMatchVerdict() async throws {
@@ -439,7 +491,7 @@ struct PhotoMatchStoreTests {
 
         #expect(store.cellStateBox(for: "touched") === touchedBox)
         #expect(touchedBox.state.represented)
-        #expect(touchedBox.state.badgeText == "PRJ-2")
+        #expect(touchedBox.state.badgeText == "PRJ")
         #expect(store.cellStateBox(for: "untouched") === untouchedBox)
         #expect(untouchedBox.state == untouchedState)
     }

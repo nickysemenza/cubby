@@ -53,7 +53,8 @@ export default defineEntity({
     // action; "page" links a hand-written `examples.new.tsx` as `routes.new`.
     create: "dialog",
     // `true` generates the route module over the generic list/detail page;
-    // `null` keeps it hand-written.
+    // a `null` list keeps it hand-written. Every detail is generic: the
+    // generator rejects `detail: null` outside a two-entity allowlist.
     list: true,
     detail: true,
   },
@@ -510,8 +511,14 @@ The list and detail route modules an entity declares through `route.list` /
 `route.detail` are generated too (`routes/_authenticated/<basePath>.index.tsx`
 and `.$shortcode.tsx`, with the generated header); a `null` slot keeps that
 module hand-written, composing route-only keys onto
-`entitySearch.<entity>.schema.shape`. Specialized screens stay as extension
-slots in shared shells.
+`entitySearch.<entity>.schema.shape`. Every entity's detail is the generic
+page: an entity outside the kernel detail roster (no create/update contract —
+image, cookbook, the read-only Run) declares `detail: { query }`, and the
+generator rejects `detail: null` except for `recipe` (its route still renders
+`GenericEntityDetail`, hand-written only for URL search keys) and `usda-food`
+(the external USDA catalog). Specialized screens stay as detail slots in
+shared shells — a Run's import workflow, photo batch, AI usage and changes are
+slots gated by `purpose`.
 
 Inspector metadata projects declared actions, filter keys, MCP operations,
 lifecycle/capability flags, reference targets, schema source-reference strings,
@@ -746,8 +753,9 @@ precedence rule.
    and relationship projections explicit. A physical change still requires a
    compatible migration; generation does not apply production DDL.
 3. Add a kernel repository adapter for the capabilities the spec declares.
-4. Set `route.list` / `route.detail` to `true` for the generic pages (or
-   `null` and hand-write the route module); add workflow extensions where needed.
+4. Set `route.list` / `route.detail` to `true` for the generic pages (a
+   `null` list hand-writes its route module; detail is always generic, with
+   specialized UI in detail slots); add workflow extensions where needed.
 5. Run `pnpm generate`; review generated source like handwritten source.
 6. Declare physical edge semantics and operation-specific lifecycle policies,
    when the entity participates in deletion or merge.

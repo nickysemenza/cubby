@@ -39,6 +39,7 @@ import {
   generatedBrowserRouteFiles,
   handWrittenBrowserRouteFiles,
   missingBrowserRouteFiles,
+  missingListSources,
 } from "../../../scripts/generator/entities/render/routes";
 import { renderSearchArtifacts } from "../../../scripts/generator/entities/render/search";
 
@@ -1539,11 +1540,24 @@ describe("typed entity compiler", () => {
         { ...base, route: { basePath: "alphas", list: null, detail: true } },
       ]),
     ).toThrow("no create+update contract");
+    const alphaDetail = {
+      query: { module: "~/entities/alpha", export: "alphaQuery" },
+    };
     expect(() =>
       compileEntityDeclarations([
-        { ...base, route: { basePath: "alphas", list: true, detail: null } },
+        {
+          ...base,
+          route: { basePath: "alphas", list: true, detail: alphaDetail },
+        },
       ]),
     ).toThrow("has no contract (nothing to list)");
+    // Every entity gets the generic detail page; only the allowlisted
+    // recipe and usda-food routes stay hand-written.
+    expect(() =>
+      compileEntityDeclarations([
+        { ...base, route: { basePath: "alphas", list: null, detail: null } },
+      ]),
+    ).toThrow("every entity gets the generic detail page");
     // A dialog-created entity needs a capture intent for the dialog to open.
     expect(() =>
       compileEntityDeclarations([
@@ -1553,7 +1567,7 @@ describe("typed entity compiler", () => {
             basePath: "alphas",
             create: "dialog",
             list: null,
-            detail: null,
+            detail: alphaDetail,
           },
         },
       ]),
@@ -1594,6 +1608,20 @@ describe("typed entity compiler", () => {
     expect(await findExtraArtifacts(root, artifacts)).toEqual([
       "generated/entity-retired-name.gen.ts",
     ]);
+  });
+
+  // Regression: importRun declared `route.list: true` with no create/update
+  // contract (so no kernel list read) and no list override, and the
+  // generated Runs index crashed on SSR. The generator must refuse that.
+  it("requires a list override for a generated index with no kernel list read", async () => {
+    const entities = await loadEntityDeclarations();
+    expect(missingListSources(entities)).toEqual([]);
+    const registry = (await import("node:fs/promises")).readFile(
+      new URL("../src/entities/list-columns/index.ts", import.meta.url),
+      "utf8",
+    );
+    const withoutRuns = (await registry).replace(/^\s+importRun:.*$/mu, "");
+    expect(missingListSources(entities, withoutRuns)).toEqual(["importRun"]);
   });
 
   it("compiles the full catalog with schema references and schema-free browser metadata", async () => {

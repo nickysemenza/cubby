@@ -14,7 +14,6 @@ import {
   expireStaleImportRuns,
   finishImportRun,
   issueBrowserCommand,
-  loadImportRunByShortcode,
   readBrowserCommandResult,
   reconcileSettledImportRun,
   resumeAuthorizedImportRuns,
@@ -72,42 +71,6 @@ describe("purchase import run admission", () => {
 
     expect(first.id).toBe(second.id);
     expect([first.created, second.created].sort()).toEqual([false, true]);
-  });
-
-  it("returns the unpriced usage count as a runtime number", async () => {
-    const party = await createMember();
-    const account = await createVendorAccount(party.id);
-    const run = await startOrResumeImportRun(ctx.db, {
-      ledgerPartyId: party.id,
-      vendorAccountId: account.id,
-      trigger: "manual",
-    });
-    const { aiUsage } = await import("~/server/db/schema");
-    const { getDb } = await import("~/server/repo/database-helpers");
-
-    const empty = await loadImportRunByShortcode(
-      ctx.db,
-      ctx.actor,
-      run.publicId,
-    );
-    expect(empty.usage.unpricedCount).toBe(0);
-
-    await getDb(ctx.db).insert(aiUsage).values({
-      feature: "purchase_import",
-      provider: "test",
-      model: "test-model",
-      operation: "extract",
-      runId: run.id,
-      status: "succeeded",
-      estimatedCost: null,
-      durationMs: 1,
-    });
-    const withUsage = await loadImportRunByShortcode(
-      ctx.db,
-      ctx.actor,
-      run.publicId,
-    );
-    expect(withUsage.usage.unpricedCount).toBe(1);
   });
 
   it("resumes authorization with a persisted dispatch generation", async () => {

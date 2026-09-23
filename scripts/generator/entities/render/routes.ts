@@ -1,4 +1,4 @@
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { CompiledEntity } from "../declarations.ts";
@@ -118,3 +118,32 @@ export const missingBrowserRouteFiles = (
   handWrittenBrowserRouteFiles(entities).filter(
     (relativePath) => !exists(resolve(ROOT, relativePath)),
   );
+
+const LIST_OVERRIDE_REGISTRY = "apps/web/src/entities/list-columns/index.ts";
+
+/**
+ * Generated index routes with no kernel list read: the entity lacks a
+ * create+update contract, so it is outside the list roster
+ * (`entityProjectionMaps`), and `GenericEntityList` can only page it through
+ * a list override that supplies rows (a `source`, or `mode: "client"`).
+ * Each must be registered in the override registry; the web test
+ * "a generated index outside the kernel list roster pages its own rows"
+ * checks the override actually yields rows.
+ */
+export const missingListSources = (
+  entities: readonly CompiledEntity[],
+  registry: string = readFileSync(
+    resolve(ROOT, LIST_OVERRIDE_REGISTRY),
+    "utf8",
+  ),
+): readonly string[] =>
+  routedEntities(entities)
+    .filter(
+      (entity) =>
+        entity.route.list !== null &&
+        (entity.contract?.create == null || entity.contract.update == null),
+    )
+    .map((entity) => entity.key)
+    .filter(
+      (key) => !new RegExp(`^\\s+(?:${key}|"${key}"):`, "mu").test(registry),
+    );

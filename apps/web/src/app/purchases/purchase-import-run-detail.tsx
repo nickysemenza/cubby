@@ -1,3 +1,4 @@
+import type { ImportRunOut } from "@cubby/schemas/import-run";
 import { initiateImportRunEvidenceUploadOut } from "@cubby/schemas/purchase-import";
 import {
   createFlueClient,
@@ -6,10 +7,9 @@ import {
   type FlueConversationPart,
 } from "@flue/sdk";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link, SquareArrowOutUpRight } from "lucide-react";
+import { SquareArrowOutUpRight } from "lucide-react";
 import {
-  type Dispatch,
-  type SetStateAction,
+  type ReactNode,
   useEffect,
   useMemo,
   useState,
@@ -21,6 +21,8 @@ import { importRunHref } from "~/app/purchases/purchase-import-links";
 import { Badge, type BadgeVariant } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { StatusText } from "~/components/ui/status-text";
+import { ripple } from "~/integrations/tanstack-query/cache-tags";
+import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 import { readJsonOrThrow } from "~/lib/http-error";
 import {
   importRunLogResponse,
@@ -31,7 +33,6 @@ import {
   importRunDetailResponse,
   type ImportRunDetail,
 } from "~/lib/purchase-import-run-detail";
-import { formatCurrency } from "~/lib/utils";
 
 const ACTIVE_RUN_STATUSES = new Set([
   "running",
@@ -60,15 +61,9 @@ const statusBadgeVariant = (status: string): BadgeVariant => {
 const formatMoment = (value: string | null): string =>
   value ? new Date(value).toLocaleString() : "Still active";
 
-const getRun = async (
-  publicId: string,
-  usageCursor: string | null,
-): Promise<ImportRunDetail> => {
-  const query = usageCursor
-    ? `?usageCursor=${encodeURIComponent(usageCursor)}`
-    : "";
+const getRun = async (publicId: string): Promise<ImportRunDetail> => {
   const response = await fetch(
-    `/api/import/runs/${encodeURIComponent(publicId)}${query}`,
+    `/api/import/runs/${encodeURIComponent(publicId)}`,
   );
   const data = await readJsonOrThrow(
     response,
@@ -1055,109 +1050,84 @@ function RunDebugLogEntry({ entry }: { entry: ImportRunLogEntry }) {
   );
 }
 
-export function ImportRunDetailPage({ publicId }: { publicId: string }) {
-  const [usageCursorHistory, setUsageCursorHistory] = useState<
-    Array<string | null>
-  >([null]);
-  const usageCursor = usageCursorHistory.at(-1) ?? null;
-  const runQuery = useQuery({
-    queryKey: ["purchase-import", "run", publicId, usageCursor],
-    queryFn: () => getRun(publicId, usageCursor),
+/**
+ * The import run's live read (agent transcript, operations, evidence), polled
+ * while the run is active. Both import slots share it through the cache.
+ */
+function useImportRun(publicId: string) {
+  return useQuery({
+    queryKey: ["purchase-import", "run", publicId],
+    queryFn: () => getRun(publicId),
     refetchInterval: (query) =>
       query.state.data && ACTIVE_RUN_STATUSES.has(query.state.data.status)
         ? 3_000
         : false,
   });
-  const run = runQuery.data;
+}
+
+function ImportRunGate({
+  record,
+  children,
+}: {
+  record: ImportRunOut;
+  children: (run: ImportRunDetail) => ReactNode;
+}) {
+  const runQuery = useImportRun(record.id);
+  const queryClient = useQueryClient();
+  const liveStatus = runQuery.data?.status;
+  // The page's hero and fields read the Run record, not this poll: refresh
+  // it once the run moves on (a control action, or the agent finishing).
+  useEffect(() => {
+    if (liveStatus !== undefined && liveStatus !== record.status)
+      void invalidateOperationTags(queryClient, ripple.runOnly);
+  }, [liveStatus, record.status, queryClient]);
   if (runQuery.isLoading) return <StatusText>Loading import run…</StatusText>;
   if (runQuery.isError)
     return <StatusText tone="destructive">{runQuery.error.message}</StatusText>;
-  if (!run) return null;
+  return runQuery.data ? children(runQuery.data) : null;
+}
 
-  // A photo-inventory batch has no vendor agent, order or purchase — it is a
-  // worklist of uploaded images, not an account-sync transcript, so it gets
-  // its own view rather than branching every section below.
-  if (run.purpose === "photo_inventory")
-    return <PhotoImportRunView run={run} />;
-
+/** Run detail slot: the account-sync / validation / enrichment workflow. */
+export function RunImportWorkflow({ record }: { record: ImportRunOut }) {
   return (
-    <ImportRunContent
-      run={run}
-      usageCursorHistory={usageCursorHistory}
-      setUsageCursorHistory={setUsageCursorHistory}
-      loading={runQuery.isFetching}
-    />
+    <ImportRunGate record={record}>
+      {(run) => <ImportRunContent run={run} />}
+    </ImportRunGate>
+  );
+}
+
+/**
+ * Run detail slot: a photo-inventory batch has no vendor agent, order or
+ * purchase — it is a worklist of uploaded images, not an account-sync
+ * transcript, so it gets its own view.
+ */
+export function RunPhotoBatch({ record }: { record: ImportRunOut }) {
+  return (
+    <ImportRunGate record={record}>
+      {(run) => <PhotoImportRunView run={run} />}
+    </ImportRunGate>
   );
 }
 
 // The operational record intentionally renders every durable evidence family
 // together so terminal history cannot silently omit one during refactors.
-// eslint-disable-next-line complexity
-function ImportRunContent({
-  run,
-  usageCursorHistory,
-  setUsageCursorHistory,
-  loading,
-}: {
-  run: ImportRunDetail;
-  usageCursorHistory: Array<string | null>;
-  setUsageCursorHistory: Dispatch<SetStateAction<Array<string | null>>>;
-  loading: boolean;
-}) {
+function ImportRunContent({ run }: { run: ImportRunDetail }) {
   return (
-    <div className="grid gap-4 pb-8">
-      <a
-        className="text-sm text-primary hover:underline"
-        href={`/activity?tab=runs&kind=${run.purpose === "purchase_validation" ? "purchase_validation" : run.purpose === "product_enrichment" ? "product_enrichment" : "purchase_import"}`}
-      >
-        Back to Activity
-      </a>
-      <section className="grid gap-4 border-b border-border pb-4">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <h1 className="font-mono text-xl font-semibold tracking-tight">
-                {run.publicId}
-              </h1>
-              <Badge variant={statusBadgeVariant(run.status)}>
-                {run.status}
-              </Badge>
-            </div>
-            <a
-              className="mt-1 inline-flex min-h-11 items-center gap-1 text-sm text-primary hover:underline"
-              href={importRunHref(run.publicId)}
-            >
-              <Link className="size-3.5" />
-              Public run URL
-            </a>
-          </div>
-          <div className="flex flex-wrap items-start justify-end gap-2">
-            <RunControl run={run} />
-            <DispatchRecoveryControls run={run} />
-            <EvidenceRecoveryControls run={run} />
-            <ManualEvidenceUpload run={run} />
-            <TerminalRunControls run={run} />
-          </div>
+    <div className="grid gap-4">
+      <section className="grid gap-4">
+        <div className="flex flex-wrap items-start justify-end gap-2">
+          <RunControl run={run} />
+          <DispatchRecoveryControls run={run} />
+          <EvidenceRecoveryControls run={run} />
+          <ManualEvidenceUpload run={run} />
+          <TerminalRunControls run={run} />
         </div>
         <dl className="grid gap-x-4 gap-y-3 sm:grid-cols-2 lg:grid-cols-4">
-          <Metadata
-            label="Purpose"
-            value={run.purpose?.replaceAll("_", " ") ?? "account sync"}
-          />
           <Metadata label="Source" value={run.source?.kind ?? run.trigger} />
           <Metadata
             label="Vendor"
             value={run.source?.vendorName ?? run.vendorAccount?.label ?? null}
           />
-          <Metadata
-            label="Actor"
-            value={run.actor?.name ?? run.actor?.ledgerParty?.name ?? null}
-          />
-          <Metadata label="Model" value={run.coordinatorModel} />
-          <Metadata label="Skill revision" value={run.skillRevision} />
-          <Metadata label="Runtime revision" value={run.runtimeRevision} />
-          <Metadata label="Started" value={formatMoment(run.startedAt)} />
-          <Metadata label="Finished" value={formatMoment(run.endedAt)} />
           {run.dispatch ? (
             <Metadata
               label="Dispatch"
@@ -1181,18 +1151,6 @@ function ImportRunContent({
             </div>
           ))}
         </div>
-        {run.usage ? (
-          <p className="font-mono text-sm text-muted-foreground tabular-nums">
-            {run.usage.unpricedCount > 0 ? "Estimated subtotal" : "Subtotal"}{" "}
-            {formatCurrency(run.usage.pricedSubtotal, 6)}
-            {run.usage.unpricedCount > 0
-              ? ` · ${run.usage.unpricedCount} unpriced`
-              : ""}
-          </p>
-        ) : null}
-        {run.failureCode ? (
-          <StatusText tone="destructive">{run.failureCode}</StatusText>
-        ) : null}
         {run.dispatch?.error ? (
           <StatusText tone="destructive">{run.dispatch.error}</StatusText>
         ) : null}
@@ -1365,24 +1323,6 @@ function ImportRunContent({
           <StatusText>No orders were prepared.</StatusText>
         )}
       </section>
-      {run.usage ? (
-        <AiUsageRecords
-          usage={run.usage}
-          onPrevious={() =>
-            setUsageCursorHistory((history) =>
-              history.length > 1 ? history.slice(0, -1) : history,
-            )
-          }
-          onNext={() => {
-            const nextCursor = run.usage?.nextCursor;
-            if (nextCursor) {
-              setUsageCursorHistory((history) => [...history, nextCursor]);
-            }
-          }}
-          canGoBack={usageCursorHistory.length > 1}
-          loading={loading}
-        />
-      ) : null}
       <AgentSurface run={run} />
       <RunProgress run={run} />
       <RunTimeline run={run} />
@@ -1391,123 +1331,6 @@ function ImportRunContent({
         active={ACTIVE_RUN_STATUSES.has(run.status)}
       />
     </div>
-  );
-}
-
-function AiUsageRecords({
-  usage,
-  onPrevious,
-  onNext,
-  canGoBack,
-  loading,
-}: {
-  usage: NonNullable<ImportRunDetail["usage"]>;
-  onPrevious: () => void;
-  onNext: () => void;
-  canGoBack: boolean;
-  loading: boolean;
-}) {
-  return (
-    <section className="grid gap-3 border border-border bg-card p-4">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div>
-          <h2 className="font-medium">AI usage</h2>
-          <p className="text-sm text-muted-foreground">
-            Full-run subtotal is derived from all recorded calls; this table is
-            paginated.
-          </p>
-        </div>
-        <div className="flex gap-2">
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            disabled={!canGoBack || loading}
-            onClick={onPrevious}
-          >
-            Previous
-          </Button>
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            disabled={!usage.nextCursor || loading}
-            onClick={onNext}
-          >
-            Next
-          </Button>
-        </div>
-      </div>
-      {usage.records.length ? (
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[72rem] text-left text-sm">
-            <thead className="border-b border-border text-xs text-muted-foreground">
-              <tr>
-                <th className="p-2">Time</th>
-                <th className="p-2">Operation</th>
-                <th className="p-2">Model</th>
-                <th className="p-2">Attempt</th>
-                <th className="p-2">Tokens</th>
-                <th className="p-2">Cache</th>
-                <th className="p-2">Duration</th>
-                <th className="p-2">Cost</th>
-                <th className="p-2">Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {usage.records.map((record) => (
-                <tr
-                  key={record.id}
-                  className="border-b border-border last:border-0"
-                >
-                  <td className="p-2 font-mono text-xs">
-                    {formatMoment(record.createdAt)}
-                  </td>
-                  <td className="p-2">
-                    <span>{record.operation}</span>
-                    <span className="block text-xs text-muted-foreground">
-                      {record.feature} · {record.provider}
-                    </span>
-                  </td>
-                  <td className="p-2 font-mono text-xs">{record.model}</td>
-                  <td className="p-2 font-mono text-xs tabular-nums">
-                    {record.attempt ?? "—"}
-                  </td>
-                  <td className="p-2 font-mono text-xs tabular-nums">
-                    {record.inputTokens ?? "—"} in /{" "}
-                    {record.outputTokens ?? "—"} out
-                  </td>
-                  <td className="p-2 font-mono text-xs tabular-nums">
-                    {record.cacheReadTokens ?? "—"} read /{" "}
-                    {record.cacheWriteTokens ?? "—"} write
-                  </td>
-                  <td className="p-2 font-mono text-xs tabular-nums">
-                    {record.durationMs}ms
-                  </td>
-                  <td className="p-2 font-mono text-xs tabular-nums">
-                    {record.estimatedCost == null
-                      ? "unpriced"
-                      : formatCurrency(record.estimatedCost, 6)}
-                  </td>
-                  <td className="p-2">
-                    <Badge variant={statusBadgeVariant(record.status)}>
-                      {record.status}
-                    </Badge>
-                    {record.gatewayLogId ? (
-                      <span className="mt-1 block font-mono text-xs text-muted-foreground">
-                        {record.gatewayLogId}
-                      </span>
-                    ) : null}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      ) : (
-        <StatusText>No AI calls were recorded for this run.</StatusText>
-      )}
-    </section>
   );
 }
 

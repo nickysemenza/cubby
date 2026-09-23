@@ -1,6 +1,7 @@
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import { entitySummary } from "@cubby/schemas/entity-summary";
 import { imageWithEntitySchema } from "@cubby/schemas/image";
+import { importRunOut } from "@cubby/schemas/import-run";
 import { cookbookSummary } from "@cubby/schemas/recipe";
 import { testShortcode } from "@cubby/schemas/testing";
 import { TIER1_NUTRIENT_KEYS } from "@cubby/usda-schemas";
@@ -25,6 +26,7 @@ const genericDetailEntities: readonly GenericDetailEntity[] = [
   ...detailEntities,
   "image",
   "cookbook",
+  "importRun",
 ];
 
 const pending = { status: "pending", reason: "totals_missing" } as const;
@@ -72,8 +74,10 @@ function recordFor<E extends GenericDetailEntity>(
       ? imageWithEntitySchema
       : entity === "cookbook"
         ? cookbookSummary
-        : // SAFETY: every other generic detail entity is a kernel detail entity.
-          getEntityDetailOutputSchema(entity as never);
+        : entity === "importRun"
+          ? importRunOut
+          : // SAFETY: every other generic detail entity is a kernel detail entity.
+            getEntityDetailOutputSchema(entity as never);
   // SAFETY: `schema` is the detail output schema of exactly `entity`, and the
   // overrides only pin fields that schema declares; `mock` re-parses the
   // result with that same schema before returning it.
@@ -148,6 +152,26 @@ describe("GenericEntityDetail", () => {
       ).toHaveTextContent(section.title ?? "");
     },
   );
+
+  // AI runs had no page before Run moved onto the generic detail: the
+  // purchase-import page scoped to a member party. Their page must show what
+  // they did (AI usage, changes) and none of the import workflow.
+  it("gives an AI run its usage and changes but no import workflow", () => {
+    render(
+      <GenericEntityDetail
+        entity="importRun"
+        record={{ ...recordFor("importRun"), purpose: "ai_suggest" }}
+        operations={operations}
+      />,
+      { wrapper: harness.wrapper },
+    );
+    const titles = screen
+      .getAllByRole("heading", { level: 2 })
+      .map((heading) => heading.textContent);
+    expect(titles).toEqual(expect.arrayContaining(["AI usage", "Changes"]));
+    expect(titles).not.toContain("Import");
+    expect(titles).not.toContain("Photos");
+  });
 
   it("links a reference field to its target's detail route", () => {
     const record = recordFor("task");

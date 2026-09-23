@@ -164,6 +164,7 @@ describe("manifest registries", () => {
       ...detailEntities,
       "image",
       "cookbook",
+      "importRun",
     ];
     const unclaimed = generic.flatMap((entity) => {
       const placed = new Set<string>(

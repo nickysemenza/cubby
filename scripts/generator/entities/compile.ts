@@ -1014,6 +1014,15 @@ const validateTitleField = (
 };
 
 /**
+ * Entities whose detail route stays hand-written (`route.detail: null`).
+ * Every other entity's page is the generic detail. `recipe` still renders
+ * `GenericEntityDetail`; its route is hand-written only for the workflow
+ * slot's URL search keys. `usda-food` is the external USDA catalog, keyed by
+ * FDC id rather than a Cubby shortcode.
+ */
+const HAND_WRITTEN_DETAIL_ROUTES = new Set(["recipe", "usda-food"]);
+
+/**
  * `route.list: true` / `route.detail: true` generate the page over the
  * generic renderers, which read the kernel's list/detail projections: the
  * detail roster is every entity with create and update contracts, the list
@@ -1022,6 +1031,7 @@ const validateTitleField = (
  * hand-writes its index route.
  */
 const validateRouteRosters = (
+  key: string,
   route: EntityDeclarationMetadata["route"],
   contract: CompiledEntity["contract"],
   timeline: CompiledEntity["timeline"],
@@ -1032,6 +1042,10 @@ const validateRouteRosters = (
       `${context}.capabilities.timeline needs a contract (the timeline is an HTTP resource verb).`,
     );
   if (route === null) return;
+  if (route.detail === null && !HAND_WRITTEN_DETAIL_ROUTES.has(key))
+    throw new EntityDeclarationError(
+      `${context}.route.detail is null; every entity gets the generic detail page. Declare detail: true, or detail: { query } outside the kernel detail roster, and put specialized UI in a detail slot.`,
+    );
   const inDetailRoster =
     contract !== null && contract.create !== null && contract.update !== null;
   if (route.detail === true && !inDetailRoster)
@@ -1311,6 +1325,7 @@ export const compileEntity = (
     );
   }
   validateRouteRosters(
+    declaration.key,
     route,
     contract,
     declaration.capabilities.timeline,

@@ -1,4 +1,5 @@
 import type { DetailSlotId } from "@cubby/schemas/entity-manifest";
+import type { ImportRunPurpose } from "@cubby/schemas/import-run-fields";
 import { type FunctionComponent, lazy, type LazyExoticComponent } from "react";
 
 import {
@@ -21,6 +22,19 @@ export interface DetailSlot<E extends GenericDetailEntity> {
    */
   applies?(record: DetailRecordOf<E>): boolean;
 }
+
+/**
+ * Run purposes the purchase agent drives: they carry a vendor, orders, an
+ * agent transcript and evidence. AI-only runs (`ai_suggest`, `ai_action`,
+ * `background`) and photo batches do not.
+ */
+const IMPORT_WORKFLOW_PURPOSES: ReadonlySet<ImportRunPurpose> = new Set([
+  "account_sync",
+  "purchase_validation",
+  "product_enrichment",
+  "file_import",
+  "legacy",
+]);
 
 type SlotModule<T> = Promise<{ default: T }>;
 const slot = <E extends GenericDetailEntity>(
@@ -179,6 +193,32 @@ export const detailSlots = {
     settlement: slot(() =>
       import("~/app/expenses/slots").then((m) => ({
         default: m.ExpenseSettlement,
+      })),
+    ),
+  },
+  importRun: {
+    "import-workflow": slot(
+      () =>
+        import("~/app/purchases/purchase-import-run-detail").then((m) => ({
+          default: m.RunImportWorkflow,
+        })),
+      (run) => IMPORT_WORKFLOW_PURPOSES.has(run.purpose),
+    ),
+    "photo-batch": slot(
+      () =>
+        import("~/app/purchases/purchase-import-run-detail").then((m) => ({
+          default: m.RunPhotoBatch,
+        })),
+      (run) => run.purpose === "photo_inventory",
+    ),
+    "ai-usage": slot(() =>
+      import("~/app/import-runs/slots").then((m) => ({
+        default: m.RunAiUsage,
+      })),
+    ),
+    changes: slot(() =>
+      import("~/app/import-runs/slots").then((m) => ({
+        default: m.RunChanges,
       })),
     ),
   },
