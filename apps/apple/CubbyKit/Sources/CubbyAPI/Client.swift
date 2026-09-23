@@ -942,6 +942,13 @@ public struct Client: APIProtocol {
                     in: &request,
                     style: .form,
                     explode: true,
+                    name: "ledgerPartyId",
+                    value: input.query.ledgerPartyId
+                )
+                try converter.setQueryItemAsURI(
+                    in: &request,
+                    style: .form,
+                    explode: true,
                     name: "dataStatus",
                     value: input.query.dataStatus
                 )
@@ -951,13 +958,6 @@ public struct Client: APIProtocol {
                     explode: true,
                     name: "dataGap",
                     value: input.query.dataGap
-                )
-                try converter.setQueryItemAsURI(
-                    in: &request,
-                    style: .form,
-                    explode: true,
-                    name: "ledgerPartyId",
-                    value: input.query.ledgerPartyId
                 )
                 try converter.setQueryItemAsURI(
                     in: &request,
@@ -2465,6 +2465,13 @@ public struct Client: APIProtocol {
                     in: &request,
                     style: .form,
                     explode: true,
+                    name: "ledgerPartyId",
+                    value: input.query.ledgerPartyId
+                )
+                try converter.setQueryItemAsURI(
+                    in: &request,
+                    style: .form,
+                    explode: true,
                     name: "search",
                     value: input.query.search
                 )
@@ -2488,13 +2495,6 @@ public struct Client: APIProtocol {
                     explode: true,
                     name: "dataGap",
                     value: input.query.dataGap
-                )
-                try converter.setQueryItemAsURI(
-                    in: &request,
-                    style: .form,
-                    explode: true,
-                    name: "ledgerPartyId",
-                    value: input.query.ledgerPartyId
                 )
                 try converter.setQueryItemAsURI(
                     in: &request,
@@ -4185,20 +4185,6 @@ public struct Client: APIProtocol {
                     in: &request,
                     style: .form,
                     explode: true,
-                    name: "sourceType",
-                    value: input.query.sourceType
-                )
-                try converter.setQueryItemAsURI(
-                    in: &request,
-                    style: .form,
-                    explode: true,
-                    name: "matchKind",
-                    value: input.query.matchKind
-                )
-                try converter.setQueryItemAsURI(
-                    in: &request,
-                    style: .form,
-                    explode: true,
                     name: "imageId",
                     value: input.query.imageId
                 )
@@ -4215,6 +4201,20 @@ public struct Client: APIProtocol {
                     explode: true,
                     name: "deviceId",
                     value: input.query.deviceId
+                )
+                try converter.setQueryItemAsURI(
+                    in: &request,
+                    style: .form,
+                    explode: true,
+                    name: "sourceType",
+                    value: input.query.sourceType
+                )
+                try converter.setQueryItemAsURI(
+                    in: &request,
+                    style: .form,
+                    explode: true,
+                    name: "matchKind",
+                    value: input.query.matchKind
                 )
                 try converter.setQueryItemAsURI(
                     in: &request,
@@ -17133,13 +17133,6 @@ public struct Client: APIProtocol {
                     in: &request,
                     style: .form,
                     explode: true,
-                    name: "status",
-                    value: input.query.status
-                )
-                try converter.setQueryItemAsURI(
-                    in: &request,
-                    style: .form,
-                    explode: true,
                     name: "vendorId",
                     value: input.query.vendorId
                 )
@@ -17149,6 +17142,13 @@ public struct Client: APIProtocol {
                     explode: true,
                     name: "ledgerPartyId",
                     value: input.query.ledgerPartyId
+                )
+                try converter.setQueryItemAsURI(
+                    in: &request,
+                    style: .form,
+                    explode: true,
+                    name: "status",
+                    value: input.query.status
                 )
                 try converter.setQueryItemAsURI(
                     in: &request,

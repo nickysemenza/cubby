@@ -15,7 +15,6 @@ import {
   executeListQueryWithCount,
   getDb,
   notDeleted,
-  shortcodeSetCondition,
   unwrapDb,
 } from "~/server/repo/database-helpers";
 import { createEntityReader } from "~/server/repo/entity-crud-factory";
@@ -140,21 +139,7 @@ const toOut = (row: ImportRunRow): ImportRunOut =>
 
 const scaffold = listScaffold("importRun", importRun);
 
-const buildWhere = (filters: ImportRunFilters) =>
-  scaffold.where(filters, [
-    shortcodeSetCondition(
-      sql`(SELECT shortcode FROM "VendorAccount" WHERE id = "ImportRun"."vendorAccountId")`,
-      filters.vendorAccountId,
-    ),
-    shortcodeSetCondition(
-      sql`(SELECT shortcode FROM "Vendor" WHERE id = "ImportRun"."vendorId")`,
-      filters.vendorId,
-    ),
-    shortcodeSetCondition(
-      sql`(SELECT shortcode FROM "LedgerParty" WHERE id = "ImportRun"."ledgerPartyId")`,
-      filters.ledgerPartyId,
-    ),
-  ]);
+const buildWhere = (filters: ImportRunFilters) => scaffold.where(filters);
 
 export async function listImportRuns(
   db: Database,

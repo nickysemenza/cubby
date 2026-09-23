@@ -1649,25 +1649,6 @@ public enum Operations {
                 public var automaticWork: Swift.Bool?
                 /// - Remark: Generated from `#/paths/api/v1/devices/GET/query/remotePaused`.
                 public var remotePaused: Swift.Bool?
-                /// - Remark: Generated from `#/paths/api/v1/devices/GET/query/DataStatusPayload`.
-                @frozen public enum DataStatusPayloadPayload: String, Codable, Hashable, Sendable, CaseIterable {
-                    case complete = "complete"
-                    case needsData = "needs_data"
-                    case defect = "defect"
-                }
-                /// - Remark: Generated from `#/paths/api/v1/devices/GET/query/dataStatus`.
-                public typealias DataStatusPayload = [Operations.Resources_device_list.Input.Query.DataStatusPayloadPayload]
-                /// - Remark: Generated from `#/paths/api/v1/devices/GET/query/dataStatus`.
-                public var dataStatus: Operations.Resources_device_list.Input.Query.DataStatusPayload?
-                /// - Remark: Generated from `#/paths/api/v1/devices/GET/query/DataGapPayload`.
-                @frozen public enum DataGapPayloadPayload: String, Codable, Hashable, Sendable, CaseIterable {
-                    case deviceOwnerMissing = "device_owner_missing"
-                    case deviceStale = "device_stale"
-                }
-                /// - Remark: Generated from `#/paths/api/v1/devices/GET/query/dataGap`.
-                public typealias DataGapPayload = [Operations.Resources_device_list.Input.Query.DataGapPayloadPayload]
-                /// - Remark: Generated from `#/paths/api/v1/devices/GET/query/dataGap`.
-                public var dataGap: Operations.Resources_device_list.Input.Query.DataGapPayload?
                 /// ledgerParty shortcode, e.g. LPY-4K7M
                 ///
                 /// - Remark: Generated from `#/paths/api/v1/devices/GET/query/LedgerPartyIdPayload`.
@@ -1727,6 +1708,25 @@ public enum Operations {
                 public typealias LedgerPartyIdPayload = [Operations.Resources_device_list.Input.Query.LedgerPartyIdPayloadPayload]
                 /// - Remark: Generated from `#/paths/api/v1/devices/GET/query/ledgerPartyId`.
                 public var ledgerPartyId: Operations.Resources_device_list.Input.Query.LedgerPartyIdPayload?
+                /// - Remark: Generated from `#/paths/api/v1/devices/GET/query/DataStatusPayload`.
+                @frozen public enum DataStatusPayloadPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case complete = "complete"
+                    case needsData = "needs_data"
+                    case defect = "defect"
+                }
+                /// - Remark: Generated from `#/paths/api/v1/devices/GET/query/dataStatus`.
+                public typealias DataStatusPayload = [Operations.Resources_device_list.Input.Query.DataStatusPayloadPayload]
+                /// - Remark: Generated from `#/paths/api/v1/devices/GET/query/dataStatus`.
+                public var dataStatus: Operations.Resources_device_list.Input.Query.DataStatusPayload?
+                /// - Remark: Generated from `#/paths/api/v1/devices/GET/query/DataGapPayload`.
+                @frozen public enum DataGapPayloadPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case deviceOwnerMissing = "device_owner_missing"
+                    case deviceStale = "device_stale"
+                }
+                /// - Remark: Generated from `#/paths/api/v1/devices/GET/query/dataGap`.
+                public typealias DataGapPayload = [Operations.Resources_device_list.Input.Query.DataGapPayloadPayload]
+                /// - Remark: Generated from `#/paths/api/v1/devices/GET/query/dataGap`.
+                public var dataGap: Operations.Resources_device_list.Input.Query.DataGapPayload?
                 /// Page number, starting at 1 (default 1)
                 ///
                 /// - Remark: Generated from `#/paths/api/v1/devices/GET/query/page`.
@@ -1761,9 +1761,9 @@ public enum Operations {
                 ///   - platform:
                 ///   - automaticWork:
                 ///   - remotePaused:
+                ///   - ledgerPartyId:
                 ///   - dataStatus:
                 ///   - dataGap:
-                ///   - ledgerPartyId:
                 ///   - page: Page number, starting at 1 (default 1)
                 ///   - pageSize: Items per page (default 10, maximum 500)
                 ///   - sort: Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: name, lastSeenAt, updatedAt, dataQuality. Default: -lastSeenAt
@@ -1778,9 +1778,9 @@ public enum Operations {
                     platform: Operations.Resources_device_list.Input.Query.PlatformPayload? = nil,
                     automaticWork: Swift.Bool? = nil,
                     remotePaused: Swift.Bool? = nil,
+                    ledgerPartyId: Operations.Resources_device_list.Input.Query.LedgerPartyIdPayload? = nil,
                     dataStatus: Operations.Resources_device_list.Input.Query.DataStatusPayload? = nil,
                     dataGap: Operations.Resources_device_list.Input.Query.DataGapPayload? = nil,
-                    ledgerPartyId: Operations.Resources_device_list.Input.Query.LedgerPartyIdPayload? = nil,
                     page: Swift.Int? = nil,
                     pageSize: Swift.Int? = nil,
                     sort: Swift.String? = nil,
@@ -1795,9 +1795,9 @@ public enum Operations {
                     self.platform = platform
                     self.automaticWork = automaticWork
                     self.remotePaused = remotePaused
+                    self.ledgerPartyId = ledgerPartyId
                     self.dataStatus = dataStatus
                     self.dataGap = dataGap
-                    self.ledgerPartyId = ledgerPartyId
                     self.page = page
                     self.pageSize = pageSize
                     self.sort = sort
@@ -4656,6 +4656,65 @@ public enum Operations {
                 public var vendorPresenceFilter: Operations.Resources_financialAccount_list.Input.Query.VendorPresenceFilterPayload?
                 /// - Remark: Generated from `#/paths/api/v1/financial-accounts/GET/query/vendorSearch`.
                 public var vendorSearch: Swift.String?
+                /// ledgerParty shortcode, e.g. LPY-4K7M
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/financial-accounts/GET/query/LedgerPartyIdPayload`.
+                public struct LedgerPartyIdPayloadPayload: Codable, Hashable, Sendable {
+                    /// ledgerParty shortcode, e.g. LPY-4K7M
+                    ///
+                    /// - Remark: Generated from `#/paths/api/v1/financial-accounts/GET/query/LedgerPartyIdPayload/value1`.
+                    public var value1: Swift.String?
+                    /// - Remark: Generated from `#/paths/api/v1/financial-accounts/GET/query/LedgerPartyIdPayload/value2`.
+                    @frozen public enum Value2Payload: String, Codable, Hashable, Sendable, CaseIterable {
+                        case __unresolvableEntityFilter = "__unresolvable_entity_filter__"
+                    }
+                    /// - Remark: Generated from `#/paths/api/v1/financial-accounts/GET/query/LedgerPartyIdPayload/value2`.
+                    public var value2: Operations.Resources_financialAccount_list.Input.Query.LedgerPartyIdPayloadPayload.Value2Payload?
+                    /// Creates a new `LedgerPartyIdPayloadPayload`.
+                    ///
+                    /// - Parameters:
+                    ///   - value1: ledgerParty shortcode, e.g. LPY-4K7M
+                    ///   - value2:
+                    public init(
+                        value1: Swift.String? = nil,
+                        value2: Operations.Resources_financialAccount_list.Input.Query.LedgerPartyIdPayloadPayload.Value2Payload? = nil
+                    ) {
+                        self.value1 = value1
+                        self.value2 = value2
+                    }
+                    public init(from decoder: any Swift.Decoder) throws {
+                        var errors: [any Swift.Error] = []
+                        do {
+                            self.value1 = try decoder.decodeFromSingleValueContainer()
+                        } catch {
+                            errors.append(error)
+                        }
+                        do {
+                            self.value2 = try decoder.decodeFromSingleValueContainer()
+                        } catch {
+                            errors.append(error)
+                        }
+                        try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                            [
+                                self.value1,
+                                self.value2
+                            ],
+                            type: Self.self,
+                            codingPath: decoder.codingPath,
+                            errors: errors
+                        )
+                    }
+                    public func encode(to encoder: any Swift.Encoder) throws {
+                        try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                            self.value1,
+                            self.value2
+                        ])
+                    }
+                }
+                /// - Remark: Generated from `#/paths/api/v1/financial-accounts/GET/query/ledgerPartyId`.
+                public typealias LedgerPartyIdPayload = [Operations.Resources_financialAccount_list.Input.Query.LedgerPartyIdPayloadPayload]
+                /// - Remark: Generated from `#/paths/api/v1/financial-accounts/GET/query/ledgerPartyId`.
+                public var ledgerPartyId: Operations.Resources_financialAccount_list.Input.Query.LedgerPartyIdPayload?
                 /// - Remark: Generated from `#/paths/api/v1/financial-accounts/GET/query/search`.
                 public var search: Swift.String?
                 /// - Remark: Generated from `#/paths/api/v1/financial-accounts/GET/query/provisional`.
@@ -4679,8 +4738,6 @@ public enum Operations {
                 public typealias DataGapPayload = [Operations.Resources_financialAccount_list.Input.Query.DataGapPayloadPayload]
                 /// - Remark: Generated from `#/paths/api/v1/financial-accounts/GET/query/dataGap`.
                 public var dataGap: Operations.Resources_financialAccount_list.Input.Query.DataGapPayload?
-                /// - Remark: Generated from `#/paths/api/v1/financial-accounts/GET/query/ledgerPartyId`.
-                public var ledgerPartyId: [Swift.String]?
                 /// - Remark: Generated from `#/paths/api/v1/financial-accounts/GET/query/IdentityKindPayload`.
                 @frozen public enum IdentityKindPayloadPayload: String, Codable, Hashable, Sendable, CaseIterable {
                     case creditCard = "credit_card"
@@ -4748,11 +4805,11 @@ public enum Operations {
                 ///   - vendorId:
                 ///   - vendorPresenceFilter:
                 ///   - vendorSearch:
+                ///   - ledgerPartyId:
                 ///   - search:
                 ///   - provisional:
                 ///   - dataStatus:
                 ///   - dataGap:
-                ///   - ledgerPartyId:
                 ///   - identityKind:
                 ///   - last4:
                 ///   - source:
@@ -4777,11 +4834,11 @@ public enum Operations {
                     vendorId: [Swift.String]? = nil,
                     vendorPresenceFilter: Operations.Resources_financialAccount_list.Input.Query.VendorPresenceFilterPayload? = nil,
                     vendorSearch: Swift.String? = nil,
+                    ledgerPartyId: Operations.Resources_financialAccount_list.Input.Query.LedgerPartyIdPayload? = nil,
                     search: Swift.String? = nil,
                     provisional: Swift.Bool? = nil,
                     dataStatus: Operations.Resources_financialAccount_list.Input.Query.DataStatusPayload? = nil,
                     dataGap: Operations.Resources_financialAccount_list.Input.Query.DataGapPayload? = nil,
-                    ledgerPartyId: [Swift.String]? = nil,
                     identityKind: Operations.Resources_financialAccount_list.Input.Query.IdentityKindPayload? = nil,
                     last4: Swift.String? = nil,
                     source: [Swift.String]? = nil,
@@ -4806,11 +4863,11 @@ public enum Operations {
                     self.vendorId = vendorId
                     self.vendorPresenceFilter = vendorPresenceFilter
                     self.vendorSearch = vendorSearch
+                    self.ledgerPartyId = ledgerPartyId
                     self.search = search
                     self.provisional = provisional
                     self.dataStatus = dataStatus
                     self.dataGap = dataGap
-                    self.ledgerPartyId = ledgerPartyId
                     self.identityKind = identityKind
                     self.last4 = last4
                     self.source = source
@@ -7829,25 +7886,6 @@ public enum Operations {
                 ///
                 /// - Remark: Generated from `#/paths/api/v1/image-sightings/GET/query/updatedTo`.
                 public var updatedTo: Swift.String?
-                /// - Remark: Generated from `#/paths/api/v1/image-sightings/GET/query/SourceTypePayload`.
-                @frozen public enum SourceTypePayloadPayload: String, Codable, Hashable, Sendable, CaseIterable {
-                    case userLibrary = "userLibrary"
-                    case cloudShared = "cloudShared"
-                    case iTunesSynced = "iTunesSynced"
-                }
-                /// - Remark: Generated from `#/paths/api/v1/image-sightings/GET/query/sourceType`.
-                public typealias SourceTypePayload = [Operations.Resources_imageSighting_list.Input.Query.SourceTypePayloadPayload]
-                /// - Remark: Generated from `#/paths/api/v1/image-sightings/GET/query/sourceType`.
-                public var sourceType: Operations.Resources_imageSighting_list.Input.Query.SourceTypePayload?
-                /// - Remark: Generated from `#/paths/api/v1/image-sightings/GET/query/MatchKindPayload`.
-                @frozen public enum MatchKindPayloadPayload: String, Codable, Hashable, Sendable, CaseIterable {
-                    case _import = "import"
-                    case libraryMatch = "libraryMatch"
-                }
-                /// - Remark: Generated from `#/paths/api/v1/image-sightings/GET/query/matchKind`.
-                public typealias MatchKindPayload = [Operations.Resources_imageSighting_list.Input.Query.MatchKindPayloadPayload]
-                /// - Remark: Generated from `#/paths/api/v1/image-sightings/GET/query/matchKind`.
-                public var matchKind: Operations.Resources_imageSighting_list.Input.Query.MatchKindPayload?
                 /// image shortcode, e.g. IMG-4K7M
                 ///
                 /// - Remark: Generated from `#/paths/api/v1/image-sightings/GET/query/ImageIdPayload`.
@@ -8025,6 +8063,25 @@ public enum Operations {
                 public typealias DeviceIdPayload = [Operations.Resources_imageSighting_list.Input.Query.DeviceIdPayloadPayload]
                 /// - Remark: Generated from `#/paths/api/v1/image-sightings/GET/query/deviceId`.
                 public var deviceId: Operations.Resources_imageSighting_list.Input.Query.DeviceIdPayload?
+                /// - Remark: Generated from `#/paths/api/v1/image-sightings/GET/query/SourceTypePayload`.
+                @frozen public enum SourceTypePayloadPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case userLibrary = "userLibrary"
+                    case cloudShared = "cloudShared"
+                    case iTunesSynced = "iTunesSynced"
+                }
+                /// - Remark: Generated from `#/paths/api/v1/image-sightings/GET/query/sourceType`.
+                public typealias SourceTypePayload = [Operations.Resources_imageSighting_list.Input.Query.SourceTypePayloadPayload]
+                /// - Remark: Generated from `#/paths/api/v1/image-sightings/GET/query/sourceType`.
+                public var sourceType: Operations.Resources_imageSighting_list.Input.Query.SourceTypePayload?
+                /// - Remark: Generated from `#/paths/api/v1/image-sightings/GET/query/MatchKindPayload`.
+                @frozen public enum MatchKindPayloadPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case _import = "import"
+                    case libraryMatch = "libraryMatch"
+                }
+                /// - Remark: Generated from `#/paths/api/v1/image-sightings/GET/query/matchKind`.
+                public typealias MatchKindPayload = [Operations.Resources_imageSighting_list.Input.Query.MatchKindPayloadPayload]
+                /// - Remark: Generated from `#/paths/api/v1/image-sightings/GET/query/matchKind`.
+                public var matchKind: Operations.Resources_imageSighting_list.Input.Query.MatchKindPayload?
                 /// Page number, starting at 1 (default 1)
                 ///
                 /// - Remark: Generated from `#/paths/api/v1/image-sightings/GET/query/page`.
@@ -8055,11 +8112,11 @@ public enum Operations {
                 ///   - createdTo: Calendar day as "YYYY-MM-DD"
                 ///   - updatedFrom: Calendar day as "YYYY-MM-DD"
                 ///   - updatedTo: Calendar day as "YYYY-MM-DD"
-                ///   - sourceType:
-                ///   - matchKind:
                 ///   - imageId:
                 ///   - ledgerPartyId:
                 ///   - deviceId:
+                ///   - sourceType:
+                ///   - matchKind:
                 ///   - page: Page number, starting at 1 (default 1)
                 ///   - pageSize: Items per page (default 10, maximum 500)
                 ///   - sort: Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: observedAt, capturedAt, createdAt, updatedAt. Default: -observedAt
@@ -8069,11 +8126,11 @@ public enum Operations {
                     createdTo: Swift.String? = nil,
                     updatedFrom: Swift.String? = nil,
                     updatedTo: Swift.String? = nil,
-                    sourceType: Operations.Resources_imageSighting_list.Input.Query.SourceTypePayload? = nil,
-                    matchKind: Operations.Resources_imageSighting_list.Input.Query.MatchKindPayload? = nil,
                     imageId: Operations.Resources_imageSighting_list.Input.Query.ImageIdPayload? = nil,
                     ledgerPartyId: Operations.Resources_imageSighting_list.Input.Query.LedgerPartyIdPayload? = nil,
                     deviceId: Operations.Resources_imageSighting_list.Input.Query.DeviceIdPayload? = nil,
+                    sourceType: Operations.Resources_imageSighting_list.Input.Query.SourceTypePayload? = nil,
+                    matchKind: Operations.Resources_imageSighting_list.Input.Query.MatchKindPayload? = nil,
                     page: Swift.Int? = nil,
                     pageSize: Swift.Int? = nil,
                     sort: Swift.String? = nil,
@@ -8083,11 +8140,11 @@ public enum Operations {
                     self.createdTo = createdTo
                     self.updatedFrom = updatedFrom
                     self.updatedTo = updatedTo
-                    self.sourceType = sourceType
-                    self.matchKind = matchKind
                     self.imageId = imageId
                     self.ledgerPartyId = ledgerPartyId
                     self.deviceId = deviceId
+                    self.sourceType = sourceType
+                    self.matchKind = matchKind
                     self.page = page
                     self.pageSize = pageSize
                     self.sort = sort
@@ -32265,17 +32322,6 @@ public enum Operations {
                 public var updatedTo: Swift.String?
                 /// - Remark: Generated from `#/paths/api/v1/vendor-accounts/GET/query/search`.
                 public var search: Swift.String?
-                /// - Remark: Generated from `#/paths/api/v1/vendor-accounts/GET/query/StatusPayload`.
-                @frozen public enum StatusPayloadPayload: String, Codable, Hashable, Sendable, CaseIterable {
-                    case active = "active"
-                    case pausedAuth = "paused_auth"
-                    case pausedOffline = "paused_offline"
-                    case disabled = "disabled"
-                }
-                /// - Remark: Generated from `#/paths/api/v1/vendor-accounts/GET/query/status`.
-                public typealias StatusPayload = [Operations.Resources_vendorAccount_list.Input.Query.StatusPayloadPayload]
-                /// - Remark: Generated from `#/paths/api/v1/vendor-accounts/GET/query/status`.
-                public var status: Operations.Resources_vendorAccount_list.Input.Query.StatusPayload?
                 /// vendor shortcode, e.g. VEN-4K7M
                 ///
                 /// - Remark: Generated from `#/paths/api/v1/vendor-accounts/GET/query/VendorIdPayload`.
@@ -32394,6 +32440,17 @@ public enum Operations {
                 public typealias LedgerPartyIdPayload = [Operations.Resources_vendorAccount_list.Input.Query.LedgerPartyIdPayloadPayload]
                 /// - Remark: Generated from `#/paths/api/v1/vendor-accounts/GET/query/ledgerPartyId`.
                 public var ledgerPartyId: Operations.Resources_vendorAccount_list.Input.Query.LedgerPartyIdPayload?
+                /// - Remark: Generated from `#/paths/api/v1/vendor-accounts/GET/query/StatusPayload`.
+                @frozen public enum StatusPayloadPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case active = "active"
+                    case pausedAuth = "paused_auth"
+                    case pausedOffline = "paused_offline"
+                    case disabled = "disabled"
+                }
+                /// - Remark: Generated from `#/paths/api/v1/vendor-accounts/GET/query/status`.
+                public typealias StatusPayload = [Operations.Resources_vendorAccount_list.Input.Query.StatusPayloadPayload]
+                /// - Remark: Generated from `#/paths/api/v1/vendor-accounts/GET/query/status`.
+                public var status: Operations.Resources_vendorAccount_list.Input.Query.StatusPayload?
                 /// Page number, starting at 1 (default 1)
                 ///
                 /// - Remark: Generated from `#/paths/api/v1/vendor-accounts/GET/query/page`.
@@ -32425,9 +32482,9 @@ public enum Operations {
                 ///   - updatedFrom: Calendar day as "YYYY-MM-DD"
                 ///   - updatedTo: Calendar day as "YYYY-MM-DD"
                 ///   - search:
-                ///   - status:
                 ///   - vendorId:
                 ///   - ledgerPartyId:
+                ///   - status:
                 ///   - page: Page number, starting at 1 (default 1)
                 ///   - pageSize: Items per page (default 10, maximum 500)
                 ///   - sort: Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: label, status, lastRunAt, updatedAt. Default: -label
@@ -32438,9 +32495,9 @@ public enum Operations {
                     updatedFrom: Swift.String? = nil,
                     updatedTo: Swift.String? = nil,
                     search: Swift.String? = nil,
-                    status: Operations.Resources_vendorAccount_list.Input.Query.StatusPayload? = nil,
                     vendorId: Operations.Resources_vendorAccount_list.Input.Query.VendorIdPayload? = nil,
                     ledgerPartyId: Operations.Resources_vendorAccount_list.Input.Query.LedgerPartyIdPayload? = nil,
+                    status: Operations.Resources_vendorAccount_list.Input.Query.StatusPayload? = nil,
                     page: Swift.Int? = nil,
                     pageSize: Swift.Int? = nil,
                     sort: Swift.String? = nil,
@@ -32451,9 +32508,9 @@ public enum Operations {
                     self.updatedFrom = updatedFrom
                     self.updatedTo = updatedTo
                     self.search = search
-                    self.status = status
                     self.vendorId = vendorId
                     self.ledgerPartyId = ledgerPartyId
+                    self.status = status
                     self.page = page
                     self.pageSize = pageSize
                     self.sort = sort

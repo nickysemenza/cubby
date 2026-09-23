@@ -5,12 +5,8 @@ import {
   generatedVendorAccountFieldSchemas,
   generatedVendorAccountFilterFields,
 } from "./generated/entity-field-schemas.vendorAccount.gen";
-import {
-  ledgerPartyShortcode,
-  vendorAccountShortcode,
-  vendorShortcode,
-} from "./identifiers";
-import { createPaginatedResponseSchema, entityFilterList } from "./pagination";
+import { vendorAccountShortcode } from "./identifiers";
+import { createPaginatedResponseSchema } from "./pagination";
 export {
   vendorAccountBrowser,
   vendorAccountCursor,
@@ -38,8 +34,6 @@ export const vendorAccountListResponse =
 export const vendorAccountFilterFields = {
   ...auditDateFilterFields,
   ...generatedVendorAccountFilterFields,
-  vendorId: entityFilterList(vendorShortcode).optional(),
-  ledgerPartyId: entityFilterList(ledgerPartyShortcode).optional(),
 };
 export const vendorAccountFilters = z.object(vendorAccountFilterFields);
 export type VendorAccountFilters = z.infer<typeof vendorAccountFilters>;

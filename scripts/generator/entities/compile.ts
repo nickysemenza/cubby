@@ -501,6 +501,8 @@ const derivableFilterKinds = new Set<string>([
   "boolean",
   "presence",
   "range",
+  "id",
+  "idMulti",
 ]);
 
 type RawFilterDescriptor =
@@ -592,6 +594,24 @@ const resolveFilterRange = (
  * over a column that is not boolean reads as presence (`true` is NOT NULL),
  * which only means something on a nullable column.
  */
+/** A stored id filter matches a foreign key by the referenced row's shortcode. */
+const validateStoredReference = (
+  value: RawFilterDescriptor,
+  kind: FilterDescriptor["kind"],
+  fields: readonly EntityStorageField[],
+  context: string,
+): void => {
+  if (kind !== "id" && kind !== "idMulti") return;
+  if (fields.some((field) => field.reference === null))
+    throw new EntityDeclarationError(
+      `${context} stored id filter needs a foreign-key field.`,
+    );
+  if (fields.some((field) => field.reference !== value.brandRef?.entity))
+    throw new EntityDeclarationError(
+      `${context} stored id filter's brandRef must name the entity its field references.`,
+    );
+};
+
 const validateStoredFilter = (
   value: RawFilterDescriptor,
   kind: FilterDescriptor["kind"],
@@ -628,6 +648,7 @@ const validateStoredFilter = (
     throw new EntityDeclarationError(
       `${context} stored over a text-array field needs stored.array.`,
     );
+  validateStoredReference(value, kind, fields, context);
   if (
     kind === "boolean" &&
     fields.some((field) => field.kind !== "boolean" && !field.nullable)

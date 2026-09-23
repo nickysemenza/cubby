@@ -9,7 +9,10 @@ import {
 } from "@playwright/test";
 import { z } from "zod";
 
-import { NAVIGATION_ANNOTATION } from "./navigation-timing";
+import {
+  NAVIGATION_ANNOTATION,
+  NAVIGATION_PHASES_ANNOTATION,
+} from "./navigation-timing";
 
 /** A public shortcode body, for composing route and id patterns. */
 export const SHORTCODE = `[${SHORTCODE_CHARS}]{${SHORTCODE_BODY_LENGTH}}`;
@@ -177,20 +180,35 @@ export async function gotoAuthenticatedPage(
   path: string,
   ready?: Locator,
 ) {
-  await timedNavigation(async () => {
+  await timedNavigation(page, async () => {
     await page.goto(path, { waitUntil: "domcontentloaded" });
     await waitForAppHydration(page);
   });
   if (ready) await expect(ready).toBeVisible({ timeout: 15000 });
 }
 
-async function timedNavigation(step: () => Promise<void>) {
+async function timedNavigation(page: Page, step: () => Promise<void>) {
   const started = performance.now();
   await step();
   test.info().annotations.push({
     type: NAVIGATION_ANNOTATION,
     description: String(Math.round(performance.now() - started)),
   });
+  const phases = await page.evaluate(() => {
+    const [entry] = performance.getEntriesByType("navigation");
+    if (!(entry instanceof PerformanceNavigationTiming)) return null;
+    return [
+      entry.responseStart,
+      entry.responseEnd,
+      entry.domContentLoadedEventEnd,
+      performance.now(),
+    ].map(Math.round);
+  });
+  if (phases)
+    test.info().annotations.push({
+      type: NAVIGATION_PHASES_ANNOTATION,
+      description: phases.join(","),
+    });
 }
 
 /**
@@ -244,7 +262,7 @@ export async function expectViewportBounded(page: Page) {
 }
 
 export async function reloadAuthenticatedPage(page: Page, ready?: Locator) {
-  await timedNavigation(async () => {
+  await timedNavigation(page, async () => {
     await page.reload({ waitUntil: "domcontentloaded" });
     await waitForAppHydration(page);
   });

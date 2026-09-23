@@ -5,8 +5,8 @@ import {
   generatedDeviceFieldSchemas,
   generatedDeviceFilterFields,
 } from "./generated/entity-field-schemas.device.gen";
-import { deviceShortcode, ledgerPartyShortcode } from "./identifiers";
-import { createPaginatedResponseSchema, entityFilterList } from "./pagination";
+import { deviceShortcode } from "./identifiers";
+import { createPaginatedResponseSchema } from "./pagination";
 
 export type { DevicePlatform } from "./device-fields";
 
@@ -29,7 +29,6 @@ export const deviceListResponse = createPaginatedResponseSchema(deviceOut);
 export const deviceFilterFields = {
   ...auditDateFilterFields,
   ...generatedDeviceFilterFields,
-  ledgerPartyId: entityFilterList(ledgerPartyShortcode).optional(),
 };
 export const deviceFilters = z.object(deviceFilterFields);
 export type DeviceFilters = z.infer<typeof deviceFilters>;

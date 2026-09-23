@@ -410,6 +410,8 @@ export default defineEntity({
         placeholder: "Filter by owner...",
         brandRef: { entity: "ledgerParty" },
         urlOnly: true,
+        deriveSchema: true,
+        stored: true,
       },
     ],
   },

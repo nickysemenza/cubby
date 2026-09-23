@@ -5,6 +5,7 @@ import { presenceFilter } from "@cubby/schemas/pagination";
 import {
   type AnyColumn,
   getTableColumns,
+  getTableName,
   or,
   type SQL,
   sql,
@@ -19,8 +20,10 @@ import {
   formatSearchTerm,
   presenceCondition,
   rangeConditions,
+  shortcodeSetCondition,
   textArrayMatches,
 } from "./database-helpers";
+import { SHORTCODE_TABLE } from "./generated/shortcode-tables.gen";
 
 const filterValues = z.record(z.string(), z.unknown());
 const optionalText = z.string().optional();
@@ -50,6 +53,8 @@ interface StoredColumn {
   readonly column: AnyColumn;
   readonly kind: string;
   readonly nullable: boolean;
+  /** The entity a foreign-key column points at, for `id`/`idMulti` filters. */
+  readonly reference: string | null;
 }
 
 const descriptorsFor = (entity: Entity): readonly StoredDescriptorView[] =>
@@ -74,7 +79,12 @@ const storedColumns = (
       throw new Error(
         `${entity}.${descriptor.columnId} has no table column ${key} for its stored filter`,
       );
-    return { column, kind: stored.kind, nullable: stored.nullable };
+    return {
+      column,
+      kind: stored.kind,
+      nullable: stored.nullable,
+      reference: stored.reference,
+    };
   });
 };
 
@@ -106,6 +116,30 @@ const booleanPredicate = (
         flag === undefined ? undefined : flag ? "has" : "none",
       );
 
+/**
+ * An id filter over a foreign-key column: the column is in the set of ids
+ * whose public shortcode was requested. The referenced table is aliased so a
+ * self-reference (a location's parent) never collides with the outer row,
+ * and the outer column stays a Drizzle column so the relational list query
+ * can re-alias it (see `list-smoke.integration.test.ts`).
+ */
+const referencePredicate = (
+  entity: Entity,
+  { column, reference }: StoredColumn,
+  codes: readonly string[] | undefined,
+): SQL | undefined => {
+  if (codes === undefined) return undefined;
+  const table = Object.entries(SHORTCODE_TABLE).find(
+    ([key]) => key === reference,
+  )?.[1];
+  if (!table)
+    throw new Error(
+      `${entity} id filter over ${column.name} references ${String(reference)}, which has no shortcode table`,
+    );
+  const requested = shortcodeSetCondition(sql`ref."shortcode"`, codes);
+  return sql`${column} IN (SELECT ref."id" FROM ${sql.identifier(getTableName(table))} ref WHERE ${requested})`;
+};
+
 const dateRange = (
   column: AnyColumn,
   from: string | undefined,
@@ -122,8 +156,9 @@ const dateRange = (
  * `text[]` column matches by element), enum filters are equality or
  * membership with the declared nullable presence filter ORed in, a
  * multiselect declared `array` is an overlap with the same presence rule,
- * boolean is equality or presence, presence checks NULL, and ranges are
- * inclusive bounds. Anything richer (joins, OR groups across filters,
+ * boolean is equality or presence, presence checks NULL, ranges are
+ * inclusive bounds, and an id filter matches a foreign key by the referenced
+ * row's shortcode. Anything richer (joins, OR groups across filters,
  * resolved ids) stays hand-written next to this spread in the repository's
  * where builder.
  */
@@ -165,6 +200,11 @@ export function declaredFilterPredicates<Filters extends object>(
           ];
         case "presence":
           return [presenceCondition(first.column, presenceFilter.parse(value))];
+        case "id":
+        case "idMulti":
+          return [
+            referencePredicate(entity, first, optionalTextList.parse(value)),
+          ];
         case "range":
           return descriptor.range?.kind === "date"
             ? dateRange(

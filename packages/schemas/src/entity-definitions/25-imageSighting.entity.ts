@@ -544,6 +544,8 @@ export default defineEntity({
         placeholder: "Filter by image...",
         brandRef: { entity: "image" },
         urlOnly: true,
+        deriveSchema: true,
+        stored: true,
       },
       {
         columnId: "ledgerPartyId",
@@ -551,6 +553,8 @@ export default defineEntity({
         placeholder: "Filter by owner...",
         brandRef: { entity: "ledgerParty" },
         urlOnly: true,
+        deriveSchema: true,
+        stored: true,
       },
       {
         columnId: "deviceId",
@@ -558,6 +562,8 @@ export default defineEntity({
         placeholder: "Filter by reporter...",
         brandRef: { entity: "device" },
         urlOnly: true,
+        deriveSchema: true,
+        stored: true,
       },
       {
         columnId: "sourceType",

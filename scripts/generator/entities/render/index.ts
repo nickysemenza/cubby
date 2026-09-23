@@ -72,6 +72,8 @@ interface DerivedFilterFields {
 interface DerivedFilterNeeds {
   z: boolean;
   oneOrMany: boolean;
+  entityFilterList: boolean;
+  shortcodeSchema: boolean;
   presence: boolean;
   numeric: boolean;
   date: boolean;
@@ -136,6 +138,7 @@ const derivedFilterImports = (
     byModule.set(module, list);
   }
   const pagination = [
+    ...(needs.entityFilterList ? ["entityFilterList"] : []),
     ...(needs.oneOrMany ? ["oneOrMany"] : []),
     ...(needs.presence ? ["presenceFilter"] : []),
   ];
@@ -152,6 +155,9 @@ const derivedFilterImports = (
       : []),
     ...(ranges.length
       ? [`import { ${ranges.join(", ")} } from "@cubby/schemas/base-entity";`]
+      : []),
+    ...(needs.shortcodeSchema
+      ? ['import { shortcodeSchema } from "@cubby/schemas/identifiers";']
       : []),
     ...[...byModule.entries()]
       .sort(([left], [right]) => left.localeCompare(right))
@@ -187,6 +193,8 @@ const renderDerivedFilterFields = (
   const needs: DerivedFilterNeeds = {
     z: false,
     oneOrMany: false,
+    entityFilterList: false,
+    shortcodeSchema: false,
     presence: false,
     numeric: false,
     date: false,
@@ -230,6 +238,22 @@ const renderDerivedFilterFields = (
           return `${key}:oneOrMany(${derivedEnumValues(descriptor, needs, readRef, refAlias)}).optional()${describe}`;
         case "range":
           return derivedRangeEntry(entity, descriptor, name, needs);
+        // The referenced entity's branded shortcode — never the field's
+        // read schema, which is nullable for an optional foreign key.
+        case "id":
+        case "idMulti": {
+          const target = descriptor.brandRef?.entity;
+          if (target === undefined)
+            throw new EntityDeclarationError(
+              `${entity.key} filter ${descriptor.columnId} derives an id schema without brandRef.`,
+            );
+          needs.shortcodeSchema = true;
+          const code = `shortcodeSchema(${JSON.stringify(target)})`;
+          if (descriptor.kind === "id")
+            return `${key}:${code}.optional()${describe}`;
+          needs.entityFilterList = true;
+          return `${key}:entityFilterList(${code}).optional()${describe}`;
+        }
         default:
           throw new EntityDeclarationError(
             `${entity.key} filter ${descriptor.columnId} cannot derive a ${descriptor.kind} schema.`,
