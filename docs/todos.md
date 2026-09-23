@@ -495,6 +495,14 @@ history is the archive. Permanent product constraints live in the
 
 ## Requires thought or evidence
 
+- **Image embeddings stopped being written.** On 2026-09-23 only 20 of about
+  6,300 live Images had an `EntityEmbedding` row, and none was newer than
+  2026-09-21, while every other embeddable kind was fully covered. The loader
+  exists (`getImageEmbeddingTexts` in `repo/entity-embedding-refresh.ts`), so
+  find out whether image refreshes are never enqueued, filtered out before
+  embedding, or were simply never backfilled, then backfill and add a guard
+  (a detector threshold or a test) that catches a kind going silent.
+
 - **Measure the delegate-less routing change.** Around 2026-10-06, re-measure
   30 days of Claude session transcripts against the baseline in
   [model routing](agents/model-routing.md#delegate-or-not): share of sessions
