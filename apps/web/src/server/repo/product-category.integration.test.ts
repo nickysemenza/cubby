@@ -224,17 +224,38 @@ describe("product category hierarchy", () => {
     ]);
   });
 
-  it("retains behavior roots and rejects duplicate feature bindings", async () => {
+  it("keeps a nested binding permanent and rejects duplicate feature bindings", async () => {
+    // A bound category nests under another tree (Tools › Tool consumables)
+    // and keeps its own feature rather than inheriting the parent's.
+    const nested = await updateProductCategory(
+      ctx.db,
+      taxonomyShortcode("tool-consumables"),
+      { parentId: taxonomyShortcode("tools") },
+      ctx.actor,
+    );
+    expect(nested.output.feature).toBe("tool-consumables");
+    const option = (await listProductCategoryTreeOptions(ctx.db)).find(
+      (item) => item.id === nested.output.id,
+    );
+    expect(option?.feature).toBe("tool-consumables");
+
     await expect(
-      deleteProductCategories(ctx.db, [taxonomyShortcode("food")], ctx.actor),
+      deleteProductCategories(
+        ctx.db,
+        [taxonomyShortcode("tool-consumables")],
+        ctx.actor,
+      ),
     ).rejects.toThrow("behavior binding");
     await expect(
       updateProductCategory(
         ctx.db,
-        taxonomyShortcode("food"),
-        { parentId: taxonomyShortcode("tools") },
+        taxonomyShortcode("tool-consumables"),
+        { feature: null },
         ctx.actor,
       ),
+    ).rejects.toThrow("behavior binding");
+    await expect(
+      deleteProductCategories(ctx.db, [taxonomyShortcode("food")], ctx.actor),
     ).rejects.toThrow("behavior binding");
 
     await expect(

@@ -23,7 +23,7 @@ import {
   productCategoryFeature,
   productCategorySummary,
 } from "@cubby/schemas/product-category-fields";
-import { and, asc, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { uniq } from "es-toolkit";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
@@ -139,6 +139,19 @@ export const mapCategorySummary = (
     feature,
   });
 };
+
+/**
+ * The binding a category resolves to: its own, else the nearest ancestor's.
+ * `path` is root-first, so search from the leaf end — a nested binding
+ * (Tools › Tool consumables) must win over the root's.
+ */
+const closestPathFeature = (
+  path: CategoryPathRow["path"],
+): ProductCategoryFeature | null =>
+  parseFeature(
+    [...path].reverse().find(({ feature }) => feature !== null)?.feature ??
+      null,
+  );
 
 const pathsFor = async (
   db: Database | DrizzleTransaction,
@@ -411,18 +424,6 @@ const assertValidParent = async (
   }
 };
 
-/** A behavior binding defines a tree root; descendants inherit it. */
-const assertFeatureBindingRoot = (
-  parentId: string | null,
-  feature: ProductCategoryFeature | null,
-) => {
-  if (parentId && feature) {
-    throw new Error(
-      "A product category feature can only be bound on a root category",
-    );
-  }
-};
-
 /**
  * A hierarchy change is transactional: it must leave every assigned Product
  * admissible in its existing category and retain every effective trade. Product
@@ -472,7 +473,6 @@ export async function createProductCategory(
       ? await resolveOrThrow(tx, "productCategory", data.parentId)
       : null;
     await assertValidParent(tx, null, parentId);
-    assertFeatureBindingRoot(parentId, data.feature);
     const row = await insertWithShortcode(tx, "productCategory", {
       name: data.name.trim(),
       aliases: cleanAliases(data.aliases),
@@ -512,20 +512,17 @@ export async function updateProductCategory(
       .where(and(eq(productCategory.id, id), notDeleted(productCategory)))
       .limit(1);
     if (!before) throw new Error("Product category not found");
+    // A bound category may move anywhere in the tree — its own binding still
+    // wins over any ancestor's — but the binding itself is permanent.
     if (
       before.feature !== null &&
-      ((data.feature !== undefined && data.feature !== before.feature) ||
-        (parentId !== undefined && parentId !== null))
+      data.feature !== undefined &&
+      data.feature !== before.feature
     ) {
       throw new Error(
-        "A category behavior binding cannot be moved, cleared, or replaced",
+        "A category behavior binding cannot be cleared or replaced",
       );
     }
-    const beforeFeature = parseFeature(before.feature);
-    assertFeatureBindingRoot(
-      parentId === undefined ? before.parentId : parentId,
-      data.feature === undefined ? beforeFeature : data.feature,
-    );
     const patch = {
       name: data.name?.trim(),
       aliases: data.aliases ? cleanAliases(data.aliases) : undefined,
@@ -565,11 +562,7 @@ export async function deleteProductCategories(
       .select({ feature: productCategory.feature })
       .from(productCategory)
       .where(
-        and(
-          inArray(productCategory.id, ids),
-          notDeleted(productCategory),
-          isNull(productCategory.parentId),
-        ),
+        and(inArray(productCategory.id, ids), notDeleted(productCategory)),
       );
     if (bound.some((row) => row.feature !== null)) {
       throw new Error("A category with a behavior binding cannot be deleted");
@@ -609,7 +602,7 @@ export async function getCategoryFeature(
 /** SQL predicate: true only when the closest feature binding equals `feature`. */
 /**
  * Keeps an already-selected compatible descendant. If none was selected (or it
- * belongs to another feature tree), selects that feature's root binding.
+ * belongs to another feature tree), selects the category bound to that feature.
  */
 export async function resolveProductCategory(
   db: Database | DrizzleTransaction,
@@ -630,7 +623,6 @@ export async function resolveProductCategory(
     .where(
       and(
         eq(productCategory.feature, requiredFeature),
-        isNull(productCategory.parentId),
         notDeleted(productCategory),
       ),
     )
@@ -663,9 +655,7 @@ export async function listProductCategoryTreeOptions(db: Database) {
       ancestorIds: path
         .slice(0, -1)
         .map(({ id }) => parseShortcodeFor("productCategory", id)),
-      feature: parseFeature(
-        path.find(({ feature }) => feature !== null)?.feature ?? row.feature,
-      ),
+      feature: closestPathFeature(path),
     };
   });
 }
@@ -692,9 +682,7 @@ export async function loadCategorySummaries(
           id: parseShortcodeFor("productCategory", id),
           name,
         })),
-        feature: parseFeature(
-          path.find(({ feature }) => feature !== null)?.feature ?? row.feature,
-        ),
+        feature: closestPathFeature(path),
       });
       return [parseEntityId("productCategory", row.id), summary] as const;
     }),

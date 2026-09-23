@@ -729,10 +729,13 @@ irreducible transaction and collision rules.
 references the most specific known node; its read-only `category` projection
 contains the complete root-first path and inherited behavior binding. Products
 can stop at any depth or remain unclassified. Filters include descendants.
-Names, aliases, descriptions, and display order are editable; stable root
-bindings preserve Food, Books, Tools, Software, and other domain behavior when
-names change. Moving a subtree validates all affected Products against the
-same identity and dependency constraints as a direct Product change.
+Names, aliases, descriptions, and display order are editable. Each feature
+(Food, Books, Tools, Software, …) is bound to exactly one category — usually a
+root, but a nested node may carry its own binding, which overrides its
+ancestors' (Tools › Tool consumables). A binding is permanent: it survives
+renames and moves and cannot be cleared, replaced, or deleted. Moving a subtree
+validates all affected Products against the same identity and dependency
+constraints as a direct Product change.
 
 Classification suggestions choose existing taxonomy references using metadata
 and retained original-image evidence. Confirmed description corrections take

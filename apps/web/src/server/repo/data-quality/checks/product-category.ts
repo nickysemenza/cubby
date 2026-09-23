@@ -15,8 +15,9 @@ export const productCategoryChecks = defineEntityChecks({
         sql`(${t.description} IS NULL OR trim(${t.description}) = '')`,
     },
     category_feature: {
-      // Only a root category carries a feature; a group/type inherits its
-      // root's feature (see `categoryFeatureSql`, product-category-sql.ts).
+      // Every root needs a binding; a descendant inherits the closest one
+      // (see `categoryFeatureSql`, product-category-sql.ts) and may carry
+      // its own, so a missing feature is only a gap on a root.
       expected: (t: ProductCategory) => sql`${t.parentId} IS NULL`,
       missing: (t: ProductCategory) => sql`${t.feature} IS NULL`,
     },
