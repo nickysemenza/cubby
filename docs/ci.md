@@ -230,18 +230,21 @@ Record ten exact-head public PR runs before changing topology: queue time,
 required-check p50/p95, per-lane duration, cache behavior, cancellations, and
 merge-to-deploy duration. The target is a 4–7 minute warm critical path and no
 more than 10 minutes cold. Optimize only a measured bottleneck; prior evidence
-already rejects node_modules caching and extra E2E sharding.
+already rejects node_modules caching and extra E2E sharding. The current
+two-runner effort targets a typical warm PR near three minutes; track queue and
+cold native builds separately.
 
 ### Public exact-head run ledger
 
 Record wall time from GitHub job metadata, not summed step duration. Cache
 state comes from each job summary, `cancelled` is the workflow conclusion, and
 deployment time is measured from the merged commit's `main` push to the
-matching Cloudflare deployment completion. Keep five successful exact-head
-samples for an experiment before retaining it: its targeted step's p50 must
-improve by at least 10%, with no regression in the required-check critical
-path. Append the remaining samples here rather than inventing a timing value
-from a partial or stale run.
+matching Cloudflare deployment completion. Apply each experiment's stated
+threshold and reject an attributable required-check critical-path regression.
+After a retained change, collect at least five naturally
+occurring successful exact-head PR runs before claiming a new median. Append
+the remaining samples here rather than inventing a timing value from a partial
+or stale run.
 
 | PR / exact head                                                       |        Queue | Required lanes (wall)                                                                                                                                  | Cache state                                                     | Cancelled | Merge to Cloudflare |
 | --------------------------------------------------------------------- | -----------: | ------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------- | --------- | ------------------: |
@@ -259,8 +262,7 @@ each load pulls ~200–250 small JS chunks over the harness's **HTTP/1.1**,
 which allows six connections per host. A chunk waits a median 130–190ms in
 the queue for 9–13ms on the wire. Production is served over HTTP/2 or
 HTTP/3, so this queueing is mostly a harness artifact. An HTTPS/HTTP/2 front
-proxy for the harness is the remaining lever; it was deferred (TLS
-certificate and forwarded-proto handling for auth origins).
+proxy for the harness was measured later in the two-runner follow-up below.
 
 | Change                                                                                               | Samples                                                                                                   | Result                                                                                                 |
 | ---------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
@@ -287,14 +289,28 @@ The alternatives were measured on standard runners and rejected:
 | Six PostgreSQL workers               | On the same standard runner class, test step **137s** versus **129s** at four; job **3:33** versus **3:27**. [Experiment](https://github.com/nickysemenza/cubby/actions/runs/35928414452) rejected.                                                                |
 | HTTP-only tests in Worker/PostgreSQL | All **704** PostgreSQL tests and desktop checks passed at exact head, but [#1289](https://github.com/nickysemenza/cubby/pull/1289) took **5:31** to `Web checks` versus **5:09** before the move, with the same **3s** median queue. Closed under the timing rule. |
 
+A later [desktop request profile](https://github.com/nickysemenza/cubby/actions/runs/35934202819)
+measured **222 JavaScript requests** on an authenticated page load, **209ms**
+median request queue time, and hydration at **2,231ms**; `Web checks` took
+**5:32**. Several small
+server-function chunks finished near the end of the load. A narrow Rolldown
+group for those modules built locally, but the client still emitted **568**
+JavaScript assets, the same as before the group. The group was dropped before
+hosted benchmarking because it did not meaningfully reduce the request count.
+The diagnostic instrumentation was also removed.
+
 The warm [#1287](https://github.com/nickysemenza/cubby/pull/1287) Apple app
 check hit both the SPM and DerivedData caches. Its iOS check step took **85s**
 and the whole Apple job **2:58**. The available step timings did not isolate
 generated-client compilation as the bottleneck, so no native build change was
 made. The broad
 entity-list PostgreSQL smoke file took **13.2s** before the read-only bounded
-concurrency change and **4.6s** and **8.4s** in two later hosted runs; it is
-being reviewed separately from the rejected HTTP tier move.
+concurrency change and **4.6s** and **8.4s** in two later hosted runs. The
+bounded read-only probes merged separately as
+[#1291](https://github.com/nickysemenza/cubby/pull/1291); its exact-head file
+took **8.8s** and the PostgreSQL lane **3:46**, while the unchanged desktop
+shard kept `Web checks` at **5:32**. This is a PostgreSQL-file improvement, not
+evidence that the required gate reached three minutes.
 
 ### 2026-09-23 E2E engine roles and three chromium shards
 
