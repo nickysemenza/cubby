@@ -3,6 +3,7 @@ import {
   type CSSProperties,
   type KeyboardEvent,
   type ReactNode,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -31,6 +32,8 @@ export interface ScheduleRow {
   expandable?: boolean;
   expanded?: boolean;
   meta?: string;
+  /** Compact rail text; meta remains the complete accessible description. */
+  metaShort?: string;
   segments: ScheduleSegment[];
   noDateLabel?: string;
 }
@@ -54,7 +57,7 @@ interface ScheduleGridProps {
 }
 
 const DAY_MS = 86_400_000;
-const LABEL_WIDTH = 320;
+const LABEL_WIDTH = 368;
 const ROW_HEIGHT = 32;
 const HEADER_HEIGHT = 56;
 const SCALE_WIDTH = {
@@ -62,6 +65,24 @@ const SCALE_WIDTH = {
   week: 12,
   month: 4,
 } satisfies Record<ScheduleScale, number>;
+
+/** Center a date in the space left after the pinned label column. */
+export function scheduleScrollLeft(
+  day: number,
+  startDay: number,
+  dayWidth: number,
+  viewportWidth: number,
+  timelineWidth: number,
+): number {
+  const dateArea = Math.max(0, viewportWidth - LABEL_WIDTH);
+  return Math.max(
+    0,
+    Math.min(
+      (day - startDay + 0.5) * dayWidth - dateArea / 2,
+      Math.max(0, LABEL_WIDTH + timelineWidth - viewportWidth),
+    ),
+  );
+}
 
 /** Date-only arithmetic in UTC avoids browser locale and daylight-saving drift. */
 export function scheduleDayIndex(value: string): number | null {
@@ -205,7 +226,74 @@ export function ScheduleGrid({
   const activeScale = localScale ?? scale ?? defaultScale(span);
   const dayWidth = SCALE_WIDTH[activeScale];
   const timelineWidth = Math.max(640, span * dayWidth);
+  const gridRef = useRef<HTMLDivElement | null>(null);
+  const previousWindow = useRef<string | null>(null);
+  const previousScale = useRef<ScheduleScale | null>(null);
+  const scaleAnchor = useRef<number | null>(null);
   const desktopRowRefs = useRef<Array<HTMLDivElement | null>>([]);
+  const today = scheduleDayIndex(householdLocalDate());
+  const todayInRange = today != null && today >= startDay && today <= endDay;
+  const windowKey = `${window.startDate}:${window.endDate}`;
+
+  useLayoutEffect(() => {
+    const grid = gridRef.current;
+    if (!grid || !validWindow) return;
+    const changedWindow = previousWindow.current !== windowKey;
+    if (changedWindow || previousScale.current !== activeScale) {
+      const focusDay = changedWindow
+        ? todayInRange
+          ? today!
+          : startDay
+        : (scaleAnchor.current ?? startDay);
+      grid.scrollLeft = scheduleScrollLeft(
+        focusDay,
+        startDay,
+        dayWidth,
+        grid.clientWidth,
+        timelineWidth,
+      );
+      previousWindow.current = windowKey;
+      previousScale.current = activeScale;
+      scaleAnchor.current = null;
+    }
+  }, [
+    activeScale,
+    dayWidth,
+    startDay,
+    timelineWidth,
+    today,
+    todayInRange,
+    validWindow,
+    windowKey,
+  ]);
+
+  const chooseScale = (choice: ScheduleScale) => {
+    const grid = gridRef.current;
+    if (grid && choice !== activeScale) {
+      const dateArea = Math.max(0, grid.clientWidth - LABEL_WIDTH);
+      scaleAnchor.current = Math.min(
+        endDay,
+        Math.max(
+          startDay,
+          startDay + (grid.scrollLeft + dateArea / 2) / dayWidth,
+        ),
+      );
+    }
+    setLocalScale(choice);
+  };
+
+  const scrollToToday = () => {
+    const grid = gridRef.current;
+    if (grid && todayInRange) {
+      grid.scrollLeft = scheduleScrollLeft(
+        today!,
+        startDay,
+        dayWidth,
+        grid.clientWidth,
+        timelineWidth,
+      );
+    }
+  };
   const months = useMemo(
     () => (validWindow ? monthTicks(startDay, endDay) : []),
     [endDay, startDay, validWindow],
@@ -231,12 +319,21 @@ export function ScheduleGrid({
           className="hidden items-center gap-0.5 md:flex"
           aria-label="Schedule scale"
         >
+          {todayInRange && (
+            <button
+              type="button"
+              onClick={scrollToToday}
+              className="mr-2 min-h-7 rounded-sm px-2 text-xs font-medium text-primary hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+            >
+              Today
+            </button>
+          )}
           {(["day", "week", "month"] as const).map((choice) => (
             <button
               key={choice}
               type="button"
               aria-pressed={activeScale === choice}
-              onClick={() => setLocalScale(choice)}
+              onClick={() => chooseScale(choice)}
               className={cn(
                 "min-h-7 rounded-sm px-2 text-xs capitalize focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
                 activeScale === choice
@@ -272,13 +369,13 @@ export function ScheduleGrid({
                   )}
                 </button>
               )}
-              <span className="min-w-0 flex-1 truncate [&_a]:inline-flex [&_a]:min-h-11 [&_a]:max-w-full [&_a]:items-center [&_a]:truncate">
+              <span className="min-w-0 flex-1 [&_a]:inline-flex [&_a]:min-h-11 [&_a]:max-w-full [&_a]:items-center">
                 {rowLabel(row)}
               </span>
             </div>
             {row.meta && (
               <div
-                className="truncate text-xs text-muted-foreground"
+                className="text-xs break-words text-muted-foreground"
                 style={{
                   paddingInlineStart: `${Math.min(row.depth, 6) * 12}px`,
                 }}
@@ -303,6 +400,7 @@ export function ScheduleGrid({
       </ul>
 
       <div
+        ref={gridRef}
         className="hidden max-h-[min(70vh,48rem)] overflow-auto md:block"
         role="grid"
         aria-label={ariaLabel}
@@ -367,11 +465,11 @@ export function ScheduleGrid({
                 />
               ))}
               {(() => {
-                const today = scheduleDayIndex(householdLocalDate());
-                return today != null && today >= startDay && today <= endDay ? (
+                return todayInRange ? (
                   <span
+                    data-testid="schedule-today-line"
                     className="absolute top-0 bottom-0 z-10 border-l-2 border-primary/70"
-                    style={{ left: (today - startDay) * dayWidth }}
+                    style={{ left: (today! - startDay) * dayWidth }}
                   />
                 ) : null;
               })()}
@@ -396,14 +494,14 @@ export function ScheduleGrid({
                   )
                 }
                 className={cn(
-                  "relative flex border-b border-border/70 text-[13px] focus-visible:z-20 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
+                  "relative flex border-b border-border/70 text-sm focus-visible:z-20 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
                   row.group ? "bg-muted/50 font-semibold" : "hover:bg-muted/40",
                 )}
                 style={{ height: ROW_HEIGHT }}
               >
                 <div
                   className={cn(
-                    "sticky left-0 z-10 flex shrink-0 items-center gap-1 border-r border-border px-2",
+                    "sticky left-0 z-20 flex shrink-0 items-center gap-1 border-r border-border px-2",
                     row.group ? "bg-muted" : "bg-card",
                   )}
                   style={{ width: LABEL_WIDTH }}
@@ -431,17 +529,21 @@ export function ScheduleGrid({
                   ) : (
                     <span className="w-7 shrink-0" aria-hidden="true" />
                   )}
-                  <span className="min-w-0 flex-1 truncate">
+                  <span className="min-w-0 flex-1 truncate [&_a]:max-w-full">
                     {rowLabel(row)}
                   </span>
                   {row.meta && (
-                    <span className="max-w-20 shrink-0 truncate text-[11px] text-muted-foreground">
-                      {row.meta}
+                    <span
+                      className="max-w-24 shrink-0 truncate text-xs text-muted-foreground"
+                      title={row.meta}
+                      aria-label={row.meta}
+                    >
+                      {row.metaShort ?? row.meta}
                     </span>
                   )}
                 </div>
                 <div
-                  className="relative shrink-0"
+                  className="relative z-0 shrink-0 overflow-hidden"
                   style={{ width: timelineWidth }}
                   role="gridcell"
                 >
@@ -486,10 +588,10 @@ export function ScheduleGrid({
                         role="img"
                         aria-label={segmentDescription(segment)}
                         title={segmentDescription(segment)}
-                        className="absolute top-[10px] z-10 size-3 rotate-45 border bg-card"
+                        className="absolute top-3 size-2 rotate-45 border bg-card"
                         style={{
                           ...style,
-                          left: left + Math.max(0, dayWidth / 2 - 6),
+                          left: left + Math.max(0, dayWidth / 2 - 4),
                         }}
                       />
                     ) : (
@@ -499,13 +601,17 @@ export function ScheduleGrid({
                         aria-label={segmentDescription(segment)}
                         title={segmentDescription(segment)}
                         className={cn(
-                          "absolute top-[8px] flex h-4 max-w-none items-center overflow-hidden rounded-[2px] border px-1 text-[10px] font-medium text-white",
+                          "absolute top-[8px] flex h-4 max-w-none items-center overflow-hidden rounded-[2px] border px-1 text-[10px] leading-none font-medium whitespace-nowrap text-white",
                           segment.variant === "reference" &&
                             "border-dashed bg-transparent! text-foreground",
                         )}
                         style={{ ...style, width }}
                       >
-                        {width >= 72 ? segment.label : null}
+                        {width >= 96 ? (
+                          <span className="block min-w-0 truncate">
+                            {segment.label}
+                          </span>
+                        ) : null}
                       </span>
                     );
                   })}
