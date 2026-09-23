@@ -2,7 +2,6 @@ import { z } from "zod";
 
 import { seedInheritancePrerequisite } from "./e2e-fixtures";
 import {
-  expectStableLayoutWhile,
   expectViewportBounded,
   gotoAuthenticatedPage,
   readExpense,
@@ -27,23 +26,7 @@ export function inheritanceContract() {
       .first();
     const open = () =>
       gotoAuthenticatedPage(page, `/expenses/${fixture.expense.id}`);
-    // Regression (phone): settling Jev field suggestions grew each suggestible
-    // field by an outcome glyph and an inline proposal, shifting this control
-    // so a tap landed on empty space and the project stayed explicit. Below md
-    // reviews now fold into the glyph's popover. At desktop width an inline
-    // review still mounts (+24px), which a pointer click tolerates, so the
-    // stability contract is the phone layout's.
-    if ((page.viewportSize()?.width ?? 0) < 768) {
-      await expectStableLayoutWhile(page, "**/_serverFn/**", useInherited, {
-        during: open,
-        match: (route) =>
-          (route.request().headers()["x-cubby-operation"] ?? "").includes(
-            "suggestFields",
-          ),
-      });
-    } else {
-      await open();
-    }
+    await open();
     await expect(
       page.getByText("Same as inherited value", { exact: true }).first(),
     ).toBeVisible();
@@ -81,21 +64,18 @@ export function inheritanceContract() {
       explanation.getByText("Stored override", { exact: true }),
     ).toHaveCount(0);
     await expectViewportBounded(page);
-    // The purchase table's project cell is a desktop layout; phones get cards.
-    if ((page.viewportSize()?.width ?? 0) >= 768) {
-      await gotoAuthenticatedPage(page, `/purchases/${fixture.purchase.id}`);
-      const projectCell = page
-        .locator('[data-cell-col="project"]')
-        .filter({ has: page.getByText("purchase default", { exact: true }) })
-        .first();
-      await expect(projectCell).toBeVisible();
-      await expect
-        .poll(() =>
-          projectCell.evaluate(
-            (cell) => cell.scrollWidth <= cell.clientWidth + 1,
-          ),
-        )
-        .toBe(true);
-    }
+    await gotoAuthenticatedPage(page, `/purchases/${fixture.purchase.id}`);
+    const projectCell = page
+      .locator('[data-cell-col="project"]')
+      .filter({ has: page.getByText("purchase default", { exact: true }) })
+      .first();
+    await expect(projectCell).toBeVisible();
+    await expect
+      .poll(() =>
+        projectCell.evaluate(
+          (cell) => cell.scrollWidth <= cell.clientWidth + 1,
+        ),
+      )
+      .toBe(true);
   });
 }

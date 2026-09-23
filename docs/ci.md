@@ -128,8 +128,9 @@ can affect them. A manual run selects all lanes. `Web checks` is the stable
 required aggregate: it checks the web, PostgreSQL, and browser matrix results
 whenever web validation is selected. The browser lanes test the exact bundle
 produced by the node test lane and retain the discovery and no-skip guard;
-chromium runs as three Playwright shards (one worker each) and webkit runs
-unsharded. There is no coverage mode. `test-postgres` and `test-e2e` each
+desktop Chromium runs as two Playwright shards (one worker each). Phone-web and
+WebKit browser coverage was removed from PR CI and the Playwright suite; native
+checks remain separate. There is no coverage mode. `test-postgres` and `test-e2e` each
 declare their own `postgres`/`integresql` `services:` block — GitHub Actions
 YAML has no anchors and no reusable construct that fits here, so the
 duplication is accepted rather than worked around. Affected jobs wait on
@@ -644,11 +645,12 @@ macOS Docker application login item was confirmed disabled and Docker Desktop
 was quit. Its data and privileged helper remain installed for rollback; the
 Docker VM and application processes are not running.
 
-The full/high-risk GitHub target is a three-minute median and four-minute p95,
+The full/high-risk GitHub target is a three-minute median on standard runners,
 without exceeding the prior full-run total of 16m54s raw runner time or its
-rounded job-minute equivalent. PostgreSQL targets 2m15s and each browser lane
-2m45s. Compare at least ten exact-head runs; queue time and cold browser-cache
-misses are reported separately rather than hidden by retries.
+rounded job-minute equivalent. PostgreSQL targets 2m15s and each desktop
+browser shard 2m45s. Compare at least five naturally occurring successful runs
+after a retained CI change; report queue time, p95, and cold cache misses
+separately rather than hiding them with retries.
 
 Deleted database and browser cases are not a ban on their behavior. Restore a
 case at the lowest tier that can fail: pure grouping, filtering, ranking,

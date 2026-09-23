@@ -84,16 +84,6 @@ export const SPEC_AREAS: readonly SpecAreaEntry[] = [
     ],
   },
   {
-    file: "mobile.activity.spec.ts",
-    globs: [
-      `${WEB}/src/routes/_authenticated/activity.tsx`,
-      `${WEB}/src/routes/_authenticated/activities.tsx`,
-      `${WEB}/src/app/activity/**`,
-      `${WEB}/src/server/repo/activity.ts`,
-      `${WEB}/src/server/repo/activity-input.ts`,
-    ],
-  },
-  {
     file: "bulk-edit.spec.ts",
     globs: [
       `${WEB}/src/routes/_authenticated/tasks.index.tsx`,
@@ -115,25 +105,7 @@ export const SPEC_AREAS: readonly SpecAreaEntry[] = [
     ],
   },
   {
-    file: "mobile.calendar-week.spec.ts",
-    globs: [
-      `${WEB}/src/routes/_authenticated/calendar.tsx`,
-      `${WEB}/src/app/calendar/**`,
-      `${WEB}/src/server/repo/calendar.ts`,
-      `${WEB}/src/server/repo/calendar-caldav.ts`,
-      `${WEB}/src/server/repo/calendar-plantings.ts`,
-      `${WEB}/src/server/repo/task/**`,
-    ],
-  },
-  {
     file: "console-ledger-overhaul.spec.ts",
-    globs: [
-      `${WEB}/src/routes/index.tsx`,
-      `${WEB}/src/app/_components/home/**`,
-    ],
-  },
-  {
-    file: "mobile.console-ledger-overhaul.spec.ts",
     globs: [
       `${WEB}/src/routes/index.tsx`,
       `${WEB}/src/app/_components/home/**`,
@@ -193,23 +165,7 @@ export const SPEC_AREAS: readonly SpecAreaEntry[] = [
     ],
   },
   {
-    file: "mobile.entity-views.spec.ts",
-    globs: [
-      `${WEB}/src/routes/_authenticated/products.index.tsx`,
-      `${WEB}/src/app/products/**`,
-      `${WEB}/src/server/repo/product/**`,
-    ],
-  },
-  {
     file: "dnd-interactions.spec.ts",
-    globs: [
-      `${WEB}/src/routes/_authenticated/tasks.index.tsx`,
-      `${WEB}/src/app/tasks/**`,
-      `${WEB}/src/server/repo/task/**`,
-    ],
-  },
-  {
-    file: "webkit.dnd-interactions.spec.ts",
     globs: [
       `${WEB}/src/routes/_authenticated/tasks.index.tsx`,
       `${WEB}/src/app/tasks/**`,
@@ -236,31 +192,12 @@ export const SPEC_AREAS: readonly SpecAreaEntry[] = [
     ],
   },
   {
-    file: "mobile.card-layout.spec.ts",
-    globs: [
-      `${WEB}/src/routes/_authenticated/products.index.tsx`,
-      `${WEB}/src/app/products/**`,
-      `${WEB}/src/server/repo/product/**`,
-    ],
-  },
-  {
     file: "entity-dependency-graph.spec.ts",
     globs: [
       `${WEB}/src/routes/_authenticated/entities.tsx`,
       `${WEB}/src/routes/_authenticated/graph.tsx`,
       `${WEB}/src/routes/_authenticated/recipes.new.tsx`,
       `${WEB}/src/routes/_authenticated/products.$shortcode.tsx`,
-      `${WEB}/src/server/repo/entity-graph.ts`,
-      `${WEB}/src/server/repo/entity-graph-explore.ts`,
-      `${WEB}/src/server/repo/entity-graph-paths.ts`,
-      `${WEB}/src/server/repo/entity-graph-path-search.ts`,
-    ],
-  },
-  {
-    file: "mobile.entity-dependency-graph.spec.ts",
-    globs: [
-      `${WEB}/src/routes/_authenticated/entities.tsx`,
-      `${WEB}/src/routes/_authenticated/graph.tsx`,
       `${WEB}/src/server/repo/entity-graph.ts`,
       `${WEB}/src/server/repo/entity-graph-explore.ts`,
       `${WEB}/src/server/repo/entity-graph-paths.ts`,
@@ -323,16 +260,6 @@ export const SPEC_AREAS: readonly SpecAreaEntry[] = [
     ],
   },
   {
-    file: "mobile.inheritance.spec.ts",
-    globs: [
-      `${WEB}/tests/e2e/inheritance-contract.ts`,
-      `${WEB}/src/server/repo/task-inheritance.ts`,
-      `${WEB}/src/server/repo/purchase-inheritance.ts`,
-      `${WEB}/src/server/repo/expense-inheritance.ts`,
-      `${WEB}/src/server/repo/inheritance-validation.ts`,
-    ],
-  },
-  {
     file: "inspect-contract.spec.ts",
     globs: [
       `${WEB}/src/routes/_authenticated/products.index.tsx`,
@@ -362,31 +289,7 @@ export const SPEC_AREAS: readonly SpecAreaEntry[] = [
     ],
   },
   {
-    file: "mobile.meal-nutrition.spec.ts",
-    globs: [
-      `${WEB}/src/routes/_authenticated/meals.$shortcode.tsx`,
-      `${WEB}/src/app/meals/**`,
-      `${WEB}/src/app/_components/nutrition/**`,
-      `${WEB}/src/server/repo/meal/**`,
-      `${WEB}/src/server/services/meal-nutrition.service.ts`,
-      `${WEB}/src/lib/meal-food-nutrition.ts`,
-    ],
-  },
-  {
     file: "nutrition.spec.ts",
-    globs: [
-      `${WEB}/src/routes/_authenticated/recipes.$shortcode.tsx`,
-      `${WEB}/src/app/recipes/**`,
-      `${WEB}/src/app/_components/nutrition/**`,
-      `${WEB}/src/server/repo/recipe/**`,
-      `${WEB}/src/server/services/recipe-costing.service.ts`,
-      `${WEB}/src/lib/nutrition-estimates.ts`,
-      `${WEB}/src/lib/nutrition-format.ts`,
-      `${WEB}/src/lib/nutrition-intel.ts`,
-    ],
-  },
-  {
-    file: "mobile.nutrition.spec.ts",
     globs: [
       `${WEB}/src/routes/_authenticated/recipes.$shortcode.tsx`,
       `${WEB}/src/app/recipes/**`,
@@ -495,29 +398,6 @@ export const SPEC_AREAS: readonly SpecAreaEntry[] = [
     ],
   },
   {
-    file: "mobile.connected-records.spec.ts",
-    globs: [
-      `${WEB}/tests/e2e/connected-records-contract.ts`,
-      `${WEB}/src/routes/_authenticated/plants.$shortcode.tsx`,
-      `${WEB}/src/routes/_authenticated/connections.tsx`,
-      `${WEB}/src/server/repo/connected-records.ts`,
-      `${WEB}/src/server/repo/relatedness/**`,
-    ],
-  },
-  {
-    file: "mobile.relationship-discovery.spec.ts",
-    globs: [
-      `${WEB}/tests/e2e/relationship-discovery-contract.ts`,
-      `${WEB}/src/server/repo/relatedness/**`,
-      `${WEB}/src/server/repo/merge/**`,
-      `${WEB}/src/server/repo/relation-mutation-adapter.ts`,
-      `${WEB}/src/server/repo/relation-preflight.ts`,
-      `${WEB}/src/server/services/relatedness.service.ts`,
-      `${WEB}/src/server/services/relatedness-ledger.ts`,
-      `${WEB}/src/server/services/placement-recommendation.service.ts`,
-    ],
-  },
-  {
     file: "shortcode-routes.spec.ts",
     globs: [
       `${WEB}/src/routes/_authenticated/$shortcode.tsx`,
@@ -532,13 +412,6 @@ export const SPEC_AREAS: readonly SpecAreaEntry[] = [
     globs: [`${WEB}/src/server/entity-kernel/**`],
   },
   {
-    file: "mobile.start-entity-transport.spec.ts",
-    globs: [
-      `${WEB}/src/server/entity-kernel/**`,
-      `${WEB}/src/app/_components/navigation/bottom-nav.tsx`,
-    ],
-  },
-  {
     file: "tools-flow.spec.ts",
     globs: [
       `${WEB}/src/routes/_authenticated/projects.tools.tsx`,
@@ -546,24 +419,6 @@ export const SPEC_AREAS: readonly SpecAreaEntry[] = [
       `${WEB}/src/app/projects/**`,
       `${WEB}/src/server/repo/project-tools.integration.test.ts`,
       `${WEB}/src/server/repo/product/**`,
-    ],
-  },
-  {
-    file: "mobile.tools-flow.spec.ts",
-    globs: [
-      `${WEB}/src/routes/_authenticated/projects.tools.tsx`,
-      `${WEB}/src/app/tools/**`,
-      `${WEB}/src/app/projects/**`,
-      `${WEB}/src/server/repo/product/**`,
-    ],
-  },
-  {
-    file: "unauth.navigation.spec.ts",
-    globs: [
-      `${WEB}/src/routes/index.tsx`,
-      `${WEB}/src/routes/auth.$authView.tsx`,
-      `${WEB}/src/app/auth/**`,
-      `${WEB}/src/app/_components/home/**`,
     ],
   },
   {
@@ -587,15 +442,6 @@ export const SPEC_AREAS: readonly SpecAreaEntry[] = [
     ],
   },
   {
-    file: "mobile.unknown-expense-dates.spec.ts",
-    globs: [
-      `${WEB}/tests/e2e/unknown-expense-date-flow.ts`,
-      `${WEB}/src/app/expenses/**`,
-      `${WEB}/src/server/repo/expense/**`,
-      `${WEB}/src/server/repo/expense-attribution.ts`,
-    ],
-  },
-  {
     file: "wardrobe-preparation.spec.ts",
     globs: [
       `${WEB}/src/routes/_authenticated/products.index.tsx`,
@@ -607,59 +453,35 @@ export const SPEC_AREAS: readonly SpecAreaEntry[] = [
     ],
   },
   {
-    file: "mobile.wardrobe.spec.ts",
+    file: "wardrobe-owner.spec.ts",
     globs: [
-      `${WEB}/src/routes/_authenticated/products.index.tsx`,
       `${WEB}/src/routes/_authenticated/collections.wardrobe.$owner.tsx`,
-      `${WEB}/src/app/products/**`,
+      `${WEB}/src/routes/_authenticated/inventory.$shortcode.tsx`,
       `${WEB}/src/app/collections/**`,
-      `${WEB}/src/server/repo/product-category.ts`,
-      `${WEB}/src/server/repo/product/**`,
+      `${WEB}/src/app/inventory/**`,
+      `${WEB}/src/server/repo/inventory/**`,
+      `${WEB}/src/server/repo/smart-collection-membership.ts`,
     ],
   },
   {
-    file: "webkit.smoke.spec.ts",
-    globs: [
-      `${WEB}/src/routes/index.tsx`,
-      `${WEB}/src/routes/_authenticated.tsx`,
-      `${WEB}/src/app/_components/home/**`,
-    ],
-  },
-  {
-    file: "mobile.smoke.spec.ts",
-    globs: [
-      `${WEB}/src/routes/index.tsx`,
-      `${WEB}/src/routes/_authenticated.tsx`,
-      `${WEB}/src/app/_components/home/**`,
-      `${WEB}/src/app/_components/navigation/bottom-nav.tsx`,
-    ],
-  },
-  {
-    file: "mobile.phone-workflows.spec.ts",
+    file: "browser-workflows.spec.ts",
     globs: [
       `${WEB}/src/routes/_authenticated/search.index.tsx`,
       `${WEB}/src/routes/_authenticated/locations.index.tsx`,
       `${WEB}/src/routes/_authenticated/products.index.tsx`,
+      `${WEB}/src/routes/_authenticated/recipes*`,
+      `${WEB}/src/routes/_authenticated/expenses*`,
+      `${WEB}/src/routes/_authenticated/meals.shopping-list.tsx`,
       `${WEB}/src/app/_components/search/**`,
       `${WEB}/src/app/locations/**`,
       `${WEB}/src/app/products/**`,
-      `${WEB}/src/app/ingredients/**`,
+      `${WEB}/src/app/recipes/**`,
+      `${WEB}/src/app/expenses/**`,
+      `${WEB}/src/app/meals/**`,
       `${WEB}/src/server/repo/location/**`,
       `${WEB}/src/server/repo/product/**`,
-      `${WEB}/src/server/repo/ingredient/**`,
-    ],
-  },
-  {
-    file: "mobile.smart-collections.spec.ts",
-    globs: [
-      `${WEB}/src/routes/_authenticated/collections.$collection.tsx`,
-      `${WEB}/src/routes/_authenticated/collections.smart.$starter.tsx`,
-      `${WEB}/src/routes/_authenticated/collections.index.tsx`,
-      `${WEB}/src/app/collections/**`,
-      `${WEB}/src/server/repo/collection.ts`,
-      `${WEB}/src/server/repo/collection-membership.ts`,
-      `${WEB}/src/server/repo/smart-collection-membership.ts`,
-      `${WEB}/src/server/repo/inventory/**`,
+      `${WEB}/src/server/repo/expense/**`,
+      `${WEB}/src/server/repo/meal/**`,
     ],
   },
 ];

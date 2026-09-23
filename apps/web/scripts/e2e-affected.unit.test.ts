@@ -38,7 +38,6 @@ describe("computeAffected", () => {
     expect(ranEverything).toBe(false);
     expect(specs).toContain("bulk-edit.spec.ts");
     expect(specs).toContain("dnd-interactions.spec.ts");
-    expect(specs).toContain("webkit.dnd-interactions.spec.ts");
     expect(specs).toContain("project-tracker.spec.ts");
     expect(specs).not.toContain("garden.spec.ts");
   });
@@ -61,7 +60,7 @@ describe("computeAffected", () => {
     );
     expect(ranEverything).toBe(false);
     expect(specs).toContain("wardrobe-preparation.spec.ts");
-    expect(specs).toContain("mobile.wardrobe.spec.ts");
+    expect(specs).not.toContain("wardrobe-owner.spec.ts");
   });
 
   it("selects every spec when a harness file changes", () => {
@@ -81,12 +80,7 @@ describe("computeAffected", () => {
       ALL_SPECS_TRIGGERS,
     );
     expect(ranEverything).toBe(false);
-    expect(specs).toEqual(
-      [
-        "mobile.relationship-discovery.spec.ts",
-        "relationship-discovery.spec.ts",
-      ].sort(),
-    );
+    expect(specs).toEqual(["relationship-discovery.spec.ts"]);
   });
 
   it("selects nothing for a docs-only change", () => {

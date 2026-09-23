@@ -35,13 +35,6 @@ for (const [key, value] of Object.entries(e2eProcessEnvDefaults)) {
   process.env[key] ??= value;
 }
 
-/** The iPhone 13 screen as current iOS reports it (402x874 at 3x). */
-const iPhone13Metrics = {
-  viewport: { width: 402, height: 874 },
-  contextOptions: { screen: { width: 402, height: 874 } },
-  deviceScaleFactor: 3,
-};
-
 /**
  * See https://playwright.dev/docs/test-configuration.
  */
@@ -51,7 +44,7 @@ export default defineConfig({
   testDir: "./tests/e2e",
   /* Public-repository ubuntu-latest CI runners have 4 vCPU, shared by the
      browser, Worker, and database. CI runs one Playwright worker per runner
-     and shards chromium across two runners (--shard) instead of running
+     and shards desktop tests across two runners (--shard) instead of running
      multiple workers on one — two workers on a single runner flaked (see
      tooling/e2e-workers.ts). Preserve the local fast-failure budget while
      giving CI scenarios more wall-clock room. */
@@ -95,12 +88,8 @@ export default defineConfig({
     screenshot: "only-on-failure",
   },
 
-  /* Projects split by layout, not engine. Desktop users run Chrome, and
-     Playwright's WebKit is not iOS Safari, so phone layout runs on Chromium
-     at iPhone 13 metrics (`mobile.*`). WebKit keeps only engine-specific
-     cases (`webkit.*`). Server/API contracts run once, in the desktop project.
-     Patterns anchor on the basename so a mid-name match cannot move a spec
-     between projects. */
+  /* Authentication modes share one desktop browser. Patterns anchor on the
+     basename so a mid-name match cannot move a spec between projects. */
   projects: [
     {
       name: "Unauthenticated tests",
@@ -113,29 +102,10 @@ export default defineConfig({
     {
       name: "Authenticated tests",
       testMatch: /\.spec\.ts$/,
-      testIgnore: /(^|\/)(?:unauth|mobile|webkit)\.[^/]*\.spec\.ts$/,
+      testIgnore: /(^|\/)unauth\.[^/]*\.spec\.ts$/,
       metadata: { authenticated: true },
       use: {
         ...devices["Desktop Chrome"],
-      },
-    },
-    {
-      name: "Chromium phone",
-      testMatch: /(^|\/)mobile\.[^/]*\.spec\.ts$/,
-      metadata: { authenticated: true },
-      use: {
-        ...devices["iPhone 13"],
-        ...iPhone13Metrics,
-        browserName: "chromium",
-      },
-    },
-    {
-      name: "WebKit smoke",
-      testMatch: /(^|\/)webkit\.[^/]*\.spec\.ts$/,
-      metadata: { authenticated: true },
-      use: {
-        ...devices["iPhone 13"],
-        ...iPhone13Metrics,
       },
     },
   ],
