@@ -245,7 +245,7 @@ export const galleryEntities: readonly GalleryEntity[] = Object.freeze(
       descriptorFor(entity).imageStorage === "gallery",
   ),
 );
-/** Entities whose single photo lives in one `coverImageId` column. */
+/** Entities whose single photo is one `cover` attachment. */
 export type CoverEntity = EntityWithImageStorage<"cover">;
 export const coverEntities: readonly CoverEntity[] = Object.freeze(
   allEntities.filter(
@@ -253,7 +253,7 @@ export const coverEntities: readonly CoverEntity[] = Object.freeze(
       descriptorFor(entity).imageStorage === "cover",
   ),
 );
-/** Entities whose single logo lives in one `logoImageId` column. */
+/** Entities whose single logo is one `logo` attachment. */
 export type LogoEntity = EntityWithImageStorage<"logo">;
 export const logoEntities: readonly LogoEntity[] = Object.freeze(
   allEntities.filter(

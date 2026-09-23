@@ -11,9 +11,9 @@ import type { Database } from "~/server/db";
 import { ENTITY_EDGE_SEMANTICS } from "~/server/db/entity-edge-semantics";
 import { INCOMING_EDGES } from "~/server/db/entity-incoming-edges";
 import {
+  entityAttachment,
   expenseAttribution,
   financialTransactionAllocation,
-  gardenEntryImage,
   gardenEntryPlanting,
   imageDerivative,
   imageDescriptionCorrection,
@@ -34,9 +34,7 @@ import {
   importSourceClaim,
   ledgerParty,
   ledgerSourceClaim,
-  locationImage,
   mailboxCursor,
-  mealImage,
   mealFoodEntry,
   mealRecipe,
   mealRecipePortion,
@@ -46,23 +44,18 @@ import {
   photoGroupProposal,
   productComponent,
   productConversionCoverage,
-  productMatchCandidate,
   productExternalId,
-  productImage,
+  productMatchCandidate,
   productUnitMappings,
   projectDependency,
-  projectImage,
   projectToolUsage,
-  purchaseImage,
   purchasePaymentEvidence,
   purchaseProduct,
-  recipeImage,
   recipeSection,
   recipeSectionIngredient,
   statementImport,
   statementRow,
   taskDependency,
-  taskImage,
   user,
   wishCandidate,
 } from "~/server/db/schema";
@@ -504,12 +497,14 @@ const SOURCE_FACTORIES = {
       name: uniq("Child category"),
       parentId: parseEntityId("productCategory", targetId),
     }),
+
   "Product.categoryId": (db, targetId) =>
     insertWithShortcode(db, "product", {
       name: uniq("Classified product"),
       manufacturer: "Test Mfr",
       categoryId: parseEntityId("productCategory", targetId),
     }),
+
   "ImageDerivative.imageId": (db, targetId) =>
     insertAndReturn(db, imageDerivative, {
       imageId: parseEntityId("image", targetId),
@@ -519,6 +514,7 @@ const SOURCE_FACTORIES = {
       sourceContentHash: uniq("source-hash"),
       processorRevision: 1,
     }),
+
   "ImageProcessingJob.imageId": (db, targetId) =>
     insertAndReturn(db, imageProcessingJob, {
       imageId: parseEntityId("image", targetId),
@@ -527,19 +523,25 @@ const SOURCE_FACTORIES = {
       sourceContentHash: uniq("source-hash"),
       processorRevision: 1,
     }),
+
   "ImageDescriptionCorrection.imageId": (db, targetId) =>
     insertAndReturn(db, imageDescriptionCorrection, {
       imageId: parseEntityId("image", targetId),
       description: "Confirmed liveness fixture description",
     }),
+
   "ImportPreparedOrder.primaryDocumentImageId": (db, targetId) =>
     mkImportPreparedOrder(db, { primaryDocumentImageId: targetId }),
+
   "ImportPreparedOrder.screenshotImageId": (db, targetId) =>
     mkImportPreparedOrder(db, { screenshotImageId: targetId }),
+
   "ImportRunTarget.imageId": (db, targetId) =>
     mkImportRunTarget(db, { imageId: parseEntityId("image", targetId) }),
+
   "ImportHunt.receiptImageId": (db, targetId) =>
     mkImportHunt(db, { receiptImageId: targetId }),
+
   "OrderMailAttachment.imageId": async (db, targetId) => {
     const mail = await mkOrderMail(db);
     return insertAndReturn(db, orderMailAttachment, {
@@ -551,6 +553,7 @@ const SOURCE_FACTORIES = {
       imageId: targetId,
     });
   },
+
   "VendorAccount.ledgerPartyId": async (db, targetId) => {
     const vendor = await mkVendor(db);
     return insertWithShortcode(db, "vendorAccount", {
@@ -559,12 +562,15 @@ const SOURCE_FACTORIES = {
       ledgerPartyId: parseEntityId("ledgerParty", targetId),
     });
   },
+
   "ImportRun.ledgerPartyId": (db, targetId) =>
     mkImportRun(db, { ledgerPartyId: parseEntityId("ledgerParty", targetId) }),
+
   "ImportSourceClaim.ledgerPartyId": (db, targetId) =>
     mkImportSourceClaim(db, {
       ledgerPartyId: parseEntityId("ledgerParty", targetId),
     }),
+
   "ImportFinding.ledgerPartyId": (db, targetId) =>
     insertAndReturn(db, importFinding, {
       ledgerPartyId: parseEntityId("ledgerParty", targetId),
@@ -574,10 +580,12 @@ const SOURCE_FACTORIES = {
       summary: "Liveness fixture",
       evidenceFingerprint: uniq("finding"),
     }),
+
   "ImportHunt.ledgerPartyId": (db, targetId) =>
     mkImportHunt(db, {
       ledgerPartyId: parseEntityId("ledgerParty", targetId),
     }),
+
   "MerchantVendorRule.ledgerPartyId": async (db, targetId) => {
     const [vendor, actor] = await Promise.all([mkVendor(db), mkUser(db)]);
     return insertAndReturn(db, merchantVendorRule, {
@@ -587,20 +595,24 @@ const SOURCE_FACTORIES = {
       confirmedByUserId: actor.id,
     });
   },
+
   "MailboxCursor.ledgerPartyId": (db, targetId) =>
     insertAndReturn(db, mailboxCursor, {
       ledgerPartyId: parseEntityId("ledgerParty", targetId),
     }),
+
   "OrderMail.ledgerPartyId": (db, targetId) =>
     mkOrderMail(db, {
       ledgerPartyId: parseEntityId("ledgerParty", targetId),
     }),
+
   "FinancialAccount.providerVendorId": (db, targetId) =>
     insertWithShortcode(db, "financialAccount", {
       name: uniq("Stored value"),
       identity: { kind: "stored_value", provider: "Synthetic store" },
       providerVendorId: parseEntityId("vendor", targetId),
     }),
+
   "VendorAccount.vendorId": async (db, targetId) => {
     const party = await mkLedgerParty(db);
     return insertWithShortcode(db, "vendorAccount", {
@@ -609,10 +621,13 @@ const SOURCE_FACTORIES = {
       ledgerPartyId: party.id,
     });
   },
+
   "ImportRun.vendorId": (db, targetId) =>
     mkImportRun(db, { vendorId: parseEntityId("vendor", targetId) }),
+
   "ImportHunt.vendorId": (db, targetId) =>
     mkImportHunt(db, { vendorId: parseEntityId("vendor", targetId) }),
+
   "MerchantVendorRule.vendorId": async (db, targetId) => {
     const [party, actor] = await Promise.all([mkLedgerParty(db), mkUser(db)]);
     return insertAndReturn(db, merchantVendorRule, {
@@ -622,12 +637,15 @@ const SOURCE_FACTORIES = {
       confirmedByUserId: actor.id,
     });
   },
+
   "OrderMail.vendorId": (db, targetId) =>
     mkOrderMail(db, { vendorId: parseEntityId("vendor", targetId) }),
+
   "ImportSourceClaim.purchaseId": (db, targetId) =>
     mkImportSourceClaim(db, {
       purchaseId: parseEntityId("purchase", targetId),
     }),
+
   "PurchasePaymentEvidence.purchaseId": async (db, targetId) => {
     const claim = await mkImportSourceClaim(db);
     return insertAndReturn(db, purchasePaymentEvidence, {
@@ -637,10 +655,12 @@ const SOURCE_FACTORIES = {
       evidenceIndex: 0,
     });
   },
+
   "ImportHunt.financialTransactionId": (db, targetId) =>
     mkImportHunt(db, {
       financialTransactionId: parseEntityId("financialTransaction", targetId),
     }),
+
   "Purchase.vendorAccountId": async (db, targetId) => {
     const vendor = await mkVendor(db);
     return insertWithShortcode(db, "purchase", {
@@ -649,10 +669,12 @@ const SOURCE_FACTORIES = {
       date: "2024-01-15",
     });
   },
+
   "ImportRun.vendorAccountId": (db, targetId) =>
     mkImportRun(db, {
       vendorAccountId: parseEntityId("vendorAccount", targetId),
     }),
+
   "PhotoGroupProposal.productId": async (db, targetId) => {
     const run = await mkImportRun(db);
     return insertAndReturn(db, photoGroupProposal, {
@@ -662,8 +684,10 @@ const SOURCE_FACTORIES = {
       productId: parseEntityId("product", targetId),
     });
   },
+
   "ImportRunTarget.productId": (db, targetId) =>
     mkImportRunTarget(db, { productId: parseEntityId("product", targetId) }),
+
   "ImportRunTarget.vendorAccountId": (db, targetId) =>
     mkProduct(db).then((product) =>
       mkImportRunTarget(db, {
@@ -671,10 +695,13 @@ const SOURCE_FACTORIES = {
         vendorAccountId: parseEntityId("vendorAccount", targetId),
       }),
     ),
+
   "ImportSourceClaim.vendorAccountId": (db, targetId) =>
     mkImportSourceClaim(db, { vendorAccountId: targetId }),
+
   "ImportHunt.vendorAccountId": (db, targetId) =>
     mkImportHunt(db, { vendorAccountId: targetId }),
+
   "ExpenseAttribution.expenseId": async (db, targetId) => {
     const party = await mkLedgerParty(db);
     return insertAndReturn(db, expenseAttribution, {
@@ -684,6 +711,7 @@ const SOURCE_FACTORIES = {
       weight: 1,
     });
   },
+
   "FinancialTransaction.ledgerTransferId": async (db, targetId) => {
     const account = await mkFinancialAccount(db);
     return insertWithShortcode(db, "financialTransaction", {
@@ -694,6 +722,7 @@ const SOURCE_FACTORIES = {
       amount: 1,
     });
   },
+
   "LedgerSourceClaim.expenseId": async (db, targetId) =>
     insertAndReturn(db, ledgerSourceClaim, {
       expenseId: parseEntityId("expense", targetId),
@@ -710,6 +739,7 @@ const SOURCE_FACTORIES = {
       targetAmountAtClaim: 1,
       reconciliationDecision: "amounts_match",
     }),
+
   "LedgerSourceClaim.ledgerTransferId": async (db, targetId) =>
     insertAndReturn(db, ledgerSourceClaim, {
       ledgerTransferId: parseEntityId("ledgerTransfer", targetId),
@@ -726,6 +756,7 @@ const SOURCE_FACTORIES = {
       targetAmountAtClaim: 1,
       reconciliationDecision: "amounts_match",
     }),
+
   "ExpenseAttribution.ledgerPartyId": async (db, targetId) => {
     const expense = await insertWithShortcode(db, "expense", {
       name: uniq("Expense"),
@@ -740,12 +771,14 @@ const SOURCE_FACTORIES = {
       weight: 1,
     });
   },
+
   "FinancialAccount.ledgerPartyId": (db, targetId) =>
     insertWithShortcode(db, "financialAccount", {
       name: uniq("Financial account"),
       identity: { kind: "cash" },
       ledgerPartyId: parseEntityId("ledgerParty", targetId),
     }),
+
   "InventoryEntry.ownerLedgerPartyId": async (db, targetId) => {
     const [product, location] = await Promise.all([
       mkProduct(db),
@@ -759,6 +792,7 @@ const SOURCE_FACTORIES = {
       ownerLedgerPartyId: parseEntityId("ledgerParty", targetId),
     });
   },
+
   "LedgerTransfer.fromPartyId": async (db, targetId) => {
     const to = await mkLedgerParty(db);
     return insertWithShortcode(db, "ledgerTransfer", {
@@ -768,6 +802,7 @@ const SOURCE_FACTORIES = {
       date: "2024-01-15",
     });
   },
+
   "LedgerTransfer.toPartyId": async (db, targetId) => {
     const from = await mkLedgerParty(db);
     return insertWithShortcode(db, "ledgerTransfer", {
@@ -777,6 +812,7 @@ const SOURCE_FACTORIES = {
       date: "2024-01-15",
     });
   },
+
   "WishCandidate.wishId": async (db, targetId) => {
     const p = await mkProduct(db);
     return insertAndReturn(db, wishCandidate, {
@@ -805,86 +841,6 @@ const SOURCE_FACTORIES = {
       forkedFromRecipeId: parseEntityId("recipe", targetId),
     }),
 
-  "Cookbook.coverImageId": (db, targetId) =>
-    insertWithShortcode(db, "cookbook", {
-      name: uniq("Cookbook"),
-      author: [],
-      subjects: [],
-      sourceLabel: "test",
-      rawJson: makeCookbookExtraction(),
-      coverImageId: targetId,
-    }),
-
-  "Vendor.logoImageId": (db, targetId) =>
-    insertWithShortcode(db, "vendor", {
-      name: uniq("Vendor"),
-      logoImageId: targetId,
-    }),
-
-  "ProductImage.imageId": async (db, targetId) => {
-    const p = await mkProduct(db);
-    return insertAndReturn(db, productImage, {
-      productId: p.id,
-      imageId: targetId,
-    });
-  },
-
-  "LocationImage.imageId": async (db, targetId) => {
-    const l = await mkLocation(db);
-    return insertAndReturn(db, locationImage, {
-      locationId: l.id,
-      imageId: targetId,
-    });
-  },
-
-  "RecipeImage.imageId": async (db, targetId) => {
-    const r = await mkRecipe(db);
-    return insertAndReturn(db, recipeImage, {
-      recipeId: r.id,
-      imageId: targetId,
-    });
-  },
-
-  "ProjectImage.imageId": async (db, targetId) => {
-    const p = await mkProject(db);
-    return insertAndReturn(db, projectImage, {
-      projectId: p.id,
-      imageId: targetId,
-    });
-  },
-
-  "PurchaseImage.imageId": async (db, targetId) => {
-    const p = await mkPurchase(db);
-    return insertAndReturn(db, purchaseImage, {
-      purchaseId: p.id,
-      imageId: targetId,
-    });
-  },
-
-  "GardenEntryImage.imageId": async (db, targetId) => {
-    const entry = await mkGardenEntry(db);
-    return insertAndReturn(db, gardenEntryImage, {
-      gardenEntryId: entry.id,
-      imageId: targetId,
-    });
-  },
-
-  "MealImage.imageId": async (db, targetId) => {
-    const m = await mkMeal(db);
-    return insertAndReturn(db, mealImage, {
-      mealId: m.id,
-      imageId: targetId,
-    });
-  },
-
-  "TaskImage.imageId": async (db, targetId) => {
-    const t = await mkTask(db);
-    return insertAndReturn(db, taskImage, {
-      taskId: t.id,
-      imageId: targetId,
-    });
-  },
-
   "RecipeSection.recipeId": (db, targetId) =>
     insertAndReturn(db, recipeSection, {
       recipeId: parseEntityId("recipe", targetId),
@@ -896,14 +852,6 @@ const SOURCE_FACTORIES = {
     return insertAndReturn(db, mealRecipe, {
       mealId: m.id,
       recipeId: parseEntityId("recipe", targetId),
-    });
-  },
-
-  "RecipeImage.recipeId": async (db, targetId) => {
-    const img = await mkImage(db);
-    return insertAndReturn(db, recipeImage, {
-      recipeId: parseEntityId("recipe", targetId),
-      imageId: img.id,
     });
   },
 
@@ -1060,14 +1008,6 @@ const SOURCE_FACTORIES = {
     });
   },
 
-  "ProductImage.productId": async (db, targetId) => {
-    const img = await mkImage(db);
-    return insertAndReturn(db, productImage, {
-      productId: parseEntityId("product", targetId),
-      imageId: img.id,
-    });
-  },
-
   "Expense.productId": (db, targetId) =>
     insertWithShortcode(db, "expense", {
       name: uniq("Expense"),
@@ -1146,16 +1086,6 @@ const SOURCE_FACTORIES = {
       observedOn: "2026-01-01",
     }),
 
-  "LocationImage.locationId": async (db, targetId) => {
-    const img = await mkImage(db);
-    return insertAndReturn(db, locationImage, {
-      locationId: parseEntityId("location", targetId),
-      imageId: img.id,
-    });
-  },
-
-  // Unconstrained at the DB level (no `.references()` — see schema.ts), but
-  // still audited: see the file-level doc comment on detectors-integrity.ts.
   "Location.parentId": (db, targetId) =>
     insertWithShortcode(db, "location", {
       name: uniq("Location"),
@@ -1218,14 +1148,6 @@ const SOURCE_FACTORIES = {
       projectId: parseEntityId("project", targetId),
     }),
 
-  "ProjectImage.projectId": async (db, targetId) => {
-    const img = await mkImage(db);
-    return insertAndReturn(db, projectImage, {
-      projectId: parseEntityId("project", targetId),
-      imageId: img.id,
-    });
-  },
-
   "ProjectToolUsage.projectId": async (db, targetId) => {
     const p = await mkProduct(db);
     return insertAndReturn(db, projectToolUsage, {
@@ -1254,30 +1176,6 @@ const SOURCE_FACTORIES = {
     return insertAndReturn(db, gardenEntryPlanting, {
       gardenEntryId: parseEntityId("gardenEntry", targetId),
       plantingId: parseEntityId("planting", planted.id),
-    });
-  },
-
-  "GardenEntryImage.gardenEntryId": async (db, targetId) => {
-    const photo = await mkImage(db);
-    return insertAndReturn(db, gardenEntryImage, {
-      gardenEntryId: parseEntityId("gardenEntry", targetId),
-      imageId: photo.id,
-    });
-  },
-
-  "MealImage.mealId": async (db, targetId) => {
-    const photo = await mkImage(db);
-    return insertAndReturn(db, mealImage, {
-      mealId: parseEntityId("meal", targetId),
-      imageId: photo.id,
-    });
-  },
-
-  "TaskImage.taskId": async (db, targetId) => {
-    const photo = await mkImage(db);
-    return insertAndReturn(db, taskImage, {
-      taskId: parseEntityId("task", targetId),
-      imageId: photo.id,
     });
   },
 
@@ -1320,14 +1218,6 @@ const SOURCE_FACTORIES = {
       date: "2024-01-15",
       purchaseId: parseEntityId("purchase", targetId),
     }),
-
-  "PurchaseImage.purchaseId": async (db, targetId) => {
-    const img = await mkImage(db);
-    return insertAndReturn(db, purchaseImage, {
-      purchaseId: parseEntityId("purchase", targetId),
-      imageId: img.id,
-    });
-  },
 
   "PurchaseProduct.purchaseId": async (db, targetId) => {
     const prod = await mkProduct(db);
@@ -1447,10 +1337,12 @@ const SOURCE_FACTORIES = {
       date: "2024-01-15",
     });
   },
+
   "ImportRun.predecessorRunId": (db, targetId) =>
     mkImportRun(db, {
       predecessorRunId: parseEntityId("importRun", targetId),
     }),
+
   "PhotoGroupProposal.runId": (db, targetId) =>
     insertAndReturn(db, photoGroupProposal, {
       runId: parseEntityId("importRun", targetId),
@@ -1458,6 +1350,7 @@ const SOURCE_FACTORIES = {
       productKind: "create",
       productCreate: { name: uniq("Proposal") },
     }),
+
   "ImportRunTarget.runId": async (db, targetId) => {
     const product = await mkProduct(db);
     return mkImportRunTarget(db, {
@@ -1465,11 +1358,13 @@ const SOURCE_FACTORIES = {
       productId: product.id,
     });
   },
+
   "ImportRunOrderCandidate.runId": (db, targetId) =>
     insertAndReturn(db, importRunOrderCandidate, {
       runId: parseEntityId("importRun", targetId),
       orderId: uniq("order"),
     }),
+
   "ImportRunEvidence.runId": async (db, targetId) => {
     const product = await mkProduct(db);
     const evidenceTarget = await mkImportRunTarget(db, {
@@ -1484,6 +1379,7 @@ const SOURCE_FACTORIES = {
       mediaType: "application/pdf",
     });
   },
+
   "ImportRunMutation.runId": (db, targetId) =>
     insertAndReturn(db, importRunMutation, {
       runId: parseEntityId("importRun", targetId),
@@ -1492,6 +1388,7 @@ const SOURCE_FACTORIES = {
       mutationKind: "liveness-fixture",
       postFingerprint: uniq("post-fingerprint"),
     }),
+
   "ImportRunOperation.runId": (db, targetId) =>
     insertAndReturn(db, importRunOperation, {
       runId: parseEntityId("importRun", targetId),
@@ -1499,12 +1396,14 @@ const SOURCE_FACTORIES = {
       kind: "liveness-fixture",
       inputFingerprint: uniq("input-fingerprint"),
     }),
+
   "ImportRunProgress.runId": (db, targetId) =>
     insertAndReturn(db, importRunProgress, {
       runId: parseEntityId("importRun", targetId),
       eventId: uniq("progress-event"),
       phase: "liveness-fixture",
     }),
+
   "ImportRunControlEvent.runId": (db, targetId) =>
     insertAndReturn(db, importRunControlEvent, {
       runId: parseEntityId("importRun", targetId),
@@ -1520,10 +1419,12 @@ const SOURCE_FACTORIES = {
       controllerLedgerPartyName: "Liveness fixture party",
       controllerLedgerPartyKind: "member",
     }),
+
   "ImportPreparedOrder.runId": (db, targetId) =>
     mkImportPreparedOrder(db, {
       runId: parseEntityId("importRun", targetId),
     }),
+
   "ImportRunApproval.runId": (db, targetId) =>
     insertAndReturn(db, importRunApproval, {
       runId: parseEntityId("importRun", targetId),
@@ -1534,14 +1435,17 @@ const SOURCE_FACTORIES = {
       targetFingerprint: uniq("target-fingerprint"),
       evidenceFingerprint: uniq("evidence-fingerprint"),
     }),
+
   "ImportSourceClaim.firstRunId": (db, targetId) =>
     mkImportSourceClaim(db, {
       firstRunId: parseEntityId("importRun", targetId),
     }),
+
   "ImportSourceClaim.lastRunId": (db, targetId) =>
     mkImportSourceClaim(db, {
       lastRunId: parseEntityId("importRun", targetId),
     }),
+
   "ImportFinding.importRunId": async (db, targetId) => {
     const party = await mkLedgerParty(db);
     return insertAndReturn(db, importFinding, {
@@ -1554,10 +1458,12 @@ const SOURCE_FACTORIES = {
       evidenceFingerprint: uniq("finding"),
     });
   },
+
   "ImportHunt.receiptRunId": (db, targetId) =>
     mkImportHunt(db, {
       receiptRunId: parseEntityId("importRun", targetId),
     }),
+
   "Device.ledgerPartyId": (db, targetId) =>
     insertWithShortcode(db, "device", {
       installationId: uniq("installation"),
@@ -1565,6 +1471,7 @@ const SOURCE_FACTORIES = {
       platform: "ios",
       ledgerPartyId: parseEntityId("ledgerParty", targetId),
     }),
+
   "Device.productId": (db, targetId) =>
     insertWithShortcode(db, "device", {
       installationId: uniq("installation"),
@@ -1572,14 +1479,18 @@ const SOURCE_FACTORIES = {
       platform: "ios",
       productId: parseEntityId("product", targetId),
     }),
+
   "ImageSighting.imageId": (db, targetId) =>
     mkImageSighting(db, { imageId: parseEntityId("image", targetId) }),
+
   "ImageSighting.ledgerPartyId": (db, targetId) =>
     mkImageSighting(db, {
       ledgerPartyId: parseEntityId("ledgerParty", targetId),
     }),
+
   "ImageSighting.deviceId": (db, targetId) =>
     mkImageSighting(db, { deviceId: parseEntityId("device", targetId) }),
+
   "Image.capturedByPartyId": (db, targetId) =>
     insertWithShortcode(db, "image", {
       key: uniq("test/img"),
@@ -1588,6 +1499,24 @@ const SOURCE_FACTORIES = {
       contentType: "image/png",
       capturedByPartyId: parseEntityId("ledgerParty", targetId),
     }),
+
+  // One factory per attachment edge serves every subject kind: entity ids
+  // are unique across tables, so the attachment only needs the id.
+  "EntityAttachment.imageId": async (db, targetId) => {
+    const p = await mkProduct(db);
+    return insertAndReturn(db, entityAttachment, {
+      subjectEntityId: p.id,
+      imageId: targetId,
+    });
+  },
+
+  "EntityAttachment.subjectEntityId": async (db, targetId) => {
+    const img = await mkImage(db);
+    return insertAndReturn(db, entityAttachment, {
+      subjectEntityId: targetId,
+      imageId: img.id,
+    });
+  },
 } satisfies Record<
   string,
   (db: Database, targetId: string) => Promise<{ id: string }>
@@ -1682,7 +1611,7 @@ describe("findReferentialLivenessViolations", () => {
 
   it("the hand-written fixture map covers exactly the derived edges (a new edge fails here, not silently)", () => {
     expect(Object.keys(SOURCE_FACTORIES).sort()).toEqual(
-      derivedMustTargetLiveEdges.map((s) => s.edgeKey).sort(),
+      [...new Set(derivedMustTargetLiveEdges.map((s) => s.edgeKey))].sort(),
     );
     for (const spec of derivedMustTargetLiveEdges) {
       expect(

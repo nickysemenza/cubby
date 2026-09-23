@@ -15,6 +15,7 @@ import type {
   ProductId,
   ProductCategoryId,
 } from "@cubby/schemas/identifiers";
+import { parseEntityId } from "@cubby/schemas/identifiers";
 import type { ImageOut } from "@cubby/schemas/image";
 import { preferredImageUrl } from "@cubby/schemas/image-summary";
 import {
@@ -57,20 +58,20 @@ import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
 import {
   cookbook,
   device,
-  photoGroupProposal,
+  entityAttachment,
   expense,
   image,
-  plant,
-  inventoryEntry,
   importRunTarget,
+  inventoryEntry,
   location,
   mealFoodEntry,
-  product,
+  photoGroupProposal,
+  plant,
   planting,
+  product,
   productComponent,
   productConversionCoverage,
   productExternalId,
-  productImage,
   productUnitMappings,
   projectToolUsage,
   purchaseProduct,
@@ -458,20 +459,20 @@ export const getProductImagesByProductIds = async (
 
   const rows = await getDb(db)
     .select({
-      productId: productImage.productId,
+      productId: entityAttachment.subjectEntityId,
       image,
     })
-    .from(productImage)
-    .innerJoin(image, eq(productImage.imageId, image.id))
+    .from(entityAttachment)
+    .innerJoin(image, eq(entityAttachment.imageId, image.id))
     .where(
       and(
-        inArray(productImage.productId, uniqueIds),
-        notDeleted(productImage),
-        sql`${productImage.purpose} IS DISTINCT FROM 'label'`,
+        inArray(entityAttachment.subjectEntityId, uniqueIds),
+        notDeleted(entityAttachment),
+        sql`${entityAttachment.purpose} IS DISTINCT FROM 'label'`,
         notDeleted(image),
       ),
     )
-    .orderBy(asc(productImage.sortOrder), asc(productImage.createdAt));
+    .orderBy(asc(entityAttachment.sortOrder), asc(entityAttachment.createdAt));
 
   for (const row of rows) {
     const [mapped] = mapImages([row.image]);
@@ -659,16 +660,16 @@ export const buildProductWhere = async (
   // Joins Image so this matches what the thumbnail cell actually renders — it
   // drops PDF manuals, and Image is separately soft-deletable from ProductImage.
   const productIdsWithImages = dbClient
-    .select({ productId: productImage.productId })
-    .from(productImage)
+    .select({ productId: entityAttachment.subjectEntityId })
+    .from(entityAttachment)
     .innerJoin(
       image,
-      and(eq(image.id, productImage.imageId), notDeleted(image)),
+      and(eq(image.id, entityAttachment.imageId), notDeleted(image)),
     )
     .where(
       and(
-        notDeleted(productImage),
-        sql`${productImage.purpose} IS DISTINCT FROM 'label'`,
+        notDeleted(entityAttachment),
+        sql`${entityAttachment.purpose} IS DISTINCT FROM 'label'`,
         displayableImageWhere,
       ),
     );
@@ -1136,12 +1137,15 @@ const loadProductListRelations = async (
 
   const [images, externalIds, unitMappings, inventoryEntries] =
     await Promise.all([
-      getDb(db).query.productImage.findMany({
+      getDb(db).query.entityAttachment.findMany({
         where: and(
-          inArray(productImage.productId, uniqueIds),
-          notDeleted(productImage),
+          inArray(entityAttachment.subjectEntityId, uniqueIds),
+          notDeleted(entityAttachment),
         ),
-        orderBy: [asc(productImage.sortOrder), asc(productImage.createdAt)],
+        orderBy: [
+          asc(entityAttachment.sortOrder),
+          asc(entityAttachment.createdAt),
+        ],
         with: { image: true },
       }),
       getDb(db).query.productExternalId.findMany({
@@ -1167,7 +1171,7 @@ const loadProductListRelations = async (
     ]);
 
   for (const row of images) {
-    result.get(row.productId)?.images.push(row);
+    result.get(parseEntityId("product", row.subjectEntityId))?.images.push(row);
   }
   for (const row of externalIds) {
     result.get(row.productId)?.externalIds.push(row);
@@ -1609,13 +1613,13 @@ export const createProduct = async (
             const imageId = resolvedByCode.get(shortcode);
             if (!imageId) continue;
             await tx
-              .update(productImage)
+              .update(entityAttachment)
               .set({ purpose })
               .where(
                 and(
-                  eq(productImage.productId, newProduct.id),
-                  eq(productImage.imageId, imageId),
-                  notDeleted(productImage),
+                  eq(entityAttachment.subjectEntityId, newProduct.id),
+                  eq(entityAttachment.imageId, imageId),
+                  notDeleted(entityAttachment),
                 ),
               );
           }
@@ -1897,15 +1901,18 @@ export const updateProduct = async (
 
       // Fetch all associated images (live only — just-removed ones must not
       // reappear in the response) in display order.
-      const productImages = await tx.query.productImage.findMany({
+      const productImages = await tx.query.entityAttachment.findMany({
         where: and(
-          eq(productImage.productId, updated.id),
-          notDeleted(productImage),
+          eq(entityAttachment.subjectEntityId, updated.id),
+          notDeleted(entityAttachment),
         ),
         with: {
           image: true,
         },
-        orderBy: [asc(productImage.sortOrder), asc(productImage.createdAt)],
+        orderBy: [
+          asc(entityAttachment.sortOrder),
+          asc(entityAttachment.createdAt),
+        ],
       });
 
       const currentExternalIdRows = await tx.query.productExternalId.findMany({
@@ -2561,8 +2568,8 @@ export const deleteProducts = async (
           auditKey: "cascadedExternalIds",
         },
         {
-          table: productImage,
-          parentColumns: [productImage.productId],
+          table: entityAttachment,
+          parentColumns: [entityAttachment.subjectEntityId],
           auditKey: "cascadedImages",
         },
         {

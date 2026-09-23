@@ -5,6 +5,10 @@ import type {
 import type { AuditEntityType } from "@cubby/schemas/audit";
 import type { Amount } from "@cubby/schemas/codec";
 import type { AuditChannel } from "@cubby/schemas/context";
+import {
+  type EntityAttachmentRole,
+  entityAttachmentRoleValues,
+} from "@cubby/schemas/entity-attachment";
 import type { Entity } from "@cubby/schemas/entity-core";
 import type {
   DeviceId,
@@ -82,7 +86,7 @@ import {
   user,
   verification,
 } from "./auth.schema";
-import { entityIdentityFk } from "./entity-identity-schema";
+import { entityIdentity, entityIdentityFk } from "./entity-identity-schema";
 import {
   generatedCookbookColumns,
   generatedDeviceColumns,
@@ -270,7 +274,6 @@ export const recipe = pgTable(
 export const cookbook = pgTable(
   "Cookbook",
   generatedCookbookColumns({
-    image: (): AnyPgColumn => image.id,
     product: (): AnyPgColumn => product.id,
   }),
   (table) => [
@@ -280,7 +283,6 @@ export const cookbook = pgTable(
       .on(table.name)
       .where(sql`${table.deletedAt} IS NULL`),
     index("Cookbook_createdAt_idx").on(table.createdAt),
-    index("Cookbook_coverImageId_idx").on(table.coverImageId),
     index("Cookbook_productId_idx").on(table.productId),
     index("Cookbook_name_gin_idx").using(
       "gin",
@@ -974,67 +976,74 @@ export const image = pgTable(
       .where(sql`${table.deletedAt} IS NULL`),
     index("Image_createdAt_idx").on(table.createdAt),
     index("Image_status_idx").on(table.status),
-    uniqueIndex("Image_attachment_idempotency_key")
-      .on(table.targetType, table.targetId, table.idempotencyKey)
-      .where(
-        sql`${table.idempotencyKey} IS NOT NULL AND ${table.deletedAt} IS NULL`,
-      ),
     index("Image_capturedByPartyId_idx").on(table.capturedByPartyId),
   ],
 );
 
-export const productImage = pgTable(
-  "ProductImage",
+/**
+ * Every direct file association, for every entity (ADR 0006). Replaces the
+ * per-entity gallery joins and the cookbook cover / vendor logo columns.
+ *
+ * `role` follows the subject kind's declared image storage: gallery entities
+ * hold `attachment` rows, a cookbook one `cover`, a vendor one `logo`.
+ * `purpose` is Product-only and `documentKind` Purchase-only; the attach
+ * helpers enforce both because a CHECK cannot see the subject's kind.
+ *
+ * Detach soft-deletes. Upload idempotency lives here rather than on `Image`,
+ * so a key reuses a file only while that exact association is active.
+ */
+export const entityAttachment = pgTable(
+  "EntityAttachment",
   {
     id: pkUuid(),
-    productId: uuid("productId")
+    subjectEntityId: uuid("subjectEntityId")
       .notNull()
-      .$type<ProductId>()
-      .references(() => product.id),
+      .references(() => entityIdentity.id),
     imageId: uuid("imageId")
       .notNull()
       .references(() => image.id),
+    role: text("role", { enum: entityAttachmentRoleValues })
+      .notNull()
+      .default("attachment")
+      .$type<EntityAttachmentRole>(),
     // Display order; 0 default means legacy rows tie-break on createdAt.
     sortOrder: integer("sortOrder").notNull().default(0),
     // `null` is the legacy item role and deliberately remains displayable.
     purpose: text("purpose", { enum: ["item", "label"] as const }),
+    documentKind: text("documentKind", {
+      enum: purchaseDocumentKindValues,
+    }).$type<PurchaseDocumentKind>(),
+    idempotencyKey: text("idempotencyKey"),
     ...baseTimestamps(),
     ...softDeletedAt(),
   },
   (table) => [
-    uniqueIndex("ProductImage_productId_imageId_key")
-      .on(table.productId, table.imageId)
+    uniqueIndex("EntityAttachment_subject_image_key")
+      .on(table.subjectEntityId, table.imageId)
       .where(sql`${table.deletedAt} IS NULL`),
-    index("ProductImage_productId_idx").on(table.productId),
-    index("ProductImage_imageId_idx").on(table.imageId),
+    uniqueIndex("EntityAttachment_subject_singular_role_key")
+      .on(table.subjectEntityId, table.role)
+      .where(
+        sql`${table.role} IN ('cover', 'logo') AND ${table.deletedAt} IS NULL`,
+      ),
+    uniqueIndex("EntityAttachment_subject_idempotency_key")
+      .on(table.subjectEntityId, table.idempotencyKey)
+      .where(
+        sql`${table.idempotencyKey} IS NOT NULL AND ${table.deletedAt} IS NULL`,
+      ),
+    index("EntityAttachment_subject_order_idx").on(
+      table.subjectEntityId,
+      table.sortOrder,
+    ),
+    index("EntityAttachment_imageId_idx").on(table.imageId),
     check(
-      "ProductImage_purpose_check",
+      "EntityAttachment_role_check",
+      sql`${table.role} IN ('attachment', 'cover', 'logo')`,
+    ),
+    check(
+      "EntityAttachment_purpose_check",
       sql`${table.purpose} IS NULL OR ${table.purpose} IN ('item', 'label')`,
     ),
-  ],
-);
-
-export const locationImage = pgTable(
-  "LocationImage",
-  {
-    id: pkUuid(),
-    locationId: uuid("locationId")
-      .notNull()
-      .$type<LocationId>()
-      .references(() => location.id),
-    imageId: uuid("imageId")
-      .notNull()
-      .references(() => image.id),
-    sortOrder: integer("sortOrder").notNull().default(0),
-    ...baseTimestamps(),
-    ...softDeletedAt(),
-  },
-  (table) => [
-    uniqueIndex("LocationImage_locationId_imageId_key")
-      .on(table.locationId, table.imageId)
-      .where(sql`${table.deletedAt} IS NULL`),
-    index("LocationImage_locationId_idx").on(table.locationId),
-    index("LocationImage_imageId_idx").on(table.imageId),
   ],
 );
 
@@ -1112,101 +1121,6 @@ export const gardenEntryPlanting = pgTable(
       .where(sql`${table.deletedAt} IS NULL`),
     index("GardenEntryPlanting_gardenEntryId_idx").on(table.gardenEntryId),
     index("GardenEntryPlanting_plantingId_idx").on(table.plantingId),
-  ],
-);
-
-export const gardenEntryImage = pgTable(
-  "GardenEntryImage",
-  {
-    id: pkUuid(),
-    gardenEntryId: uuid("gardenEntryId")
-      .notNull()
-      .references(() => gardenEntry.id),
-    imageId: uuid("imageId")
-      .notNull()
-      .references(() => image.id),
-    sortOrder: integer("sortOrder").notNull().default(0),
-    ...baseTimestamps(),
-    ...softDeletedAt(),
-  },
-  (table) => [
-    uniqueIndex("GardenEntryImage_gardenEntryId_imageId_key")
-      .on(table.gardenEntryId, table.imageId)
-      .where(sql`${table.deletedAt} IS NULL`),
-    index("GardenEntryImage_gardenEntryId_idx").on(table.gardenEntryId),
-    index("GardenEntryImage_imageId_idx").on(table.imageId),
-  ],
-);
-
-export const recipeImage = pgTable(
-  "RecipeImage",
-  {
-    id: pkUuid(),
-    recipeId: uuid("recipeId")
-      .notNull()
-      .$type<RecipeId>()
-      .references(() => recipe.id),
-    imageId: uuid("imageId")
-      .notNull()
-      .references(() => image.id),
-    sortOrder: integer("sortOrder").notNull().default(0),
-    ...baseTimestamps(),
-    ...softDeletedAt(),
-  },
-  (table) => [
-    uniqueIndex("RecipeImage_recipeId_imageId_key")
-      .on(table.recipeId, table.imageId)
-      .where(sql`${table.deletedAt} IS NULL`),
-    index("RecipeImage_recipeId_idx").on(table.recipeId),
-    index("RecipeImage_imageId_idx").on(table.imageId),
-  ],
-);
-
-export const mealImage = pgTable(
-  "MealImage",
-  {
-    id: pkUuid(),
-    mealId: uuid("mealId")
-      .notNull()
-      .$type<MealId>()
-      .references(() => meal.id),
-    imageId: uuid("imageId")
-      .notNull()
-      .references(() => image.id),
-    sortOrder: integer("sortOrder").notNull().default(0),
-    ...baseTimestamps(),
-    ...softDeletedAt(),
-  },
-  (table) => [
-    uniqueIndex("MealImage_mealId_imageId_key")
-      .on(table.mealId, table.imageId)
-      .where(sql`${table.deletedAt} IS NULL`),
-    index("MealImage_mealId_idx").on(table.mealId),
-    index("MealImage_imageId_idx").on(table.imageId),
-  ],
-);
-
-export const taskImage = pgTable(
-  "TaskImage",
-  {
-    id: pkUuid(),
-    taskId: uuid("taskId")
-      .notNull()
-      .$type<TaskId>()
-      .references(() => task.id),
-    imageId: uuid("imageId")
-      .notNull()
-      .references(() => image.id),
-    sortOrder: integer("sortOrder").notNull().default(0),
-    ...baseTimestamps(),
-    ...softDeletedAt(),
-  },
-  (table) => [
-    uniqueIndex("TaskImage_taskId_imageId_key")
-      .on(table.taskId, table.imageId)
-      .where(sql`${table.deletedAt} IS NULL`),
-    index("TaskImage_taskId_idx").on(table.taskId),
-    index("TaskImage_imageId_idx").on(table.imageId),
   ],
 );
 
@@ -1369,26 +1283,21 @@ export const taskDependency = pgTable(
  * its own table, which is why a vendor's documents and contractor metadata had
  * nowhere to live.
  */
-export const vendor = pgTable(
-  "Vendor",
-  generatedVendorColumns({ image: (): AnyPgColumn => image.id }),
-  (table) => [
-    shortcodeUnique("Vendor", table.shortcode),
-    entityIdentityFk("Vendor", table),
-    uniqueIndex("Vendor_name_key")
-      .on(table.name)
-      .where(sql`${table.deletedAt} IS NULL`),
-    index("Vendor_logoImageId_idx").on(table.logoImageId),
-    check(
-      "Vendor_orderEvidence_check",
-      sql`${table.orderEvidence} IS NULL OR ${table.orderEvidence} IN ('online_account', 'receipt_only', 'not_expected')`,
-    ),
-    check(
-      "Vendor_returnWindowDays_check",
-      sql`${table.returnWindowDays} IS NULL OR ${table.returnWindowDays} >= 0`,
-    ),
-  ],
-);
+export const vendor = pgTable("Vendor", generatedVendorColumns(), (table) => [
+  shortcodeUnique("Vendor", table.shortcode),
+  entityIdentityFk("Vendor", table),
+  uniqueIndex("Vendor_name_key")
+    .on(table.name)
+    .where(sql`${table.deletedAt} IS NULL`),
+  check(
+    "Vendor_orderEvidence_check",
+    sql`${table.orderEvidence} IS NULL OR ${table.orderEvidence} IN ('online_account', 'receipt_only', 'not_expected')`,
+  ),
+  check(
+    "Vendor_returnWindowDays_check",
+    sql`${table.returnWindowDays} IS NULL OR ${table.returnWindowDays} >= 0`,
+  ),
+]);
 
 export const financialAccount = pgTable(
   "FinancialAccount",
@@ -1537,36 +1446,6 @@ export const purchase = pgTable(
       "gin",
       sql`${table.displayLabel} gin_trgm_ops`,
     ),
-  ],
-);
-
-export const purchaseImage = pgTable(
-  "PurchaseImage",
-  {
-    id: pkUuid(),
-    purchaseId: uuid("purchaseId")
-      .notNull()
-      .$type<PurchaseId>()
-      .references(() => purchase.id),
-    imageId: uuid("imageId")
-      .notNull()
-      .references(() => image.id),
-    sortOrder: integer("sortOrder").notNull().default(0),
-    documentKind: text("documentKind", {
-      enum: purchaseDocumentKindValues,
-    })
-      .notNull()
-      .$type<PurchaseDocumentKind>()
-      .default("other"),
-    ...baseTimestamps(),
-    ...softDeletedAt(),
-  },
-  (table) => [
-    uniqueIndex("PurchaseImage_purchaseId_imageId_key")
-      .on(table.purchaseId, table.imageId)
-      .where(sql`${table.deletedAt} IS NULL`),
-    index("PurchaseImage_purchaseId_idx").on(table.purchaseId),
-    index("PurchaseImage_imageId_idx").on(table.imageId),
   ],
 );
 
@@ -2887,30 +2766,6 @@ export const ledgerSourceClaim = pgTable(
   ],
 );
 
-export const projectImage = pgTable(
-  "ProjectImage",
-  {
-    id: pkUuid(),
-    projectId: uuid("projectId")
-      .notNull()
-      .$type<ProjectId>()
-      .references(() => project.id),
-    imageId: uuid("imageId")
-      .notNull()
-      .references(() => image.id),
-    sortOrder: integer("sortOrder").notNull().default(0),
-    ...baseTimestamps(),
-    ...softDeletedAt(),
-  },
-  (table) => [
-    uniqueIndex("ProjectImage_projectId_imageId_key")
-      .on(table.projectId, table.imageId)
-      .where(sql`${table.deletedAt} IS NULL`),
-    index("ProjectImage_projectId_idx").on(table.projectId),
-    index("ProjectImage_imageId_idx").on(table.imageId),
-  ],
-);
-
 export const recipeRelations = relations(recipe, ({ one, many }) => ({
   sections: many(recipeSection),
   pointerIngredient: one(ingredient, {
@@ -2929,16 +2784,13 @@ export const recipeRelations = relations(recipe, ({ one, many }) => ({
   forks: many(recipe, {
     relationName: "RecipeForkedFrom",
   }),
-  images: many(recipeImage),
+  images: many(entityAttachment),
   mealRecipes: many(mealRecipe),
 }));
 
 export const cookbookRelations = relations(cookbook, ({ one, many }) => ({
   recipes: many(recipe),
-  coverImage: one(image, {
-    fields: [cookbook.coverImageId],
-    references: [image.id],
-  }),
+  attachments: many(entityAttachment),
   product: one(product, {
     fields: [cookbook.productId],
     references: [product.id],
@@ -2985,7 +2837,7 @@ export const mealRelations = relations(meal, ({ many }) => ({
   recipes: many(mealRecipe),
   recipePortions: many(mealRecipePortion),
   foodEntries: many(mealFoodEntry),
-  images: many(mealImage),
+  images: many(entityAttachment),
 }));
 
 export const mealRecipeRelations = relations(mealRecipe, ({ one, many }) => ({
@@ -3056,7 +2908,7 @@ export const productRelations = relations(product, ({ one, many }) => ({
   conversionCoverage: one(productConversionCoverage),
   externalIds: many(productExternalId),
   inventoryEntry: many(inventoryEntry),
-  images: many(productImage),
+  images: many(entityAttachment),
   expenses: many(expense),
   projectToolUsages: many(projectToolUsage),
   purchaseProducts: many(purchaseProduct),
@@ -3115,7 +2967,7 @@ export const locationRelations = relations(location, ({ one, many }) => ({
     relationName: "LocationToLocation",
   }),
   inventoryEntries: many(inventoryEntry),
-  images: many(locationImage),
+  images: many(entityAttachment),
   product: one(product, {
     fields: [location.productId],
     references: [product.id],
@@ -3159,7 +3011,7 @@ export const gardenEntryRelations = relations(gardenEntry, ({ one, many }) => ({
     references: [location.id],
   }),
   plantings: many(gardenEntryPlanting),
-  images: many(gardenEntryImage),
+  images: many(entityAttachment),
 }));
 
 export const gardenEntryPlantingRelations = relations(
@@ -3192,22 +3044,67 @@ export const inventoryEntryRelations = relations(inventoryEntry, ({ one }) => ({
 }));
 
 export const imageRelations = relations(image, ({ many }) => ({
-  productImages: many(productImage),
-  locationImages: many(locationImage),
-  recipeImages: many(recipeImage),
-  projectImages: many(projectImage),
-  purchaseImages: many(purchaseImage),
-  gardenEntryImages: many(gardenEntryImage),
-  mealImages: many(mealImage),
-  taskImages: many(taskImage),
-  cookbookCovers: many(cookbook),
-  vendorLogos: many(vendor),
+  attachments: many(entityAttachment),
 }));
+
+/**
+ * One relation per subject kind; ids are unique across entity tables, so a
+ * join on `subjectEntityId` needs no kind filter.
+ */
+export const entityAttachmentRelations = relations(
+  entityAttachment,
+  ({ one }) => ({
+    image: one(image, {
+      fields: [entityAttachment.imageId],
+      references: [image.id],
+    }),
+    product: one(product, {
+      fields: [entityAttachment.subjectEntityId],
+      references: [product.id],
+    }),
+    location: one(location, {
+      fields: [entityAttachment.subjectEntityId],
+      references: [location.id],
+    }),
+    gardenEntry: one(gardenEntry, {
+      fields: [entityAttachment.subjectEntityId],
+      references: [gardenEntry.id],
+    }),
+    recipe: one(recipe, {
+      fields: [entityAttachment.subjectEntityId],
+      references: [recipe.id],
+    }),
+    meal: one(meal, {
+      fields: [entityAttachment.subjectEntityId],
+      references: [meal.id],
+    }),
+    task: one(task, {
+      fields: [entityAttachment.subjectEntityId],
+      references: [task.id],
+    }),
+    purchase: one(purchase, {
+      fields: [entityAttachment.subjectEntityId],
+      references: [purchase.id],
+    }),
+    project: one(project, {
+      fields: [entityAttachment.subjectEntityId],
+      references: [project.id],
+    }),
+    cookbook: one(cookbook, {
+      fields: [entityAttachment.subjectEntityId],
+      references: [cookbook.id],
+    }),
+    vendor: one(vendor, {
+      fields: [entityAttachment.subjectEntityId],
+      references: [vendor.id],
+    }),
+  }),
+);
 
 export const projectRelations = relations(project, ({ one, many }) => ({
   tasks: many(task),
   expenses: many(expense),
-  images: many(projectImage),
+  images: many(entityAttachment),
   toolUsages: many(projectToolUsage),
   parentProject: one(project, {
     fields: [project.parentProjectId],
@@ -3285,7 +3182,7 @@ export const taskRelations = relations(task, ({ one, many }) => ({
   }),
   blockedBy: many(taskDependency, { relationName: "TaskBlocked" }),
   blocking: many(taskDependency, { relationName: "TaskBlocking" }),
-  images: many(taskImage),
+  images: many(entityAttachment),
 }));
 
 export const taskDependencyRelations = relations(taskDependency, ({ one }) => ({
@@ -3358,12 +3255,9 @@ export const ledgerSourceClaimRelations = relations(
   }),
 );
 
-export const vendorRelations = relations(vendor, ({ one, many }) => ({
+export const vendorRelations = relations(vendor, ({ many }) => ({
   purchases: many(purchase),
-  logo: one(image, {
-    fields: [vendor.logoImageId],
-    references: [image.id],
-  }),
+  attachments: many(entityAttachment),
 }));
 
 export const financialAccountRelations = relations(
@@ -3383,7 +3277,7 @@ export const purchaseRelations = relations(purchase, ({ one, many }) => ({
     references: [vendor.id],
   }),
   expenses: many(expense),
-  images: many(purchaseImage),
+  images: many(entityAttachment),
   products: many(purchaseProduct),
   settlementAllocations: many(financialTransactionAllocation),
 }));
@@ -3464,97 +3358,6 @@ export const productComponentRelations = relations(
     }),
   }),
 );
-
-export const purchaseImageRelations = relations(purchaseImage, ({ one }) => ({
-  purchase: one(purchase, {
-    fields: [purchaseImage.purchaseId],
-    references: [purchase.id],
-  }),
-  image: one(image, {
-    fields: [purchaseImage.imageId],
-    references: [image.id],
-  }),
-}));
-
-export const projectImageRelations = relations(projectImage, ({ one }) => ({
-  project: one(project, {
-    fields: [projectImage.projectId],
-    references: [project.id],
-  }),
-  image: one(image, {
-    fields: [projectImage.imageId],
-    references: [image.id],
-  }),
-}));
-
-export const productImageRelations = relations(productImage, ({ one }) => ({
-  product: one(product, {
-    fields: [productImage.productId],
-    references: [product.id],
-  }),
-  image: one(image, {
-    fields: [productImage.imageId],
-    references: [image.id],
-  }),
-}));
-
-export const locationImageRelations = relations(locationImage, ({ one }) => ({
-  location: one(location, {
-    fields: [locationImage.locationId],
-    references: [location.id],
-  }),
-  image: one(image, {
-    fields: [locationImage.imageId],
-    references: [image.id],
-  }),
-}));
-
-export const gardenEntryImageRelations = relations(
-  gardenEntryImage,
-  ({ one }) => ({
-    gardenEntry: one(gardenEntry, {
-      fields: [gardenEntryImage.gardenEntryId],
-      references: [gardenEntry.id],
-    }),
-    image: one(image, {
-      fields: [gardenEntryImage.imageId],
-      references: [image.id],
-    }),
-  }),
-);
-
-export const recipeImageRelations = relations(recipeImage, ({ one }) => ({
-  recipe: one(recipe, {
-    fields: [recipeImage.recipeId],
-    references: [recipe.id],
-  }),
-  image: one(image, {
-    fields: [recipeImage.imageId],
-    references: [image.id],
-  }),
-}));
-
-export const mealImageRelations = relations(mealImage, ({ one }) => ({
-  meal: one(meal, {
-    fields: [mealImage.mealId],
-    references: [meal.id],
-  }),
-  image: one(image, {
-    fields: [mealImage.imageId],
-    references: [image.id],
-  }),
-}));
-
-export const taskImageRelations = relations(taskImage, ({ one }) => ({
-  task: one(task, {
-    fields: [taskImage.taskId],
-    references: [task.id],
-  }),
-  image: one(image, {
-    fields: [taskImage.imageId],
-    references: [image.id],
-  }),
-}));
 
 export const aiAnalysis = pgTable(
   "AiAnalysis",

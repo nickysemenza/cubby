@@ -27696,31 +27696,6 @@
             "explode": true
           },
           {
-            "name": "logoImageId",
-            "in": "query",
-            "schema": {
-              "type": "array",
-              "items": {
-                "anyOf": [
-                  {
-                    "type": "string",
-                    "pattern": "^IMG-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
-                    "description": "image shortcode, e.g. IMG-4K7M"
-                  },
-                  {
-                    "type": "string",
-                    "const": "__unresolvable_entity_filter__"
-                  }
-                ],
-                "type": "string",
-                "pattern": "^IMG-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
-                "description": "image shortcode, e.g. IMG-4K7M"
-              }
-            },
-            "style": "form",
-            "explode": true
-          },
-          {
             "name": "dataStatus",
             "in": "query",
             "schema": {

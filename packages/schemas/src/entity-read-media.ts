@@ -1,9 +1,10 @@
 import { z } from "zod";
 
 import { displayImagesField } from "./display-images";
+import { entityAttachmentRoleValues } from "./entity-attachment";
 import { imageOut } from "./entity-definitions/field-primitives";
 
-export const entityAttachmentRole = z.enum(["attachment", "cover", "logo"]);
+export const entityAttachmentRole = z.enum(entityAttachmentRoleValues);
 
 export const entityAttachmentRead = imageOut.extend({
   role: entityAttachmentRole,

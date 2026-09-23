@@ -334,7 +334,7 @@ const NON_GRAPH_ENTITY_FK_EXEMPTIONS = {
 >;
 
 interface IntrospectedEdge {
-  /** `${sourceTableName}.${sourceColumnName}`, e.g. "PurchaseImage.imageId". */
+  /** `${sourceTableName}.${sourceColumnName}`, e.g. "EntityAttachment.imageId". */
   key: string;
   sourceEntity: Entity | undefined;
   targetTableName: string;

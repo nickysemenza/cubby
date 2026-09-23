@@ -5,11 +5,7 @@ import {
   allEntities,
   entityManifest,
   imageDisplayBindings,
-  isGalleryEntity,
   localRelationshipByKey,
-  type CoverEntity,
-  type GalleryEntity,
-  type LogoEntity,
 } from "@cubby/schemas/entity-manifest";
 import type { EntityAttachmentRead } from "@cubby/schemas/entity-read-media";
 import { imageShortcode } from "@cubby/schemas/identifiers";
@@ -26,12 +22,8 @@ import {
 import { z } from "zod";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
-import { cookbook, image, vendor } from "~/server/db/schema";
-import {
-  imageJoinBindings,
-  notDeleted,
-  unwrapDb,
-} from "~/server/repo/database-helpers";
+import { entityAttachment, image } from "~/server/db/schema";
+import { notDeleted, unwrapDb } from "~/server/repo/database-helpers";
 import { mapImages } from "~/server/repo/database-helpers/transform";
 import { previousShortcodesFor } from "~/server/repo/entity-identity";
 import { displayableImageSql } from "~/server/repo/image-displayability";
@@ -338,58 +330,31 @@ async function resolveEntityDisplayImageLists(
 const publicEntityRowSchema = z.looseObject({ id: z.string() });
 type PublicEntityRow = z.output<typeof publicEntityRowSchema>;
 
-type SingleImageEntity = CoverEntity | LogoEntity;
-type SingleImageBinding = {
-  table: typeof cookbook | typeof vendor;
-  imageIdColumn: typeof cookbook.coverImageId | typeof vendor.logoImageId;
-  role: "cover" | "logo";
-};
-
-/** Exhaustive registry for direct images stored on the owning row. */
-const singleImageBindings = {
-  cookbook: {
-    table: cookbook,
-    imageIdColumn: cookbook.coverImageId,
-    role: "cover",
-  },
-  vendor: {
-    table: vendor,
-    imageIdColumn: vendor.logoImageId,
-    role: "logo",
-  },
-} as const satisfies Record<SingleImageEntity, SingleImageBinding>;
-
-const isSingleImageEntity = (entity: Entity): entity is SingleImageEntity => {
-  const storage = entityManifest[entity].imageStorage;
-  return storage === "cover" || storage === "logo";
-};
-
-const galleryAttachments = async (
+/** Every direct attachment of the given subjects, in display order. */
+const directAttachments = async (
   db: Database | DrizzleTransaction,
-  entityType: GalleryEntity,
   entityIds: readonly string[],
 ): Promise<Map<string, EntityAttachmentRead[]>> => {
   if (entityIds.length === 0) return new Map();
-  const binding = imageJoinBindings[entityType];
-  const joinTable = binding.table;
   const rows = await unwrapDb(db)
     .select({
-      entityId: binding.parentIdColumn,
+      entityId: entityAttachment.subjectEntityId,
+      attachmentRole: entityAttachment.role,
       ...getTableColumns(image),
     })
-    .from(joinTable)
-    .innerJoin(image, eq(image.id, joinTable.imageId))
+    .from(entityAttachment)
+    .innerJoin(image, eq(image.id, entityAttachment.imageId))
     .where(
       and(
-        inArray(binding.parentIdColumn, [...entityIds]),
-        notDeleted(joinTable),
+        inArray(entityAttachment.subjectEntityId, [...entityIds]),
+        notDeleted(entityAttachment),
         notDeleted(image),
       ),
     )
     .orderBy(
-      asc(binding.parentIdColumn),
-      asc(joinTable.sortOrder),
-      asc(joinTable.createdAt),
+      asc(entityAttachment.subjectEntityId),
+      asc(entityAttachment.sortOrder),
+      asc(entityAttachment.createdAt),
       asc(image.id),
     );
   const attachments = new Map<string, EntityAttachmentRead[]>();
@@ -400,56 +365,14 @@ const galleryAttachments = async (
   mapImages(rows).forEach((item, index) => {
     const row = rows[index];
     if (!row) return;
-    const entityId = String(row.entityId);
-    const list = attachments.get(entityId) ?? [];
+    const list = attachments.get(row.entityId) ?? [];
     list.push({
       ...item,
       representations: representations.get(item.id),
-      role: "attachment",
+      role: row.attachmentRole,
       position: list.length,
     });
-    attachments.set(entityId, list);
-  });
-  return attachments;
-};
-
-const singleImageAttachments = async (
-  db: Database | DrizzleTransaction,
-  entityType: SingleImageEntity,
-  entityIds: readonly string[],
-): Promise<Map<string, EntityAttachmentRead[]>> => {
-  if (entityIds.length === 0) return new Map();
-  const binding: SingleImageBinding = singleImageBindings[entityType];
-  const rows = await unwrapDb(db)
-    .select({ entityId: binding.table.id, ...getTableColumns(image) })
-    .from(binding.table)
-    .innerJoin(image, eq(image.id, binding.imageIdColumn))
-    .where(
-      and(
-        sql`${binding.table.id} IN (${sql.join(
-          entityIds.map((entityId) => sql`${entityId}::uuid`),
-          sql`, `,
-        )})`,
-        notDeleted(binding.table),
-        notDeleted(image),
-      ),
-    );
-  const attachments = new Map<string, EntityAttachmentRead[]>();
-  const representations = await loadImageRepresentations(
-    db,
-    rows.map((row) => row.shortcode),
-  );
-  mapImages(rows).forEach((item, index) => {
-    const row = rows[index];
-    if (!row) return;
-    attachments.set(String(row.entityId), [
-      {
-        ...item,
-        representations: representations.get(item.id),
-        role: binding.role,
-        position: 0,
-      },
-    ]);
+    attachments.set(row.entityId, list);
   });
   return attachments;
 };
@@ -459,17 +382,10 @@ export const resolveEntityAttachments = async (
   db: Database | DrizzleTransaction,
   entityType: Entity,
   entityIds: readonly string[],
-): Promise<Map<string, EntityAttachmentRead[]>> => {
-  const storage = entityManifest[entityType].imageStorage;
-  if (storage === false) return new Map();
-  if (isGalleryEntity(entityType))
-    return galleryAttachments(db, entityType, entityIds);
-  if (isSingleImageEntity(entityType))
-    return singleImageAttachments(db, entityType, entityIds);
-  throw new Error(
-    `No direct-attachment binding for ${entityType} (${storage})`,
-  );
-};
+): Promise<Map<string, EntityAttachmentRead[]>> =>
+  entityManifest[entityType].imageStorage === false
+    ? new Map()
+    : directAttachments(db, entityIds);
 
 /** Universal public read projection. One shortcode lookup and one image query per batch. */
 export async function withUniversalEntityMedia<

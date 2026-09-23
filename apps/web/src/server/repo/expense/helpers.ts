@@ -19,6 +19,7 @@ import { createAppError } from "~/server/errors/app-error";
 import {
   resolveLiveJoinName,
   resolveLiveJoinShortcode,
+  singularAttachment,
 } from "~/server/repo/database-helpers";
 import { getR2PublicUrl } from "~/server/utils/r2-public-url";
 
@@ -139,13 +140,16 @@ export type ExpenseRow = {
       shortcode: string;
       orderUrlTemplate: string | null;
       deletedAt: Date | null;
-      logo: {
-        key: string;
-        contentType: string;
-        renderStatus: ImageRenderStatus | null;
-        storageStatus: ImageStorageStatus | null;
-        deletedAt: Date | null;
-      } | null;
+      /** The vendor's live `logo` attachment, at most one. */
+      attachments: Array<{
+        image: {
+          key: string;
+          contentType: string;
+          renderStatus: ImageRenderStatus | null;
+          storageStatus: ImageStorageStatus | null;
+          deletedAt: Date | null;
+        };
+      }>;
     } | null;
   } | null;
   attributions: Array<{
@@ -173,7 +177,7 @@ const purchaseVendorLogo = (
   purchaseRow: ExpenseRow["purchase"],
 ): ExpenseOut["vendorLogo"] => {
   const vendor = purchaseRow?.vendor;
-  const logo = vendor?.logo;
+  const logo = singularAttachment(vendor);
   if (vendor?.deletedAt !== null || logo?.deletedAt !== null) return null;
   if (!logo || !isDisplayableImageFile(logo)) return null;
   return { url: getR2PublicUrl(logo.key) };

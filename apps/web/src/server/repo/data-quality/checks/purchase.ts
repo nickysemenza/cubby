@@ -42,9 +42,9 @@ const primaryDocumentKinds = sql.raw(
 );
 
 const hasPrimaryDocument = (t: Purchase) => sql`EXISTS (
-  SELECT 1 FROM "PurchaseImage" dq_pi
+  SELECT 1 FROM "EntityAttachment" dq_pi
   JOIN "Image" dq_i ON dq_i."id" = dq_pi."imageId" AND dq_i."deletedAt" IS NULL
-  WHERE dq_pi."purchaseId" = ${t.id} AND dq_pi."deletedAt" IS NULL
+  WHERE dq_pi."subjectEntityId" = ${t.id} AND dq_pi."deletedAt" IS NULL
     AND dq_pi."documentKind" IN (${primaryDocumentKinds})
 )`;
 

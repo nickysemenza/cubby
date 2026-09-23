@@ -14,13 +14,12 @@ import { describe, expect, it } from "vitest";
 import type { Database } from "~/server/db";
 import {
   cookbook,
+  entityAttachment,
   image,
   importRun,
   importRunTarget,
   ledgerParty,
-  projectImage,
   user,
-  vendor,
 } from "~/server/db/schema";
 import { makeCookbookExtraction } from "~/server/repo/repo.fixtures";
 import { markImageUploadedWorkflow } from "~/server/workflows/image.server";
@@ -292,9 +291,9 @@ describe("image repository", () => {
       (
         await dbc
           .select()
-          .from(projectImage)
-          .where(eq(projectImage.projectId, projectId))
-          .orderBy(asc(projectImage.sortOrder))
+          .from(entityAttachment)
+          .where(eq(entityAttachment.subjectEntityId, projectId))
+          .orderBy(asc(entityAttachment.sortOrder))
       ).map(({ imageId: id, sortOrder }) => ({ id, sortOrder })),
     ).toEqual([
       { id: imageId, sortOrder: 0 },
@@ -366,8 +365,8 @@ describe("image repository", () => {
     expect(
       await dbc
         .select()
-        .from(projectImage)
-        .where(inArray(projectImage.imageId, ids)),
+        .from(entityAttachment)
+        .where(inArray(entityAttachment.imageId, ids)),
     ).toHaveLength(0);
   });
 
@@ -497,15 +496,17 @@ describe("image repository", () => {
       },
       ctx.actor,
     );
-    await getDb(ctx.db)
-      .update(cookbook)
-      .set({ coverImageId: cover.id })
-      .where(eq(cookbook.id, cookbookId));
+    await getDb(ctx.db).insert(entityAttachment).values({
+      subjectEntityId: cookbookId,
+      role: "cover",
+      imageId: cover.id,
+    });
     const vendorId = await findOrCreateVendor(ctx.db, "FK Clear Vendor");
-    await getDb(ctx.db)
-      .update(vendor)
-      .set({ logoImageId: logo.id })
-      .where(eq(vendor.id, vendorId));
+    await getDb(ctx.db).insert(entityAttachment).values({
+      subjectEntityId: vendorId,
+      role: "logo",
+      imageId: logo.id,
+    });
 
     await expect(
       deleteImages(ctx.db, [
@@ -514,19 +515,21 @@ describe("image repository", () => {
       ]),
     ).resolves.toBeDefined();
 
-    const [book] = await getDb(ctx.db)
-      .select({ coverImageId: cookbook.coverImageId })
-      .from(cookbook)
-      .where(eq(cookbook.id, cookbookId));
-    expect(book).toBeDefined();
-    expect(book?.coverImageId).toBeNull();
-
-    const [vendorRow] = await getDb(ctx.db)
-      .select({ logoImageId: vendor.logoImageId })
-      .from(vendor)
-      .where(eq(vendor.id, vendorId));
-    expect(vendorRow).toBeDefined();
-    expect(vendorRow?.logoImageId).toBeNull();
+    // The associations go with the image; the cookbook and vendor survive.
+    expect(
+      await getDb(ctx.db)
+        .select({ id: entityAttachment.id })
+        .from(entityAttachment)
+        .where(
+          inArray(entityAttachment.subjectEntityId, [cookbookId, vendorId]),
+        ),
+    ).toEqual([]);
+    expect(
+      await getDb(ctx.db).query.cookbook.findFirst({
+        where: eq(cookbook.id, cookbookId),
+        columns: { deletedAt: true },
+      }),
+    ).toEqual({ deletedAt: null });
   });
 
   // findCullablePendingImages enumerates four join tables (product/location/
@@ -746,8 +749,8 @@ describe("image repository — purchase (charge) documents", () => {
       const projectA = await makeProject("Detach Shared A");
       const projectB = await makeProject("Detach Shared B");
       const attached = await attachToProject(projectA, "shared.jpg");
-      await insertAndReturn(ctx.db, projectImage, {
-        projectId: projectB,
+      await insertAndReturn(ctx.db, entityAttachment, {
+        subjectEntityId: projectB,
         imageId: attached.id,
       });
 
@@ -779,9 +782,9 @@ describe("image repository — purchase (charge) documents", () => {
       const projectB = await makeProject("Detach Tombstone B");
       const attached = await attachToProject(projectA, "tombstone.jpg");
       const [tombstoned] = await getDb(ctx.db)
-        .insert(projectImage)
+        .insert(entityAttachment)
         .values({
-          projectId: projectB,
+          subjectEntityId: projectB,
           imageId: attached.id,
           deletedAt: new Date(),
         })
@@ -798,8 +801,8 @@ describe("image repository — purchase (charge) documents", () => {
       expect(
         await getDb(ctx.db)
           .select()
-          .from(projectImage)
-          .where(eq(projectImage.id, tombstoned!.id)),
+          .from(entityAttachment)
+          .where(eq(entityAttachment.id, tombstoned!.id)),
       ).toHaveLength(0);
     });
   });
@@ -862,10 +865,12 @@ describe("image repository — purchase (charge) documents", () => {
         },
         ctx.actor,
       );
-      await getDb(ctx.db)
-        .update(cookbook)
-        .set({ coverImageId: coverOnly.id })
-        .where(eq(cookbook.id, cookbookId));
+      await getDb(ctx.db).insert(entityAttachment).values({
+        subjectEntityId: cookbookId,
+        role: "cover",
+        imageId: coverOnly.id,
+      });
+      // Deleting the book detaches its cover and reaps the unshared file.
       await deleteCookbook(ctx.db, cookbookId, ctx.actor);
 
       await getDb(ctx.db)

@@ -78,13 +78,13 @@ import {
   auditLog,
   cookbook,
   device,
+  entityAttachment,
   expense,
   expenseAttribution,
   financialAccount,
   financialTransaction,
   financialTransactionAllocation,
   gardenEntry,
-  gardenEntryImage,
   image,
   imageDerivative,
   imageDescriptionCorrection,
@@ -109,8 +109,6 @@ import {
   ledgerSourceClaim,
   ledgerTransfer,
   location,
-  locationImage,
-  mealImage,
   mealFoodEntry,
   mealRecipe,
   mealRecipePortion,
@@ -125,18 +123,14 @@ import {
   productConversionCoverage,
   productMatchCandidate,
   productExternalId,
-  productImage,
   productUnitMappings,
   project,
   projectDependency,
-  projectImage,
   projectToolUsage,
   purchase,
-  purchaseImage,
   purchasePaymentEvidence,
   purchaseProduct,
   recipe,
-  recipeImage,
   recipeSection,
   recipeSectionIngredient,
   plant,
@@ -144,13 +138,11 @@ import {
   statementRow,
   task,
   taskDependency,
-  taskImage,
-  vendor,
   vendorAccount,
   wishCandidate,
 } from "./schema";
 
-/** `${pgTable name}.${column name}` — e.g. `"PurchaseImage.imageId"`. */
+/** `${pgTable name}.${column name}` — e.g. `"EntityAttachment.imageId"`. */
 type EdgeKey<C extends AnyColumn> = `${C["_"]["tableName"]}.${C["_"]["name"]}`;
 
 export interface EntityEdge {
@@ -200,6 +192,14 @@ function edges<T extends Record<string, EntityEdge>>(t: T & WellKeyed<T>): T {
 
 export const ENTITY_EDGES = {
   cookbook: edges({
+    "EntityAttachment.subjectEntityId": {
+      column: entityAttachment.subjectEntityId,
+      role: "media",
+      label: "cookbook covers",
+      description:
+        "The cover photo for this cookbook, shown in cookbook lists and detail headers.",
+      liveness: { kind: "must-target-live" },
+    },
     "Recipe.cookbookId": {
       column: recipe.cookbookId,
       role: "owned-child",
@@ -210,6 +210,14 @@ export const ENTITY_EDGES = {
     },
   }),
   image: edges({
+    "EntityAttachment.imageId": {
+      column: entityAttachment.imageId,
+      role: "media",
+      label: "attachments",
+      description:
+        "A file attached to an entity: a gallery photo, a document, a cookbook cover, or a vendor logo. Says nothing about ownership.",
+      liveness: { kind: "must-target-live" },
+    },
     "ImportRunTarget.imageId": {
       column: importRunTarget.imageId,
       role: "history",
@@ -272,81 +280,6 @@ export const ENTITY_EDGES = {
       description: "A normalized document captured from an order email.",
       liveness: { kind: "must-target-live" },
     },
-    "Cookbook.coverImageId": {
-      column: cookbook.coverImageId,
-      role: "media",
-      label: "cookbook covers",
-      description:
-        "The cover photo for a cookbook, shown in cookbook lists and detail headers.",
-      liveness: { kind: "must-target-live" },
-    },
-    "Vendor.logoImageId": {
-      column: vendor.logoImageId,
-      role: "media",
-      label: "vendor logos",
-      description:
-        "An optional brand mark for a vendor; absence deliberately falls back to the vendor monogram.",
-      liveness: { kind: "must-target-live" },
-    },
-    "ProductImage.imageId": {
-      column: productImage.imageId,
-      role: "media",
-      label: "product photos",
-      description:
-        "A photo or manual attachment linked to a product; says nothing about whether the product was ever owned.",
-      liveness: { kind: "must-target-live" },
-    },
-    "LocationImage.imageId": {
-      column: locationImage.imageId,
-      role: "media",
-      label: "location photos",
-      description:
-        "A photo attached to a location — e.g. a picture of a shelf or bin.",
-      liveness: { kind: "must-target-live" },
-    },
-    "RecipeImage.imageId": {
-      column: recipeImage.imageId,
-      role: "media",
-      label: "recipe photos",
-      description: "A photo attached to a recipe.",
-      liveness: { kind: "must-target-live" },
-    },
-    "ProjectImage.imageId": {
-      column: projectImage.imageId,
-      role: "media",
-      label: "project photos",
-      description: "A photo attached to a household project.",
-      liveness: { kind: "must-target-live" },
-    },
-    "PurchaseImage.imageId": {
-      column: purchaseImage.imageId,
-      role: "media",
-      label: "receipt attachments",
-      description:
-        "The emailed invoice PDF or a photo of the paper receipt attached to a purchase.",
-      liveness: { kind: "must-target-live" },
-    },
-    "GardenEntryImage.imageId": {
-      column: gardenEntryImage.imageId,
-      role: "media",
-      label: "garden entry photos",
-      description: "A full-scene photo attached to a dated garden entry.",
-      liveness: { kind: "must-target-live" },
-    },
-    "MealImage.imageId": {
-      column: mealImage.imageId,
-      role: "media",
-      label: "meal photos",
-      description: "A photo of a planned or prepared meal.",
-      liveness: { kind: "must-target-live" },
-    },
-    "TaskImage.imageId": {
-      column: taskImage.imageId,
-      role: "media",
-      label: "task photos",
-      description: "A before/after or reference photo attached to a task.",
-      liveness: { kind: "must-target-live" },
-    },
     "ImageSighting.imageId": {
       column: imageSighting.imageId,
       role: "owned-child",
@@ -389,8 +322,8 @@ export const ENTITY_EDGES = {
         "A join row placing this recipe on the meal calendar; the meal and the recipe each exist independently of the pairing.",
       liveness: { kind: "must-target-live" },
     },
-    "RecipeImage.recipeId": {
-      column: recipeImage.recipeId,
+    "EntityAttachment.subjectEntityId": {
+      column: entityAttachment.subjectEntityId,
       role: "media",
       label: "recipe photos",
       description: "A photo attached to this recipe.",
@@ -464,12 +397,11 @@ export const ENTITY_EDGES = {
         "A recorded portion from a recipe preparation assigned for consumption at this meal, including portions from an earlier leftovers source.",
       liveness: { kind: "must-target-live" },
     },
-    "MealImage.mealId": {
-      column: mealImage.mealId,
+    "EntityAttachment.subjectEntityId": {
+      column: entityAttachment.subjectEntityId,
       role: "media",
       label: "meal photos",
-      description:
-        "A photo of the plated dinner or preparation has no independent meaning once the meal is removed.",
+      description: "A photo attached to this meal.",
       liveness: { kind: "must-target-live" },
     },
   }),
@@ -649,8 +581,8 @@ export const ENTITY_EDGES = {
         "A shelf or bin count of this product currently on hand — proof it was actually acquired, not just cataloged.",
       liveness: { kind: "must-target-live" },
     },
-    "ProductImage.productId": {
-      column: productImage.productId,
+    "EntityAttachment.subjectEntityId": {
+      column: entityAttachment.subjectEntityId,
       role: "media",
       label: "product photos",
       description:
@@ -803,8 +735,8 @@ export const ENTITY_EDGES = {
       description: "A product physically held at this location right now.",
       liveness: { kind: "must-target-live" },
     },
-    "LocationImage.locationId": {
-      column: locationImage.locationId,
+    "EntityAttachment.subjectEntityId": {
+      column: entityAttachment.subjectEntityId,
       role: "media",
       label: "location photos",
       description: "A photo attached to this location.",
@@ -892,11 +824,11 @@ export const ENTITY_EDGES = {
         "A spend-ledger line rolled up under this project — all money lives on Expense, so this is the source of the project's cost total.",
       liveness: { kind: "must-target-live" },
     },
-    "ProjectImage.projectId": {
-      column: projectImage.projectId,
+    "EntityAttachment.subjectEntityId": {
+      column: entityAttachment.subjectEntityId,
       role: "media",
       label: "project photos",
-      description: "A photo attached to this project.",
+      description: "A photo or document attached to this project.",
       liveness: { kind: "must-target-live" },
     },
     "ProjectToolUsage.projectId": {
@@ -932,12 +864,11 @@ export const ENTITY_EDGES = {
         "A dependency edge naming this task as the blocker another task is waiting on.",
       liveness: { kind: "must-target-live" },
     },
-    "TaskImage.taskId": {
-      column: taskImage.taskId,
+    "EntityAttachment.subjectEntityId": {
+      column: entityAttachment.subjectEntityId,
       role: "media",
       label: "task photos",
-      description:
-        "A before/after or reference photo has no independent meaning once the task is removed.",
+      description: "A photo attached to this task.",
       liveness: { kind: "must-target-live" },
     },
     "Planting.taskId": {
@@ -949,6 +880,14 @@ export const ENTITY_EDGES = {
     },
   }),
   vendor: edges({
+    "EntityAttachment.subjectEntityId": {
+      column: entityAttachment.subjectEntityId,
+      role: "media",
+      label: "vendor logos",
+      description:
+        "An optional brand mark for this vendor; absence falls back to the vendor monogram.",
+      liveness: { kind: "must-target-live" },
+    },
     "FinancialAccount.providerVendorId": {
       column: financialAccount.providerVendorId,
       role: "reference",
@@ -1038,12 +977,12 @@ export const ENTITY_EDGES = {
         "A categorized line of spend booked against this purchase. All money lives on Expense.cost; the purchase's own statedTotal is a soft reconciliation cue and is never summed into spend.",
       liveness: { kind: "must-target-live" },
     },
-    "PurchaseImage.purchaseId": {
-      column: purchaseImage.purchaseId,
+    "EntityAttachment.subjectEntityId": {
+      column: entityAttachment.subjectEntityId,
       role: "media",
-      label: "receipt attachments",
+      label: "purchase documents",
       description:
-        "The invoice PDF or a photo of the paper receipt attached to this purchase.",
+        "A receipt, invoice, or other document attached to this purchase.",
       liveness: { kind: "must-target-live" },
     },
     "PurchaseProduct.purchaseId": {
@@ -1178,12 +1117,11 @@ export const ENTITY_EDGES = {
         "A live association records which growing attempts a garden entry describes.",
       liveness: { kind: "must-target-live" },
     },
-    "GardenEntryImage.gardenEntryId": {
-      column: gardenEntryImage.gardenEntryId,
+    "EntityAttachment.subjectEntityId": {
+      column: entityAttachment.subjectEntityId,
       role: "media",
-      label: "entry photos",
-      description:
-        "Photos attached to this garden entry have no independent meaning once it is removed.",
+      label: "garden journal photos",
+      description: "A photo attached to this garden journal entry.",
       liveness: { kind: "must-target-live" },
     },
   }),

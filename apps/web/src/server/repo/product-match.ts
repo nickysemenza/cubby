@@ -15,6 +15,7 @@ import type { z } from "zod";
 
 import type { Database } from "~/server/db";
 import {
+  entityAttachment,
   expense,
   image,
   inventoryEntry,
@@ -22,7 +23,6 @@ import {
   product,
   productCategory,
   productExternalId,
-  productImage,
   purchase,
   purchaseProduct,
   vendor,
@@ -386,17 +386,22 @@ export async function loadProductImageOrderFacts(
     .select({
       shortcode: image.shortcode,
       source: image.source,
-      purpose: productImage.purpose,
+      purpose: entityAttachment.purpose,
     })
-    .from(productImage)
+    .from(entityAttachment)
     .innerJoin(
       image,
-      and(eq(image.id, productImage.imageId), notDeleted(image)),
+      and(eq(image.id, entityAttachment.imageId), notDeleted(image)),
     )
-    .where(and(eq(productImage.productId, productId), notDeleted(productImage)))
+    .where(
+      and(
+        eq(entityAttachment.subjectEntityId, productId),
+        notDeleted(entityAttachment),
+      ),
+    )
     .orderBy(
-      asc(productImage.sortOrder),
-      asc(productImage.createdAt),
-      asc(productImage.id),
+      asc(entityAttachment.sortOrder),
+      asc(entityAttachment.createdAt),
+      asc(entityAttachment.id),
     );
 }

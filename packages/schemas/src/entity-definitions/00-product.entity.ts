@@ -2311,14 +2311,14 @@ export default defineEntity({
       provenance: {
         kind: "local-path",
         steps: [
-          { edge: "ProductImage.productId", direction: "incoming" },
-          { edge: "ProductImage.imageId", direction: "outgoing" },
+          { edge: "EntityAttachment.subjectEntityId", direction: "incoming" },
+          { edge: "EntityAttachment.imageId", direction: "outgoing" },
         ],
       },
       inverse: {
         steps: [
-          { edge: "ProductImage.imageId", direction: "incoming" },
-          { edge: "ProductImage.productId", direction: "outgoing" },
+          { edge: "EntityAttachment.imageId", direction: "incoming" },
+          { edge: "EntityAttachment.subjectEntityId", direction: "outgoing" },
         ],
       },
     },

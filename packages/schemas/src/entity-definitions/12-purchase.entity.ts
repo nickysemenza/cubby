@@ -1002,14 +1002,14 @@ export default defineEntity({
       provenance: {
         kind: "local-path",
         steps: [
-          { edge: "PurchaseImage.purchaseId", direction: "incoming" },
-          { edge: "PurchaseImage.imageId", direction: "outgoing" },
+          { edge: "EntityAttachment.subjectEntityId", direction: "incoming" },
+          { edge: "EntityAttachment.imageId", direction: "outgoing" },
         ],
       },
       inverse: {
         steps: [
-          { edge: "PurchaseImage.imageId", direction: "incoming" },
-          { edge: "PurchaseImage.purchaseId", direction: "outgoing" },
+          { edge: "EntityAttachment.imageId", direction: "incoming" },
+          { edge: "EntityAttachment.subjectEntityId", direction: "outgoing" },
         ],
       },
     },

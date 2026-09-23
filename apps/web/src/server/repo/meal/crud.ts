@@ -98,7 +98,7 @@ export const MEAL_DELETE_EDGE_POLICY = {
     description:
       "Deleting a meal soft-deletes portions served at it; their source preparations are untouched.",
   },
-  "MealImage.mealId": {
+  "EntityAttachment.subjectEntityId": {
     code: "soft-delete-association",
     effect: "soft-delete",
     description:
@@ -471,7 +471,7 @@ export const deleteMeals = async (
             parentColumns: [mealRecipePortion.mealId],
             auditKey: "cascadedMealRecipePortions",
           },
-          imageCascadeChild(imageJoinBindings.meal),
+          imageCascadeChild(),
         ],
       });
     return { deleted, detachedImageKeys, deletedImageShortcodes };

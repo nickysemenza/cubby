@@ -2,7 +2,7 @@ import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { aiAnalysis, image, meal, mealImage } from "~/server/db/schema";
+import { aiAnalysis, entityAttachment, image, meal } from "~/server/db/schema";
 import { entityKernelContextSchema } from "~/server/entity-kernel";
 import { getDb, withTransaction } from "~/server/repo/database-helpers";
 import {
@@ -142,7 +142,9 @@ describe("photo import transaction", () => {
         .where(eq(image.id, staged.id)),
     ).toEqual([{ status: "UPLOADED" }]);
     expect(
-      await getDb(ctx.db).select({ id: mealImage.id }).from(mealImage),
+      await getDb(ctx.db)
+        .select({ id: entityAttachment.id })
+        .from(entityAttachment),
     ).toHaveLength(1);
   });
 
@@ -234,9 +236,9 @@ describe("photo import transaction", () => {
     expect(receipt.createdDestinations).toHaveLength(2);
     expect(
       await getDb(ctx.db)
-        .select({ id: mealImage.id })
-        .from(mealImage)
-        .where(eq(mealImage.imageId, staged.id)),
+        .select({ id: entityAttachment.id })
+        .from(entityAttachment)
+        .where(eq(entityAttachment.imageId, staged.id)),
     ).toHaveLength(2);
     expect(
       await getDb(ctx.db)
@@ -338,9 +340,9 @@ describe("photo import transaction", () => {
     expect(createdMeal[0]?.date).toBe("2026-09-16");
     expect(
       await getDb(ctx.db)
-        .select({ id: mealImage.id })
-        .from(mealImage)
-        .where(eq(mealImage.imageId, staged.id)),
+        .select({ id: entityAttachment.id })
+        .from(entityAttachment)
+        .where(eq(entityAttachment.imageId, staged.id)),
     ).toHaveLength(1);
   });
 

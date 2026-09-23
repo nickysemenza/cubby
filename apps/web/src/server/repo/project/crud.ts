@@ -26,10 +26,10 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import {
+  entityAttachment,
   expense,
   project,
   projectDependency,
-  projectImage,
   projectToolUsage,
   purchase,
   task,
@@ -108,7 +108,7 @@ export const PROJECT_DELETE_EDGE_POLICY = {
     description:
       "A project with live expenses can't be deleted — delete or reassign them first.",
   },
-  "ProjectImage.projectId": {
+  "EntityAttachment.subjectEntityId": {
     code: "soft-delete-association",
     effect: "soft-delete",
     description:
@@ -536,8 +536,8 @@ export const deleteProjects = async (
           mode: "hard",
         },
         {
-          table: projectImage,
-          parentColumns: [projectImage.projectId],
+          table: entityAttachment,
+          parentColumns: [entityAttachment.subjectEntityId],
           auditKey: "cascadedImages",
         },
         {

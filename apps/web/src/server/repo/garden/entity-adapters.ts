@@ -26,7 +26,6 @@ import {
 import {
   buildPartialUpdateValues,
   imageCascadeChild,
-  imageJoinBindings,
   notDeleted,
   withTransaction,
 } from "~/server/repo/database-helpers";
@@ -65,7 +64,7 @@ const PLANTING_DELETE_EDGE_POLICY = {
 } as const satisfies IncomingEdgePolicy<"planting", OperationDisposition>;
 
 const GARDEN_ENTRY_DELETE_EDGE_POLICY = {
-  "GardenEntryImage.gardenEntryId": {
+  "EntityAttachment.subjectEntityId": {
     code: "soft-delete-association",
     effect: "soft-delete",
     description: "Garden entry image associations are removed with the entry.",
@@ -399,7 +398,7 @@ export const gardenEntryEntityAdapter = defineEntityAdapter({
                 parentColumns: [gardenEntryPlanting.gardenEntryId],
                 auditKey: "cascadedPlantings",
               },
-              imageCascadeChild(imageJoinBindings.gardenEntry),
+              imageCascadeChild(),
             ],
           });
         });

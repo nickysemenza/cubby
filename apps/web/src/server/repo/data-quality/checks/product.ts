@@ -46,9 +46,9 @@ const inScope = (t: Product) => sql`(${hasExpenses(t)} OR ${hasInventory(t)})`;
 // separately from Image, and a PDF manual is not a photo. Joining ProductImage
 // alone reads `true` for a product whose only attachment is a manual.
 const hasDisplayableImage = (t: Product) => sql`EXISTS (
-  SELECT 1 FROM "ProductImage" dq_pimg
+  SELECT 1 FROM "EntityAttachment" dq_pimg
   JOIN "Image" dq_img ON dq_img."id" = dq_pimg."imageId" AND dq_img."deletedAt" IS NULL
-  WHERE dq_pimg."productId" = ${t.id}
+  WHERE dq_pimg."subjectEntityId" = ${t.id}
     AND dq_pimg."deletedAt" IS NULL AND dq_pimg."purpose" IS DISTINCT FROM 'label'
     AND ${sql.raw(displayableImageRawSql("dq_img"))}
 )`;

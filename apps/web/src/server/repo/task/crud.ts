@@ -102,7 +102,7 @@ export const TASK_DELETE_EDGE_POLICY = {
     description:
       "Blocks/blocked-by dependency rows naming the task (or a cascaded subtask) are removed outright.",
   },
-  "TaskImage.taskId": {
+  "EntityAttachment.subjectEntityId": {
     code: "soft-delete-association",
     effect: "soft-delete",
     description:
@@ -977,7 +977,7 @@ export const deleteTasks = async (
             ],
             mode: "hard",
           },
-          imageCascadeChild(imageJoinBindings.task),
+          imageCascadeChild(),
         ],
       },
     );

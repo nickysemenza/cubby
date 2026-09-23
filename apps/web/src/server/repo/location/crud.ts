@@ -45,15 +45,14 @@ import { uniq } from "es-toolkit";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import {
+  entityAttachment,
   gardenEntry,
   image,
   inventoryEntry,
   location,
-  locationImage,
   photoGroupProposal,
   planting,
   product,
-  productImage,
 } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
 import {
@@ -126,7 +125,7 @@ export const LOCATION_DELETE_EDGE_POLICY = {
     description:
       "A location still holding inventory can't be deleted — move or remove the inventory first.",
   },
-  "LocationImage.locationId": {
+  "EntityAttachment.subjectEntityId": {
     code: "soft-delete-association",
     effect: "soft-delete",
     description:
@@ -692,7 +691,7 @@ export const deleteLocations = async (
       ids,
       removal: "soft",
       actor,
-      children: [imageCascadeChild(imageJoinBindings.location)],
+      children: [imageCascadeChild()],
     });
   });
 };
@@ -774,13 +773,13 @@ export const buildLocationWhere = async (
     .from(childLocation)
     .where(and(notDeleted(childLocation), isNotNull(childLocation.parentId)));
   const locationIdsWithImages = getDb(db)
-    .select({ locationId: locationImage.locationId })
-    .from(locationImage)
+    .select({ locationId: entityAttachment.subjectEntityId })
+    .from(entityAttachment)
     .innerJoin(
       image,
-      and(eq(image.id, locationImage.imageId), notDeleted(image)),
+      and(eq(image.id, entityAttachment.imageId), notDeleted(image)),
     )
-    .where(and(notDeleted(locationImage), displayableImageWhere));
+    .where(and(notDeleted(entityAttachment), displayableImageWhere));
   const locationIdsMeetingInventoryMinimum = getDb(db)
     .select({ locationId: inventoryEntry.locationId })
     .from(inventoryEntry)
@@ -953,20 +952,21 @@ const loadLocationCoverImages = async (
   const byId = new Map<LocationId, ImageOut>();
   if (ids.length === 0) return byId;
 
-  const rows = await getDb(db).query.locationImage.findMany({
+  const rows = await getDb(db).query.entityAttachment.findMany({
     where: and(
-      inArray(locationImage.locationId, ids),
-      notDeleted(locationImage),
+      inArray(entityAttachment.subjectEntityId, ids),
+      notDeleted(entityAttachment),
     ),
     orderBy: imageOrder,
     with: { image: true },
   });
 
   for (const row of rows) {
-    if (byId.has(row.locationId)) continue;
+    const locationId = parseEntityId("location", row.subjectEntityId);
+    if (byId.has(locationId)) continue;
     const [mapped] = mapImages([row]);
     if (mapped && isDisplayableImageFile(mapped)) {
-      byId.set(row.locationId, mapped);
+      byId.set(locationId, mapped);
     }
   }
   const entries = await hydrateImageReadProjection(db, [...byId]);
@@ -991,7 +991,7 @@ const loadIdentityProductCoverImages = async (
     columns: { id: true },
     with: {
       images: {
-        where: notDeleted(productImage),
+        where: notDeleted(entityAttachment),
         orderBy: imageOrder,
         with: { image: true },
       },

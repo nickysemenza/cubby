@@ -3,7 +3,7 @@ import { and, eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { image, recipeImage } from "~/server/db/schema";
+import { entityAttachment, image } from "~/server/db/schema";
 import { upsertCookbook } from "~/server/repo/cookbook";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
 import { upsertCookbookRecipeFromCookbook } from "~/server/repo/import-recipe-convert";
@@ -166,9 +166,9 @@ describe("cookbook recipe photo workflow", () => {
     ).rejects.toThrow(/uploaded object could not be cleaned up/);
 
     const joins = await getDb(ctx.db)
-      .select({ recipeId: recipeImage.recipeId })
-      .from(recipeImage)
-      .where(notDeleted(recipeImage));
+      .select({ recipeId: entityAttachment.subjectEntityId })
+      .from(entityAttachment)
+      .where(notDeleted(entityAttachment));
     expect(joins.map((row) => row.recipeId).sort()).toEqual(
       [first.entityId, second.entityId, existing.entityId].sort(),
     );

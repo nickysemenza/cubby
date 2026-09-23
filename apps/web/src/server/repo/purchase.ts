@@ -55,18 +55,18 @@ import { purchaseLabel } from "~/lib/purchase-label";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import {
+  entityAttachment,
   expense,
   expenseAttribution,
   financialTransactionAllocation,
   image,
-  importRunTarget,
   importRunEvidence,
+  importRunTarget,
   importSourceClaim,
   ledgerSourceClaim,
   purchase,
-  purchaseImage,
-  purchaseProduct,
   purchasePaymentEvidence,
+  purchaseProduct,
 } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
 import {
@@ -180,7 +180,7 @@ export const PURCHASE_DELETE_EDGE_POLICY = {
     description:
       "Deleting a purchase nulls its expenses' purchaseId rather than deleting them — an expense is the money, and deleting a purchase must never delete spend. Each detach is logged to the audit trail.",
   },
-  "PurchaseImage.purchaseId": {
+  "EntityAttachment.subjectEntityId": {
     code: "soft-delete-association",
     effect: "soft-delete",
     description:
@@ -222,7 +222,7 @@ export const PURCHASE_MERGE_EDGE_POLICY = {
     description:
       "Merging a purchase re-points its expenses onto the surviving purchase, logged to the audit trail.",
   },
-  "PurchaseImage.purchaseId": {
+  "EntityAttachment.subjectEntityId": {
     code: "move-dedupe-and-soft-delete-source",
     effect: "move-dedupe",
     description:
@@ -276,9 +276,9 @@ const purchasePostedRefundTotal = correlated<number>(
 );
 
 const purchaseDocumentCount = correlated<number>(
-  `(SELECT count(*)::int FROM "PurchaseImage" pi
+  `(SELECT count(*)::int FROM "EntityAttachment" pi
      JOIN "Image" i ON i."id" = pi."imageId" AND i."deletedAt" IS NULL
-     WHERE pi."purchaseId" = "Purchase"."id" AND pi."deletedAt" IS NULL)`,
+     WHERE pi."subjectEntityId" = "Purchase"."id" AND pi."deletedAt" IS NULL)`,
 );
 
 const purchaseVendorName = correlated<string | null>(
@@ -306,7 +306,9 @@ const purchaseVendorOrderUrlTemplate = correlated<string | null>(
 
 const purchaseVendorLogoKey = sql<string | null>`(
   SELECT logo."key" FROM "Vendor" v
-  JOIN "Image" logo ON logo."id" = v."logoImageId"
+  JOIN "EntityAttachment" logo_att ON logo_att."subjectEntityId" = v."id"
+    AND logo_att."role" = 'logo' AND logo_att."deletedAt" IS NULL
+  JOIN "Image" logo ON logo."id" = logo_att."imageId"
   WHERE v."id" = ${sql.raw('"Purchase"."vendorId"')}
     AND v."deletedAt" IS NULL
     AND logo."deletedAt" IS NULL
@@ -429,20 +431,22 @@ const loadPurchaseImages = async (
       filename: image.filename,
       contentType: image.contentType,
       key: image.key,
-      documentKind: purchaseImage.documentKind,
+      documentKind: entityAttachment.documentKind,
     })
-    .from(purchaseImage)
-    .innerJoin(image, eq(purchaseImage.imageId, image.id))
+    .from(entityAttachment)
+    .innerJoin(image, eq(entityAttachment.imageId, image.id))
     .where(
       and(
-        eq(purchaseImage.purchaseId, id),
-        notDeleted(purchaseImage),
+        eq(entityAttachment.subjectEntityId, id),
+        notDeleted(entityAttachment),
         notDeleted(image),
       ),
     )
-    .orderBy(asc(purchaseImage.sortOrder), asc(purchaseImage.createdAt));
-  return rows.map(({ shortcode, key, ...rest }) => ({
+    .orderBy(asc(entityAttachment.sortOrder), asc(entityAttachment.createdAt));
+  return rows.map(({ shortcode, key, documentKind, ...rest }) => ({
     ...rest,
+    // Every Purchase attachment is classified; `other` is the insert default.
+    documentKind: documentKind ?? "other",
     id: parseShortcodeFor("image", shortcode),
     key,
     url: getR2PublicUrl(key),
@@ -733,11 +737,11 @@ export const reclassifyPurchaseDocument = async (
   const id = await resolveOrThrow(db, "purchase", input.purchaseId);
   const imageId = await resolveOrThrow(db, "image", input.imageId);
   await withTransaction(db, async (tx) => {
-    const before = await tx.query.purchaseImage.findFirst({
+    const before = await tx.query.entityAttachment.findFirst({
       where: and(
-        eq(purchaseImage.purchaseId, id),
-        eq(purchaseImage.imageId, imageId),
-        notDeleted(purchaseImage),
+        eq(entityAttachment.subjectEntityId, id),
+        eq(entityAttachment.imageId, imageId),
+        notDeleted(entityAttachment),
       ),
     });
     if (!before) {
@@ -748,9 +752,9 @@ export const reclassifyPurchaseDocument = async (
     }
     if (before.documentKind === input.documentKind) return;
     await tx
-      .update(purchaseImage)
+      .update(entityAttachment)
       .set({ documentKind: input.documentKind, updatedAt: new Date() })
-      .where(eq(purchaseImage.id, before.id));
+      .where(eq(entityAttachment.id, before.id));
     await tx
       .update(purchase)
       .set({ updatedAt: new Date() })
@@ -1676,26 +1680,34 @@ const moveChargeImages = async (
   deadId: PurchaseId,
   survivorId: PurchaseId,
 ) => {
-  const rows = await tx.query.purchaseImage.findMany({
-    where: and(eq(purchaseImage.purchaseId, deadId), notDeleted(purchaseImage)),
-    columns: { imageId: true, sortOrder: true },
+  const rows = await tx.query.entityAttachment.findMany({
+    where: and(
+      eq(entityAttachment.subjectEntityId, deadId),
+      notDeleted(entityAttachment),
+    ),
+    columns: { imageId: true, sortOrder: true, documentKind: true },
   });
   if (rows.length === 0) return;
   await tx
-    .insert(purchaseImage)
+    .insert(entityAttachment)
     .values(
       rows.map((row) => ({
-        purchaseId: survivorId,
+        subjectEntityId: survivorId,
+        role: "attachment" as const,
         imageId: row.imageId,
         sortOrder: row.sortOrder,
+        documentKind: row.documentKind ?? "other",
       })),
     )
     .onConflictDoNothing();
   await tx
-    .update(purchaseImage)
+    .update(entityAttachment)
     .set({ deletedAt: new Date() })
     .where(
-      and(eq(purchaseImage.purchaseId, deadId), notDeleted(purchaseImage)),
+      and(
+        eq(entityAttachment.subjectEntityId, deadId),
+        notDeleted(entityAttachment),
+      ),
     );
 };
 
@@ -2168,10 +2180,7 @@ const deletePurchasesWithPolicy = async (
             parentColumns: [purchaseProduct.purchaseId],
             auditKey: "cascadedPurchaseProducts",
           },
-          imageCascadeChild(
-            imageJoinBindings.purchase,
-            "cascadedPurchaseImages",
-          ),
+          imageCascadeChild("cascadedPurchaseImages"),
         ],
       });
 
@@ -2310,13 +2319,14 @@ export const previewMergePurchases = async (
       ),
     }),
     impact({
-      disposition: PURCHASE_MERGE_EDGE_POLICY["PurchaseImage.purchaseId"],
-      edgeKey: "PurchaseImage.purchaseId",
+      disposition:
+        PURCHASE_MERGE_EDGE_POLICY["EntityAttachment.subjectEntityId"],
+      edgeKey: "EntityAttachment.subjectEntityId",
       label: "documents moved and deduplicated",
       byTargetId: await countByTarget(
         dbClient,
-        purchaseImage,
-        purchaseImage.purchaseId,
+        entityAttachment,
+        entityAttachment.subjectEntityId,
         losers,
       ),
     }),

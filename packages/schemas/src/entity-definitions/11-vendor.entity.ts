@@ -384,14 +384,6 @@ export default defineEntity({
         },
       },
       { key: "shortcode", kind: "text", readKey: null },
-      {
-        key: "logoImageId",
-        kind: "identifier",
-        nullable: true,
-        label: "Logo Image ID",
-        readKey: null,
-        reference: { entity: "image" },
-      },
       { key: "deletedAt", kind: "timestamp", nullable: true, readKey: null },
     ],
     storage: [
@@ -399,7 +391,6 @@ export default defineEntity({
       { key: "shortcode", specialized: "shortcode" },
       "name",
       "website",
-      { key: "logoImageId", reference: "image" },
       "orderUrlTemplate",
       "orderEvidence",
       {
@@ -704,10 +695,16 @@ export default defineEntity({
       cardinality: "one",
       provenance: {
         kind: "local-path",
-        steps: [{ edge: "Vendor.logoImageId", direction: "outgoing" }],
+        steps: [
+          { edge: "EntityAttachment.subjectEntityId", direction: "incoming" },
+          { edge: "EntityAttachment.imageId", direction: "outgoing" },
+        ],
       },
       inverse: {
-        steps: [{ edge: "Vendor.logoImageId", direction: "incoming" }],
+        steps: [
+          { edge: "EntityAttachment.imageId", direction: "incoming" },
+          { edge: "EntityAttachment.subjectEntityId", direction: "outgoing" },
+        ],
       },
     },
     {

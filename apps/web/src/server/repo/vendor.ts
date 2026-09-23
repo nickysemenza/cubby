@@ -39,7 +39,7 @@ import {
 
 import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
-import { image, purchase, vendor } from "~/server/db/schema";
+import { entityAttachment, image, purchase, vendor } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
 import { logAuditEntry } from "~/server/repo/audit-log";
 import { loadDataQualities } from "~/server/repo/data-quality";
@@ -48,6 +48,7 @@ import {
   correlated,
   countWhere,
   getDb,
+  imageCascadeChild,
   type ListReadIntent,
   lockAndValidateForDelete,
   notDeleted,
@@ -80,6 +81,10 @@ import {
   findOrCreateWithShortcode,
   insertWithShortcode,
 } from "~/server/repo/shortcode-utils";
+import {
+  replaceSingularAttachment,
+  singularAttachmentImageIds,
+} from "~/server/repo/singular-attachment";
 import { getR2PublicUrl } from "~/server/utils/r2-public-url";
 
 export const VENDOR_DELETE_EDGE_POLICY = {
@@ -119,6 +124,12 @@ export const VENDOR_DELETE_EDGE_POLICY = {
     effect: "block",
     description:
       "A vendor with purchases still pointing at it can't be deleted — those purchases are load-bearing history.",
+  },
+  "EntityAttachment.subjectEntityId": {
+    code: "cascade-delete-attachment",
+    effect: "soft-delete",
+    description:
+      "The logo association is soft-deleted with the vendor; the image is reaped when nothing else uses it.",
   },
 } as const satisfies IncomingEdgePolicy<"vendor", OperationDisposition>;
 
@@ -161,6 +172,12 @@ export const VENDOR_MERGE_EDGE_POLICY = {
     effect: "move-dedupe",
     description:
       "A merged vendor's purchases re-point onto the surviving vendor; purchases that collide on the same order id are folded into one instead.",
+  },
+  "EntityAttachment.subjectEntityId": {
+    code: "carry-logo",
+    effect: "repoint",
+    description:
+      "A loser's logo becomes the survivor's when the survivor has none; any other loser logo is detached and reaped unless shared.",
   },
 } as const satisfies IncomingEdgePolicy<"vendor", OperationDisposition>;
 
@@ -236,11 +253,21 @@ export async function getVendorCoverage(
 }
 
 const vendorHasDisplayableLogo = sql<boolean>`EXISTS (
-  SELECT 1 FROM "Image" logo
-  WHERE logo."id" = ${sql.raw('"Vendor"."logoImageId"')}
+  SELECT 1 FROM "EntityAttachment" logo_att
+  JOIN "Image" logo ON logo."id" = logo_att."imageId"
+  WHERE logo_att."subjectEntityId" = ${sql.raw('"Vendor"."id"')}
+    AND logo_att."role" = 'logo'
+    AND logo_att."deletedAt" IS NULL
     AND logo."deletedAt" IS NULL
     AND ${displayableImageSql("logo")}
 )`;
+
+/** The vendor's live logo attachment, for a left join ahead of `image`. */
+const vendorLogoAttachment = and(
+  eq(entityAttachment.subjectEntityId, vendor.id),
+  eq(entityAttachment.role, "logo"),
+  notDeleted(entityAttachment),
+);
 
 const vendorColumns = {
   id: vendor.id,
@@ -455,10 +482,11 @@ export const vendorList = async (
     getDb(db)
       .select(vendorColumns)
       .from(vendor)
+      .leftJoin(entityAttachment, vendorLogoAttachment)
       .leftJoin(
         image,
         and(
-          eq(image.id, vendor.logoImageId),
+          eq(image.id, entityAttachment.imageId),
           notDeleted(image),
           displayableImageWhere,
         ),
@@ -508,10 +536,11 @@ export const getVendorByID = async (
   const [row] = await getDb(db)
     .select(vendorColumns)
     .from(vendor)
+    .leftJoin(entityAttachment, vendorLogoAttachment)
     .leftJoin(
       image,
       and(
-        eq(image.id, vendor.logoImageId),
+        eq(image.id, entityAttachment.imageId),
         notDeleted(image),
         displayableImageWhere,
       ),
@@ -545,10 +574,11 @@ export const vendorOptions = async (
       logoKey: image.key,
     })
     .from(vendor)
+    .leftJoin(entityAttachment, vendorLogoAttachment)
     .leftJoin(
       image,
       and(
-        eq(image.id, vendor.logoImageId),
+        eq(image.id, entityAttachment.imageId),
         notDeleted(image),
         displayableImageWhere,
       ),
@@ -648,10 +678,7 @@ export const replaceVendorLogo = async (
     async (tx) => {
       const entityId = await resolveOrThrow(tx, "vendor", input.id);
       const [before] = await tx
-        .select({
-          website: vendor.website,
-          logoImageId: vendor.logoImageId,
-        })
+        .select({ website: vendor.website })
         .from(vendor)
         .where(and(eq(vendor.id, entityId), notDeleted(vendor)))
         .for("update");
@@ -671,24 +698,24 @@ export const replaceVendorLogo = async (
       const created = await insertWithShortcode(tx, "image", {
         ...input.image,
         status: "UPLOADED",
-        targetType: "vendor",
-        targetId: entityId,
       });
-      await tx
-        .update(vendor)
-        .set({ logoImageId: created.id })
-        .where(eq(vendor.id, entityId));
+      const { previousImageId } = await replaceSingularAttachment(
+        tx,
+        entityId,
+        "logo",
+        created.id,
+      );
       await logAuditEntry(tx, actor, {
         entityType: "vendor",
         entityId,
         action: "update",
         changes: {
-          logoImageId: { from: before.logoImageId, to: created.shortcode },
+          logoImageId: { from: previousImageId, to: created.shortcode },
         },
       });
 
-      const detachedImageKeys = before.logoImageId
-        ? (await reapUnreferencedImages(tx, [before.logoImageId])).deletedKeys
+      const detachedImageKeys = previousImageId
+        ? (await reapUnreferencedImages(tx, [previousImageId])).deletedKeys
         : [];
       return { entityId, detachedImageKeys };
     },
@@ -725,23 +752,24 @@ const planVendorMerge = async (
   // better-populated duplicate is rarely the one with more charges. The real
   // first case was `B&H` (website, 1 charge) vs `B&H Photo` (none, 4 charges).
   const [keeperRow] = await dbClient
-    .select({
-      website: vendor.website,
-      notes: vendor.notes,
-      logoImageId: vendor.logoImageId,
-    })
+    .select({ website: vendor.website, notes: vendor.notes })
     .from(vendor)
     .where(eq(vendor.id, keepId))
     .limit(1);
   const loserRows = await dbClient
     .select({
+      id: vendor.id,
       shortcode: vendor.shortcode,
       website: vendor.website,
       notes: vendor.notes,
-      logoImageId: vendor.logoImageId,
     })
     .from(vendor)
     .where(inArray(vendor.id, losers));
+  const logos = await singularAttachmentImageIds(
+    dbClient,
+    [keepId, ...losers],
+    "logo",
+  );
   const deletedIds = loserRows.map((r) =>
     parseShortcodeFor("vendor", r.shortcode),
   );
@@ -755,9 +783,11 @@ const planVendorMerge = async (
     const found = loserRows.find((r) => r.notes != null)?.notes;
     if (found != null) carried.notes = found;
   }
-  if (keeperRow?.logoImageId == null) {
-    const found = loserRows.find((r) => r.logoImageId != null)?.logoImageId;
-    if (found != null) carried.logoImageId = found;
+  if (!logos.has(keepId)) {
+    const found = loserRows
+      .map((row) => logos.get(row.id))
+      .find((imageId) => imageId !== undefined);
+    if (found !== undefined) carried.logoImageId = found;
   }
 
   const allPurchases = await dbClient
@@ -828,8 +858,9 @@ export const mergeVendors = async (
       carriedFields: Object.keys(plan.carried),
     };
 
-    if (Object.keys(plan.carried).length > 0) {
-      await tx.update(vendor).set(plan.carried).where(eq(vendor.id, keepId));
+    const { logoImageId: carriedLogo, ...carriedColumns } = plan.carried;
+    if (Object.keys(carriedColumns).length > 0) {
+      await tx.update(vendor).set(carriedColumns).where(eq(vendor.id, keepId));
     }
 
     for (const fold of plan.folded) {
@@ -845,19 +876,22 @@ export const mergeVendors = async (
       liveOnly: true,
     });
 
-    // Vendor logos are direct references rather than child rows. Clear losers
-    // before tombstoning them so a logo that was not carried to the keeper is
-    // eligible for the same shared-reference reap as an ordinary vendor delete.
-    const loserLogos = (
-      await tx
-        .select({ logoImageId: vendor.logoImageId })
-        .from(vendor)
-        .where(inArray(vendor.id, losers))
-    ).flatMap((row) => (row.logoImageId ? [row.logoImageId] : []));
-    await tx
-      .update(vendor)
-      .set({ logoImageId: null })
-      .where(inArray(vendor.id, losers));
+    // Detach every loser logo before tombstoning, then give the survivor the
+    // carried one, so a logo that was not carried is eligible for the same
+    // shared-reference reap as an ordinary vendor delete.
+    const loserLogos: string[] = [];
+    for (const loserId of losers) {
+      const { previousImageId } = await replaceSingularAttachment(
+        tx,
+        loserId,
+        "logo",
+        null,
+      );
+      if (previousImageId) loserLogos.push(previousImageId);
+    }
+    if (carriedLogo) {
+      await replaceSingularAttachment(tx, keepId, "logo", carriedLogo);
+    }
 
     type VendorMergeSurvivorChanges = {
       mergedFrom: { from: null; to: VendorId[] };
@@ -947,31 +981,19 @@ export const deleteVendors = async (
       );
     }
 
-    // A logo is a direct FK, not a gallery join row, so collect it before the
-    // vendor is tombstoned. Reaping uses every image incoming edge, preserving
-    // an intentionally shared image rather than assuming logo exclusivity.
-    const logoRows = await tx
-      .select({ logoImageId: vendor.logoImageId })
-      .from(vendor)
-      .where(inArray(vendor.id, ids));
-    const logoIds = logoRows.flatMap((row) =>
-      row.logoImageId ? [row.logoImageId] : [],
-    );
-
-    await tx
-      .update(vendor)
-      .set({ logoImageId: null })
-      .where(inArray(vendor.id, ids));
-    const { deleted } = await removeEntity(tx, {
-      entity: "vendor",
-      ids,
-      removal: "soft",
-      actor,
-    });
-    const reaped = await reapUnreferencedImages(tx, logoIds);
+    // The logo is an attachment (ADR 0006): the cascade detaches it and
+    // reaps it only when no other entity shares the image.
+    const { deleted, detachedImageKeys, deletedImageShortcodes } =
+      await removeEntity(tx, {
+        entity: "vendor",
+        ids,
+        removal: "soft",
+        actor,
+        children: [imageCascadeChild()],
+      });
     return {
-      detachedImageKeys: reaped.deletedKeys,
-      deletedImageShortcodes: reaped.deletedShortcodes,
+      detachedImageKeys,
+      deletedImageShortcodes,
       deleted,
     };
   });

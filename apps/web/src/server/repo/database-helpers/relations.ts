@@ -1,23 +1,20 @@
-import { type AnyColumn, and, asc, sql } from "drizzle-orm";
+import { type AnyColumn, and, asc, eq, sql } from "drizzle-orm";
 
 import {
   expenseAttribution,
+  image,
   inventoryEntry,
   ledgerSourceClaim,
   location,
-  locationImage,
-  mealImage,
   mealRecipe,
   product,
   productExternalId,
-  productImage,
   productUnitMappings,
   cookbook,
+  entityAttachment,
   recipe,
-  recipeImage,
   recipeSection,
   recipeSectionIngredient,
-  taskImage,
 } from "~/server/db/schema";
 /**
  * Predefined relation loaders for common query patterns.
@@ -102,17 +99,13 @@ const withProjectAndProductNameOnly = {
             orderUrlTemplate: true,
             deletedAt: true,
           },
-          with: {
-            logo: {
-              columns: {
-                key: true,
-                contentType: true,
-                renderStatus: true,
-                storageStatus: true,
-                deletedAt: true,
-              },
-            },
-          },
+          with: singularAttachmentImage("logo", {
+            key: true,
+            contentType: true,
+            renderStatus: true,
+            storageStatus: true,
+            deletedAt: true,
+          }),
         },
       },
     },
@@ -158,12 +151,35 @@ const sectionOrder = (t: {
 }) => [asc(t.sortOrder), asc(t.createdAt), asc(t.id)];
 
 /**
- * Display order for entity images (productImage/locationImage/recipeImage):
+ * Display order for entity attachments:
  * same shape as sections — explicit sortOrder (first = cover), createdAt/id
  * tie-break for legacy rows that all sit at the 0 default. Exported for the
  * few image loads that don't go through these relation presets.
  */
 export const imageOrder = sectionOrder;
+
+/**
+ * A cookbook cover or vendor logo: the subject's one live attachment in that
+ * role, with the Image columns the caller needs. Read it back with
+ * {@link singularAttachment}.
+ */
+export function singularAttachmentImage<
+  const Columns extends Partial<Record<keyof typeof image.$inferSelect, true>>,
+>(role: "cover" | "logo", columns: Columns) {
+  return {
+    attachments: {
+      where: and(notDeleted(entityAttachment), eq(entityAttachment.role, role)),
+      limit: 1,
+      columns: { id: true },
+      with: { image: { columns } },
+    },
+  } as const;
+}
+
+/** The Image loaded by {@link singularAttachmentImage}, or null. */
+export const singularAttachment = <T>(
+  row: { attachments: readonly { image: T }[] } | null | undefined,
+): T | null => row?.attachments[0]?.image ?? null;
 
 /**
  * Insertion order for relations hanging off a plain FK, which have no
@@ -193,7 +209,7 @@ const withProjectAndParentTaskNameOnly = {
       columns: { name: true, shortcode: true, deletedAt: true },
     },
     images: {
-      where: notDeleted(taskImage),
+      where: notDeleted(entityAttachment),
       orderBy: imageOrder,
       with: {
         image: true,
@@ -218,7 +234,7 @@ const locationIdentityProduct = {
   extras: productCategoryProjection,
   with: {
     images: {
-      where: notDeleted(productImage),
+      where: notDeleted(entityAttachment),
       orderBy: imageOrder,
       with: {
         image: true,
@@ -238,7 +254,7 @@ export const relations = {
             unitMappings: { where: notDeleted(productUnitMappings) },
             externalIds: { where: notDeleted(productExternalId) },
             images: {
-              where: notDeleted(productImage),
+              where: notDeleted(entityAttachment),
               orderBy: imageOrder,
               with: {
                 image: true,
@@ -277,7 +293,7 @@ export const relations = {
               where: notDeleted(productExternalId),
             },
             images: {
-              where: notDeleted(productImage),
+              where: notDeleted(entityAttachment),
               orderBy: imageOrder,
               with: {
                 image: true,
@@ -318,7 +334,7 @@ export const relations = {
             location: {
               with: {
                 images: {
-                  where: notDeleted(locationImage),
+                  where: notDeleted(entityAttachment),
                   orderBy: imageOrder,
                   with: {
                     image: true,
@@ -329,7 +345,7 @@ export const relations = {
           },
         },
         images: {
-          where: notDeleted(productImage),
+          where: notDeleted(entityAttachment),
           orderBy: imageOrder,
           with: {
             image: true,
@@ -352,7 +368,7 @@ export const relations = {
         ingredient: true,
         growsPlant: { columns: { shortcode: true } },
         images: {
-          where: notDeleted(productImage),
+          where: notDeleted(entityAttachment),
           orderBy: imageOrder,
           with: {
             image: true,
@@ -433,7 +449,7 @@ export const relations = {
           },
         },
         images: {
-          where: notDeleted(recipeImage),
+          where: notDeleted(entityAttachment),
           orderBy: imageOrder,
           with: {
             image: true,
@@ -505,7 +521,7 @@ export const relations = {
           // Association rows are soft-deletable independently of the Image, so
           // without this a detached image still renders a thumbnail — and would
           // disagree with `imagePresenceFilter`, which excludes it.
-          where: notDeleted(locationImage),
+          where: notDeleted(entityAttachment),
           orderBy: imageOrder,
           with: {
             image: true,
@@ -525,7 +541,7 @@ export const relations = {
             // child renders an empty type with no name to fall back on.
             product: locationIdentityProduct,
             images: {
-              where: notDeleted(locationImage),
+              where: notDeleted(entityAttachment),
               orderBy: imageOrder,
               with: {
                 image: true,
@@ -538,7 +554,7 @@ export const relations = {
         // `directItemCount`; the detail page's Contents table reads the
         // inventory list (which includes installed fixtures) on its own.
         images: {
-          where: notDeleted(locationImage),
+          where: notDeleted(entityAttachment),
           orderBy: imageOrder,
           with: {
             image: true,
@@ -550,7 +566,7 @@ export const relations = {
       with: {
         product: locationIdentityProduct,
         images: {
-          where: notDeleted(locationImage),
+          where: notDeleted(entityAttachment),
           orderBy: imageOrder,
           with: {
             image: true,
@@ -580,7 +596,7 @@ export const relations = {
             unitMappings: { where: notDeleted(productUnitMappings) },
             externalIds: { where: notDeleted(productExternalId) },
             images: {
-              where: notDeleted(productImage),
+              where: notDeleted(entityAttachment),
               orderBy: imageOrder,
               with: {
                 image: true,
@@ -592,7 +608,7 @@ export const relations = {
           with: {
             product: locationIdentityProduct,
             images: {
-              where: notDeleted(locationImage),
+              where: notDeleted(entityAttachment),
               orderBy: imageOrder,
               with: {
                 image: true,
@@ -648,7 +664,7 @@ export const relations = {
           },
         },
         images: {
-          where: notDeleted(mealImage),
+          where: notDeleted(entityAttachment),
           orderBy: imageOrder,
           with: {
             image: true,

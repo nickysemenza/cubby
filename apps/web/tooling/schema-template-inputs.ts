@@ -25,6 +25,7 @@ export const schemaTemplateInputs = [
   "./src/server/db/entity-identity-schema.ts",
   "../../packages/schemas/src/product-category-fields.ts",
   "./src/server/db/generated/**/*.ts",
+  "../../packages/schemas/src/entity-attachment.ts",
   "../../packages/schemas/src/entity-manifest.ts",
   "../../packages/schemas/src/expense-line-kind.ts",
   "../../packages/schemas/src/image.ts",

@@ -7,8 +7,8 @@ import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import {
+  entityAttachment,
   inventoryEntry,
-  productImage,
   planting,
   product,
   productExternalId,
@@ -406,10 +406,10 @@ describe("mergeProducts", () => {
       sha256,
     });
     await getDb(ctx.db)
-      .insert(productImage)
+      .insert(entityAttachment)
       .values([
-        { productId: keeper.id, imageId: keeperImage.id },
-        { productId: loser.id, imageId: loserImage.id },
+        { subjectEntityId: keeper.id, imageId: keeperImage.id },
+        { subjectEntityId: loser.id, imageId: loserImage.id },
       ]);
 
     await mergeProducts(
@@ -418,10 +418,10 @@ describe("mergeProducts", () => {
       TEST_ACTOR,
     );
 
-    const liveImages = await getDb(ctx.db).query.productImage.findMany({
+    const liveImages = await getDb(ctx.db).query.entityAttachment.findMany({
       where: and(
-        eq(productImage.productId, keeper.id),
-        notDeleted(productImage),
+        eq(entityAttachment.subjectEntityId, keeper.id),
+        notDeleted(entityAttachment),
       ),
       columns: { imageId: true },
     });
@@ -438,10 +438,10 @@ describe("mergeProducts", () => {
       size: 100,
     });
     await getDb(ctx.db)
-      .insert(productImage)
+      .insert(entityAttachment)
       .values([
-        { productId: keeper.id, imageId: image.id, purpose: null },
-        { productId: loser.id, imageId: image.id, purpose: "label" },
+        { subjectEntityId: keeper.id, imageId: image.id, purpose: null },
+        { subjectEntityId: loser.id, imageId: image.id, purpose: "label" },
       ]);
 
     await mergeProducts(
@@ -450,11 +450,11 @@ describe("mergeProducts", () => {
       TEST_ACTOR,
     );
 
-    const [surviving] = await getDb(ctx.db).query.productImage.findMany({
+    const [surviving] = await getDb(ctx.db).query.entityAttachment.findMany({
       where: and(
-        eq(productImage.productId, keeper.id),
-        eq(productImage.imageId, image.id),
-        notDeleted(productImage),
+        eq(entityAttachment.subjectEntityId, keeper.id),
+        eq(entityAttachment.imageId, image.id),
+        notDeleted(entityAttachment),
       ),
       columns: { purpose: true },
     });

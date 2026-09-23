@@ -5,12 +5,12 @@ import { TEST_HOME_SHORTCODE, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import {
+  entityAttachment,
   importRun,
   importRunOperation,
   importRunTarget,
   inventoryEntry,
   product,
-  productImage,
 } from "~/server/db/schema";
 import { getDb } from "~/server/repo/database-helpers";
 import {
@@ -138,16 +138,19 @@ describe("commitPhotoGroup", () => {
     expect(result.inventoryId).toBeDefined();
 
     const attachments = await getDb(ctx.db)
-      .select({ imageId: productImage.imageId, purpose: productImage.purpose })
-      .from(productImage)
-      .where(eq(productImage.imageId, images[0]!.id));
+      .select({
+        imageId: entityAttachment.imageId,
+        purpose: entityAttachment.purpose,
+      })
+      .from(entityAttachment)
+      .where(eq(entityAttachment.imageId, images[0]!.id));
     expect(attachments).toHaveLength(1);
     expect(attachments[0]?.purpose).toBe("item");
 
     const [labelAttachment] = await getDb(ctx.db)
-      .select({ purpose: productImage.purpose })
-      .from(productImage)
-      .where(eq(productImage.imageId, images[1]!.id));
+      .select({ purpose: entityAttachment.purpose })
+      .from(entityAttachment)
+      .where(eq(entityAttachment.imageId, images[1]!.id));
     expect(labelAttachment?.purpose).toBe("label");
 
     const [entry] = await getDb(ctx.db)
@@ -239,9 +242,9 @@ describe("commitPhotoGroup", () => {
     expect(products).toHaveLength(1);
 
     const attachments = await getDb(ctx.db)
-      .select({ id: productImage.id })
-      .from(productImage)
-      .where(eq(productImage.imageId, images[0]!.id));
+      .select({ id: entityAttachment.id })
+      .from(entityAttachment)
+      .where(eq(entityAttachment.imageId, images[0]!.id));
     expect(attachments).toHaveLength(1);
   });
 

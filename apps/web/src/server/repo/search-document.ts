@@ -5,17 +5,13 @@ import {
   type SearchableEntityRef,
   searchableEntities,
 } from "@cubby/schemas/search";
-import { getTableName, type SQL, sql } from "drizzle-orm";
+import { type SQL, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { wasm } from "~/lib/wasm";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { preferredImageDescriptionPolicy } from "~/server/image-processing/description-policy";
-import {
-  imageJoinBindings,
-  unwrapDb,
-  uuidArrayParam,
-} from "~/server/repo/database-helpers";
+import { unwrapDb, uuidArrayParam } from "~/server/repo/database-helpers";
 import {
   getEmbeddingTextsForEntityTypes,
   getEmbeddingTextsForRefs,
@@ -72,19 +68,8 @@ async function loadDirectImageSearchText(
     sql`, `,
   );
   const searchable = new Set<string>(searchableEntities);
-  const galleryBranches = Object.entries(imageJoinBindings)
-    .filter(([entityType]) => searchable.has(entityType))
-    .map(([entityType, binding]) => {
-      const table = sql.raw(`"${getTableName(binding.table)}"`);
-      const parent = sql.raw(`attachment."${binding.parentIdColumn.name}"`);
-      const imageId = sql.raw('attachment."imageId"');
-      return sql`
-        SELECT ${entityType}::text AS "entityType", ${parent}::text AS "entityId", ${imageId} AS "imageId"
-        FROM ${table} attachment
-        JOIN refs ON refs."entityType" = ${entityType} AND refs."entityId" = ${parent}
-        WHERE attachment."deletedAt" IS NULL`;
-    });
-  // Covers/logos are direct Image FK ownership rather than gallery joins.
+  // Every direct attachment — gallery photo, cookbook cover, vendor logo — is
+  // one EntityAttachment row; `refs` already limits it to searchable owners.
   const branches = [
     ...(searchable.has("image")
       ? [
@@ -93,13 +78,11 @@ async function loadDirectImageSearchText(
           WHERE i."deletedAt" IS NULL`,
         ]
       : []),
-    ...galleryBranches,
-    sql`SELECT 'cookbook'::text AS "entityType", c.id::text AS "entityId", c."coverImageId" AS "imageId"
-        FROM "Cookbook" c JOIN refs ON refs."entityType" = 'cookbook' AND refs."entityId" = c.id
-        WHERE c."deletedAt" IS NULL AND c."coverImageId" IS NOT NULL`,
-    sql`SELECT 'vendor'::text AS "entityType", v.id::text AS "entityId", v."logoImageId" AS "imageId"
-        FROM "Vendor" v JOIN refs ON refs."entityType" = 'vendor' AND refs."entityId" = v.id
-        WHERE v."deletedAt" IS NULL AND v."logoImageId" IS NOT NULL`,
+    sql`SELECT e."kind" AS "entityType", attachment."subjectEntityId"::text AS "entityId", attachment."imageId" AS "imageId"
+        FROM "EntityAttachment" attachment
+        JOIN "Entity" e ON e."id" = attachment."subjectEntityId"
+        JOIN refs ON refs."entityType" = e."kind" AND refs."entityId" = attachment."subjectEntityId"
+        WHERE attachment."deletedAt" IS NULL`,
   ];
   const result = await unwrapDb(db).execute<{
     entityType: SearchableEntity;
@@ -158,15 +141,6 @@ export async function findDirectImageSearchOwnerRefs(
   imageId: string,
 ): Promise<SearchableEntityRef[]> {
   const searchable = new Set<string>(searchableEntities);
-  const galleryBranches = Object.entries(imageJoinBindings)
-    .filter(([entityType]) => searchable.has(entityType))
-    .map(([entityType, binding]) => {
-      const table = sql.raw(`"${getTableName(binding.table)}"`);
-      const parent = sql.raw(`attachment."${binding.parentIdColumn.name}"`);
-      return sql`SELECT ${entityType}::text AS "entityType", ${parent}::text AS "entityId"
-        FROM ${table} attachment
-        WHERE attachment."imageId" = ${imageId}::uuid AND attachment."deletedAt" IS NULL`;
-    });
   const result = await unwrapDb(db).execute<{
     entityType: SearchableEntity;
     entityId: string;
@@ -179,16 +153,15 @@ export async function findDirectImageSearchOwnerRefs(
             WHERE id = ${imageId}::uuid AND "deletedAt" IS NULL`,
             ]
           : []),
-        ...galleryBranches,
-        sql`SELECT 'cookbook'::text AS "entityType", id::text AS "entityId" FROM "Cookbook"
-          WHERE "coverImageId" = ${imageId}::uuid AND "deletedAt" IS NULL`,
-        sql`SELECT 'vendor'::text AS "entityType", id::text AS "entityId" FROM "Vendor"
-          WHERE "logoImageId" = ${imageId}::uuid AND "deletedAt" IS NULL`,
+        sql`SELECT e."kind" AS "entityType", attachment."subjectEntityId"::text AS "entityId"
+          FROM "EntityAttachment" attachment
+          JOIN "Entity" e ON e."id" = attachment."subjectEntityId" AND e."deletedAt" IS NULL
+          WHERE attachment."imageId" = ${imageId}::uuid AND attachment."deletedAt" IS NULL`,
       ],
       sql` UNION ALL `,
     )}
   `);
-  return result.rows;
+  return result.rows.filter((row) => searchable.has(row.entityType));
 }
 
 /** Refresh docs and semantic work after an analysis/correction changes text. */

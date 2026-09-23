@@ -53,32 +53,32 @@ import type {
 } from "~/contracts/photo-import.contract";
 import type { Database } from "~/server/db";
 import {
+  entityAttachment,
+  expense,
   financialTransaction,
   financialTransactionAllocation,
   image,
   importFinding,
   importHunt,
+  importPreparedLine,
+  importPreparedOrder,
   importRun,
   importRunApproval,
   importRunControlEvent,
+  importRunEvidence,
+  importRunMutation,
   importRunOperation,
   importRunOrderCandidate,
   importRunProgress,
-  importPreparedLine,
-  importPreparedOrder,
-  ledgerParty,
-  purchase,
-  vendor,
-  vendorAccount,
-  expense,
-  purchasePaymentEvidence,
-  importRunMutation,
   importRunTarget,
-  importRunEvidence,
+  ledgerParty,
   product,
   productExternalId,
-  productImage,
+  purchase,
+  purchasePaymentEvidence,
   user,
+  vendor,
+  vendorAccount,
 } from "~/server/db/schema";
 import {
   databaseForTransaction,
@@ -1453,14 +1453,17 @@ export async function claimNextImportWork(
       ),
     )
     .leftJoin(
-      productImage,
-      and(eq(productImage.productId, product.id), notDeleted(productImage)),
+      entityAttachment,
+      and(
+        eq(entityAttachment.subjectEntityId, product.id),
+        notDeleted(entityAttachment),
+      ),
     )
     .where(
       and(
         eq(importRunMutation.runId, scope.public.runId),
         eq(importRunMutation.targetType, "product"),
-        isNull(productImage.id),
+        isNull(entityAttachment.id),
       ),
     )
     .limit(1);

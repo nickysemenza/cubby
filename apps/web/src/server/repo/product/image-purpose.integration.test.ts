@@ -3,7 +3,7 @@ import { and, eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { productImage } from "~/server/db/schema";
+import { entityAttachment } from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
 import { updateProduct } from "~/server/repo/product";
 import {
@@ -85,11 +85,11 @@ describe("pending Product image roles", () => {
       ctx.actor,
     );
 
-    const row = await getDb(ctx.db).query.productImage.findFirst({
+    const row = await getDb(ctx.db).query.entityAttachment.findFirst({
       where: and(
-        eq(productImage.productId, product.entityId),
-        eq(productImage.imageId, label.id),
-        notDeleted(productImage),
+        eq(entityAttachment.subjectEntityId, product.entityId),
+        eq(entityAttachment.imageId, label.id),
+        notDeleted(entityAttachment),
       ),
       columns: { purpose: true },
     });

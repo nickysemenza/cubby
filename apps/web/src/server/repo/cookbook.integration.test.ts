@@ -41,6 +41,7 @@ import {
   makeCookbookRecipe,
   makeProductInput,
 } from "./repo.fixtures";
+import { singularAttachmentImageIds } from "./singular-attachment";
 
 // EPUB importer suite — actor audits as an epub import, not the UI.
 describe("cookbook repository", () => {
@@ -239,16 +240,17 @@ describe("cookbook repository", () => {
       ctx.actor,
     );
 
-    const row = await getDb(ctx.db).query.cookbook.findFirst({
-      where: eq(cookbook.id, first.entityId),
-      columns: { coverImageId: true },
-    });
+    const covers_ = await singularAttachmentImageIds(
+      ctx.db,
+      [first.entityId],
+      "cover",
+    );
     const covers = await getDb(ctx.db).query.image.findMany({
       where: (table, { inArray }) =>
         inArray(table.id, [firstCover.id, redundantCover.id]),
       columns: { id: true, status: true },
     });
-    expect(row?.coverImageId).toBe(firstCover.id);
+    expect(covers_.get(first.entityId)).toBe(firstCover.id);
     expect(covers).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ id: firstCover.id, status: "UPLOADED" }),

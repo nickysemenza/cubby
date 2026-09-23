@@ -8,12 +8,11 @@ import {
 } from "@cubby/schemas/project";
 import { purchaseCreateInput } from "@cubby/schemas/purchase";
 import { vendorCreateInput } from "@cubby/schemas/vendor";
-import { eq } from "drizzle-orm";
 import { taxonomyShortcode } from "tooling/product-category-fixtures";
 import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { vendor } from "~/server/db/schema";
+import { entityAttachment } from "~/server/db/schema";
 import { createExpense } from "~/server/repo/expense";
 import { createFinancialAccount } from "~/server/repo/financial-account";
 import { createFinancialTransaction } from "~/server/repo/financial-transaction";
@@ -167,10 +166,11 @@ describe("data quality: finance and project entities", () => {
       ctx.actor,
     );
     const logo = await createImageFixture(ctx.db, "dq-vendor-logo");
-    await getDb(ctx.db)
-      .update(vendor)
-      .set({ logoImageId: logo.id })
-      .where(eq(vendor.id, complete.entityId));
+    await getDb(ctx.db).insert(entityAttachment).values({
+      subjectEntityId: complete.entityId,
+      role: "logo",
+      imageId: logo.id,
+    });
 
     const hydrated = await loadDataQualities(ctx.db, "vendor", [
       untransacted.entityId,

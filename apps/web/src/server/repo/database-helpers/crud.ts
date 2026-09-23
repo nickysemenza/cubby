@@ -25,17 +25,7 @@ import type { PgTable, PgUpdateSetSource } from "drizzle-orm/pg-core";
 import { type JSONType, z } from "zod";
 
 import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
-import {
-  image,
-  locationImage,
-  gardenEntryImage,
-  mealImage,
-  productImage,
-  projectImage,
-  purchaseImage,
-  recipeImage,
-  taskImage,
-} from "~/server/db/schema";
+import { entityAttachment, image } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
 import {
   resolveAllOrThrow,
@@ -294,94 +284,40 @@ const defineImageJoinBinding = <
   binding: ImageJoinBinding<TTable, TParentColumn>,
 ) => binding;
 
+const galleryBinding = (
+  extraColumns: Pick<
+    InferInsertModel<typeof entityAttachment>,
+    "documentKind"
+  > = {},
+) =>
+  defineImageJoinBinding({
+    table: entityAttachment,
+    parentIdColumn: entityAttachment.subjectEntityId,
+    insertRow: (subjectEntityId, imageId, sortOrder) => ({
+      subjectEntityId,
+      imageId,
+      sortOrder,
+      role: "attachment" as const,
+      ...extraColumns,
+    }),
+    sortOrderUpdate: (sortOrder) => ({ sortOrder }),
+  });
+
 /**
- * One binding per entity whose declaration says `images: "gallery"` — the
- * `satisfies Record<GalleryEntity, …>` fails to compile when a gallery entity
- * has no `<Entity>Image` binding here (cookbook is `"cover"`: a single
- * `coverImageId`, no join table). Each value's precise shape is pinned by
- * `defineImageJoinBinding`; the key roster is what this checks.
+ * One binding per entity whose declaration says `images: "gallery"`. Every
+ * binding targets the shared `EntityAttachment` table (ADR 0006); the
+ * `satisfies Record<GalleryEntity, …>` still fails to compile when a gallery
+ * entity has no binding, and Purchase keeps its default document kind.
  */
 export const imageJoinBindings = {
-  product: defineImageJoinBinding({
-    table: productImage,
-    parentIdColumn: productImage.productId,
-    insertRow: (productId, imageId, sortOrder) => ({
-      productId,
-      imageId,
-      sortOrder,
-    }),
-    sortOrderUpdate: (sortOrder) => ({ sortOrder }),
-  }),
-  location: defineImageJoinBinding({
-    table: locationImage,
-    parentIdColumn: locationImage.locationId,
-    insertRow: (locationId, imageId, sortOrder) => ({
-      locationId,
-      imageId,
-      sortOrder,
-    }),
-    sortOrderUpdate: (sortOrder) => ({ sortOrder }),
-  }),
-  recipe: defineImageJoinBinding({
-    table: recipeImage,
-    parentIdColumn: recipeImage.recipeId,
-    insertRow: (recipeId, imageId, sortOrder) => ({
-      recipeId,
-      imageId,
-      sortOrder,
-    }),
-    sortOrderUpdate: (sortOrder) => ({ sortOrder }),
-  }),
-  project: defineImageJoinBinding({
-    table: projectImage,
-    parentIdColumn: projectImage.projectId,
-    insertRow: (projectId, imageId, sortOrder) => ({
-      projectId,
-      imageId,
-      sortOrder,
-    }),
-    sortOrderUpdate: (sortOrder) => ({ sortOrder }),
-  }),
-  purchase: defineImageJoinBinding({
-    table: purchaseImage,
-    parentIdColumn: purchaseImage.purchaseId,
-    insertRow: (purchaseId, imageId, sortOrder) => ({
-      purchaseId,
-      imageId,
-      sortOrder,
-    }),
-    sortOrderUpdate: (sortOrder) => ({ sortOrder }),
-  }),
-  gardenEntry: defineImageJoinBinding({
-    table: gardenEntryImage,
-    parentIdColumn: gardenEntryImage.gardenEntryId,
-    insertRow: (gardenEntryId, imageId, sortOrder) => ({
-      gardenEntryId,
-      imageId,
-      sortOrder,
-    }),
-    sortOrderUpdate: (sortOrder) => ({ sortOrder }),
-  }),
-  meal: defineImageJoinBinding({
-    table: mealImage,
-    parentIdColumn: mealImage.mealId,
-    insertRow: (mealId, imageId, sortOrder) => ({
-      mealId,
-      imageId,
-      sortOrder,
-    }),
-    sortOrderUpdate: (sortOrder) => ({ sortOrder }),
-  }),
-  task: defineImageJoinBinding({
-    table: taskImage,
-    parentIdColumn: taskImage.taskId,
-    insertRow: (taskId, imageId, sortOrder) => ({
-      taskId,
-      imageId,
-      sortOrder,
-    }),
-    sortOrderUpdate: (sortOrder) => ({ sortOrder }),
-  }),
+  product: galleryBinding(),
+  location: galleryBinding(),
+  recipe: galleryBinding(),
+  project: galleryBinding(),
+  purchase: galleryBinding({ documentKind: "other" }),
+  gardenEntry: galleryBinding(),
+  meal: galleryBinding(),
+  task: galleryBinding(),
 } as const satisfies Record<GalleryEntity, { table: ImageJoinTable }>;
 
 export async function associatePendingImages<
@@ -527,32 +463,23 @@ export async function nextImageSortOrder<
 }
 
 /**
- * The declared child-cascade edge for a gallery entity's own image join
- * table — pass this in `removeEntity`'s `children` so a delete soft-deletes
- * the association and reaps any Image row/R2 object the cascade orphaned.
- * `removeEntity` discovers the image column itself (via `imageJoinColumnFor`
- * reading `INCOMING_EDGES.image`); this just supplies the `parentColumns` /
- * `auditKey` shape every gallery entity's delete uses identically.
+ * The declared child-cascade edge for an entity's own attachments — pass this
+ * in `removeEntity`'s `children` so a delete soft-deletes the associations and
+ * reaps any Image row/R2 object the cascade orphaned. `removeEntity` discovers
+ * the image column itself (via `imageJoinColumnFor` reading
+ * `INCOMING_EDGES.image`).
  */
-export const imageCascadeChild = <
-  TTable extends ImageJoinTable,
-  TParentColumn extends AnyColumn,
->(
-  binding: ImageJoinBinding<TTable, TParentColumn>,
+export const imageCascadeChild = (
   // Purchase's cascade counts distinguish `cascadedPurchaseImages` from its
   // sibling `cascadedPurchaseProducts` child — every other caller uses the
   // shared default.
   auditKey = "cascadedImages",
 ) =>
   ({
-    table: binding.table,
-    parentColumns: [binding.parentIdColumn],
+    table: entityAttachment,
+    parentColumns: [entityAttachment.subjectEntityId],
     auditKey,
-  }) satisfies {
-    table: TTable;
-    parentColumns: readonly [TParentColumn];
-    auditKey: string;
-  };
+  }) as const;
 
 /**
  * The shared image-sync body behind every gallery entity's update path:
