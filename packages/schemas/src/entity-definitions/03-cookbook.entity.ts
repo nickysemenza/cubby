@@ -7,9 +7,8 @@ export default defineEntity({
   names: { singular: "Cookbook", plural: "Cookbooks" },
   route: {
     basePath: "cookbooks",
-    list: true,
     // No kernel `get`: the detail reads the cookbook summary query.
-    detail: {
+    detailOverride: {
       query: {
         module: "~/entities/cookbook.functions",
         export: "cookbookDetailQuery",
@@ -29,7 +28,7 @@ export default defineEntity({
     },
     icons: { lucide: "BookOpen", sfSymbol: "book.closed", emoji: "📖" },
     detail: {
-      sections: [
+      sectionOverrides: [
         {
           kind: "fields",
           id: "overview",
@@ -64,7 +63,11 @@ export default defineEntity({
         { kind: "slot", id: "import-progress", title: "Import" },
       ],
     },
-    list: { links: [{ label: "Import", path: "/recipes/import" }] },
+    // The client-paged cookbook list has no generic row delete action.
+    list: {
+      actionOverrides: [],
+      links: [{ label: "Import", path: "/recipes/import" }],
+    },
   },
   model: {
     fields: [
@@ -268,9 +271,8 @@ export default defineEntity({
     audit: [],
     sort: {
       fields: ["name", "recipeCount", "createdAt", "updatedAt"],
-      default: "name",
+      defaultOverride: "name",
       computed: ["recipeCount"],
-      direction: "asc",
     },
     output: [
       "shortcode",
@@ -348,7 +350,7 @@ export default defineEntity({
     auditable: true,
     images: {
       storage: "cover",
-      displaySources: [
+      displaySourceOverrides: [
         {
           relationPath: ["product"],
           priority: 1,

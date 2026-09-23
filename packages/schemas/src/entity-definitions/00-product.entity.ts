@@ -28,7 +28,7 @@ import { productCategorySummary } from "../product-category-fields";
 export default defineEntity({
   key: "product",
   names: { singular: "Product", plural: "Products" },
-  route: { basePath: "products", create: "dialog", list: true, detail: true },
+  route: { basePath: "products" },
   table: "Product",
   identifiers: { brand: "ProductId", shortcode: "PRD-" },
   presentation: {
@@ -50,10 +50,10 @@ export default defineEntity({
           "Who ate it is per-portion meal data; the Meals table on this page shows each meal and its eaters.",
       },
       hero: {
-        images: true,
-        actions: ["edit", "addToInventory", "recordSale", "discard"],
+        imagesOverride: true,
+        actionOverrides: ["edit", "addToInventory", "recordSale", "discard"],
       },
-      sections: [
+      sectionOverrides: [
         {
           kind: "fields",
           id: "basic-information",
@@ -187,9 +187,9 @@ export default defineEntity({
       ],
     },
     list: {
-      views: ["table", "shelf", "timeline"],
-      shelf: { subtitle: ["price", "category"] },
-      actions: [
+      viewOverrides: ["table", "shelf", "timeline"],
+      shelfSubtitleOverride: ["price", "category"],
+      actionOverrides: [
         "addToInventory",
         "discard",
         "setStockTracking",
@@ -205,7 +205,7 @@ export default defineEntity({
     // block and product's `media` presentation hook render it outside this
     // grouping (`entity-edit-dialog-content.tsx`, `editor-presentations.tsx`).
     edit: {
-      sections: [
+      sectionOverrides: [
         {
           id: "identity",
           title: "Identity",
@@ -1318,7 +1318,6 @@ export default defineEntity({
         "related:product.vendors",
         "related:product.purchases",
       ],
-      default: "createdAt",
       computed: [
         "category",
         "location",

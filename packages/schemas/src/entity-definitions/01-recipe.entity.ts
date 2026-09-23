@@ -15,7 +15,7 @@ import { z } from "zod";
 export default defineEntity({
   key: "recipe",
   names: { singular: "Recipe", plural: "Recipes" },
-  route: { basePath: "recipes", create: "page", list: true, detail: null },
+  route: { basePath: "recipes", createOverride: "page", detailOverride: null },
   table: "Recipe",
   identifiers: { brand: "RecipeId", shortcode: "RCP-" },
   presentation: {
@@ -30,8 +30,8 @@ export default defineEntity({
     },
     icons: { lucide: "ChefHat", sfSymbol: "fork.knife", emoji: "🍳" },
     detail: {
-      hero: { images: true },
-      sections: [
+      hero: { imagesOverride: true },
+      sectionOverrides: [
         {
           kind: "fields",
           id: "overview",
@@ -69,7 +69,6 @@ export default defineEntity({
       ],
     },
     list: {
-      actions: ["delete"],
       links: [
         { label: "Compare", path: "/recipes/compare" },
         { label: "Import", path: "/recipes/import" },
@@ -532,7 +531,6 @@ export default defineEntity({
         "tags",
         "totalMinutes",
       ],
-      default: "createdAt",
       computed: ["cookbook", "costTotal", "caloriesTotal"],
       groupable: ["name"],
     },
@@ -898,7 +896,7 @@ export default defineEntity({
     auditable: true,
     images: {
       storage: "gallery",
-      displaySources: [
+      displaySourceOverrides: [
         {
           relationPath: ["meals"],
           priority: 1,

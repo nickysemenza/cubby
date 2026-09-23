@@ -14,7 +14,7 @@ const inheritanceModeSchema = z.enum(["inherit", "explicit"]);
 export default defineEntity({
   key: "task",
   names: { singular: "Task", plural: "Tasks" },
-  route: { basePath: "tasks", create: "dialog", list: true, detail: true },
+  route: { basePath: "tasks" },
   table: "Task",
   identifiers: { brand: "TaskId", shortcode: "TSK-" },
   presentation: {
@@ -35,9 +35,9 @@ export default defineEntity({
       },
       hero: {
         chip: "status",
-        actions: ["edit", "bulkEdit", "delete"],
+        actionOverrides: ["edit", "bulkEdit", "delete"],
       },
-      sections: [
+      sectionOverrides: [
         {
           kind: "fields",
           id: "overview",
@@ -72,7 +72,7 @@ export default defineEntity({
       ],
     },
     list: {
-      views: [
+      viewOverrides: [
         "table",
         { kind: "slot", id: "agenda", label: "Next" },
         {
@@ -83,7 +83,7 @@ export default defineEntity({
         },
         "timeline",
       ],
-      actions: ["bulkEdit", "delete"],
+      actionOverrides: ["bulkEdit", "delete"],
       timeline: {
         fields: ["dueDate", "dueEndDate"],
         lifecycle: {
@@ -638,7 +638,6 @@ export default defineEntity({
         "createdAt",
         "updatedAt",
       ],
-      default: "createdAt",
       computed: ["project", "subjectProduct"],
       groupable: ["status"],
     },
@@ -979,7 +978,7 @@ export default defineEntity({
     timeline: "default",
     images: {
       storage: "gallery",
-      displaySources: [
+      displaySourceOverrides: [
         {
           relationPath: ["subject"],
           priority: 1,

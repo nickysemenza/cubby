@@ -16,9 +16,6 @@ export default defineEntity({
   names: { singular: "Garden Entry", plural: "Garden Entries" },
   route: {
     basePath: "garden-entries",
-    create: "dialog",
-    list: true,
-    detail: true,
   },
   table: "GardenEntry",
   identifiers: { brand: "GardenEntryId", shortcode: "GDE-" },
@@ -34,7 +31,7 @@ export default defineEntity({
     },
     icons: { lucide: "CalendarDays", sfSymbol: "text.badge.plus", emoji: "📓" },
     detail: {
-      sections: [
+      sectionOverrides: [
         {
           kind: "fields",
           id: "entry",
@@ -51,8 +48,7 @@ export default defineEntity({
       ],
     },
     list: {
-      views: ["table", "timeline"],
-      actions: ["delete"],
+      viewOverrides: ["table", "timeline"],
       timeline: { fields: ["observedOn"] },
     },
   },
@@ -302,7 +298,7 @@ export default defineEntity({
     ],
     sort: {
       fields: ["observedOn", "createdAt", "updatedAt", "kind"],
-      default: "observedOn",
+      defaultOverride: "observedOn",
     },
     intents: {
       fields: {

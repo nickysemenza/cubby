@@ -17,9 +17,6 @@ export default defineEntity({
   names: { singular: "Vendor Account", plural: "Vendor Accounts" },
   route: {
     basePath: "vendor-accounts",
-    create: "dialog",
-    list: true,
-    detail: true,
   },
   table: "VendorAccount",
   identifiers: { brand: "VendorAccountId", shortcode: "VACCT-" },
@@ -34,29 +31,6 @@ export default defineEntity({
       actionLabel: "Add vendor account",
     },
     icons: { lucide: "KeyRound", sfSymbol: "person.badge.key", emoji: "🔑" },
-    detail: {
-      sections: [
-        {
-          kind: "fields",
-          id: "overview",
-          title: "Overview",
-          placement: "supporting",
-          fields: [
-            "label",
-            "vendorId",
-            "ledgerPartyId",
-            "inventoryOwnerDefaultEnabled",
-            "status",
-            "browser",
-            "lastRunAt",
-            "lastSuccessAt",
-            "createdAt",
-            "updatedAt",
-          ],
-        },
-      ],
-    },
-    list: { actions: ["delete"] },
   },
   model: {
     fields: [
@@ -277,8 +251,6 @@ export default defineEntity({
     ],
     sort: {
       fields: ["label", "status", "lastRunAt", "updatedAt"],
-      default: "label",
-      direction: "asc",
     },
     intents: {
       fields: {
@@ -409,14 +381,6 @@ export default defineEntity({
     auditable: true,
     images: {
       storage: false,
-      displaySources: [
-        {
-          relationPath: ["vendor"],
-          priority: 0,
-          ordering: "declared",
-          identityEvidence: false,
-        },
-      ],
     },
     countable: false,
     softDelete: true,

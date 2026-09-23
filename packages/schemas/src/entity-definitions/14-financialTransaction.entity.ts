@@ -35,9 +35,6 @@ export default defineEntity({
   names: { singular: "Financial Transaction", plural: "Transactions" },
   route: {
     basePath: "financial-transactions",
-    create: "dialog",
-    list: true,
-    detail: true,
   },
   table: "FinancialTransaction",
   identifiers: {
@@ -68,7 +65,7 @@ export default defineEntity({
           "Reached through the Purchases table on this page; the product path is three joins deep.",
       },
       hero: { stats: ["amount", "status"] },
-      sections: [
+      sectionOverrides: [
         {
           kind: "fields",
           id: "overview",
@@ -96,7 +93,6 @@ export default defineEntity({
         },
       ],
     },
-    list: { actions: ["delete"] },
   },
   model: {
     fields: [
@@ -540,7 +536,7 @@ export default defineEntity({
         "createdAt",
         "updatedAt",
       ],
-      default: "transactionDate",
+      defaultOverride: "transactionDate",
     },
     intents: {
       fields: {
@@ -1040,7 +1036,7 @@ export default defineEntity({
     auditable: true,
     images: {
       storage: false,
-      displaySources: [
+      displaySourceOverrides: [
         {
           relationPath: ["purchase"],
           priority: 1,

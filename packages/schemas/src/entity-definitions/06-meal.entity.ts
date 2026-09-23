@@ -15,7 +15,7 @@ import { z } from "zod";
 export default defineEntity({
   key: "meal",
   names: { singular: "Meal", plural: "Meals" },
-  route: { basePath: "meals", create: "dialog", list: true, detail: true },
+  route: { basePath: "meals" },
   table: "Meal",
   identifiers: { brand: "MealId", shortcode: "MEL-" },
   presentation: {
@@ -43,8 +43,8 @@ export default defineEntity({
         recipes:
           "The composition slot renders served recipes with their portions.",
       },
-      hero: { images: true },
-      sections: [
+      hero: { imagesOverride: true },
+      sectionOverrides: [
         {
           kind: "slot",
           id: "composition",
@@ -76,7 +76,7 @@ export default defineEntity({
       ],
     },
     list: {
-      views: [
+      viewOverrides: [
         {
           kind: "slot",
           id: "calendar",
@@ -91,7 +91,6 @@ export default defineEntity({
         },
         "table",
       ],
-      actions: ["delete"],
       links: [{ label: "Shopping list", path: "/meals/shopping-list" }],
     },
   },
@@ -409,7 +408,7 @@ export default defineEntity({
     audit: [],
     sort: {
       fields: ["date", "name", "mealType", "createdAt", "updatedAt"],
-      default: "date",
+      defaultOverride: "date",
     },
     intents: {
       fields: {
@@ -758,7 +757,7 @@ export default defineEntity({
     auditable: true,
     images: {
       storage: "gallery",
-      displaySources: [
+      displaySourceOverrides: [
         {
           relationPath: ["recipes"],
           priority: 1,

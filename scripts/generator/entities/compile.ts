@@ -19,7 +19,11 @@ import {
   compileDataQuality,
   validateDataQualityDeclarations,
 } from "./data-quality.ts";
-import { deriveInverseRelations, deriveRelationSections } from "./derive.ts";
+import {
+  deriveImageDisplaySources,
+  deriveInverseRelations,
+  deriveRelationSections,
+} from "./derive.ts";
 import type {
   CompiledEntity,
   DeclarationObject,
@@ -415,6 +419,12 @@ const compileFieldModel = (
           const sortContext = `${context}.sort`;
           const computed = sortValue.computed ?? [];
           const groupable = sortValue.groupable ?? [];
+          const [first, ...rest] = sortValue.fields;
+          if (first === undefined)
+            throw new EntityDeclarationError(`${sortContext}.fields is empty.`);
+          const defaultField =
+            sortValue.default ??
+            (sortValue.fields.includes("createdAt") ? "createdAt" : first);
           for (const key of sortValue.fields) {
             if (computed.includes(key)) continue;
             if (!fieldKeys.includes(key))
@@ -422,9 +432,9 @@ const compileFieldModel = (
                 `${sortContext}.fields references undeclared field ${key}.`,
               );
           }
-          if (!sortValue.fields.includes(sortValue.default))
+          if (!sortValue.fields.includes(defaultField))
             throw new EntityDeclarationError(
-              `${sortContext}.default ${sortValue.default} must be one of sort.fields.`,
+              `${sortContext}.default ${defaultField} must be one of sort.fields.`,
             );
           for (const key of groupable) {
             if (!sortValue.fields.includes(key))
@@ -438,15 +448,18 @@ const compileFieldModel = (
                 `${sortContext}.computed ${key} must be one of sort.fields.`,
               );
           }
-          const [first, ...rest] = sortValue.fields;
-          if (first === undefined)
-            throw new EntityDeclarationError(`${sortContext}.fields is empty.`);
           return {
             fields: [first, ...rest] as const,
-            default: sortValue.default,
+            default: defaultField,
             computed,
             groupable,
-            direction: sortValue.direction ?? "desc",
+            direction:
+              sortValue.direction ??
+              (["text", "enum"].includes(
+                fields.find((field) => field.key === defaultField)?.kind ?? "",
+              )
+                ? "asc"
+                : "desc"),
           };
         })();
   const compiled = {
@@ -1091,7 +1104,7 @@ const validateTitleField = (
 };
 
 /**
- * Entities whose detail route stays hand-written (`route.detail: null`).
+ * Entities whose detail route stays hand-written (`route.detailOverride: null`).
  * Every other entity's page is the generic detail. `recipe` still renders
  * `GenericEntityDetail`; its route is hand-written only for the workflow
  * slot's URL search keys. `usda-food` is the external USDA catalog, keyed by
@@ -1100,11 +1113,11 @@ const validateTitleField = (
 const HAND_WRITTEN_DETAIL_ROUTES = new Set(["recipe", "usda-food"]);
 
 /**
- * `route.list: true` / `route.detail: true` generate the page over the
+ * A route defaults to generated list and detail pages over the
  * generic renderers, which read the kernel's list/detail projections: the
  * detail roster is every entity with create and update contracts, the list
  * roster its browser-routed members. An entity outside the detail roster
- * declares `detail: { query }` instead (image); one outside the list roster
+ * declares `detailOverride: { query }` instead (image); one outside the list roster
  * hand-writes its index route.
  */
 const validateRouteRosters = (
@@ -1121,24 +1134,24 @@ const validateRouteRosters = (
   if (route === null) return;
   if (route.detail === null && !HAND_WRITTEN_DETAIL_ROUTES.has(key))
     throw new EntityDeclarationError(
-      `${context}.route.detail is null; every entity gets the generic detail page. Declare detail: true, or detail: { query } outside the kernel detail roster, and put specialized UI in a detail slot.`,
+      `${context}.route.detail is null; every entity gets the generic detail page. Omit detailOverride, or declare detailOverride: { query } outside the kernel detail roster, and put specialized UI in a detail slot.`,
     );
   const inDetailRoster =
     contract !== null && contract.create !== null && contract.update !== null;
   if (route.detail === true && !inDetailRoster)
     throw new EntityDeclarationError(
-      `${context}.route.detail is true but the entity has no create+update contract; declare detail: { query } or null.`,
+      `${context}.route.detail is true but the entity has no create+update contract; declare detailOverride: { query } or null.`,
     );
   if (route.detail !== null && route.detail !== true && inDetailRoster)
     throw new EntityDeclarationError(
-      `${context}.route.detail.query is for entities outside the kernel detail roster; use detail: true.`,
+      `${context}.route.detail.query is for entities outside the kernel detail roster; omit detailOverride.`,
     );
   // A generated index route needs rows to list: the kernel list read for a
   // roster entity, or (outside the roster) a client-paged override module in
   // `apps/web/src/entities/list-columns` over the entity's own projection.
   if (route.list === true && contract === null)
     throw new EntityDeclarationError(
-      `${context}.route.list is true but the entity has no contract (nothing to list); declare list: null.`,
+      `${context}.route.list is true but the entity has no contract (nothing to list); declare listOverride: null.`,
     );
 };
 
@@ -2066,8 +2079,10 @@ export const compileEntityDeclarations = (
   const entities = deriveRelationSections(
     validateDataQualityDeclarations(
       deriveInverseRelations(
-        declarations.map((value, index) =>
-          objectValue(value, `ENTITY_DECLARATIONS[${index}]`),
+        deriveImageDisplaySources(
+          declarations.map((value, index) =>
+            objectValue(value, `ENTITY_DECLARATIONS[${index}]`),
+          ),
         ),
       ).map(compileEntity),
     ),

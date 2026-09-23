@@ -5,7 +5,7 @@ import { z } from "zod";
 export default defineEntity({
   key: "ledgerParty",
   names: { singular: "Ledger Party", plural: "Ledger Parties" },
-  route: { basePath: "ledger-parties", list: true, detail: true },
+  route: { basePath: "ledger-parties" },
   table: "LedgerParty",
   identifiers: { brand: "LedgerPartyId", shortcode: "LPY-" },
   presentation: {
@@ -23,7 +23,7 @@ export default defineEntity({
         "recipes-eaten":
           "Reachable through the Meals table on this page; the recipe rollup is three joins deep.",
       },
-      sections: [
+      sectionOverrides: [
         { kind: "slot", id: "wardrobe", title: "Wardrobe" },
         {
           kind: "fields",
@@ -61,7 +61,6 @@ export default defineEntity({
       ],
     },
     // Merge is a kernel capability with no browser operation yet.
-    list: { actions: ["delete"] },
   },
   model: {
     fields: [
@@ -155,9 +154,8 @@ export default defineEntity({
     audit: ["name", "kind", "notes"],
     sort: {
       fields: ["name", "kind", "createdAt", "updatedAt"],
-      default: "name",
+      defaultOverride: "name",
       // A name roster reads A→Z, unlike the blanket descending default.
-      direction: "asc",
     },
     intents: {
       fields: {

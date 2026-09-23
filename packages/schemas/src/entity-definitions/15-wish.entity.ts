@@ -8,7 +8,7 @@ import { z } from "zod";
 export default defineEntity({
   key: "wish",
   names: { singular: "Wish", plural: "Wishlist" },
-  route: { basePath: "wishes", create: "dialog", list: true, detail: true },
+  route: { basePath: "wishes" },
   table: "Wish",
   identifiers: { brand: "WishId", shortcode: "WSH-" },
   presentation: {
@@ -27,8 +27,8 @@ export default defineEntity({
         candidates:
           "The Candidate alternatives section edits candidates in place with its own renderer.",
       },
-      hero: { actions: ["edit", "markPurchased"] },
-      sections: [
+      hero: { actionOverrides: ["edit", "markPurchased"] },
+      sectionOverrides: [
         {
           kind: "fields",
           id: "overview",
@@ -44,7 +44,7 @@ export default defineEntity({
         },
       ],
     },
-    list: { actions: ["markPurchased", "delete"] },
+    list: { actionOverrides: ["markPurchased", "delete"] },
   },
   model: {
     fields: [
@@ -231,7 +231,6 @@ export default defineEntity({
     audit: ["name", "notes", "acquiredAt", "candidateProductIds"],
     sort: {
       fields: ["name", "acquiredAt", "priceRange", "createdAt", "updatedAt"],
-      default: "createdAt",
       computed: ["priceRange"],
     },
     intents: {
@@ -337,7 +336,7 @@ export default defineEntity({
     auditable: true,
     images: {
       storage: false,
-      displaySources: [
+      displaySourceOverrides: [
         {
           relationPath: ["candidates"],
           priority: 0,

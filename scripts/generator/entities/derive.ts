@@ -83,6 +83,87 @@ const declarationView = z.object({
 });
 type DeclarationView = z.infer<typeof declarationView>;
 
+const imageDefaultView = z.object({
+  key: z.string(),
+  capabilities: z.object({
+    images: z.object({
+      storage: z.union([
+        z.literal(false),
+        z.enum(["gallery", "cover", "logo"]),
+      ]),
+      displaySourceOverrides: z.array(z.unknown()).optional(),
+    }),
+  }),
+  relations: z.array(relationView),
+});
+
+/**
+ * A singular outgoing relation identifies the subject of a record. It is a
+ * safe default for a borrowed preview, unlike an incoming collection of
+ * activity, which can show a photo unrelated to the record's identity.
+ * Explicit `displaySourceOverrides`, including [], replace the ranked default.
+ */
+export const deriveImageDisplaySources = (
+  declarations: readonly DeclarationObject[],
+): DeclarationObject[] => {
+  const views = new Map(
+    declarations.flatMap((declaration) => {
+      const parsed = imageDefaultView.safeParse(declaration);
+      return parsed.success ? [[parsed.data.key, parsed.data] as const] : [];
+    }),
+  );
+  return declarations.map((declaration) => {
+    const view = views.get(String(declaration.key));
+    if (
+      view === undefined ||
+      view.capabilities.images.storage !== false ||
+      view.capabilities.images.displaySourceOverrides !== undefined
+    )
+      return declaration;
+    const candidates = view.relations
+      .filter((relation) => {
+        const target = views.get(relation.target);
+        return (
+          relation.cardinality === "one" &&
+          relation.provenance.kind === "local-path" &&
+          relation.provenance.steps?.length === 1 &&
+          relation.provenance.steps[0]?.direction === "outgoing" &&
+          target !== undefined &&
+          (target.key === "image" ||
+            target.capabilities.images.storage !== false)
+        );
+      })
+      .sort(
+        (left, right) =>
+          Number(right.target === "image") - Number(left.target === "image"),
+      );
+    if (candidates.length === 0) return declaration;
+    const capabilities = objectValue(
+      declaration.capabilities,
+      `${view.key}.capabilities`,
+    );
+    const images = objectValue(
+      capabilities.images,
+      `${view.key}.capabilities.images`,
+    );
+    return {
+      ...declaration,
+      capabilities: {
+        ...capabilities,
+        images: {
+          ...images,
+          displaySourceOverrides: candidates.map((relation, priority) => ({
+            relationPath: [relation.key],
+            priority,
+            ordering: "declared",
+            identityEvidence: false,
+          })),
+        },
+      },
+    };
+  });
+};
+
 const samePath = (left: readonly Step[], right: readonly Step[]) =>
   left.length === right.length &&
   left.every(

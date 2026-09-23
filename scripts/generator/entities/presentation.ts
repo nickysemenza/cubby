@@ -102,7 +102,7 @@ const checkHero = (
 
 /** Returns whether a timeline section is declared. */
 const checkSections = (
-  sections: EntityPresentation["detail"]["sections"],
+  sections: NonNullable<EntityPresentation["detail"]["sections"]>,
   fieldModel: EntityFieldModel,
   relations: EntityDeclarationMetadata["relations"],
   lookup: FieldLookup,
@@ -365,9 +365,26 @@ export const compilePresentation = (
   const { fieldModel, relations, capabilities, ports } = facts;
   const lookup = fieldLookup(fieldModel, context);
   const { detail, list, edit } = presentation;
+  const detailFields = fieldModel.fields
+    .filter((field) => field.display.detail)
+    .map((field) => field.key);
+  const sections =
+    detail.sections ??
+    (detailFields.length === 0
+      ? []
+      : [
+          {
+            kind: "fields" as const,
+            id: "overview",
+            title: "Overview",
+            placement: "supporting" as const,
+            collapsed: false,
+            fields: detailFields,
+          },
+        ]);
   checkHero(detail.hero, lookup);
   const timelineSection = checkSections(
-    detail.sections,
+    sections,
     fieldModel,
     relations,
     lookup,
@@ -393,21 +410,27 @@ export const compilePresentation = (
   return {
     ...presentation,
     detail: {
-      ...detail,
+      variant: detail.variant,
       hero: {
         ...detail.hero,
         images: detail.hero.images ?? capabilities.images.storage === "gallery",
         actions: detail.hero.actions ?? (facts.hasUpdate ? ["edit"] : []),
       },
+      sections,
+      omitRelations: detail.omitRelations,
     },
     list: {
-      ...list,
       // Cards are a universal alternate renderer. Stored images improve the
       // card, but their absence resolves through the entity icon fallback.
       views: list.views.includes("shelf")
         ? list.views
         : [...list.views, "shelf"],
+      viewAliases: list.viewAliases,
       shelf: { subtitle: shelfSubtitle },
+      primarySearch: list.primarySearch,
+      tree: list.tree,
+      actions: list.actions ?? (capabilities.delete !== null ? ["delete"] : []),
+      links: list.links,
       timeline:
         list.timeline === null
           ? null

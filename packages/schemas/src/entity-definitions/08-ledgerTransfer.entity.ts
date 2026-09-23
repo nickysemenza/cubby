@@ -17,7 +17,7 @@ import { z } from "zod";
 export default defineEntity({
   key: "ledgerTransfer",
   names: { singular: "Ledger Transfer", plural: "Transfers" },
-  route: { basePath: "ledger-transfers", list: true, detail: true },
+  route: { basePath: "ledger-transfers" },
   table: "LedgerTransfer",
   identifiers: { brand: "LedgerTransferId", shortcode: "LTR-" },
   // Ledger transfers have no name field; `fromPartyName` is the most
@@ -37,7 +37,7 @@ export default defineEntity({
       emoji: "🔁",
     },
     detail: {
-      sections: [
+      sectionOverrides: [
         {
           kind: "fields",
           id: "overview",
@@ -62,7 +62,6 @@ export default defineEntity({
         },
       ],
     },
-    list: { actions: ["delete"] },
   },
   model: {
     fields: [
@@ -283,7 +282,7 @@ export default defineEntity({
     ],
     sort: {
       fields: ["date", "amount", "createdAt", "updatedAt"],
-      default: "date",
+      defaultOverride: "date",
     },
     intents: {
       fields: {
