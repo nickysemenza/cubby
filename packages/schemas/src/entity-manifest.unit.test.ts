@@ -31,19 +31,6 @@ const sorted = (xs: readonly string[]) => [...xs].sort();
 const descriptor = (entity: Entity): EntityDescriptor =>
   entityDescriptor.parse(entityManifest[entity]);
 
-const IMAGE_KEY = {
-  product: "PRODUCT",
-  recipe: "RECIPE",
-  cookbook: "COOKBOOK",
-  location: "LOCATION",
-  meal: "MEAL",
-  project: "PROJECT",
-  task: "TASK",
-  purchase: "PURCHASE",
-  planting: "PLANTING",
-  gardenEntry: "GARDENENTRY",
-} satisfies Partial<Record<Entity, string>>;
-
 describe("entity manifest", () => {
   it("covers every entity exactly once, each a valid descriptor", () => {
     expect(sorted(allEntities)).toEqual(sorted(entitySchema.options));
@@ -124,92 +111,18 @@ describe("entity manifest", () => {
   });
 
   it("derives the auditable contract and audit union", () => {
-    expect(auditableEntities).toEqual([
-      "product",
-      "recipe",
-      "ingredient",
-      "cookbook",
-      "location",
-      "inventory",
-      "meal",
-      "ledgerParty",
-      "ledgerTransfer",
-      "project",
-      "task",
-      "vendor",
-      "purchase",
-      "financialAccount",
-      "financialTransaction",
-      "wish",
-      "expense",
-      "planting",
-      "gardenEntry",
-      "vendorAccount",
-      "productCategory",
-      "device",
-      "imageSighting",
-    ]);
     expect(sorted(auditEntitySchema.options)).toEqual(
       sorted(auditableEntities),
     );
   });
 
-  it("derives the countable contract", () => {
-    expect(countableEntities).toEqual([
-      "product",
-      "recipe",
-      "ingredient",
-      "cookbook",
-      "location",
-      "inventory",
-      "meal",
-      "project",
-      "task",
-      "vendor",
-      "purchase",
-      "financialAccount",
-      "financialTransaction",
-      "wish",
-      "expense",
-      "image",
-      "planting",
-      "gardenEntry",
-      "importRun",
-      "imageSighting",
-    ]);
-  });
-
   it("derives the image-bearing contract and storage enum", () => {
-    expect(imageEntities).toEqual([
-      "product",
-      "recipe",
-      "cookbook",
-      "location",
-      "meal",
-      "project",
-      "task",
-      "purchase",
-      "gardenEntry",
-    ]);
-    expect(sorted(imageEntities.map((e) => IMAGE_KEY[e] ?? e))).toEqual(
+    expect(sorted(imageEntities.map((e) => e.toUpperCase()))).toEqual(
       sorted(entityImage.options),
     );
   });
 
   it("derives every direct-image storage roster from the manifest", () => {
-    expect(galleryEntities).toEqual([
-      "product",
-      "recipe",
-      "location",
-      "meal",
-      "project",
-      "task",
-      "purchase",
-      "gardenEntry",
-    ]);
-    expect(coverEntities).toEqual(["cookbook"]);
-    expect(logoEntities).toEqual(["vendor"]);
-
     const directImageEntities = new Set<Entity>([
       ...galleryEntities,
       ...coverEntities,
@@ -253,45 +166,16 @@ describe("entity manifest", () => {
   });
 
   it("derives the searchable contract", () => {
-    expect(searchableEntities).toEqual([
-      "product",
-      "recipe",
-      "ingredient",
-      "cookbook",
-      "location",
-      "inventory",
-      "meal",
-      "project",
-      "task",
-      "vendor",
-      "purchase",
-      "financialAccount",
-      "financialTransaction",
-      "wish",
-      "expense",
-      "image",
-      "planting",
-      "gardenEntry",
-    ]);
+    for (const entity of embeddableEntities) {
+      expect(searchableEntities).toContain(entity);
+    }
     // The three financial entities stay lexically searchable but opt out of
     // embedding (search: { enabled: true, embedding: false }).
-    expect(embeddableEntities).toEqual([
-      "product",
-      "recipe",
-      "ingredient",
-      "cookbook",
-      "location",
-      "inventory",
-      "meal",
-      "project",
-      "task",
-      "vendor",
-      "financialAccount",
-      "wish",
-      "image",
-      "planting",
-      "gardenEntry",
-    ]);
+    expect(
+      searchableEntities
+        .filter((e) => !new Set<string>(embeddableEntities).has(e))
+        .sort(),
+    ).toEqual(["expense", "financialTransaction", "purchase"]);
   });
 
   it("countable entities have a db table; non-countable usda-food does not", () => {

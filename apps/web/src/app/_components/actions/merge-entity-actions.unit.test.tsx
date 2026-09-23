@@ -84,12 +84,10 @@ function PurchaseAvailabilityHarness() {
 }
 
 describe("merge entity actions", () => {
-  it("registers bounded vendor and purchase merge actions", () => {
-    expect(mergeEntityActionDefinitions).toMatchObject([
-      { entities: ["product"], minSelection: 2, verb: "merge" },
-      { entities: ["vendor"], minSelection: 2, verb: "merge" },
-      { entities: ["purchase"], minSelection: 2, verb: "merge" },
-    ]);
+  it("bounds every merge action to a selection of at least two", () => {
+    for (const definition of mergeEntityActionDefinitions) {
+      expect(definition).toMatchObject({ minSelection: 2, verb: "merge" });
+    }
   });
 
   it("keeps a staged selection until the merge dialog executes its typed mutation", async () => {

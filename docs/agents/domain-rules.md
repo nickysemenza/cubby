@@ -79,9 +79,10 @@ a **row constructor**, not a Postgres array (use `eqAny`/`inArray`/
 `arrayOverlaps`/`uuidArrayParam`; the `no-unsafe-sql-array-interpolation`
 Oxlint rule guards it). A new FK that closes a loop between tables makes every
 table in the loop infer as `any` (TS7022) unless the `.references()` callback
-is annotated `(): AnyPgColumn =>`. A new incoming FK edge also trips the
-hardcoded `EXPECTED_EDGE_COUNT` in `detectors-integrity.ts`, which `pnpm check`
-cannot see, on top of the exhaustive `Record<Entity, …>` registries.
+is annotated `(): AnyPgColumn =>`. A new `must-target-live` incoming FK edge
+also needs a `SOURCE_FACTORIES` fixture in
+`detectors-integrity.integration.test.ts`, which `pnpm check` cannot see, on
+top of the exhaustive `Record<Entity, …>` registries.
 
 Inside the entity kernel's write transaction every DB touch must go through the
 transaction-bound context: a service still bound to the request pool that

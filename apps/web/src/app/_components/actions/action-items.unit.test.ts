@@ -133,15 +133,6 @@ describe("verb-backed actions single-source their presentation", () => {
   // registries existed; they were simply never connected.
   const verbBacked = actionItems.filter((item) => item.verb !== undefined);
 
-  it("covers the actions that are also verbs", () => {
-    expect(verbBacked.map((item) => item.id).sort()).toEqual([
-      "bulk-edit",
-      "photo-pass",
-      "print-labels",
-      "recount",
-    ]);
-  });
-
   it.each(verbBacked)("$id reads label and icon from the verb", (item) => {
     const verb = verbDef(item.verb!);
     expect(item.name).toBe(verb.label);

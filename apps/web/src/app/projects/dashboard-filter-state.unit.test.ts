@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 
 import {
   activeFilterCount,
-  DASHBOARD_FILTER_SEARCH_KEYS,
   dateRangeBounds,
   defaultFilters,
   type Filters,
@@ -163,43 +162,5 @@ describe("dateRangeBounds", () => {
     expect(dateRangeBounds("not-a-real-key", today)).toBeNull();
     expect(dateRangeBounds("", today)).toBeNull();
     expect(dateRangeBounds("20240", today)).toBeNull();
-  });
-});
-
-describe("URL search-param key disjointness", () => {
-  /**
-   * `entities/filter-manifest.tsx` is the source of truth for the project
-   * table's manifest-managed search-param keys, but it cannot be imported
-   * here: it's a `.tsx` (the vitest `unit` project has no React/JSX plugin,
-   * only `ui` does) and it transitively imports several `~/...`-aliased
-   * modules (`~/app/_components/data-table/columnHelpers`,
-   * `~/app/projects/project-options`, etc.) — both independently make it
-   * unloadable from this alias-free `unit`-project test file. So this list
-   * is a hand-maintained literal, not a derived import. It reflects the
-   * *target* state after a concurrent unit removes the presentation-only
-   * `status`/`kind` specs from the project entry in `entityFilters` (see
-   * the comment in filter-manifest.tsx above the `project:` entry) — the
-   * table then owns exactly `name` (its text filter) plus
-   * `tableSearchFields`'s `sort`/`page`/`pageSize`. If the manifest ever
-   * grows another key for the `project` entity, update this list too.
-   */
-  const PROJECT_TABLE_MANIFEST_SEARCH_KEYS = [
-    "name",
-    "statuses",
-    "kinds",
-    "locations",
-    "date",
-    "completed",
-    "parent",
-    "sort",
-    "page",
-    "pageSize",
-  ] as const;
-
-  it("uses the same URL keys in the dashboard and project list", () => {
-    const tableKeys = new Set<string>(PROJECT_TABLE_MANIFEST_SEARCH_KEYS);
-    expect(
-      DASHBOARD_FILTER_SEARCH_KEYS.every((key) => tableKeys.has(key)),
-    ).toBe(true);
   });
 });

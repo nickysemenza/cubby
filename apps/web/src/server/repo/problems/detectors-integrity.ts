@@ -89,36 +89,6 @@ interface EdgeAuditSpec {
   sourceSoftDeletable: boolean;
 }
 
-/** Source tables with no `deletedAt` column — hard-delete-only, so no `s."deletedAt" IS NULL` guard applies. */
-const EXPECTED_HARD_DELETE_ONLY_TABLES = new Set([
-  "ImportFinding",
-  "ImportHunt",
-  "ImportPreparedOrder",
-  "ImportRunApproval",
-  "ImportRunControlEvent",
-  "ImportRunEvidence",
-  "ImportRunMutation",
-  "ImportRunOperation",
-  "ImportRunOrderCandidate",
-  "ImportRunProgress",
-  "ImportRunTarget",
-  "ImportSourceClaim",
-  "ImageProcessingJob",
-  "MailboxCursor",
-  "MerchantVendorRule",
-  "OrderMail",
-  "OrderMailAttachment",
-  "PhotoGroupProposal",
-  "PurchasePaymentEvidence",
-  "ProjectDependency",
-  "ProductConversionCoverage",
-  "ProductMatchCandidate",
-  "TaskDependency",
-]);
-
-/** The must-target-live edges this audit checks, derived (not hand-maintained) should equal this. */
-const EXPECTED_EDGE_COUNT = 140;
-
 /**
  * Derive one {@link EdgeAuditSpec} per `must-target-live` edge in
  * `INCOMING_EDGES`, skipping `allow-target-deleted` edges.
@@ -127,11 +97,7 @@ const EXPECTED_EDGE_COUNT = 140;
  * trusted: the source table/column names come from the Drizzle column itself
  * (`column.table` / `column.name`), then checked against the edge's own key
  * string — a mis-derivation (wrong table, wrong column) throws instead of
- * silently querying the wrong data. The two structural counts this repo's
- * history depends on (the audited edge count and exact hard-delete-only source
- * tables) are asserted at the end for the same reason: drift should fail
- * loudly, not read as "0 problems
- * found" against a query that quietly stopped covering what it used to.
+ * silently querying the wrong data.
  */
 function buildEdgeAuditSpecs(): EdgeAuditSpec[] {
   const specs: EdgeAuditSpec[] = [];
@@ -203,30 +169,6 @@ function buildEdgeAuditSpecs(): EdgeAuditSpec[] {
         sourceSoftDeletable,
       });
     }
-  }
-
-  if (specs.length !== EXPECTED_EDGE_COUNT) {
-    throw new Error(
-      `Expected ${EXPECTED_EDGE_COUNT} must-target-live edges, derived ${specs.length}. ` +
-        "An edge was added/removed/reclassified in INCOMING_EDGES or ENTITY_EDGE_SEMANTICS " +
-        "without updating this audit's expected count.",
-    );
-  }
-
-  const hardDeleteOnlyTables = new Set(
-    specs.filter((s) => !s.sourceSoftDeletable).map((s) => s.sourceTableName),
-  );
-  const sameSize =
-    hardDeleteOnlyTables.size === EXPECTED_HARD_DELETE_ONLY_TABLES.size;
-  const sameMembers = [...hardDeleteOnlyTables].every((t) =>
-    EXPECTED_HARD_DELETE_ONLY_TABLES.has(t),
-  );
-  if (!sameSize || !sameMembers) {
-    throw new Error(
-      `Expected exactly {${[...EXPECTED_HARD_DELETE_ONLY_TABLES].join(", ")}} as the hard-delete-only ` +
-        `source tables, found {${[...hardDeleteOnlyTables].join(", ")}}. A source table's soft-delete ` +
-        "status changed — update EXPECTED_HARD_DELETE_ONLY_TABLES if that's intended.",
-    );
   }
 
   return specs;

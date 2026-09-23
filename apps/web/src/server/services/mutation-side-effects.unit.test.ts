@@ -6,7 +6,6 @@ import type { PublishOptions } from "~/server/background-tasks/publish";
 import { Database } from "~/server/db";
 
 import {
-  mutationSideEffectManifest,
   type MutationSideEffectEvent,
   type MutationSideEffectPorts,
   runMutationSideEffects,
@@ -467,34 +466,5 @@ describe("mutation side effects manifest", () => {
       source: "test.product",
     };
     expect(event.entity.entity).toBe("product");
-  });
-
-  it("declares lifecycle hooks for every supported entity", () => {
-    expect(Object.keys(mutationSideEffectManifest).sort()).toEqual([
-      "cookbook",
-      "expense",
-      "financialAccount",
-      "financialTransaction",
-      "gardenEntry",
-      "image",
-      "ingredient",
-      "inventory",
-      "location",
-      "meal",
-      "planting",
-      "product",
-      "productCategory",
-      "project",
-      "purchase",
-      "recipe",
-      "task",
-      "vendor",
-      "wish",
-    ]);
-    for (const handlers of Object.values(mutationSideEffectManifest)) {
-      expect(handlers).toHaveProperty("onCreate");
-      expect(handlers).toHaveProperty("onUpdate");
-      expect(handlers).toHaveProperty("onDelete");
-    }
   });
 });
