@@ -130,6 +130,10 @@ export interface ReferenceSuggestSpec<C> {
   detailOf?(c: C): string | null;
   renderLine(c: C): string;
   subject(basis: ResolvedBasis): string;
+  /** A tree roster's parent link. When set, a pick below the high-confidence
+   * floor rolls up to the deepest ancestor whose subtree clears it
+   * (`placeByBranch`). */
+  parentIdOf?(c: C): string | null;
 }
 
 export interface TextRosterSuggestSpec {
@@ -409,6 +413,7 @@ export const FIELD_SUGGEST_REGISTRY = {
     detailOf: (c) => productCategoryPath(c),
     renderLine: renderProductCategoryOption,
     subject: (basis) => renderSubject("product", basis),
+    parentIdOf: (c) => c.ancestorIds.at(-1) ?? null,
   } satisfies ReferenceSuggestSpec<ProductCategorySuggestionOption>,
   "product.tags": {
     kind: "prune",

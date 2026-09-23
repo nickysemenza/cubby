@@ -95,6 +95,9 @@ export interface AiSelectionOutcome<C> {
    * Always `[]` on the overflow/chat-tier path — a prose pick has no
    * distribution to rank — and when there were no candidates to choose from. */
   alternatives: { candidate: C; probability: number }[];
+  /** Jev's full ranked distribution over the shown candidates (winner
+   * included, `none` excluded). `[]` wherever `alternatives` is. */
+  distribution: { candidate: C; probability: number }[];
   /** False only when there were no candidates to show, so no model was asked. */
   evaluated: boolean;
 }
@@ -128,6 +131,7 @@ export async function runAiSelection<C>(
       probability: null,
       reasoning: "No candidates were available to choose from.",
       alternatives: [],
+      distribution: [],
       evaluated: false,
     };
   }
@@ -151,6 +155,7 @@ export async function runAiSelection<C>(
       probability: null,
       reasoning: result.reasoning,
       alternatives: [],
+      distribution: [],
       evaluated: true,
     };
   }
@@ -163,15 +168,17 @@ export async function runAiSelection<C>(
     usage: args.usage,
     port: args.jev,
   });
-  const alternatives = result.ranked
-    .filter((entry) => entry.index !== result.selectedIndex)
-    .slice(0, 3)
-    .flatMap((entry) => {
-      const candidate = shown[entry.index];
-      return candidate === undefined
-        ? []
-        : [{ candidate, probability: entry.probability }];
-    });
+  const distribution = result.ranked.flatMap((entry) => {
+    const candidate = shown[entry.index];
+    return candidate === undefined
+      ? []
+      : [{ candidate, probability: entry.probability }];
+  });
+  const selectedCandidate =
+    result.selectedIndex === null ? undefined : shown[result.selectedIndex];
+  const alternatives = distribution
+    .filter((entry) => entry.candidate !== selectedCandidate)
+    .slice(0, 3);
   return {
     selected:
       result.selectedIndex === null
@@ -181,6 +188,7 @@ export async function runAiSelection<C>(
     probability: result.probability,
     reasoning: "",
     alternatives,
+    distribution,
     evaluated: true,
   };
 }
