@@ -15,7 +15,7 @@ describe("purchase-agent queue dispatch", () => {
     const event = parsePurchaseAgentEvent({
       type: "browser_connected",
       runId,
-      coordinatorModel: "gpt-5.6-sol",
+      coordinatorModel: "gpt-6-sol",
       eventId: "connection-9",
       connectionId: "mac-bridge-9",
     });
@@ -27,7 +27,7 @@ describe("purchase-agent queue dispatch", () => {
       id: `import-run:${runId}`,
       initialData: {
         runId,
-        coordinatorModel: "gpt-5.6-sol",
+        coordinatorModel: "gpt-6-sol",
       },
       idempotencyKey: `purchase-agent:${runId}:browser_connected:connection-9`,
       message: {
@@ -35,7 +35,7 @@ describe("purchase-agent queue dispatch", () => {
         type: "purchase-import.browser_connected",
         body: JSON.stringify({
           version: 1,
-          coordinatorModel: "gpt-5.6-sol",
+          coordinatorModel: "gpt-6-sol",
           eventId: "connection-9",
           type: "browser_connected",
           connectionId: "mac-bridge-9",

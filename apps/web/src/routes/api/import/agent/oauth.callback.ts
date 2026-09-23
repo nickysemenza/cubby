@@ -125,9 +125,7 @@ async function dispatchResumedRuns(
           purpose: z
             .enum(["account_sync", "product_enrichment", "purchase_validation"])
             .parse(run.purpose),
-          coordinatorModel: z
-            .enum(["gpt-5.6-terra", "gpt-5.6-sol", "gpt-6-sol"])
-            .parse(run.coordinatorModel),
+          coordinatorModel: "gpt-6-sol",
           eventId: run.eventId,
           type: "retry",
         });

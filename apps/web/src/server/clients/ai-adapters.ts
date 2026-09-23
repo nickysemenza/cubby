@@ -3,7 +3,7 @@ import {
   createAnthropicChat,
 } from "@tanstack/ai-anthropic";
 import {
-  type OpenAIChatModelProviderOptionsByName,
+  type OpenAITextProviderOptions,
   createOpenaiChat,
 } from "@tanstack/ai-openai";
 import {
@@ -200,7 +200,7 @@ export function anthropicOptions(args: {
   return options;
 }
 
-type OpenAiTierOptions = OpenAIChatModelProviderOptionsByName["gpt-5.6-luna"];
+type OpenAiTierOptions = OpenAITextProviderOptions;
 export type OpenAiEffort = NonNullable<
   NonNullable<OpenAiTierOptions["reasoning"]>["effort"]
 >;

@@ -405,7 +405,7 @@ describe("runStructuredFeature repair", () => {
 
 describe("modelOptionsFor", () => {
   it("routes each model to its provider's option shape", () => {
-    expect(modelOptionsFor("gpt-5.6-luna", { maxTokens: 100 })).toEqual({
+    expect(modelOptionsFor("gpt-6-luna", { maxTokens: 100 })).toEqual({
       max_output_tokens: 100,
       reasoning: { effort: "low" },
     });
@@ -422,7 +422,7 @@ describe("modelOptionsFor", () => {
 
   it("honours an explicit effort", () => {
     expect(
-      modelOptionsFor("gpt-5.6-luna", { maxTokens: 100, effort: "high" }),
+      modelOptionsFor("gpt-6-luna", { maxTokens: 100, effort: "high" }),
     ).toEqual({ max_output_tokens: 100, reasoning: { effort: "high" } });
   });
 });

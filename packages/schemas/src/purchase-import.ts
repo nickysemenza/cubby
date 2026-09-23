@@ -672,11 +672,7 @@ export const browserBridgeServerMessage = z.discriminatedUnion("type", [
   }),
 ]);
 
-export const importCoordinatorModel = z.enum([
-  "gpt-5.6-terra",
-  "gpt-5.6-sol",
-  "gpt-6-sol",
-]);
+export const importCoordinatorModel = z.literal("gpt-6-sol");
 
 export const purchaseAgentEvent = z.object({
   version: z.literal(1),

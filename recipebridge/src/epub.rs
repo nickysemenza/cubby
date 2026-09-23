@@ -10,3 +10,20 @@
 //! wasm-bindgen emits them from this cdylib and tsify writes their types into
 //! the generated `.d.ts`.
 pub use cookbook::wasm::*;
+
+use wasm_bindgen::prelude::*;
+
+/// Price app chat models absent from the cookbook ladder catalog using the
+/// same Rust model table pinned by Cargo.lock.
+#[wasm_bindgen]
+pub fn rust_model_rates(id: &str) -> Result<JsValue, JsError> {
+    let rates = llm_models_spider::MODEL_INFO
+        .iter()
+        .find(|entry| entry.name == id)
+        .filter(|entry| entry.cost_input_x1000 > 0 && entry.cost_output_x1000 > 0)
+        .map(|entry| cookbook::models::Rates {
+            input: entry.cost_input_x1000 as f64 / 1000.0,
+            output: entry.cost_output_x1000 as f64 / 1000.0,
+        });
+    serde_wasm_bindgen::to_value(&rates).map_err(|error| JsError::new(&error.to_string()))
+}

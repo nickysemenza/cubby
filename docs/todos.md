@@ -590,7 +590,7 @@ example vegetable` must not resolve to the weight of an entire linked bag
 
 - **Cookbook fallback evaluation.** Run the six-book answer-key corpus against
   GPT-6 Luna as the second ladder reader and compare its full-book recall,
-  escalation rate, latency, and cost with GPT-5.6 Luna. Keep Gemini 2.5 Flash
+  escalation rate, latency, and cost with the former second reader. Keep Gemini 2.5 Flash
   as the evaluated first reader until a broader test supports a change.
 
 - **CalDAV event deletion.** The HTTP adapter returns 405 for DELETE and directs

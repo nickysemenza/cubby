@@ -23,7 +23,6 @@ import {
   importRunPurpose,
   importRunTrigger,
   importRunTargetState,
-  importCoordinatorModel,
   importRunScope,
   type BrowserBridgeOperation,
   type ImportRunTrigger,
@@ -309,7 +308,6 @@ export async function startOrResumeImportRun(
     vendorAccountId: VendorAccountId;
     trigger: ImportRunTrigger;
     predecessorRunId?: string;
-    coordinatorModel?: string;
     skillRevision?: string;
     runtimeRevision?: string;
   },
@@ -394,7 +392,7 @@ export async function startOrResumeImportRun(
             ? importRunId.parse(input.predecessorRunId)
             : null,
           trigger,
-          coordinatorModel: input.coordinatorModel ?? "gpt-6-sol",
+          coordinatorModel: "gpt-6-sol",
           skillRevision: input.skillRevision ?? "purchase-import@1",
           runtimeRevision: input.runtimeRevision ?? "flue@1",
           agentSessionId: `import-run:${id}`,
@@ -3147,7 +3145,6 @@ export async function controlImportRun(
           trigger: importRun.trigger,
           skillRevision: importRun.skillRevision,
           runtimeRevision: importRun.runtimeRevision,
-          coordinatorModel: importRun.coordinatorModel,
           dispatchEventId: importRun.dispatchEventId,
           coordinatorStartedAt: importRun.coordinatorStartedAt,
           decisionRevision: importRun.decisionRevision,
@@ -3184,6 +3181,7 @@ export async function controlImportRun(
             endedAt: null,
             dispatchEventId,
             dispatchError: null,
+            coordinatorModel: "gpt-6-sol",
             updatedAt: new Date(),
           })
           .where(eq(importRun.id, scope.public.runId));
@@ -3193,9 +3191,7 @@ export async function controlImportRun(
           dispatchRunId: scope.public.runId,
           dispatchPublicId: input.runPublicId,
           dispatchPurpose: locked.purpose,
-          dispatchCoordinatorModel: importCoordinatorModel.parse(
-            locked.coordinatorModel,
-          ),
+          dispatchCoordinatorModel: "gpt-6-sol",
           dispatchEventId,
         };
       }
@@ -3248,7 +3244,7 @@ export async function controlImportRun(
             purpose: "purchase_validation",
             trigger: "manual",
             status: isUnavailable ? "needs_review" : "dispatch_failed",
-            coordinatorModel: locked.coordinatorModel,
+            coordinatorModel: "gpt-6-sol",
             dispatchEventId,
             failureCode: isUnavailable ? "no_evidence_available" : null,
             dispatchError: isUnavailable
@@ -3293,15 +3289,11 @@ export async function controlImportRun(
           successorRunId: successorId,
           successorRunPublicId: successor.publicId,
           successorStatus: successor.status,
-          successorCoordinatorModel: importCoordinatorModel.parse(
-            locked.coordinatorModel,
-          ),
+          successorCoordinatorModel: "gpt-6-sol",
           dispatchRunId: null,
           dispatchPublicId: successor.publicId,
           dispatchPurpose: "purchase_validation" as const,
-          dispatchCoordinatorModel: importCoordinatorModel.parse(
-            locked.coordinatorModel,
-          ),
+          dispatchCoordinatorModel: "gpt-6-sol",
           dispatchEventId,
           created: true,
         };
@@ -3323,7 +3315,6 @@ export async function controlImportRun(
             id: importRun.id,
             publicId: importRun.shortcode,
             status: importRun.status,
-            coordinatorModel: importRun.coordinatorModel,
           })
           .from(importRun)
           .where(eq(importRun.predecessorRunId, scope.public.runId))
@@ -3336,9 +3327,7 @@ export async function controlImportRun(
             successorRunId: existingSuccessor.id,
             successorRunPublicId: existingSuccessor.publicId,
             successorStatus: existingSuccessor.status,
-            successorCoordinatorModel: importCoordinatorModel.parse(
-              existingSuccessor.coordinatorModel,
-            ),
+            successorCoordinatorModel: "gpt-6-sol",
             created: false,
           };
         }
@@ -3362,10 +3351,7 @@ export async function controlImportRun(
             purpose: locked.purpose,
             trigger: locked.trigger,
             dispatchEventId,
-            coordinatorModel:
-              input.action === "escalate_sol"
-                ? "gpt-6-sol"
-                : locked.coordinatorModel,
+            coordinatorModel: "gpt-6-sol",
             skillRevision: locked.skillRevision,
             runtimeRevision: locked.runtimeRevision,
             decisionRevision: locked.decisionRevision + 1,
@@ -3435,18 +3421,12 @@ export async function controlImportRun(
           successorRunId: successorId,
           successorRunPublicId: successor.publicId,
           successorStatus: successor.status,
-          successorCoordinatorModel:
-            input.action === "escalate_sol"
-              ? "gpt-6-sol"
-              : importCoordinatorModel.parse(locked.coordinatorModel),
+          successorCoordinatorModel: "gpt-6-sol",
           created: true,
           dispatchRunId: successorId,
           dispatchPublicId: successor.publicId,
           dispatchPurpose: locked.purpose,
-          dispatchCoordinatorModel:
-            input.action === "escalate_sol"
-              ? "gpt-6-sol"
-              : importCoordinatorModel.parse(locked.coordinatorModel),
+          dispatchCoordinatorModel: "gpt-6-sol",
           dispatchEventId,
         };
       }

@@ -1,3 +1,4 @@
+import { importRunId } from "@cubby/schemas/identifiers";
 import type {
   BrowserBridgeRequest,
   BrowserBridgeResult,
@@ -81,29 +82,37 @@ describe("purchase import run admission", () => {
     expect(stored?.coordinatorModel).toBe("gpt-6-sol");
   });
 
-  it("retries a historical run on its recorded coordinator model", async () => {
+  it("retries a historical run on the current coordinator model", async () => {
     const party = await createMember();
     const account = await createVendorAccount(party.id);
     const run = await startOrResumeImportRun(ctx.db, {
       ledgerPartyId: party.id,
       vendorAccountId: account.id,
       trigger: "manual",
-      coordinatorModel: "gpt-5.6-terra",
     });
     const { importRun } = await import("~/server/db/schema");
     const { eq } = await import("drizzle-orm");
     const { getDb } = await import("~/server/repo/database-helpers");
     await getDb(ctx.db)
       .update(importRun)
-      .set({ status: "completed", endedAt: new Date() })
+      .set({
+        status: "completed",
+        endedAt: new Date(),
+        coordinatorModel: "retired-model",
+      })
       .where(eq(importRun.id, run.id));
 
     const successor = await controlImportRun(ctx.db, ctx.actor, {
       runPublicId: run.publicId,
       action: "retry",
     });
-    expect(successor.successorCoordinatorModel).toBe("gpt-5.6-terra");
-    expect(successor.dispatchCoordinatorModel).toBe("gpt-5.6-terra");
+    expect(successor.successorCoordinatorModel).toBe("gpt-6-sol");
+    expect(successor.dispatchCoordinatorModel).toBe("gpt-6-sol");
+    const [storedSuccessor] = await getDb(ctx.db)
+      .select({ coordinatorModel: importRun.coordinatorModel })
+      .from(importRun)
+      .where(eq(importRun.id, importRunId.parse(successor.successorRunId)));
+    expect(storedSuccessor?.coordinatorModel).toBe("gpt-6-sol");
   });
 
   it("resumes authorization with a persisted dispatch generation", async () => {
