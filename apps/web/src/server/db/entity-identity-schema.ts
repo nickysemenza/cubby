@@ -179,7 +179,7 @@ CREATE OR REPLACE TRIGGER "Entity_identity_delete" AFTER DELETE ON "${table}"
   FOR EACH ROW EXECUTE FUNCTION "entity_identity_on_delete"();`;
 
 /** Every function and trigger, idempotent, as one script. */
-export const entityIdentityTriggerSql = (): string =>
+const entityIdentityTriggerSql = (): string =>
   [ENTITY_IDENTITY_FUNCTIONS, ...identityTables().map(tableTriggers)].join(
     "\n\n",
   );
