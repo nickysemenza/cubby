@@ -16,16 +16,16 @@ export default defineEntity({
     domain: "plan",
     description: "Wanted items and candidate products.",
     emptyState: {
-      title: "No tool wishes yet",
+      title: "No wishes yet",
       description:
-        "Keep a tool idea open-ended or compare a few Products before deciding.",
+        "Keep an idea open-ended or compare a few Products before deciding.",
       actionLabel: "Add Wish",
     },
     icons: { lucide: "Heart", sfSymbol: "star", emoji: "⭐" },
     detail: {
       omitRelations: {
         candidates:
-          "The Tool alternatives section edits candidates in place with its own renderer.",
+          "The Candidate alternatives section edits candidates in place with its own renderer.",
       },
       hero: { actions: ["edit", "markPurchased"] },
       sections: [
@@ -39,7 +39,7 @@ export default defineEntity({
         {
           kind: "fields",
           id: "candidates",
-          title: "Tool alternatives",
+          title: "Candidate alternatives",
           fields: ["candidates"],
         },
       ],
@@ -314,7 +314,7 @@ export default defineEntity({
   relations: [
     {
       key: "candidates",
-      label: "Tool candidates",
+      label: "Candidate products",
       target: "product",
       cardinality: "many",
       provenance: {

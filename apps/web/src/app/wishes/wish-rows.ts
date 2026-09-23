@@ -1,7 +1,7 @@
 import type { WishCandidateOut, WishListItemOut } from "@cubby/schemas/wish";
 
 /**
- * A row in the wishlist table: either a Wish, or one of its candidate Tool
+ * A row in the wishlist table: either a Wish, or one of its candidate
  * Products nested beneath it.
  *
  * The two are a discriminated union rather than one widened shape so every

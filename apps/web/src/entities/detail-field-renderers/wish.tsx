@@ -62,8 +62,8 @@ function WishCandidateRow({ candidate }: { candidate: WishCandidateOut }) {
 export const wishDetailFields = {
   // Wishes own no images; the covers belong to the candidate Products and
   // are fetched independently of the Wish detail record, so an
-  // unillustrated Tool stays an honest placeholder rather than making every
-  // wish response heavier.
+  // unillustrated Product stays an honest placeholder rather than making
+  // every wish response heavier.
   "wish-candidates": (wish) => ({
     value:
       wish.candidates.length === 0 ? (

@@ -116,7 +116,7 @@ describe("EntityManifestGrid mega table: relations sub-row", () => {
 
     // The selected row's relations sub-table is always expanded inline.
     expect(screen.getByText("candidates")).toBeInTheDocument();
-    const reasonCell = screen.getByText(/Tool alternatives/);
+    const reasonCell = screen.getByText(/Candidate alternatives/);
     expect(reasonCell).toBeInTheDocument();
   });
 

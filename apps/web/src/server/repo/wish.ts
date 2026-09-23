@@ -40,7 +40,6 @@ import {
 } from "~/server/repo/database-helpers";
 import { withDisplayImages } from "~/server/repo/entity-display-image";
 import { listScaffold } from "~/server/repo/list-scaffold";
-import { categoryFeatureSql } from "~/server/repo/product-category-sql";
 import {
   effectiveProductPriceSql,
   loadProductPricing,
@@ -60,10 +59,10 @@ type WishRow = typeof wish.$inferSelect;
 
 export const WISH_DELETE_EDGE_POLICY = {
   "WishCandidate.wishId": {
-    code: "soft-delete-tool-alternatives",
+    code: "soft-delete-candidate-alternatives",
     effect: "soft-delete",
     description:
-      "Deleting a wishlist item soft-deletes its candidate alternatives; the Tool products themselves are unchanged.",
+      "Deleting a wishlist item soft-deletes its candidate alternatives; the products themselves are unchanged.",
   },
 } as const satisfies IncomingEdgePolicy<"wish", OperationDisposition>;
 type CandidateRow = {
@@ -369,7 +368,9 @@ export const getWishByShortcode = async (
   return id ? getWishByID(db, id) : null;
 };
 
-async function resolveToolProductIds(
+/** Any live Product can be a wish candidate — the only requirement is that it
+ * exists and is live. */
+async function resolveCandidateProductIds(
   tx: DrizzleTransaction,
   shortcodes: readonly string[],
 ): Promise<ProductId[]> {
@@ -378,25 +379,10 @@ async function resolveToolProductIds(
   if (resolved.size !== codes.length) {
     throw createAppError(
       "PRODUCT_NOT_FOUND",
-      "Every Wishlist candidate must be a live Tool Product.",
+      "Every Wishlist candidate must be a live Product.",
     );
   }
-  const ids = codes.map((code) => resolved.get(code)!);
-  const tools = await tx.query.product.findMany({
-    where: and(
-      inArray(product.id, ids),
-      categoryFeatureSql(sql`${product.categoryId}`, "tools"),
-      notDeleted(product),
-    ),
-    columns: { id: true },
-  });
-  if (tools.length !== ids.length) {
-    throw createAppError(
-      "PRODUCT_NOT_FOUND",
-      "Every Wishlist candidate must have category Tools.",
-    );
-  }
-  return ids;
+  return codes.map((code) => resolved.get(code)!);
 }
 
 export const createWish = async (
@@ -405,7 +391,7 @@ export const createWish = async (
   actor: ActorContext,
 ): Promise<{ output: WishOut; entityId: WishId }> => {
   const id = await withTransaction(db, async (tx) => {
-    const productIds = await resolveToolProductIds(
+    const productIds = await resolveCandidateProductIds(
       tx,
       data.candidateProductIds,
     );
@@ -462,7 +448,10 @@ export const updateWish = async (
     const beforeCandidates = await candidateShortcodes(tx, id);
     let afterCandidates = beforeCandidates;
     if (data.candidateProductIds !== undefined) {
-      const nextIds = await resolveToolProductIds(tx, data.candidateProductIds);
+      const nextIds = await resolveCandidateProductIds(
+        tx,
+        data.candidateProductIds,
+      );
       const currentRows = await tx.query.wishCandidate.findMany({
         where: and(eq(wishCandidate.wishId, id), notDeleted(wishCandidate)),
         columns: { productId: true },

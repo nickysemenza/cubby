@@ -130,6 +130,58 @@ describe("project reusable resources", () => {
       deleteProducts(ctx.db, [tool.entityId], ctx.actor),
     ).resolves.toMatchObject({ detachedImageKeys: [] });
   });
+
+  // Tool accessories (e.g. jigs and guides) nest under Tools but keep their
+  // own feature; the project-resource capability grants it too.
+  it("accepts a Tool accessories Product as a project resource", async () => {
+    const project = await createProject(
+      ctx.db,
+      projectCreateInput.parse({ name: "Tool accessories capability project" }),
+      ctx.actor,
+    );
+    const candidate = await createProduct(
+      ctx.db,
+      makeProductInput({
+        name: "Tool accessories candidate",
+        categoryId: taxonomyShortcode("tool-accessories"),
+      }),
+      ctx.actor,
+    );
+    await expect(
+      attachProjectResources(
+        ctx.db,
+        project.entityId,
+        [candidate.entityId],
+        ctx.actor,
+      ),
+    ).resolves.toMatchObject({ changed: 1 });
+  });
+
+  // Tool consumables nest under Tools the same way, but the capability does
+  // not grant it — a consumable is used up, not a reusable project resource.
+  it("refuses a Tool consumables Product as a project resource", async () => {
+    const project = await createProject(
+      ctx.db,
+      projectCreateInput.parse({ name: "Tool consumables capability project" }),
+      ctx.actor,
+    );
+    const candidate = await createProduct(
+      ctx.db,
+      makeProductInput({
+        name: "Tool consumables candidate",
+        categoryId: taxonomyShortcode("tool-consumables"),
+      }),
+      ctx.actor,
+    );
+    await expect(
+      attachProjectResources(
+        ctx.db,
+        project.entityId,
+        [candidate.entityId],
+        ctx.actor,
+      ),
+    ).rejects.toMatchObject({ reason: "PRODUCT_CATEGORY_INELIGIBLE" });
+  });
 });
 
 // `deleteProducts` blocks on live project uses, and before this the only way
