@@ -1442,12 +1442,12 @@ history is the archive. Permanent product constraints live in the
 - **Household balance sheet.** Generalize location valuation into replacement
   forecasts, cost-per-project analysis, and insurance or cost-basis exports.
 
-- **Household cash-flow projection.** A scenario input, not a synced entity:
-  expected inflows (a vesting date, price, withholding) and the ledger's
-  recurring outflows projected forward, calibrated against `SUM(Expense.cost)`
-  history. Needs no schema change and no money-bearing table. Net worth and
-  retirement stay out until the trusted-household tenet is amended for a
-  time-series table as an explicit decision.
+- **Household cash-flow projection.** Planned in
+  [household finance synthesis](plans/household-finance-synthesis.md) Phase 2,
+  alongside category analytics, a funder-to-category Sankey, and transfer-pair
+  acceptance in Phase 1. Net worth and retirement stay out until the
+  trusted-household tenet is amended for a time-series table as an explicit
+  decision.
 
 - **House timeline.** A chronological house journal with project milestones,
   before/after photos, and an annual wrapped-style view over existing records.
