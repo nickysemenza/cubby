@@ -29,6 +29,7 @@ import type { WayfindingDomain } from "./domain-wayfinding";
 /** A navigable destination. `to` is typed against the generated route tree. */
 export type NavItem = {
   to: LinkProps["to"];
+  entity?: BrowserRoutedEntity;
   /** Static search params — only the scanner shortcut needs these today. */
   search?: Readonly<Record<string, string | undefined>>;
   label: string;
@@ -75,6 +76,7 @@ export function navItemLinkProps(item: NavItem, active: boolean) {
 export const homeNavItem: NavItem = { to: "/", label: "Home", icon: Home };
 const inventory: NavItem = {
   to: "/inventory",
+  entity: "inventory",
   label: "Inventory",
   icon: entities.inventory.lucideIcon,
 };
@@ -125,7 +127,15 @@ export const desktopNav: NavNode[] = [
   {
     ...recordDirectoryNavItem,
     tier: "primary",
-    children: [...recordViews],
+    children: recordViews.filter(
+      (view) =>
+        !activityViews.some((activity) =>
+          activity.destinations.some(
+            (destination) =>
+              "entity" in destination && destination.entity === view.entity,
+          ),
+        ),
+    ),
   },
   {
     label: "More",
@@ -189,15 +199,6 @@ function leafAt(to: LinkProps["to"]): NavItem {
   return item;
 }
 
-/** Household destinations that earn persistent desktop attention. */
-export const todayNavItems: NavItem[] = [
-  leafAt("/graph"),
-  leafAt("/inventory/session"),
-  leafAt("/meals/shopping-list"),
-  leafAt("/projects"),
-  leafAt("/problems"),
-];
-
 /** Secondary phone destinations shown before the deeper taxonomy. */
 export const mobileHouseholdItems: NavItem[] = [
   homeNavItem,
@@ -260,20 +261,9 @@ export function getEntityNavGroup(
   entity: BrowserRoutedEntity,
 ): NavGroup | undefined {
   const listRoute = entities[entity].routes.list;
-  // Entity lists have contextual Activity shortcuts, while Records is the
-  // canonical roster parent used for breadcrumbs and page wayfinding.
-  return (
-    desktopNav.find(
-      (node): node is NavGroup =>
-        isNavGroup(node) &&
-        node.label === "Records" &&
-        node.children.some((child) => child.to === listRoute),
-    ) ??
-    desktopNav.find(
-      (node): node is NavGroup =>
-        isNavGroup(node) &&
-        node.children.some((child) => child.to === listRoute),
-    )
+  return desktopNav.find(
+    (node): node is NavGroup =>
+      isNavGroup(node) && node.children.some((child) => child.to === listRoute),
   );
 }
 

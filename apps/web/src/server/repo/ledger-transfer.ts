@@ -510,11 +510,9 @@ export async function deleteLedgerTransfers(
 
 const ledgerTransferScaffold = listScaffold("ledgerTransfer", ledgerTransfer);
 
-export async function listLedgerTransfers(
+export async function buildLedgerTransferWhere(
   db: Database,
   filters: LedgerTransferFilters,
-  sorts: SortParams[],
-  pagination: PaginationParams,
 ) {
   const fromIds = filters.fromPartyId
     ? await resolveAllPresent(db, "ledgerParty", [filters.fromPartyId].flat())
@@ -522,15 +520,24 @@ export async function listLedgerTransfers(
   const toIds = filters.toPartyId
     ? await resolveAllPresent(db, "ledgerParty", [filters.toPartyId].flat())
     : undefined;
-  // fromPartyId/toPartyId stay hand-written — they resolve shortcodes to ids
-  // before the query runs, which a declared stored predicate can't express.
-  // `date` (dateFrom/dateTo) is now a declared stored range descriptor.
-  const where = ledgerTransferScaffold.where(filters, [
+  return ledgerTransferScaffold.where(filters, [
     ...auditDateWhereConditions(ledgerTransfer, filters),
     fromIds?.length === 0 || toIds?.length === 0 ? sql`false` : undefined,
     fromIds ? inArray(ledgerTransfer.fromPartyId, fromIds) : undefined,
     toIds ? inArray(ledgerTransfer.toPartyId, toIds) : undefined,
   ]);
+}
+
+export async function listLedgerTransfers(
+  db: Database,
+  filters: LedgerTransferFilters,
+  sorts: SortParams[],
+  pagination: PaginationParams,
+) {
+  // fromPartyId/toPartyId stay hand-written — they resolve shortcodes to ids
+  // before the query runs, which a declared stored predicate can't express.
+  // `date` (dateFrom/dateTo) is now a declared stored range descriptor.
+  const where = await buildLedgerTransferWhere(db, filters);
   const { take, skip } = ledgerTransferScaffold.page(pagination);
   const { data, count } = await executeListQueryWithCount(
     unwrapDb(db)

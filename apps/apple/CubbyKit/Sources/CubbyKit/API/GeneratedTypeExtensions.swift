@@ -228,6 +228,7 @@ extension DashboardCountsOut {
         guard let counts = try? JSONValue(encoding: self), case .object(let fields) = counts else {
             return nil
         }
+        if key == .usdaFood, fields["usdaFoodsAvailable"] != .bool(true) { return nil }
         let field = key == .usdaFood ? "usdaFoods" : key.rawValue
         if case .number(let value) = fields[field] ?? .null { return Int(value) }
         return nil

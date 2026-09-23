@@ -474,6 +474,7 @@ final class AppModel {
         entityMutationKeys = keys
         relationshipMutationReplacement = nil
         entityMutationRevision += 1
+        Task { await browseCounts.load(client: client, host: host, force: true) }
     }
 
     /// An accepted recommendation is an entity mutation on the kinds it links, plus a jump to the

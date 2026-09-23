@@ -124,7 +124,7 @@ type VendorAccountReferencePatch = {
   ledgerPartyId?: ReturnType<typeof parseEntityId<"ledgerParty">>;
 };
 
-const buildWhere = (filters: VendorAccountFilters) =>
+export const buildVendorAccountWhere = (filters: VendorAccountFilters) =>
   scaffold.where(filters, [
     ...auditDateWhereConditions(vendorAccount, filters),
   ]);
@@ -135,7 +135,7 @@ export async function listVendorAccounts(
   sorts: SortParams[],
   pagination: PaginationParams,
 ) {
-  const where = buildWhere(filters);
+  const where = buildVendorAccountWhere(filters);
   const { take, skip } = scaffold.page(pagination);
   const { data, count } = await executeListQueryWithCount(
     getDb(db)

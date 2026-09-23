@@ -91,6 +91,9 @@ enum PreviewFixtures {
 
     /// `task.todayBriefing`'s `next` rows, for `TodayView`'s preview.
     static let sampleTodayTasks: [TaskTodayBriefingItemOut] = decode(sampleTodayTasksJSON)
+    static let sampleTodayBriefing = TaskTodayBriefingOut(
+        next: sampleTodayTasks, nextCount: sampleTodayTasks.count + 1, laterCount: 2,
+        blockedCount: 1, overdueCount: 0, dueThisWeekCount: 2)
 
     /// Today's `GET /api/v1/meals` rows, for `TodayView`'s preview.
     static let sampleTodayMeals: [MealListItem] = decode(sampleTodayMealsJSON)

@@ -17,7 +17,6 @@ import {
   mobileHouseholdItems,
   primaryNavGroups,
   settingsNavItem,
-  todayNavItems,
   utilityNavGroups,
 } from "./nav-items";
 
@@ -61,14 +60,7 @@ describe("workspace navigation contract", () => {
     }
   });
 
-  it("pins the task-first persistent and phone household choices", () => {
-    expect(todayNavItems.map((item) => item.label)).toEqual([
-      "Graph",
-      "Recount inventory",
-      "Build a shopping list",
-      "Projects",
-      "Problems",
-    ]);
+  it("pins the phone household choices", () => {
     expect(mobileHouseholdItems.map((item) => item.label)).toEqual([
       "Home",
       "Activities",
@@ -148,10 +140,8 @@ describe("getEntityNavGroup", () => {
           isNavGroup(node) &&
           node.children.some((child) => child.to === listRoute),
       );
-      expect(matchingGroups.length).toBeGreaterThanOrEqual(1);
-      expect(getEntityNavGroup(entity)).toBe(
-        matchingGroups.find((group) => group.label === "Records"),
-      );
+      expect(matchingGroups).toHaveLength(1);
+      expect(getEntityNavGroup(entity)).toBe(matchingGroups[0]);
     },
   );
 });

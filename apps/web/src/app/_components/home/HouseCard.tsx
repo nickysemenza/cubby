@@ -158,8 +158,14 @@ export function TodayAttention() {
           </Button>
         </p>
       ) : (
-        <p className="mt-2 font-mono text-2xs text-muted-foreground uppercase">
-          {taskBriefingEvidence(briefing.data)}
+        <p className="mt-2 flex flex-wrap gap-x-2 font-mono text-2xs text-muted-foreground uppercase">
+          {taskBriefingEvidence(briefing.data)
+            ?.split(" · ")
+            .map((part) => (
+              <span key={part} className="whitespace-nowrap">
+                {part}
+              </span>
+            ))}
         </p>
       )}
 

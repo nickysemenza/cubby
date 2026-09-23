@@ -315,7 +315,7 @@ const toOut = async (
   });
 };
 
-const buildWhere = (filters: ProductCategoryFilters) =>
+export const buildProductCategoryWhere = (filters: ProductCategoryFilters) =>
   scaffold.where(filters, [
     ...auditDateWhereConditions(productCategory, filters),
   ]);
@@ -326,7 +326,7 @@ export async function listProductCategories(
   sorts: SortParams[],
   pagination: PaginationParams,
 ) {
-  const where = buildWhere(filters);
+  const where = buildProductCategoryWhere(filters);
   const { take, skip } = scaffold.page(pagination);
   const { data, count } = await executeListQueryWithCount(
     getDb(db)

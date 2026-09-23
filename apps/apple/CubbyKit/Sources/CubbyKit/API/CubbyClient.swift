@@ -821,9 +821,9 @@ public actor CubbyClient {
         try await perform { try await api.dashboard_counts().ok.body.json }
     }
 
-    /// `task.todayBriefing`'s `next` array: actionable tasks, already filtered and capped.
-    public func todayBriefing() async throws -> [TaskTodayBriefingItemOut] {
-        try await perform { try await api.task_todayBriefing().ok.body.json.next }
+    /// The complete ranked task briefing, including summary counts outside the visible prefix.
+    public func todayBriefing() async throws -> TaskTodayBriefingOut {
+        try await perform { try await api.task_todayBriefing().ok.body.json }
     }
 
     public func problemCounts() async throws -> ProblemsCount {

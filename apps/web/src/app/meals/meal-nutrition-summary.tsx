@@ -124,9 +124,16 @@ function NutritionPeople({
 }) {
   if (!people.length)
     return (
-      <p className="py-4 text-sm text-muted-foreground">
-        No portions entered yet. Add food and an amount for each person to see
-        their macros.
+      <p
+        className={
+          compact
+            ? "py-1 text-xs text-muted-foreground"
+            : "py-4 text-sm text-muted-foreground"
+        }
+      >
+        {compact
+          ? "No food logged yet. Add a portion to see nutrition."
+          : "No portions entered yet. Add food and an amount for each person to see their macros."}
       </p>
     );
   const partial = people.some((p) =>

@@ -25,7 +25,11 @@ export const getDashboardCounts = bindWorkflow(
         }),
     })
     .output(({ counts: { local, usda } }) =>
-      dashboardCountsOut.parse({ ...local, usdaFoods: usda?.usda_food ?? 0 }),
+      dashboardCountsOut.parse({
+        ...local,
+        usdaFoods: usda?.usda_food ?? 0,
+        usdaFoodsAvailable: usda !== null,
+      }),
     ),
   (context: DashboardContext) => ({ context, input: undefined }),
 );

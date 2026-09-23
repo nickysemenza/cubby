@@ -10,6 +10,7 @@ import { imageSighting, importRun, plant } from "~/server/db/schema";
 import { cookbookListWhere } from "~/server/repo/cookbook";
 import { getDb } from "~/server/repo/database-helpers";
 import { notDeleted } from "~/server/repo/database-helpers/query";
+import { buildDeviceWhere } from "~/server/repo/device";
 import { buildExpenseWhereClause } from "~/server/repo/expense/lookup";
 import { buildFinancialAccountWhere } from "~/server/repo/financial-account";
 import { buildFinancialTransactionWhere } from "~/server/repo/financial-transaction";
@@ -20,8 +21,11 @@ import {
 import { buildImageWhere } from "~/server/repo/image";
 import { buildIngredientListWhere } from "~/server/repo/ingredient/search";
 import { buildInventoryWhere } from "~/server/repo/inventory/crud";
+import { buildLedgerPartyWhere } from "~/server/repo/ledger-party";
+import { buildLedgerTransferWhere } from "~/server/repo/ledger-transfer";
 import { buildLocationWhere } from "~/server/repo/location/crud";
 import { buildMealWhere } from "~/server/repo/meal/crud";
+import { buildProductCategoryWhere } from "~/server/repo/product-category";
 import { buildProductWhere } from "~/server/repo/product/crud";
 import { buildProjectWhere } from "~/server/repo/project/lookup";
 import { buildPurchaseWhereClause } from "~/server/repo/purchase";
@@ -29,6 +33,7 @@ import { buildRecipeWhere } from "~/server/repo/recipe/crud";
 import { SHORTCODE_TABLE } from "~/server/repo/shortcode-utils";
 import { buildTaskWhere } from "~/server/repo/task/lookup";
 import { buildVendorWhereClause } from "~/server/repo/vendor";
+import { buildVendorAccountWhere } from "~/server/repo/vendor-account";
 import { buildWishWhere } from "~/server/repo/wish";
 
 /**
@@ -54,6 +59,15 @@ import { buildWishWhere } from "~/server/repo/wish";
  */
 type CountWhere = (db: Database) => SQL | undefined | Promise<SQL | undefined>;
 
+const extraCountEntities = [
+  "ledgerParty",
+  "ledgerTransfer",
+  "vendorAccount",
+  "productCategory",
+  "device",
+] as const;
+type LocalCountEntity = CountableEntity | (typeof extraCountEntities)[number];
+
 const COUNT_WHERE = {
   product: (db) => buildProductWhere(db, {}),
   recipe: (db) => buildRecipeWhere(db, {}),
@@ -77,18 +91,28 @@ const COUNT_WHERE = {
   importRun: () =>
     and(notDeleted(importRun), ne(importRun.trigger, "ephemeral")),
   imageSighting: () => notDeleted(imageSighting),
-} satisfies Record<CountableEntity, CountWhere>;
+  ledgerParty: () => buildLedgerPartyWhere({}),
+  ledgerTransfer: (db) => buildLedgerTransferWhere(db, {}),
+  vendorAccount: () => buildVendorAccountWhere({}),
+  productCategory: () => buildProductCategoryWhere({}),
+  device: () => buildDeviceWhere({}),
+} satisfies Record<LocalCountEntity, CountWhere>;
 
-type EntityCounts = Record<CountableEntity, number>;
+type EntityCounts = Record<LocalCountEntity, number>;
 
-const entityCountsSchema = z.record(z.enum(countableEntities), z.number());
+const localCountEntities = [
+  ...countableEntities,
+  ...extraCountEntities,
+] as const;
+const entityCountsSchema = z.record(z.enum(localCountEntities), z.number());
 
 /**
- * Live row count for every countable entity, as one round-trip of cheap scalar
+ * Live row count for every local browser list, as one round-trip of cheap scalar
  * `COUNT(*)` subqueries — NO list fetch and NO USDA enrichment. Driven by the
- * manifest's `countableEntities`; one query (not N) because N parallel counts
- * overran the per-request pool (max 5). Powers the homepage stat strip + footer
- * + the `/entities` page. Filtered counts stay on the `*.list` procedures.
+ * manifest's homepage `countableEntities` plus five other local roster types;
+ * one query (not N) because N parallel counts overran the per-request pool
+ * (max 5). The homepage still reads only `countableEntities` from this result.
+ * Filtered counts stay on the `*.list` procedures.
  */
 export const getEntityCounts = async (db: Database): Promise<EntityCounts> => {
   // Resolved SEQUENTIALLY, not `Promise.all`. None of these builders queries
@@ -96,8 +120,8 @@ export const getEntityCounts = async (db: Database): Promise<EntityCounts> => {
   // but if one ever starts, 16 concurrent awaits would re-create the pool
   // exhaustion this function exists to avoid. Serial degrades to slow; parallel
   // degrades to 500s.
-  const whereByEntity = new Map<CountableEntity, SQL | undefined>();
-  for (const entity of countableEntities) {
+  const whereByEntity = new Map<LocalCountEntity, SQL | undefined>();
+  for (const entity of localCountEntities) {
     whereByEntity.set(entity, await COUNT_WHERE[entity](db));
   }
 
@@ -112,7 +136,7 @@ export const getEntityCounts = async (db: Database): Promise<EntityCounts> => {
   // fragment is spelled out literally instead of going through
   // `SHORTCODE_TABLE`.
   const IMAGE_ALIASED_FROM = sql`"Image" AS "image"`;
-  const countCol = (entity: CountableEntity): SQL => {
+  const countCol = (entity: LocalCountEntity): SQL => {
     const where = whereByEntity.get(entity);
     const from =
       entity === "image" ? IMAGE_ALIASED_FROM : sql`${SHORTCODE_TABLE[entity]}`;
@@ -121,7 +145,7 @@ export const getEntityCounts = async (db: Database): Promise<EntityCounts> => {
       : sql`(SELECT count(*)::int FROM ${from})`;
   };
 
-  const fragments = countableEntities.map(
+  const fragments = localCountEntities.map(
     (entity) => sql`${countCol(entity)} AS ${sql.identifier(entity)}`,
   );
 
@@ -132,7 +156,7 @@ export const getEntityCounts = async (db: Database): Promise<EntityCounts> => {
 
   return entityCountsSchema.parse(
     Object.fromEntries(
-      countableEntities.map((entity) => [entity, row?.[entity] ?? 0]),
+      localCountEntities.map((entity) => [entity, row?.[entity] ?? 0]),
     ),
   );
 };

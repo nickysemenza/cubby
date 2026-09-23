@@ -109,18 +109,26 @@ function Home() {
           a coverage-only backlog, which is why it can render either way. */}
       <ProblemsBanner />
 
-      {/* The daily briefing owns the first decision. Desktop gives the ranked
-          task queue twice the room of meals; phone keeps the same reading order
-          as a vertical briefing. */}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(18rem,1fr)]">
-        <TodayAttention />
-        <div className="grid content-start gap-6">
-          <TodayNutrition initialDate={asOf.meals.from} />
-          <TodayMeals asOf={asOf} />
+      {/* The briefing reads tasks, meals, recurring actions, then nutrition on
+          a phone. Desktop keeps tasks and meals side by side. */}
+      <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(18rem,1fr)]">
+        <div className="contents lg:grid lg:content-start lg:gap-6">
+          <div className="order-1 lg:order-none">
+            <TodayAttention />
+          </div>
+          <div className="order-3 lg:order-none">
+            <DailyPasses />
+          </div>
+        </div>
+        <div className="contents lg:grid lg:content-start lg:gap-6">
+          <div className="order-2 lg:order-none">
+            <TodayMeals asOf={asOf} />
+          </div>
+          <div className="order-4 lg:order-none">
+            <TodayNutrition initialDate={asOf.meals.from} />
+          </div>
         </div>
       </div>
-
-      <DailyPasses />
 
       {/* The household's two operating signals — state of what is on hand and
           what has been spent. Mobile puts pantry first because it is the

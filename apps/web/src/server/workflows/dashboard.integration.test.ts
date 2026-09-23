@@ -1,6 +1,11 @@
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import { getEntityCounts } from "~/server/repo/dashboard";
+import {
+  createLedgerParty,
+  listLedgerParties,
+} from "~/server/repo/ledger-party";
 import {
   createProductFixture,
   makeProductInput,
@@ -27,6 +32,8 @@ describe("dashboard count workflow", () => {
     });
     expect(result.product).toBe(1);
     expect(result.usdaFoods).toBe(0);
+    expect(result.usdaFoodsAvailable).toBe(false);
+    expect(result.device).toBe(0);
   });
 
   it("combines external counts with the local entity population", async () => {
@@ -46,5 +53,20 @@ describe("dashboard count workflow", () => {
     });
     expect(result.product).toBe(0);
     expect(result.usdaFoods).toBe(42);
+    expect(result.usdaFoodsAvailable).toBe(true);
+  });
+
+  it("matches the unfiltered live roster for an optional local count", async () => {
+    await createLedgerParty(
+      ctx.db,
+      { name: "Sample household member", kind: "member", notes: null },
+      ctx.actor,
+    );
+    const list = await listLedgerParties(ctx.db, {}, [], {
+      pageIndex: 0,
+      pageSize: 1,
+    });
+    const result = await getEntityCounts(ctx.db);
+    expect(result.ledgerParty).toBe(list.count);
   });
 });

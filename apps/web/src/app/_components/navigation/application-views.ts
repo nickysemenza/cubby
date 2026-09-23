@@ -38,6 +38,7 @@ import {
 /** A route selected by a declarative application view. */
 export interface ApplicationDestination {
   readonly to: LinkProps["to"];
+  readonly entity?: BrowserRoutedEntity;
   readonly label: string;
   readonly description: string;
   readonly icon: React.ComponentType<{ className?: string }>;
@@ -62,6 +63,7 @@ const recordDestination = (
   description: string,
 ): ApplicationDestination => ({
   to: entities[entity].routes.list,
+  entity,
   label: entities[entity].pluralLabel,
   description,
   icon: entities[entity].lucideIcon,
