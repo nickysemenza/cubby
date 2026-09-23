@@ -39,6 +39,7 @@ import {
   generatedBrowserRouteFiles,
   handWrittenBrowserRouteFiles,
   missingBrowserRouteFiles,
+  missingListSources,
 } from "../../../scripts/generator/entities/render/routes";
 import { renderSearchArtifacts } from "../../../scripts/generator/entities/render/search";
 
@@ -1607,6 +1608,20 @@ describe("typed entity compiler", () => {
     expect(await findExtraArtifacts(root, artifacts)).toEqual([
       "generated/entity-retired-name.gen.ts",
     ]);
+  });
+
+  // Regression: importRun declared `route.list: true` with no create/update
+  // contract (so no kernel list read) and no list override, and the
+  // generated Runs index crashed on SSR. The generator must refuse that.
+  it("requires a list override for a generated index with no kernel list read", async () => {
+    const entities = await loadEntityDeclarations();
+    expect(missingListSources(entities)).toEqual([]);
+    const registry = (await import("node:fs/promises")).readFile(
+      new URL("../src/entities/list-columns/index.ts", import.meta.url),
+      "utf8",
+    );
+    const withoutRuns = (await registry).replace(/^\s+importRun:.*$/mu, "");
+    expect(missingListSources(entities, withoutRuns)).toEqual(["importRun"]);
   });
 
   it("compiles the full catalog with schema references and schema-free browser metadata", async () => {

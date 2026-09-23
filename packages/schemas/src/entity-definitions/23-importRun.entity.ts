@@ -341,7 +341,9 @@ export default defineEntity({
       {
         key: "ledgerPartyName",
         kind: "text",
-        validation: readOnly(z.string()),
+        // Null with `ledgerPartyId` on runs that group AI work.
+        nullable: true,
+        validation: readOnly(z.string().nullable()),
       },
       {
         key: "id",
