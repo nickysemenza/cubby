@@ -35,7 +35,7 @@ Location detail pages link directly to the same route with `parentId`. A scan
 from inside a recount jumps within the current subtree; an out-of-root scan
 offers to switch to a new recount rooted at the scanned location.
 
-Unknown is itself a valid root once it holds items — recounting it *is* how you
+Unknown is itself a valid root once it holds items — recounting it _is_ how you
 drain it, by relocating each row to where it belongs. At that stop the pane
 drops its own "From Unknown" tray and the "Move to Unknown" action, since both
 would point at the bin you are standing in.
@@ -106,11 +106,11 @@ targeted at all — which is exactly the thing most worth sweeping.
 
 Each scan resolves server-side in `inventory.scanAtLocation`:
 
-| Facts | Outcome |
-|---|---|
-| No stock rows anywhere | create a row here, stamped `verifiedAt` |
-| A stock row **here** | confirm it — stamp `verifiedAt`, amount untouched |
-| Stock rows **elsewhere** | write nothing; queue them for the end |
+| Facts                    | Outcome                                           |
+| ------------------------ | ------------------------------------------------- |
+| No stock rows anywhere   | create a row here, stamped `verifiedAt`           |
+| A stock row **here**     | confirm it — stamp `verifiedAt`, amount untouched |
+| Stock rows **elsewhere** | write nothing; queue them for the end             |
 
 **Confirm, never increment.** Sweeping a correct shelf twice must change
 nothing. The intuitive alternative — "not a one-of-a-kind item, so add another"

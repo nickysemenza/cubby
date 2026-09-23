@@ -13,7 +13,7 @@ generate --spec apps/apple/project.yml --use-cache`. If a build fails with the l
 
 ## Wire rules (non-negotiable)
 
-- `/api/v1` has no `{ok,data}` envelope: a 2xx body *is* the payload. Every error status carries
+- `/api/v1` has no `{ok,data}` envelope: a 2xx body _is_ the payload. Every error status carries
   one bare `ApiError` body (`{code, message, reason?, requestId?, validationIssues?}`), decoded by
   `CubbyAPIError` — never a per-operation error type.
 - A flat list/get query is plain GET query params: `page=1&pageSize=20&sort=-name`, literal values
@@ -22,7 +22,7 @@ generate --spec apps/apple/project.yml --use-cache`. If a build fails with the l
   body instead — never hand-build a query string for one.
 - Send `Origin: cubby-mobile://` on every `/api/auth/*` request (Better Auth trusts this origin;
   omitting it fails sign-in).
-- Store the `set-auth-token` response header verbatim in Keychain. If a *later* `/api/auth/*`
+- Store the `set-auth-token` response header verbatim in Keychain. If a _later_ `/api/auth/*`
   response carries a different `set-auth-token`, overwrite the stored value — do not keep the
   first one.
 - Hand-written Swift names generated types only through the aliases in

@@ -1,14 +1,15 @@
 # Continuous integration
 
-GitHub Actions runs the complete verification matrix on every pull request to
-`main` and every `main` push. Required checks on the exact PR head are the merge
-gate. Merging to `main` independently starts deployment of affected production
-Workers; deployment never waits for post-merge CI.
+GitHub Actions routes checks by affected files on pull requests and `main`
+pushes. Required checks on the exact PR head are the merge gate. Merging to
+`main` independently deploys every production Worker, including after a
+documentation-only change; deployment never waits for post-merge CI.
 
 ## Local verification
 
-`scripts/ci-scope.ts`'s hand-rolled path classifier is gone. Affected-ness and
-scoping are now Nx's job: every gate is a target on the project whose files it
+`scripts/ci-change-scope.ts` classifies hosted changes for the `Scope` job;
+unknown paths and manual runs select every lane. Local affected-ness and
+scoping remain Nx's job: every gate is a target on the project whose files it
 covers (`apps/web/project.json` — `postgres`, `build-cf`, `e2e`,
 `workers-tests`; `recipebridge/project.json` and `cubby-ffi/project.json` —
 `rust`; `apps/apple/project.json` — `apple-check`; the repo-wide `generate`, `types`,
@@ -91,16 +92,10 @@ contracts (`SubjectLift`, `FeaturePrintIndex`) when running on the Simulator,
 for whichever caller — local or hosted — ends up running that scheme there.
 
 Two hosted macOS jobs cover the Apple surface, both gated on the `scope`
-job's `apple` output. On a pull request `dorny/paths-filter` computes it from
-the PR's changed files: anything under `apps/apple/`, `cubby-ffi/`, or
-`recipebridge/`, plus `rust-toolchain.toml`, `scripts/ensure-apple-ffi.ts`,
-`scripts/rust-fingerprint.ts`, `scripts/apple-check.sh`,
-`apps/web/src/lib/generated/http-openapi.gen.json`, `ci.yaml` itself, and the
-two composites the Apple jobs use (`setup-apple-ffi`, `setup-apple-tools`).
-On a `push` or `workflow_dispatch` there is no PR diff to check and it is
-always `true`. A skipped job
-still satisfies its required status check (GitHub treats a skipped required
-job as passing). `Apple package tests` runs `swift test --package-path
+job's `apple` output. The scope job reads the PR file list or the files in a
+`main` push. Native source, FFI, Rust bridge, shared API schemas, and CI policy
+changes select Apple; an Apple README alone does not. A skipped job still
+satisfies its required status check. `Apple package tests` runs `swift test --package-path
 apps/apple/CubbyKit --force-resolved-versions` on the macOS host — no
 simulator — restoring/saving an exact-key cache of
 `apps/apple/CubbyKit/.build/{checkouts,repositories}` keyed on
@@ -125,21 +120,23 @@ package-test job's SPM checkout cache described above.
 ## Hosted suite
 
 The `CI` workflow runs automatically for pull requests to `main` and pushes to
-`main`. It runs repository validation and dependency deduplication, auxiliary
-tests and Worker builds, Rust checks, web node/UI tests, PostgreSQL integration
-tests, Chromium and WebKit E2E, and (when the Apple path filter above matches)
-`Apple package tests` and `Apple checks` — see above for why those stayed two
-separate jobs. The browser lanes test the exact bundle produced by the node
-test lane and retain the discovery and no-skip guard; chromium runs as two
-Playwright shards (`--shard=1/2`/`--shard=2/2`, one worker each — two workers
-on a single runner flaked, see `apps/web/tooling/e2e-workers.ts`) and webkit
-runs unsharded. There is no coverage mode. `test-postgres` and `test-e2e` each
+`main`. `Scope` and `Validation` retain stable required names. A documentation-only
+change runs Oxfmt and offline relative-link validation; generated Markdown also
+runs `generate:check`. The guide imported into the web app selects the web lanes.
+Native, auxiliary, Rust, web, and PostgreSQL/E2E lanes run only when their inputs
+can affect them. A manual run selects all lanes. `Web checks` is the stable
+required aggregate: it checks the web, PostgreSQL, and browser matrix results
+whenever web validation is selected. The browser lanes test the exact bundle
+produced by the node test lane and retain the discovery and no-skip guard;
+chromium runs as three Playwright shards (one worker each) and webkit runs
+unsharded. There is no coverage mode. `test-postgres` and `test-e2e` each
 declare their own `postgres`/`integresql` `services:` block — GitHub Actions
 YAML has no anchors and no reusable construct that fits here, so the
-duplication is accepted rather than worked around. Every test job starts
-immediately; only the two Apple jobs wait on `scope`. The separate Markdown
-link workflow and the `@claude` mention workflow (`claude.yml`) remain
-manual; `claude-code-review.yml` reviews each non-Renovate, non-fork PR once,
+duplication is accepted rather than worked around. Affected jobs wait on
+`Scope`. The separate Markdown link workflow remains available manually, and
+the same check runs automatically in `Validation` for Markdown changes. The
+`@claude` mention workflow (`claude.yml`) remains manual;
+`claude-code-review.yml` reviews each non-Renovate, non-fork PR once,
 on `opened`/`ready_for_review`/`reopened` (never on `synchronize`, so a push
 does not trigger a re-review), using Sonnet 5. Preview deploys were removed;
 production is the only deployed environment.
@@ -181,8 +178,7 @@ subcommands, `archive <ios|macos>` and `export <ios|macos>`; the macOS
 Distribution identity check (the v1.0.2 failure) runs in both the macOS
 `archive` leg and the `upload` job, each behind its own signing import.
 
-A `warm-apple-ffi` job in `ci.yaml` runs on every `main` push (not gated on
-`scope`, since there is no PR path filter to apply to a push) and
+A `warm-apple-ffi` job in `ci.yaml` runs on `main` pushes selected for Apple and
 restores/builds the `device`/`dist` and `mac`/`dist` `setup-apple-ffi`
 caches, so a release normally hits a warm cache instead of the cold
 ~7-minute Rust build those two cache keys previously only ever saw during a
@@ -223,10 +219,11 @@ re-run of an old Deploy run from rolling production back to a stale commit.
 
 ## Branch protection and measurement
 
-After the first passing PR exposes the check names, protect `main` by requiring
-a pull request and every CI lane. Keep `strict` disabled so a green
-non-conflicting branch need not rebase, allow administrator bypasses, and do not
-require human review.
+The `main` ruleset requires `Scope`, `Validation`, `Web checks`, auxiliary,
+Rust, and Apple checks. Non-matrix jobs that are unaffected are skipped; the
+web aggregate verifies every selected matrix lane. Keep `strict` disabled so
+a green non-conflicting branch need not rebase, allow administrator bypasses,
+and do not require human review.
 
 Record ten exact-head public PR runs before changing topology: queue time,
 required-check p50/p95, per-lane duration, cache behavior, cancellations, and
@@ -245,9 +242,9 @@ improve by at least 10%, with no regression in the required-check critical
 path. Append the remaining samples here rather than inventing a timing value
 from a partial or stale run.
 
-| PR / exact head | Queue | Required lanes (wall) | Cache state | Cancelled | Merge to Cloudflare |
-| --- | ---: | --- | --- | --- | ---: |
-| [#1102](https://github.com/nickysemenza/cubby/pull/1102) / `ac4aad71` | not captured | validation 168s; auxiliary 54s; Rust 21s; web node 97s; web UI 67s; PostgreSQL 121s; Chromium 358s; WebKit 183s; Apple checks 647s; Apple package 308s | macOS pnpm-store hit (732 MiB; setup 72s); Rust FFI target hits | no | 82s |
+| PR / exact head                                                       |        Queue | Required lanes (wall)                                                                                                                                  | Cache state                                                     | Cancelled | Merge to Cloudflare |
+| --------------------------------------------------------------------- | -----------: | ------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------- | --------- | ------------------: |
+| [#1102](https://github.com/nickysemenza/cubby/pull/1102) / `ac4aad71` | not captured | validation 168s; auxiliary 54s; Rust 21s; web node 97s; web UI 67s; PostgreSQL 121s; Chromium 358s; WebKit 183s; Apple checks 647s; Apple package 308s | macOS pnpm-store hit (732 MiB; setup 72s); Rust FFI target hits | no        |                 82s |
 
 ### 2026-09-23 E2E page-load cost
 
@@ -264,11 +261,11 @@ HTTP/3, so this queueing is mostly a harness artifact. An HTTPS/HTTP/2 front
 proxy for the harness is the remaining lever; it was deferred (TLS
 certificate and forwarded-proto handling for auth origins).
 
-| Change | Samples | Result |
-| --- | --- | --- |
-| Two Playwright workers per chromium shard ([#1250](https://github.com/nickysemenza/cubby/pull/1250)) | slowest shard 249/306/250/247/244s (p50 **249s** vs 257s, −3%), no failures | rejected: the workers split one 4-vCPU runner and the same six connections |
-| Preload the recipebridge WASM from the document head | six cold loads of `/` each: WASM starts ~55ms instead of ~495ms, but hydration ~1,032ms vs ~1,045ms (−1%) | rejected: the 1.3 MB download competes with the JS chunks for the same connections; not the bottleneck |
-| Trim `goto`s in the slowest specs | analysis only | not pursued: the repeat loads are mostly deep links (URL state) the specs exist to test; ~4% at best |
+| Change                                                                                               | Samples                                                                                                   | Result                                                                                                 |
+| ---------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| Two Playwright workers per chromium shard ([#1250](https://github.com/nickysemenza/cubby/pull/1250)) | slowest shard 249/306/250/247/244s (p50 **249s** vs 257s, −3%), no failures                               | rejected: the workers split one 4-vCPU runner and the same six connections                             |
+| Preload the recipebridge WASM from the document head                                                 | six cold loads of `/` each: WASM starts ~55ms instead of ~495ms, but hydration ~1,032ms vs ~1,045ms (−1%) | rejected: the 1.3 MB download competes with the JS chunks for the same connections; not the bottleneck |
+| Trim `goto`s in the slowest specs                                                                    | analysis only                                                                                             | not pursued: the repeat loads are mostly deep links (URL state) the specs exist to test; ~4% at best   |
 
 ### 2026-09-23 E2E engine roles and three chromium shards
 
@@ -279,8 +276,8 @@ of 385/339/352s (p50 **352s**). The main ruleset now requires the aggregate
 `E2E tests (chromium)` job instead of per-shard names, so shard count no longer
 touches it. Walls are GitHub job metadata; samples are full exact-head reruns.
 
-| PR | Change | Samples (wall) | Result |
-| --- | --- | --- | --- |
+| PR                                                       | Change                                                                                                         | Samples (wall)                                                                 | Result                                                                                                                                                                               |
+| -------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | [#1239](https://github.com/nickysemenza/cubby/pull/1239) | Three chromium shards (specs shard-independent since [#1228](https://github.com/nickysemenza/cubby/pull/1228)) | slowest shard 282/272/251/250/257s (p50 **257s**, −27%); WebKit smoke 100–133s | retained; one sample failed `unknown-expense-dates` (the dialog-focus flake also seen on two-shard main runs, not shard-dependent); that flow now reports the focus thief on failure |
 
 ### 2026-09-22 cache repairs, compiled-output caches, generator speed
@@ -291,14 +288,14 @@ Baseline: six green PR runs on 2026-09-22 before these changes. Apple checks
 of 10 GB, 8.26 GB of it per-PR `spm-clones` copies. Walls are GitHub job
 metadata; "warm" samples are exact-head job reruns.
 
-| PR | Change | Samples (wall) | Result |
-| --- | --- | --- | --- |
-| [#1206](https://github.com/nickysemenza/cubby/pull/1206) | `openapi-gen-v1` was a 204 B empty entry saved by a failed run and exact-hit ever after; key v2, save only when the binary exists | Apple checks 345/381/387/418s (p50 **384s**) | retained; generator step ~3 min → under 15s |
-| [#1208](https://github.com/nickysemenza/cubby/pull/1208) | Nx `wasm` target skips when setup-node-with-deps already restored the exact-key package | Validation 110/126/132/133/145s (p50 **132s**) | retained |
-| [#1210](https://github.com/nickysemenza/cubby/pull/1210) | Cache CubbyKit `.build`; blob-hash mtimes (`scripts/stamp-source-mtimes.ts`) | Apple package tests 64/80/107s (cold seed 381s) | retained |
-| [#1211](https://github.com/nickysemenza/cubby/pull/1211) | Cache DerivedData the same way; `spm-clones`/DerivedData saved by main only | Apple checks 188/278s warm; xcodebuild 1m45s recompiling only the changed modules | retained |
-| [#1216](https://github.com/nickysemenza/cubby/pull/1216) | `workers-tests` joins the `check:all` run-many | `check:all` 57/65/69/78s (p50 94s before) | retained |
-| [#1213](https://github.com/nickysemenza/cubby/pull/1213) | Three chromium shards | slowest shard 247s, then 218s with **2 of 3 shards failing** on test-isolation leaks | rejected until those tests stop depending on shard mates; also needs the ruleset's required check names changed |
+| PR                                                       | Change                                                                                                                            | Samples (wall)                                                                       | Result                                                                                                          |
+| -------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------- |
+| [#1206](https://github.com/nickysemenza/cubby/pull/1206) | `openapi-gen-v1` was a 204 B empty entry saved by a failed run and exact-hit ever after; key v2, save only when the binary exists | Apple checks 345/381/387/418s (p50 **384s**)                                         | retained; generator step ~3 min → under 15s                                                                     |
+| [#1208](https://github.com/nickysemenza/cubby/pull/1208) | Nx `wasm` target skips when setup-node-with-deps already restored the exact-key package                                           | Validation 110/126/132/133/145s (p50 **132s**)                                       | retained                                                                                                        |
+| [#1210](https://github.com/nickysemenza/cubby/pull/1210) | Cache CubbyKit `.build`; blob-hash mtimes (`scripts/stamp-source-mtimes.ts`)                                                      | Apple package tests 64/80/107s (cold seed 381s)                                      | retained                                                                                                        |
+| [#1211](https://github.com/nickysemenza/cubby/pull/1211) | Cache DerivedData the same way; `spm-clones`/DerivedData saved by main only                                                       | Apple checks 188/278s warm; xcodebuild 1m45s recompiling only the changed modules    | retained                                                                                                        |
+| [#1216](https://github.com/nickysemenza/cubby/pull/1216) | `workers-tests` joins the `check:all` run-many                                                                                    | `check:all` 57/65/69/78s (p50 94s before)                                            | retained                                                                                                        |
+| [#1213](https://github.com/nickysemenza/cubby/pull/1213) | Three chromium shards                                                                                                             | slowest shard 247s, then 218s with **2 of 3 shards failing** on test-isolation leaks | rejected until those tests stop depending on shard mates; also needs the ruleset's required check names changed |
 
 Local measurements behind #1210: CubbyKit `swift build --build-tests` cold 76s;
 `.build` restored with fresh-checkout mtimes 41s; restored and stamped 3s; one
@@ -327,12 +324,12 @@ Exact-head runs of [#1163](https://github.com/nickysemenza/cubby/pull/1163)
 (140s generator build, 93s SPM clone, 53s unneeded `pnpm install`); Apple
 package tests 301s after a 154s runner queue; chromium 433s on one worker.
 
-| Run | Apple caches | PR wall | Apple checks | Apple package | Chromium | Note |
-| --- | --- | ---: | ---: | ---: | --- | --- |
-| 35652760985 | cold | — | 1089s (failed) | merged into Apple checks | 345s (2 workers) | simulator tests: 4 Vision suites cannot run on the simulator; one real bug in `PhotoRecordSearch` |
-| 35655298230 | cold (saved on exit) | 1139s | 1082s | merged | 416s (2 workers) | simulator pre-booted at job start starved the FFI restore (41s → 281s) |
-| 35657369044 | warm | 918s | 899s | merged | 330s (2 workers, **1 flake**) | boot moved after restores: still ~10 min of CPU starvation |
-| 35659623444 | warm | **325s** | **296s** | 309s (SPM checkouts cold, saved) | **216s / 284s** (2 shards, 1 worker each) | two macOS jobs restored; retained |
+| Run         | Apple caches         |  PR wall |   Apple checks |                    Apple package | Chromium                                  | Note                                                                                              |
+| ----------- | -------------------- | -------: | -------------: | -------------------------------: | ----------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| 35652760985 | cold                 |        — | 1089s (failed) |         merged into Apple checks | 345s (2 workers)                          | simulator tests: 4 Vision suites cannot run on the simulator; one real bug in `PhotoRecordSearch` |
+| 35655298230 | cold (saved on exit) |    1139s |          1082s |                           merged | 416s (2 workers)                          | simulator pre-booted at job start starved the FFI restore (41s → 281s)                            |
+| 35657369044 | warm                 |     918s |           899s |                           merged | 330s (2 workers, **1 flake**)             | boot moved after restores: still ~10 min of CPU starvation                                        |
+| 35659623444 | warm                 | **325s** |       **296s** | 309s (SPM checkouts cold, saved) | **216s / 284s** (2 shards, 1 worker each) | two macOS jobs restored; retained                                                                 |
 
 **Decisions.** Retained: generator-binary and SPM-clone caches (generator
 step 140s → under 5s warm; Resolve Package Graph 93s → 28s), dropping the
@@ -352,18 +349,18 @@ wait. `S`, `V`, `A`, `R`, `N`, `U`, `P`, `C`, `W`, `I`, and `K` mean Scope,
 Validation, Auxiliary, Rust, web Node, web UI, PostgreSQL, Chromium, WebKit,
 Apple checks, and Apple package tests. All runs completed without cancellation.
 
-| Exact head / attempt | Queue | Required lane walls (seconds) | Cache policy | Cancelled | Merge to Cloudflare |
-| --- | ---: | --- | --- | --- | ---: |
-| [#1105](https://github.com/nickysemenza/cubby/pull/1105) `46a920e4` / 1 | 238s | S 3; V 191; A 52; R 36; N 84; U 48; P 123; C 296; W 199; I 514; K 266 | macOS pnpm store hit | no | 79s |
-| `46a920e4` / 2 | 9s | S 3; V 188; A 54; R 36; N 75; U 59; P 97; C 328; W 197; I 560; K 261 | macOS pnpm store hit | no | 79s |
-| `46a920e4` / 3 | 7s | S 2; V 143; A 48; R 30; N 70; U 73; P 118; C 346; W 196; I 471; K 255 | macOS pnpm store hit | no | 79s |
-| `46a920e4` / 4 | 7s | S 4; V 199; A 48; R 37; N 88; U 59; P 110; C 329; W 185; I 630; K 271 | macOS pnpm store hit | no | 79s |
-| `46a920e4` / 5 | 6s | S 3; V 191; A 53; R 32; N 97; U 59; P 121; C 345; W 197; I 606; K 204 | macOS pnpm store hit | no | 79s |
-| [#1107](https://github.com/nickysemenza/cubby/pull/1107) `a5a2586a` / 1 | 11s | S 5; V 198; A 47; R 22; N 99; U 67; P 155; C 320; W 213; I 551; K 324 | iOS pnpm store disabled; Linux store hit | no | 98s |
-| `a5a2586a` / 2 | 15s | S 4; V 211; A 43; R 24; N 96; U 71; P 109; C 344; W 185; I 503; K 236 | iOS pnpm store disabled; Linux store hit | no | 98s |
-| `a5a2586a` / 3 | 6s | S 3; V 196; A 49; R 34; N 91; U 62; P 137; C 290; W 183; I 428; K 316 | iOS pnpm store disabled; Linux store hit | no | 98s |
-| `a5a2586a` / 4 | 227s | S 3; V 196; A 47; R 24; N 80; U 67; P 117; C 339; W 173; I 540; K 230 | iOS pnpm store disabled; Linux store hit | no | 98s |
-| `a5a2586a` / 5 | 7s | S 4; V 208; A 48; R 23; N 89; U 59; P 118; C 332; W 197; I 443; K 297 | iOS pnpm store disabled; Linux store hit | no | 98s |
+| Exact head / attempt                                                    | Queue | Required lane walls (seconds)                                         | Cache policy                             | Cancelled | Merge to Cloudflare |
+| ----------------------------------------------------------------------- | ----: | --------------------------------------------------------------------- | ---------------------------------------- | --------- | ------------------: |
+| [#1105](https://github.com/nickysemenza/cubby/pull/1105) `46a920e4` / 1 |  238s | S 3; V 191; A 52; R 36; N 84; U 48; P 123; C 296; W 199; I 514; K 266 | macOS pnpm store hit                     | no        |                 79s |
+| `46a920e4` / 2                                                          |    9s | S 3; V 188; A 54; R 36; N 75; U 59; P 97; C 328; W 197; I 560; K 261  | macOS pnpm store hit                     | no        |                 79s |
+| `46a920e4` / 3                                                          |    7s | S 2; V 143; A 48; R 30; N 70; U 73; P 118; C 346; W 196; I 471; K 255 | macOS pnpm store hit                     | no        |                 79s |
+| `46a920e4` / 4                                                          |    7s | S 4; V 199; A 48; R 37; N 88; U 59; P 110; C 329; W 185; I 630; K 271 | macOS pnpm store hit                     | no        |                 79s |
+| `46a920e4` / 5                                                          |    6s | S 3; V 191; A 53; R 32; N 97; U 59; P 121; C 345; W 197; I 606; K 204 | macOS pnpm store hit                     | no        |                 79s |
+| [#1107](https://github.com/nickysemenza/cubby/pull/1107) `a5a2586a` / 1 |   11s | S 5; V 198; A 47; R 22; N 99; U 67; P 155; C 320; W 213; I 551; K 324 | iOS pnpm store disabled; Linux store hit | no        |                 98s |
+| `a5a2586a` / 2                                                          |   15s | S 4; V 211; A 43; R 24; N 96; U 71; P 109; C 344; W 185; I 503; K 236 | iOS pnpm store disabled; Linux store hit | no        |                 98s |
+| `a5a2586a` / 3                                                          |    6s | S 3; V 196; A 49; R 34; N 91; U 62; P 137; C 290; W 183; I 428; K 316 | iOS pnpm store disabled; Linux store hit | no        |                 98s |
+| `a5a2586a` / 4                                                          |  227s | S 3; V 196; A 47; R 24; N 80; U 67; P 117; C 339; W 173; I 540; K 230 | iOS pnpm store disabled; Linux store hit | no        |                 98s |
+| `a5a2586a` / 5                                                          |    7s | S 4; V 208; A 48; R 23; N 89; U 59; P 118; C 332; W 197; I 443; K 297 | iOS pnpm store disabled; Linux store hit | no        |                 98s |
 
 **Decisions.** Hosted Swift batch compilation's iOS app-check step was
 425/433/370/526/493s (p50 **433s**, 19.5% below the 538s pre-experiment
@@ -453,12 +450,12 @@ average at the start of each run — the host was shared with other concurrent
 work, so absolute numbers are noisy; the comparison is same-host, same-load-ish,
 interleaved:
 
-| Structure | Wall times (s) | Median | Vitest-reported duration (s) | Load (1-min) at each run |
-|---|---|---|---|---|
-| 8 family files (before) | 28, 29, 31 | 29s | 25.25, 25.36, 26.77 | 4.6, 6.0, 6.7 |
-| 77 real files, `isolate: false` (after) | 34, 27, 35, 20, 20 | 27s | 27.23, 22.66, 30.86, 16.25, 16.40 | 28.6, 19.6, 14.1, 14.1, 11.2 |
+| Structure                               | Wall times (s)     | Median | Vitest-reported duration (s)      | Load (1-min) at each run     |
+| --------------------------------------- | ------------------ | ------ | --------------------------------- | ---------------------------- |
+| 8 family files (before)                 | 28, 29, 31         | 29s    | 25.25, 25.36, 26.77               | 4.6, 6.0, 6.7                |
+| 77 real files, `isolate: false` (after) | 34, 27, 35, 20, 20 | 27s    | 27.23, 22.66, 30.86, 16.25, 16.40 | 28.6, 19.6, 14.1, 14.1, 11.2 |
 
-The after-column ran under markedly *higher* average load (other work
+The after-column ran under markedly _higher_ average load (other work
 contending for the same 8 cores) and still matched or beat the before-column's
 median on both wall time and Vitest's own duration; the two fastest after-runs
 (16.3s duration, 20s wall, load 11–14) landed well below every before-run. Both
@@ -512,10 +509,10 @@ cached images and passed all 407 contracts. Wall times include startup and
 cleanup; three samples per worker count were interleaved:
 
 | PostgreSQL workers | Wall times (seconds) | Median |
-|---|---|---|
-| 2 | 51.30, 78.96, 62.20 | 62.20s |
-| 4 | 40.37, 67.18, 41.98 | 41.98s |
-| 6 | 31.62, 36.90, 44.91 | 36.90s |
+| ------------------ | -------------------- | ------ |
+| 2                  | 51.30, 78.96, 62.20  | 62.20s |
+| 4                  | 40.37, 67.18, 41.98  | 41.98s |
+| 6                  | 31.62, 36.90, 44.91  | 36.90s |
 
 The local default is **6 workers**; `VITEST_MAX_WORKERS` still overrides it.
 Sampled memory availability stayed at or above 44%; swap usage at run
@@ -584,17 +581,17 @@ runs below, against the plan's idle-host assumption). Given that, this table
 is evidence of direction, not a clean absolute baseline; re-run the matrix on
 an idle host before trusting the wall times as a new target.
 
-| Config | Runs | Wall (s) | E2E wall (s, solo) | Flakes | Load (1-min) before → after |
-|---|---|---|---|---|---|
-| Concurrent (old), full crash | 1 | 180 | — (e2e never ran a test: `ERR_PNPM_RECURSIVE_RUN_FIRST_FAIL`) | run-ending crash | 4.6 → n/a |
-| Concurrent (old), completed | 1 | 159 | — | 4/58 (see below) | 8.9 → 10.8 |
-| Sequential (adopted) | 4 | 207, 266, 162, 202 | — | 4/58, same 4 each run | 4.5→13.6, 16.8→19.3, 15.7→11.5, 8.7→11.6 |
-| E2E alone, 3 workers | 2 | — | 155, 137 | 4/58 both | 11.4→26.4, 3.1→14.0 |
-| E2E alone, 4 workers | 1 | — | 134 | 4/58 | 7.9 → 12.4 |
+| Config                       | Runs | Wall (s)           | E2E wall (s, solo)                                            | Flakes                | Load (1-min) before → after              |
+| ---------------------------- | ---- | ------------------ | ------------------------------------------------------------- | --------------------- | ---------------------------------------- |
+| Concurrent (old), full crash | 1    | 180                | — (e2e never ran a test: `ERR_PNPM_RECURSIVE_RUN_FIRST_FAIL`) | run-ending crash      | 4.6 → n/a                                |
+| Concurrent (old), completed  | 1    | 159                | —                                                             | 4/58 (see below)      | 8.9 → 10.8                               |
+| Sequential (adopted)         | 4    | 207, 266, 162, 202 | —                                                             | 4/58, same 4 each run | 4.5→13.6, 16.8→19.3, 15.7→11.5, 8.7→11.6 |
+| E2E alone, 3 workers         | 2    | —                  | 155, 137                                                      | 4/58 both             | 11.4→26.4, 3.1→14.0                      |
+| E2E alone, 4 workers         | 1    | —                  | 134                                                           | 4/58                  | 7.9 → 12.4                               |
 
 Every failure across every config, every worker count, and even the one run
-that *started* from a near-idle 3.1 load (climbing to 14 purely from the
-run's own postgres+integresql+3-browser-worker footprint) was the *same* four
+that _started_ from a near-idle 3.1 load (climbing to 14 purely from the
+run's own postgres+integresql+3-browser-worker footprint) was the _same_ four
 tests: `create-recipe-full-flow.spec.ts`, `product-ssr.spec.ts`,
 `mobile.phone-workflows.spec.ts`, `http-resource-api.spec.ts` — three of them
 exactly the hydration-timeout shape this fix targets (a `Create|Save|Move`
@@ -605,7 +602,7 @@ this branch; they fail identically regardless of `test:all` sequencing or
 worker count, including from a near-idle start. That rules out "this
 change caused it" and points instead to a **pre-existing host-contention
 sensitivity**: these are the tests closest to their own timeout budget, so
-they are the first to tip over the instant *any* significant load appears —
+they are the first to tip over the instant _any_ significant load appears —
 even the load the E2E run's own three browser workers plus PostgreSQL
 generate by themselves on this 8-core machine. This is a narrower claim than
 H1 as originally framed (which blamed the specific PostgreSQL+Playwright
@@ -632,8 +629,7 @@ the lead). Re-run `pnpm test:all` ×3–5 on a host with nothing else running at
 all (not just "idle-ish") to confirm the sequencing fix's flake rate in
 isolation from these four.
 
-*Superseded 2026-09-17:* the local macOS E2E worker default moved from 3 to
-2. At three workers the iPhone WebKit project flaked across four unrelated
+_Superseded 2026-09-17:_ the local macOS E2E worker default moved from 3 to 2. At three workers the iPhone WebKit project flaked across four unrelated
 specs whenever other sessions' gates loaded the host; every run at
 `CUBBY_E2E_WORKERS=2` was clean. `CUBBY_E2E_WORKERS=3|4` remain available for
 an idle-host comparison.
@@ -672,15 +668,15 @@ interface.
 Measured on the merged branch, host shared with an unrelated build (1-minute
 load 5–20 throughout), so wall clocks are pessimistic:
 
-| gate | result |
-|---|---|
-| `pnpm test:all` (sequential) | 3:13, 2:54, 2:37 — 0 failures, 0 flakes |
-| `pnpm test:e2e` alone (fresh `build:cf`) | 1:51 for 65 tests (was ~2:20 standalone) |
-| `pnpm test:postgres` | 77 files / 422 tests; median 27s vs 29s for the eight family bundles |
-| `@cubby/web` vitest duration | 24.2s |
-| `pnpm verify:local:full` (`--parallel=1`) | 6:49, all 11 targets across 14 projects |
-| `pnpm verify:local:full` (default parallelism, rejected) | 10:54 and red — unit tier 196s, timeouts |
-| `pnpm exec oxlint .` with the two new plugin rules | 1.9s |
+| gate                                                     | result                                                               |
+| -------------------------------------------------------- | -------------------------------------------------------------------- |
+| `pnpm test:all` (sequential)                             | 3:13, 2:54, 2:37 — 0 failures, 0 flakes                              |
+| `pnpm test:e2e` alone (fresh `build:cf`)                 | 1:51 for 65 tests (was ~2:20 standalone)                             |
+| `pnpm test:postgres`                                     | 77 files / 422 tests; median 27s vs 29s for the eight family bundles |
+| `@cubby/web` vitest duration                             | 24.2s                                                                |
+| `pnpm verify:local:full` (`--parallel=1`)                | 6:49, all 11 targets across 14 projects                              |
+| `pnpm verify:local:full` (default parallelism, rejected) | 10:54 and red — unit tier 196s, timeouts                             |
+| `pnpm exec oxlint .` with the two new plugin rules       | 1.9s                                                                 |
 
 ## Operational checks
 

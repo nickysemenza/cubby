@@ -7,27 +7,27 @@ mechanical ownership; domain-specific validators, repository transactions, image
 storage, quantity reconciliation, and relationship renderers retain explicit ports.
 Zero create/update fields preserve a workflow-only or read-only contract.
 
-| Entity declaration | Fields | Stored columns | Create fields | Update fields | Bulk fields |
-| --- | ---: | ---: | ---: | ---: | ---: |
-| [product](../../packages/schemas/src/entity-definitions/00-product.entity.ts) | 30 | 19 | 18 | 20 | 1 |
-| [recipe](../../packages/schemas/src/entity-definitions/01-recipe.entity.ts) | 24 | 18 | 8 | 10 | 0 |
-| [ingredient](../../packages/schemas/src/entity-definitions/02-ingredient.entity.ts) | 10 | 10 | 4 | 4 | 1 |
-| [cookbook](../../packages/schemas/src/entity-definitions/03-cookbook.entity.ts) | 17 | 13 | 0 | 0 | 0 |
-| [location](../../packages/schemas/src/entity-definitions/04-location.entity.ts) | 19 | 14 | 7 | 9 | 1 |
-| [inventory](../../packages/schemas/src/entity-definitions/05-inventory.entity.ts) | 11 | 11 | 4 | 4 | 0 |
-| [meal](../../packages/schemas/src/entity-definitions/06-meal.entity.ts) | 12 | 10 | 6 | 5 | 0 |
-| [ledgerParty](../../packages/schemas/src/entity-definitions/07-ledgerParty.entity.ts) | 8 | 8 | 3 | 3 | 0 |
-| [ledgerTransfer](../../packages/schemas/src/entity-definitions/08-ledgerTransfer.entity.ts) | 15 | 10 | 7 | 7 | 0 |
-| [project](../../packages/schemas/src/entity-definitions/09-project.entity.ts) | 24 | 18 | 12 | 13 | 0 |
-| [task](../../packages/schemas/src/entity-definitions/10-task.entity.ts) | 22 | 15 | 9 | 10 | 5 |
-| [vendor](../../packages/schemas/src/entity-definitions/11-vendor.entity.ts) | 14 | 10 | 4 | 4 | 0 |
-| [purchase](../../packages/schemas/src/entity-definitions/12-purchase.entity.ts) | 26 | 12 | 7 | 9 | 0 |
-| [financialAccount](../../packages/schemas/src/entity-definitions/13-financialAccount.entity.ts) | 13 | 11 | 6 | 6 | 0 |
-| [financialTransaction](../../packages/schemas/src/entity-definitions/14-financialTransaction.entity.ts) | 21 | 17 | 13 | 13 | 0 |
-| [wish](../../packages/schemas/src/entity-definitions/15-wish.entity.ts) | 11 | 8 | 3 | 4 | 0 |
-| [expense](../../packages/schemas/src/entity-definitions/16-expense.entity.ts) | 32 | 20 | 19 | 19 | 3 |
-| [usda-food](../../packages/schemas/src/entity-definitions/17-usda-food.entity.ts) | 8 | 0 | 0 | 0 | 0 |
-| [image](../../packages/schemas/src/entity-definitions/18-image.entity.ts) | 21 | 20 | 0 | 1 | 0 |
+| Entity declaration                                                                                      | Fields | Stored columns | Create fields | Update fields | Bulk fields |
+| ------------------------------------------------------------------------------------------------------- | -----: | -------------: | ------------: | ------------: | ----------: |
+| [product](../../packages/schemas/src/entity-definitions/00-product.entity.ts)                           |     30 |             19 |            18 |            20 |           1 |
+| [recipe](../../packages/schemas/src/entity-definitions/01-recipe.entity.ts)                             |     24 |             18 |             8 |            10 |           0 |
+| [ingredient](../../packages/schemas/src/entity-definitions/02-ingredient.entity.ts)                     |     10 |             10 |             4 |             4 |           1 |
+| [cookbook](../../packages/schemas/src/entity-definitions/03-cookbook.entity.ts)                         |     17 |             13 |             0 |             0 |           0 |
+| [location](../../packages/schemas/src/entity-definitions/04-location.entity.ts)                         |     19 |             14 |             7 |             9 |           1 |
+| [inventory](../../packages/schemas/src/entity-definitions/05-inventory.entity.ts)                       |     11 |             11 |             4 |             4 |           0 |
+| [meal](../../packages/schemas/src/entity-definitions/06-meal.entity.ts)                                 |     12 |             10 |             6 |             5 |           0 |
+| [ledgerParty](../../packages/schemas/src/entity-definitions/07-ledgerParty.entity.ts)                   |      8 |              8 |             3 |             3 |           0 |
+| [ledgerTransfer](../../packages/schemas/src/entity-definitions/08-ledgerTransfer.entity.ts)             |     15 |             10 |             7 |             7 |           0 |
+| [project](../../packages/schemas/src/entity-definitions/09-project.entity.ts)                           |     24 |             18 |            12 |            13 |           0 |
+| [task](../../packages/schemas/src/entity-definitions/10-task.entity.ts)                                 |     22 |             15 |             9 |            10 |           5 |
+| [vendor](../../packages/schemas/src/entity-definitions/11-vendor.entity.ts)                             |     14 |             10 |             4 |             4 |           0 |
+| [purchase](../../packages/schemas/src/entity-definitions/12-purchase.entity.ts)                         |     26 |             12 |             7 |             9 |           0 |
+| [financialAccount](../../packages/schemas/src/entity-definitions/13-financialAccount.entity.ts)         |     13 |             11 |             6 |             6 |           0 |
+| [financialTransaction](../../packages/schemas/src/entity-definitions/14-financialTransaction.entity.ts) |     21 |             17 |            13 |            13 |           0 |
+| [wish](../../packages/schemas/src/entity-definitions/15-wish.entity.ts)                                 |     11 |              8 |             3 |             4 |           0 |
+| [expense](../../packages/schemas/src/entity-definitions/16-expense.entity.ts)                           |     32 |             20 |            19 |            19 |           3 |
+| [usda-food](../../packages/schemas/src/entity-definitions/17-usda-food.entity.ts)                       |      8 |              0 |             0 |             0 |           0 |
+| [image](../../packages/schemas/src/entity-definitions/18-image.entity.ts)                               |     21 |             20 |             0 |             1 |           0 |
 
 The generated operation registry retains all **249** baseline operation IDs and
 their query/mutation/subscription kinds. All have generated handler entries.

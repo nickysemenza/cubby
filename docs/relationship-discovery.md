@@ -69,16 +69,16 @@ native app releases. No database migration is required.
 Implementation lives on `codex/relationship-discovery`, based on freshly fetched
 `origin/main` at `896f2702d`, in the dedicated relationship-discovery checkout.
 
-| Check | Result |
-| --- | --- |
-| `pnpm check` | Passed: types, lint, formatting, generated contracts, and repository guards. |
-| `pnpm test` | Passed, including 5,273 web tests and the auxiliary package suites. Subsequent wire-fixture changes also passed their focused suites. |
-| Financial PostgreSQL family | 100 passed, including recommendation ranking, self-exclusion, and mutation rollups. |
-| Inventory/graph PostgreSQL family | 68 passed, including multi-hop traversal and thumbnail deadline degradation. |
-| Fresh-built Playwright | Ten passed: seven desktop Chromium contracts and three iPhone WebKit contracts, including full-section Apply and inventory merge navigation. |
-| Native OpenAPI drift | Passed. |
-| CubbyKit | 227 tests passed, including shared mapping, graph state, cancellation, layout, acceptance retries, and surviving inventory response handling. |
-| Native app | iOS Simulator and macOS builds passed; four macOS app tests passed. |
+| Check                             | Result                                                                                                                                        |
+| --------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pnpm check`                      | Passed: types, lint, formatting, generated contracts, and repository guards.                                                                  |
+| `pnpm test`                       | Passed, including 5,273 web tests and the auxiliary package suites. Subsequent wire-fixture changes also passed their focused suites.         |
+| Financial PostgreSQL family       | 100 passed, including recommendation ranking, self-exclusion, and mutation rollups.                                                           |
+| Inventory/graph PostgreSQL family | 68 passed, including multi-hop traversal and thumbnail deadline degradation.                                                                  |
+| Fresh-built Playwright            | Ten passed: seven desktop Chromium contracts and three iPhone WebKit contracts, including full-section Apply and inventory merge navigation.  |
+| Native OpenAPI drift              | Passed.                                                                                                                                       |
+| CubbyKit                          | 227 tests passed, including shared mapping, graph state, cancellation, layout, acceptance retries, and surviving inventory response handling. |
+| Native app                        | iOS Simulator and macOS builds passed; four macOS app tests passed.                                                                           |
 
 Mac interaction checks used the built worktree app, a disposable local
 PostgreSQL/Worker backend, and synthetic records. Verified inline project

@@ -10,7 +10,7 @@ services:
       PGUSER: postgres
       PGPASSWORD: password
   db:
-  # 17 until https://github.com/drizzle-team/drizzle-orm/issues/4944
+    # 17 until https://github.com/drizzle-team/drizzle-orm/issues/4944
     image: pgvector/pgvector:pg17
     restart: always
     ports:
@@ -48,7 +48,7 @@ services:
         "-c",
         "log_destination=stderr",
         "-c",
-        "log_line_prefix=%t [%p]:[%l] user=%u, db=%d "
+        "log_line_prefix=%t [%p]:[%l] user=%u, db=%d ",
       ]
     # Belt and braces so a future logging change cannot silently eat the disk
     # again.

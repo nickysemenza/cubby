@@ -13,10 +13,10 @@ Incremental checking remains enabled; the service-worker check is unchanged.
 Representative cold runs (`--noEmit --incremental false --extendedDiagnostics`,
 wrapped with `/usr/bin/time -l`):
 
-| Setting | Files | Instantiations | Wall time | CPU user time | Peak RSS |
-| --- | ---: | ---: | ---: | ---: | ---: |
-| Default checkers | 7,403 | 21,307,057 | 12.29 s | 50.44 s | 5.93 GB |
-| One checker | 7,403 | 10,148,693 | 12.37 s | 21.52 s | 3.07 GB |
+| Setting          | Files | Instantiations | Wall time | CPU user time | Peak RSS |
+| ---------------- | ----: | -------------: | --------: | ------------: | -------: |
+| Default checkers | 7,403 |     21,307,057 |   12.29 s |       50.44 s |  5.93 GB |
+| One checker      | 7,403 |     10,148,693 |   12.37 s |       21.52 s |  3.07 GB |
 
 This is primarily a memory and CPU improvement, not a demonstrated latency win.
 Earlier measurements overlapped trace generation or dependency installation and
@@ -205,15 +205,15 @@ Measurements were taken on the same busy ARM Mac and are observations, not a
 controlled speedup claim. Cold Cargo compilation is excluded from the setup
 comparison, as requested.
 
-| Measurement | Observed result |
-| --- | --- |
-| Original runner, initial `pnpm check` sample | 181.26 s |
-| Retained `pnpm check:all`, uncached | 253.59 s; all 12 gates passed |
-| Retained warm `pnpm check` | 13.83 s overall; 6/8 tasks cached |
-| Mandatory pre-commit check | Passed; Nx task duration 3.9 s |
-| Fresh worktree `pnpm agent:setup` | 67.72 s, including 45.8 s install and 16.22 s WASM preparation |
-| Existing worktree `pnpm agent:setup` | 17.00 s; tracked files remained clean |
-| Lint cache reused by a separate worktree | 1/1 cache hit; Nx task duration 397 ms |
+| Measurement                                  | Observed result                                                |
+| -------------------------------------------- | -------------------------------------------------------------- |
+| Original runner, initial `pnpm check` sample | 181.26 s                                                       |
+| Retained `pnpm check:all`, uncached          | 253.59 s; all 12 gates passed                                  |
+| Retained warm `pnpm check`                   | 13.83 s overall; 6/8 tasks cached                              |
+| Mandatory pre-commit check                   | Passed; Nx task duration 3.9 s                                 |
+| Fresh worktree `pnpm agent:setup`            | 67.72 s, including 45.8 s install and 16.22 s WASM preparation |
+| Existing worktree `pnpm agent:setup`         | 17.00 s; tracked files remained clean                          |
+| Lint cache reused by a separate worktree     | 1/1 cache hit; Nx task duration 397 ms                         |
 
 The full and fast check commands have different gate sets; do not compare their
 elapsed times as equivalent workloads. The warm six-second target was missed.
@@ -235,7 +235,6 @@ successfully. The full verifier is **not green**; targeted successes do not
 replace its failed aggregate result. Failed Nx tasks returned nonzero and were
 not cached. A separate hook probe verified that pre-commit propagates a failing
 `pnpm check` exit status.
-
 
 ## Worktree setup follow-up (September 7, 2026)
 
@@ -367,11 +366,11 @@ PostgreSQL cases; the combined branch retains its calendar Worker tests and uses
 
 Measured today on this machine (8-core ARM, 24 GB):
 
-| Case | Before | After |
-| --- | ---: | ---: |
-| Fresh worktree `pnpm agent:setup` WASM step | 54.8 s (Nx miss, full 69-crate build) | 1.6 s (Nx hit restores `packages/wasm`) |
-| Warm checkout `node scripts/ensure-wasm.ts` (nothing changed) | ~7 s (verified Nx hit re-hashes and re-copies outputs) | 0.3 s (in-package `.fingerprint` marker matches) |
-| Same commit, two checkouts — fingerprint equal? | no (untracked `recipebridge/Cargo.lock` re-resolved per checkout; `.DS_Store`/`.claude/` hashed) | yes |
+| Case                                                          |                                                                                           Before |                                            After |
+| ------------------------------------------------------------- | -----------------------------------------------------------------------------------------------: | -----------------------------------------------: |
+| Fresh worktree `pnpm agent:setup` WASM step                   |                                                            54.8 s (Nx miss, full 69-crate build) |          1.6 s (Nx hit restores `packages/wasm`) |
+| Warm checkout `node scripts/ensure-wasm.ts` (nothing changed) |                                           ~7 s (verified Nx hit re-hashes and re-copies outputs) | 0.3 s (in-package `.fingerprint` marker matches) |
+| Same commit, two checkouts — fingerprint equal?               | no (untracked `recipebridge/Cargo.lock` re-resolved per checkout; `.DS_Store`/`.claude/` hashed) |                                              yes |
 
 `recipebridge/Cargo.lock` is now tracked: untracked, it was re-resolved by
 cargo metadata on every fresh checkout and rewritten each time, so no two
@@ -391,11 +390,11 @@ Two path-independent slices were measured instead, each as a cold
 into a fresh `-derivedDataPath`, run sequentially on an otherwise idle 8-core
 machine (one populate run, then the measured run):
 
-| Case | Cold build | DerivedData |
-| --- | ---: | ---: |
-| Baseline | 132 s | 4.5 GB |
-| `-clonedSourcePackagesDirPath <shared>` (second worktree) | 177 s | 1.1 GB (+3.5 GB shared) |
-| `COMPILATION_CACHE_ENABLE_CACHING=YES` + shared `COMPILATION_CACHE_CAS_PATH` (second worktree) | 121 s | 4.5 GB (+1.0 GB CAS) |
+| Case                                                                                           | Cold build |             DerivedData |
+| ---------------------------------------------------------------------------------------------- | ---------: | ----------------------: |
+| Baseline                                                                                       |      132 s |                  4.5 GB |
+| `-clonedSourcePackagesDirPath <shared>` (second worktree)                                      |      177 s | 1.1 GB (+3.5 GB shared) |
+| `COMPILATION_CACHE_ENABLE_CACHING=YES` + shared `COMPILATION_CACHE_CAS_PATH` (second worktree) |      121 s |    4.5 GB (+1.0 GB CAS) |
 
 Neither changes build time beyond run-to-run noise (the populate runs were
 116 s and 102 s), so neither flag was adopted. The shared clone directory is a

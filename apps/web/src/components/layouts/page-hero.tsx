@@ -487,27 +487,26 @@ function DetailPlate({
               {onFileSince && <span>Added {onFileSince}</span>}
             </div>
           </div>
-          {heroStats &&
-            heroStats.length > 0 && (
-              // Compact record stats — hairline separators, plain-language
-              // labels, and tabular numerals.
-              <div className="mt-4 flex border-t border-border pt-2">
-                {heroStats.map((stat, i) => (
-                  <div
-                    key={stat.label}
-                    className={cn(
-                      "min-w-0 flex-1",
-                      i > 0 && "border-l border-border pl-4",
-                    )}
-                  >
-                    <Eyebrow as="div">{stat.label}</Eyebrow>
-                    <div className="truncate font-mono text-base font-semibold tabular-nums">
-                      {stat.value}
-                    </div>
+          {heroStats && heroStats.length > 0 && (
+            // Compact record stats — hairline separators, plain-language
+            // labels, and tabular numerals.
+            <div className="mt-4 flex border-t border-border pt-2">
+              {heroStats.map((stat, i) => (
+                <div
+                  key={stat.label}
+                  className={cn(
+                    "min-w-0 flex-1",
+                    i > 0 && "border-l border-border pl-4",
+                  )}
+                >
+                  <Eyebrow as="div">{stat.label}</Eyebrow>
+                  <div className="truncate font-mono text-base font-semibold tabular-nums">
+                    {stat.value}
                   </div>
-                ))}
-              </div>
-            )}
+                </div>
+              ))}
+            </div>
+          )}
         </CardContent>
       </Card>
     </>

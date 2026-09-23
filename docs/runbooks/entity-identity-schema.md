@@ -30,6 +30,7 @@ The PR is opened without auto-merge. Do not merge it until step 5.
    ```
 
    Cron is left running; a failed run is retried by the next one.
+
 4. **Cutover.** Run `entity-identity.sql`. It is one transaction: it locks
    the entity tables against writes (reads continue), creates `Entity`,
    `EntityAttachment`, and `DataException`, backfills identities, merge

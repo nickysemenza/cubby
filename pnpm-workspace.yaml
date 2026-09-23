@@ -4,12 +4,12 @@ packages:
 
 # Preserve the existing install-script allowlist and warning-only policy.
 allowBuilds:
-  '@google/genai': false
-  '@openrouter/sdk': false
-  '@prisma/client': false
-  '@prisma/engines': false
-  '@sentry/cli': false
-  '@swc/core': false
+  "@google/genai": false
+  "@openrouter/sdk": false
+  "@prisma/client": false
+  "@prisma/engines": false
+  "@sentry/cli": false
+  "@swc/core": false
   better-sqlite3@12.11.1: true
   # v13 bundles native binaries; binding.gyp otherwise triggers an implicit
   # node-gyp rebuild even though no install script is needed.
@@ -435,4 +435,4 @@ peerDependencyRules:
 enableGlobalVirtualStore: false
 
 configDependencies:
-  '@pnpm/plugin-types-fixer': 0.1.0
+  "@pnpm/plugin-types-fixer": 0.1.0

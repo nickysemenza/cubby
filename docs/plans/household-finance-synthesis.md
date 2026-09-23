@@ -8,7 +8,7 @@ implemented yet. Phase 1 needs no schema change; Phase 2 needs none either.
 
 Cubby already records where household money went — line-level `Expense` rows,
 project attribution, settlement evidence, and funders derived from account
-ownership. What it cannot yet do is *synthesize* that record: slice spend by
+ownership. What it cannot yet do is _synthesize_ that record: slice spend by
 product category, show how money flows from funder to project to category, or
 project spend forward. This plan adds that read-side layer in two phases.
 
@@ -62,28 +62,28 @@ Findings from the current dataset that shaped the design:
 
 ## 3. Decision log
 
-| # | Decision | Choice |
-|---|---|---|
-| 1 | Scope | All five candidate items in one plan, two phases. Recurring-outflow detection is folded into the Phase 2 baseline method, not a separate feature. |
-| 2 | What the projection answers | Household cash flow ("what will we spend per month"), with project burn as one component. |
-| 3 | Calibration | Diagnostic only: a Problems detector plus an estimate/actual column. Never scales a forecast. |
-| 4 | Category grain | Root category, drill-down to children. Explicit **Uncategorized** bucket so totals reconcile. |
-| 5 | Category money basis | Landed cost: principal plus its allocated share of tax/shipping, via one allocator that carries both project and root category. |
-| 6 | Receipt adjustments bucket | Only what the allocator cannot place: ancillary lines on a purchase with no principal line, or with no purchase. |
-| 7 | Sankey | Historical, not forecast. Funder → project bucket → root category, on the expense analytics view, sharing the Ledger's filters. |
-| 8 | Sankey negatives | Links use gross outflow; refunds/credits reported in a note beneath the chart. |
-| 9 | Sankey node caps | Top 8 projects by flow, remainder grouped as "Other projects"; categories at root level plus Uncategorized and Receipt adjustments. |
-| 10 | Multi-funder expenses | Split proportionally with the contribution ledger's weights. |
-| 11 | Same-owner transfer pairs | Recorded as a normal `LedgerTransfer` with `fromPartyId = toPartyId` for completeness; reported separately as internal moves. |
-| 12 | Unowned account in a pair | Refuse, naming the account; ownership must be set first. |
-| 13 | Baseline method | Per root category, median of the trailing 12 complete months of landed non-project spend, carried forward flat. Empty months count as $0; categories active in fewer than 3 months fold into Uncategorized. |
-| 14 | Envelope placement | Remaining = estimate − actual − committed. Spread evenly from the current month to the project's `endDate` when set and in the future; otherwise **unscheduled**. |
-| 15 | Which projects count | `in_progress` by default; `not_started` behind a toggle defaulting off; `planning` only if it has an estimate. A project under an ancestor with an estimate is excluded. |
-| 16 | Scenario storage | URL/page state only. Structural presets (horizon, toggles, category subset) are declared views in `view-manifest.ts`; scenario values never enter the repository. `AppSettings` is the upgrade path if URL-only proves annoying. |
-| 17 | Scenario shape | `{ label, date, amount, direction: inflow \| outflow, recurrence: once \| monthly, until? }`. Inflows exist only as scenarios; the page never claims to show real income. |
-| 18 | Surfaces | Category chart + filter and the Sankey on `expense-analytics-view.tsx`; projection on a new `/cash-flow` route; calibration on the Problems page. |
-| 19 | MCP | `get_cash_flow_projection` (read), `accept_financial_transfer_pair` (mutation), category breakdown added to `get_expense_analytics`. Gap deep links are web-only. |
-| 20 | Forward Sankey | **Rejected.** Forward figures are baseline, envelopes, and scenarios; a Sankey over them hides timing, which is the point of the page. |
+| #   | Decision                    | Choice                                                                                                                                                                                                                           |
+| --- | --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | Scope                       | All five candidate items in one plan, two phases. Recurring-outflow detection is folded into the Phase 2 baseline method, not a separate feature.                                                                                |
+| 2   | What the projection answers | Household cash flow ("what will we spend per month"), with project burn as one component.                                                                                                                                        |
+| 3   | Calibration                 | Diagnostic only: a Problems detector plus an estimate/actual column. Never scales a forecast.                                                                                                                                    |
+| 4   | Category grain              | Root category, drill-down to children. Explicit **Uncategorized** bucket so totals reconcile.                                                                                                                                    |
+| 5   | Category money basis        | Landed cost: principal plus its allocated share of tax/shipping, via one allocator that carries both project and root category.                                                                                                  |
+| 6   | Receipt adjustments bucket  | Only what the allocator cannot place: ancillary lines on a purchase with no principal line, or with no purchase.                                                                                                                 |
+| 7   | Sankey                      | Historical, not forecast. Funder → project bucket → root category, on the expense analytics view, sharing the Ledger's filters.                                                                                                  |
+| 8   | Sankey negatives            | Links use gross outflow; refunds/credits reported in a note beneath the chart.                                                                                                                                                   |
+| 9   | Sankey node caps            | Top 8 projects by flow, remainder grouped as "Other projects"; categories at root level plus Uncategorized and Receipt adjustments.                                                                                              |
+| 10  | Multi-funder expenses       | Split proportionally with the contribution ledger's weights.                                                                                                                                                                     |
+| 11  | Same-owner transfer pairs   | Recorded as a normal `LedgerTransfer` with `fromPartyId = toPartyId` for completeness; reported separately as internal moves.                                                                                                    |
+| 12  | Unowned account in a pair   | Refuse, naming the account; ownership must be set first.                                                                                                                                                                         |
+| 13  | Baseline method             | Per root category, median of the trailing 12 complete months of landed non-project spend, carried forward flat. Empty months count as $0; categories active in fewer than 3 months fold into Uncategorized.                      |
+| 14  | Envelope placement          | Remaining = estimate − actual − committed. Spread evenly from the current month to the project's `endDate` when set and in the future; otherwise **unscheduled**.                                                                |
+| 15  | Which projects count        | `in_progress` by default; `not_started` behind a toggle defaulting off; `planning` only if it has an estimate. A project under an ancestor with an estimate is excluded.                                                         |
+| 16  | Scenario storage            | URL/page state only. Structural presets (horizon, toggles, category subset) are declared views in `view-manifest.ts`; scenario values never enter the repository. `AppSettings` is the upgrade path if URL-only proves annoying. |
+| 17  | Scenario shape              | `{ label, date, amount, direction: inflow \| outflow, recurrence: once \| monthly, until? }`. Inflows exist only as scenarios; the page never claims to show real income.                                                        |
+| 18  | Surfaces                    | Category chart + filter and the Sankey on `expense-analytics-view.tsx`; projection on a new `/cash-flow` route; calibration on the Problems page.                                                                                |
+| 19  | MCP                         | `get_cash_flow_projection` (read), `accept_financial_transfer_pair` (mutation), category breakdown added to `get_expense_analytics`. Gap deep links are web-only.                                                                |
+| 20  | Forward Sankey              | **Rejected.** Forward figures are baseline, envelopes, and scenarios; a Sankey over them hides timing, which is the point of the page.                                                                                           |
 
 ## 4. Phase 1 — read-side foundations
 
@@ -175,11 +175,11 @@ unchanged.
 
 On the household contribution page:
 
-| Gap code | Link target |
-|---|---|
-| `missing_funders` | Financial-transactions list filtered to unallocated charges near the expense's date and amount |
-| `funder_account_unowned` | The account's detail page, where the Owner picker lives |
-| `beneficiary_assumed_household` | None — a status, not a worklist |
+| Gap code                        | Link target                                                                                    |
+| ------------------------------- | ---------------------------------------------------------------------------------------------- |
+| `missing_funders`               | Financial-transactions list filtered to unallocated charges near the expense's date and amount |
+| `funder_account_unowned`        | The account's detail page, where the Owner picker lives                                        |
+| `beneficiary_assumed_household` | None — a status, not a worklist                                                                |
 
 ## 5. Phase 2 — cash-flow projection
 

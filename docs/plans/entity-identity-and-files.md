@@ -358,13 +358,13 @@ report `redirectedFrom`.
 
 ### Reference policy for polymorphic consumers
 
-| Class | Target | Delete | Merge | In this PR |
-| --- | --- | --- | --- | --- |
-| Durable history | `Entity` FK | keep original | keep original; expose `canonicalEntityId` on read | `AuditLog` |
-| Rebuildable cache | `Entity` FK | delete projection | delete and rebuild | `SearchDocument`, `EntityEmbedding` |
-| Entity-scoped decision | `Entity` FK | delete with entity | survivor keeps its own; loser rows are dropped unless the check is absent on the survivor | `DataException` |
-| Workflow evidence | typed FK | workflow-specific | workflow-specific | unchanged |
-| Everything else | existing pair | existing policy | existing policy | unchanged |
+| Class                  | Target        | Delete             | Merge                                                                                     | In this PR                          |
+| ---------------------- | ------------- | ------------------ | ----------------------------------------------------------------------------------------- | ----------------------------------- |
+| Durable history        | `Entity` FK   | keep original      | keep original; expose `canonicalEntityId` on read                                         | `AuditLog`                          |
+| Rebuildable cache      | `Entity` FK   | delete projection  | delete and rebuild                                                                        | `SearchDocument`, `EntityEmbedding` |
+| Entity-scoped decision | `Entity` FK   | delete with entity | survivor keeps its own; loser rows are dropped unless the check is absent on the survivor | `DataException`                     |
+| Workflow evidence      | typed FK      | workflow-specific  | workflow-specific                                                                         | unchanged                           |
+| Everything else        | existing pair | existing policy    | existing policy                                                                           | unchanged                           |
 
 `Entity`-targeted consumers are invisible to the existing per-entity
 incoming-edge policies (`entity-incoming-edges.ts`), which key on payload
@@ -439,7 +439,7 @@ currently bypass the helper and must route through it:
 - Product import/restore (`repo/product/crud.ts`), which replays an explicit
   shortcode. It is refused when any `Entity` row, live or tombstone, already
   owns the code, so shortcodes are never reused. A static check permits direct payload inserts only in migration and test
-factories; test factories use the same seam so the payload FK holds.
+  factories; test factories use the same seam so the payload FK holds.
 
 ## Rollout
 

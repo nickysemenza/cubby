@@ -168,12 +168,12 @@ Expand-before-deploy order:
 1. Apply the SQL above against production, after Part 1's `Device` table
    already exists (`ImageSighting.deviceId` references it). Every statement
    is safe to re-run: `ADD COLUMN IF NOT EXISTS`, `CREATE TABLE IF NOT
-   EXISTS`, `CREATE INDEX IF NOT EXISTS`, and the constraint block's own
+EXISTS`, `CREATE INDEX IF NOT EXISTS`, and the constraint block's own
    `pg_constraint` guard.
 2. Read the schema back and confirm: `Image` has all nine new columns with
    the nullability above and `captureAttribution` defaulting to `'none'`;
    `ImageSighting` has both check constraints valid, `ImageSighting_
-   image_party_asset_key` is a unique index scoped by `"deletedAt" IS NULL`
+image_party_asset_key` is a unique index scoped by `"deletedAt" IS NULL`
    (not a plain unique constraint — a soft-deleted sighting must not block a
    fresh report for the same image/party/asset), and all three FK columns
    (`imageId`, `ledgerPartyId`, `deviceId`) reference live tables.
@@ -190,7 +190,7 @@ No rollback concern beyond the usual: dropping `ImageSighting` and the nine
 `Image` columns is safe as long as no deployed code still references them.
 `ImageSighting` carries no incoming edges from any other table (nothing
 references a sighting by id), so there is nothing else to clean up first;
-`Image.capturedByPartyId` is the only new FK *from* this PR's columns, and it
+`Image.capturedByPartyId` is the only new FK _from_ this PR's columns, and it
 is nullable, so dropping it does not require detaching anything first either.
 
 ## Part 3 — `Image.embeddedMetadata`
@@ -214,7 +214,7 @@ Expand-before-deploy order:
    `backfillImageMetadata` maintenance. `Image.metadataRevision` (added in
    Part 2, always nullable) is the stale marker this part's background task
    advances to `IMAGE_METADATA_REVISION`; a row with `metadataRevision IS
-   NULL` or below the current revision is a candidate for extraction.
+NULL` or below the current revision is a candidate for extraction.
 
 No rollback concern beyond the usual: dropping the column is safe as long as
 no deployed code still references it — nothing else stores an incoming
