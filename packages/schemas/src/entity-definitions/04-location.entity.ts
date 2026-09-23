@@ -335,10 +335,16 @@ export default defineEntity({
       },
       {
         key: "aiDescription",
+        label: "AI Description",
         kind: "text",
         nullable: true,
         // Rendered (and regenerated) by the `ai-description` detail slot.
-        display: { list: true, listHidden: true },
+        display: {
+          list: true,
+          listHidden: true,
+          width: "lg",
+          mobile: { slot: "meta", priority: 70 },
+        },
         validation: {
           read: z.string().nullable(),
           create: null,

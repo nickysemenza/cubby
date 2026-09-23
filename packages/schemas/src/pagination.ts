@@ -212,6 +212,16 @@ export const buildTakeSkip = (pagination: PaginationParams) => {
 export type PaginationParams = z.infer<typeof paginationParams>;
 export type SortParams = z.infer<typeof sortParams>;
 
+/** Counts from the full filtered set, ordered as the grouped list is ordered. */
+export const listGroupSummarySchema = z
+  .object({
+    key: z.string().min(1),
+    label: z.string().min(1),
+    count: z.number().int().positive(),
+  })
+  .meta({ id: "ListGroupSummary" });
+export type ListGroupSummary = z.infer<typeof listGroupSummarySchema>;
+
 export function buildPaginatedResponse<T>(
   pagination: PaginationParams,
   data: T[],
@@ -222,12 +232,14 @@ export function buildPaginatedResponse<T>(
    * footers can show truthful totals on server-paginated lists.
    */
   sums?: Record<string, number>,
+  groups?: ListGroupSummary[],
 ) {
   type PaginatedMeta = {
     pageIndex: number;
     pageSize: number;
     totalCount: number;
     sums?: Record<string, number>;
+    groups?: ListGroupSummary[];
   };
   const meta: PaginatedMeta = {
     pageIndex: pagination.pageIndex,
@@ -235,6 +247,7 @@ export function buildPaginatedResponse<T>(
     totalCount: count,
   };
   if (sums) meta.sums = sums;
+  if (groups) meta.groups = groups;
   return {
     meta,
     items: data,
@@ -248,6 +261,7 @@ export const paginatedMetaSchema = z
     pageSize: z.number().int().positive().max(MAX_PAGE_SIZE),
     totalCount: z.number().int().nonnegative(),
     sums: z.record(z.string(), z.number()).optional(),
+    groups: z.array(listGroupSummarySchema).optional(),
   })
   .meta({ id: "ListPageMeta" });
 

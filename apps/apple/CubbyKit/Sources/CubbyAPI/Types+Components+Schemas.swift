@@ -19893,6 +19893,35 @@ extension Components {
                 case ndbNumber = "ndb_number"
             }
         }
+        /// - Remark: Generated from `#/components/schemas/ListGroupSummary`.
+        public struct ListGroupSummary: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ListGroupSummary/key`.
+            public var key: Swift.String
+            /// - Remark: Generated from `#/components/schemas/ListGroupSummary/label`.
+            public var label: Swift.String
+            /// - Remark: Generated from `#/components/schemas/ListGroupSummary/count`.
+            public var count: Swift.Int
+            /// Creates a new `ListGroupSummary`.
+            ///
+            /// - Parameters:
+            ///   - key:
+            ///   - label:
+            ///   - count:
+            public init(
+                key: Swift.String,
+                label: Swift.String,
+                count: Swift.Int
+            ) {
+                self.key = key
+                self.label = label
+                self.count = count
+            }
+            public enum CodingKeys: String, CodingKey {
+                case key
+                case label
+                case count
+            }
+        }
         /// - Remark: Generated from `#/components/schemas/ListPageMeta`.
         public struct ListPageMeta: Codable, Hashable, Sendable {
             /// - Remark: Generated from `#/components/schemas/ListPageMeta/pageIndex`.
@@ -19921,6 +19950,8 @@ extension Components {
             }
             /// - Remark: Generated from `#/components/schemas/ListPageMeta/sums`.
             public var sums: Components.Schemas.ListPageMeta.SumsPayload?
+            /// - Remark: Generated from `#/components/schemas/ListPageMeta/groups`.
+            public var groups: [Components.Schemas.ListGroupSummary]?
             /// Creates a new `ListPageMeta`.
             ///
             /// - Parameters:
@@ -19928,22 +19959,26 @@ extension Components {
             ///   - pageSize:
             ///   - totalCount:
             ///   - sums:
+            ///   - groups:
             public init(
                 pageIndex: Swift.Int,
                 pageSize: Swift.Int,
                 totalCount: Swift.Int,
-                sums: Components.Schemas.ListPageMeta.SumsPayload? = nil
+                sums: Components.Schemas.ListPageMeta.SumsPayload? = nil,
+                groups: [Components.Schemas.ListGroupSummary]? = nil
             ) {
                 self.pageIndex = pageIndex
                 self.pageSize = pageSize
                 self.totalCount = totalCount
                 self.sums = sums
+                self.groups = groups
             }
             public enum CodingKeys: String, CodingKey {
                 case pageIndex
                 case pageSize
                 case totalCount
                 case sums
+                case groups
             }
         }
         /// - Remark: Generated from `#/components/schemas/ListReceiptHuntsOut`.

@@ -109,6 +109,62 @@ public enum DetailRendererID: String, CaseIterable, Codable, Sendable {
   case wishCandidates = "wish-candidates"
 }
 
+public enum EntityHeroActionID: String, CaseIterable, Codable, Sendable {
+  case addToInventory = "addToInventory"
+  case bulkEdit = "bulkEdit"
+  case delete = "delete"
+  case discard = "discard"
+  case edit = "edit"
+  case markPurchased = "markPurchased"
+  case recordSale = "recordSale"
+  case setStatus = "setStatus"
+}
+
+public enum EntityDetailSlotID: String, CaseIterable, Codable, Sendable {
+  case cookbookImportProgress = "cookbook.import-progress"
+  case cookbookToc = "cookbook.toc"
+  case expenseSettlement = "expense.settlement"
+  case imageAssociations = "image.associations"
+  case importRunAiUsage = "importRun.ai-usage"
+  case importRunChanges = "importRun.changes"
+  case importRunImportWorkflow = "importRun.import-workflow"
+  case importRunPhotoBatch = "importRun.photo-batch"
+  case ingredientNutritionProduct = "ingredient.nutrition-product"
+  case ledgerPartyWardrobe = "ledgerParty.wardrobe"
+  case locationAiDescription = "location.ai-description"
+  case locationContentsValuation = "location.contents-valuation"
+  case mealComposition = "meal.composition"
+  case mealNutrition = "meal.nutrition"
+  case productCookbooks = "product.cookbooks"
+  case productFitsWith = "product.fits-with"
+  case productImportRuns = "product.import-runs"
+  case productLabels = "product.labels"
+  case productNutrition = "product.nutrition"
+  case productRecipeAppearances = "product.recipe-appearances"
+  case productUnitMappings = "product.unit-mappings"
+  case projectAnalytics = "project.analytics"
+  case projectBudget = "project.budget"
+  case projectContribution = "project.contribution"
+  case purchaseFinancialSettlement = "purchase.financial-settlement"
+  case purchaseImportRuns = "purchase.import-runs"
+  case purchaseProjectAllocation = "purchase.project-allocation"
+  case purchaseReconciliation = "purchase.reconciliation"
+  case recipeWorkflow = "recipe.workflow"
+}
+
+public enum EntityListSlotID: String, CaseIterable, Codable, Sendable {
+  case expenseAnalytics = "expense.analytics"
+  case locationGallery = "location.gallery"
+  case locationVisualizations = "location.visualizations"
+  case mealCalendar = "meal.calendar"
+  case mealNutrition = "meal.nutrition"
+  case productCategoryHierarchy = "productCategory.hierarchy"
+  case projectAnalytics = "project.analytics"
+  case projectOverview = "project.overview"
+  case taskAgenda = "task.agenda"
+  case taskBoard = "task.board"
+}
+
 /// A `{value, label}` choice: a filter's options or a select control's options.
 public struct LabeledOption: Codable, Sendable, Hashable {
   public let value: String
@@ -365,7 +421,7 @@ public struct EntityPresentation: Codable, Sendable, Hashable {
   public let heroStats: [String]
   public let heroBreadcrumb: String?
   public let heroImages: Bool
-  public let heroActions: [String]
+  public let heroActions: [EntityHeroActionID]
   public let detailSections: [DetailSection]
   public let listViews: [ListView]
   /// Shelf card subtitle fields, in order; empty when there is no shelf view.
@@ -600,7 +656,7 @@ public enum EntityCatalog {
       heroStats: [],
       heroBreadcrumb: nil,
       heroImages: true,
-      heroActions: ["edit", "addToInventory", "recordSale", "discard"],
+      heroActions: [.edit, .addToInventory, .recordSale, .discard],
       detailSections: [
         DetailSection(id: "basic-information", title: "Basic information", placement: .supporting, collapsed: false, explanationField: nil, kind: .fields(["name", "id", "manufacturer", "model", "price", "categoryId", "primaryGtin", "fdc_id", "ingredientId", "growsPlantId", "externalIds", "tags", "notes"])),
         DetailSection(id: "plantings", title: "Plantings", placement: .primary, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "plantings", filterDescriptor: "sourceProductId", prefill: nil, columns: nil, sort: nil, limit: nil, hideWhenEmpty: true, collapseWhenEmpty: false))),
@@ -615,13 +671,13 @@ public enum EntityCatalog {
         DetailSection(id: "wishes", title: "Wishlist", placement: .primary, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "wishes", filterDescriptor: "related:wish.candidates", prefill: nil, columns: nil, sort: nil, limit: nil, hideWhenEmpty: false, collapseWhenEmpty: true))),
         DetailSection(id: "containing-kits", title: "Part of kits", placement: .primary, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "containing-kits", filterDescriptor: "componentId", prefill: nil, columns: ["name", "manufacturer"], sort: nil, limit: nil, hideWhenEmpty: false, collapseWhenEmpty: true))),
         DetailSection(id: "movements", title: "Movements", placement: .full, collapsed: false, explanationField: nil, kind: .timeline(mode: .events)),
-        DetailSection(id: "product.labels", title: "Labels", placement: .primary, collapsed: false, explanationField: nil, kind: .slot),
-        DetailSection(id: "product.nutrition", title: "Nutrition", placement: .primary, collapsed: false, explanationField: nil, kind: .slot),
-        DetailSection(id: "product.unit-mappings", title: "Unit mappings", placement: .primary, collapsed: false, explanationField: nil, kind: .slot),
-        DetailSection(id: "product.fits-with", title: "Fits with", placement: .primary, collapsed: false, explanationField: nil, kind: .slot),
-        DetailSection(id: "product.cookbooks", title: "Cookbooks", placement: .primary, collapsed: false, explanationField: nil, kind: .slot),
-        DetailSection(id: "product.recipe-appearances", title: "Appears in recipes", placement: .primary, collapsed: false, explanationField: nil, kind: .slot),
-        DetailSection(id: "product.import-runs", title: "Import runs", placement: .primary, collapsed: false, explanationField: nil, kind: .slot),
+        DetailSection(id: EntityDetailSlotID.productLabels.rawValue, title: "Labels", placement: .primary, collapsed: false, explanationField: nil, kind: .slot),
+        DetailSection(id: EntityDetailSlotID.productNutrition.rawValue, title: "Nutrition", placement: .primary, collapsed: false, explanationField: nil, kind: .slot),
+        DetailSection(id: EntityDetailSlotID.productUnitMappings.rawValue, title: "Unit mappings", placement: .primary, collapsed: false, explanationField: nil, kind: .slot),
+        DetailSection(id: EntityDetailSlotID.productFitsWith.rawValue, title: "Fits with", placement: .primary, collapsed: false, explanationField: nil, kind: .slot),
+        DetailSection(id: EntityDetailSlotID.productCookbooks.rawValue, title: "Cookbooks", placement: .primary, collapsed: false, explanationField: nil, kind: .slot),
+        DetailSection(id: EntityDetailSlotID.productRecipeAppearances.rawValue, title: "Appears in recipes", placement: .primary, collapsed: false, explanationField: nil, kind: .slot),
+        DetailSection(id: EntityDetailSlotID.productImportRuns.rawValue, title: "Import runs", placement: .primary, collapsed: false, explanationField: nil, kind: .slot),
         DetailSection(id: "meals", title: "Eaten at meals", placement: .primary, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "meals", filterDescriptor: "foodProductId", prefill: nil, columns: nil, sort: nil, limit: nil, hideWhenEmpty: false, collapseWhenEmpty: true))),
         DetailSection(id: "locations", title: "Serving as locations", placement: .primary, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "locations", filterDescriptor: "product", prefill: nil, columns: nil, sort: nil, limit: nil, hideWhenEmpty: false, collapseWhenEmpty: true))),
         DetailSection(id: "devices", title: "Devices", placement: .primary, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "devices", filterDescriptor: "productId", prefill: nil, columns: nil, sort: nil, limit: nil, hideWhenEmpty: false, collapseWhenEmpty: true)))
@@ -718,11 +774,11 @@ public enum EntityCatalog {
       heroStats: [],
       heroBreadcrumb: nil,
       heroImages: true,
-      heroActions: ["edit"],
+      heroActions: [.edit],
       detailSections: [
         DetailSection(id: "overview", title: "Overview", placement: .supporting, collapsed: false, explanationField: nil, kind: .fields(["name", "servings", "yield", "meta", "tags", "source", "forkedFromRecipeId", "notes", "createdAt", "updatedAt"])),
         DetailSection(id: "contents", title: "Recipe", placement: .primary, collapsed: false, explanationField: nil, kind: .fields(["sections", "totals"])),
-        DetailSection(id: "recipe.workflow", title: nil, placement: .full, collapsed: false, explanationField: nil, kind: .slot),
+        DetailSection(id: EntityDetailSlotID.recipeWorkflow.rawValue, title: nil, placement: .full, collapsed: false, explanationField: nil, kind: .slot),
         DetailSection(id: "meals", title: "Meals", placement: .primary, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "meals", filterDescriptor: "recipeId", prefill: nil, columns: ["date", "name", "mealType"], sort: SectionSort(field: "date", direction: .desc), limit: nil, hideWhenEmpty: false, collapseWhenEmpty: false)))
       ],
       listViews: [.table, .shelf],
@@ -795,10 +851,10 @@ public enum EntityCatalog {
       heroStats: [],
       heroBreadcrumb: nil,
       heroImages: false,
-      heroActions: ["edit"],
+      heroActions: [.edit],
       detailSections: [
         DetailSection(id: "basic-information", title: "Basic information", placement: .supporting, collapsed: false, explanationField: nil, kind: .fields(["name", "aliases", "usuallyOnHand", "createdAt", "updatedAt"])),
-        DetailSection(id: "ingredient.nutrition-product", title: "Nutrition", placement: .primary, collapsed: false, explanationField: nil, kind: .slot),
+        DetailSection(id: EntityDetailSlotID.ingredientNutritionProduct.rawValue, title: "Nutrition", placement: .primary, collapsed: false, explanationField: nil, kind: .slot),
         DetailSection(id: "products", title: "Products", placement: .primary, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "products", filterDescriptor: "ingredient", prefill: nil, columns: ["name", "manufacturer", "category", "onHandUnits"], sort: nil, limit: nil, hideWhenEmpty: false, collapseWhenEmpty: false))),
         DetailSection(id: "plants", title: "Plants", placement: .supporting, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "plants", filterDescriptor: "ingredientId", prefill: nil, columns: ["name", "gardenGuideKey", "verdict"], sort: nil, limit: nil, hideWhenEmpty: true, collapseWhenEmpty: false))),
         DetailSection(id: "recipes", title: "Appears in recipes", placement: .primary, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "recipes", filterDescriptor: "related:recipe.ingredients", prefill: nil, columns: ["name", "tags", "meals"], sort: nil, limit: nil, hideWhenEmpty: false, collapseWhenEmpty: false))),
@@ -867,9 +923,9 @@ public enum EntityCatalog {
       detailSections: [
         DetailSection(id: "overview", title: "Overview", placement: .supporting, collapsed: false, explanationField: nil, kind: .fields(["name", "author", "subjects", "recipeCount", "sourceRecipeCount", "needsReextract", "coverUrl"])),
         DetailSection(id: "physical-copy", title: "Physical copy", placement: .supporting, collapsed: false, explanationField: nil, kind: .fields(["product"])),
-        DetailSection(id: "cookbook.toc", title: "Contents", placement: .primary, collapsed: false, explanationField: nil, kind: .slot),
+        DetailSection(id: EntityDetailSlotID.cookbookToc.rawValue, title: "Contents", placement: .primary, collapsed: false, explanationField: nil, kind: .slot),
         DetailSection(id: "recipes", title: "Recipes", placement: .primary, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "recipes", filterDescriptor: "source", prefill: nil, columns: ["name", "tags", "costTotal"], sort: nil, limit: nil, hideWhenEmpty: false, collapseWhenEmpty: false))),
-        DetailSection(id: "cookbook.import-progress", title: "Import", placement: .primary, collapsed: false, explanationField: nil, kind: .slot)
+        DetailSection(id: EntityDetailSlotID.cookbookImportProgress.rawValue, title: "Import", placement: .primary, collapsed: false, explanationField: nil, kind: .slot)
       ],
       listViews: [.table, .shelf],
       shelfSubtitle: [],
@@ -910,7 +966,7 @@ public enum EntityCatalog {
       FieldDescriptor(key: "id", columnId: nil, label: "Shortcode", kind: .identifier, nullable: false, reference: nil, explanation: nil, controlKind: nil, controlRenderer: nil, controlSection: nil, controlWidth: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: true, detailOrder: 0, listOrder: nil, listHidden: false, width: nil, format: nil, listRenderer: nil, detailRenderer: nil, mobileSlot: nil, mobilePriority: nil, mobileInteractive: false),
       FieldDescriptor(key: "product", columnId: nil, label: "Product", kind: .json, nullable: true, reference: nil, explanation: FieldExplanation(ruleId: "location.installed-product", version: 1, description: "The installed product is projected from this location's current product relationship.", readPath: "product", resolver: "field", projections: [:], sourceDependencies: [FieldExplanationDependency(path: "product", label: "Installed product")], actions: []), controlKind: nil, controlRenderer: nil, controlSection: nil, controlWidth: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: true, showInDetail: false, detailOrder: nil, listOrder: nil, listHidden: false, width: nil, format: nil, listRenderer: nil, detailRenderer: nil, mobileSlot: nil, mobilePriority: nil, mobileInteractive: false),
       FieldDescriptor(key: "lastBulkInventory", columnId: nil, label: "Last recount", kind: .timestamp, nullable: true, reference: nil, explanation: nil, controlKind: nil, controlRenderer: nil, controlSection: nil, controlWidth: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: true, showInDetail: true, detailOrder: 4, listOrder: nil, listHidden: false, width: nil, format: nil, listRenderer: nil, detailRenderer: nil, mobileSlot: nil, mobilePriority: nil, mobileInteractive: false),
-      FieldDescriptor(key: "aiDescription", columnId: nil, label: "Ai Description", kind: .text, nullable: true, reference: nil, explanation: nil, controlKind: nil, controlRenderer: nil, controlSection: nil, controlWidth: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: true, showInDetail: false, detailOrder: nil, listOrder: nil, listHidden: true, width: nil, format: nil, listRenderer: nil, detailRenderer: nil, mobileSlot: nil, mobilePriority: nil, mobileInteractive: false),
+      FieldDescriptor(key: "aiDescription", columnId: nil, label: "AI Description", kind: .text, nullable: true, reference: nil, explanation: nil, controlKind: nil, controlRenderer: nil, controlSection: nil, controlWidth: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: true, showInDetail: false, detailOrder: nil, listOrder: nil, listHidden: true, width: "lg", format: nil, listRenderer: nil, detailRenderer: nil, mobileSlot: "meta", mobilePriority: 70, mobileInteractive: false),
       FieldDescriptor(key: "images", columnId: "image", label: "Images", kind: .json, nullable: false, reference: nil, explanation: FieldExplanation(ruleId: "location.images", version: 1, description: "Location images are the current live Image attachments in canonical attachment order; list and summary surfaces use the same selected images through the display-image projection.", readPath: nil, resolver: "field", projections: ["list": "displayImages", "detail": "images", "summary": "displayImages"], sourceDependencies: [FieldExplanationDependency(path: "displayImages", label: "Selected location images")], actions: []), controlKind: nil, controlRenderer: nil, controlSection: nil, controlWidth: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: true, showInDetail: false, detailOrder: nil, listOrder: nil, listHidden: false, width: nil, format: nil, listRenderer: nil, detailRenderer: nil, mobileSlot: nil, mobilePriority: nil, mobileInteractive: false),
       FieldDescriptor(key: "valuation", columnId: "valuation", label: "Valuation", kind: .json, nullable: true, reference: nil, explanation: FieldExplanation(ruleId: "location.direct-valuation", version: 1, description: "Location valuation rolls up canonical inventory values; the list shows direct contents and the detail valuation includes descendant locations.", readPath: nil, resolver: "locationValuation", projections: ["list": "valuation.directValuation", "detail": "valuation.totalValuation", "summary": "valuation.directValuation"], sourceDependencies: [FieldExplanationDependency(path: "valuation.directItemCount", label: "Direct item count"), FieldExplanationDependency(path: "valuation.directPricedCount", label: "Priced direct items"), FieldExplanationDependency(path: "valuation.directUnpricedCount", label: "Unpriced direct items"), FieldExplanationDependency(path: "valuation.totalItemCount", label: "Total rolled-up item count"), FieldExplanationDependency(path: "valuation.total", label: "Rolled-up pricing coverage")], actions: []), controlKind: nil, controlRenderer: nil, controlSection: nil, controlWidth: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: true, showInDetail: false, detailOrder: nil, listOrder: nil, listHidden: false, width: nil, format: nil, listRenderer: nil, detailRenderer: nil, mobileSlot: nil, mobilePriority: nil, mobileInteractive: false),
       FieldDescriptor(key: "createdAt", columnId: nil, label: "Created At", kind: .timestamp, nullable: false, reference: nil, explanation: nil, controlKind: nil, controlRenderer: nil, controlSection: nil, controlWidth: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: true, detailOrder: nil, listOrder: nil, listHidden: false, width: nil, format: nil, listRenderer: nil, detailRenderer: nil, mobileSlot: nil, mobilePriority: nil, mobileInteractive: false),
@@ -955,17 +1011,17 @@ public enum EntityCatalog {
       heroStats: [],
       heroBreadcrumb: "parentId",
       heroImages: true,
-      heroActions: ["edit"],
+      heroActions: [.edit],
       detailSections: [
         DetailSection(id: "inventory", title: "Contents", placement: .primary, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "inventory", filterDescriptor: "locationId", prefill: nil, columns: ["amount", "placement", "verifiedAt"], sort: nil, limit: nil, hideWhenEmpty: false, collapseWhenEmpty: false))),
         DetailSection(id: "children", title: "Sub-locations", placement: .primary, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "children", filterDescriptor: "parent", prefill: nil, columns: ["name", "type", "valuation"], sort: nil, limit: nil, hideWhenEmpty: false, collapseWhenEmpty: false))),
         DetailSection(id: "basic-information", title: "Basic information", placement: .supporting, collapsed: false, explanationField: nil, kind: .fields(["id", "type", "productId", "parentId", "lastBulkInventory", "notes", "aliases", "tags", "createdAt", "updatedAt"])),
-        DetailSection(id: "location.contents-valuation", title: "Valuation", placement: .supporting, collapsed: false, explanationField: "valuation", kind: .slot),
-        DetailSection(id: "location.ai-description", title: "AI description", placement: .supporting, collapsed: false, explanationField: nil, kind: .slot),
+        DetailSection(id: EntityDetailSlotID.locationContentsValuation.rawValue, title: "Valuation", placement: .supporting, collapsed: false, explanationField: "valuation", kind: .slot),
+        DetailSection(id: EntityDetailSlotID.locationAiDescription.rawValue, title: "AI description", placement: .supporting, collapsed: false, explanationField: nil, kind: .slot),
         DetailSection(id: "plantings", title: "Plantings", placement: .supporting, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "plantings", filterDescriptor: "locationId", prefill: nil, columns: nil, sort: nil, limit: nil, hideWhenEmpty: true, collapseWhenEmpty: false))),
         DetailSection(id: "garden-entries", title: "Garden entries", placement: .supporting, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "garden-entries", filterDescriptor: "locationId", prefill: nil, columns: nil, sort: SectionSort(field: "observedOn", direction: .desc), limit: nil, hideWhenEmpty: true, collapseWhenEmpty: false)))
       ],
-      listViews: [.slot(id: "location.gallery", label: "Contents", searchKeys: []), .table, .slot(id: "location.visualizations", label: "Visualizations", searchKeys: []), .shelf],
+      listViews: [.slot(id: EntityListSlotID.locationGallery.rawValue, label: "Contents", searchKeys: []), .table, .slot(id: EntityListSlotID.locationVisualizations.rawValue, label: "Visualizations", searchKeys: []), .shelf],
       shelfSubtitle: ["type"],
       listActions: ["moveUnder", "delete"],
       timelineFields: [],
@@ -1041,7 +1097,7 @@ public enum EntityCatalog {
       heroStats: [],
       heroBreadcrumb: nil,
       heroImages: false,
-      heroActions: ["edit"],
+      heroActions: [.edit],
       detailSections: [
         DetailSection(id: "inventory-details", title: "Inventory item details", placement: .primary, collapsed: false, explanationField: nil, kind: .fields(["productId", "locationId", "amount", "placement", "ownershipMode", "ownerLedgerPartyId", "effectiveOwnership", "verifiedAt"]))
       ],
@@ -1127,13 +1183,13 @@ public enum EntityCatalog {
       heroStats: [],
       heroBreadcrumb: nil,
       heroImages: true,
-      heroActions: ["edit"],
+      heroActions: [.edit],
       detailSections: [
-        DetailSection(id: "meal.composition", title: "Recipes", placement: .primary, collapsed: false, explanationField: "recipes", kind: .slot),
-        DetailSection(id: "meal.nutrition", title: "Nutrition", placement: .primary, collapsed: false, explanationField: "totals", kind: .slot),
+        DetailSection(id: EntityDetailSlotID.mealComposition.rawValue, title: "Recipes", placement: .primary, collapsed: false, explanationField: "recipes", kind: .slot),
+        DetailSection(id: EntityDetailSlotID.mealNutrition.rawValue, title: "Nutrition", placement: .primary, collapsed: false, explanationField: "totals", kind: .slot),
         DetailSection(id: "meal-details", title: "Meal details", placement: .supporting, collapsed: false, explanationField: nil, kind: .fields(["date", "name", "mealType", "mealKind", "recipeNames", "sortOrder", "createdAt", "updatedAt"]))
       ],
-      listViews: [.slot(id: "meal.calendar", label: "Calendar", searchKeys: ["period", "week", "date"]), .slot(id: "meal.nutrition", label: "Nutrition", searchKeys: ["date"]), .table, .shelf],
+      listViews: [.slot(id: EntityListSlotID.mealCalendar.rawValue, label: "Calendar", searchKeys: ["period", "week", "date"]), .slot(id: EntityListSlotID.mealNutrition.rawValue, label: "Nutrition", searchKeys: ["date"]), .table, .shelf],
       shelfSubtitle: [],
       listActions: ["delete"],
       timelineFields: [],
@@ -1204,9 +1260,9 @@ public enum EntityCatalog {
       heroStats: [],
       heroBreadcrumb: nil,
       heroImages: false,
-      heroActions: ["edit"],
+      heroActions: [.edit],
       detailSections: [
-        DetailSection(id: "ledgerParty.wardrobe", title: "Wardrobe", placement: .primary, collapsed: false, explanationField: nil, kind: .slot),
+        DetailSection(id: EntityDetailSlotID.ledgerPartyWardrobe.rawValue, title: "Wardrobe", placement: .primary, collapsed: false, explanationField: nil, kind: .slot),
         DetailSection(id: "overview", title: "Overview", placement: .supporting, collapsed: false, explanationField: nil, kind: .fields(["name", "kind", "notes", "createdAt", "updatedAt"])),
         DetailSection(id: "financial-accounts", title: "Financial accounts", placement: .primary, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "financial-accounts", filterDescriptor: "ledgerPartyId", prefill: nil, columns: ["name", "identity", "transactionCount"], sort: nil, limit: nil, hideWhenEmpty: false, collapseWhenEmpty: false))),
         DetailSection(id: "outgoing-transfers", title: "Outgoing transfers", placement: .primary, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "outgoing-transfers", filterDescriptor: "fromPartyId", prefill: nil, columns: ["toPartyId", "amount", "date"], sort: SectionSort(field: "date", direction: .desc), limit: nil, hideWhenEmpty: false, collapseWhenEmpty: false))),
@@ -1282,7 +1338,7 @@ public enum EntityCatalog {
       heroStats: [],
       heroBreadcrumb: nil,
       heroImages: false,
-      heroActions: ["edit"],
+      heroActions: [.edit],
       detailSections: [
         DetailSection(id: "overview", title: "Overview", placement: .supporting, collapsed: false, explanationField: nil, kind: .fields(["fromPartyId", "toPartyId", "amount", "date", "notes", "classification", "createdAt", "updatedAt"])),
         DetailSection(id: "evidence", title: "Evidence transactions", placement: .primary, collapsed: false, explanationField: nil, kind: .fields(["evidenceTransactionIds"])),
@@ -1400,10 +1456,10 @@ public enum EntityCatalog {
       heroStats: ["costEstimate"],
       heroBreadcrumb: nil,
       heroImages: true,
-      heroActions: ["edit", "setStatus"],
+      heroActions: [.edit, .setStatus],
       detailSections: [
-        DetailSection(id: "project.budget", title: "Budget", placement: .primary, collapsed: false, explanationField: nil, kind: .slot),
-        DetailSection(id: "project.contribution", title: "Contribution", placement: .supporting, collapsed: false, explanationField: nil, kind: .slot),
+        DetailSection(id: EntityDetailSlotID.projectBudget.rawValue, title: "Budget", placement: .primary, collapsed: false, explanationField: nil, kind: .slot),
+        DetailSection(id: EntityDetailSlotID.projectContribution.rawValue, title: "Contribution", placement: .supporting, collapsed: false, explanationField: nil, kind: .slot),
         DetailSection(id: "tasks", title: "Tasks", placement: .primary, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "tasks", filterDescriptor: "project", prefill: nil, columns: ["name", "status", "dueDate", "trade"], sort: nil, limit: nil, hideWhenEmpty: false, collapseWhenEmpty: false))),
         DetailSection(id: "overview", title: "Overview", placement: .supporting, collapsed: false, explanationField: nil, kind: .fields(["name", "icon", "status", "kind", "startDate", "endDate", "costEstimate", "parentProjectId", "locations", "defaultTrade", "updatedAt"])),
         DetailSection(id: "reusable-resources", title: "Reusable resources", placement: .primary, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "resources", filterDescriptor: "usedOnProjectId", prefill: nil, columns: ["name", "manufacturer", "category"], sort: nil, limit: nil, hideWhenEmpty: false, collapseWhenEmpty: false))),
@@ -1415,9 +1471,9 @@ public enum EntityCatalog {
         DetailSection(id: "purchased-products", title: "Purchased products", placement: .primary, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "purchased-products", filterDescriptor: "related:product.projects", prefill: nil, columns: ["name", "manufacturer", "category", "expenseTotal"], sort: nil, limit: nil, hideWhenEmpty: false, collapseWhenEmpty: false))),
         DetailSection(id: "vendors", title: "Vendors", placement: .primary, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "vendors", filterDescriptor: "projectId", prefill: nil, columns: ["name", "purchaseCount", "spend"], sort: nil, limit: nil, hideWhenEmpty: false, collapseWhenEmpty: false))),
         DetailSection(id: "notes", title: "Notes", placement: .supporting, collapsed: false, explanationField: nil, kind: .fields(["notes"])),
-        DetailSection(id: "project.analytics", title: "Analytics", placement: .full, collapsed: true, explanationField: nil, kind: .slot)
+        DetailSection(id: EntityDetailSlotID.projectAnalytics.rawValue, title: "Analytics", placement: .full, collapsed: true, explanationField: nil, kind: .slot)
       ],
-      listViews: [.table, .slot(id: "project.overview", label: "Overview", searchKeys: ["rows"]), .slot(id: "project.analytics", label: "Analytics", searchKeys: []), .shelf],
+      listViews: [.table, .slot(id: EntityListSlotID.projectOverview.rawValue, label: "Overview", searchKeys: ["rows"]), .slot(id: EntityListSlotID.projectAnalytics.rawValue, label: "Analytics", searchKeys: []), .shelf],
       shelfSubtitle: [],
       listActions: ["setStatus", "delete"],
       timelineFields: [],
@@ -1512,14 +1568,14 @@ public enum EntityCatalog {
       heroStats: [],
       heroBreadcrumb: nil,
       heroImages: true,
-      heroActions: ["edit", "bulkEdit", "delete"],
+      heroActions: [.edit, .bulkEdit, .delete],
       detailSections: [
         DetailSection(id: "overview", title: "Overview", placement: .supporting, collapsed: false, explanationField: nil, kind: .fields(["name", "status", "trade", "dueDate", "dueEndDate", "projectId", "subjectProductId", "parentTaskId"])),
         DetailSection(id: "dependencies", title: "Dependencies", placement: .supporting, collapsed: false, explanationField: nil, kind: .fields(["blockedByIds", "blockingIds"])),
         DetailSection(id: "subtasks", title: "Subtasks", placement: .primary, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "subtasks", filterDescriptor: "parentTask", prefill: nil, columns: ["name", "status", "dueDate"], sort: nil, limit: nil, hideWhenEmpty: false, collapseWhenEmpty: false))),
         DetailSection(id: "plantings", title: "Plantings", placement: .primary, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "plantings", filterDescriptor: "taskId", prefill: nil, columns: nil, sort: nil, limit: nil, hideWhenEmpty: false, collapseWhenEmpty: true)))
       ],
-      listViews: [.table, .slot(id: "task.agenda", label: "Next", searchKeys: []), .slot(id: "task.board", label: "Board", searchKeys: ["cols", "lane", "q"]), .timeline, .shelf],
+      listViews: [.table, .slot(id: EntityListSlotID.taskAgenda.rawValue, label: "Next", searchKeys: []), .slot(id: EntityListSlotID.taskBoard.rawValue, label: "Board", searchKeys: ["cols", "lane", "q"]), .timeline, .shelf],
       shelfSubtitle: ["status"],
       listActions: ["bulkEdit", "delete"],
       timelineFields: ["dueDate", "dueEndDate"],
@@ -1609,7 +1665,7 @@ public enum EntityCatalog {
       heroStats: [],
       heroBreadcrumb: nil,
       heroImages: false,
-      heroActions: ["edit"],
+      heroActions: [.edit],
       detailSections: [
         DetailSection(id: "overview", title: "Overview", placement: .supporting, collapsed: false, explanationField: nil, kind: .fields(["name", "website", "orderUrlTemplate", "orderEvidence", "orderEmailSenders", "browserDomains", "returnWindowDays", "agentHints", "notes", "purchaseCount", "spend", "latestPurchaseDate", "createdAt", "updatedAt"])),
         DetailSection(id: "purchases", title: "Purchases", placement: .primary, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "purchases", filterDescriptor: "vendor", prefill: nil, columns: ["displayLabel", "orderId", "date", "statedTotal", "expenseCount"], sort: SectionSort(field: "date", direction: .desc), limit: nil, hideWhenEmpty: false, collapseWhenEmpty: false))),
@@ -1727,15 +1783,15 @@ public enum EntityCatalog {
       heroStats: ["statedTotal", "expenseTotal"],
       heroBreadcrumb: nil,
       heroImages: true,
-      heroActions: ["edit"],
+      heroActions: [.edit],
       detailSections: [
         DetailSection(id: "expenses", title: "Expenses", placement: .primary, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "expenses", filterDescriptor: "purchaseId", prefill: nil, columns: ["name", "cost", "date", "lineKind", "product", "project"], sort: nil, limit: nil, hideWhenEmpty: false, collapseWhenEmpty: false))),
         DetailSection(id: "products", title: "Products", placement: .primary, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "products", filterDescriptor: "related:product.purchases", prefill: nil, columns: ["name", "manufacturer", "category", "price"], sort: nil, limit: nil, hideWhenEmpty: false, collapseWhenEmpty: false))),
-        DetailSection(id: "purchase.project-allocation", title: "Project allocation", placement: .primary, collapsed: false, explanationField: nil, kind: .slot),
-        DetailSection(id: "purchase.import-runs", title: "Import runs", placement: .primary, collapsed: false, explanationField: nil, kind: .slot),
+        DetailSection(id: EntityDetailSlotID.purchaseProjectAllocation.rawValue, title: "Project allocation", placement: .primary, collapsed: false, explanationField: nil, kind: .slot),
+        DetailSection(id: EntityDetailSlotID.purchaseImportRuns.rawValue, title: "Import runs", placement: .primary, collapsed: false, explanationField: nil, kind: .slot),
         DetailSection(id: "overview", title: "Overview", placement: .supporting, collapsed: false, explanationField: nil, kind: .fields(["vendorId", "vendorAccountId", "defaultProjectId", "defaultTrade", "orderId", "displayLabel", "date", "statedTotal", "notes"])),
-        DetailSection(id: "purchase.reconciliation", title: "Reconciliation", placement: .supporting, collapsed: false, explanationField: "reconciliation", kind: .slot),
-        DetailSection(id: "purchase.financial-settlement", title: "Financial settlement", placement: .supporting, collapsed: false, explanationField: "financialReconciliation", kind: .slot)
+        DetailSection(id: EntityDetailSlotID.purchaseReconciliation.rawValue, title: "Reconciliation", placement: .supporting, collapsed: false, explanationField: "reconciliation", kind: .slot),
+        DetailSection(id: EntityDetailSlotID.purchaseFinancialSettlement.rawValue, title: "Financial settlement", placement: .supporting, collapsed: false, explanationField: "financialReconciliation", kind: .slot)
       ],
       listViews: [.table, .shelf],
       shelfSubtitle: [],
@@ -1820,7 +1876,7 @@ public enum EntityCatalog {
       heroStats: [],
       heroBreadcrumb: nil,
       heroImages: false,
-      heroActions: ["edit"],
+      heroActions: [.edit],
       detailSections: [
         DetailSection(id: "overview", title: "Overview", placement: .supporting, collapsed: false, explanationField: nil, kind: .fields(["name", "identity", "provisional", "sourceAliases", "cardNumbers", "providerVendorId", "ledgerPartyId", "inventoryOwnerDefaultEnabled", "notes", "transactionCount", "createdAt", "updatedAt"])),
         DetailSection(id: "transactions", title: "Transactions", placement: .primary, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "transactions", filterDescriptor: "accountId", prefill: nil, columns: ["merchant", "amount", "kind", "status", "postedDate"], sort: SectionSort(field: "postedDate", direction: .desc), limit: nil, hideWhenEmpty: false, collapseWhenEmpty: false)))
@@ -1925,7 +1981,7 @@ public enum EntityCatalog {
       heroStats: ["amount", "status"],
       heroBreadcrumb: nil,
       heroImages: false,
-      heroActions: ["edit"],
+      heroActions: [.edit],
       detailSections: [
         DetailSection(id: "overview", title: "Overview", placement: .supporting, collapsed: false, explanationField: nil, kind: .fields(["merchant", "vendorInference", "amount", "kind", "status", "accountId", "allocations", "postedDate", "sourceRefs"])),
         DetailSection(id: "expenses", title: "Expenses", placement: .primary, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "expenses", filterDescriptor: "financialTransactionId", prefill: nil, columns: ["name", "cost", "date", "product", "project"], sort: nil, limit: nil, hideWhenEmpty: false, collapseWhenEmpty: false))),
@@ -1994,7 +2050,7 @@ public enum EntityCatalog {
       heroStats: [],
       heroBreadcrumb: nil,
       heroImages: false,
-      heroActions: ["edit", "markPurchased"],
+      heroActions: [.edit, .markPurchased],
       detailSections: [
         DetailSection(id: "overview", title: "Overview", placement: .supporting, collapsed: false, explanationField: nil, kind: .fields(["name", "notes", "acquiredAt", "createdAt", "updatedAt"])),
         DetailSection(id: "candidates", title: "Tool alternatives", placement: .primary, collapsed: false, explanationField: nil, kind: .fields(["candidates"]))
@@ -2112,13 +2168,13 @@ public enum EntityCatalog {
       heroStats: [],
       heroBreadcrumb: nil,
       heroImages: false,
-      heroActions: ["edit"],
+      heroActions: [.edit],
       detailSections: [
         DetailSection(id: "overview", title: "Overview", placement: .primary, collapsed: false, explanationField: nil, kind: .fields(["name", "cost", "date", "lineKind", "costType", "trade", "future", "url", "notes", "vendor", "orderId", "projectId", "productId", "lineBasis", "productQuantity"])),
         DetailSection(id: "purchase", title: "Purchase", placement: .supporting, collapsed: false, explanationField: nil, kind: .fields(["purchaseId"])),
-        DetailSection(id: "expense.settlement", title: "Settlement", placement: .supporting, collapsed: false, explanationField: nil, kind: .slot)
+        DetailSection(id: EntityDetailSlotID.expenseSettlement.rawValue, title: "Settlement", placement: .supporting, collapsed: false, explanationField: nil, kind: .slot)
       ],
-      listViews: [.table, .slot(id: "expense.analytics", label: "Analytics", searchKeys: ["analyzeRows", "analyzeColumns", "analyzeMetric", "analyzeCompare", "analyzeShow"]), .shelf],
+      listViews: [.table, .slot(id: EntityListSlotID.expenseAnalytics.rawValue, label: "Analytics", searchKeys: ["analyzeRows", "analyzeColumns", "analyzeMetric", "analyzeCompare", "analyzeShow"]), .shelf],
       shelfSubtitle: [],
       listActions: ["bulkEdit", "delete"],
       timelineFields: [],
@@ -2263,10 +2319,10 @@ public enum EntityCatalog {
       heroStats: [],
       heroBreadcrumb: nil,
       heroImages: false,
-      heroActions: ["edit"],
+      heroActions: [.edit],
       detailSections: [
         DetailSection(id: "overview", title: "Overview", placement: .supporting, collapsed: false, explanationField: nil, kind: .fields(["filename", "url", "key", "size", "contentType", "status", "width", "height", "detectedContentType", "sha256", "renderStatus", "storageStatus", "useOriginal", "source", "sourcePageUrl", "sourceAssetUrl", "sourceName", "verifiedAt", "capturedAt", "capturedAtOffsetMinutes", "captureLocation", "capturePlaceName", "captureDeviceLabel", "capturedByPartyId", "captureAttribution", "provenanceEvidence", "createdAt", "updatedAt"])),
-        DetailSection(id: "image.associations", title: "Used by", placement: .primary, collapsed: false, explanationField: nil, kind: .slot),
+        DetailSection(id: EntityDetailSlotID.imageAssociations.rawValue, title: "Used by", placement: .primary, collapsed: false, explanationField: nil, kind: .slot),
         DetailSection(id: "sightings", title: "Sightings", placement: .supporting, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "sightings", filterDescriptor: "imageId", prefill: nil, columns: ["ledgerPartyName", "deviceName", "capturedAt", "matchKind"], sort: nil, limit: nil, hideWhenEmpty: true, collapseWhenEmpty: false)))
       ],
       listViews: [.table, .shelf],
@@ -2351,7 +2407,7 @@ public enum EntityCatalog {
       heroStats: [],
       heroBreadcrumb: nil,
       heroImages: false,
-      heroActions: ["edit"],
+      heroActions: [.edit],
       detailSections: [
         DetailSection(id: "garden-history", title: "Journal", placement: .primary, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "entries", filterDescriptor: "journalPlantingId", prefill: RelationSectionPrefill(field: "plantingIds"), columns: ["kind", "observedOn", "locationId", "note", "harvestAmount"], sort: SectionSort(field: "observedOn", direction: .desc), limit: nil, hideWhenEmpty: false, collapseWhenEmpty: false))),
         DetailSection(id: "overview", title: "Planting details", placement: .supporting, collapsed: false, explanationField: nil, kind: .fields(["plantId", "status", "outcome", "locationId", "sourceProductId", "quantity", "plannedWindow", "sowedOn", "transplantedOn", "finishedOn", "notes", "taskId", "expectedHarvest", "guideSowWindow", "guideTransplantWindow"]))
@@ -2425,7 +2481,7 @@ public enum EntityCatalog {
       heroStats: [],
       heroBreadcrumb: nil,
       heroImages: true,
-      heroActions: ["edit"],
+      heroActions: [.edit],
       detailSections: [
         DetailSection(id: "entry", title: "Entry", placement: .primary, collapsed: false, explanationField: nil, kind: .fields(["kind", "observedOn", "locationId", "plantings", "note", "harvestAmount"])),
         DetailSection(id: "plantings", title: "Plantings", placement: .primary, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "plantings", filterDescriptor: "gardenEntryId", prefill: nil, columns: nil, sort: nil, limit: nil, hideWhenEmpty: false, collapseWhenEmpty: true)))
@@ -2493,7 +2549,7 @@ public enum EntityCatalog {
       heroStats: [],
       heroBreadcrumb: nil,
       heroImages: false,
-      heroActions: ["edit"],
+      heroActions: [.edit],
       detailSections: [
         DetailSection(id: "overview", title: "Overview", placement: .supporting, collapsed: false, explanationField: nil, kind: .fields(["label", "vendorId", "ledgerPartyId", "inventoryOwnerDefaultEnabled", "status", "browser", "lastRunAt", "lastSuccessAt", "createdAt", "updatedAt"])),
         DetailSection(id: "purchases", title: "Purchases", placement: .primary, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "purchases", filterDescriptor: "vendorAccountId", prefill: nil, columns: nil, sort: nil, limit: nil, hideWhenEmpty: false, collapseWhenEmpty: true)))
@@ -2561,13 +2617,13 @@ public enum EntityCatalog {
       heroStats: [],
       heroBreadcrumb: nil,
       heroImages: false,
-      heroActions: ["edit"],
+      heroActions: [.edit],
       detailSections: [
         DetailSection(id: "overview", title: "Overview", placement: .supporting, collapsed: false, explanationField: nil, kind: .fields(["name", "aliases", "description", "parentId", "sortOrder", "feature", "path", "productCount", "createdAt", "updatedAt"])),
         DetailSection(id: "products", title: "Products", placement: .primary, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "products", filterDescriptor: "category", prefill: nil, columns: ["name", "manufacturer", "category", "onHandUnits"], sort: nil, limit: nil, hideWhenEmpty: false, collapseWhenEmpty: false))),
         DetailSection(id: "children", title: "Subcategories", placement: .primary, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "children", filterDescriptor: "parentId", prefill: nil, columns: nil, sort: nil, limit: nil, hideWhenEmpty: false, collapseWhenEmpty: true)))
       ],
-      listViews: [.table, .slot(id: "productCategory.hierarchy", label: "Hierarchy", searchKeys: []), .shelf],
+      listViews: [.table, .slot(id: EntityListSlotID.productCategoryHierarchy.rawValue, label: "Hierarchy", searchKeys: []), .shelf],
       shelfSubtitle: [],
       listActions: ["delete"],
       timelineFields: [],
@@ -2651,10 +2707,10 @@ public enum EntityCatalog {
       heroActions: [],
       detailSections: [
         DetailSection(id: "overview", title: "Overview", placement: .supporting, collapsed: false, explanationField: nil, kind: .fields(["status", "purpose", "trigger", "vendorAccountId", "vendorId", "ledgerPartyId", "actorName", "startedAt", "endedAt", "failureCode", "notes"])),
-        DetailSection(id: "importRun.import-workflow", title: "Import", placement: .primary, collapsed: false, explanationField: nil, kind: .slot),
-        DetailSection(id: "importRun.photo-batch", title: "Photos", placement: .primary, collapsed: false, explanationField: nil, kind: .slot),
-        DetailSection(id: "importRun.ai-usage", title: "AI usage", placement: .primary, collapsed: false, explanationField: nil, kind: .slot),
-        DetailSection(id: "importRun.changes", title: "Changes", placement: .primary, collapsed: false, explanationField: nil, kind: .slot),
+        DetailSection(id: EntityDetailSlotID.importRunImportWorkflow.rawValue, title: "Import", placement: .primary, collapsed: false, explanationField: nil, kind: .slot),
+        DetailSection(id: EntityDetailSlotID.importRunPhotoBatch.rawValue, title: "Photos", placement: .primary, collapsed: false, explanationField: nil, kind: .slot),
+        DetailSection(id: EntityDetailSlotID.importRunAiUsage.rawValue, title: "AI usage", placement: .primary, collapsed: false, explanationField: nil, kind: .slot),
+        DetailSection(id: EntityDetailSlotID.importRunChanges.rawValue, title: "Changes", placement: .primary, collapsed: false, explanationField: nil, kind: .slot),
         DetailSection(id: "runtime", title: "Runtime", placement: .supporting, collapsed: true, explanationField: nil, kind: .fields(["coordinatorModel", "skillRevision", "runtimeRevision", "decisionRevision", "dispatchAttempts", "dispatchError", "coordinatorStartedAt", "auditedAt", "predecessorRunId", "createdAt", "updatedAt"]))
       ],
       listViews: [.table, .shelf],
@@ -2727,7 +2783,7 @@ public enum EntityCatalog {
       heroStats: [],
       heroBreadcrumb: nil,
       heroImages: false,
-      heroActions: ["edit"],
+      heroActions: [.edit],
       detailSections: [
         DetailSection(id: "overview", title: "Overview", placement: .supporting, collapsed: false, explanationField: nil, kind: .fields(["name", "platform", "appVersion", "osVersion", "lastSeenAt", "automaticWork", "remotePaused", "ledgerPartyId", "productId", "installationId", "createdAt", "updatedAt"])),
         DetailSection(id: "image-sightings", title: "Image sightings", placement: .primary, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "image-sightings", filterDescriptor: "deviceId", prefill: nil, columns: nil, sort: nil, limit: nil, hideWhenEmpty: false, collapseWhenEmpty: true)))
@@ -2807,7 +2863,7 @@ public enum EntityCatalog {
       heroStats: [],
       heroBreadcrumb: nil,
       heroImages: false,
-      heroActions: ["edit"],
+      heroActions: [.edit],
       detailSections: [
         DetailSection(id: "overview", title: "Overview", placement: .supporting, collapsed: false, explanationField: nil, kind: .fields(["imageId", "ledgerPartyId", "deviceId", "assetKey", "sourceType", "mediaSubtypes", "originalFilename", "pixelWidth", "pixelHeight", "hasAdjustments", "capturedAt", "capturedAtOffsetMinutes", "addedAt", "location", "placeName", "camera", "matchKind", "hashDistance", "aspectGate", "observedAt", "createdAt", "updatedAt"]))
       ],
@@ -2882,7 +2938,7 @@ public enum EntityCatalog {
       heroStats: [],
       heroBreadcrumb: nil,
       heroImages: false,
-      heroActions: ["edit"],
+      heroActions: [.edit],
       detailSections: [
         DetailSection(id: "plantings", title: "Plantings", placement: .primary, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "plantings", filterDescriptor: "plantId", prefill: nil, columns: ["status", "locationId", "sowedOn", "transplantedOn", "outcome"], sort: SectionSort(field: "createdAt", direction: .desc), limit: nil, hideWhenEmpty: true, collapseWhenEmpty: false))),
         DetailSection(id: "products", title: "Seeds and plants", placement: .primary, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "products", filterDescriptor: "growsPlant", prefill: nil, columns: ["name", "manufacturer", "onHandUnits"], sort: nil, limit: nil, hideWhenEmpty: true, collapseWhenEmpty: false))),
