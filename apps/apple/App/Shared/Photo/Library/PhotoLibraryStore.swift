@@ -61,6 +61,10 @@ final class PhotoLibraryStore: NSObject, PHPhotoLibraryChangeObserver {
     @ObservationIgnored var matchHost: String?
     /// Set by an explicit refresh so the next reconcile ignores saved match results once.
     @ObservationIgnored private var forceRematch = false
+    /// PhotoKit changes not yet applied — a debounce window's burst, or everything delivered while
+    /// no Photos tab was active. Applied in order: each `changeDetails(for:)` is relative to the
+    /// fetch result the previous change produced, so none may be dropped.
+    @ObservationIgnored private var pendingLibraryChanges: [PHChange] = []
     var hasFullAccess: Bool { authorization == .authorized }
 
     var scanStatus: String {
@@ -145,19 +149,45 @@ final class PhotoLibraryStore: NSObject, PHPhotoLibraryChangeObserver {
     func activate(_ id: UUID, matches: PhotoMatchStore, client: CubbyClient) async {
         clients[id] = (matches, client)
         matches.acquire(id)
-        await refresh(matches: matches, client: client)
+        if canResume {
+            await resume(matches: matches, client: client)
+        } else {
+            await refresh(matches: matches, client: client)
+        }
     }
 
+    /// Leaving the Photos tab stops background work but keeps the loaded library and stays
+    /// registered for PhotoKit changes (queued in `pendingLibraryChanges`), so returning resumes
+    /// instead of re-reading ~90k assets from PhotoKit.
     func deactivate(_ id: UUID) {
         clients.removeValue(forKey: id)?.0.release(id)
-        if clients.isEmpty {
-            stopWork()
-            if observing { PHPhotoLibrary.shared().unregisterChangeObserver(self); observing = false }
+        if clients.isEmpty { stopWork() }
+    }
+
+    /// A completed load for the same Photos access, kept current by the change observer while
+    /// the tab was away.
+    private var canResume: Bool {
+        fetchResult != nil && observing && hasFullAccess
+            && PHPhotoLibrary.authorizationStatus(for: .readWrite) == authorization
+    }
+
+    private func resume(matches: PhotoMatchStore, client: CubbyClient) async {
+        if !pendingLibraryChanges.isEmpty {
+            // Applies the deltas (or falls back to a full refresh) and re-arms the scan.
+            await applyLibraryChanges(matches: matches, client: client)
+            return
         }
+        let token = generation
+        // Cheap now that known results only take the index delta (`PhotoMatchStore.refresh`).
+        if isParticipating { await matches.refresh(client: client) }
+        guard generation == token, !Task.isCancelled, isParticipating, analysisStore != nil else { return }
+        let remaining = months.flatMap(\.assets).filter { !checked.contains($0.localIdentifier) }
+        startScan(remaining: remaining, matches: matches, token: token)
     }
 
     func reset() {
         stopWork()
+        pendingLibraryChanges = []
         for (id, pair) in clients { pair.0.release(id) }
         if observing { PHPhotoLibrary.shared().unregisterChangeObserver(self); observing = false }
         clients = [:]; checked = []
@@ -180,6 +210,8 @@ final class PhotoLibraryStore: NSObject, PHPhotoLibraryChangeObserver {
     func refresh(matches: PhotoMatchStore, client: CubbyClient, forceRematch: Bool = false) async {
         if forceRematch { self.forceRematch = true }
         stopWork()
+        // The fresh fetch below already reflects every change queued before it.
+        pendingLibraryChanges = []
         let token = generation
         defer { if generation == token { isLoadingLibrary = false } }
         authorization = PHPhotoLibrary.authorizationStatus(for: .readWrite)
@@ -582,51 +614,56 @@ final class PhotoLibraryStore: NSObject, PHPhotoLibraryChangeObserver {
     nonisolated func photoLibraryDidChange(_ changeInstance: PHChange) {
         Task { @MainActor [weak self] in
             guard let self else { return }
+            pendingLibraryChanges.append(changeInstance)
             libraryChangeTask?.cancel()
-            // Leave the scan running while iCloud sends bursts of library changes.
+            // Leave the scan running while iCloud sends bursts of library changes; with no
+            // active Photos tab the queue simply waits for `resume`.
             libraryChangeTask = Task { [weak self] in
                 do { try await Task.sleep(for: .milliseconds(750)) } catch { return }
                 guard let self, !Task.isCancelled, let (matches, client) = clients.values.first else {
                     return
                 }
                 libraryChangeTask = nil
-                await self.applyLibraryChange(changeInstance, matches: matches, client: client)
+                await self.applyLibraryChanges(matches: matches, client: client)
             }
         }
     }
 
-    /// Applies a PhotoKit change as a delta into `index` instead of a full `refresh()`, so an
-    /// iCloud sync burst on a 90k-photo library does not repeatedly reload everything. Falls back
-    /// to a full `refresh()` when PhotoKit reports no incremental diff is available (e.g. the
-    /// first change after a cold start, or a change too large for PhotoKit to diff), or when this
-    /// store has no prior `fetchResult` to diff against at all.
-    private func applyLibraryChange(
-        _ changeInstance: PHChange, matches: PhotoMatchStore, client: CubbyClient
-    ) async {
+    /// Applies queued PhotoKit changes as deltas into `index` instead of a full `refresh()`, so an
+    /// iCloud sync burst on a 90k-photo library does not repeatedly reload everything. A change
+    /// that does not touch the image fetch (an album edit) is a no-op; one PhotoKit cannot diff,
+    /// or a queue too long to be worth replaying, falls back to a full `refresh()`.
+    private func applyLibraryChanges(matches: PhotoMatchStore, client: CubbyClient) async {
+        let changes = pendingLibraryChanges
+        pendingLibraryChanges = []
         // Mid-load, `index` is still being filled from the load's own snapshot: a delta applied
         // now would be overwritten (removed assets re-appended by later batches), so restart.
-        guard !isLoadingLibrary, let currentFetchResult = fetchResult,
-            let details = changeInstance.changeDetails(for: currentFetchResult),
-            details.hasIncrementalChanges
-        else {
+        guard !isLoadingLibrary, var current = fetchResult, changes.count <= 200 else {
             await refresh(matches: matches, client: client)
             return
         }
         let token = generation
-        for asset in details.changedObjects {
-            thumbnails.removeObject(forKey: asset.localIdentifier as NSString)
-            checked.remove(asset.localIdentifier)
+        var applied = false
+        for change in changes {
+            guard let details = change.changeDetails(for: current) else { continue }
+            guard details.hasIncrementalChanges else {
+                await refresh(matches: matches, client: client)
+                return
+            }
+            for asset in details.changedObjects + details.removedObjects {
+                thumbnails.removeObject(forKey: asset.localIdentifier as NSString)
+                checked.remove(asset.localIdentifier)
+            }
+            let removedIDs = Set(details.removedObjects.map(\.localIdentifier))
+            selectedIDs.removeAll { removedIDs.contains($0) }
+            index.apply(
+                removed: details.removedObjects, inserted: details.insertedObjects,
+                changed: details.changedObjects)
+            current = details.fetchResultAfterChanges
+            applied = true
         }
-        for asset in details.removedObjects {
-            thumbnails.removeObject(forKey: asset.localIdentifier as NSString)
-            checked.remove(asset.localIdentifier)
-        }
-        let removedIDs = Set(details.removedObjects.map(\.localIdentifier))
-        selectedIDs.removeAll { removedIDs.contains($0) }
-        index.apply(
-            removed: details.removedObjects, inserted: details.insertedObjects,
-            changed: details.changedObjects)
-        fetchResult = details.fetchResultAfterChanges
+        fetchResult = current
+        guard applied else { return }
         count = index.count
         totalAssetCount = index.count
         publishMonths()

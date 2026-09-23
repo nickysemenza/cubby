@@ -27,13 +27,28 @@ extension EnvironmentValues {
 /// (`apps/apple/DESIGN.md` § Developer overlays).
 struct DevOverlayText: View {
     let text: String
+    /// Drawn over a photo: secondary text on arbitrary image content is unreadable, so it gets
+    /// white text on a dark capsule instead.
+    let overMedia: Bool
 
-    init(_ text: String) { self.text = text }
+    init(_ text: String, overMedia: Bool = false) {
+        self.text = text
+        self.overMedia = overMedia
+    }
 
     var body: some View {
-        Text(text)
-            .font(.porcelainCode)
-            .foregroundStyle(.secondary)
+        if overMedia {
+            Text(text)
+                .font(.porcelainCode)
+                .foregroundStyle(.white)
+                .padding(.horizontal, 5)
+                .padding(.vertical, 1)
+                .background(.black.opacity(0.6), in: .capsule)
+        } else {
+            Text(text)
+                .font(.porcelainCode)
+                .foregroundStyle(.secondary)
+        }
     }
 }
 

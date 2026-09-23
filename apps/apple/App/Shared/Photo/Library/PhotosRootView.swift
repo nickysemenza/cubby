@@ -674,7 +674,7 @@ private struct PhotoLibraryCell: View {
                         Image(systemName: "photo").foregroundStyle(.secondary)
                     }
                 }.clipped()
-                .overlay(alignment: .bottomTrailing) { cornerBadge }
+                .overlay { PhotoCellChrome(state: cellState, developerOverlays: developerOverlays) }
                 .overlay(alignment: .topTrailing) {
                     if let selection {
                         Text("\(selection)").font(.caption.bold()).padding(7)
@@ -682,7 +682,6 @@ private struct PhotoLibraryCell: View {
                             .accessibilityHidden(true)
                     }
                 }
-                .overlay(alignment: .bottomLeading) { analysisDot }
         }.buttonStyle(.plain)
             .overlay(alignment: .topLeading) { detailsButton }
             .help(cellState.accessibilityStatus)
@@ -698,38 +697,6 @@ private struct PhotoLibraryCell: View {
                 { /* Local-only grid requests can fail for cloud assets; selection retries with network access. */
                 }
             }
-    }
-
-    /// Ownership and selection occupy different corners so selecting cannot hide a match.
-    private var cornerBadge: some View {
-        PhotoGridMatchIndicator(state: cellState).padding(5)
-    }
-
-    /// B4's grid dot: absent while pending, `.secondary` once analysed with no category hit,
-    /// category-tinted (by ramp index, never by key) once a hit lands. Developer overlays layer 1
-    /// adds the classify time and top label underneath, purely as an overlay caption — it never
-    /// changes the tile's own layout.
-    @ViewBuilder private var analysisDot: some View {
-        VStack(alignment: .trailing, spacing: 2) {
-            switch cellState.analysis {
-            case .pending:
-                EmptyView()
-            case .analysed(let categories):
-                Circle().fill(PhotoCategoryTint.color(for: categories) ?? Color.secondary)
-                    .frame(width: 6, height: 6)
-            }
-            if developerOverlays, let classifyMs = cellState.classifyMs {
-                DevOverlayText(analysisOverlayCaption(classifyMs))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.6)
-            }
-        }
-        .padding(6)
-    }
-
-    private func analysisOverlayCaption(_ classifyMs: Double) -> String {
-        let label = cellState.topLabel.map { " · \($0)" } ?? ""
-        return "\(Int(classifyMs))ms\(label)"
     }
 
     private var detailsButton: some View {
@@ -865,4 +832,81 @@ private struct PhotoLibraryPreview: View {
 #Preview("Developer overlays on", traits: .modifier(SignedInPreview())) {
     NavigationStack { PhotosRootView() }
         .environment(\.developerOverlays, true)
+}
+
+/// A grid tile's bottom chrome over its image: the match badge (trailing), the analysis dot
+/// (leading), and — developer overlays only — the classify caption. Split out of
+/// `PhotoLibraryCell` so it previews over a fixture image without a `PHAsset`.
+private struct PhotoCellChrome: View {
+    let state: PhotoGridCellState
+    let developerOverlays: Bool
+
+    var body: some View {
+        ZStack {
+            // Ownership and selection occupy different corners so selecting cannot hide a match.
+            PhotoGridMatchIndicator(state: state).padding(5)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+            analysisDot
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
+            analysisCaption
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
+        }
+    }
+
+    /// B4's grid dot: absent while pending, `.secondary` once analysed with no category hit,
+    /// category-tinted (by ramp index, never by key) once a hit lands.
+    @ViewBuilder private var analysisDot: some View {
+        switch state.analysis {
+        case .pending:
+            EmptyView()
+        case .analysed(let categories):
+            Circle().fill(PhotoCategoryTint.color(for: categories) ?? Color.secondary)
+                .frame(width: 6, height: 6)
+                .padding(6)
+        }
+    }
+
+    /// Developer overlays layer 1: the classify time and top label, purely as an overlay — it never
+    /// changes the tile's own layout. It sits on its own row above the bottom corners, because the
+    /// trailing match badge can span most of the tile ("GDE-7AP4 plant") and the two collided.
+    @ViewBuilder private var analysisCaption: some View {
+        if developerOverlays, let classifyMs = state.classifyMs {
+            let label = state.topLabel.map { " · \($0)" } ?? ""
+            DevOverlayText("\(Int(classifyMs))ms\(label)", overMedia: true)
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
+                .padding(.horizontal, 5)
+                .padding(.bottom, 38)
+        }
+    }
+}
+
+#Preview("Cell chrome — developer overlays") {
+    let states: [PhotoGridCellState] = [
+        PhotoGridCellState(
+            matchState: .unmatched, ownerBadgeText: nil, accessibilityStatus: "Not in Cubby",
+            indexIsComplete: true, analysis: .analysed(categories: []), classifyMs: 50,
+            topLabel: "structure"),
+        PhotoGridCellState(
+            matchState: .strong, ownerBadgeText: "GDE-7AP4", accessibilityStatus: "In Cubby",
+            indexIsComplete: true, analysis: .analysed(categories: ["plants"]), classifyMs: 222,
+            topLabel: "plant"),
+        PhotoGridCellState(
+            matchState: .possible, ownerBadgeText: "PRD-4K7M", accessibilityStatus: "Possible match",
+            indexIsComplete: true, analysis: .analysed(categories: ["food"]), classifyMs: 1527,
+            topLabel: "tableware"),
+    ]
+    HStack(spacing: 3) {
+        ForEach(Array(states.enumerated()), id: \.offset) { index, state in
+            // A busy light-to-dark fixture: the caption must stay legible on either.
+            LinearGradient(
+                colors: index.isMultiple(of: 2) ? [.white, .orange] : [.green, .black],
+                startPoint: .top, endPoint: .bottom
+            )
+            .aspectRatio(1, contentMode: .fit)
+            .overlay { PhotoCellChrome(state: state, developerOverlays: true) }
+            .frame(width: 130)
+        }
+    }
+    .padding()
 }
