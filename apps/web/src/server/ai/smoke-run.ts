@@ -32,7 +32,10 @@ import {
 } from "~/server/ai/features";
 import { suggestFields } from "~/server/ai/field-suggest/suggest-fields";
 import { JEV_MAX_CANDIDATES, runJevChoice } from "~/server/ai/jev";
-import { runStructuredFeature } from "~/server/ai/run-feature";
+import {
+  runStructuredFeature,
+  type StructuredRunPorts,
+} from "~/server/ai/run-feature";
 import { runAiSelection } from "~/server/ai/selection";
 import { getAiClient } from "~/server/clients/ai";
 import { aiUsage, image, importRun } from "~/server/db/schema";
@@ -154,6 +157,7 @@ async function runCase(
   scenario: AiSmokeScenario,
   raw: SmokeJson,
   runId: ImportRunId,
+  structuredPorts?: StructuredRunPorts,
 ): Promise<CaseResult> {
   const db = context.db;
   switch (scenario) {
@@ -320,6 +324,7 @@ async function runCase(
             operation: "smoke.imageDescription",
             entity: { entityType: "image", entityId: id },
           },
+          structuredPorts,
         ),
       };
     }
@@ -403,6 +408,7 @@ async function runCase(
           PURCHASE_IMPORT_EXTRACTION_FEATURE,
           purchaseExtractionPrompt(purchaseCapture(fixture)),
           { db, runId, operation: "smoke.purchaseExtraction" },
+          structuredPorts,
         ),
       };
     }
@@ -439,6 +445,7 @@ async function runCase(
                 : "Please contact support.",
           }),
           { db, runId, operation: "smoke.purchaseMail" },
+          structuredPorts,
         ),
       };
     }
@@ -492,6 +499,7 @@ async function runCase(
           PURCHASE_IMPORT_REPAIR_FEATURE,
           purchaseRepairRequest(purchaseCapture(fixture)),
           { db, runId, operation: "smoke.purchaseRepair" },
+          structuredPorts,
         ),
       };
     }
@@ -542,6 +550,7 @@ export async function runAiSmoke(
   context: AuthenticatedStartOperationContext,
   scenario: AiSmokeScenario,
   raw: SmokeJson,
+  structuredPorts?: StructuredRunPorts,
 ) {
   // Reject malformed input before opening a Run. Every accepted attempt has a link.
   aiSmokeInputs[scenario].parse(raw);
@@ -560,7 +569,7 @@ export async function runAiSmoke(
     .limit(1);
   if (!run) throw new Error("Smoke Run was not found after creation.");
   const attempt = await finishSmokeAttempt(spec.feature, run.shortcode, () =>
-    runCase(context, scenario, raw, runId),
+    runCase(context, scenario, raw, runId, structuredPorts),
   );
   const usages = await getDb(context.db)
     .select({
