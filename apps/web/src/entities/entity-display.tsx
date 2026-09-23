@@ -1,5 +1,5 @@
 import { amount as amountSchema } from "@cubby/schemas/codec";
-import type { Entity } from "@cubby/schemas/entity";
+import type { Entity, EntityRef } from "@cubby/schemas/entity";
 import {
   entityFieldModels,
   type EntityFieldModel,
@@ -44,14 +44,27 @@ import {
   attachCubbyColumnMeta,
   type MobileColumnMeta,
 } from "~/app/_components/data-table/table-meta";
+import {
+  EntityDisplayImagesProvider,
+  useEntityDisplayImage,
+} from "~/app/_components/entity-media/entity-display-images";
+import { EntityPreviewLink } from "~/app/_components/EntityPreviewLink";
 import { ExternalLinkText } from "~/app/_components/ExternalLink";
 import { tryFormatAmount } from "~/app/_components/inventory/format-amount";
-import { TableLink } from "~/app/_components/table/TableLink";
+import {
+  hoverPreviewEntities,
+  type HoverPreviewEntity,
+} from "~/app/_components/preview/preview-entities";
+import {
+  TableLink,
+  tableLinkVariants,
+} from "~/app/_components/table/TableLink";
 import { BasicInfo, type BasicInfoField } from "~/components/common/basic-info";
 import {
   renderScalarValue,
   type ScalarDisplayValue,
 } from "~/components/common/scalar-value";
+import { EntityIdentityMark } from "~/components/entity/entity-identity-mark";
 import { Checkbox } from "~/components/ui/checkbox";
 import { EntityFilterLink } from "~/components/ui/entity-filter-link";
 import { NoneValue } from "~/components/ui/none-value";
@@ -303,22 +316,75 @@ function copyScalarField<TRecord extends object>(
   }
 }
 
-function referenceLink(entity: string, item: ReferenceItem): ReactNode {
-  const label = item.name ?? item.id;
+const isHoverPreviewEntity = (
+  entity: BrowserRoutedEntity,
+): entity is HoverPreviewEntity =>
+  hoverPreviewEntities.some((candidate) => candidate === entity);
+
+/** Routed manifest reference targets whose shortcode is a display-image ref. */
+const referenceMediaEntity = (entity: string): BrowserRoutedEntity | null =>
   // SAFETY: a manifest reference target is always a declared entity key.
-  if (!isBrowserRoutedEntity(entity as Entity) || entity === "usda-food")
-    return <span className="font-mono text-xs">{label}</span>;
+  isBrowserRoutedEntity(entity as Entity) && entity !== "usda-food"
+    ? (entity as BrowserRoutedEntity)
+    : null;
+
+/** The display-image refs a reference field names on one record. */
+function referenceMediaRefs<TRecord extends object>(
+  record: TRecord,
+  field: DisplayField,
+): EntityRef[] {
+  const reference = readReferenceField(record, field);
+  const entityType = reference && referenceMediaEntity(reference.entity);
+  if (!reference || entityType === null) return [];
+  return reference.items.map((item) => ({ entityType, entityId: item.id }));
+}
+
+/**
+ * A manifest reference led by the same image-or-icon identity mark as
+ * `EntityInlineLink`. The cover comes from the nearest
+ * `EntityDisplayImagesProvider`; outside one, the entity icon holds its box.
+ */
+function ReferenceLink({
+  entity,
+  item,
+}: {
+  entity: BrowserRoutedEntity;
+  item: ReferenceItem;
+}) {
+  const label = item.name ?? item.id;
+  const displayImage = useEntityDisplayImage({
+    entityType: entity,
+    entityId: item.id,
+  });
+  if (isHoverPreviewEntity(entity))
+    return (
+      <EntityPreviewLink
+        entity={entity}
+        id={item.id}
+        displayImage={displayImage}
+        className={tableLinkVariants({ className: "max-w-full" })}
+      >
+        <span className="min-w-0 truncate">{label}</span>
+      </EntityPreviewLink>
+    );
   return (
     <TableLink
-      // SAFETY: `isBrowserRoutedEntity` above proves the manifest reference
-      // target names a routed entity.
-      to={entities[entity as BrowserRoutedEntity].routes.detail}
+      to={entities[entity].routes.detail}
       params={entityDetailParams(item.id)}
       title={label}
+      className="inline-flex max-w-full items-center gap-1"
     >
-      {label}
+      <EntityIdentityMark entity={entity} displayImage={displayImage} />
+      <span className="min-w-0 truncate">{label}</span>
     </TableLink>
   );
+}
+
+function referenceLink(entity: string, item: ReferenceItem): ReactNode {
+  const routed = referenceMediaEntity(entity);
+  if (routed === null)
+    return <span className="font-mono text-xs">{item.name ?? item.id}</span>;
+  return <ReferenceLink entity={routed} item={item} />;
 }
 
 /** Reference fields link to the target's detail route; everything else
@@ -529,7 +595,10 @@ export function EntityBasicInfo<TRecord extends object>({
       throw new Error(`Undeclared detail renderer for ${entity}.${key}`);
     }
   }
-  return (
+  const mediaRefs = fields.flatMap((field) =>
+    referenceMediaRefs(record, field),
+  );
+  const info = (
     <BasicInfo
       actions={actions}
       header={header}
@@ -590,6 +659,14 @@ export function EntityBasicInfo<TRecord extends object>({
         ];
       })}
     />
+  );
+  // Only a card that names references needs covers (and a QueryClient).
+  return mediaRefs.length > 0 ? (
+    <EntityDisplayImagesProvider refs={mediaRefs}>
+      {info}
+    </EntityDisplayImagesProvider>
+  ) : (
+    info
   );
 }
 
@@ -1006,6 +1083,7 @@ export function createEntityDisplayColumns<TRecord extends object>(
               className: widthClassName(field.display.width),
               mobile: toMobileColumnMeta(field.display.mobile),
               cellData,
+              entityRefs: (row) => referenceMediaRefs(row, field),
             }),
             cell: ({ row }) => (
               <EditableEntityCell
@@ -1054,6 +1132,9 @@ export function createEntityDisplayColumns<TRecord extends object>(
                 : undefined,
               className: widthClassName(field.display.width),
               mobile: toMobileColumnMeta(field.display.mobile),
+              entityRefs: field.reference
+                ? (row) => referenceMediaRefs(row, field)
+                : undefined,
             }),
             cell: ({ row }) =>
               readable ? (

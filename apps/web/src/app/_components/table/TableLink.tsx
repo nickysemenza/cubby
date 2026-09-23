@@ -7,7 +7,7 @@ import type {
   EntityDetailRoute,
 } from "~/entities/entities";
 
-const tableLinkVariants = cva(
+export const tableLinkVariants = cva(
   "rounded-[2px] underline-offset-2 transition-colors outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring",
   {
     variants: {
