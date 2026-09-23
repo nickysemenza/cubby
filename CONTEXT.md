@@ -4,17 +4,21 @@ Cubby records a household's products, inventory, spending, and project history.
 
 ## Language
 
+**Plant**:
+A cultivar or species the household sows or buys as a transplant. Grouped into a crop by its growing guide key; carries the household's verdict (yes, maybe, no) and cultivar days to maturity from its packet. Its Ingredient link, when set, is informational: one plant's harvest can become several ingredients.
+_Avoid_: Crop ingredient, variety text, seed listing
+
 **Planting**:
-A crop or group grown together at a Location, linked to its Ingredient and optionally the Product it came from. Planned, growing, and finished describe its lifecycle. A partial transplant creates a child Planting that retains its source and sowing history; a whole transplant keeps the same record. Herbs and trees can stay growing through many harvests.
-_Avoid_: Crop entity, seedling inventory, individual-plant ledger
+A crop or group grown together at a Location, linked to its Plant and optionally the Product it came from. An outcome (succeeded if it yielded anything, else failed) records how it went. Planned, growing, and finished describe its lifecycle. A partial transplant creates a child Planting that retains its source and sowing history; a whole transplant keeps the same record. Herbs and trees can stay growing through many harvests.
+_Avoid_: seedling inventory, individual-plant ledger
 
 **Garden Entry**:
 A dated observation, photo batch, harvest, or recorded move at a Location, optionally associated with one Planting. The event's Location remains historical when the Planting moves. Harvest amounts are optional text and never change Inventory.
 _Avoid_: Task, inventory transaction, readiness forecast
 
 **Growing guide**:
-Checked-in, source-specific planting windows associated explicitly with an Ingredient. A guide preserves each source's microclimate and planting method; a sowing recommendation need not specify tray versus bed. It provides reference information without creating a planting or predicting a harvest date.
-_Avoid_: seasonal plan, maturity estimate, consensus recommendation
+Checked-in, source-specific planting windows associated with a Plant through its crop key. A guide preserves each source's microclimate and planting method. Household practice (how a crop is started, how often it is resown, crop-level days to maturity marked cited or estimate) is separate checked-in data under the same keys and never reads as a citation.
+_Avoid_: seasonal plan, consensus recommendation
 
 **Collection**:
 A named grouping of Products useful to browse together. Existing tag-backed Collections use direct Product assignments and inherited Location-subtree membership. Smart starters instead evaluate code-defined OR rules over Product manufacturer, exact tags, current Location/ancestor names, and directly linked actual Expense Trades. Every matching source is explained, and Products are counted once even when several sources match. Starter names and rules can be edited temporarily in a browser tab; refresh restores the defaults. Neither evaluation nor temporary editing writes tags or membership records. A Collection is not a physical Location Area, an Expense/project Trade, a future Work Area, or a Product compatibility tag.

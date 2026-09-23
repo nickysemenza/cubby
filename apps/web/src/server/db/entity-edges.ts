@@ -139,6 +139,7 @@ import {
   recipeImage,
   recipeSection,
   recipeSectionIngredient,
+  plant,
   planting,
   statementRow,
   task,
@@ -429,19 +430,12 @@ export const ENTITY_EDGES = {
         "A purchasable product mapped to this ingredient — the one hop nutrition and costing resolve through (ingredient → product → fdc_id), never a direct link.",
       liveness: { kind: "must-target-live" },
     },
-    "Product.growsIngredientId": {
-      column: product.growsIngredientId,
+    "Plant.ingredientId": {
+      column: plant.ingredientId,
       role: "reference",
-      label: "garden source products",
+      label: "plants",
       description:
-        "A seed packet, seedling, or plant product can name the ingredient it grows without becoming edible inventory.",
-      liveness: { kind: "must-target-live" },
-    },
-    "Planting.ingredientId": {
-      column: planting.ingredientId,
-      role: "history",
-      label: "plantings",
-      description: "A garden planting retains the crop ingredient it records.",
+        "A plant can name the cooking ingredient its harvest usually becomes; informational only.",
       liveness: { kind: "must-target-live" },
     },
   }),
@@ -1145,6 +1139,23 @@ export const ENTITY_EDGES = {
       role: "metadata",
       label: "source claims",
       description: "Canonical external evidence claimed by this transfer.",
+      liveness: { kind: "must-target-live" },
+    },
+  }),
+  plant: edges({
+    "Planting.plantId": {
+      column: planting.plantId,
+      role: "history",
+      label: "plantings",
+      description: "A garden planting retains the plant it grew.",
+      liveness: { kind: "must-target-live" },
+    },
+    "Product.growsPlantId": {
+      column: product.growsPlantId,
+      role: "reference",
+      label: "seeds and plants",
+      description:
+        "A seed packet, seedling, or plant product names the plant it grows without becoming edible inventory.",
       liveness: { kind: "must-target-live" },
     },
   }),

@@ -354,9 +354,27 @@ export function buildFinancialTransactionEmbeddingText(
   ]);
 }
 
+const plantSearchTextInputSchema = z.object({
+  displayName: z.string(),
+  latinName: nullableText,
+  verdict: nullableText,
+  notes: nullableText,
+});
+
+export function buildPlantEmbeddingText(
+  plant: z.infer<typeof plantSearchTextInputSchema>,
+) {
+  const parsed = plantSearchTextInputSchema.parse(plant);
+  return joinFields([
+    field("plant", parsed.displayName),
+    field("latin name", parsed.latinName),
+    field("verdict", parsed.verdict),
+    field("notes", parsed.notes),
+  ]);
+}
+
 const plantingSearchTextInputSchema = z.object({
-  ingredientName: z.string(),
-  variety: nullableText,
+  plantName: z.string(),
   status: nullableText,
   locationName: nullableText,
   notes: nullableText,
@@ -367,8 +385,7 @@ export function buildPlantingEmbeddingText(
 ) {
   const parsed = plantingSearchTextInputSchema.parse(planting);
   return joinFields([
-    field("planting", parsed.ingredientName),
-    field("variety", parsed.variety),
+    field("planting", parsed.plantName),
     field("status", parsed.status),
     field("location", parsed.locationName),
     field("notes", parsed.notes),

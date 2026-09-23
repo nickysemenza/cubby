@@ -26,7 +26,7 @@ import {
   findInventoryEmbeddingRefsForLocations,
   findInventoryEmbeddingRefsForProducts,
   findMealEmbeddingRefsForRecipes,
-  findPlantingEmbeddingRefsForIngredients,
+  findPlantingEmbeddingRefsForPlants,
   findPlantingEmbeddingRefsForLocations,
   findProductEmbeddingRefsForCategories,
   findRecipeEmbeddingRefsForIngredients,
@@ -57,6 +57,7 @@ const mutationSideEffectEntities = [
   "financialTransaction",
   "expense",
   "wish",
+  "plant",
   "planting",
   "gardenEntry",
   "image",
@@ -101,7 +102,7 @@ export interface MutationSideEffectPorts {
   readonly findTaskEmbeddingRefsForProducts: typeof findTaskEmbeddingRefsForProducts;
   readonly findWishEmbeddingRefsForProducts: typeof findWishEmbeddingRefsForProducts;
   readonly findMealEmbeddingRefsForRecipes: typeof findMealEmbeddingRefsForRecipes;
-  readonly findPlantingEmbeddingRefsForIngredients: typeof findPlantingEmbeddingRefsForIngredients;
+  readonly findPlantingEmbeddingRefsForPlants: typeof findPlantingEmbeddingRefsForPlants;
   readonly findPlantingEmbeddingRefsForLocations: typeof findPlantingEmbeddingRefsForLocations;
   readonly findGardenEntryEmbeddingRefsForLocations: typeof findGardenEntryEmbeddingRefsForLocations;
   readonly findGardenEntryEmbeddingRefsForPlantings: typeof findGardenEntryEmbeddingRefsForPlantings;
@@ -126,7 +127,7 @@ const productionMutationSideEffectPorts: MutationSideEffectPorts = {
   findTaskEmbeddingRefsForProducts,
   findWishEmbeddingRefsForProducts,
   findMealEmbeddingRefsForRecipes,
-  findPlantingEmbeddingRefsForIngredients,
+  findPlantingEmbeddingRefsForPlants,
   findPlantingEmbeddingRefsForLocations,
   findGardenEntryEmbeddingRefsForLocations,
   findGardenEntryEmbeddingRefsForPlantings,
@@ -349,11 +350,11 @@ const collectMealEmbeddingRefsForRecipe: EmbeddingRefCollector = async (
   ]);
 };
 
-const collectPlantingEmbeddingRefsForIngredient: EmbeddingRefCollector = async (
+const collectPlantingEmbeddingRefsForPlant: EmbeddingRefCollector = async (
   ctx,
 ) => {
-  if (ctx.event.entity.entity !== "ingredient") return [];
-  return await ctx.ports.findPlantingEmbeddingRefsForIngredients(ctx.db, [
+  if (ctx.event.entity.entity !== "plant") return [];
+  return await ctx.ports.findPlantingEmbeddingRefsForPlants(ctx.db, [
     ctx.event.entity.id,
   ]);
 };
@@ -512,11 +513,11 @@ async function refreshMealEmbeddingsForRecipe(
   return await publishEmbeddingRefreshes(ctx.db, refs, ctx.event, ctx.ports);
 }
 
-// Plantings embed their ingredient's name, so an ingredient rename fans out.
-async function refreshPlantingEmbeddingsForIngredient(
+// Plantings embed their plant's name, so a plant rename fans out.
+async function refreshPlantingEmbeddingsForPlant(
   ctx: HandlerContext,
 ): Promise<void> {
-  const refs = await collectPlantingEmbeddingRefsForIngredient(ctx);
+  const refs = await collectPlantingEmbeddingRefsForPlant(ctx);
   return await publishEmbeddingRefreshes(ctx.db, refs, ctx.event, ctx.ports);
 }
 
@@ -609,10 +610,7 @@ const embeddingRefCollectorByHandler = new Map<
     collectRecipeEmbeddingRefsForIngredient,
   ],
   [refreshMealEmbeddingsForRecipe, collectMealEmbeddingRefsForRecipe],
-  [
-    refreshPlantingEmbeddingsForIngredient,
-    collectPlantingEmbeddingRefsForIngredient,
-  ],
+  [refreshPlantingEmbeddingsForPlant, collectPlantingEmbeddingRefsForPlant],
   [
     refreshPlantingEmbeddingsForLocation,
     collectPlantingEmbeddingRefsForLocation,
@@ -698,13 +696,14 @@ export const mutationSideEffectManifest = {
   },
   ingredient: {
     onCreate: [refreshOwnEmbedding],
-    // Rename fan-out: recipe embeddings and planting titles embed the
-    // ingredient's name.
-    onUpdate: [
-      refreshOwnEmbedding,
-      refreshRecipeEmbeddingsForIngredient,
-      refreshPlantingEmbeddingsForIngredient,
-    ],
+    // Rename fan-out: recipe embeddings embed the ingredient's name.
+    onUpdate: [refreshOwnEmbedding, refreshRecipeEmbeddingsForIngredient],
+    onDelete: [],
+  },
+  plant: {
+    onCreate: [refreshOwnEmbedding],
+    // Rename fan-out: planting titles embed the plant's name.
+    onUpdate: [refreshOwnEmbedding, refreshPlantingEmbeddingsForPlant],
     onDelete: [],
   },
   recipe: {
@@ -894,6 +893,7 @@ const ENTITY_REF_BUILDER: EntityRefBuilderMap = {
   productCategory: (id) => ({ entity: "productCategory", id }),
   location: (id) => ({ entity: "location", id }),
   ingredient: (id) => ({ entity: "ingredient", id }),
+  plant: (id) => ({ entity: "plant", id }),
   recipe: (id) => ({ entity: "recipe", id }),
   cookbook: (id) => ({ entity: "cookbook", id }),
   inventory: (id) => ({ entity: "inventory", id }),

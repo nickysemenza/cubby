@@ -1,14 +1,9 @@
 ---
 name: garden-plan-import
-description: Turn a seasonal garden plan document (beds, per-bed per-season plantings, a dated work calendar, a shopping list, a plant index with variety/source/seed-stock, watering/lessons prose) into Cubby Locations, a season Project, Tasks, and planned Plantings via the MCP entity/entity_batch tools. Use when the user supplies a garden plan, seasonal plan, bed plan, or planting plan and wants it imported or ingested into Cubby.
+description: Turn a seasonal garden plan document (beds, per-bed per-season plantings, a dated work calendar, a shopping list, a plant index with variety/source/seed-stock, grow/skip verdicts, watering/lessons prose) into Cubby Locations, a season Project, Tasks, Plants, and planned Plantings via the MCP entity/entity_batch tools. Use when the user supplies a garden plan, seasonal plan, bed plan, or planting plan and wants it imported or ingested into Cubby.
 ---
 
 # Import a seasonal garden plan
-
-> Planned change: cultivars become `Plant` records and seed/live-plant
-> Products may precede purchase — see
-> `docs/plans/garden-plants-and-verdicts.md`. Until that lands, this skill
-> is current.
 
 Cubby has no bespoke garden workflow — a plan becomes ordinary generic-entity
 records: `Location`s for beds, one `Project` for the season, `Task`s for its
@@ -19,9 +14,9 @@ playbook for that decomposition, not a new capability. See
 ## Read this model first
 
 ```
-Location (bed/planter/area) ──< Planting >── Ingredient (crop; gardenGuideKey optional)
-                                    │
-                                  taskId
+Location (bed/planter/area) ──< Planting >── Plant (cultivar/species; gardenGuideKey = crop,
+                                    │                verdict, days to maturity,
+                                  taskId             ingredientId informational)
                                     │
                                   Task >── Project (kind: "garden")
 ```
@@ -40,10 +35,17 @@ Location (bed/planter/area) ──< Planting >── Ingredient (crop; gardenGui
   planting's `taskId` points at the Task that will do the sowing/transplant,
   so "what does this plan still ask of me" is always `entity list task
   {filters:{projectId}}`.
-- Seed packets become `Product`s only once **bought** — run `purchase-import`
-  at that point and set the Planting's `sourceProductId`. A plan's shopping
-  list is Task rows, not Products; the seed drawer itself is Inventory, not
-  modelled by this skill.
+- A Planting names its `Plant` (`plantId`), never free-text variety. A Plant
+  is one cultivar ("Sun Gold F1") or, with no cultivar, the species
+  ("Fenugreek"); its `gardenGuideKey` is the crop. Plant verdicts
+  (`yes | maybe | no`) carry the plan's grow/skip decisions; the reasoning
+  goes in `Plant.notes`. A crop-level "never here" is a species Plant with
+  verdict `no`.
+- Seed packets and live plants become `Product`s only once **bought** — run
+  `purchase-import` at that point, set `Product.growsPlantId` and the
+  Planting's `sourceProductId`. A plan's shopping list is Task rows (vendor
+  URL and price in the Task notes), not Products; the seed drawer itself is
+  Inventory, not modelled by this skill.
 - Bed grid positions (row/section within a bed) are not modelled — no child
   Locations, no position field. If the plan places "row 2 of bed 3," that
   detail lives in the Planting's `notes` or `quantity` text, not a new
@@ -80,18 +82,26 @@ Location (bed/planter/area) ──< Planting >── Ingredient (crop; gardenGui
    that Project (`projectId`). Due dates come from the plan's headings.
    Resolve `subjectProductId` with `resolve_products` when a matching
    Product already exists; never create one for a not-yet-bought line.
-6. Resolve crop identity in one batch with `resolve_ingredients`, creating
-   Ingredients only for crops the plan actually names. Set `gardenGuideKey`
-   on an Ingredient only when a matching key already exists in
-   `packages/schemas/src/garden-guides.ts` — never invent one.
+6. Resolve cultivars in one batch with `resolve_plants`
+   (`{ name, gardenGuideKey?, ingredientName? }[]`). `gardenGuideKey` must be
+   an existing key in `packages/schemas/src/garden-practice.ts`
+   (`gardenCropKeys`) — never invent one. Then set on each Plant what the
+   plan states: `verdict` from its grow/maybe/skip lists (reason in
+   `notes`), and `daysFromSowMin/Max` or `daysFromTransplantMin/Max` only
+   from a packet or vendor listing the plan cites (URL in `notes`) — crop
+   estimates already live in `garden-practice.ts`.
 7. Create the planned Plantings: `status: "planned"`, `locationId`,
-   `variety`, `quantity` (text, as the plan states it — count or weight),
+   `plantId`, `quantity` (text, as the plan states it — count or weight),
    `plannedWindow` (text, as the plan states timing), `taskId` pointing at
    the Task from step 5 that will plant it. Leave `sowedOn`/`transplantedOn`
    unset at import time (see [references/mapping.md](references/mapping.md)
    for the later, normal shape of nursery-bought stock). No planned Planting
    carries photos — planting has no photo gallery.
-8. Verify in batches: list Plantings with the created `taskId` filters and
+8. Create one end-of-season Task in the Project, "Review outcomes and
+   verdicts", due at the season's end: it sets each Planting's
+   `outcome` (`succeeded` if it yielded anything, else `failed`, reason in
+   `notes`), `status: finished`, `finishedOn`, and updates Plant verdicts.
+9. Verify in batches: list Plantings with the created `taskId` filters and
    Tasks with the Project filter, then compare counts and named rows to the
    plan. Do not make one verification read per row.
 

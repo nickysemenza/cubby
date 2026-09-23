@@ -10,9 +10,8 @@ export const plantingChecks = defineEntityChecks({
   entity: "planting",
   table: planting,
   checks: {
-    planting_variety: {
-      missing: (t: Planting) =>
-        sql`(${t.variety} IS NULL OR trim(${t.variety}) = '')`,
+    planting_plant: {
+      missing: (t: Planting) => sql`${t.plantId} IS NULL`,
     },
     planting_location: {
       // A still-`planned` planting may have no assigned bed yet; once it is

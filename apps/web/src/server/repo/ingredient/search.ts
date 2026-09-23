@@ -6,7 +6,6 @@ import {
 import type {
   IngredientFilters,
   IngredientListItem,
-  IngredientMergeCandidateImpact,
 } from "@cubby/schemas/ingredient";
 /**
  * Ingredient search, lookup, and list reads.
@@ -169,103 +168,6 @@ export const getIngredientMergeCandidatesByIds = async (
       ),
     );
   return rows.map((r) => ({ ...r, productCount: Number(r.productCount) }));
-};
-
-/**
- * Merge preview: for each candidate ingredient, how much of the "worth keeping"
- * signal it carries — distinct recipe usages, non-deleted linked products, alias
- * count, and whether any linked product has a USDA-resolvable reference
- * (`fdc_id` or `upc`). Read-only; one query per axis (all `inArray`, not N).
- * Used by the merge-confirmation picker to default the keeper to the best
- * candidate and show the per-row counts. Missing/deleted ids are omitted.
- */
-export const mergeImpactForIngredients = async (
-  db: Database,
-  ids: IngredientId[],
-): Promise<IngredientMergeCandidateImpact[]> => {
-  if (ids.length === 0) return [];
-  const dbClient = getDb(db);
-
-  // Base rows: name + alias count. Filters deleted so a stale id contributes
-  // nothing (and drops out of the result entirely).
-  const bases = await dbClient
-    .select({
-      id: ingredient.id,
-      shortcode: ingredient.shortcode,
-      name: ingredient.name,
-    })
-    .from(ingredient)
-    .where(and(inArray(ingredient.id, ids), notDeleted(ingredient)));
-  if (bases.length === 0) return [];
-
-  const liveIds = bases.map((b) => b.id);
-
-  // Distinct recipe count per ingredient (via any live section).
-  const recipeRows = await dbClient
-    .select({
-      ingredientId: recipeSectionIngredient.ingredientId,
-      recipeCount: sql<number>`count(distinct ${recipeSectionIngredient.recipeSectionId})`,
-    })
-    .from(recipeSectionIngredient)
-    .where(
-      and(
-        inArray(recipeSectionIngredient.ingredientId, liveIds),
-        notDeleted(recipeSectionIngredient),
-      ),
-    )
-    .groupBy(recipeSectionIngredient.ingredientId);
-  const recipeCountById = new Map(
-    recipeRows.map((r) => [r.ingredientId, Number(r.recipeCount)]),
-  );
-
-  // Non-deleted product count + USDA-linkability per ingredient.
-  const productRows = await dbClient
-    .select({
-      ingredientId: product.ingredientId,
-      productCount: sql<number>`count(*)`,
-      // Mirrors `foodLookupParamFromProduct`: an explicit fdc_id, else a
-      // barcode — OR a label nutrition override, which supersedes USDA
-      // outright. `sql.raw` with the outer reference hand-qualified — this is
-      // a joined-through aggregate over a single-table select, where drizzle
-      // strips the table prefix off an interpolated column and the subquery
-      // would silently self-join.
-      hasUsdaLink: sql<boolean>`bool_or(${product.fdc_id} is not null or ${product.labelNutrition} is not null or ${sql.raw(
-        `EXISTS (SELECT 1 FROM "ProductExternalId" pei WHERE pei."productId" = "Product"."id" AND pei."source" = 'gtin' AND pei."deletedAt" IS NULL)`,
-      )})`,
-    })
-    .from(product)
-    .where(and(inArray(product.ingredientId, liveIds), notDeleted(product)))
-    .groupBy(product.ingredientId);
-  const productStatsById = new Map(
-    productRows.map((r) => [
-      r.ingredientId,
-      { count: Number(r.productCount), hasUsdaLink: r.hasUsdaLink === true },
-    ]),
-  );
-
-  // Alias count read from the base table (a text[] column) so it needs no join.
-  const aliasRows = await dbClient
-    .select({
-      id: ingredient.id,
-      aliasCount: sql<number>`cardinality(${ingredient.aliases})`,
-    })
-    .from(ingredient)
-    .where(inArray(ingredient.id, liveIds));
-  const aliasCountById = new Map(
-    aliasRows.map((r) => [r.id, Number(r.aliasCount)]),
-  );
-
-  return bases.map((b) => {
-    const productStats = productStatsById.get(b.id);
-    return {
-      id: parseShortcodeFor("ingredient", b.shortcode),
-      name: b.name,
-      recipeUsageCount: recipeCountById.get(b.id) ?? 0,
-      productCount: productStats?.count ?? 0,
-      aliasCount: aliasCountById.get(b.id) ?? 0,
-      hasUsdaLink: productStats?.hasUsdaLink ?? false,
-    };
-  });
 };
 
 /**

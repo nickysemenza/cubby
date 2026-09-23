@@ -10,7 +10,7 @@ import { and, eq, gte, isNotNull, lte, or } from "drizzle-orm";
 
 import { formatPlainDate, parsePlainDate } from "~/lib/plain-date";
 import type { Database } from "~/server/db";
-import { ingredient, location, planting } from "~/server/db/schema";
+import { location, plant, planting } from "~/server/db/schema";
 import { plantingDisplayName } from "~/server/repo/garden";
 
 import { getDb, notDeleted } from "./database-helpers";
@@ -52,8 +52,8 @@ export const loadCalendarPlantings = (
   return getDb(db)
     .select({
       shortcode: planting.shortcode,
-      ingredientName: ingredient.name,
-      variety: planting.variety,
+      plantName: plant.name,
+      gardenGuideKey: plant.gardenGuideKey,
       locationName: location.name,
       plannedWindow: planting.plannedWindow,
       sowedOn: planting.sowedOn,
@@ -61,7 +61,7 @@ export const loadCalendarPlantings = (
       finishedOn: planting.finishedOn,
     })
     .from(planting)
-    .innerJoin(ingredient, eq(planting.ingredientId, ingredient.id))
+    .innerJoin(plant, eq(planting.plantId, plant.id))
     .leftJoin(location, eq(planting.locationId, location.id))
     .where(
       and(
@@ -84,8 +84,8 @@ export const loadCalendarPlantings = (
  * shape with no database dependency. */
 export interface CalendarPlantingRow {
   shortcode: string;
-  ingredientName: string;
-  variety: string | null;
+  plantName: string;
+  gardenGuideKey: string | null;
   locationName: string | null;
   plannedWindow: string | null;
   sowedOn: string | null;
@@ -121,7 +121,10 @@ export const mapPlantingItems = (
           kind: "planting" as const,
           id: parseShortcodeFor("planting", row.shortcode),
           milestone,
-          title: plantingDisplayName(row),
+          title: plantingDisplayName({
+            name: row.plantName,
+            gardenGuideKey: row.gardenGuideKey,
+          }),
           locationName: row.locationName,
           plannedWindow: row.plannedWindow,
           startDate: date,

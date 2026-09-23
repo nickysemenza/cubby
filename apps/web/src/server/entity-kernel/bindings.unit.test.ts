@@ -167,6 +167,7 @@ describe("entity kernel bindings", () => {
     expect(mergeable.map((binding) => binding.entity).sort()).toEqual([
       "ingredient",
       "ledgerParty",
+      "plant",
       "product",
       "purchase",
       "vendor",

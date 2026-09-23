@@ -35,6 +35,7 @@ extension EntityKey {
         case .ledgerTransfer: [.create, .delete, .get, .list, .update]
         case .location: [.create, .delete, .get, .list, .update]
         case .meal: [.create, .delete, .get, .list, .update]
+        case .plant: [.create, .delete, .get, .list, .update]
         case .planting: [.create, .delete, .get, .list, .timeline, .update]
         case .product: [.create, .delete, .get, .list, .timeline, .update]
         case .productCategory: [.create, .delete, .get, .list, .update]
@@ -67,6 +68,7 @@ extension EntityKey {
         case .ledgerTransfer: [.create, .get, .list, .update]
         case .location: [.create, .get, .list, .update]
         case .meal: [.create, .get, .list, .update]
+        case .plant: [.create, .get, .list, .update]
         case .planting: [.create, .get, .list, .timeline, .update]
         case .product: [.create, .get, .list, .timeline, .update]
         case .productCategory: [.create, .get, .list, .update]
@@ -98,6 +100,7 @@ extension EntityKey {
         case .ledgerTransfer: .resource
         case .location: .resource
         case .meal: .resource
+        case .plant: .resource
         case .planting: .resource
         case .product: .resource
         case .productCategory: .resource
@@ -545,6 +548,31 @@ extension EntityDescriptor {
                 items: try page.items.map(JSONValue.init(encoding:)),
                 meta: page.meta
             )
+        case .plant:
+            var query = Operations.Resources_plant_list.Input.Query(page: page, pageSize: pageSize, sort: sort)
+            for name in filters.names {
+                guard let value = filters[name] else { continue }
+                switch name {
+                case "createdFrom": query.createdFrom = try value.string(name)
+                case "createdTo": query.createdTo = try value.string(name)
+                case "updatedFrom": query.updatedFrom = try value.string(name)
+                case "updatedTo": query.updatedTo = try value.string(name)
+                case "search": query.search = try value.string(name)
+                case "gardenGuideKey": query.gardenGuideKey = try value.enumCases(name)
+                case "verdict": query.verdict = try value.enumCases(name)
+                case "dataStatus": query.dataStatus = try value.enumCases(name)
+                case "dataGap": query.dataGap = try value.enumCases(name)
+                case "ingredientId": query.ingredientId = value.strings
+                case "searchQuery": query.searchQuery = try value.string(name)
+                case "groupBy": query.groupBy = try value.enumCase(name)
+                default: throw EntityFilterError.unknownParameter(.plant, name)
+                }
+            }
+            let page = try await client.resources_plant_list(query: query).ok.body.json
+            return ListPage(
+                items: try page.items.map(JSONValue.init(encoding:)),
+                meta: page.meta
+            )
         case .planting:
             var query = Operations.Resources_planting_list.Input.Query(page: page, pageSize: pageSize, sort: sort)
             for name in filters.names {
@@ -558,7 +586,7 @@ extension EntityDescriptor {
                 case "dataStatus": query.dataStatus = try value.enumCases(name)
                 case "dataGap": query.dataGap = try value.enumCases(name)
                 case "locationId": query.locationId = value.strings
-                case "ingredientId": query.ingredientId = value.strings
+                case "plantId": query.plantId = value.strings
                 case "taskId": query.taskId = value.strings
                 case "sourceProductId": query.sourceProductId = value.strings
                 case "gardenEntryId": query.gardenEntryId = value.strings
@@ -641,7 +669,7 @@ extension EntityDescriptor {
                 case "locationIdFilter": query.locationIdFilter = value.strings.map { .init(value1: $0) }
                 case "ingredientPresenceFilter": query.ingredientPresenceFilter = try value.enumCase(name)
                 case "ingredientIdFilter": query.ingredientIdFilter = value.strings.map { .init(value1: $0) }
-                case "growsIngredientIdFilter": query.growsIngredientIdFilter = value.strings.map { .init(value1: $0) }
+                case "growsPlantIdFilter": query.growsPlantIdFilter = value.strings.map { .init(value1: $0) }
                 case "taskStatusFilter": query.taskStatusFilter = try value.enumCases(name)
                 case "taskOpenOnly": query.taskOpenOnly = try value.bool(name)
                 case "taskDueFrom": query.taskDueFrom = try value.string(name)
@@ -1136,11 +1164,20 @@ extension EntityDescriptor {
                 case "groupBy": ["date", "name", "mealType", "createdAt", "updatedAt"]
                 default: nil
             }
+        case .plant:
+            switch wireKey {
+                case "gardenGuideKey": ["artichoke", "basil", "bean-fava", "bean-runner", "bean-snap", "beet", "broccoli", "brussels-sprout", "cabbage", "carrot", "cauliflower", "celery", "chard", "collard", "corn", "cucumber", "eggplant", "garlic", "kale", "kohlrabi", "leek", "lettuce", "mustard", "onion", "parsnip", "pea", "pepper", "potato", "radish", "rhubarb", "shallot", "spinach", "squash-summer", "squash-winter", "sunflower", "tomato", "turnip", "melon", "pumpkin", "rutabaga", "watermelon", "asian-greens", "broccoli-raab", "cilantro", "dill", "parsley", "sorrel", "shiso", "tomatillo", "epazote", "fenugreek", "scallion", "bean-yardlong", "saffron", "celery-leaf", "alyssum", "nasturtium", "marigold"]
+                case "verdict": ["yes", "maybe", "no"]
+                case "dataStatus": ["complete", "needs_data", "defect"]
+                case "dataGap": ["plant_crop"]
+                case "groupBy": ["name", "createdAt", "updatedAt"]
+                default: nil
+            }
         case .planting:
             switch wireKey {
                 case "status": ["planned", "growing", "finished"]
                 case "dataStatus": ["complete", "needs_data", "defect"]
-                case "dataGap": ["planting_variety", "planting_location"]
+                case "dataGap": ["planting_plant", "planting_location"]
                 case "groupBy": ["createdAt", "updatedAt", "status", "sowedOn", "finishedOn"]
                 default: nil
             }
@@ -1340,7 +1377,7 @@ extension EntityDescriptor {
                 case "dataStatus": query.dataStatus = try value.enumCases(name)
                 case "dataGap": query.dataGap = try value.enumCases(name)
                 case "locationId": query.locationId = value.strings
-                case "ingredientId": query.ingredientId = value.strings
+                case "plantId": query.plantId = value.strings
                 case "taskId": query.taskId = value.strings
                 case "sourceProductId": query.sourceProductId = value.strings
                 case "gardenEntryId": query.gardenEntryId = value.strings
@@ -1424,7 +1461,7 @@ extension EntityDescriptor {
                 case "locationIdFilter": query.locationIdFilter = value.strings.map { .init(value1: $0) }
                 case "ingredientPresenceFilter": query.ingredientPresenceFilter = try value.enumCase(name)
                 case "ingredientIdFilter": query.ingredientIdFilter = value.strings.map { .init(value1: $0) }
-                case "growsIngredientIdFilter": query.growsIngredientIdFilter = value.strings.map { .init(value1: $0) }
+                case "growsPlantIdFilter": query.growsPlantIdFilter = value.strings.map { .init(value1: $0) }
                 case "taskStatusFilter": query.taskStatusFilter = try value.enumCases(name)
                 case "taskOpenOnly": query.taskOpenOnly = try value.bool(name)
                 case "taskDueFrom": query.taskDueFrom = try value.string(name)
@@ -1539,6 +1576,8 @@ extension EntityDescriptor {
             return try JSONValue(encoding: try await client.resources_location_get(path: .init(id: id)).ok.body.json)
         case .meal:
             return try JSONValue(encoding: try await client.resources_meal_get(path: .init(id: id)).ok.body.json)
+        case .plant:
+            return try JSONValue(encoding: try await client.resources_plant_get(path: .init(id: id)).ok.body.json)
         case .planting:
             return try JSONValue(encoding: try await client.resources_planting_get(path: .init(id: id)).ok.body.json)
         case .product:
@@ -1604,6 +1643,9 @@ extension EntityDescriptor {
         case .meal:
             let created = try await client.resources_meal_create(body: .json(try body.decoded())).created.body.json
             return try createdID(created.item)
+        case .plant:
+            let created = try await client.resources_plant_create(body: .json(try body.decoded())).created.body.json
+            return try createdID(created.item)
         case .planting:
             let created = try await client.resources_planting_create(body: .json(try body.decoded())).created.body.json
             return try createdID(created.item)
@@ -1667,6 +1709,8 @@ extension EntityDescriptor {
             _ = try await client.resources_location_update(path: .init(id: id), body: .json(try body.decoded())).ok
         case .meal:
             _ = try await client.resources_meal_update(path: .init(id: id), body: .json(try body.decoded())).ok
+        case .plant:
+            _ = try await client.resources_plant_update(path: .init(id: id), body: .json(try body.decoded())).ok
         case .planting:
             _ = try await client.resources_planting_update(path: .init(id: id), body: .json(try body.decoded())).ok
         case .product:

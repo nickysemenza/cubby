@@ -1,349 +1,280 @@
 # Garden plants, verdicts and outcomes
 
-Status: **proposed**. Design agreed 2026-09-21 after a gap analysis of the
-current garden model against a full season plan that today lives outside
-Cubby, and an adversarial review against the codebase. ADR 0004 records the
-grain decision; this plan carries the model, static data, tools, migration
-and sequence. Nothing here is implemented yet.
+Status: **implemented, production rollout pending** (§7). Design agreed
+2026-09-21 after a gap analysis of the garden model against a full season
+plan that lived outside Cubby; refined 2026-09-22. ADR 0004 records the grain
+decision; this plan carries the model, static data, tools, migration and
+rollout.
 
 ## 1. Summary
 
-The garden model — `Location` (bed/planter) ← `Planting` → `Ingredient`
-(+ `gardenGuideKey`), `GardenEntry`, a season `Project` with `Task`s, and the
-curated sow/transplant windows in `garden-guides.ts` — records where things
-were planted and when. It has no home for what a real season plan is mostly
-made of: **which cultivar and why**, **crop and cultivar verdicts** (grow it,
-maybe, never here), **what happened**, **how a crop is started** (direct,
-tray, indoor, or bought as a transplant) and how often it is resown, and
-**where to buy it**. The consequence today is that the household's plan is a
-web page and Cubby is a partial ledger of it.
+The garden model — `Location` ← `Planting` → `Ingredient` (+ `gardenGuideKey`),
+`GardenEntry`, a season `Project` with `Task`s, and the curated windows in
+`garden-guides.ts` — records where things were planted and when. It has no
+home for **which cultivar**, **verdicts** (grow it, maybe, never here),
+**what happened**, **how a crop is started** and resown, or **when to expect a
+harvest**.
 
-This plan adds one entity and moves two fields.
+This plan adds one entity (`Plant`) and one static file (`garden-practice.ts`).
 
 ```text
-Ingredient (recipe grain)       "cherry tomato", "jalapeño", null for flowers
-    ▲ ingredientId (nullable)
-Plant (cultivar grain, PLANT-)  "Sun Gold F1", "Lady Han", "Windsor fava"
-    │  gardenGuideKey · verdict · latinName · breeding
-    ├──< Planting.plantId        status · dates · outcome · locationId
-    └──< Product.growsPlantId    seed packets AND live plants, bought or not
-                                 (vendor externalIds, price)
-GardenEntry >── Location         unchanged
-garden-guides.ts                 source windows, unchanged
-garden-practice.ts (new)         starts[] · successionWeeks, keyed by guide key
+Plant (cultivar grain, PLANT-)   "Sun Gold F1", "Windsor", "Okra"
+    │  gardenGuideKey (the crop) · verdict · days-to-maturity ranges
+    │  ingredientId (nullable, informational)
+    ├──< Planting.plantId         status · dates · outcome · locationId
+    └──< Product.growsPlantId     seed packets and live plants, once bought
+garden-guides.ts                  source windows, unchanged
+garden-practice.ts (new)          starts[] · successionWeeks · maturity, per guide key
 ```
 
 Goals: a Planting names a cultivar, not free text; a cultivar carries its
-verdict and its growing-guide key; a season's outcome is queryable; the
-question "can I start X today, and how" is answered from static data; the
-current season plan can be imported and then regenerated from Cubby.
+verdict, its crop and its maturity; a season's outcome is queryable; "can I
+start X today, and how" and "when will it be ready" are answered from data; the
+current season plan can be imported and regenerated from Cubby.
 
-Non-goals: bed grid positions or footprints; irrigation zones or timer
-schedules; seed viability or packed-for dates; harvest aggregation; maturity
-or harvest forecasts; importing a vendor catalogue wholesale.
+Non-goals: bed grid positions; irrigation schedules; seed viability; harvest
+aggregation; graded windows (optimal/marginal); cultivar-specific sow windows;
+Products for unbought vendor listings; a harvest milestone on the timeline or
+calendar (follow-up).
 
 ## 2. Why
 
-The gap analysis compared the season plan (three 4×8 beds in San Francisco,
-~70 cultivars, a month-by-month calendar, a per-plant order table with
-variety reasoning and not-suggested lists, controller schedules) with the
-model in [docs/garden.md](../garden.md) and the live data (61 plantings, 44
-garden entries, five garden projects). Findings, condensed:
+The gap analysis compared the season plan (three 4×8 beds, ~70 cultivars, a
+month-by-month calendar, an order table, not-suggested lists) with
+[docs/garden.md](../garden.md) and the live data (61 plantings, 44 garden
+entries, five garden projects):
 
-1. **Variety is free text.** `Planting.variety` holds "DiCicco or Belstar",
-   "Windsor" and "windsor", "Unknown (possibly Jimmy Nardello)". Nothing
-   accumulates on a cultivar across seasons.
-2. **Ingredient is doing two jobs.** It is the recipe grain (a recipe wants
-   jalapeño) and, because `gardenGuideKey` and the plantings relation hang
-   off it, also the sown grain. The live data shows the strain: one generic
-   pepper ingredient holds Jimmy Nardello, Bhut Jolokia, Gochujang King and
-   Shishito as varieties, while shishito, serrano, jalapeño, habanero and
-   Fresno are each their own ingredient; "Sungold" exists as an ingredient
-   beside the tomato ingredient that also holds a Sun Gold variety.
-3. **Verdicts have no home.** "Never okra here", "Long Island Improved is the
-   loose, aphid-prone strain — buy Silvia" and "cucamelon: cut, not worth the
-   square" are the decisions a season plan is made of. Today they are prose
-   in `Project.notes` or nowhere.
-4. **Outcomes are narrative.** 24 of the 61 plantings are a January tray
-   batch that never transplanted; that fact is in `notes` on each row and
-   cannot be asked for.
-5. **Guide coverage.** 9 of 61 plantings have a guide window. `gardenGuideKey`
-   has 41 keys; the plan's crops include ~15 with none (asian greens, broccoli
-   raab, cilantro, dill, parsley, sorrel, shiso, tomatillo, epazote, fenugreek,
-   scallion, yardlong bean, saffron, celery-leaf, the working flowers). The
-   household microclimate is a constant in
-   `apps/web/src/server/garden-guides/windows.ts`.
-6. **Start method and succession.** The sources' windows say *when* to sow
-   or transplant; nothing says whether a crop is started direct, in an
-   outdoor tray, indoors on a heat mat, or bought — the question the household
-   asks most — nor that a rotation strip is resown every four weeks.
-7. **Where to buy.** The plan's order table (top pick, alternates, vendor,
-   URL, price) has no representation; the `garden-plan-import` skill forbids
-   creating a Product before purchase.
+1. **Variety is free text.** "DiCicco or Belstar", "Windsor" and "windsor".
+   Nothing accumulates on a cultivar across seasons.
+2. **Ingredient does two jobs** — recipe grain and sown grain. One pepper
+   ingredient holds four cultivars while other peppers are their own
+   ingredients.
+3. **Verdicts have no home** ("never okra here", "cucamelon: not worth the
+   square").
+4. **Outcomes are narrative.** 24 plantings are a tray batch that never
+   transplanted; that fact is only in `notes`.
+5. **Guide coverage.** ~15 planned crops have no guide key.
+6. **Start method, succession and maturity** are not recorded anywhere.
 
 ## 3. Decision log
 
 | # | Decision | Choice |
 |---|---|---|
-| 1 | Grain of the new entity | **Cultivar.** One `Plant` per named cultivar ("Sun Gold F1"); species-level rows allowed with `variety: null` (fenugreek, borage). No third crop-as-grown level. |
-| 2 | Ingredient's role | **Recipe grain only.** A Plant links an Ingredient when the harvest is a cooking ingredient; flowers (alyssum, marigold) have `ingredientId: null`. Ingredient granularity follows what recipes call for, which dissolves finding 2. |
-| 3 | Entity or static file | **Entity** (`PLANT-`). Rule: reference data no household changes (planting windows, start methods, microclimate calendar) is static and checked in; anything that points at household records or changes with experience (cultivars grown, verdicts, outcomes) is an entity. Entities may reference static slugs; static files never contain shortcodes. |
-| 4 | Where the guide key lives | **Plant** (the sown thing), defaulting from the linked Ingredient's key at migration. Ingredient loses `gardenGuideKey` and the two window projections. |
-| 5 | Verdicts | `verdict: yes \| maybe \| no` + `verdictReason` + `verdictOn` on **both** Plant (cultivar: "avoid Long Island Improved") and Ingredient (crop: "no okra"). Free-text reason; no reason-kind enum. |
-| 6 | Outcome | On Planting: optional `outcome: succeeded \| failed` + `outcomeReason`. `status: finished` never requires one. "Partial" and "abandoned" are `failed` with a reason. |
-| 7 | Planting loses stored fields | `variety` removed (it is the Plant's); stored `ingredientId` removed, kept as a **read-only projection** through the Plant so crop filters and the Ingredient detail's Plantings section keep working. |
-| 8 | Products | `growsIngredientId` → `growsPlantId`. Seed packets **and live plants** are Products pointing at a Plant and may be created from vendor listings (top pick + alternates, vendor `externalIds` + price) **before purchase**. This reverses the import skill's "Products only once bought" rule. No tags, no form field — the product name says Seeds or Live Plant. |
-| 9 | Vendor listings | Are those Products. No listing table, no `sources` on Plant; prices and stock go stale in weeks and the decision-grade fact is the URL. The offline vendor scrape proposes Products; it is not imported wholesale. |
-| 10 | Source windows | `garden-guides.ts` **stays source-only** (its header promises byte-identical source data; `garden-guide.ts` enforces `windows.min(1)`; the unit test pins the UC key set). |
-| 11 | Household practice | New static `garden-practice.ts`: per guide key, `starts: ("direct" \| "tray" \| "indoor" \| "bought")[]` and `successionWeeks: number \| null`. Its key set is a superset of the source guides; crops with no citable window exist here with practice only. Vocabulary is deliberately distinct from the source `method` enum so a household claim never reads as a citation. |
-| 12 | Route viability | A projection on Plant: seed-based starts evaluate against the source's *seed* windows, `bought` against *transplant* windows; a crop with two routes declares two starts and each is read independently, with both readings reported ("sow now indoors; plant out May–Jun"). |
-| 13 | Household config | `apps/web/src/server/household/` replaces the hardcoded microclimate constant. Holds the microclimate, not the household name and never a shortcode. |
-| 14 | Bed layout | **Not modelled.** Grid positions, footprints and capacity were an artefact of the web page, not something worth tracking in the real world. |
-| 15 | Irrigation | **No field.** Beds and controller zones share names; the schedule is `Project.notes`. |
-| 16 | Seed viability | **Not modelled.** Inventory in the seed drawer is assumed viable. |
-| 17 | Harvest aggregation | Not now; `GardenEntry.harvestAmount` stays text. |
-| 18 | Plant merge | `merge: true`, Ingredient merge as the template (hard-delete + repoint). The variety-text migration will mint duplicates and the MCP checklist needs a cleanup verb. |
-| 19 | Resolver | New MCP `resolve_plants` taking `{ name, ingredientName?, variety? }[]`, not bare names — "Windsor" needs its crop to resolve or create. |
-| 20 | Operating prose | Controller schedules, the seed-starting fix, vendor ranking, pot assignments go in the season `Project.notes` at import, as the existing skill already says. No runbook: `docs/runbooks/` is schema rollouts. |
+| 1 | Grain | **Cultivar.** One `Plant` per named cultivar; species-level rows ("Okra", "Fenugreek") where there is none. `name` is the cultivar or species; no separate `variety`. |
+| 2 | Crop grouping | **`gardenGuideKey`** on Plant is the crop. `displayName` is `"<name> · <guide label>"` ("Windsor · Fava bean"), or `name` alone without a key or when it equals the label. |
+| 3 | Ingredient link | Single nullable `Plant.ingredientId`, **informational only** (harvests are not 1:1 with ingredients: thyme → fresh and dried thyme). Nothing filters or projects through it. |
+| 4 | Entity vs static | Reference data no household changes (windows, start methods, crop maturity) is static and checked in; anything that points at household records or changes with experience is an entity. Static files never contain shortcodes. |
+| 5 | Verdicts | `verdict: yes \| maybe \| no` on **Plant only**. A crop-level verdict is a species-level Plant ("Okra", `no`). Reasons go in `notes`; the audit log records when. |
+| 6 | Outcome | `Planting.outcome: succeeded \| failed`, nullable. Any harvest at all is `succeeded`. Reason in `notes`. `status: finished` never requires one. |
+| 7 | Products | `growsIngredientId` → `growsPlantId`. **Products only once bought** (unchanged import rule); vendor URLs live on the shopping Task. |
+| 8 | Source windows | `garden-guides.ts` stays source-only and unchanged; windows stay in/out and crop-level. Cultivar timing goes in `Plant.notes`. |
+| 9 | Household practice | New static `garden-practice.ts` (§5.2). Edited by hand when practice changes; no per-Plant override. |
+| 10 | Maturity | Ranges, from sow and from transplant. Crop-level in `garden-practice.ts` with a cited source or `"estimate"`; cultivar-level on Plant from the packet. Plant wins. |
+| 11 | Harvest forecast | Read-only `expectedHarvestStart/End` on Planting (§4.3), only from a real date. |
+| 12 | Microclimate | Stays the constant in `garden-guides/windows.ts`. |
+| 13 | Plant merge | `merge: true`, Ingredient merge as the template (hard-delete + repoint). |
+| 14 | Resolver | MCP `resolve_plants` taking `{ name, gardenGuideKey?, ingredientName? }[]`. |
+| 15 | Season review | No new skill. `garden-plan-import` creates a "review outcomes and verdicts" Task per season. |
+| 16 | Rollout | One PR, brief downtime accepted (§7). |
 
 ## 4. Domain model changes
 
-Migrations follow [docs/agents/domain-rules.md](../agents/domain-rules.md):
-expand → backfill → deploy → cleanup, and remove a `schema.ts` column
-declaration and deploy before any `DROP COLUMN`.
-
 ### 4.1 `Plant` (entity, `PLANT-`)
 
-`PLANT-` satisfies the generator's `^[A-Z]{2,5}-$` prefix rule (precedent
-`VACCT-`). Its adjacency to `PLT-` (Planting) is accepted: the two are
-neighbours in meaning too.
+`PLANT-` satisfies the generator's `^[A-Z]{2,5}-$` rule
+(`scripts/generator/entities/compile.ts:967`).
 
 | Column | Type | Notes |
 |---|---|---|
-| `name` | text, required | The cultivar as sold ("Sun Gold F1", "Lady Han"), or the species when there is no cultivar ("Fenugreek"). |
-| `ingredientId` | FK → Ingredient, nullable | Null for non-food plants. |
-| `variety` | text, nullable | Null for species-level rows. |
-| `latinName` | text, nullable | Settles moschata-vs-maxima permanently. |
-| `breeding` | enum `open-pollinated \| hybrid`, nullable | "Rebuy F1 every year" lives here. |
-| `gardenGuideKey` | enum (union of source guide keys and practice keys), nullable | Moved from Ingredient. |
+| `name` | text, required | Cultivar as sold ("Sun Gold F1") or species ("Okra"). |
+| `gardenGuideKey` | enum (union of source guide and practice keys), nullable | The crop. Moved from Ingredient. |
+| `ingredientId` | FK → Ingredient, nullable | Informational. |
+| `latinName` | text, nullable | |
+| `breeding` | enum `open-pollinated \| hybrid`, nullable | |
 | `verdict` | enum `yes \| maybe \| no`, nullable | |
-| `verdictReason` | text, nullable | |
-| `verdictOn` | date, nullable | |
-| `notes` | text, nullable | |
+| `daysFromSowMin` / `Max` | int, nullable | Cultivar packet or vendor listing only; URL in `notes`. |
+| `daysFromTransplantMin` / `Max` | int, nullable | Same. |
+| `notes` | text, nullable | Verdict reasons, cultivar timing, sources. |
 
-Projections: `displayName` (non-null; `"<name> · <ingredient name>"`, or
-`name` alone without an ingredient) so Cmd-K and `/search` index it;
-`guideSowWindow`, `guideTransplantWindow` (moved from Ingredient); `routes`
-(§5.3). Detail sections: Plantings (history, by `plantId`), Products (seed
-packets and live plants, by `growsPlantId`), the verdict trio. List views:
-table. Capabilities: auditable, countable, soft delete, `merge: true`,
-`bulkUpdate: ["verdict", "verdictOn", "gardenGuideKey"]`, MCP
+Projections: `displayName` (decision 2); `guideSowWindow`,
+`guideTransplantWindow` (moved from Ingredient); `routes` (§5.3). Detail
+sections: Plantings (by `plantId`), Products (by `growsPlantId`). Capabilities:
+auditable, countable, soft delete, `merge: true`,
+`bulkUpdate: ["verdict", "gardenGuideKey"]`, MCP
 `get/list/create/update/delete/bulkUpdate/merge`, no image storage
-(`displaySources`: the linked Products' covers, then the newest journal photo
-of any planting). Lifecycle: delete blocked by live Plantings or Products;
-merge repoints both.
+(`displaySources`: linked Product covers, then the newest planting journal
+photo). Delete is blocked by live Plantings or Products; merge repoints both.
 
 ### 4.2 `Ingredient`
 
-| Change | Notes |
-|---|---|
-| add `verdict`, `verdictReason`, `verdictOn` | Same shapes as Plant. Merge must carry them the way `gardenGuideKey` is carried today (`repo/ingredient/merge.ts`, `gardenGuideKeyCarried` / `Conflicts` in the public `MergeSummaryOut`). |
-| remove `gardenGuideKey`, `guideSowWindow`, `guideTransplantWindow` | After backfill to Plant. Touches the manifest field/section/audit lists, `repo/ingredient/crud.ts`, `merge.ts`, `windows.ts`, the `ingredient.guide-sow-window` explanation, and the generated Swift types. |
-| relation `plantings` | Becomes a two-step path: `Planting.plantId` incoming → `Plant.ingredientId` outgoing (ADR 0001 allows multi-step provenance). Section filter descriptor changes accordingly. |
-| new relation `plants` | `Plant.ingredientId` incoming; a Plants section on the detail page. |
-| relation `grown-by` (Products) | Becomes `Product.growsPlantId` incoming → `Plant.ingredientId` outgoing. |
+Loses `gardenGuideKey`, `guideSowWindow`, `guideTransplantWindow` (manifest
+field/section/audit lists, `repo/ingredient/crud.ts`, `merge.ts` guide-key
+carry, `windows.ts`, the `ingredient.guide-*` explanations, Swift types).
+Loses the `plantings` and `grown-by` sections. Gains a generic Plants section
+(`Plant.ingredientId` incoming).
 
 ### 4.3 `Planting`
 
 | Change | Notes |
 |---|---|
-| add `plantId` | FK → Plant, **required** after backfill. Delete of a Plant is blocked by it; merge repoints. |
-| remove `variety` | Now the Plant's. |
-| remove stored `ingredientId` | Kept as read-only `ingredientId` / `ingredientName` projections through the Plant; the `ingredientId` filter keeps working via a join. |
-| add `outcome` | enum `succeeded \| failed`, nullable. |
-| add `outcomeReason` | text, nullable. |
+| add `plantId` | FK → Plant, required. |
+| add `outcome` | enum `succeeded \| failed`, nullable; added to `bulkUpdate`. |
+| remove `variety`, `ingredientId` | No projection kept. |
+| add `plantName` | Read-only `text` projection through Plant; replaces `variety` in `routing.candidateFields` / `ocrFields` (the compiler accepts a derived `text` field there, `compile.ts:1930`). |
+| add `expectedHarvestStart`, `expectedHarvestEnd`, `expectedHarvestBasis` | Read-only. With `transplantedOn`, add the from-transplant range; else with `sowedOn`, the from-sow range; else null. Plant values win over `garden-practice.ts`. Basis is `cultivar` (Plant, packet), `crop` (cited static) or `crop-estimate`. A bought seedling is a Planting with `transplantedOn` and no `sowedOn`. Shown on detail and as a sortable list column. |
 
-Consumers that read `variety` or the stored ingredient edge, all to change in
-the same expand step: the manifest's `ingredient` relation and inverse
-(`db/entity-edges.ts` history edge), `repo/search-document.ts` (raw SQL
-`i.name || ' · ' || pl.variety`), `semantic/text.ts`, `repo/calendar-plantings.ts`,
-`plantingDisplayName` in `repo/garden/index.ts`, `intents.fields.capture`
-(`ingredientId` → `plantId`; native quick-capture needs a Plant picker),
-`routing.candidateFields` / `ocrFields` (`["variety", "notes"]` → `["notes"]`
-unless the compiler accepts a projection there — verify), and
-`validatePlantingSource` (compares `growsIngredientId` to `ingredientId`;
-becomes `growsPlantId` to `plantId`, and its non-food category check means
-listing Products stay category `supplies` as the existing seed records do).
-`countable` and `bulkUpdate` are unaffected; `bulkUpdate` gains `outcome`.
+The crop filter on Planting becomes `gardenGuideKey` through the Plant.
+Consumers of `variety` / the stored ingredient edge change in the same PR:
+the manifest relation and `db/entity-edges.ts` history edge,
+`repo/search-document.ts` (`i.name || ' · ' || pl.variety`),
+`semantic/text.ts`, `repo/calendar-plantings.ts`, `plantingDisplayName` in
+`repo/garden/index.ts`, `intents.fields.capture` (`ingredientId` → `plantId`;
+native quick-capture needs a Plant picker), and `validatePlantingSource`
+(`growsPlantId` vs `plantId`).
 
 ### 4.4 `Product`
 
-| Change | Notes |
-|---|---|
-| add `growsPlantId` | FK → Plant, nullable. |
-| `growsIngredientId` | Derived read-only through the Plant for one release, then dropped. Public-contract touchpoints: `growsIngredientIdFilter` in `product.ts`, `repo/product/crud.ts`, `mappers.ts`, `services/product.service.ts`, the `schema.ts` FK, and the generated Swift types. |
-
-Products created from vendor listings before purchase are ordinary catalog
-rows with no movements — the same shape as an Amazon lookup nobody bought.
-They must not read as unlocated, and product completeness / Problems
-detectors (`repo/problems/detectors-product.ts`) must accept a priced Product
-with vendor `externalIds` and no Expense; if a detector fires, add the
-exception rule rather than a Product field. `purchase-import` line resolution
-now legitimately matches them, which is the point.
+`growsIngredientId` replaced by `growsPlantId` (FK → Plant, nullable), with no
+deprecation release. Touchpoints: `growsIngredientIdFilter` in `product.ts`,
+`repo/product/crud.ts`, `mappers.ts`, `services/product.service.ts`, the
+`schema.ts` FK, Swift types. The orphaned-product detector is unaffected
+because only bought Products exist.
 
 ### 4.5 Nothing else
 
-No change to `Location`, `GardenEntry`, `Project`, `Task`, the calendar lane,
-or the ICS feed. A Planting's move, journal and photo rules are as in
-[docs/garden.md](../garden.md).
+No change to `Location`, `GardenEntry`, `Project`, `Task`, the calendar lane
+or the ICS feed.
 
 ## 5. Static layer
 
 ### 5.1 `garden-guides.ts` — unchanged
 
-Source windows, attribution and the hand-kept `gardenGuideKeys` tuple stay
-exactly as they are. Do not relax `windows.min(1)`; do not add uncited
-windows for crops the four sources omit.
+Do not relax `windows.min(1)`; do not add uncited windows.
 
 ### 5.2 `garden-practice.ts` — new, `packages/schemas/src`
 
 ```ts
+export const gardenPracticeSources = [
+  { id: "…", name: "…", url: "…", reviewedAt: "2026-…" }, // same shape as guide sources
+];
+
 export const gardenPractice = {
-  broccoli:  { starts: ["tray", "bought"],   successionWeeks: null },
-  carrot:    { starts: ["direct"],            successionWeeks: 4 },
-  basil:     { starts: ["indoor", "bought"], successionWeeks: null },
-  "gai-lan": { starts: ["direct"],            successionWeeks: 4 },   // no source window yet
-  saffron:   { starts: ["bought"],            successionWeeks: null }, // corms
+  tomato: {
+    starts: ["indoor", "bought"],
+    successionWeeks: null,
+    maturity: { fromSow: null, fromTransplant: [60, 85], source: "…" },
+  },
+  carrot: {
+    starts: ["direct"],
+    successionWeeks: 4,
+    maturity: { fromSow: [60, 80], fromTransplant: null, source: "…" },
+  },
+  "gai-lan": {
+    starts: ["direct"],
+    successionWeeks: 4,
+    maturity: {
+      fromSow: [50, 70],
+      fromTransplant: null,
+      source: "estimate",
+      note: "…how derived…",
+    },
+  },
   // …
 } satisfies Record<string, GardenPractice>;
 ```
 
-`starts` is horticulture, not a calendar: it says where the sowing happens or
-that the plant arrives as a transplant, one list per crop. A crop with two
-legitimate routes lists both. Keys are a superset of the source guide keys;
-`gardenGuideKey` on Plant accepts the union. New keys to add here first:
-asian greens / gai lan, broccoli raab, cilantro, dill, parsley, sorrel, shiso,
-tomatillo, epazote, fenugreek, scallion, yardlong bean, saffron, celery-leaf,
-alyssum, nasturtium, marigold. Each gets source windows later only when a
-citable source exists.
+`starts: ("direct" | "tray" | "indoor" | "bought")[]` — deliberately distinct
+from the source `method` enum so a household claim never reads as a
+citation. Keys are a superset of the source guide keys; new practice-only
+keys: asian greens / gai lan, broccoli raab, cilantro, dill, parsley, sorrel,
+shiso, tomatillo, epazote, fenugreek, scallion, yardlong bean, saffron,
+celery-leaf, alyssum, nasturtium, marigold. `maturity` is nullable per key;
+`source` is a `gardenPracticeSources` id or `"estimate"` with a `note`.
+
+**Research.** The first pass produced typical catalogue ranges without
+opening a source page, so every entry ships as `"estimate"` with a note and
+`gardenPracticeSources` is empty. Upgrading an entry to a citation means
+adding the source and replacing `"estimate"` with its id.
 
 ### 5.3 Route viability
 
-`apps/web/src/server/garden-guides/windows.ts` grows a `routes(plant, today)`
-projection: for each declared start, seed-based starts (`direct`, `tray`,
-`indoor`) read the household-microclimate *seed* windows, `bought` reads the
-*transplant* windows; the result per start is `{ start, sowNow, plantOutWindow }`
-rendered on Plant as short text ("indoor: not now, sow Feb–Mar, plant out
-May–Jun · bought: plant out now"). Uses existing month arrays only; infers no
-dates.
-
-### 5.4 Household config
-
-`apps/web/src/server/household/garden.ts` exports `{ microclimate: "sunny" }`
-and replaces `HOUSEHOLD_MICROCLIMATE`. Server code, not `packages/schemas`;
-no household name (skill fixtures forbid real household codes in checked-in
-files, and the same spirit applies here).
+`garden-guides/windows.ts` gains `routes(plant, today)`: seed-based starts
+(`direct`, `tray`, `indoor`) read the household-microclimate *sow* windows,
+`bought` reads *transplant* windows; each start reports
+`{ start, sowNow, plantOutWindow }`, rendered on Plant as short text ("indoor:
+not now, sow Feb–Mar, plant out May–Jun · bought: plant out now"). Existing
+month arrays only.
 
 ## 6. Tools and skills
 
-- **`resolve_plants`** (MCP): input `{ name, ingredientName?, variety? }[]`;
-  matches on `name`/`variety` within the resolved ingredient, creates when
-  missing (creating the Ingredient too only when `ingredientName` is given
-  and unresolved), returns `PLANT-` ids with a `created` flag. Add the hint
-  line in `mcp/server.ts` beside the other resolvers.
-- **`garden-plan-import`** (skill): resolve cultivars through `resolve_plants`;
-  a plan row's variety becomes a Plant, not `Planting.variety`; a plan's
-  "buy this" lines become Products with `growsPlantId` and vendor
-  `externalIds` (top pick and alternates), and a Task per shopping line as
-  today; verdicts from a plan's skip/maybe lists land on Plant/Ingredient.
-  Remove the "Products only once bought" rule and its mapping/fixture text.
-- **`garden-season-review`** (new skill): the end-of-season pass — list the
-  season's plantings, set `outcome`/`outcomeReason`, `status: finished` and
-  `finishedOn`, update Plant/Ingredient verdicts from what happened, note
-  the reasoning in `Project.notes`. Exists because a field nobody is prompted
-  to fill stays empty.
-- Web: Plant list and detail (generic manifest rendering); Planting create
-  and quick-capture pick a Plant; Ingredient detail gains a Plants section
-  and loses the guide fields. Native follows the manifest.
+- **`resolve_plants`** (MCP): `{ name, gardenGuideKey?, ingredientName? }[]`;
+  matches `name` case-insensitively within the guide key, creates when
+  missing, returns `PLANT-` ids with `created`. Follows `resolve_ingredients`
+  (`repo/ingredient/crud.ts:222`, `findOrCreateWithShortcode`). Hint line in
+  `mcp/server.ts`.
+- **`garden-plan-import`**: resolve cultivars through `resolve_plants`; set
+  verdicts from skip/maybe lists on Plant; fill Plant maturity from packet or
+  listing data when the plan has it; vendor URLs stay on shopping Tasks;
+  create a "review outcomes and verdicts" Task at season end.
+- Web: Plant list and detail (generic manifest); Planting create and
+  quick-capture pick a Plant; Ingredient detail gains Plants and loses the
+  guide fields. Native follows the manifest.
 
-## 7. Migration
+## 7. Migration and rollout
 
-Measured on 2026-09-21: 61 plantings (25 finished, 36 growing), ~35 seed
-Products with inventory, 5 garden projects. Remeasure at execution.
+One PR; brief downtime or breakage is accepted. Remeasure counts at execution
+(2026-09-21: 61 plantings, ~35 seed Products, 5 garden projects).
 
-1. **Expand.** Create `Plant`; add `Planting.plantId` (nullable for now),
-   `Planting.outcome`, `Planting.outcomeReason`, `Product.growsPlantId`,
-   `Ingredient.verdict*`, `Plant.gardenGuideKey`. Deploy.
-2. **Backfill (scripted).** For each distinct (`Planting.ingredientId`,
-   trimmed lower-cased `variety`) create a Plant named from the variety (or
-   the ingredient when null), `gardenGuideKey` copied from the ingredient;
-   set `Planting.plantId`. For each Product with `growsIngredientId`, create
-   or reuse a species-level Plant for that ingredient and set
-   `growsPlantId`. Report counts and the duplicate candidates the merge step
-   will need.
-3. **Judgment calls (MCP checklist, by hand).** Merge case-variant Plants;
-   resolve the two "Unknown" bed-1 tomatoes and "roma" to Plants with
-   `variety: null`; merge the stray `Sungold` ingredient into the tomato
-   ingredient; mark the bed-2 rows still `growing` after the 2026-09-19
-   clear-out `finished`; leave the peppers' ingredient grain alone — with
-   Plant carrying the cultivar, mixed ingredient grain is a recipe-side
-   question, not a garden one. Sparse pre-2026 history stays sparse.
-4. **Contract.** Make `plantId` required; remove the `schema.ts` declarations
-   for `Planting.variety`, `Planting.ingredientId`, `Ingredient.gardenGuideKey`,
-   `Product.growsIngredientId`; deploy; drop the columns; delete the
-   `ingredient.guide-*` explanations and Swift fields.
+1. `db:push` the additions only from the branch (Plant table, new columns;
+   old columns stay).
+2. Run the backfill script against prod, dry-run report first. For each
+   distinct (`Planting.ingredientId`, trimmed lower-cased `variety`), create a
+   Plant named from the variety (or the ingredient when null) with the
+   ingredient's `gardenGuideKey` and `ingredientId`; set `Planting.plantId`.
+   For each Product with `growsIngredientId`, use the Plant of the plantings
+   that source it (`sourceProductId`), else a species-level Plant for that
+   ingredient; set `growsPlantId`.
+3. Merge and deploy code that no longer declares the old columns.
+4. `db:push` the drops: `Planting.variety`, `Planting.ingredientId`,
+   `Ingredient.gardenGuideKey`, `Product.growsIngredientId`; `plantId`
+   becomes required.
+5. Judgment calls over MCP afterwards: merge case-variant Plants; resolve
+   "Unknown" tomatoes and "roma" to species rows; merge the stray `Sungold`
+   ingredient; mark cleared-out beds' rows `finished`.
 
 ## 8. Validation
 
-Tests to extend or add: `garden-guides.unit` (key set unchanged; practice
-keys a superset), a new `garden-practice.unit` (every practice key has ≥1
-start; every source key has a practice entry), `windows.unit` (routes: seed
-starts read seed windows, `bought` reads transplant windows, two starts read
-independently), `garden/timeline.integration` (guide band via Plant),
-`search-document` (planting `displayName` through Plant), Ingredient merge
-tests (verdict carry), `product/list.integration` (`growsPlantId` filter,
-derived `growsIngredientId`), `entity-generator.unit` and the catalog
-snapshot (new entity, removed fields), Problems detector tests (unbought
-listing Products are not findings).
+`garden-guides.unit` (key set unchanged); new `garden-practice.unit` (every
+key has ≥1 start; source keys ⊆ practice keys; `min ≤ max`; every `source`
+resolves or is `"estimate"` with a note); `windows.unit` (routes: seed starts
+read sow windows, `bought` reads transplant windows, starts read
+independently); expected-harvest table test (transplant beats sow, Plant beats
+static, basis reported, null without a date); `garden/timeline.integration`
+(guide band via Plant); `search-document` (planting display through Plant);
+`product/list.integration` (`growsPlantId` filter); `entity-generator.unit`
+and the catalog snapshot.
 
-Acceptance for the whole plan: the current season plan is imported with the
-updated skill, and its plant index, order table, verdict lists and calendar
-can be regenerated from `entity list plant/planting/product/task` without
-consulting the original document.
+Acceptance: the current season plan is imported with the updated skill, and
+its plant index, verdict lists, order list and calendar can be regenerated
+from `entity list plant/planting/task` without the original document.
 
 ## 9. Documentation to change when code lands
 
-Left untouched by this proposal because they are still true:
-
 - [CONTEXT.md](../../CONTEXT.md): add **Plant** ("a cultivar or species the
-  household sows or buys as a transplant; linked to an Ingredient when its
-  harvest is a cooking ingredient; carries the growing-guide key and the
-  household's verdict"); rewrite **Planting** ("linked to its Plant"), whose
-  `_Avoid_: Crop entity` must either move or state that Plant is the sown
-  grain, not a recipe crop; rewrite **Growing guide** to associate with a
-  Plant.
+  household sows or buys as a transplant; grouped into a crop by its growing
+  guide; carries the household's verdict and days to maturity"); rewrite
+  **Planting** ("linked to its Plant") and **Growing guide**.
 - [docs/garden.md](../garden.md), [docs/terminology.md](../terminology.md)
   §Garden, [docs/entities.md](../entities.md).
-- `.claude/skills/garden-plan-import/` SKILL.md, `references/mapping.md`,
-  `references/fixtures.md` (the Products-before-purchase reversal and the
-  Plant resolution step).
+- `.claude/skills/garden-plan-import/` SKILL.md and references (Plant
+  resolution, verdicts, season review Task).
 
-## 10. Open questions
+## 10. Later, enabled by this plan
 
-- Whether the manifest compiler accepts a read-only projection in
-  `routing.candidateFields`; if not, photo routing for plantings loses
-  `variety` as a signal and gains nothing until Plant names are searchable
-  through the relation.
-- Whether `Ingredient` should keep a derived "guide via its plants" summary,
-  or simply show the Plants section. Default: the section only.
-- Whether `resolve_plants` should also accept a `latinName` for
-  disambiguating species-level rows. Default: no; name + ingredient is
-  enough for a household catalogue.
-
-## 11. Later, enabled by this plan
-
-Per-cultivar history across seasons ("Sun Gold: four seasons, four
-successes"); a "what can I start today" page over `routes`; seed-drawer
-suggestions from Products with `growsPlantId` and on-hand inventory; the
-photo-comparison and season-revision work already listed in
-[docs/todos.md](../todos.md) under seasonal garden planning.
+Per-cultivar history across seasons; a "what can I start today" page over
+`routes` (optionally an "edge of window" label); a dashed expected-harvest
+milestone on the timeline (verify `lifecycle.milestones` accepts a
+projection); a `Plant.sowMonths` override if a cultivar falls outside its
+crop window; Plant↔Ingredient many-to-many if "cook from the garden" needs it;
+the photo-comparison and season-revision work in
+[docs/todos.md](../todos.md).

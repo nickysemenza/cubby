@@ -36,6 +36,7 @@ import {
   inventoryEntry,
   location,
   meal,
+  plant,
   planting,
   product,
   project,
@@ -182,6 +183,12 @@ const embeddingSources = {
     idColumn: wish.id,
     shortcodeColumn: wish.shortcode,
     deletedAtColumn: wish.deletedAt,
+  },
+  plant: {
+    table: plant,
+    idColumn: plant.id,
+    shortcodeColumn: plant.shortcode,
+    deletedAtColumn: plant.deletedAt,
   },
   planting: {
     table: planting,

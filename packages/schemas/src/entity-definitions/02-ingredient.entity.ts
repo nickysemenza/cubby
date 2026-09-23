@@ -1,12 +1,7 @@
 import { defineEntity } from "./definition.js";
 import { ingredientShortcode } from "../identifier-fields.js";
 import { baseKind } from "../codec.js";
-import { gardenGuideKeys, plantingGuides } from "@cubby/schemas/garden-guides";
 import { z } from "zod";
-
-const gardenGuideKey = z.enum(gardenGuideKeys);
-const gardenGuideKeyLabel = (key: (typeof gardenGuideKeys)[number]): string =>
-  plantingGuides.guides.find((guide) => guide.key === key)?.name ?? key;
 
 export default defineEntity({
   key: "ingredient",
@@ -45,9 +40,6 @@ export default defineEntity({
             "name",
             "aliases",
             "usuallyOnHand",
-            "gardenGuideKey",
-            "guideSowWindow",
-            "guideTransplantWindow",
             "createdAt",
             "updatedAt",
           ],
@@ -63,19 +55,11 @@ export default defineEntity({
         },
         {
           kind: "relation",
-          id: "plantings",
-          title: "Plantings",
-          relation: "plantings",
+          id: "plants",
+          title: "Plants",
+          relation: "plants",
           filter: { descriptor: "ingredientId" },
-          hideWhenEmpty: true,
-        },
-        {
-          kind: "relation",
-          id: "grown-by",
-          title: "Grown by",
-          relation: "grown-by",
-          filter: { descriptor: "growsIngredient" },
-          columns: ["name", "manufacturer", "category", "onHandUnits"],
+          columns: ["name", "gardenGuideKey", "verdict"],
           hideWhenEmpty: true,
           placement: "supporting",
         },
@@ -168,69 +152,8 @@ export default defineEntity({
           update: z.boolean().optional(),
         },
       },
-      {
-        key: "gardenGuideKey",
-        kind: "text",
-        nullable: true,
-        label: "Garden guide key",
-        control: {
-          kind: "select",
-          options: gardenGuideKeys.map((key) => ({
-            value: key,
-            label: gardenGuideKeyLabel(key),
-          })),
-        },
-        display: { detail: true },
-        validation: {
-          read: gardenGuideKey.nullable(),
-          create: gardenGuideKey.nullable().optional(),
-          update: gardenGuideKey.nullable().optional(),
-        },
-      },
-      {
-        // Derived on read from this ingredient's guide, for the household's
-        // microclimate — formatted month range (e.g. "Feb–Apr") or null.
-        key: "guideSowWindow",
-        kind: "text",
-        nullable: true,
-        label: "Guide sow window",
-        display: { detail: true },
-        provenance: {
-          kind: "derived",
-          sources: [{ label: "Garden guide and household microclimate" }],
-        },
-        explanation: {
-          ruleId: "ingredient.guide-sow-window",
-          description:
-            "The sowing window comes from the selected garden guide entry adjusted to the household microclimate.",
-          readPath: "guideSowWindow",
-          sourceDependencies: [
-            { path: "gardenGuideKey", label: "Garden guide key" },
-          ],
-        },
-        validation: { read: z.string().nullable(), create: null, update: null },
-      },
-      {
-        key: "guideTransplantWindow",
-        kind: "text",
-        nullable: true,
-        label: "Guide transplant window",
-        display: { detail: true },
-        provenance: {
-          kind: "derived",
-          sources: [{ label: "Garden guide and household microclimate" }],
-        },
-        explanation: {
-          ruleId: "ingredient.guide-transplant-window",
-          description:
-            "The transplanting window comes from the selected garden guide entry adjusted to the household microclimate.",
-          readPath: "guideTransplantWindow",
-          sourceDependencies: [
-            { path: "gardenGuideKey", label: "Garden guide key" },
-          ],
-        },
-        validation: { read: z.string().nullable(), create: null, update: null },
-      },
+      // LEGACY: storage-only until the garden Plant backfill drops it.
+      { key: "gardenGuideKey", kind: "text", nullable: true, readKey: null },
       {
         key: "id",
         kind: "identifier",
@@ -298,10 +221,10 @@ export default defineEntity({
       "deletedAt",
       { key: "recipeId", reference: "recipe" },
     ],
-    create: ["name", "aliases", "naKinds", "usuallyOnHand", "gardenGuideKey"],
-    update: ["naKinds", "usuallyOnHand", "gardenGuideKey", "name", "aliases"],
+    create: ["name", "aliases", "naKinds", "usuallyOnHand"],
+    update: ["naKinds", "usuallyOnHand", "name", "aliases"],
     bulk: ["usuallyOnHand"],
-    audit: ["name", "aliases", "naKinds", "usuallyOnHand", "gardenGuideKey"],
+    audit: ["name", "aliases", "naKinds", "usuallyOnHand"],
     sort: {
       fields: ["createdAt", "updatedAt", "name", "appearsInRecipes", "product"],
       default: "createdAt",
@@ -322,9 +245,6 @@ export default defineEntity({
       "aliases",
       "naKinds",
       "usuallyOnHand",
-      "gardenGuideKey",
-      "guideSowWindow",
-      "guideTransplantWindow",
       "createdAt",
       "updatedAt",
     ],
@@ -471,29 +391,16 @@ export default defineEntity({
       },
     },
     {
-      key: "plantings",
-      label: "Plantings",
-      target: "planting",
+      key: "plants",
+      label: "Plants",
+      target: "plant",
       cardinality: "many",
       provenance: {
         kind: "local-path",
-        steps: [{ edge: "Planting.ingredientId", direction: "incoming" }],
+        steps: [{ edge: "Plant.ingredientId", direction: "incoming" }],
       },
       inverse: {
-        steps: [{ edge: "Planting.ingredientId", direction: "outgoing" }],
-      },
-    },
-    {
-      key: "grown-by",
-      label: "Grown by",
-      target: "product",
-      cardinality: "many",
-      provenance: {
-        kind: "local-path",
-        steps: [{ edge: "Product.growsIngredientId", direction: "incoming" }],
-      },
-      inverse: {
-        steps: [{ edge: "Product.growsIngredientId", direction: "outgoing" }],
+        steps: [{ edge: "Plant.ingredientId", direction: "outgoing" }],
       },
     },
     {

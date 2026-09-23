@@ -59,6 +59,7 @@ describe("bulkEditEntities", () => {
         "expense",
         "ingredient",
         "location",
+        "plant",
         "planting",
         "product",
         "task",

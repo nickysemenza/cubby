@@ -13,6 +13,7 @@ import { ledgerPartyChecks } from "./checks/ledger-party";
 import { ledgerTransferChecks } from "./checks/ledger-transfer";
 import { locationChecks } from "./checks/location";
 import { mealChecks } from "./checks/meal";
+import { plantChecks } from "./checks/plant";
 import { plantingChecks } from "./checks/planting";
 import { productChecks } from "./checks/product";
 import { productCategoryChecks } from "./checks/product-category";
@@ -55,6 +56,7 @@ export const dataQualityEntries = {
   financialTransaction: financialTransactionChecks,
   expense: expenseChecks,
   wish: wishChecks,
+  plant: plantChecks,
   planting: plantingChecks,
   gardenEntry: gardenEntryChecks,
   ledgerParty: ledgerPartyChecks,

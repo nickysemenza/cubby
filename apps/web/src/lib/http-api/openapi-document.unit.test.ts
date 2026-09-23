@@ -189,7 +189,8 @@ describe("generated HTTP OpenAPI document", () => {
     // entity-filter unions as every other entity.
     // 80: the Run list read (`run.list`) adds its vendor-account filter
     // union and its sort object, the same shapes every entity list emits.
-    expect(positional.length).toBeLessThanOrEqual(80);
+    // 81: the Plant list's verdict filter union.
+    expect(positional.length).toBeLessThanOrEqual(81);
     expect(schemas).toHaveProperty("ProductTopLevelOut");
     expect(schemas).toHaveProperty("LocationShortcode");
     expect(schemas).toHaveProperty("VendorCreateInput");
@@ -454,7 +455,7 @@ describe("generated HTTP OpenAPI document", () => {
     const pages = Object.entries(schemas).filter(([name]) =>
       name.endsWith("ListPage"),
     );
-    expect(pages).toHaveLength(22);
+    expect(pages).toHaveLength(23);
     for (const [, page] of pages)
       expect(schemaNode.parse(page.properties?.meta).$ref).toBe(
         `${COMPONENT}ListPageMeta`,

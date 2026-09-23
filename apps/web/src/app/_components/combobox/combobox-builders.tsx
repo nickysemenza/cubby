@@ -8,6 +8,7 @@ import type {
   VendorShortcode,
 } from "@cubby/schemas/identifiers";
 
+type PlantShortcode = ShortcodeFor<"plant">;
 type PlantingShortcode = ShortcodeFor<"planting">;
 import {
   parseShortcodeFor,
@@ -475,6 +476,18 @@ export const buildTaskComboboxItem = (task: {
     icon: <EntityIcon entity="task" size={14} colored />,
   };
 };
+
+export const buildPlantComboboxItem = (plant: {
+  id: PlantShortcode;
+  displayName: string;
+  verdict?: string | null;
+}): ComboboxItem<PlantShortcode> => ({
+  id: plant.id,
+  shortcode: plant.id,
+  name: plant.displayName,
+  secondary: plant.verdict ? humanizePickerValue(plant.verdict) : undefined,
+  icon: <EntityIcon entity="plant" size={14} colored />,
+});
 
 export const buildPlantingComboboxItem = (planting: {
   id: PlantingShortcode;

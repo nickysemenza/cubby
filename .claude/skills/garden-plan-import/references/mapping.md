@@ -44,9 +44,8 @@ no planting attached, just the purchase itself as the action.
 
 | Plan concept | Field |
 |---|---|
-| The crop | `ingredientId`, resolved in batch via `resolve_ingredients` — create the Ingredient only if it doesn't already exist |
+| The cultivar (or species) | `plantId`, resolved in batch via `resolve_plants` with its crop `gardenGuideKey` |
 | The bed/pot it goes in | `locationId` — leave `null` if the plan hasn't assigned a bed yet |
-| Cultivar name(s) ("DiCicco or Belstar", "Windsor") | `variety` (free text; multiple options stay as one string) |
 | Count or weight ("×3", "¾ lb") | `quantity` (text, as stated — never parsed into a number) |
 | Stated timing ("plant now", "Nov", "early spring") | `plannedWindow` (text, as stated) |
 | The Task that will do the sowing/transplanting | `taskId` |
@@ -61,18 +60,27 @@ interval's start from `transplantedOn` when `sowedOn` is null. A planned
 Planting also never carries photos (planting has no photo gallery) — photos
 belong on the GardenEntry the household logs later.
 
-## `gardenGuideKey`
+## Plant
 
-Set on the **Ingredient**, never on the Planting. Check
-`gardenGuideKeys` in `packages/schemas/src/garden-guides.ts` for the exact
-key spelling before setting it, and only set one when the crop is genuinely
-in that curated list — most plan crops won't be, and that's fine; the guide
-projections (`guideSowWindow`/`guideTransplantWindow`) simply read null.
+| Plan concept | Field |
+|---|---|
+| Cultivar as sold ("Sun Gold F1", "Windsor"), or the species when none | `name` |
+| The crop | `gardenGuideKey` — an existing key in `gardenCropKeys` (`packages/schemas/src/garden-practice.ts`); never invented |
+| Undecided between cultivars ("DiCicco or Belstar") | Resolve the top pick; name the alternate in `Plant.notes` |
+| Grow / maybe / skip lists, "never X here" | `verdict: yes \| maybe \| no`; the reason in `notes`. A crop-level "never" is a species Plant ("Okra") with verdict `no` |
+| Days to maturity from a cited packet or listing | `daysFromSowMin/Max` or `daysFromTransplantMin/Max`, URL in `notes`; crop estimates stay in `garden-practice.ts` |
+| The cooking ingredient the harvest becomes | `ingredientId` (informational only; pass `ingredientName` to `resolve_plants`) |
+
+The Plant's `routes` read out how and when each practice start route
+applies this month, and a Planting's `expectedHarvest` is computed from its
+sow or transplant date — neither is written by this skill.
 
 ## Seed packets and Products
 
 A shopping-list line for seeds is a Task, not a Product — Cubby only creates
 a Product once something is actually bought (the `purchase-import` skill's
 job). When the household later buys a plan's seed packets, hand the receipt
-to `purchase-import`, then set the resulting Product's shortcode as the
-matching Planting's `sourceProductId` with `entity update planting`.
+to `purchase-import`, set the resulting Product's `growsPlantId`, and set its
+shortcode as the matching Planting's `sourceProductId` with `entity update
+planting`. Vendor URLs and prices for unbought lines stay in the shopping
+Task's notes.

@@ -92,8 +92,6 @@ export const mergeSummary = z.object({
    * itself (`finalizeMerge`) rather than assumed from `mergeIds.length`.
    */
   merged: z.number().int().nonnegative(),
-  gardenGuideKeyCarried: z.string().nullable(),
-  gardenGuideKeyConflicts: z.array(z.string()),
 });
 export type MergeSummaryOut = z.infer<typeof mergeSummary>;
 
@@ -269,25 +267,6 @@ export const ingredientMergeInput = z.object({
   keepId: ingredientShortcode,
   mergeIds: z.array(ingredientShortcode).min(1),
 });
-
-/**
- * Per-candidate merge preview: how much of the "worth keeping" signal each
- * ingredient carries. Powers the keeper picker (best-keeper default + the
- * counts shown per row) so the choice is informed, not selection-order. All
- * counts are non-negative; `hasUsdaLink` is true when any linked product has a
- * USDA-resolvable reference (explicit `fdc_id` or a UPC).
- */
-export const ingredientMergeCandidateImpact = z.object({
-  id: ingredientShortcode,
-  name: z.string(),
-  recipeUsageCount: z.number().int().nonnegative(),
-  productCount: z.number().int().nonnegative(),
-  aliasCount: z.number().int().nonnegative(),
-  hasUsdaLink: z.boolean(),
-});
-export type IngredientMergeCandidateImpact = z.infer<
-  typeof ingredientMergeCandidateImpact
->;
 
 export const ingredientIdInput = z.object({
   id: ingredientShortcode,

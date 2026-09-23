@@ -344,6 +344,20 @@ public protocol APIProtocol: Sendable {
     /// - Remark: HTTP `GET /api/v1/plantings/timeline`.
     /// - Remark: Generated from `#/paths//api/v1/plantings/timeline/get(resources.planting.timeline)`.
     func resources_planting_timeline(_ input: Operations.Resources_planting_timeline.Input) async throws -> Operations.Resources_planting_timeline.Output
+    /// Use page=1&pageSize=20&sort=name,-createdAt. Filters are individual query parameters: text is literal, numbers and booleans are plain, and a list repeats its key (tag=a&tag=b). Response pagination metadata remains zero-based. Resource methods depend on entity capabilities.
+    ///
+    /// - Remark: HTTP `GET /api/v1/plants`.
+    /// - Remark: Generated from `#/paths//api/v1/plants/get(resources.plant.list)`.
+    func resources_plant_list(_ input: Operations.Resources_plant_list.Input) async throws -> Operations.Resources_plant_list.Output
+    /// - Remark: HTTP `POST /api/v1/plants`.
+    /// - Remark: Generated from `#/paths//api/v1/plants/post(resources.plant.create)`.
+    func resources_plant_create(_ input: Operations.Resources_plant_create.Input) async throws -> Operations.Resources_plant_create.Output
+    /// - Remark: HTTP `GET /api/v1/plants/{id}`.
+    /// - Remark: Generated from `#/paths//api/v1/plants/{id}/get(resources.plant.get)`.
+    func resources_plant_get(_ input: Operations.Resources_plant_get.Input) async throws -> Operations.Resources_plant_get.Output
+    /// - Remark: HTTP `PATCH /api/v1/plants/{id}`.
+    /// - Remark: Generated from `#/paths//api/v1/plants/{id}/patch(resources.plant.update)`.
+    func resources_plant_update(_ input: Operations.Resources_plant_update.Input) async throws -> Operations.Resources_plant_update.Output
     /// - Remark: HTTP `GET /api/v1/problems/getCounts`.
     /// - Remark: Generated from `#/paths//api/v1/problems/getCounts/get(problems.getCounts)`.
     func problems_getCounts(_ input: Operations.Problems_getCounts.Input) async throws -> Operations.Problems_getCounts.Output
@@ -1660,6 +1674,54 @@ extension APIProtocol {
         try await resources_planting_timeline(Operations.Resources_planting_timeline.Input(
             query: query,
             headers: headers
+        ))
+    }
+    /// Use page=1&pageSize=20&sort=name,-createdAt. Filters are individual query parameters: text is literal, numbers and booleans are plain, and a list repeats its key (tag=a&tag=b). Response pagination metadata remains zero-based. Resource methods depend on entity capabilities.
+    ///
+    /// - Remark: HTTP `GET /api/v1/plants`.
+    /// - Remark: Generated from `#/paths//api/v1/plants/get(resources.plant.list)`.
+    public func resources_plant_list(
+        query: Operations.Resources_plant_list.Input.Query = .init(),
+        headers: Operations.Resources_plant_list.Input.Headers = .init()
+    ) async throws -> Operations.Resources_plant_list.Output {
+        try await resources_plant_list(Operations.Resources_plant_list.Input(
+            query: query,
+            headers: headers
+        ))
+    }
+    /// - Remark: HTTP `POST /api/v1/plants`.
+    /// - Remark: Generated from `#/paths//api/v1/plants/post(resources.plant.create)`.
+    public func resources_plant_create(
+        headers: Operations.Resources_plant_create.Input.Headers = .init(),
+        body: Operations.Resources_plant_create.Input.Body? = nil
+    ) async throws -> Operations.Resources_plant_create.Output {
+        try await resources_plant_create(Operations.Resources_plant_create.Input(
+            headers: headers,
+            body: body
+        ))
+    }
+    /// - Remark: HTTP `GET /api/v1/plants/{id}`.
+    /// - Remark: Generated from `#/paths//api/v1/plants/{id}/get(resources.plant.get)`.
+    public func resources_plant_get(
+        path: Operations.Resources_plant_get.Input.Path,
+        headers: Operations.Resources_plant_get.Input.Headers = .init()
+    ) async throws -> Operations.Resources_plant_get.Output {
+        try await resources_plant_get(Operations.Resources_plant_get.Input(
+            path: path,
+            headers: headers
+        ))
+    }
+    /// - Remark: HTTP `PATCH /api/v1/plants/{id}`.
+    /// - Remark: Generated from `#/paths//api/v1/plants/{id}/patch(resources.plant.update)`.
+    public func resources_plant_update(
+        path: Operations.Resources_plant_update.Input.Path,
+        headers: Operations.Resources_plant_update.Input.Headers = .init(),
+        body: Operations.Resources_plant_update.Input.Body? = nil
+    ) async throws -> Operations.Resources_plant_update.Output {
+        try await resources_plant_update(Operations.Resources_plant_update.Input(
+            path: path,
+            headers: headers,
+            body: body
         ))
     }
     /// - Remark: HTTP `GET /api/v1/problems/getCounts`.

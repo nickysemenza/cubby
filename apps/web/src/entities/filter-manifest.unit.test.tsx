@@ -267,17 +267,17 @@ describe("generated filter contracts", () => {
 });
 
 describe("public entity-reference filters", () => {
-  it("parses a planting ingredient shortcode and never widens invalid URLs", () => {
+  it("parses a planting plant shortcode and never widens invalid URLs", () => {
     const specs = getEntityFilters("planting");
-    const build = (ingredientId: string) =>
+    const build = (plantId: string) =>
       buildFiltersFromManifest(
         specs,
-        filterGetterFromSearch(specs, { ingredientId }),
+        filterGetterFromSearch(specs, { plantId }),
       );
 
-    expect(build("ING-C2YH")).toEqual({ ingredientId: ["ING-C2YH"] });
-    expect(build("not-an-ingredient")).toEqual({
-      ingredientId: ["__unresolvable_entity_filter__"],
+    expect(build("PLANT-C2YH")).toEqual({ plantId: ["PLANT-C2YH"] });
+    expect(build("not-a-plant")).toEqual({
+      plantId: ["__unresolvable_entity_filter__"],
     });
   });
 });

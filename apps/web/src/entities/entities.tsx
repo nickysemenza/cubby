@@ -28,6 +28,7 @@ import {
   Package,
   Receipt,
   ReceiptText,
+  Leaf,
   Smartphone,
   Sprout,
   Store,
@@ -208,6 +209,7 @@ const LUCIDE_ICONS = {
   Package,
   Receipt,
   ReceiptText,
+  Leaf,
   Smartphone,
   Sprout,
   Store,
@@ -488,6 +490,10 @@ const entityDefinitions = withEntityNames({
       border: "border-l-muted-foreground",
     },
     // Note: images use 'filename' not 'name', so we define columns explicitly in ImageList
+  },
+  plant: {
+    ...generatedBrowserRoutes.plant,
+    color: INK.plum,
   },
   planting: {
     ...generatedBrowserRoutes.planting,

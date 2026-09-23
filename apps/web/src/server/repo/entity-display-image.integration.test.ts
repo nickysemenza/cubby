@@ -41,6 +41,7 @@ import {
   createIngredientFixture,
   createInventoryFixture,
   createLocationFixture,
+  createPlantFixture,
   createProductFixture,
   makeCookbookExtraction,
   makeExpenseInput,
@@ -806,7 +807,7 @@ describe("entity display image resolver", () => {
         sortOrder: 0,
       });
 
-      const crop = await createIngredientFixture(
+      const crop = await createPlantFixture(
         ctx.db,
         { name: "Planting fallback crop" },
         ctx.actor,
@@ -819,7 +820,7 @@ describe("entity display image resolver", () => {
       const planted = await createPlanting(
         ctx.db,
         {
-          ingredientId: crop.id,
+          plantId: crop.id,
           locationId: location.id,
           sourceProductId: seedPacket.id,
           status: "growing",
@@ -879,7 +880,7 @@ describe("entity display image resolver", () => {
         sortOrder: 0,
       });
 
-      const crop = await createIngredientFixture(
+      const crop = await createPlantFixture(
         ctx.db,
         { name: "No-entry crop" },
         ctx.actor,
@@ -887,7 +888,7 @@ describe("entity display image resolver", () => {
       const planted = await createPlanting(
         ctx.db,
         {
-          ingredientId: crop.id,
+          plantId: crop.id,
           sourceProductId: seedPacket.id,
           status: "planned",
         },
@@ -907,14 +908,14 @@ describe("entity display image resolver", () => {
     });
 
     it("is empty with neither journal entries nor a seed product", async () => {
-      const crop = await createIngredientFixture(
+      const crop = await createPlantFixture(
         ctx.db,
         { name: "Empty fallback crop" },
         ctx.actor,
       );
       const planted = await createPlanting(
         ctx.db,
-        { ingredientId: crop.id, status: "planned" },
+        { plantId: crop.id, status: "planned" },
         ctx.actor,
       );
 

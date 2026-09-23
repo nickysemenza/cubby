@@ -30,10 +30,6 @@ import {
   type recipeSectionIngredient,
 } from "~/server/db/schema";
 import {
-  guideWindowsFor,
-  resolveGardenGuideKey,
-} from "~/server/garden-guides/windows";
-import {
   attachDataQuality,
   loadDataQualities,
 } from "~/server/repo/data-quality";
@@ -136,17 +132,12 @@ export const dbIngredientToTopLevel = (
   ingredientData: IngredientSelect,
   dataQuality: DataQuality,
 ): IngredientOut => {
-  const gardenGuideKey = resolveGardenGuideKey(ingredientData.gardenGuideKey);
-  const { sow, transplant } = guideWindowsFor(gardenGuideKey);
   return {
     id: parseShortcodeFor("ingredient", ingredientData.shortcode),
     name: ingredientData.name,
     aliases: ingredientData.aliases,
     naKinds: ingredientData.naKinds,
     usuallyOnHand: ingredientData.usuallyOnHand,
-    gardenGuideKey,
-    guideSowWindow: sow,
-    guideTransplantWindow: transplant,
     createdAt: ingredientData.createdAt,
     updatedAt: ingredientData.updatedAt,
     dataQuality,

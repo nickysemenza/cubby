@@ -17,9 +17,9 @@ import {
   updatePlanting,
 } from "~/server/repo/garden";
 import { plantingEntityAdapter } from "~/server/repo/garden/entity-adapters";
-import { createIngredient } from "~/server/repo/ingredient";
 import { createLocation } from "~/server/repo/location";
 import {
+  createPlantFixture,
   createProductFixture,
   makeLocationInput,
   makeProductInput,
@@ -54,7 +54,7 @@ describe("garden workflows", () => {
   // its own top-level (non-conditional) function so every `expect` call
   // stays unconditional; `it.each` below still drives both from one table.
   const plantingSortCase = async () => {
-    const crop = await createIngredient(
+    const crop = await createPlantFixture(
       ctx.db,
       { name: "Garden sort crop" },
       TEST_ACTOR,
@@ -62,12 +62,12 @@ describe("garden workflows", () => {
     const location = await bed("Garden sort bed");
     const first = await createPlanting(
       ctx.db,
-      { ingredientId: crop.id, locationId: location.id, status: "growing" },
+      { plantId: crop.id, locationId: location.id, status: "growing" },
       TEST_ACTOR,
     );
     const second = await createPlanting(
       ctx.db,
-      { ingredientId: crop.id, locationId: location.id, status: "growing" },
+      { plantId: crop.id, locationId: location.id, status: "growing" },
       TEST_ACTOR,
     );
     const firstId = await resolveLiveShortcode(ctx.db, first.id, "planting");
@@ -106,7 +106,7 @@ describe("garden workflows", () => {
   };
 
   const gardenEntrySortCase = async () => {
-    const crop = await createIngredient(
+    const crop = await createPlantFixture(
       ctx.db,
       { name: "Garden entry sort crop" },
       TEST_ACTOR,
@@ -114,7 +114,7 @@ describe("garden workflows", () => {
     const location = await bed("Garden entry sort bed");
     const sowed = await createPlanting(
       ctx.db,
-      { ingredientId: crop.id, locationId: location.id, status: "growing" },
+      { plantId: crop.id, locationId: location.id, status: "growing" },
       TEST_ACTOR,
     );
     // Same `observedOn` for both — the primary sort column ties, so the
@@ -174,7 +174,7 @@ describe("garden workflows", () => {
   );
 
   it("hydrates many planting associations without multiplying the entry row", async () => {
-    const crop = await createIngredient(
+    const crop = await createPlantFixture(
       ctx.db,
       { name: "Many planting crop" },
       TEST_ACTOR,
@@ -182,12 +182,12 @@ describe("garden workflows", () => {
     const location = await bed("Many planting bed");
     const first = await createPlanting(
       ctx.db,
-      { ingredientId: crop.id, locationId: location.id, status: "growing" },
+      { plantId: crop.id, locationId: location.id, status: "growing" },
       TEST_ACTOR,
     );
     const second = await createPlanting(
       ctx.db,
-      { ingredientId: crop.id, locationId: location.id, status: "growing" },
+      { plantId: crop.id, locationId: location.id, status: "growing" },
       TEST_ACTOR,
     );
     const entry = await createGardenEntry(
@@ -216,7 +216,7 @@ describe("garden workflows", () => {
   });
 
   it("journalPlantingId includes direct entries and in-window whole-area entries, excluding out-of-window and other-location entries", async () => {
-    const crop = await createIngredient(
+    const crop = await createPlantFixture(
       ctx.db,
       { name: "Journal predicate crop" },
       TEST_ACTOR,
@@ -226,7 +226,7 @@ describe("garden workflows", () => {
     const target = await createPlanting(
       ctx.db,
       {
-        ingredientId: crop.id,
+        plantId: crop.id,
         locationId: location.id,
         status: "finished",
         sowedOn: "2026-04-01",
@@ -311,7 +311,7 @@ describe("garden workflows", () => {
   });
 
   it("replaces planting associations transactionally and audits unordered sets", async () => {
-    const crop = await createIngredient(
+    const crop = await createPlantFixture(
       ctx.db,
       { name: "Association audit crop" },
       TEST_ACTOR,
@@ -319,12 +319,12 @@ describe("garden workflows", () => {
     const location = await bed("Association audit bed");
     const first = await createPlanting(
       ctx.db,
-      { ingredientId: crop.id, locationId: location.id, status: "growing" },
+      { plantId: crop.id, locationId: location.id, status: "growing" },
       TEST_ACTOR,
     );
     const second = await createPlanting(
       ctx.db,
-      { ingredientId: crop.id, locationId: location.id, status: "growing" },
+      { plantId: crop.id, locationId: location.id, status: "growing" },
       TEST_ACTOR,
     );
     const entry = await createGardenEntry(
@@ -378,29 +378,32 @@ describe("garden workflows", () => {
   });
 
   it("deleting a planting detaches its garden entries with an audit entry, rather than blocking", async () => {
-    const crop = await createIngredient(
+    const detachedPlant = await createPlantFixture(
       ctx.db,
-      { name: "Planting delete detach crop" },
+      { name: "Detached plant" },
+      TEST_ACTOR,
+    );
+    const retainedPlant = await createPlantFixture(
+      ctx.db,
+      { name: "Retained plant" },
       TEST_ACTOR,
     );
     const location = await bed("Planting delete detach bed");
     const target = await createPlanting(
       ctx.db,
       {
-        ingredientId: crop.id,
+        plantId: detachedPlant.id,
         locationId: location.id,
         status: "growing",
-        variety: "Detached variety",
       },
       TEST_ACTOR,
     );
     const retained = await createPlanting(
       ctx.db,
       {
-        ingredientId: crop.id,
+        plantId: retainedPlant.id,
         locationId: location.id,
         status: "growing",
-        variety: "Retained variety",
       },
       TEST_ACTOR,
     );
@@ -461,14 +464,12 @@ describe("garden workflows", () => {
       "gardenEntry",
       entryId!,
     );
-    expect(refreshedSearchText?.embeddingText).toContain("Retained variety");
-    expect(refreshedSearchText?.embeddingText).not.toContain(
-      "Detached variety",
-    );
+    expect(refreshedSearchText?.embeddingText).toContain("Retained plant");
+    expect(refreshedSearchText?.embeddingText).not.toContain("Detached plant");
   });
 
   it("deleting a task detaches its plantings, reporting the Planting.taskId edge", async () => {
-    const crop = await createIngredient(
+    const crop = await createPlantFixture(
       ctx.db,
       { name: "Task delete detach crop" },
       TEST_ACTOR,
@@ -483,7 +484,7 @@ describe("garden workflows", () => {
     );
     const planted = await createPlanting(
       ctx.db,
-      { ingredientId: crop.id, status: "planned", taskId: task.output.id },
+      { plantId: crop.id, status: "planned", taskId: task.output.id },
       TEST_ACTOR,
     );
 
@@ -523,7 +524,7 @@ describe("garden workflows", () => {
   });
 
   it("updatePlanting records audit changes on a locationId edit", async () => {
-    const crop = await createIngredient(
+    const crop = await createPlantFixture(
       ctx.db,
       { name: "Update audit crop" },
       TEST_ACTOR,
@@ -532,7 +533,7 @@ describe("garden workflows", () => {
     const bedB = await bed("Update audit bed B");
     const planted = await createPlanting(
       ctx.db,
-      { ingredientId: crop.id, locationId: bedA.id, status: "growing" },
+      { plantId: crop.id, locationId: bedA.id, status: "growing" },
       TEST_ACTOR,
     );
     const plantedId = await resolveLiveShortcode(
@@ -566,7 +567,7 @@ describe("garden workflows", () => {
   });
 
   it("plantingList taskId filter narrows to plantings linked to that task", async () => {
-    const crop = await createIngredient(
+    const crop = await createPlantFixture(
       ctx.db,
       { name: "Task filter crop" },
       TEST_ACTOR,
@@ -578,12 +579,12 @@ describe("garden workflows", () => {
     );
     const linked = await createPlanting(
       ctx.db,
-      { ingredientId: crop.id, status: "planned", taskId: task.output.id },
+      { plantId: crop.id, status: "planned", taskId: task.output.id },
       TEST_ACTOR,
     );
     const unlinked = await createPlanting(
       ctx.db,
-      { ingredientId: crop.id, status: "planned" },
+      { plantId: crop.id, status: "planned" },
       TEST_ACTOR,
     );
 
@@ -599,7 +600,7 @@ describe("garden workflows", () => {
   });
 
   it("plantingList sourceProductId filter narrows to plantings sourced from that product", async () => {
-    const crop = await createIngredient(
+    const crop = await createPlantFixture(
       ctx.db,
       { name: "Source product filter crop" },
       TEST_ACTOR,
@@ -612,7 +613,7 @@ describe("garden workflows", () => {
     const fromSeed = await createPlanting(
       ctx.db,
       {
-        ingredientId: crop.id,
+        plantId: crop.id,
         status: "planned",
         sourceProductId: seedPacket.id,
       },
@@ -620,7 +621,7 @@ describe("garden workflows", () => {
     );
     const fromElsewhere = await createPlanting(
       ctx.db,
-      { ingredientId: crop.id, status: "planned" },
+      { plantId: crop.id, status: "planned" },
       TEST_ACTOR,
     );
 
@@ -636,7 +637,7 @@ describe("garden workflows", () => {
   });
 
   it("plantingList activeOn scopes to a planting's live date window", async () => {
-    const crop = await createIngredient(
+    const crop = await createPlantFixture(
       ctx.db,
       { name: "Active-on filter crop" },
       TEST_ACTOR,
@@ -644,7 +645,7 @@ describe("garden workflows", () => {
     const active = await createPlanting(
       ctx.db,
       {
-        ingredientId: crop.id,
+        plantId: crop.id,
         status: "finished",
         sowedOn: "2026-05-01",
         finishedOn: "2026-06-01",
@@ -654,7 +655,7 @@ describe("garden workflows", () => {
     const inactive = await createPlanting(
       ctx.db,
       {
-        ingredientId: crop.id,
+        plantId: crop.id,
         status: "finished",
         sowedOn: "2026-01-01",
         finishedOn: "2026-02-01",
@@ -674,7 +675,7 @@ describe("garden workflows", () => {
   });
 
   it("plantingEntityAdapter.repository.bulkUpdate patches status and finishedOn together and clears locationId with an explicit null", async () => {
-    const crop = await createIngredient(
+    const crop = await createPlantFixture(
       ctx.db,
       { name: "Bulk update crop" },
       TEST_ACTOR,
@@ -682,12 +683,12 @@ describe("garden workflows", () => {
     const location = await bed("Bulk update bed");
     const first = await createPlanting(
       ctx.db,
-      { ingredientId: crop.id, locationId: location.id, status: "growing" },
+      { plantId: crop.id, locationId: location.id, status: "growing" },
       TEST_ACTOR,
     );
     const second = await createPlanting(
       ctx.db,
-      { ingredientId: crop.id, locationId: location.id, status: "growing" },
+      { plantId: crop.id, locationId: location.id, status: "growing" },
       TEST_ACTOR,
     );
 

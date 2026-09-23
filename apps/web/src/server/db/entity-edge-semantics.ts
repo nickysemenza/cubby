@@ -96,6 +96,7 @@ export const ENTITY_EDGE_SEMANTICS = {
   wish: projectSemantics(ENTITY_EDGES.wish),
   expense: projectSemantics(ENTITY_EDGES.expense),
   ledgerTransfer: projectSemantics(ENTITY_EDGES.ledgerTransfer),
+  plant: projectSemantics(ENTITY_EDGES.plant),
   planting: projectSemantics(ENTITY_EDGES.planting),
   gardenEntry: projectSemantics(ENTITY_EDGES.gardenEntry),
   inventory: projectSemantics(ENTITY_EDGES.inventory),

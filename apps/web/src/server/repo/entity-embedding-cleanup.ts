@@ -2,6 +2,7 @@ import type {
   ExpenseId,
   FinancialAccountId,
   IngredientId,
+  PlantId,
   LocationId,
   ProductCategoryId,
   ProductId,
@@ -246,18 +247,14 @@ export async function findRecipeEmbeddingRefsForIngredients(
   return rows.map((row) => ({ entityType: "recipe", entityId: row.recipeId }));
 }
 
-/** Plantings embed their ingredient's NAME, so a rename must refresh every
- * live planting sown for it. */
-export async function findPlantingEmbeddingRefsForIngredients(
+/** Plantings whose embedded title names one of these plants. */
+export async function findPlantingEmbeddingRefsForPlants(
   db: Database | DrizzleTransaction,
-  ingredientIds: IngredientId[],
+  plantIds: PlantId[],
 ): Promise<SearchableEntityRef[]> {
-  if (ingredientIds.length === 0) return [];
+  if (plantIds.length === 0) return [];
   const rows = await unwrapDb(db).query.planting.findMany({
-    where: and(
-      inArray(planting.ingredientId, ingredientIds),
-      notDeleted(planting),
-    ),
+    where: and(inArray(planting.plantId, plantIds), notDeleted(planting)),
     columns: { id: true },
   });
   return rows.map((row) => ({ entityType: "planting", entityId: row.id }));

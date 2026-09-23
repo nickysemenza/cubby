@@ -138,8 +138,11 @@ House  →  Room  →  Shelf  →  Bin
 
 ## Garden
 
-- A **planting** (`Planting`) is one crop instance in at most one `Location`
-  (`locationId`, nullable). Its display name is `"<crop name>[ · <variety>]"`.
+- A **plant** (`Plant`) is a cultivar or species; its `gardenGuideKey` is the
+  crop and its display name is `"<name> · <crop label>"`. It carries the
+  household's `verdict` ("Yes", "Maybe", "No").
+- A **planting** (`Planting`) is one instance of a Plant in at most one `Location`
+  (`locationId`, nullable). Its display name is its Plant's.
   There are no lifecycle verbs — Edit is the only hero action, and
   `status`/`locationId`/`finishedOn` are ordinary editable fields. Its state
   reads "Planned", "Growing", or "Finished" (`status`). Sowing in trays and

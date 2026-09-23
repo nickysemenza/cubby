@@ -249,7 +249,7 @@ describe("GenericEntityDetail", () => {
       primaryGtin: null,
       fdc_id: null,
       cookbooks: [],
-      growsIngredientId: null,
+      growsPlantId: null,
     };
     render(
       <GenericEntityDetail

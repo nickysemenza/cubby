@@ -43,6 +43,7 @@ const baseProduct = {
   tags: [],
   upc: null,
   fdc_id: null,
+  growsPlantId: null,
   growsIngredientId: null,
   model: "5lb",
   expectedQuantity: null,

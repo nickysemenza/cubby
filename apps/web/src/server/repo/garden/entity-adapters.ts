@@ -80,6 +80,7 @@ const GARDEN_ENTRY_DELETE_EDGE_POLICY = {
 
 type PlantingBulkPatch = {
   status?: "planned" | "growing" | "finished";
+  outcome?: "succeeded" | "failed" | null;
   finishedOn?: string | null;
   locationId?: string | null;
 };
@@ -133,6 +134,7 @@ const updatePlantingsInBulk = async (
         id: planting.id,
         shortcode: planting.shortcode,
         status: planting.status,
+        outcome: planting.outcome,
         finishedOn: planting.finishedOn,
         locationId: planting.locationId,
       })
@@ -148,6 +150,7 @@ const updatePlantingsInBulk = async (
 
     const values = buildPartialUpdateValues({
       status: data.status,
+      outcome: data.outcome,
       finishedOn: data.finishedOn,
       locationId,
     });

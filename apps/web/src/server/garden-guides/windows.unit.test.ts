@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { guideBandMonthsFor, guideWindowsFor } from "./windows";
+import {
+  expectedHarvestFor,
+  guideBandMonthsFor,
+  guideWindowsFor,
+  plantRoutesFor,
+} from "./windows";
 
 describe("guideWindowsFor", () => {
   it.each([
@@ -31,5 +36,95 @@ describe("guideBandMonthsFor", () => {
     [null, { sow: null, transplant: null }],
   ])("resolves %s to %o", (key, expected) => {
     expect(guideBandMonthsFor(key)).toEqual(expected);
+  });
+});
+
+describe("plantRoutesFor", () => {
+  it.each([
+    // Seed routes read the sow window; `bought` reads the transplant window.
+    [
+      "tomato" as const,
+      5,
+      "tray: sow (no guide window), plant out Apr–Jun · indoor: sow (no guide window), plant out Apr–Jun · bought: plant out now",
+    ],
+    [
+      "leek" as const,
+      9,
+      "tray: sow Feb–Apr, plant out Feb–Apr · indoor: sow Feb–Apr, plant out Feb–Apr",
+    ],
+    // A practice-only crop has starts but no citable window.
+    [
+      "cilantro" as const,
+      3,
+      "direct: sow (no guide window) · tray: sow (no guide window)",
+    ],
+    [null, 3, null],
+  ])("reads %s in month %i", (key, month, expected) => {
+    expect(plantRoutesFor(key, month)).toBe(expected);
+  });
+});
+
+describe("expectedHarvestFor", () => {
+  const noPacket = {
+    daysFromSowMin: null,
+    daysFromSowMax: null,
+    daysFromTransplantMin: null,
+    daysFromTransplantMax: null,
+  };
+  it.each([
+    [
+      "transplant date plus the crop's transplant range",
+      {
+        key: "tomato" as const,
+        plant: noPacket,
+        sowedOn: null,
+        transplantedOn: "2026-05-01",
+      },
+      { start: "2026-06-30", end: "2026-07-25", basis: "crop estimate" },
+    ],
+    [
+      "cultivar packet days win over the crop range",
+      {
+        key: "tomato" as const,
+        plant: { ...noPacket, daysFromTransplantMin: 57 },
+        sowedOn: "2026-03-01",
+        transplantedOn: "2026-05-01",
+      },
+      { start: "2026-06-27", end: "2026-06-27", basis: "cultivar packet" },
+    ],
+    [
+      "sow date plus the sow range for a direct-sown crop",
+      {
+        key: "carrot" as const,
+        plant: noPacket,
+        sowedOn: "2026-03-01",
+        transplantedOn: null,
+      },
+      { start: "2026-04-30", end: "2026-05-15", basis: "crop estimate" },
+    ],
+    [
+      // Late rather than early: the safe side for a guess.
+      "a transplant with only sow-based days counts them from the transplant",
+      {
+        key: "carrot" as const,
+        plant: noPacket,
+        sowedOn: null,
+        transplantedOn: "2026-03-01",
+      },
+      { start: "2026-04-30", end: "2026-05-15", basis: "crop estimate" },
+    ],
+  ])("%s", (_label, args, expected) => {
+    expect(expectedHarvestFor(args)).toMatchObject(expected);
+  });
+
+  it("is null without a real date", () => {
+    expect(
+      expectedHarvestFor({
+        key: "tomato",
+        plant: noPacket,
+        sowedOn: null,
+        transplantedOn: null,
+      }),
+    ).toBeNull();
   });
 });

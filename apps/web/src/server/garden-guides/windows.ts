@@ -1,35 +1,65 @@
 /**
- * Sow/transplant recommendations derived on read from an ingredient's
- * `gardenGuideKey`, for the household's own microclimate (falling back to
+ * Sow/transplant recommendations derived on read from a Plant's crop key
+ * (`gardenGuideKey`), for the household's own microclimate (falling back to
  * the region-wide calendar). The guide data itself (`plantingGuides`) is
- * curated reference data in `@cubby/schemas/garden-guides`; this module only
- * resolves it for one household and formats it for display.
+ * curated reference data in `@cubby/schemas/garden-guides`; household practice
+ * (start routes, crop maturity) is in `@cubby/schemas/garden-practice`. This
+ * module only resolves both for one household and formats them for display.
  */
 import type {
   GardenGuideMethod,
   GardenGuideMicroclimate,
 } from "@cubby/schemas/garden-guide";
-import { gardenGuideKeys, plantingGuides } from "@cubby/schemas/garden-guides";
+import { plantingGuides } from "@cubby/schemas/garden-guides";
+import {
+  type GardenCropKey,
+  gardenCropKeys,
+  gardenCropLabel,
+  gardenPractice,
+  gardenPracticeSources,
+} from "@cubby/schemas/garden-practice";
 
-export type GardenGuideKey = (typeof gardenGuideKeys)[number];
+export type GardenGuideKey = GardenCropKey;
 
-const gardenGuideKeySet = new Set<string>(gardenGuideKeys);
+const gardenCropKeySet = new Set<string>(gardenCropKeys);
 
 /**
- * Loosely parses a DB `text` column into a known guide key — `null` for
+ * Loosely parses a DB `text` column into a known crop key — `null` for
  * unset, legacy, or otherwise-invalid data rather than throwing, since this
  * runs on every read.
  */
 export function resolveGardenGuideKey(
   value: string | null | undefined,
 ): GardenGuideKey | null {
-  // SAFETY: `gardenGuideKeySet` is built from `gardenGuideKeys`, the exact
+  // SAFETY: `gardenCropKeySet` is built from `gardenCropKeys`, the exact
   // literal union `GardenGuideKey` is derived from, so membership in the set
   // proves `value` is one of those literals.
-  return value != null && gardenGuideKeySet.has(value)
+  return value != null && gardenCropKeySet.has(value)
     ? (value as GardenGuideKey)
     : null;
 }
+
+/** `"<name> · <crop label>"`, or `name` alone without a crop or when the name
+ * already is the crop label. Shared with Planting's title; it lives here, not
+ * in `repo/plant`, so the garden readers import no repo module (a cycle). */
+export const plantDisplayName = (
+  name: string,
+  gardenGuideKey: string | null,
+): string => {
+  const key = resolveGardenGuideKey(gardenGuideKey);
+  if (key === null) return name;
+  const label = gardenCropLabel(key);
+  return label.toLowerCase() === name.toLowerCase()
+    ? name
+    : `${name} · ${label}`;
+};
+
+/** The planting's Plant display name — the canonical planting identity, shared
+ * by `planting.displayName`, garden-entry planting references, and the
+ * calendar's planting item title (`repo/calendar-plantings.ts`). */
+export const plantingDisplayName = (
+  row: { name: string; gardenGuideKey: string | null } | null,
+) => (row ? plantDisplayName(row.name, row.gardenGuideKey) : "Unknown plant");
 
 /** The household's own growing conditions; every other window falls back to
  * the regional calendar below. */
@@ -54,7 +84,7 @@ const MONTH_ABBREVIATIONS = [
   "Dec",
 ] as const;
 
-const guidesByKey = new Map(
+const guidesByKey = new Map<string, (typeof plantingGuides.guides)[number]>(
   plantingGuides.guides.map((guide) => [guide.key, guide]),
 );
 
@@ -140,7 +170,7 @@ export type GuideWindows = {
 
 /**
  * Formatted sow/transplant recommendation, derived on read from an
- * ingredient's `gardenGuideKey`. `null` on either side when the crop has no
+ * plant's crop key. `null` on either side when the crop has no
  * guide, or no window of that method for the household's or the fallback
  * microclimate.
  */
@@ -151,4 +181,135 @@ export function guideWindowsFor(key: GardenGuideKey | null): GuideWindows {
     sow: sowMonths ? formatMonths(sowMonths) : null,
     transplant: transplantMonths ? formatMonths(transplantMonths) : null,
   };
+}
+
+const monthsText = (months: number[] | null): string | null =>
+  months ? formatMonths(months) : null;
+
+/**
+ * One clause per declared start route, read against this month: seed routes
+ * (`direct`, `tray`, `indoor`) against the sow window, `bought` against the
+ * transplant window, and seed routes other than `direct` also report where
+ * they plant out. `null` when the crop has no practice entry.
+ */
+export function plantRoutesFor(
+  key: GardenGuideKey | null,
+  month: number,
+): string | null {
+  if (key === null) return null;
+  const { sow, transplant } = guideBandMonthsFor(key);
+  const clause = (label: string, months: number[] | null) =>
+    months === null
+      ? `${label} (no guide window)`
+      : months.includes(month)
+        ? `${label} now`
+        : `${label} ${formatMonths(months)}`;
+  return gardenPractice[key].starts
+    .map((start) => {
+      if (start === "bought")
+        return `bought: ${clause("plant out", transplant)}`;
+      const sowing = clause("sow", sow);
+      if (start === "direct" || transplant === null)
+        return `${start}: ${sowing}`;
+      return `${start}: ${sowing}, plant out ${monthsText(transplant)}`;
+    })
+    .join(" · ");
+}
+
+type DayRange = readonly [number, number];
+
+/** Cultivar days from the Plant's packet fields; either side may be unset. */
+export type PlantMaturityDays = {
+  daysFromSowMin: number | null;
+  daysFromSowMax: number | null;
+  daysFromTransplantMin: number | null;
+  daysFromTransplantMax: number | null;
+};
+
+export type ExpectedHarvest = {
+  start: string;
+  end: string;
+  /** "cultivar packet", a cited crop source's name, or "crop estimate". */
+  basis: string;
+  summary: string;
+};
+
+const packetRange = (
+  min: number | null,
+  max: number | null,
+): DayRange | null =>
+  min === null && max === null ? null : [min ?? max!, max ?? min!];
+
+const addDays = (date: string, days: number): string => {
+  const next = new Date(`${date}T00:00:00Z`);
+  next.setUTCDate(next.getUTCDate() + days);
+  return next.toISOString().slice(0, 10);
+};
+
+const formatDay = (date: string): string => {
+  const [, month, day] = date.split("-").map(Number);
+  return `${MONTH_ABBREVIATIONS[month! - 1]} ${day}`;
+};
+
+/** A crop range's basis: its cited source's name, else "crop estimate". */
+const cropBasis = (source: string | undefined): string =>
+  gardenPracticeSources.find((cited) => cited.id === source)?.name ??
+  "crop estimate";
+
+/**
+ * The expected first-harvest range: `transplantedOn` plus the transplant
+ * range, else `sowedOn` plus the sow range. Cultivar packet days win over the
+ * crop-level practice estimate for the same anchor. A bought seedling is just
+ * a planting with `transplantedOn` and no `sowedOn`. `null` without a real
+ * date or any matching days.
+ */
+export function expectedHarvestFor(args: {
+  key: GardenGuideKey | null;
+  plant: PlantMaturityDays | null;
+  sowedOn: string | null;
+  transplantedOn: string | null;
+}): ExpectedHarvest | null {
+  const maturity = args.key ? gardenPractice[args.key].maturity : null;
+  const anchors = [
+    {
+      date: args.transplantedOn,
+      packet: args.plant
+        ? packetRange(
+            args.plant.daysFromTransplantMin,
+            args.plant.daysFromTransplantMax,
+          )
+        : null,
+      crop: maturity?.fromTransplant ?? null,
+    },
+    {
+      date: args.sowedOn,
+      packet: args.plant
+        ? packetRange(args.plant.daysFromSowMin, args.plant.daysFromSowMax)
+        : null,
+      crop: maturity?.fromSow ?? null,
+    },
+    // A transplant with only sow-based days: late, which is the safe side.
+    {
+      date: args.transplantedOn,
+      packet: args.plant
+        ? packetRange(args.plant.daysFromSowMin, args.plant.daysFromSowMax)
+        : null,
+      crop: maturity?.fromSow ?? null,
+    },
+  ];
+  for (const anchor of anchors) {
+    if (anchor.date === null) continue;
+    const range = anchor.packet ?? anchor.crop;
+    if (range === null) continue;
+    const basis =
+      anchor.packet !== null ? "cultivar packet" : cropBasis(maturity?.source);
+    const start = addDays(anchor.date, range[0]);
+    const end = addDays(anchor.date, range[1]);
+    const span =
+      start === end
+        ? formatDay(start)
+        : `${formatDay(start)} – ${formatDay(end)}`;
+    return { start, end, basis, summary: `${span} (${basis})` };
+  }
+  return null;
 }

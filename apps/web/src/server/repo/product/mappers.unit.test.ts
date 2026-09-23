@@ -108,6 +108,7 @@ const baseProduct = {
   tags: [],
   upc: "012345678905",
   fdc_id: null,
+  growsPlantId: null,
   growsIngredientId: null,
   model: "5lb",
   notes: "Keep dry",

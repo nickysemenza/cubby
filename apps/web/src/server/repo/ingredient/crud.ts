@@ -82,7 +82,6 @@ export const createIngredient = async (
     aliases: data.aliases || [],
     naKinds: data.naKinds ?? [],
     usuallyOnHand: data.usuallyOnHand ?? false,
-    gardenGuideKey: data.gardenGuideKey ?? null,
   });
 
   // Log audit entry

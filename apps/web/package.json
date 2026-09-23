@@ -30,6 +30,7 @@
     "test:e2e:postgres": "pnpm test:e2e",
     "typecheck": "tsc --noEmit --checkers 1",
     "db:ensure-extensions": "tsx scripts/ensure-db-extensions.ts",
+    "db:backfill-garden-plants": "tsx scripts/backfill-garden-plants.ts",
     "db:push": "pnpm run db:ensure-extensions && drizzle-kit push",
     "db:pull": "drizzle-kit pull",
     "db:studio": "drizzle-kit studio",

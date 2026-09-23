@@ -170,6 +170,7 @@ export const listRendererCoverage = {
   financialTransaction: scoredCoverage<"financialTransaction">(),
   expense: scoredCoverage<"expense">(),
   wish: scoredCoverage<"wish">(),
+  plant: scoredCoverage<"plant">(),
   planting: scoredCoverage<"planting">(),
   gardenEntry: scoredCoverage<"gardenEntry">(),
   ledgerParty: scoredCoverage<"ledgerParty">(),

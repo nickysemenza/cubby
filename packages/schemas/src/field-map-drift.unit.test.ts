@@ -307,8 +307,6 @@ const INTENTIONAL_RESPELLINGS = {
   "image::projectImageSummarySchema::url": IMAGE_READ_FIELD_HAND_COPY,
 
   // --- ingredient ---
-  "ingredient::ingredientMergeCandidateImpact::name":
-    "merge-candidate preview projection (id/name plus derived counts for the keeper picker) — plain z.string() label, not sourced from generatedIngredientFieldSchemas.read.name",
   "ingredient::ingredientResolveOrCreateResultOut::aliases":
     "the resolved ingredient's own current aliases — hand-written z.array(z.string()) instead of referencing generatedIngredientFieldSchemas.read.aliases directly",
   "ingredient::ingredientResolveOrCreateResultOut::name":
@@ -350,7 +348,9 @@ const INTENTIONAL_RESPELLINGS = {
   // --- planting / gardenEntry: id filters over the generated scalar reference fields ---
   "planting::plantingFiltersSchema::locationId":
     "multi-value filter (oneOrMany(locationShortcode)) over the generated scalar locationId field",
-  "planting::plantingFiltersSchema::ingredientId":
+  "planting::plantingFiltersSchema::plantId":
+    "multi-value filter (oneOrMany(plantShortcode)) over the generated scalar plantId field",
+  "plant::plantFiltersSchema::ingredientId":
     "multi-value filter (oneOrMany(ingredientShortcode)) over the generated scalar ingredientId field",
   "planting::plantingFiltersSchema::taskId":
     "multi-value filter (oneOrMany(taskShortcode)) over the generated scalar taskId field",

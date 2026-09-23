@@ -380,18 +380,22 @@ async function getSearchDocumentSources(
     wish: sql`
       SELECT 'wish', w."id"::text, w."shortcode", w."name", w."notes", 'tool wishlist', ARRAY[]::text[], ARRAY['tool wishlist']::text[]
       FROM "Wish" w WHERE w."deletedAt" IS NULL AND 'wish' IN (${types}) AND ${requested(sql`w."id"`)}`,
-    // Title mirrors `plantingDisplayName` (garden/index.ts): ingredient name,
-    // ` · ` + variety when present. `pl."variety"` is nullable, so the COALESCE
-    // wraps the whole `' · ' || variety` term rather than the variety alone —
-    // otherwise the `||` against a NULL variety would null out the ingredient
-    // name too.
+    // The crop label lives in static data, not SQL, so the title is the plant
+    // name and the crop key rides along as a search term.
+    plant: sql`
+      SELECT 'plant', p."id"::text, p."shortcode", p."name",
+        concat_ws(' · ', p."gardenGuideKey", p."verdict"), p."verdict",
+        ARRAY[]::text[], ARRAY[p."gardenGuideKey", p."latinName"]::text[]
+      FROM "Plant" p
+      WHERE p."deletedAt" IS NULL AND 'plant' IN (${types}) AND ${requested(sql`p."id"`)}`,
+    // Title is the plant name (see `plant` above for why not its crop label).
     planting: sql`
       SELECT 'planting', pl."id"::text, pl."shortcode",
-        i."name" || COALESCE(' · ' || pl."variety", ''),
+        COALESCE(p."name", 'Unknown plant'),
         concat_ws(' · ', pl."status", l."name"), pl."status",
-        ARRAY[]::text[], ARRAY[pl."variety", l."name"]::text[]
+        ARRAY[]::text[], ARRAY[p."gardenGuideKey", l."name"]::text[]
       FROM "Planting" pl
-      JOIN "Ingredient" i ON i."id" = pl."ingredientId" AND i."deletedAt" IS NULL
+      LEFT JOIN "Plant" p ON p."id" = pl."plantId" AND p."deletedAt" IS NULL
       LEFT JOIN "Location" l ON l."id" = pl."locationId" AND l."deletedAt" IS NULL
       WHERE pl."deletedAt" IS NULL AND 'planting' IN (${types}) AND ${requested(sql`pl."id"`)}`,
     // Title mirrors `gardenEntryDisplayName` (garden/index.ts): kind label ·
@@ -403,10 +407,10 @@ async function getSearchDocumentSources(
       SELECT 'gardenEntry', ge."id"::text, ge."shortcode",
         (CASE ge."kind" WHEN 'observation' THEN 'Note' WHEN 'harvest' THEN 'Harvest' ELSE 'Move' END)
           || ' · ' || to_char(ge."observedOn", 'YYYY-MM-DD') || ' · ' || l."name",
-        (SELECT string_agg(i."name" || COALESCE(' · ' || pl."variety", ''), ', ' ORDER BY pl."shortcode")
+        (SELECT string_agg(COALESCE(p."name", 'Unknown plant'), ', ' ORDER BY pl."shortcode")
          FROM "GardenEntryPlanting" gep
          JOIN "Planting" pl ON pl."id" = gep."plantingId" AND pl."deletedAt" IS NULL
-         JOIN "Ingredient" i ON i."id" = pl."ingredientId" AND i."deletedAt" IS NULL
+         LEFT JOIN "Plant" p ON p."id" = pl."plantId" AND p."deletedAt" IS NULL
          WHERE gep."gardenEntryId" = ge."id" AND gep."deletedAt" IS NULL),
         ge."kind", ARRAY[]::text[], ARRAY[l."name", ge."harvestAmount"]::text[]
       FROM "GardenEntry" ge

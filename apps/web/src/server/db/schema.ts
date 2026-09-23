@@ -97,6 +97,7 @@ import {
   generatedLocationColumns,
   generatedMealColumns,
   generatedProductColumns,
+  generatedPlantColumns,
   generatedPlantingColumns,
   generatedGardenEntryColumns,
   generatedProjectColumns,
@@ -507,6 +508,7 @@ export const product = pgTable(
   "Product",
   generatedProductColumns({
     ingredient: (): AnyPgColumn => ingredient.id,
+    plant: (): AnyPgColumn => plant.id,
     productCategory: (): AnyPgColumn => productCategory.id,
   }),
   (table) => [
@@ -516,6 +518,7 @@ export const product = pgTable(
       .on(table.name, table.manufacturer)
       .where(sql`${table.deletedAt} IS NULL`),
     index("Product_ingredientId_idx").on(table.ingredientId),
+    index("Product_growsPlantId_idx").on(table.growsPlantId),
     index("Product_createdAt_idx").on(table.createdAt),
     index("Product_name_idx").on(table.name),
     index("Product_name_gin_idx").using("gin", sql`${table.name} gin_trgm_ops`),
@@ -1021,10 +1024,23 @@ export const locationImage = pgTable(
   ],
 );
 
+/** A cultivar or species the household sows or buys as a transplant. */
+export const plant = pgTable(
+  "Plant",
+  generatedPlantColumns({
+    ingredient: (): AnyPgColumn => ingredient.id,
+  }),
+  (table) => [
+    shortcodeUnique("Plant", table.shortcode),
+    index("Plant_ingredientId_idx").on(table.ingredientId),
+    index("Plant_gardenGuideKey_idx").on(table.gardenGuideKey),
+  ],
+);
+
 export const planting = pgTable(
   "Planting",
   generatedPlantingColumns({
-    ingredient: (): AnyPgColumn => ingredient.id,
+    plant: (): AnyPgColumn => plant.id,
     product: (): AnyPgColumn => product.id,
     location: (): AnyPgColumn => location.id,
     task: (): AnyPgColumn => task.id,
@@ -1032,6 +1048,7 @@ export const planting = pgTable(
   (table) => [
     shortcodeUnique("Planting", table.shortcode),
     index("Planting_ingredientId_idx").on(table.ingredientId),
+    index("Planting_plantId_idx").on(table.plantId),
     index("Planting_sourceProductId_idx").on(table.sourceProductId),
     index("Planting_locationId_idx").on(table.locationId),
     index("Planting_taskId_idx").on(table.taskId),
@@ -2917,7 +2934,7 @@ export const ingredientRelations = relations(ingredient, ({ one, many }) => ({
   }),
   recipeSectionIngredient: many(recipeSectionIngredient),
   product: many(product, { relationName: "ProductIngredient" }),
-  grownByProducts: many(product, { relationName: "ProductGrowsIngredient" }),
+  plants: many(plant),
   mealFoodEntries: many(mealFoodEntry),
 }));
 
@@ -3001,10 +3018,9 @@ export const productRelations = relations(product, ({ one, many }) => ({
     references: [ingredient.id],
     relationName: "ProductIngredient",
   }),
-  growsIngredient: one(ingredient, {
-    fields: [product.growsIngredientId],
-    references: [ingredient.id],
-    relationName: "ProductGrowsIngredient",
+  growsPlant: one(plant, {
+    fields: [product.growsPlantId],
+    references: [plant.id],
   }),
   unitMappings: many(productUnitMappings),
   mealFoodEntries: many(mealFoodEntry),
@@ -3079,10 +3095,19 @@ export const locationRelations = relations(location, ({ one, many }) => ({
   gardenEntries: many(gardenEntry),
 }));
 
-export const plantingRelations = relations(planting, ({ one, many }) => ({
+export const plantRelations = relations(plant, ({ one, many }) => ({
   ingredient: one(ingredient, {
-    fields: [planting.ingredientId],
+    fields: [plant.ingredientId],
     references: [ingredient.id],
+  }),
+  plantings: many(planting),
+  products: many(product),
+}));
+
+export const plantingRelations = relations(planting, ({ one, many }) => ({
+  plant: one(plant, {
+    fields: [planting.plantId],
+    references: [plant.id],
   }),
   sourceProduct: one(product, {
     fields: [planting.sourceProductId],

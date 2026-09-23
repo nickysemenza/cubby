@@ -5,7 +5,7 @@ import {
   relationshipDiscoveryContract,
 } from "./relationship-discovery-contract";
 import {
-  seedIngredientPrerequisite,
+  seedPlantPrerequisite,
   seedPlacementReviewPrerequisite,
   seedPlantingPrerequisite,
   seedRelationshipReviewPrerequisite,
@@ -97,11 +97,11 @@ test("a large planting branch shows its first page without an expansion click", 
     name: `e2e planting graph ${suffix}`,
   });
   const cropName = `e2e graph crop ${suffix}`;
-  const crop = await seedIngredientPrerequisite(page, cropName);
+  const crop = await seedPlantPrerequisite(page, cropName);
   await Promise.all(
     Array.from({ length: 13 }, () =>
       seedPlantingPrerequisite(page, {
-        ingredientId: crop.id,
+        plantId: crop.id,
         taskId: task.id,
       }),
     ),
