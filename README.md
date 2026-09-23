@@ -309,8 +309,9 @@ pnpm db:dev:down    # stop the container (the named volume, and its data, persis
 it reuses the existing container rather than recreating it. `db:dev:push` and
 `db:dev:seed` refuse to run against anything but that local database (checked
 by protocol, host, port, user, password, and database). The reset also checks
-the exact container image, published port, environment, and named volume before
-removing it. `dev:local` skips corpus seeding when products already exist;
+the running container's image, published port, environment, and named volume
+before removing it; after `db:dev:down`, run `db:dev:up` before resetting.
+`dev:local` skips corpus seeding when products already exist;
 `db:dev:reset` restores a clean corpus. The persistent database is shared by
 local worktrees.
 If a later schema change needs a Drizzle rename decision, `dev:local` stops

@@ -185,7 +185,8 @@ async function ready(): Promise<number> {
 }
 
 async function reset(): Promise<number> {
-  if (await assertOwnedContainer()) await stopAndRemove(DEV_DB_CONTAINER);
+  await assertRunningOwnedContainer();
+  await stopAndRemove(DEV_DB_CONTAINER);
   await containerCli(["volume", "rm", DEV_DB_VOLUME]);
   return ready();
 }

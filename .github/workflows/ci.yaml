@@ -424,7 +424,7 @@ jobs:
   web-checks:
     name: Web checks
     needs: [scope, test-web, test-postgres, test-e2e]
-    if: always()
+    if: always() && !(github.event_name == 'workflow_dispatch' && inputs.simulator_e2e)
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
