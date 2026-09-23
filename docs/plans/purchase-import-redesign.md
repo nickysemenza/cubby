@@ -738,7 +738,7 @@ first, as separate small PRs, in numeric order.
    for exactly one type; exclusive-arc nullable FKs only where they already
    exist. Cleanup for untyped rows lives in `cascadeRemoval` /
    `finalizeMerge`, not in the edge registry. This interim rule is superseded
-   only when a consumer moves onto the reference policy in the proposed
+   only when a consumer moves onto the reference policy in the approved
    [durable identity and shared-files plan](entity-identity-and-files.md);
    ordinary domain relationships remain typed.
 8. **Mac app networking.** WebSocket client in `CubbyKit` with bearer auth and
@@ -767,7 +767,7 @@ Not in scope; listed so the design keeps the door open.
 - **Merge redirects.** A `mergedIntoId` on the mergeable tables (or a
   three-column redirect table) written by `finalizeMerge` and consulted on
   resolver miss, with a `redirectedFrom` marker and a non-redirecting
-  resolver for mutations. This is now specified by the proposed
+  resolver for mutations. This is now specified by the approved
   [durable identity and shared-files plan](entity-identity-and-files.md) and
   remains independent of the purchase-import implementation.
 
