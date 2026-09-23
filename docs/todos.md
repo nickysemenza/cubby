@@ -211,20 +211,6 @@ history is the archive. Permanent product constraints live in the
   (`product-import-runs.tsx` already knows it). Receiving stays explicit
   (purchase-import plan decision 15).
 
-- **Make grouped entity lists correct across pagination and sorting.** Grouping
-  already reaches the server, but headers count only loaded rows and omit
-  groups not yet loaded. Keep grouping primary before pagination, with
-  relevance and user sorts within groups; relevance-only search currently
-  bypasses group ordering in `listScaffold.orderBy`, and `buildOrderBy` must
-  promote a later group field in a multi-sort. Derive group metadata from the
-  filtered set for truthful counts. Cover search, secondary group-field sorts,
-  and groups spanning pages. Generic Cards/Compact views omit group
-  headings; fix those before extending grouped Flow beyond Tools. Focus on
-  `apps/web/src/server/repo/list-scaffold.ts`,
-  `apps/web/src/server/repo/database-helpers/query.ts`,
-  `apps/web/src/app/_components/data-table/useDesktopGroupedRows.ts`, and
-  `apps/web/src/app/_components/entity-list/entity-shelf.tsx`.
-
 - **Native slot list views are hidden from the view picker.** Calendar,
   board, gallery, and analytics `list.views` slot entries exist in the
   manifest, but `EntityListView.swift`'s view picker does not surface `slot`
