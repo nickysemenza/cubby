@@ -842,16 +842,33 @@ private struct PhotoCellChrome: View {
     let developerOverlays: Bool
 
     var body: some View {
-        ZStack {
-            // Ownership and selection occupy different corners so selecting cannot hide a match.
-            PhotoGridMatchIndicator(state: state).padding(5)
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
-            analysisDot
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
-            analysisCaption
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
+        // The badge keeps its full size (ownership and selection occupy different corners, so
+        // selecting cannot hide a match). A ~100pt tile leaves ~34pt beside the compact icon badge:
+        // room for the classify time, not the label, so the time joins the bottom row and the
+        // label sits just above it. An owner badge ("GDE-7AP4") leaves no room at all, so there
+        // both lines sit above the row.
+        let inRow = state.ownerBadgeText == nil
+        VStack(alignment: .leading, spacing: 3) {
+            if developerOverlays, state.classifyMs != nil {
+                let lines = inRow ? [state.topLabel] : [classifyTime, state.topLabel]
+                let text = lines.compactMap { $0 }.joined(separator: "\n")
+                if !text.isEmpty { DevOverlayText(text, overMedia: true) }
+            }
+            HStack(alignment: .center, spacing: 3) {
+                analysisDot
+                if inRow, developerOverlays, let classifyTime {
+                    // Ahead of the spacer, which otherwise splits the free width with it.
+                    DevOverlayText(classifyTime, overMedia: true).layoutPriority(1)
+                }
+                Spacer(minLength: 0)
+                PhotoGridMatchIndicator(state: state).fixedSize().layoutPriority(2)
+            }
         }
+        .padding(5)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
     }
+
+    private var classifyTime: String? { state.classifyMs.map { "\(Int($0))ms" } }
 
     /// B4's grid dot: absent while pending, `.secondary` once analysed with no category hit,
     /// category-tinted (by ramp index, never by key) once a hit lands.
@@ -862,21 +879,6 @@ private struct PhotoCellChrome: View {
         case .analysed(let categories):
             Circle().fill(PhotoCategoryTint.color(for: categories) ?? Color.secondary)
                 .frame(width: 6, height: 6)
-                .padding(6)
-        }
-    }
-
-    /// Developer overlays layer 1: the classify time and top label, purely as an overlay — it never
-    /// changes the tile's own layout. It sits on its own row above the bottom corners, because the
-    /// trailing match badge can span most of the tile ("GDE-7AP4 plant") and the two collided.
-    @ViewBuilder private var analysisCaption: some View {
-        if developerOverlays, let classifyMs = state.classifyMs {
-            let label = state.topLabel.map { " · \($0)" } ?? ""
-            DevOverlayText("\(Int(classifyMs))ms\(label)", overMedia: true)
-                .lineLimit(1)
-                .minimumScaleFactor(0.6)
-                .padding(.horizontal, 5)
-                .padding(.bottom, 38)
         }
     }
 }
@@ -905,7 +907,8 @@ private struct PhotoCellChrome: View {
             )
             .aspectRatio(1, contentMode: .fit)
             .overlay { PhotoCellChrome(state: state, developerOverlays: true) }
-            .frame(width: 130)
+            // About a Mac grid tile's width.
+            .frame(width: 100)
         }
     }
     .padding()

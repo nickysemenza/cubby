@@ -28,7 +28,7 @@ extension EnvironmentValues {
 struct DevOverlayText: View {
     let text: String
     /// Drawn over a photo: secondary text on arbitrary image content is unreadable, so it gets
-    /// white text on a dark capsule instead.
+    /// white text on a dark rounded plate instead (a plate, not a capsule, so two lines sit well).
     let overMedia: Bool
 
     init(_ text: String, overMedia: Bool = false) {
@@ -38,12 +38,18 @@ struct DevOverlayText: View {
 
     var body: some View {
         if overMedia {
-            Text(text)
-                .font(.porcelainCode)
-                .foregroundStyle(.white)
-                .padding(.horizontal, 5)
-                .padding(.vertical, 1)
-                .background(.black.opacity(0.6), in: .capsule)
+            // One `Text` per line, so each line truncates on its own instead of a long label
+            // wrapping mid-word into the next.
+            VStack(alignment: .leading, spacing: 0) {
+                ForEach(Array(text.split(separator: "\n").enumerated()), id: \.offset) { _, line in
+                    Text(line).lineLimit(1).minimumScaleFactor(0.6)
+                }
+            }
+            .font(.porcelainCode)
+            .foregroundStyle(.white)
+            .padding(.horizontal, 3)
+            .padding(.vertical, 2)
+            .background(.black.opacity(0.6), in: .rect(cornerRadius: 5))
         } else {
             Text(text)
                 .font(.porcelainCode)
