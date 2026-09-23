@@ -10,7 +10,11 @@ rename/drop prompts. It does not diff CHECK constraints or partial-index WHERE
 clauses; apply those deliberately and read the resulting schema back. Before a
 `DROP COLUMN`, remove the `schema.ts` declaration and DEPLOY first — the
 relational query builder selects every declared column, so the declaration is
-the read.
+the read. The reverse also bites: an undeclared legacy table or column keeps
+its foreign keys, so a new write path that hard-deletes the referenced row
+fails until the drop. Either drop the legacy FKs in the expand step or run the
+drop right after the deploy (the ADR 0006 image joins blocked image deletes
+this way).
 
 Traps around `db:push`, all seen for real:
 

@@ -142,6 +142,11 @@ history is the archive. Permanent product constraints live in the
   grouping (`treePickerItems`) is not worth the wiring yet — revisit if
   either roster grows deep nesting.
 
+- **Test the merge dialog's impact preview.** `entity-merge-dialog.tsx`
+  renders a `MergeImpactPreview` per loser in both the ranked and fixed
+  dialogs, but only the delete dialog's preview has a unit test. Add one for
+  a blocking disposition on one loser that leaves confirm enabled.
+
 - **Cover the photo-group review's untested guards.** Add regression tests for
   the photo-groups route's household-member check (404 for a non-member), the
   `state='proposed'` guard on the approval `lastError` write, and the
@@ -169,6 +174,13 @@ history is the archive. Permanent product constraints live in the
   upserts on the unique key, so batch semantics match the single write. The
   client side is ready — the sync plans a whole pass before sending, so it has
   the full pending list in hand.
+
+- **Native clients follow merge redirects and show connections.** The API now
+  returns `redirectedFrom` and `previousShortcodes` on every detail read and
+  serves `entityGraph.connections`, but CubbyKit ignores all three: a merged
+  code opens the survivor without saying so, and the Relations surface has no
+  physical-connections section or delete impact preview. Mirror the web
+  behavior (a "was X" banner, the connections list, the advisory preview).
 
 - **Post-import shelf triage.** After a vendor purchase import every new
   product lands in the `unlocated` saved view (`entities/view-manifest.ts`:
@@ -406,13 +418,14 @@ history is the archive. Permanent product constraints live in the
   a CI job that diffs `application-schema.json` against the live schema and
   blocks merge on a missing column.
 
-- **Drop the legacy image joins and exception columns (entity identity PR 2).**
-  After production has run a full background and import cycle on `Entity` and
-  `EntityAttachment` with clean integrity detectors, drop the eight
-  `<Entity>Image` joins, `Cookbook.coverImageId`, `Vendor.logoImageId`,
-  `Image.targetType`/`targetId`/`idempotencyKey`, and the Product and Purchase
-  `dataExceptions` columns. See
-  [the runbook](runbooks/entity-identity-schema.md#pr-2-drop-the-legacy-storage).
+- **Anchor the remaining polymorphic references on `Entity`.** ADR 0006 gave
+  `AuditLog`, `SearchDocument`, `EntityEmbedding`, and `DataException` a
+  composite `Entity(id, kind)` FK. `AiAnalysis`, `AiUsage`, `ImportRunMutation`,
+  and `ImportFinding` still carry unenforced `(entityType|targetType, id)`
+  pairs with bespoke merge and removal cleanup. Classify each one (history that
+  keeps its original identity vs a live pointer that follows a merge), then
+  convert one table per cutover; a pair whose target can be a non-entity row
+  (`import_run`, `expense` without a shortcode) stays as it is.
 
 - **Finish the meal amount migration.** `MealFoodEntry` and
   `MealRecipePortion` still retain legacy `grams` columns and read/input
