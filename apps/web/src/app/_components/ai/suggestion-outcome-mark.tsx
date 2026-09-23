@@ -271,13 +271,17 @@ function OutcomePopoverBody({
 }
 
 /** One footprint for every glyph state (checking, failed, outcome), so a
- * settling query swaps icons in space already taken: phone touch target on
- * `inline`/`line`, 12px elsewhere, and the shared 20px rail slot in a table
+ * settling query swaps icons in space already taken: glyph-sized with a
+ * phone touch target on `inline`/`line`, and the shared 20px rail slot in a table
  * cell so it lines up with the cell's other affordances. */
 function glyphTriggerClass(surface: SuggestionOutcomeSurface) {
   return cn(
     "inline-flex shrink-0 items-center justify-center rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-ring",
-    surface === "cell" ? "size-5" : "min-h-11 min-w-11 md:min-h-0 md:min-w-0",
+    // The phone target is a 44px pseudo-element, not a 44px box: a box
+    // pushed the value's neighbours onto a second line in narrow ledgers.
+    surface === "cell"
+      ? "size-5"
+      : "relative after:absolute after:-inset-4 md:after:hidden",
   );
 }
 

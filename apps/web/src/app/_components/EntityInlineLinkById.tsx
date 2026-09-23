@@ -1,14 +1,34 @@
 import type { AuditEntityType } from "@cubby/schemas/audit";
 import type { Entity } from "@cubby/schemas/entity";
-import type { ImageUrlSummary } from "@cubby/schemas/image-summary";
+import { entitySummary } from "@cubby/schemas/entity-summary";
+import {
+  imageUrlSummary,
+  type ImageUrlSummary,
+} from "@cubby/schemas/image-summary";
 import { skipToken, useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
+import { z } from "zod";
 
 import { Spinner } from "~/components/ui/spinner";
+import {
+  isGeneratedBrowserCrudEntity,
+  type StandardEntity,
+} from "~/entities/entity-contracts";
 import { entityPreviewQueryOptions } from "~/entities/entity-query";
 
 import { EntityInlineLink } from "./EntityInlineLink";
-import { EntityPreviewLink } from "./EntityPreviewLink";
+import { EntityReferenceLink } from "./EntityReferenceLink";
+
+const isNamedEntity = (
+  entity: AuditEntityType,
+): entity is StandardEntity & AuditEntityType =>
+  entity !== "inventory" &&
+  entity !== "cookbook" &&
+  isGeneratedBrowserCrudEntity(entity);
+
+const namedRecordSchema = z.looseObject({
+  displayImages: z.array(imageUrlSummary).optional().catch(undefined),
+});
 
 // Entity types this inline link resolves to a name via the detail transport. Inventory &
 // cookbook are intentionally excluded — they render as plain links below.
@@ -41,20 +61,19 @@ export function EntityInlineLinkById({
   entityId,
   compact,
 }: EntityInlineLinkByIdProps) {
-  // Resolve the name via the shared entity-detail mapping for the fetchable
-  // inline-link types; everything else (inventory, cookbook, or an out-of-union runtime
+  // Resolve the name via the shared entity-detail mapping for every named
+  // entity; everything else (inventory, cookbook, or an out-of-union runtime
   // entityType from a legacy audit row) gets a skipped query so useQuery never
   // receives a non-object arg — v5 throws "only the Object form is allowed".
   const queryOptions = useMemo(
     () =>
-      isFetchableInlineEntity(entityType)
+      isNamedEntity(entityType)
         ? entityPreviewQueryOptions(entityType, entityId)
         : { queryKey: ["invalid"] as const, queryFn: skipToken },
     [entityType, entityId],
   );
 
-  // Single query hook instead of 4 disabled ones
-  // SAFETY: the options union is narrowed by the fetchable entity guard, but
+  // SAFETY: the options union is narrowed by the named entity guard, but
   // React Query's generic overload cannot express that correlation.
   const query = useQuery(queryOptions as never);
 
@@ -76,21 +95,27 @@ export function EntityInlineLinkById({
     );
   }
 
-  if (
-    entityType === "project" ||
-    entityType === "task" ||
-    entityType === "purchase"
-  ) {
+  if (!isFetchableInlineEntity(entityType) && isNamedEntity(entityType)) {
+    // Every other generated entity names itself through its manifest
+    // `titleField`; a bare shortcode link (`PRJ-4UMD`) says nothing to a reader.
+    const record = namedRecordSchema.safeParse(query.data);
     return (
-      <EntityPreviewLink
+      <EntityReferenceLink
         entity={entityType}
         id={entityId}
-        displayImage={null}
-        showIdentityMark={false}
-        className="text-sm text-primary hover:underline"
-      >
-        {entityId}
-      </EntityPreviewLink>
+        name={
+          record.success
+            ? z
+                .string()
+                .catch("")
+                .parse(record.data[entitySummary[entityType].titleField]) ||
+              null
+            : null
+        }
+        displayImage={
+          record.success ? (record.data.displayImages?.[0] ?? null) : null
+        }
+      />
     );
   }
 

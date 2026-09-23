@@ -12,7 +12,10 @@ import {
 import { z } from "zod";
 
 import { Button } from "~/components/ui/button";
-import { FieldResolutionStatus } from "~/entities/field-resolution";
+import {
+  FieldResolutionStatus,
+  resolutionActionClassName,
+} from "~/entities/field-resolution";
 
 import { useFieldSuggestionContext } from "./field-suggestion-provider";
 
@@ -94,12 +97,13 @@ export function FormFieldResolution<TValues extends FieldValues>({
     }
   };
   const actions = (
-    <span className="inline-flex items-center gap-1">
+    <span className="inline-flex items-center gap-2">
       {resolution?.mode === "inherit" ? null : (
         <Button
           type="button"
           size="xs"
           variant="link"
+          className={resolutionActionClassName}
           onClick={() => applyPatch(policy.reset)}
         >
           Use inherited
@@ -109,10 +113,11 @@ export function FormFieldResolution<TValues extends FieldValues>({
         <Button
           type="button"
           size="xs"
-          variant="ghost"
+          variant="link"
+          className={resolutionActionClassName}
           onClick={() => applyPatch(nonePatch)}
         >
-          None
+          Set to none
         </Button>
       ) : null}
     </span>

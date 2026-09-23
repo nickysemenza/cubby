@@ -7,6 +7,9 @@ export interface BasicInfoField {
   value: ReactNode;
   /** Secondary browse/filter action kept outside editable values and links. */
   filterAction?: ReactNode;
+  /** Quiet secondary line under the value (where an inherited value comes
+   * from), kept off the value line so its row actions stay put. */
+  caption?: ReactNode;
   hide?: boolean;
 }
 
@@ -48,9 +51,17 @@ export const BasicInfo: FC<BasicInfoProps> = ({
             {/* A value is often one inline-flex control (an edit trigger); as a
                 flex child its min-width is its content, so it has to be told
                 to shrink or a long note escapes the rail. */}
-            <span className="flex min-w-0 items-center gap-2 break-words [&>*]:max-w-full [&>*]:min-w-0">
-              {field.value}
-              {field.filterAction}
+            <span
+              data-slot="basic-info-value"
+              className="grid min-w-0 content-start gap-0.5"
+            >
+              {/* Row actions wrap under a value that needs the width rather
+                  than truncating it — the value is what the row is for. */}
+              <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 break-words [&>*]:max-w-full [&>*]:min-w-0">
+                {field.value}
+                {field.filterAction}
+              </span>
+              {field.caption}
             </span>
           </Fragment>
         ))}

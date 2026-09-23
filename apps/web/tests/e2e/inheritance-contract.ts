@@ -45,7 +45,7 @@ export function inheritanceContract() {
       await open();
     }
     await expect(
-      page.getByText("Matches inherited value", { exact: true }).first(),
+      page.getByText("Same as inherited value", { exact: true }).first(),
     ).toBeVisible();
     await useInherited.click();
     await expect
@@ -55,11 +55,13 @@ export function inheritanceContract() {
         fieldResolutions: { projectId: { mode: "inherit" } },
       });
     await expect(
-      page.getByText("purchase default", { exact: true }).first(),
+      page.getByText("From purchase", { exact: true }).first(),
     ).toBeVisible();
     await expectViewportBounded(page);
     await gotoAuthenticatedPage(page, `/expenses/${fixture.charge.id}`);
-    await expect(page.getByText(/purchase allocation/i).first()).toBeVisible();
+    await expect(
+      page.getByText("Allocated from", { exact: true }).first(),
+    ).toBeVisible();
     await expect(
       page.locator(`a[href="/projects/${fixture.project.id}"]`).first(),
     ).toBeVisible();
@@ -71,9 +73,10 @@ export function inheritanceContract() {
       explanation.getByText("Project share", { exact: true }),
     ).toBeVisible();
     await expect(explanation.getByText("$1.00", { exact: true })).toBeVisible();
+    // The source link names the project (not its shortcode) once it loads.
     await expect(
-      explanation.getByRole("link", { name: fixture.project.id, exact: true }),
-    ).toHaveAttribute("href", `/projects/${fixture.project.id}`);
+      explanation.locator(`a[href="/projects/${fixture.project.id}"]`).first(),
+    ).not.toHaveText(fixture.project.id);
     await expect(
       explanation.getByText("Stored override", { exact: true }),
     ).toHaveCount(0);

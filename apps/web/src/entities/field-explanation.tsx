@@ -193,7 +193,14 @@ export function FieldExplanation({
           <Button
             size="icon-xs"
             variant="ghost"
-            className={surface === "list" ? CELL_RAIL_BUTTON_CLASS : undefined}
+            // Off the list rail, the 44px phone target is an `::after`
+            // (24px + 2×10px) so a ledger row keeps its value on one line.
+            mobileSize={surface === "list" ? "touch" : "compact"}
+            className={
+              surface === "list"
+                ? CELL_RAIL_BUTTON_CLASS
+                : "relative after:absolute after:-inset-2.5 md:after:hidden"
+            }
             aria-label={`How ${label.toLowerCase()} is determined`}
           />
         }

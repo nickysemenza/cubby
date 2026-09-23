@@ -44,39 +44,22 @@ import {
   attachCubbyColumnMeta,
   type MobileColumnMeta,
 } from "~/app/_components/data-table/table-meta";
-import {
-  EntityDisplayImagesProvider,
-  useEntityDisplayImage,
-} from "~/app/_components/entity-media/entity-display-images";
-import { EntityPreviewLink } from "~/app/_components/EntityPreviewLink";
+import { EntityDisplayImagesProvider } from "~/app/_components/entity-media/entity-display-images";
+import { EntityReferenceLink } from "~/app/_components/EntityReferenceLink";
 import { ExternalLinkText } from "~/app/_components/ExternalLink";
 import { tryFormatAmount } from "~/app/_components/inventory/format-amount";
-import {
-  hoverPreviewEntities,
-  type HoverPreviewEntity,
-} from "~/app/_components/preview/preview-entities";
-import {
-  TableLink,
-  tableLinkVariants,
-} from "~/app/_components/table/TableLink";
 import { BasicInfo, type BasicInfoField } from "~/components/common/basic-info";
 import {
   renderScalarValue,
   type ScalarDisplayValue,
 } from "~/components/common/scalar-value";
-import { EntityIdentityMark } from "~/components/entity/entity-identity-mark";
 import { Checkbox } from "~/components/ui/checkbox";
 import { EntityFilterLink } from "~/components/ui/entity-filter-link";
 import { NoneValue } from "~/components/ui/none-value";
 import { formatCurrency } from "~/lib/utils";
 
 import { recordFieldClearing } from "./editing/field-clearing";
-import {
-  entities,
-  entityDetailParams,
-  entityPluralLabel,
-  isBrowserRoutedEntity,
-} from "./entities";
+import { entities, entityPluralLabel, isBrowserRoutedEntity } from "./entities";
 import { readReferenceField, type ReferenceItem } from "./entity-references";
 import {
   enumDisplayValue,
@@ -316,11 +299,6 @@ function copyScalarField<TRecord extends object>(
   }
 }
 
-const isHoverPreviewEntity = (
-  entity: BrowserRoutedEntity,
-): entity is HoverPreviewEntity =>
-  hoverPreviewEntities.some((candidate) => candidate === entity);
-
 /** Routed manifest reference targets whose shortcode is a display-image ref. */
 const referenceMediaEntity = (entity: string): BrowserRoutedEntity | null =>
   // SAFETY: a manifest reference target is always a declared entity key.
@@ -339,52 +317,11 @@ function referenceMediaRefs<TRecord extends object>(
   return reference.items.map((item) => ({ entityType, entityId: item.id }));
 }
 
-/**
- * A manifest reference led by the same image-or-icon identity mark as
- * `EntityInlineLink`. The cover comes from the nearest
- * `EntityDisplayImagesProvider`; outside one, the entity icon holds its box.
- */
-function ReferenceLink({
-  entity,
-  item,
-}: {
-  entity: BrowserRoutedEntity;
-  item: ReferenceItem;
-}) {
-  const label = item.name ?? item.id;
-  const displayImage = useEntityDisplayImage({
-    entityType: entity,
-    entityId: item.id,
-  });
-  if (isHoverPreviewEntity(entity))
-    return (
-      <EntityPreviewLink
-        entity={entity}
-        id={item.id}
-        displayImage={displayImage}
-        className={tableLinkVariants({ className: "max-w-full" })}
-      >
-        <span className="min-w-0 truncate">{label}</span>
-      </EntityPreviewLink>
-    );
-  return (
-    <TableLink
-      to={entities[entity].routes.detail}
-      params={entityDetailParams(item.id)}
-      title={label}
-      className="inline-flex max-w-full items-center gap-1"
-    >
-      <EntityIdentityMark entity={entity} displayImage={displayImage} />
-      <span className="min-w-0 truncate">{label}</span>
-    </TableLink>
-  );
-}
-
 function referenceLink(entity: string, item: ReferenceItem): ReactNode {
   const routed = referenceMediaEntity(entity);
   if (routed === null)
     return <span className="font-mono text-xs">{item.name ?? item.id}</span>;
-  return <ReferenceLink entity={routed} item={item} />;
+  return <EntityReferenceLink entity={routed} id={item.id} name={item.name} />;
 }
 
 /** Reference fields link to the target's detail route; everything else
@@ -398,9 +335,11 @@ export function renderDetailFieldValue<TRecord extends object>(
   if (reference !== null) {
     if (reference.items.length === 0) return <NoneValue />;
     return (
-      <span className="flex flex-wrap gap-x-2 gap-y-0.5">
+      <span className="flex max-w-full min-w-0 flex-wrap gap-x-2 gap-y-0.5">
         {reference.items.map((item) => (
-          <span key={item.id}>{referenceLink(reference.entity, item)}</span>
+          <span key={item.id} className="flex max-w-full min-w-0">
+            {referenceLink(reference.entity, item)}
+          </span>
         ))}
       </span>
     );
@@ -411,6 +350,11 @@ export function renderDetailFieldValue<TRecord extends object>(
     "detail",
   );
 }
+
+/** A ledger row's filter icon keeps its 40px phone target as a pseudo-element
+ * so it doesn't wrap the value's other affordances onto a second line. */
+const LEDGER_FILTER_ACTION_CLASS =
+  "relative size-6 after:absolute after:-inset-2 sm:size-6 sm:after:hidden";
 
 /** Filter kinds whose URL value is one option or one id. */
 const COHORT_FILTER_KINDS = new Set(["select", "multiselect", "id", "idMulti"]);
@@ -483,6 +427,7 @@ function cohortFilterAction<TRecord extends object>(
         to={countFilter.to}
         search={{ [countFilter.urlKey]: recordId.data.id }}
         label={`Show all ${countFilter.plural}`}
+        className={LEDGER_FILTER_ACTION_CLASS}
       />
     );
   }
@@ -497,6 +442,7 @@ function cohortFilterAction<TRecord extends object>(
       to={entities[entity].routes.list}
       search={{ [descriptor.urlKey]: value }}
       label={`Show all ${plural} with ${label} ${text}`}
+      className={LEDGER_FILTER_ACTION_CLASS}
     />
   );
   const reference = readReferenceField(record, field);
@@ -625,34 +571,32 @@ export function EntityBasicInfo<TRecord extends object>({
             />
           ) : undefined;
         const resolution = fieldResolutionFor(record, field.key);
-        const decoratedValue =
-          field.control?.suggest || resolution ? (
-            <span className="inline-flex min-w-0 flex-wrap items-center gap-1">
-              {field.control?.suggest ? (
-                <RecordFieldSuggestion record={record} field={field.key}>
-                  {rendered.value}
-                </RecordFieldSuggestion>
-              ) : (
-                rendered.value
-              )}
-              {resolution ? (
-                <FieldResolutionBadge record={record} field={field.key} />
-              ) : null}
-            </span>
-          ) : (
-            rendered.value
-          );
+        // The suggestion mark rides the value's own line; the resolution
+        // caption goes beneath so neither pushes the row actions around.
+        const decoratedValue = field.control?.suggest ? (
+          <span className="inline-flex max-w-full min-w-0 items-center gap-1">
+            <RecordFieldSuggestion record={record} field={field.key}>
+              {rendered.value}
+            </RecordFieldSuggestion>
+          </span>
+        ) : (
+          rendered.value
+        );
         return [
           {
             label: field.label,
             ...rendered,
             value: decoratedValue,
+            caption: resolution ? (
+              <FieldResolutionBadge record={record} field={field.key} />
+            ) : undefined,
             filterAction:
               filterAction || explanationAction ? (
-                <>
+                // One unit, so a wrap never strands the info icon alone.
+                <span className="inline-flex shrink-0 items-center gap-2">
                   {filterAction}
                   {explanationAction}
-                </>
+                </span>
               ) : undefined,
           },
           ...(afterFields[field.key] ?? []),
