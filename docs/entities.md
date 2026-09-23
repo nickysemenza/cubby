@@ -12,6 +12,11 @@ parses metadata and applies defaults before typed compilation. Cross-entity
 references, capability compatibility, field rosters, and physical storage remain
 semantic compiler checks. Field-validation Zod instances pass through unchanged.
 
+For generic behavior shared across entities (including #1066 and #1067), add
+the capability to the entity declaration first, implement it in the generic
+renderer, prove declaration-to-renderer parity, then delete the per-entity twin.
+Keep any remaining entity-specific exception explicit in its declaration.
+
 Declarations may import shared primitives and cycle-safe field modules. They
 must not import canonical schemas, generated artifacts, server implementations,
 or browser modules. Implementation references remain `{ module, export }` data.
@@ -275,7 +280,7 @@ entity whose manifest declares it, and its dialog renders exactly those
 fields through the same reference/select/date rendering `EntityIntentFields`
 uses. The mutation payload is the form's dirty-field subset: an untouched
 field is omitted, and a cleared nullable field sends `null`. Native has no
-`bulkUpdate` route on its wire and keeps multi-select delete only.
+`bulkUpdate` route or multi-select delete.
 
 `capabilities.images` is `false`, `"gallery"` (an ordered `<Entity>Image` join
 table, bound in `apps/web/src/server/repo/database-helpers/crud.ts`
@@ -308,6 +313,9 @@ typed item schema, repository adapter, source, and browser/MCP exposure on the
 relationship itself. The generated inspector projects these references as
 client-safe data; generated server bindings import executable adapters.
 Repository closures still own transactions and service injection.
+For entities using the shared search-document behavior, `ports.search: "document"`
+selects the standard projection, semantic text, and dependent refresh bindings;
+use explicit references when an entity needs a different implementation.
 
 The model owns scalar validation and physical column factories as well as
 presentation. `model.storage` declares stored columns; `create`, `update`,

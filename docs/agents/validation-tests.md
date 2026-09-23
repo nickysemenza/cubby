@@ -53,10 +53,10 @@ instead of growing the page, a headline that must not wrap). It is opt-in
 (not part of `pnpm test`) because a real browser launch is slower than the
 shared jsdom graph; select it with `--project=preview`, `--project preview`,
 `test:preview`, or a direct `.preview.test.tsx` file argument. It is not
-wired into a CI job yet — doing so cheaply would need a Playwright browser
-install step in the `Tests - web (ui)` lane, which every push would pay for;
-add it there (never as a new required check — see AGENTS.md on rulesets) once
-more than one component family needs it. Preview specs need Tailwind's real
+wired into CI yet — doing so would need a Playwright browser install step in
+the `Tests - web (ui)` lane, which every push would pay for; wire it into that
+existing workflow once more than one component family needs it. Preview specs
+need Tailwind's real
 CSS output (`tooling/preview-test-setup.ts` imports `~/styles.css`) since a
 utility class only affects a real browser's layout once Tailwind has
 generated it — jsdom tests never needed this because jsdom has no layout
