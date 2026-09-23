@@ -75,7 +75,7 @@ import {
   getCategoryFeature,
   resolveProductCategory,
 } from "~/server/repo/product-category";
-import { deleteProductMatchCandidatesTx } from "~/server/repo/product-match-candidate";
+import { repointProductMatchCandidatesTx } from "~/server/repo/product-match-candidate";
 import { cascadeRemoval } from "~/server/repo/removal";
 
 import { validateLiveEffectiveTrades } from "../inheritance-validation";
@@ -179,16 +179,16 @@ export const PRODUCT_MERGE_EDGE_POLICY = {
       "Absorbed products' conversion projections are discarded; the survivor is marked stale and rebuilt from the merged graph.",
   },
   "ProductMatchCandidate.productAId": {
-    code: "discard-match-review",
-    effect: "hard-delete",
+    code: "repoint-match-review",
+    effect: "repoint",
     description:
-      "Match-queue reviews naming a merged-away product are discarded, so the merged pair itself cannot survive as a self-pair.",
+      "Match-queue reviews naming a merged-away product move onto the survivor so agent evidence survives; the merged pair itself is dropped as a self-pair and a colliding pair folds, keeping any dismissal.",
   },
   "ProductMatchCandidate.productBId": {
-    code: "discard-match-review",
-    effect: "hard-delete",
+    code: "repoint-match-review",
+    effect: "repoint",
     description:
-      "Match-queue reviews naming a merged-away product are discarded, so the merged pair itself cannot survive as a self-pair.",
+      "Match-queue reviews naming a merged-away product move onto the survivor so agent evidence survives; the merged pair itself is dropped as a self-pair and a colliding pair folds, keeping any dismissal.",
   },
   "Planting.sourceProductId": {
     code: "preserve-garden-source",
@@ -1730,7 +1730,7 @@ export const mergeProducts = async (
       })
       .where(eq(product.id, keepId));
 
-    await deleteProductMatchCandidatesTx(tx, plan.loserIds);
+    await repointProductMatchCandidatesTx(tx, keepId, plan.loserIds);
 
     if (plan.conversionCoverage.length > 0) {
       await tx.delete(productConversionCoverage).where(

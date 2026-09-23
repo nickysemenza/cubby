@@ -29,6 +29,12 @@ import {
   listProductComponents,
 } from "~/server/repo/product-components";
 import {
+  dismissProductMatch,
+  listProductMatchRows,
+  productPairKey,
+  upsertAgentProductMatch,
+} from "~/server/repo/product-match-candidate";
+import {
   createPlantFixture,
   makeLocationInput,
   makeProductInput,
@@ -329,6 +335,56 @@ describe("mergeProducts", () => {
     expect(survivorGtins).toEqual([
       { externalId: "00012345678905", isPrimary: true },
     ]);
+  });
+
+  // Regression: merging used to hard-delete every match review naming a loser,
+  // so an agent's evidence against a third product vanished with the merge.
+  it("keeps match reviews against third products, folding and dropping self-pairs", async () => {
+    const keeper = await seedProduct("Match Keeper");
+    const loser = await seedProduct("Match Loser");
+    const third = await seedProduct("Match Third");
+    const fourth = await seedProduct("Match Fourth");
+    await upsertAgentProductMatch(ctx.db, {
+      productIds: [keeper.id, loser.id],
+      evidence: "same item",
+      sourceUrls: [],
+    });
+    await upsertAgentProductMatch(ctx.db, {
+      productIds: [loser.id, third.id],
+      evidence: "loser matches third",
+      sourceUrls: ["https://example.com/a"],
+    });
+    await dismissProductMatch(ctx.db, [keeper.id, fourth.id]);
+    await upsertAgentProductMatch(ctx.db, {
+      productIds: [loser.id, fourth.id],
+      evidence: "loser matches fourth",
+      sourceUrls: ["https://example.com/b"],
+    });
+
+    await mergeProducts(
+      ctx.db,
+      { keepId: keeper.shortcode, mergeIds: [loser.shortcode] },
+      TEST_ACTOR,
+    );
+
+    const rows = await listProductMatchRows(ctx.db);
+    const byPair = new Map(
+      rows.map((row) => [productPairKey(row.productAId, row.productBId), row]),
+    );
+    expect(rows).toHaveLength(2);
+    expect(byPair.get(productPairKey(keeper.id, third.id))).toMatchObject({
+      source: "agent",
+      state: "open",
+      evidence: "loser matches third",
+      sourceUrls: ["https://example.com/a"],
+    });
+    // The person's dismissal stands; the loser's agent evidence rides along.
+    expect(byPair.get(productPairKey(keeper.id, fourth.id))).toMatchObject({
+      source: "agent",
+      state: "dismissed",
+      evidence: "loser matches fourth",
+      sourceUrls: ["https://example.com/b"],
+    });
   });
 
   it("dedupes separately stored product images with the same verified hash", async () => {
