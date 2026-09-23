@@ -3,7 +3,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 import { ALL_SPECS_TRIGGERS, SPEC_AREAS } from "../tests/e2e/spec-areas.ts";
-import { computeAffected, globToRegExp } from "./e2e-affected.ts";
+import { computeAffected } from "./e2e-affected.ts";
 
 const E2E_DIR = fileURLToPath(new URL("../tests/e2e", import.meta.url));
 
@@ -25,35 +25,6 @@ describe("spec-areas.ts manifest coverage", () => {
         0,
       );
     }
-  });
-});
-
-describe("globToRegExp", () => {
-  it("matches a literal path", () => {
-    expect(
-      globToRegExp("apps/web/package.json").test("apps/web/package.json"),
-    ).toBe(true);
-    expect(
-      globToRegExp("apps/web/package.json").test("apps/web/other.json"),
-    ).toBe(false);
-  });
-
-  it("matches a single-star segment but not a path separator", () => {
-    const re = globToRegExp("apps/web/src/app/_components/form-utils*.ts*");
-    expect(re.test("apps/web/src/app/_components/form-utils.tsx")).toBe(true);
-    expect(
-      re.test("apps/web/src/app/_components/form-utils-focus.unit.test.tsx"),
-    ).toBe(true);
-    expect(re.test("apps/web/src/app/_components/other/form-utils.tsx")).toBe(
-      false,
-    );
-  });
-
-  it("matches nested paths with a double-star", () => {
-    const re = globToRegExp("apps/web/src/app/tasks/**");
-    expect(re.test("apps/web/src/app/tasks/kanban-board.tsx")).toBe(true);
-    expect(re.test("apps/web/src/app/tasks/nested/deep-file.ts")).toBe(true);
-    expect(re.test("apps/web/src/app/projects/index.tsx")).toBe(false);
   });
 });
 

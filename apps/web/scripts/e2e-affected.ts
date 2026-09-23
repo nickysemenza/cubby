@@ -50,36 +50,9 @@ export function changedFiles(root: string): string[] {
   return [...new Set(sets.flat())];
 }
 
-/**
- * Compiles a glob (supporting `*`, `**`, and `?`) into a RegExp anchored to
- * the full string. Good enough for the path-glob vocabulary used in
- * `spec-areas.ts`; not a general-purpose glob implementation.
- */
-export function globToRegExp(glob: string): RegExp {
-  let pattern = "";
-  for (let i = 0; i < glob.length; i++) {
-    const c = glob[i];
-    if (c === "*") {
-      if (glob[i + 1] === "*") {
-        pattern += ".*";
-        i++;
-      } else {
-        pattern += "[^/]*";
-      }
-    } else if (c === "?") {
-      pattern += "[^/]";
-    } else if (c && /[.+^${}()|[\]\\]/.test(c)) {
-      pattern += `\\${c}`;
-    } else {
-      pattern += c;
-    }
-  }
-  return new RegExp(`^${pattern}$`);
-}
-
 function matches(file: string, globs: readonly string[]): string | null {
   for (const glob of globs) {
-    if (globToRegExp(glob).test(file)) return glob;
+    if (path.matchesGlob(file, glob)) return glob;
   }
   return null;
 }
