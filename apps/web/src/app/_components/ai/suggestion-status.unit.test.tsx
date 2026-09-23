@@ -44,6 +44,23 @@ describe("SuggestionStatus copy", () => {
     expect(container).toBeEmptyDOMElement();
   });
 
+  // Regression: a failed check left nothing to report, so the focused
+  // "Checking suggestions…" trigger unmounted and the bulk-edit dialog
+  // refocused its own shell mid-interaction.
+  it("keeps the status trigger mounted when a check fails outright", () => {
+    const { rerender } = render(
+      <SuggestionStatus checking failures={0} count={0} fields={[]} />,
+    );
+    const trigger = screen.getByRole("button", {
+      name: /Checking suggestions/,
+    });
+    rerender(
+      <SuggestionStatus checking={false} failures={1} count={0} fields={[]} />,
+    );
+    expect(trigger).toBeInTheDocument();
+    expect(trigger).toHaveTextContent("Suggestions unavailable");
+  });
+
   it("shows 'Checking suggestions…' while a request is in flight", () => {
     render(<SuggestionStatus checking failures={0} count={0} fields={[]} />);
     expect(screen.getByText("Checking suggestions…")).toBeInTheDocument();
