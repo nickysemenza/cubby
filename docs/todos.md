@@ -166,6 +166,16 @@ history is the archive. Permanent product constraints live in the
 
 ## Ready projects
 
+- **Complete native parity for web fieldwork.** Before retiring the web
+  workflows, restore an unfinished native recount after relaunch with its
+  staged decisions and completed/skipped stops; bring the location photo pass
+  (scoped queue, scan-to-stop, and resume) to native; add the web sweep's
+  missing-item review; and accept recipe links from the iOS Share Sheet in the
+  native recipe flow. Capture, Recount, and Needs Photo already cover parts of
+  these jobs, so extend them rather than duplicate their screens. Use
+  `docs/inventory-audit.md`, `apps/web/src/app/locations/photo-pass`, and
+  `apps/apple/App/Shared` for the behavior and ownership boundaries.
+
 - **Backfill image descriptions as a paced, visible sweep.** Product
   classification evidence is built from `image-description` analyses, but
   automatic scheduling is off (image-processing settings `enabled: false`) and
@@ -646,6 +656,15 @@ example vegetable` must not resolve to the weight of an entire linked bag
 
 ### Needs a decision or investigation
 
+- **Make narrow web layouts device agnostic.** `useIsMobile` already follows
+  viewport width, but the compact shell still uses phone-style tabs and
+  overlays. Design a simpler compact navigation and overlay pattern that works
+  at the same narrow width on a resized desktop window and on iPhone, keeps
+  every ordinary route reachable, and uses width rather than device identity
+  for layout. Keep safe-area, virtual-keyboard, and touch behavior where the
+  browser exposes those capabilities; update the web design language and
+  responsive checks with the chosen pattern.
+
 - **Detail ledger dates.** Task Overview shows `Due` and `Due end` as two
   identical ISO rows (`2026-09-22` twice) for a single-day task, while the
   header reads `Added Sep 18, 2026`. Decide whether a same-day range
@@ -973,6 +992,14 @@ entry` on the other — six shipped occurrences so far (#456, #462, #481,
   more than the current recovery path.
 
 ### Waiting for a trigger
+
+- **Retire native-owned web fieldwork and PWA installation.** After the native
+  parity project above ships and its flows pass real-device validation, remove
+  web barcode/QR camera controls, `/scan`, the sweep UI, the superseded recount
+  and location photo-pass routes, and PWA manifest/share-target/icons/splash
+  assets. Account for unfinished browser-local passes and old entry links
+  before removing their routes. Keep the responsive website, ordinary record
+  links, photo capture/upload, and the scan/reconcile APIs used by native.
 
 - **Follow-ups gated on image provenance landing** (see the
   [plan](plans/image-provenance-and-devices.md)); each promotes on its own
