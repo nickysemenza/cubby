@@ -60,6 +60,25 @@ const sealArtifact = async (
     throw new Error(
       `${artifact.relativePath} does not start with the generated header.`,
     );
+  try {
+    const current = await readFile(
+      resolve(root, artifact.relativePath),
+      "utf8",
+    );
+    const hashes = current.match(ARTIFACT_HASH_PATTERN);
+    if (
+      hashes?.[1] === artifactHash(artifact.source) &&
+      hashes[2] === artifactHash(current.replace(ARTIFACT_HASH_PATTERN, ""))
+    )
+      return { ...artifact, source: current };
+  } catch (error) {
+    if (
+      !(error instanceof Error) ||
+      !("code" in error) ||
+      error.code !== "ENOENT"
+    )
+      throw error;
+  }
   const formatted = await formatSource(root, artifact);
   const hashLine = `// Artifact hashes: source=${artifactHash(artifact.source)} content=${artifactHash(formatted)}\n`;
   return {
@@ -199,9 +218,22 @@ export const writeArtifacts = async (
   root: string,
   artifacts: readonly EntityArtifacts[],
 ) => {
+  const changed: string[] = [];
   for (const artifact of artifacts) {
     const artifactPath = resolve(root, artifact.relativePath);
+    try {
+      if ((await readFile(artifactPath, "utf8")) === artifact.source) continue;
+    } catch (error) {
+      if (
+        !(error instanceof Error) ||
+        !("code" in error) ||
+        error.code !== "ENOENT"
+      )
+        throw error;
+    }
     await mkdir(dirname(artifactPath), { recursive: true });
     await writeFile(artifactPath, artifact.source);
+    changed.push(artifact.relativePath);
   }
+  return changed;
 };

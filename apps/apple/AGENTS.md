@@ -28,9 +28,9 @@ generate --spec apps/apple/project.yml --use-cache`. If a build fails with the l
 - Hand-written Swift names generated types only through the aliases in
   `CubbyKit/Sources/CubbyKit/Generated/APITypes.swift` (`Product`, `ProductListItem`,
   `PlantingOut`, `ScanAtLocationOut`, …), never as `Components.Schemas.*`, and never a
-  positional `…Payload`/`InputSchemaNN`/`OutputSchemaNN` name — those are swift-openapi-generator's
-  names for a 1,000+-schema doc and are not stable across regeneration (reach a positional
-  value by property and let inference carry the type). The generator's output is its own SPM
+  anonymous `…Payload`/`InputShared…`/`OutputShared…` name — structural names can
+  change when a schema changes (reach an anonymous value by property and let
+  inference carry the type). The generator's output is its own SPM
   target, `CubbyAPI` (`CubbyKit/Sources/CubbyAPI/`), so editing hand-written CubbyKit code
   does not recompile ~58k generated lines; `import CubbyAPI` appears only inside CubbyKit
   (`API/*.swift`, `Generated/*.swift`, and the model files that extend a generated type), never
@@ -109,6 +109,8 @@ generate --spec apps/apple/project.yml --use-cache`. If a build fails with the l
   (`apps/web/src/lib/generated/http-openapi.gen.json`). The entire `CubbyAPI` target is generated,
   which is why it is excluded from the `swift format` targets in `scripts/apple-check.sh`. Regenerate
   with `apps/apple/scripts/generate-openapi.sh`; `generate-openapi.sh --check` fails when stale.
+  On macOS, `pnpm generate:api` updates the web OpenAPI document and Swift client
+  in dependency order. Both generators preserve unchanged files and modification times.
 - `CubbyKit/Sources/CubbyKit/Generated/{OperationRoutes,EntityOperations,APITypes}.swift` — the
   runtime route table (`OperationRoute.all`), the per-entity `list`/`timeline`/`get`/`create`/
   `update`/image-attach switches with `EntityKey.httpActions`/`nativeActions` and the generated
