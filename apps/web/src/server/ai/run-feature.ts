@@ -12,12 +12,18 @@ import type { ImportRunId } from "@cubby/schemas/identifiers";
  */
 import { chat, type ModelMessage } from "@tanstack/ai";
 
+import { recordAiUsage } from "~/server/ai-usage";
 import type { AiChatFeature, AiStructuredFeature } from "~/server/ai/features";
 import {
   getChatModelConfig,
   type SupportedChatModel,
   adaptiveThinkingFor,
 } from "~/server/ai/models";
+import {
+  type AiResponseCacheKeyInput,
+  type ApplicationCacheStatus,
+  withAiResponseCache,
+} from "~/server/ai/response-cache";
 import {
   anthropicOptions,
   cachedCall,
@@ -63,6 +69,7 @@ export interface AiRunContext<T = unknown> {
   entity?: { entityType: string; entityId: string } | null;
   /** Whether the *caller's* own cache (AiAnalysis) hit, for the usage row. */
   cacheStatus?: "hit" | "miss" | "none";
+  applicationCacheStatus?: ApplicationCacheStatus;
   /**
    * Skip the gateway's response cache despite an identical request body —
    * what a "regenerate" action needs, since an unchanged prompt would
@@ -129,6 +136,7 @@ export function planStructuredRun<T = unknown>(
           jobKind: ctx.job?.kind ?? null,
           jobId: ctx.job?.id ?? null,
           cacheStatus: ctx.cacheStatus ?? "none",
+          applicationCacheStatus: ctx.applicationCacheStatus ?? "none",
           entity: ctx.entity ?? null,
         })
       : undefined,
@@ -282,32 +290,74 @@ export async function runStructuredFeature<T>(
     }
   };
 
-  const firstResult = await placeCall(request, planStructuredRun(spec, ctx));
-  if (!ctx.validate) return firstResult;
-
-  const firstValidation = ctx.validate(firstResult);
-  if (firstValidation.ok) return firstResult;
-
-  const repairRequest: AiChatRequest = {
-    systemPrompts: request.systemPrompts,
-    messages: [
-      ...request.messages,
-      buildRepairTurn(firstValidation.issues, firstResult),
-    ],
+  const validate = (value: unknown): T => {
+    const parsed = spec.schema.parse(value);
+    const checked = ctx.validate?.(parsed);
+    if (checked && !checked.ok)
+      throw new Error(
+        `Structured output for "${spec.feature}" is invalid: ${checked.issues.join("; ")}`,
+      );
+    return parsed;
   };
-  // `force: true` for explicitness: the repaired body already differs from
-  // the first call's (the repair turn is new), so it would miss the
-  // gateway's exact-body cache regardless — but a validator that always
-  // rejects must never be able to land a cached rejection loop.
-  const repairedResult = await placeCall(
-    repairRequest,
-    planStructuredRun(spec, { ...ctx, force: true }),
-  );
-
-  const repairValidation = ctx.validate(repairedResult);
-  if (repairValidation.ok) return repairedResult;
-
-  throw new Error(
-    `Structured output for "${spec.feature}" is invalid after one repair attempt: ${repairValidation.issues.join("; ")}`,
-  );
+  const keyInput: AiResponseCacheKeyInput = {
+    feature: spec.feature,
+    model: spec.model,
+    promptVersion: spec.promptVersion,
+    tier: spec.tier,
+    maxTokens: spec.maxTokens,
+    request,
+  };
+  if (spec.effort !== undefined) keyInput.effort = spec.effort;
+  return withAiResponseCache({
+    enabled: spec.cache && ports === productionStructuredRunPorts,
+    force: ctx.force,
+    keyInput,
+    validate,
+    onHit: async (durationMs) => {
+      if (!ctx.db) return;
+      await recordAiUsage(ctx.db, {
+        provider: getChatModelConfig(spec.model).provider,
+        model: spec.model,
+        feature: spec.feature,
+        operation: ctx.operation,
+        runId: ctx.runId,
+        jobKind: ctx.job?.kind ?? null,
+        jobId: ctx.job?.id ?? null,
+        entity: ctx.entity ?? null,
+        cacheStatus: ctx.cacheStatus ?? "none",
+        applicationCacheStatus: "hit",
+        inputTokens: 0,
+        outputTokens: 0,
+        estimatedCost: 0,
+        attempt: 0,
+        durationMs,
+      });
+    },
+    compute: async (applicationCacheStatus) => {
+      const callContext = { ...ctx, applicationCacheStatus };
+      const firstResult = await placeCall(
+        request,
+        planStructuredRun(spec, callContext),
+      );
+      if (!ctx.validate) return firstResult;
+      const firstValidation = ctx.validate(firstResult);
+      if (firstValidation.ok) return firstResult;
+      const repairRequest: AiChatRequest = {
+        systemPrompts: request.systemPrompts,
+        messages: [
+          ...request.messages,
+          buildRepairTurn(firstValidation.issues, firstResult),
+        ],
+      };
+      const repairedResult = await placeCall(
+        repairRequest,
+        planStructuredRun(spec, { ...callContext, force: true }),
+      );
+      const repairValidation = ctx.validate(repairedResult);
+      if (repairValidation.ok) return repairedResult;
+      throw new Error(
+        `Structured output for "${spec.feature}" is invalid after one repair attempt: ${repairValidation.issues.join("; ")}`,
+      );
+    },
+  });
 }

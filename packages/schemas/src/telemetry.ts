@@ -59,11 +59,12 @@ export const aiUsageTelemetrySchema = z.strictObject({
   // telemetry queued by the preceding deployment forward-compatible.
   cacheReadTokens: z.number().int().nonnegative().nullable().optional(),
   cacheWriteTokens: z.number().int().nonnegative().nullable().optional(),
-  attempt: z.number().int().positive().optional(),
+  attempt: z.number().int().nonnegative().optional(),
   status: z.enum(["succeeded", "failed"]).optional(),
   gatewayLogId: z.string().min(1).nullable().optional(),
   durationMs: z.number().int().nonnegative(),
   cacheStatus: z.enum(["hit", "miss", "none"]).nullable(),
+  applicationCacheStatus: z.enum(["hit", "miss", "none"]).nullable().optional(),
   entityType: z.string().min(1).nullable(),
   entityId: z.uuid().nullable(),
   // The caller's own cost figure (the cookbook crate prices every model it

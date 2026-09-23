@@ -10,7 +10,7 @@ import {
 } from "./jev";
 
 const base = {
-  feature: FIELD_SUGGESTION_FEATURE,
+  feature: { ...FIELD_SUGGESTION_FEATURE, cache: false },
   subject: "pick one",
   rules: "Choose one.",
   usage: {

@@ -105,6 +105,7 @@ export async function persistTelemetryMessages(
               }),
             durationMs: event.durationMs,
             cacheStatus: event.cacheStatus,
+            applicationCacheStatus: event.applicationCacheStatus ?? null,
             entityType: event.entityType,
             entityId: event.entityId,
             createdAt: new Date(event.occurredAt),
