@@ -240,4 +240,77 @@ struct PhotoAnalysisStoreTests {
                 host: "cubby.example", localIdentifier: "asset-1", imageId: "IMG-1", version: 1,
                 modificationDate: secondDate))
     }
+
+    private func match(_ id: String, _ candidates: [DedupCandidate] = [], date: Double = 1)
+        -> StoredPhotoMatch
+    {
+        StoredPhotoMatch(
+            localIdentifier: id, modificationDate: Date(timeIntervalSinceReferenceDate: date),
+            hashRevision: PerceptualHash64.algorithmRevision, candidates: candidates)
+    }
+
+    @Test func savedMatchesRoundTripPerHostAndUpsertInPlace() async throws {
+        let store = try makeStore()
+        let candidate = DedupCandidate(
+            id: ImageCode("IMG-1"), basis: .content, confidence: .strong, distance: 1)
+        try await store.saveMatches(host: "a.example", [match("p1", [candidate]), match("p2")])
+        try await store.saveMatches(host: "a.example", [match("p2", [candidate], date: 2)])
+        try await store.saveMatches(host: "b.example", [match("p1")])
+        let state = try await store.matchState(host: "a.example")
+        #expect(state.matches.count == 2)
+        #expect(state.matches["p1"]?.candidates == [candidate])
+        // The second save replaced p2's row rather than adding one, and an empty result stored
+        // as NULL reads back as no candidates.
+        #expect(state.matches["p2"]?.candidates == [candidate])
+        #expect(state.matches["p2"]?.modificationDate == Date(timeIntervalSinceReferenceDate: 2))
+        #expect(try await store.matchState(host: "b.example").matches["p1"]?.candidates == [])
+        #expect(state.indexDigests.isEmpty)
+    }
+
+    @Test func applyingADeltaReplacesTheIndexSnapshotWithTheRows() async throws {
+        let store = try makeStore()
+        try await store.applyMatchDelta(
+            host: "a.example", matches: [match("p1")],
+            indexDigests: [ImageCode("IMG-1"): 1, ImageCode("IMG-2"): UInt64.max])
+        try await store.applyMatchDelta(
+            host: "a.example", matches: [match("p2")], indexDigests: [ImageCode("IMG-2"): 7])
+        let state = try await store.matchState(host: "a.example")
+        // The snapshot is replaced, not merged: IMG-1 left the index.
+        #expect(state.indexDigests == [ImageCode("IMG-2"): 7])
+        #expect(Set(state.matches.keys) == ["p1", "p2"])
+    }
+
+    @Test func pruneRemovesMissingPhotosFromAnalysisAndSavedMatches() async throws {
+        let store = try makeStore()
+        for id in ["keep", "gone"] {
+            try await store.upsertHash(
+                localIdentifier: id, modificationDate: nil, perceptualHash: PerceptualHash64(value: 1))
+        }
+        try await store.saveMatches(host: "a.example", [match("keep"), match("gone")])
+        #expect(try await store.pruneMissing(["keep"]) == 1)
+        #expect(Set(try await store.hashes(for: ["keep", "gone"]).keys) == ["keep"])
+        #expect(Set(try await store.matchState(host: "a.example").matches.keys) == ["keep"])
+        // A second prune reuses the temp table without leftover ids keeping "gone" alive.
+        #expect(try await store.pruneMissing([]) == 1)
+    }
+
+    @Test func batchClassificationWritesEveryRowAndSkipsTheFullAnalysisBlobOnRequest() async throws {
+        let store = try makeStore()
+        try await store.upsertFullAnalysis(
+            localIdentifier: "full", analysis: Data([1, 2, 3]), version: 1, categories: ["food"],
+            topLabels: [], classifyVersion: 1)
+        try await store.upsertClassifications([
+            PhotoClassificationWrite(
+                localIdentifier: "a", categories: ["plants"], topLabels: [], classifyVersion: 3, classifyMs: 5
+            ),
+            PhotoClassificationWrite(
+                localIdentifier: "b", categories: [], topLabels: [], classifyVersion: 3, classifyMs: nil),
+        ])
+        #expect(try await store.classifiedLocalIdentifiers(classifyVersion: 3) == ["a", "b", "full"])
+        let light = try await store.snapshots(for: ["a", "full"], includeFullAnalysis: false)
+        #expect(light["a"]?.categories == ["plants"])
+        #expect(light["full"]?.fullAnalysis == nil)
+        #expect(light["full"]?.fullAnalysisVersion == 1)
+        #expect(try await store.snapshots(for: ["full"])["full"]?.fullAnalysis == Data([1, 2, 3]))
+    }
 }
