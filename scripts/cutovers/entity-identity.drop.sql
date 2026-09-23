@@ -13,6 +13,15 @@
 
 BEGIN;
 
+-- Take every lock the drops need before any of them runs: acquiring them one
+-- DROP at a time deadlocked against a live read holding one of the tables.
+-- A busy table times out instead of queueing reads behind this; rerun it.
+SET LOCAL lock_timeout = '5s';
+LOCK TABLE "Image", "Product", "Purchase", "Cookbook", "Vendor",
+  "ProductImage", "LocationImage", "GardenEntryImage", "RecipeImage",
+  "MealImage", "TaskImage", "PurchaseImage", "ProjectImage"
+  IN ACCESS EXCLUSIVE MODE;
+
 DO $$
 DECLARE
   missing bigint;

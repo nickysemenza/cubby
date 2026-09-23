@@ -81,6 +81,8 @@ these objects, so dropping them never breaks a read.
    `Image.targetType`/`targetId`/`idempotencyKey` with the
    `Image_attachment_idempotency_key` index, and the Product and Purchase
    `dataExceptions` columns. Both verify queries at the end return no rows.
+   It locks every affected table first with a 5-second `lock_timeout`; on a
+   lock timeout, nothing changed, so rerun it.
 
 `psql` (keg-only under `/opt/homebrew/opt/libpq/bin`) runs each file as
 written: use the direct Neon host (drop `-pooler`) with
