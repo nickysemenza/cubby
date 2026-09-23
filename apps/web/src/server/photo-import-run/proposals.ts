@@ -21,14 +21,15 @@ import {
   type ImageId,
   type ImageShortcode,
   type ImportRunId,
+  type LedgerPartyId,
   type LocationId,
+  type ProductCategoryId,
   type ProductId,
 } from "@cubby/schemas/identifiers";
 import {
   imageId,
   importRunId,
   importRunShortcode,
-  ledgerPartyShortcode,
 } from "@cubby/schemas/identifiers";
 import { inventoryOwnershipMode } from "@cubby/schemas/inventory-ownership";
 import {
@@ -63,6 +64,7 @@ import {
   location,
   photoGroupProposal,
   product,
+  productCategory,
 } from "~/server/db/schema";
 import { assertImportRunCapability } from "~/server/purchase-import/capabilities";
 import {
@@ -87,7 +89,6 @@ type RunImage = { imageId: ImageId; shortcode: string; state: string };
 const storedCreate = commitPhotoGroupProduct.options[1].shape.create;
 const storedInventory = z.object({
   ownershipMode: inventoryOwnershipMode.optional(),
-  ownerPartyId: ledgerPartyShortcode.optional(),
   quantity: z.number().int().positive(),
 });
 
@@ -246,6 +247,64 @@ async function productSummaries(
   }));
 }
 
+/** Live codes for the category and owner FK columns of these rows. */
+async function linkedCodes(db: Database, rows: readonly ProposalRow[]) {
+  const categoryIds = [
+    ...new Set(rows.flatMap((row) => row.productCreateCategoryId ?? [])),
+  ];
+  const ownerIds = [
+    ...new Set(rows.flatMap((row) => row.inventoryOwnerPartyId ?? [])),
+  ];
+  const [categories, owners] = await Promise.all([
+    categoryIds.length
+      ? getDb(db)
+          .select({
+            id: productCategory.id,
+            shortcode: productCategory.shortcode,
+          })
+          .from(productCategory)
+          .where(
+            and(
+              inArray(productCategory.id, categoryIds),
+              notDeleted(productCategory),
+            ),
+          )
+      : Promise.resolve([]),
+    ownerIds.length
+      ? getDb(db)
+          .select({ id: ledgerParty.id, shortcode: ledgerParty.shortcode })
+          .from(ledgerParty)
+          .where(
+            and(inArray(ledgerParty.id, ownerIds), notDeleted(ledgerParty)),
+          )
+      : Promise.resolve([]),
+  ]);
+  const categoryById = new Map(
+    categories.map((row) => [
+      row.id,
+      parseShortcodeFor("productCategory", row.shortcode),
+    ]),
+  );
+  const ownerById = new Map(
+    owners.map((row) => [
+      row.id,
+      parseShortcodeFor("ledgerParty", row.shortcode),
+    ]),
+  );
+  return {
+    create: (row: ProposalRow) => ({
+      ...storedCreate.parse(row.productCreate),
+      categoryId: row.productCreateCategoryId
+        ? (categoryById.get(row.productCreateCategoryId) ?? null)
+        : null,
+    }),
+    ownerPartyId: (row: ProposalRow) =>
+      row.inventoryOwnerPartyId
+        ? ownerById.get(row.inventoryOwnerPartyId)
+        : undefined,
+  };
+}
+
 async function toViews(
   db: Database,
   rows: ProposalRow[],
@@ -264,7 +323,7 @@ async function toViews(
       ),
     ),
   ];
-  const [chosen, conflicts, locations] = await Promise.all([
+  const [chosen, conflicts, locations, linked] = await Promise.all([
     productSummaries(db, { ids: productIds }),
     productSummaries(db, { shortcodes: conflictCodes }),
     locationIds.length
@@ -277,6 +336,7 @@ async function toViews(
           .from(location)
           .where(and(inArray(location.id, locationIds), notDeleted(location)))
       : Promise.resolve([]),
+    linkedCodes(db, rows),
   ]);
   const summaryById = new Map(chosen.map((entry) => [entry.uuid, entry]));
   const summaryByCode = new Map(conflicts.map((entry) => [entry.id, entry]));
@@ -315,7 +375,7 @@ async function toViews(
             }
           : {
               kind: "create" as const,
-              create: storedCreate.parse(row.productCreate),
+              create: linked.create(row),
             },
       committedProduct: row.state === "committed" ? productSummary : null,
       inventory: inventory
@@ -325,7 +385,7 @@ async function toViews(
               : null,
             locationName: place?.name ?? null,
             ownershipMode: inventory.ownershipMode,
-            ownerPartyId: inventory.ownerPartyId,
+            ownerPartyId: linked.ownerPartyId(row),
             quantity: inventory.quantity,
           }
         : null,
@@ -384,6 +444,8 @@ type ResolvedGroup = {
   skip: { imageId: ImageId; reason: string }[];
   productId: ProductId | null;
   locationId: LocationId | null;
+  categoryId: ProductCategoryId | null;
+  ownerPartyId: LedgerPartyId | null;
 };
 
 /** Resolve one group's codes, refusing any image that is not a still-pending target of this run. */
@@ -419,20 +481,29 @@ async function resolveGroup(
     group.product.kind === "existing"
       ? await resolveOrThrow(db, "product", group.product.existingId)
       : null;
-  if (group.product.kind === "create" && group.product.create.categoryId) {
-    await resolveOrThrow(
-      db,
-      "productCategory",
-      group.product.create.categoryId,
-    );
-  }
+  const categoryId =
+    group.product.kind === "create" && group.product.create.categoryId
+      ? await resolveOrThrow(
+          db,
+          "productCategory",
+          group.product.create.categoryId,
+        )
+      : null;
   const locationId = group.inventory
     ? await resolveOrThrow(db, "location", group.inventory.locationId)
     : null;
-  if (group.inventory?.ownerPartyId) {
-    await resolveOrThrow(db, "ledgerParty", group.inventory.ownerPartyId);
-  }
-  return { group, images, skip, productId, locationId };
+  const ownerPartyId = group.inventory?.ownerPartyId
+    ? await resolveOrThrow(db, "ledgerParty", group.inventory.ownerPartyId)
+    : null;
+  return {
+    group,
+    images,
+    skip,
+    productId,
+    locationId,
+    categoryId,
+    ownerPartyId,
+  };
 }
 
 /** Exclusivity is checked against the post-write set of proposed rows. */
@@ -475,16 +546,21 @@ async function upsertProposal(
     skip: entry.skip,
     productKind: group.product.kind,
     productId: entry.productId,
+    // Category and owner are FK columns, not codes in the JSON, so a merge
+    // or delete before approval is followed rather than breaking it.
     productCreate:
-      group.product.kind === "create" ? group.product.create : null,
+      group.product.kind === "create"
+        ? { ...group.product.create, categoryId: undefined }
+        : null,
+    productCreateCategoryId: entry.categoryId,
     inventoryLocationId: entry.locationId,
     inventory: group.inventory
       ? {
           quantity: group.inventory.quantity,
           ownershipMode: group.inventory.ownershipMode,
-          ownerPartyId: group.inventory.ownerPartyId,
         }
       : null,
+    inventoryOwnerPartyId: entry.ownerPartyId,
     evidence: group.evidence ?? null,
     conflictProductIds: null,
     lastError: null,
@@ -512,7 +588,9 @@ export async function proposePhotoGroups(
 ): Promise<ProposePhotoGroupsOutput> {
   const input = proposePhotoGroupsInput.parse(rawInput);
   const run = await loadRun(db, input.runId);
-  if (run.status !== "running") {
+  // Dropping a proposed group commits nothing, so a reviewer can tidy a run
+  // after it stops; proposing new groups still needs a running run.
+  if (run.status !== "running" && input.groups.length > 0) {
     throw new Error(
       `Photo-inventory run ${run.shortcode} is not running (status: ${run.status})`,
     );
@@ -606,7 +684,7 @@ async function commitInputFor(
   } else {
     productChoice = {
       kind: "create",
-      create: storedCreate.parse(row.productCreate),
+      create: (await linkedCodes(db, [row])).create(row),
     };
   }
   let inventory: CommitPhotoGroupInput["inventory"];
@@ -628,7 +706,7 @@ async function commitInputFor(
       locationId: parseShortcodeFor("location", place.shortcode),
       quantity: stored.quantity,
       ownershipMode: stored.ownershipMode,
-      ownerPartyId: stored.ownerPartyId,
+      ownerPartyId: (await linkedCodes(db, [row])).ownerPartyId(row),
     };
   }
   return {
@@ -669,8 +747,10 @@ async function persistSettled(
     productKind: row.productKind,
     productId,
     productCreate: row.productCreate,
+    productCreateCategoryId: row.productCreateCategoryId,
     inventoryLocationId: row.inventoryLocationId,
     inventory: row.inventory,
+    inventoryOwnerPartyId: row.inventoryOwnerPartyId,
     evidence: row.evidence,
     conflictProductIds: null,
     lastError: null,

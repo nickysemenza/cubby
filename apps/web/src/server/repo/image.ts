@@ -80,6 +80,7 @@ import {
   location,
   meal,
   orderMailAttachment,
+  photoGroupProposal,
   product,
   project,
   purchase,
@@ -1653,6 +1654,27 @@ const IMAGE_EDGE_OPERATIONS = {
       await tx
         .delete(importRunTarget)
         .where(inArray(importRunTarget.imageId, parseImageIds(imageIds)));
+      // The photo also leaves any proposed group of that run; settled groups
+      // keep their history.
+      const keep = (column: SQL) =>
+        sql`COALESCE((SELECT jsonb_agg(entry) FROM jsonb_array_elements(${column}) entry
+          WHERE NOT ((entry->>'imageId')::uuid = ANY(${uuidArrayParam(imageIds)}))), '[]'::jsonb)`;
+      await tx
+        .update(photoGroupProposal)
+        .set({
+          images: keep(sql`${photoGroupProposal.images}`),
+          skip: keep(sql`${photoGroupProposal.skip}`),
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(photoGroupProposal.state, "proposed"),
+            sql`EXISTS (
+              SELECT 1 FROM jsonb_array_elements(${photoGroupProposal.images} || ${photoGroupProposal.skip}) entry
+              WHERE (entry->>'imageId')::uuid = ANY(${uuidArrayParam(imageIds)})
+            )`,
+          ),
+        );
     },
     findReferenced: async (
       dbc: DrizzleClient | DrizzleTransaction,

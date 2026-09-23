@@ -406,6 +406,14 @@ export const ENTITY_EDGES = {
     },
   }),
   ledgerParty: edges({
+    "PhotoGroupProposal.inventoryOwnerPartyId": {
+      column: photoGroupProposal.inventoryOwnerPartyId,
+      role: "metadata",
+      label: "photo group proposals",
+      description:
+        "The member a proposed photo group's inventory will belong to; a merge follows it to the survivor.",
+      liveness: { kind: "must-target-live" },
+    },
     "VendorAccount.ledgerPartyId": {
       column: vendorAccount.ledgerPartyId,
       role: "reference",
@@ -710,6 +718,14 @@ export const ENTITY_EDGES = {
     },
   }),
   productCategory: edges({
+    "PhotoGroupProposal.productCreateCategoryId": {
+      column: photoGroupProposal.productCreateCategoryId,
+      role: "metadata",
+      label: "photo group proposals",
+      description:
+        "The category a proposed photo group's new Product will be filed under.",
+      liveness: { kind: "must-target-live" },
+    },
     "ProductCategory.parentId": {
       column: productCategory.parentId,
       role: "hierarchy",

@@ -28,7 +28,11 @@ import { uniq } from "es-toolkit";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
-import { product, productCategory } from "~/server/db/schema";
+import {
+  photoGroupProposal,
+  product,
+  productCategory,
+} from "~/server/db/schema";
 import { logAuditEntry } from "~/server/repo/audit-log";
 import { loadDataQualities } from "~/server/repo/data-quality";
 import {
@@ -62,6 +66,12 @@ export const PRODUCT_CATEGORY_DELETE_EDGE_POLICY = {
     code: "block-products",
     effect: "block",
     description: "Products retain their selected category until reassigned.",
+  },
+  "PhotoGroupProposal.productCreateCategoryId": {
+    code: "clear-proposal-category",
+    effect: "detach",
+    description:
+      "Deleting a category clears it from a proposed photo group's new Product, which is then created unclassified.",
   },
 } as const satisfies IncomingEdgePolicy<
   "productCategory",
@@ -567,6 +577,10 @@ export async function deleteProductCategories(
     if (bound.some((row) => row.feature !== null)) {
       throw new Error("A category with a behavior binding cannot be deleted");
     }
+    await tx
+      .update(photoGroupProposal)
+      .set({ productCreateCategoryId: null })
+      .where(inArray(photoGroupProposal.productCreateCategoryId, ids));
     await removeEntity(tx, {
       entity: "productCategory",
       ids,

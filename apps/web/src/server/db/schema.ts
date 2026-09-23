@@ -28,6 +28,7 @@ import type {
   MealRecipeId,
   MealRecipePortionId,
   PlantingId,
+  ProductCategoryId,
   ProductId,
   ProjectId,
   PurchaseId,
@@ -1865,19 +1866,32 @@ export const photoGroupProposal = pgTable(
     productId: uuid("productId")
       .$type<ProductId>()
       .references(() => product.id),
-    /** `commit_photo_group`'s `product.create` payload when `productKind` is `create`. */
+    /**
+     * `commit_photo_group`'s `product.create` payload when `productKind` is
+     * `create`, minus its category: that lives in `productCreateCategoryId`
+     * so a merge or delete between proposing and approving is followed.
+     */
     productCreate:
       jsonb("productCreate").$type<
         import("@cubby/schemas/photo-import-run").CommitPhotoGroupProductCreate
       >(),
+    productCreateCategoryId: uuid("productCreateCategoryId")
+      .$type<ProductCategoryId>()
+      .references(() => productCategory.id),
     inventoryLocationId: uuid("inventoryLocationId")
       .$type<LocationId>()
       .references(() => location.id),
-    /** `commit_photo_group`'s inventory minus `locationId`; null = no inventory. */
+    /**
+     * `commit_photo_group`'s inventory minus `locationId` and the owner, which
+     * lives in `inventoryOwnerPartyId`; null = no inventory.
+     */
     inventory:
       jsonb("inventory").$type<
         import("@cubby/schemas/photo-import-run").PhotoGroupStoredInventory
       >(),
+    inventoryOwnerPartyId: uuid("inventoryOwnerPartyId")
+      .$type<LedgerPartyId>()
+      .references(() => ledgerParty.id),
     evidence: text("evidence"),
     /** Product shortcodes that collided with a `create` name on the last approval. */
     conflictProductIds: jsonb("conflictProductIds").$type<string[]>(),
