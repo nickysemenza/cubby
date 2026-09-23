@@ -10,6 +10,11 @@ import {
 class E2EHarnessReporter implements Reporter {
   private outcomes: Array<{ name: string; state: string }> = [];
   private navigation: Array<{ name: string; ms: number; count: number }> = [];
+  private durations: Array<{
+    name: string;
+    totalMs: number;
+    navigationMs: number;
+  }> = [];
   private testMs = 0;
   private phases: number[][] = [];
 
@@ -23,6 +28,13 @@ class E2EHarnessReporter implements Reporter {
     const loads = result.annotations
       .filter((annotation) => annotation.type === NAVIGATION_ANNOTATION)
       .map((annotation) => Number(annotation.description));
+    const navigationMs = loads.reduce((sum, ms) => sum + ms, 0);
+    if (result.retry === 0)
+      this.durations.push({
+        name: `${test.parent.project()?.name ?? ""} › ${test.title}`,
+        totalMs: result.duration,
+        navigationMs,
+      });
     this.testMs += result.duration;
     for (const annotation of result.annotations) {
       if (annotation.type !== NAVIGATION_PHASES_ANNOTATION) continue;
@@ -33,7 +45,7 @@ class E2EHarnessReporter implements Reporter {
     if (loads.length > 0) {
       this.navigation.push({
         name: `${test.parent.project()?.name ?? ""} › ${test.title}`,
-        ms: loads.reduce((sum, ms) => sum + ms, 0),
+        ms: navigationMs,
         count: loads.length,
       });
     }
@@ -41,11 +53,30 @@ class E2EHarnessReporter implements Reporter {
 
   onEnd(): void {
     this.printNavigationSummary();
+    this.printDurationSummary();
     assertTestRunContract(this.outcomes, {
       allowEmpty: ["--last-failed", "--list"].some((argument) =>
         process.argv.includes(argument),
       ),
     });
+  }
+
+  private printDurationSummary(): void {
+    if (this.durations.length === 0) return;
+    console.log(
+      [
+        "[e2e duration] longest test time outside timed page loads (total, page load):",
+        ...[...this.durations]
+          .sort(
+            (a, b) => b.totalMs - b.navigationMs - (a.totalMs - a.navigationMs),
+          )
+          .slice(0, 10)
+          .map(
+            ({ name, totalMs, navigationMs }) =>
+              `  ${((totalMs - navigationMs) / 1000).toFixed(1)}s outside, ${(totalMs / 1000).toFixed(1)}s total, ${(navigationMs / 1000).toFixed(1)}s page load  ${name}`,
+          ),
+      ].join("\n"),
+    );
   }
 
   /** Page loads (goto/reload + hydration through the shared helpers) as a
