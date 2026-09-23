@@ -5,13 +5,8 @@ import {
   generatedImageSightingFieldSchemas,
   generatedImageSightingFilterFields,
 } from "./generated/entity-field-schemas.imageSighting.gen";
-import {
-  deviceShortcode,
-  imageShortcode,
-  imageSightingShortcode,
-  ledgerPartyShortcode,
-} from "./identifiers";
-import { createPaginatedResponseSchema, entityFilterList } from "./pagination";
+import { imageSightingShortcode } from "./identifiers";
+import { createPaginatedResponseSchema } from "./pagination";
 
 export type {
   ImageSightingCamera,
@@ -46,9 +41,6 @@ export const imageSightingListResponse =
 export const imageSightingFilterFields = {
   ...auditDateFilterFields,
   ...generatedImageSightingFilterFields,
-  imageId: entityFilterList(imageShortcode).optional(),
-  ledgerPartyId: entityFilterList(ledgerPartyShortcode).optional(),
-  deviceId: entityFilterList(deviceShortcode).optional(),
 };
 export const imageSightingFilters = z.object(imageSightingFilterFields);
 export type ImageSightingFilters = z.infer<typeof imageSightingFilters>;

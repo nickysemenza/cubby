@@ -1119,6 +1119,12 @@ describe("typed entity compiler", () => {
       { key: "flag", kind: "boolean" },
       { key: "at", kind: "timestamp", nullable: true },
       { key: "amount", kind: "number" },
+      {
+        key: "parentId",
+        kind: "identifier",
+        label: "Parent",
+        reference: { entity: "alpha" },
+      },
     ];
     type RawDescriptor = EntityDeclaration["filters"]["descriptors"][number];
     const stored = (
@@ -1131,7 +1137,14 @@ describe("typed entity compiler", () => {
           model: {
             ...model,
             fields,
-            storage: ["name", "tags", "flag", "at", "amount"],
+            storage: [
+              "name",
+              "tags",
+              "flag",
+              "at",
+              "amount",
+              { key: "parentId", reference: "alpha" },
+            ],
           },
           filters: {
             descriptors: [
@@ -1168,6 +1181,13 @@ describe("typed entity compiler", () => {
       columns: ["at"],
       array: false,
     });
+    expect(
+      stored({
+        columnId: "parentId",
+        kind: "idMulti",
+        brandRef: { entity: "alpha" },
+      }),
+    ).toEqual({ columns: ["parentId"], array: false });
     const rejected: Array<[Parameters<typeof stored>[0], string]> = [
       [
         { columnId: "name", kind: "text", deriveSchema: false },
@@ -1205,6 +1225,18 @@ describe("typed entity compiler", () => {
       [
         { columnId: "at", kind: "range", range: { finite: true } },
         "range.int/finite apply only to numeric ranges",
+      ],
+      [
+        { columnId: "name", kind: "id", brandRef: { entity: "alpha" } },
+        "stored id filter needs a foreign-key field",
+      ],
+      [
+        {
+          columnId: "parentId",
+          kind: "idMulti",
+          brandRef: { entity: "device" },
+        },
+        "brandRef must name the entity its field references",
       ],
     ];
     for (const [descriptor, message] of rejected)

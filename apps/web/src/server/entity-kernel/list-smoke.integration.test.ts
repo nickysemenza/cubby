@@ -30,10 +30,17 @@
  * with a single seed; each case is still individually identifiable — a
  * thrown error is caught, labeled with its (entity, key) pair, and collected
  * so one bad pair never hides another.
+ *
+ * The same matrix also guards a second bug class: a filter the list route
+ * accepts and validates but never applies. `imageSighting.imageId` shipped
+ * that way — the list showed the filter chip and returned every sighting.
+ * For each seeded entity, every id-shaped filter is re-run with a
+ * well-formed shortcode that names no row, and must return nothing.
  */
 import { generatedEntitySort } from "@cubby/schemas/entity-sort";
 import { ingredientFiltersSchema } from "@cubby/schemas/ingredient";
 import { testUserId } from "@cubby/schemas/testing";
+import { SHORTCODE_BODY_LENGTH, SHORTCODE_CHARS } from "@cubby/shared";
 import {
   seedEntity,
   TEST_HOME_SHORTCODE,
@@ -50,6 +57,7 @@ import { ENTITY_KERNEL_ENTITIES } from "~/server/entity-kernel/contracts";
 import type { EntityKernelEntity } from "~/server/entity-kernel/contracts";
 import { ENTITY_KERNEL_BINDINGS } from "~/server/generated/entity-kernel-bindings.gen";
 import { ingredientList } from "~/server/repo/ingredient";
+import { createImageFixture } from "~/server/repo/repo.fixtures";
 import { requireActor } from "~/server/request-context";
 import { createTestRequestContext } from "~/server/testing/request-context";
 
@@ -145,6 +153,32 @@ function roundNumbers(value: unknown): unknown {
     );
   }
   return value;
+}
+/**
+ * The same sample with every shortcode swapped for a well-formed code of the
+ * same prefix that names no row, or `null` when the sample is not purely
+ * shortcodes (a string or a list of strings) — only those have an obvious
+ * "matches nothing" value.
+ */
+function unmatchedIdSample(
+  value: unknown,
+  seeded: ReadonlySet<string>,
+): string | string[] | null {
+  const codes = [value].flat();
+  if (
+    codes.length === 0 ||
+    !codes.every((c) => typeof c === "string" && SHORTCODE_PATTERN.test(c))
+  )
+    return null;
+  const swapped = codes.map((code) => {
+    const prefix = prefixOf(String(code)) ?? "";
+    const body = [...SHORTCODE_CHARS]
+      .map((ch) => `${prefix}${ch.repeat(SHORTCODE_BODY_LENGTH)}`)
+      .find((candidate) => !seeded.has(candidate));
+    if (body === undefined) throw new Error(`no unused ${prefix} code`);
+    return body;
+  });
+  return Array.isArray(value) ? swapped : (swapped[0] ?? null);
 }
 /* oxlint-enable anti-slop/no-runtime-typeof, anti-slop/no-unknown-parameters, anti-slop/no-unknown-returns, anti-slop/no-unsafe-dictionary-type */
 
@@ -368,6 +402,19 @@ async function seedReferenceUniverse(db: Database): Promise<ReferenceUniverse> {
   if (ledgerPartyB) ledgerTransferOverrides.toPartyId = ledgerPartyB.id;
   await seed("ledgerTransfer", ledgerTransferOverrides);
 
+  // `image` has no kernel create (see SKIPPED_ENTITIES), but a sighting
+  // needs one; insert it directly so imageSighting's filters are guarded.
+  const image = await createImageFixture(db, "list-smoke");
+  record(image.shortcode);
+  const device = await seed("device");
+  // oxlint-disable-next-line anti-slop/no-known-value-widening, anti-slop/no-unsafe-dictionary-type -- see the walker block comment above
+  const sightingOverrides: Record<string, unknown> = {
+    imageId: image.shortcode,
+  };
+  if (device) sightingOverrides.deviceId = device.id;
+  if (ledgerPartyA) sightingOverrides.ledgerPartyId = ledgerPartyA.id;
+  await seed("imageSighting", sightingOverrides);
+
   // `image` (and any other entity this sequence never attempted) still needs
   // to be recorded as skipped for the report below.
   for (const entity of ENTITY_KERNEL_ENTITIES) {
@@ -419,9 +466,17 @@ describe("entity list smoke — dual relational/count FROM-clause aliasing", () 
       }
     };
 
+    const seededCodes = new Set(universe.shortcodeByPrefix.values());
     for (const entity of ENTITY_KERNEL_ENTITIES) {
       const binding = ENTITY_KERNEL_BINDINGS[entity];
       const filterFields = filterFieldsOf(entity);
+      const unfiltered = await executeEntity(kernelCtx, {
+        action: "list",
+        entity,
+        filters: {},
+        pagination: { pageIndex: 0, pageSize: 1 },
+      }).catch(() => null);
+      const hasRows = (unfiltered?.meta.totalCount ?? 0) > 0;
 
       for (const [key, fieldSchema] of Object.entries(filterFields)) {
         seed += 1;
@@ -442,6 +497,28 @@ describe("entity list smoke — dual relational/count FROM-clause aliasing", () 
             pagination: { pageIndex: 0, pageSize: 20 },
           }),
         );
+
+        const unmatched = hasRows
+          ? unmatchedIdSample(sample.value, seededCodes)
+          : null;
+        if (unmatched === null) continue;
+        caseCount += 1;
+        try {
+          const result = await executeEntity(kernelCtx, {
+            action: "list",
+            entity,
+            filters: { [key]: unmatched },
+            pagination: { pageIndex: 0, pageSize: 1 },
+          });
+          if (result.meta.totalCount !== 0)
+            failures.push(
+              `${entity} filter ${key}=${String(unmatched)}: matched ${result.meta.totalCount} row(s) — the filter is accepted but not applied`,
+            );
+        } catch (err) {
+          failures.push(
+            `${entity} filter ${key} (unmatched): ${describeError(err)}`,
+          );
+        }
       }
 
       for (const orderBy of binding.sort.fields) {
@@ -495,7 +572,7 @@ describe("entity list smoke — dual relational/count FROM-clause aliasing", () 
     // report.
     expect(
       failures.join("\n"),
-      `${failures.length} of ${caseCount} list case(s) threw a FROM-clause/plan error`,
+      `${failures.length} of ${caseCount} list case(s) threw a FROM-clause/plan error or ignored a filter:\n${failures.join("\n")}\n`,
     ).toBe("");
-  }, 60_000); // ~640 sequential kernel/repo round trips; default 10s times out under load.
+  }, 180_000); // ~1k sequential kernel/repo round trips; default 10s times out under load.
 });

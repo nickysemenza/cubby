@@ -4,16 +4,10 @@ import {
   generatedRunFieldSchemas,
   generatedRunFilterFields,
 } from "./generated/entity-field-schemas.importRun.gen";
-import {
-  ledgerPartyShortcode,
-  vendorAccountShortcode,
-  vendorShortcode,
-} from "./identifiers";
 import { generatedEntitySort } from "./generated/entity-sort.gen";
 import {
   createPaginatedResponseSchema,
   createSortPaginationFields,
-  entityFilterList,
 } from "./pagination";
 
 export const importRunOut = z.object(generatedRunFieldSchemas.read);
@@ -22,9 +16,6 @@ export const importRunListResponse =
   createPaginatedResponseSchema(importRunOut);
 export const importRunFilterFields = {
   ...generatedRunFilterFields,
-  vendorAccountId: entityFilterList(vendorAccountShortcode).optional(),
-  vendorId: entityFilterList(vendorShortcode).optional(),
-  ledgerPartyId: entityFilterList(ledgerPartyShortcode).optional(),
   /**
    * Ephemeral runs (one per Jev pass or AI action) are hidden unless this is
    * set or a `purpose` filter asks for them explicitly.

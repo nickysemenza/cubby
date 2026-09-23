@@ -397,6 +397,8 @@ export default defineEntity({
         placeholder: "Filter by ledger party...",
         brandRef: { entity: "ledgerParty" },
         urlOnly: true,
+        deriveSchema: true,
+        stored: true,
       },
       {
         columnId: "name",
