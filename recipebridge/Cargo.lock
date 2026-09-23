@@ -69,7 +69,7 @@ checksum = "a6ef517f0926dd24a1582492c791b6a4818a4d94e789a334894aa15b0d12f55c"
 [[package]]
 name = "cookbook"
 version = "0.1.0"
-source = "git+https://github.com/nickysemenza/ingredient-parser?rev=5ae8ffbf9e25cd25131176891d42ce0bc85567fe#5ae8ffbf9e25cd25131176891d42ce0bc85567fe"
+source = "git+https://github.com/nickysemenza/ingredient-parser?rev=71fb65e7e4eeb0ab18a7a22085e7b6672aab82b3#71fb65e7e4eeb0ab18a7a22085e7b6672aab82b3"
 dependencies = [
  "ego-tree",
  "futures",
@@ -577,7 +577,7 @@ dependencies = [
 [[package]]
 name = "ingredient"
 version = "0.4.0"
-source = "git+https://github.com/nickysemenza/ingredient-parser?rev=5ae8ffbf9e25cd25131176891d42ce0bc85567fe#5ae8ffbf9e25cd25131176891d42ce0bc85567fe"
+source = "git+https://github.com/nickysemenza/ingredient-parser?rev=71fb65e7e4eeb0ab18a7a22085e7b6672aab82b3#71fb65e7e4eeb0ab18a7a22085e7b6672aab82b3"
 dependencies = [
  "nom",
  "nom-language",
@@ -669,8 +669,8 @@ checksum = "47d9d19d1d6efa0109d2f65ff4c85cddd50bd572e5a00127ab10987290bcefae"
 
 [[package]]
 name = "llm_models_spider"
-version = "0.1.229"
-source = "git+https://github.com/spider-rs/llm_models?branch=main#6c81d05bf5e3df96b8ff5c8b6b22c3a3d7bdd17a"
+version = "0.1.234"
+source = "git+https://github.com/spider-rs/llm_models?branch=main#0b703bd221bc78c9e76335fff185c9f2398a8718"
 
 [[package]]
 name = "lock_api"
@@ -938,7 +938,7 @@ dependencies = [
 [[package]]
 name = "recipe-parsing"
 version = "0.1.0"
-source = "git+https://github.com/nickysemenza/ingredient-parser?rev=5ae8ffbf9e25cd25131176891d42ce0bc85567fe#5ae8ffbf9e25cd25131176891d42ce0bc85567fe"
+source = "git+https://github.com/nickysemenza/ingredient-parser?rev=71fb65e7e4eeb0ab18a7a22085e7b6672aab82b3#71fb65e7e4eeb0ab18a7a22085e7b6672aab82b3"
 dependencies = [
  "ingredient",
  "recipe-types",
@@ -948,7 +948,7 @@ dependencies = [
 [[package]]
 name = "recipe-scraper"
 version = "0.1.0"
-source = "git+https://github.com/nickysemenza/ingredient-parser?rev=5ae8ffbf9e25cd25131176891d42ce0bc85567fe#5ae8ffbf9e25cd25131176891d42ce0bc85567fe"
+source = "git+https://github.com/nickysemenza/ingredient-parser?rev=71fb65e7e4eeb0ab18a7a22085e7b6672aab82b3#71fb65e7e4eeb0ab18a7a22085e7b6672aab82b3"
 dependencies = [
  "html-escape",
  "ingredient",
@@ -965,7 +965,7 @@ dependencies = [
 [[package]]
 name = "recipe-types"
 version = "0.1.0"
-source = "git+https://github.com/nickysemenza/ingredient-parser?rev=5ae8ffbf9e25cd25131176891d42ce0bc85567fe#5ae8ffbf9e25cd25131176891d42ce0bc85567fe"
+source = "git+https://github.com/nickysemenza/ingredient-parser?rev=71fb65e7e4eeb0ab18a7a22085e7b6672aab82b3#71fb65e7e4eeb0ab18a7a22085e7b6672aab82b3"
 dependencies = [
  "serde",
  "tsify-next",
@@ -980,6 +980,7 @@ dependencies = [
  "cookbook",
  "ingredient",
  "js-sys",
+ "llm_models_spider",
  "recipe-scraper",
  "rstest",
  "serde",

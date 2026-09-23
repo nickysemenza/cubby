@@ -4,9 +4,11 @@ import { z } from "zod";
 import {
   browserBridgeRequest,
   importExtractionModelOutput,
+  importAuditModelOutput,
   importExtractionOutcome,
   importSourceIdentity,
   normalizeImportExtractionModelOutput,
+  normalizeImportAuditModelOutput,
   proposedImportFix,
 } from "./purchase-import";
 
@@ -38,6 +40,50 @@ describe("purchase import contracts", () => {
     expect(
       JSON.stringify(z.toJSONSchema(importExtractionModelOutput)),
     ).not.toContain('"oneOf"');
+  });
+
+  it("keeps the audit wire schema portable and validates decoded fixes", () => {
+    const schema = JSON.stringify(z.toJSONSchema(importAuditModelOutput));
+    expect(schema).not.toMatch(/"oneOf"|"minimum"|"maximum"/);
+    const finding = {
+      kind: "wrong_product",
+      targetPurchaseId: "00000000-0000-4000-8000-000000000001",
+      summary: "The linked product is a different variant.",
+      probability: 0.95,
+    };
+    expect(
+      normalizeImportAuditModelOutput(
+        importAuditModelOutput.parse({
+          findings: [
+            {
+              ...finding,
+              proposedFixJson: JSON.stringify({
+                kind: "relink_product",
+                expenseId: "00000000-0000-4000-8000-000000000002",
+                productId: "00000000-0000-4000-8000-000000000003",
+              }),
+            },
+          ],
+        }),
+      ).findings[0]?.proposedFix,
+    ).toMatchObject({ kind: "relink_product" });
+    expect(() =>
+      normalizeImportAuditModelOutput(
+        importAuditModelOutput.parse({
+          findings: [
+            {
+              ...finding,
+              proposedFixJson: JSON.stringify({
+                kind: "create_refund",
+                purchaseId: finding.targetPurchaseId,
+                amount: -10,
+                title: "Unsupported refund",
+              }),
+            },
+          ],
+        }),
+      ),
+    ).toThrow("Audit cannot propose create_refund");
   });
 
   it("normalizes OpenAI null placeholders into optional domain fields", () => {

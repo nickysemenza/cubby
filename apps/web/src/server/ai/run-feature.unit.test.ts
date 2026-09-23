@@ -147,7 +147,7 @@ describe("planStructuredRun", () => {
       }).usage,
     ).toMatchObject({
       provider: "openai",
-      model: "gpt-5.6-luna",
+      model: "gpt-6-luna",
       feature: "product-identification",
       cacheStatus: "none",
     });
@@ -158,7 +158,7 @@ describe("planStructuredRun", () => {
         runId,
         operation: "recipeFlow",
       }).usage,
-    ).toMatchObject({ provider: "anthropic", model: "claude-sonnet-5" });
+    ).toMatchObject({ provider: "openai", model: "gpt-6-sol" });
 
     expect(
       planStructuredRun(LOCATION_DESCRIPTION_FEATURE, {
@@ -213,7 +213,7 @@ describe("runStructuredFeature", () => {
     expect(calls[0]!.modelOptions).toEqual({ max_tokens: 1500 });
   });
 
-  it("maps the reasoning tier to Anthropic options with adaptive thinking", async () => {
+  it("maps the reasoning tier to OpenAI Responses options", async () => {
     const { calls, ports } = fakeChat([UNUSED_RESPONSE]);
 
     await runStructuredFeature(
@@ -224,9 +224,8 @@ describe("runStructuredFeature", () => {
     );
 
     expect(calls[0]!.modelOptions).toEqual({
-      max_tokens: 16000,
-      thinking: { type: "adaptive" },
-      output_config: { effort: "low" },
+      max_output_tokens: 16000,
+      reasoning: { effort: "low" },
     });
   });
 
@@ -406,7 +405,7 @@ describe("runStructuredFeature repair", () => {
 
 describe("modelOptionsFor", () => {
   it("routes each model to its provider's option shape", () => {
-    expect(modelOptionsFor("gpt-5.6-luna", { maxTokens: 100 })).toEqual({
+    expect(modelOptionsFor("gpt-6-luna", { maxTokens: 100 })).toEqual({
       max_output_tokens: 100,
       reasoning: { effort: "low" },
     });
@@ -423,7 +422,7 @@ describe("modelOptionsFor", () => {
 
   it("honours an explicit effort", () => {
     expect(
-      modelOptionsFor("gpt-5.6-luna", { maxTokens: 100, effort: "high" }),
+      modelOptionsFor("gpt-6-luna", { maxTokens: 100, effort: "high" }),
     ).toEqual({ max_output_tokens: 100, reasoning: { effort: "high" } });
   });
 });

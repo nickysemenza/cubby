@@ -399,7 +399,7 @@ export default defineEntity({
       {
         key: "coordinatorModel",
         default: "literal",
-        defaultValue: "gpt-5.6-terra",
+        defaultValue: "gpt-6-sol",
       },
       {
         key: "skillRevision",

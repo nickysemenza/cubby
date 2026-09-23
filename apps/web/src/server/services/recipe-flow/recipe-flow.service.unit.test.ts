@@ -123,7 +123,7 @@ const artifact = (fingerprint: string): RecipeFlowArtifact => ({
   guidance: null,
   warnings: [],
   contentFingerprint: fingerprint,
-  model: "claude-sonnet-5",
+  model: "gpt-6-sol",
   promptVersion: "2026-09-11.1",
   generatedAt: new Date("2026-07-29T12:00:00Z"),
 });
@@ -228,7 +228,7 @@ describe("recipe-flow service", () => {
         RUN_ID,
         memory.ports,
       ),
-    ).resolves.toMatchObject({ model: "claude-sonnet-5" });
+    ).resolves.toMatchObject({ model: "gpt-6-sol" });
     expect(memory.analyses).toHaveLength(1);
   });
 
@@ -250,7 +250,7 @@ describe("recipe-flow service", () => {
         RUN_ID,
         memory.ports,
       ),
-    ).resolves.toMatchObject({ model: "claude-sonnet-5" });
+    ).resolves.toMatchObject({ model: "gpt-6-sol" });
     expect(memory.analyses).toHaveLength(1);
   });
 

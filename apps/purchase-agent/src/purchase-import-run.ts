@@ -30,17 +30,14 @@ export { cloudflare } from "./sentry";
 
 type ImportRunInitialData = {
   runId: string;
-  coordinatorModel?: "gpt-5.6-terra" | "gpt-5.6-sol";
+  coordinatorModel?: string;
   purpose?: "account_sync" | "purchase_validation" | "product_enrichment";
 };
 
 /** One durable Flue conversation per authoritative ImportRun. */
 export function PurchaseImportRun({ id }: AgentProps) {
-  const {
-    runId,
-    coordinatorModel = "gpt-5.6-terra",
-    purpose = "account_sync",
-  } = useInitialData<ImportRunInitialData>();
+  const { runId, purpose = "account_sync" } =
+    useInitialData<ImportRunInitialData>();
   if (id !== purchaseImportAgentIdentity(runId)) {
     throw new Error(
       "Purchase import agent identity does not match its ImportRun",
@@ -49,7 +46,7 @@ export function PurchaseImportRun({ id }: AgentProps) {
 
   // The coordinator is intentionally fixed. Other registered provider models
   // exist for Flue internals and future bounded operations, not dynamic routing.
-  useModel(`openai/${coordinatorModel}`, { thinkingLevel: "high" });
+  useModel("openai/gpt-6-sol", { thinkingLevel: "high" });
   useMcpConnection(cubbyMcpConnection(runId, serviceForCurrentRun));
   useSkill(purchaseImportSkill);
   useSkill(productEnrichmentSkill);
@@ -113,7 +110,7 @@ The server owns member identity, run scope, approval state, idempotency, and all
 PurchaseImportRun.agentName = "purchase-import-run";
 PurchaseImportRun.initialData = v.object({
   runId: v.pipe(v.string(), v.uuid()),
-  coordinatorModel: v.optional(v.picklist(["gpt-5.6-terra", "gpt-5.6-sol"])),
+  coordinatorModel: v.optional(v.string()),
   purpose: v.optional(
     v.picklist(["account_sync", "purchase_validation", "product_enrichment"]),
   ),

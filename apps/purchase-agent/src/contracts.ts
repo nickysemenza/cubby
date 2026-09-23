@@ -11,7 +11,10 @@ const nonEmptyId = z.string().trim().min(1).max(256);
 const purchaseAgentEventBaseSchema = z.object({
   version: z.literal(1).default(1),
   runId: z.uuid(),
-  coordinatorModel: z.enum(["gpt-5.6-terra", "gpt-5.6-sol"]).optional(),
+  coordinatorModel: z
+    .string()
+    .transform(() => "gpt-6-sol" as const)
+    .optional(),
   purpose: importRunPurpose.optional(),
   eventId: nonEmptyId,
 });
@@ -37,7 +40,7 @@ export type PurchaseAgentEvent = z.infer<typeof purchaseAgentEventSchema>;
 type PurchaseAgentEventCandidateObject = {
   version?: 1;
   runId?: string;
-  coordinatorModel?: "gpt-5.6-terra" | "gpt-5.6-sol";
+  coordinatorModel?: string;
   purpose?: z.infer<typeof importRunPurpose>;
   eventId?: string;
   type?: string;

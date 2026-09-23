@@ -10,7 +10,7 @@ import { openaiProvider } from "@earendil-works/pi-ai/providers/openai";
 import { z } from "zod";
 
 const CUBBY_GATEWAY_ID = "cubby";
-const OPENAI_MODELS = ["gpt-5.6-luna", "gpt-5.6-terra", "gpt-5.6-sol"] as const;
+const OPENAI_MODELS = ["gpt-6-sol"] as const;
 const ANTHROPIC_MODELS = ["claude-haiku-4-5", "claude-sonnet-5"] as const;
 const STRIPPED_SDK_HEADERS = [
   "authorization",
@@ -109,7 +109,24 @@ function selectedModels<const TIds extends readonly string[]>(
   baseUrl: string,
 ) {
   return ids.map((id) => {
-    const model = provider.getModels().find((candidate) => candidate.id === id);
+    const model =
+      provider.getModels().find((candidate) => candidate.id === id) ??
+      (id === "gpt-6-sol"
+        ? (() => {
+            const template = provider
+              .getModels()
+              .find((candidate) => candidate.id === "gpt-5.5-pro");
+            if (!template) throw new Error("Pi does not declare gpt-5.5-pro");
+            // Pi's catalog has not caught up to GPT-6. Responses uses this
+            // id verbatim; inherit the 1.05m context and 128k output limits.
+            return {
+              ...template,
+              id,
+              name: "GPT-6 Sol",
+              cost: { input: 2, output: 10, cacheRead: 0.2, cacheWrite: 2.5 },
+            };
+          })()
+        : undefined);
     if (!model) throw new Error(`Pi does not declare ${id}`);
     return { ...model, baseUrl };
   });

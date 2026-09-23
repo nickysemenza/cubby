@@ -10,7 +10,7 @@ describe("createCubbyGatewayFetch", () => {
     {
       provider: "openai" as const,
       url: "https://ai-gateway.invalid/openai/responses?beta=true",
-      model: "gpt-5.6-terra",
+      model: "gpt-6-sol",
       endpoint: "responses?beta=true",
     },
     {
@@ -72,9 +72,7 @@ describe("createCubbyGatewayFetch", () => {
         provider.getModels().map((model) => `${provider.id}/${model.id}`),
       ),
     ).toEqual([
-      "openai/gpt-5.6-luna",
-      "openai/gpt-5.6-terra",
-      "openai/gpt-5.6-sol",
+      "openai/gpt-6-sol",
       "anthropic/claude-haiku-4-5",
       "anthropic/claude-sonnet-5",
     ]);

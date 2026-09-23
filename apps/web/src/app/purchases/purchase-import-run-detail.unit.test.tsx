@@ -159,6 +159,12 @@ describe("RunImportWorkflow", () => {
     expect(screen.getByText("fixture-order.pdf")).toBeInTheDocument();
     expect(await screen.findByText("System and Mac log")).toBeInTheDocument();
     expect(
+      screen.getByRole("button", { name: "Retry import" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /Terra|Escalate to Sol/ }),
+    ).not.toBeInTheDocument();
+    expect(
       screen.queryByRole("button", { name: "Send prompt" }),
     ).not.toBeInTheDocument();
     expect(

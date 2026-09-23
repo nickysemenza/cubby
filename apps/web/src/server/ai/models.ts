@@ -63,12 +63,12 @@ type AiModelConfig =
   | DecisionAiModelConfig;
 
 const supportedChatModel = z.enum([
-  "gpt-5.6-luna",
-  "gpt-5.6-terra",
-  "gpt-5.6-sol",
+  "gpt-6-luna",
+  "gpt-6-sol",
   "gemini-2.5-flash",
   "gemini-2.5-flash-lite",
   "claude-sonnet-5",
+  "claude-opus-5-5",
   "claude-haiku-4-5",
 ]);
 export type SupportedChatModel = z.infer<typeof supportedChatModel>;
@@ -87,10 +87,12 @@ const supportedAiModel = z.enum([
 type SupportedAiModel = z.infer<typeof supportedAiModel>;
 
 /** The three measured tiers every feature is assigned to. */
-export const FAST_MODEL = "gpt-5.6-luna" satisfies SupportedChatModel;
+export const FAST_MODEL = "gpt-6-luna" satisfies SupportedChatModel;
 export const VISION_BATCH_MODEL =
   "gemini-2.5-flash" satisfies SupportedChatModel;
-export const REASONING_MODEL = "claude-sonnet-5" satisfies SupportedChatModel;
+export const REASONING_MODEL = "gpt-6-sol" satisfies SupportedChatModel;
+export const AUDIT_RECOVERY_MODEL =
+  "claude-opus-5-5" satisfies SupportedChatModel;
 /**
  * The decision tier's model: TypeSafe's Jev, a closed-set decision model
  * served by Workers AI over its native route rather than a chat one, so it
@@ -103,44 +105,22 @@ export type AiModel = SupportedChatModel | SupportedDecisionModel;
 export const DEFAULT_EMBEDDING_MODEL =
   "text-embedding-3-small" satisfies SupportedEmbeddingModel;
 
-/**
- * Registered chat/decision ids the crate catalog does not price. Every other
- * such row must exist there (`models.unit.test.ts` asserts it), so a model
- * added here without a catalog entry fails loudly instead of silently
- * recording null-cost usage.
- */
-// Flue records the provider-reported total for its Terra/Sol turns. They are
-// intentionally usable through the shared Gateway registry even while the
-// cookbook catalog remains focused on extraction tiers.
-const UNCATALOGED_MODELS = [
-  "gpt-5.6-terra",
-  "gpt-5.6-sol",
-] as const satisfies readonly AiModel[];
-
 const AI_MODEL_REGISTRY = {
-  "gpt-5.6-luna": {
+  "gpt-6-luna": {
     role: "chat",
     provider: "openai",
     route: "openai-responses",
-    wireModel: "gpt-5.6-luna",
+    wireModel: "gpt-6-luna",
     vision: true,
-    cachePricing: { read: 0.1, write: 1.25 },
+    cachePricing: { read: 0.01, write: 0.125 },
   },
-  "gpt-5.6-terra": {
+  "gpt-6-sol": {
     role: "chat",
     provider: "openai",
     route: "openai-responses",
-    wireModel: "gpt-5.6-terra",
+    wireModel: "gpt-6-sol",
     vision: true,
-    cachePricing: { read: 0.25, write: 3.125 },
-  },
-  "gpt-5.6-sol": {
-    role: "chat",
-    provider: "openai",
-    route: "openai-responses",
-    wireModel: "gpt-5.6-sol",
-    vision: true,
-    cachePricing: { read: 0.5, write: 6.25 },
+    cachePricing: { read: 0.2, write: 2.5 },
   },
   "gemini-2.5-flash": {
     role: "chat",
@@ -165,6 +145,15 @@ const AI_MODEL_REGISTRY = {
     wireModel: "claude-sonnet-5",
     vision: true,
     cachePricing: { read: 0.2, write: 2.5 },
+    adaptiveThinking: true,
+  },
+  "claude-opus-5-5": {
+    role: "chat",
+    provider: "anthropic",
+    route: "anthropic",
+    wireModel: "claude-opus-5-5",
+    vision: true,
+    cachePricing: { read: 0.2, write: 5 },
     adaptiveThinking: true,
   },
   "claude-haiku-4-5": {
@@ -197,10 +186,8 @@ export type SupportedAiModelRef = {
 }[SupportedAiModel];
 
 /**
- * The cookbook crate's measured model catalog (`wasm.model_catalog()`), the
- * single price source for every chat model Cubby calls. Only the fields the
- * app reads are declared; the crate row carries labels, priors, and sources
- * too.
+ * The cookbook catalog prices its extraction models. The same pinned Rust
+ * models crate prices other app chat models through `rust_model_rates`.
  */
 const catalogRatesSchema = z.object({
   input: z.number().nonnegative(),
@@ -229,9 +216,15 @@ export function getAiModelCatalog(): ReadonlyMap<string, AiModelCatalogEntry> {
         error: parsed.error.message,
       });
     }
-    catalogById = new Map(
+    const entries = new Map(
       (parsed.success ? parsed.data : []).map((entry) => [entry.id, entry]),
     );
+    for (const id of supportedChatModel.options) {
+      if (entries.has(id)) continue;
+      const rates = catalogRatesSchema.safeParse(wasm.rust_model_rates(id));
+      if (rates.success) entries.set(id, { id, rates: rates.data });
+    }
+    catalogById = entries;
   }
   return catalogById;
 }
@@ -333,9 +326,5 @@ export function estimateAiUsageCostUsd(
 
 /** Ids the crate catalog is expected to price — the membership guard. */
 export function catalogedModels(): AiModel[] {
-  const uncataloged = new Set<string>(UNCATALOGED_MODELS);
-  return [
-    ...supportedChatModel.options,
-    ...supportedDecisionModel.options,
-  ].filter((model) => !uncataloged.has(model));
+  return [...supportedChatModel.options, ...supportedDecisionModel.options];
 }

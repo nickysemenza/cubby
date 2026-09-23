@@ -1,6 +1,5 @@
 import { importRunPurpose } from "@cubby/schemas/purchase-import";
 import { createFileRoute } from "@tanstack/react-router";
-import { z } from "zod";
 
 import {
   importRunShortcode,
@@ -222,9 +221,7 @@ export const Route = createFileRoute("/api/import/runs/$publicId")({
                   version: 1,
                   runId: control.dispatchRunId,
                   purpose: importRunPurpose.parse(control.dispatchPurpose),
-                  coordinatorModel: z
-                    .enum(["gpt-5.6-terra", "gpt-5.6-sol"])
-                    .parse(control.dispatchCoordinatorModel),
+                  coordinatorModel: "gpt-6-sol",
                   eventId: control.dispatchEventId,
                   type: "start_or_resume",
                 });

@@ -9,6 +9,18 @@ import {
 const runId = "f47ac10b-58cc-4372-a567-0e02b2c3d479";
 
 describe("PurchaseAgentEvent", () => {
+  it("switches a queued historical coordinator to the current model", () => {
+    expect(
+      parsePurchaseAgentEvent({
+        type: "retry",
+        runId,
+        eventId: "historical-retry",
+        coordinatorModel: "retired-model",
+        retryOf: "operation-4",
+      }).coordinatorModel,
+    ).toBe("gpt-6-sol");
+  });
+
   it("accepts only the four continuation events", () => {
     expect(
       parsePurchaseAgentEvent({

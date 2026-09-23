@@ -132,7 +132,7 @@ describe("purchase agent OAuth callback", () => {
         id: importRunId.parse("15119902-3ed6-4f04-a9cc-8c9860c399b2"),
         publicId: "RUN-4K7M",
         purpose: "account_sync",
-        coordinatorModel: "gpt-5.6-terra",
+        coordinatorModel: "retired-model",
         eventId: "persisted-event",
       },
     ]);
@@ -144,7 +144,11 @@ describe("purchase agent OAuth callback", () => {
 
     expectRedirect(response, "authorized");
     expect(send).toHaveBeenCalledWith(
-      expect.objectContaining({ eventId: "persisted-event", type: "retry" }),
+      expect.objectContaining({
+        coordinatorModel: "gpt-6-sol",
+        eventId: "persisted-event",
+        type: "retry",
+      }),
     );
     expect(ports.recordDispatch).toHaveBeenCalledWith(database, {
       runId: "15119902-3ed6-4f04-a9cc-8c9860c399b2",
@@ -158,14 +162,14 @@ describe("purchase agent OAuth callback", () => {
         id: importRunId.parse("15119902-3ed6-4f04-a9cc-8c9860c399b2"),
         publicId: "RUN-4K7M",
         purpose: "account_sync" as const,
-        coordinatorModel: "gpt-5.6-terra",
+        coordinatorModel: "retired-model",
         eventId: "event-1",
       },
       {
         id: importRunId.parse("25119902-3ed6-4f04-a9cc-8c9860c399b2"),
         publicId: "RUN-4K7N",
         purpose: "account_sync" as const,
-        coordinatorModel: "gpt-5.6-terra",
+        coordinatorModel: "retired-model",
         eventId: "event-2",
       },
     ];
