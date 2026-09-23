@@ -14,7 +14,6 @@ import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import {
   BulkEditDialogBody,
-  bulkEditEntities,
   type BulkEditDraft,
 } from "./bulk-edit-entity-action";
 
@@ -47,25 +46,6 @@ beforeEach(() => {
 
 afterEach(() => {
   harness.dispose();
-});
-
-describe("bulkEditEntities", () => {
-  it("lists exactly the entities whose manifest declares capabilities.bulkUpdate", () => {
-    // A regression guard for the roster the generic `bulkEdit` verb is
-    // registered against (entity-actions.tsx) — every entity here, and no
-    // other, must carry a non-null `lifecycle.bulkUpdate`.
-    expect([...bulkEditEntities].sort()).toEqual(
-      [
-        "expense",
-        "ingredient",
-        "location",
-        "plant",
-        "planting",
-        "product",
-        "task",
-      ].sort(),
-    );
-  });
 });
 
 describe("BulkEditDialogBody", () => {

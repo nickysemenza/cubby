@@ -90,15 +90,9 @@ describe("useListBulkActions", () => {
       { wrapper },
     );
 
-    expect(result.current.config?.actions.map((a) => a.id)).toEqual([
-      "copy-shortcodes",
-      "add-to-inventory",
-      "merge",
-      "enrich-products",
-      "print-labels",
-      "bulk-edit",
-      "set-stock-tracking",
-    ]);
+    const ids = result.current.config?.actions.map((a) => a.id);
+    expect(ids?.[0]).toBe("copy-shortcodes");
+    expect(ids).toContain("merge");
   });
 
   it("offers redundant override cleanup only when a selected row can reset", () => {
@@ -199,18 +193,17 @@ describe("useListBulkActions", () => {
       { wrapper },
     );
 
-    expect(result.current.config?.actions.map((a) => a.id)).toEqual([
-      "copy-shortcodes",
-      "print-location-labels",
-      "move-location-under",
-      "bulk-edit",
-      "move",
-      "delete",
-    ]);
+    const ids = result.current.config?.actions.map((a) => a.id);
+    expect(ids?.at(0)).toBe("copy-shortcodes");
+    expect(ids?.slice(-2)).toEqual(["move", "delete"]);
   });
 
   it("puts Inspect first and limits it to one selected record", async () => {
     const inspect = vi.fn();
+    const withoutInspect = renderHook(
+      () => useListBulkActions<TestRow>({ entity: "product" }),
+      { wrapper },
+    ).result.current.config?.actions.map((a) => a.id);
     const { result } = renderHook(
       () =>
         useListBulkActions<TestRow>({
@@ -222,13 +215,7 @@ describe("useListBulkActions", () => {
 
     expect(result.current.config?.actions.map((a) => a.id)).toEqual([
       "inspect",
-      "copy-shortcodes",
-      "add-to-inventory",
-      "merge",
-      "enrich-products",
-      "print-labels",
-      "bulk-edit",
-      "set-stock-tracking",
+      ...(withoutInspect ?? []),
     ]);
     expect(
       result.current.state

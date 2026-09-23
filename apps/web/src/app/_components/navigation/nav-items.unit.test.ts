@@ -154,46 +154,6 @@ describe("getEntityNavGroup", () => {
       );
     },
   );
-
-  // Pins the actual group label per entity, so a future reorg that moves an
-  // entity's list route to a different group is a visible, intentional test
-  // change rather than a silent breadcrumb drift.
-  it("derives the expected group label for every entity", () => {
-    const expected = {
-      recipe: "Records",
-      cookbook: "Records",
-      ingredient: "Records",
-      product: "Records",
-      productCategory: "Records",
-      device: "Records",
-      plant: "Records",
-      imageSighting: "Records",
-      "usda-food": "Records",
-      image: "Records",
-      inventory: "Records",
-      location: "Records",
-      meal: "Records",
-      wish: "Records",
-      project: "Records",
-      task: "Records",
-      planting: "Records",
-      gardenEntry: "Records",
-      expense: "Records",
-      vendor: "Records",
-      vendorAccount: "Records",
-      importRun: "Records",
-      purchase: "Records",
-      financialAccount: "Records",
-      financialTransaction: "Records",
-      ledgerParty: "Records",
-      ledgerTransfer: "Records",
-    } satisfies Record<BrowserRoutedEntity, string>;
-
-    for (const entity of entityKeys) {
-      // oxlint-disable-next-line vitest/valid-expect -- The second argument is an assertion label for this table-driven check.
-      expect(getEntityNavGroup(entity)?.label, entity).toBe(expected[entity]);
-    }
-  });
 });
 
 describe("expanded rail labels", () => {

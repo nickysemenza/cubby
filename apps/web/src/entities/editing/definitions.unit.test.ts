@@ -1,4 +1,5 @@
-import { allEntities, entityManifest } from "@cubby/schemas/entity-manifest";
+import { entitySchema } from "@cubby/schemas/entity";
+import { entityManifest } from "@cubby/schemas/entity-manifest";
 import { EXPENSE_DATE_REQUIRED_MESSAGE } from "@cubby/schemas/expense-fields";
 import { productWithMappingsAndFoodOut } from "@cubby/schemas/product";
 import { projectOut, taskOut } from "@cubby/schemas/project";
@@ -16,18 +17,6 @@ import {
   resolveEntityEdit,
 } from "./kernel";
 import type { EditableEntity } from "./types";
-
-// `ledgerParty`/`ledgerTransfer` joined the registry when they gained browser
-// routes: the shared action and command chrome is keyed by edit intent and runs
-// for every routed entity, so they need entries even though no editor UI is
-// rendered for them yet and their create/update still go through MCP.
-const editableEntities = allEntities.filter(
-  (entity): entity is EditableEntity =>
-    entity !== "image" &&
-    entity !== "usda-food" &&
-    entity !== "cookbook" &&
-    entity !== "importRun",
-);
 
 // Proves the property `genericCreateDefault` (definitions.ts) relies on:
 // Zod 4 exposes a `ZodDefault`'s default as a plain `def.defaultValue`
@@ -147,12 +136,6 @@ describe("entity edit definitions", () => {
         expect(result.command.data).not.toHaveProperty(mode);
     },
   );
-
-  it("covers every standard editable entity exactly once", () => {
-    expect(Object.keys(entityEditRegistry).sort()).toEqual(
-      [...editableEntities].sort(),
-    );
-  });
 
   it("keeps semantic intent field selections local, valid, and non-empty", () => {
     for (const [entity, definition] of Object.entries(entityEditRegistry)) {
@@ -432,9 +415,8 @@ describe("entity edit definitions", () => {
   });
 
   it("declares delete availability wherever the schema declares a lifecycle", () => {
-    for (const entity of editableEntities) {
-      const definition = entityEditRegistry[entity];
-      const deletion = entityManifest[entity].lifecycle.delete;
+    for (const [key, definition] of Object.entries(entityEditRegistry)) {
+      const deletion = entityManifest[entitySchema.parse(key)].lifecycle.delete;
       expect(definition.operations.delete).toBeDefined();
       expect(deletion).not.toBeNull();
     }

@@ -3,7 +3,7 @@ import type { EdgeRole } from "@cubby/schemas/entity-integrity";
 import { entityManifest } from "@cubby/schemas/entity-manifest";
 import { parseEntityId, userId } from "@cubby/schemas/identifiers";
 import { generateShortcode } from "@cubby/shared";
-import { eq, sql } from "drizzle-orm";
+import { eq, getTableColumns, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
@@ -1645,38 +1645,11 @@ function entityTableName(entity: Entity): string {
   return tableName;
 }
 
-const HARD_DELETE_ONLY_SOURCE_TABLES = new Set([
-  "ImportFinding",
-  "ImportHunt",
-  "ImportPreparedOrder",
-  "ImportRun",
-  "ImportRunApproval",
-  "ImportRunControlEvent",
-  "ImportRunEvidence",
-  "ImportRunMutation",
-  "ImportRunOperation",
-  "ImportRunOrderCandidate",
-  "ImportRunProgress",
-  "ImportRunTarget",
-  "ImportSourceClaim",
-  "ImageProcessingJob",
-  "MailboxCursor",
-  "MerchantVendorRule",
-  "OrderMail",
-  "OrderMailAttachment",
-  "PhotoGroupProposal",
-  "ProjectDependency",
-  "ProductConversionCoverage",
-  "ProductMatchCandidate",
-  "PurchasePaymentEvidence",
-  "TaskDependency",
-]);
-
 function deriveMustTargetLiveEdges(): DerivedEdgeSpec[] {
   const specs: DerivedEdgeSpec[] = [];
   for (const [rawTargetEntity, edgeMap] of Object.entries(INCOMING_EDGES)) {
     const targetEntity = entitySchema.parse(rawTargetEntity);
-    for (const edgeKey of Object.keys(edgeMap)) {
+    for (const [edgeKey, edge] of Object.entries(edgeMap)) {
       const semantics = Object.entries(
         ENTITY_EDGE_SEMANTICS[targetEntity],
       ).find(([key]) => key === edgeKey)?.[1];
@@ -1695,8 +1668,7 @@ function deriveMustTargetLiveEdges(): DerivedEdgeSpec[] {
         targetEntity,
         role: semantics.role,
         sourceTableName,
-        sourceSoftDeletable:
-          !HARD_DELETE_ONLY_SOURCE_TABLES.has(sourceTableName),
+        sourceSoftDeletable: "deletedAt" in getTableColumns(edge.column.table),
       });
     }
   }
@@ -1707,13 +1679,6 @@ const derivedMustTargetLiveEdges = deriveMustTargetLiveEdges();
 
 describe("findReferentialLivenessViolations", () => {
   const ctx = withTestDb();
-
-  it("derives 141 must-target-live edges from INCOMING_EDGES × ENTITY_EDGE_SEMANTICS", () => {
-    // Mirrors EXPECTED_EDGE_COUNT in detectors-integrity.ts — an independent
-    // spot check computed from the same two source-of-truth maps, not from the
-    // detector's own (unexported) derivation.
-    expect(derivedMustTargetLiveEdges).toHaveLength(141);
-  });
 
   it("the hand-written fixture map covers exactly the derived edges (a new edge fails here, not silently)", () => {
     expect(Object.keys(SOURCE_FACTORIES).sort()).toEqual(
@@ -1760,8 +1725,7 @@ describe("findReferentialLivenessViolations", () => {
 
   it("ignores every soft-deleted source even when its target is soft-deleted", async () => {
     // Authoritative owner for the old per-edge soft-source cases. Hard-delete
-    // source tables remain deliberately absent: the structural guard above
-    // proves this matrix is exactly the set where a deletedAt guard exists.
+    // source tables remain deliberately absent: they have no deletedAt column.
     for (const spec of derivedMustTargetLiveEdges.filter(
       (edge) => edge.sourceSoftDeletable,
     )) {

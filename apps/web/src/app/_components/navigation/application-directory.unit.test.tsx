@@ -41,7 +41,7 @@ describe("application directory", () => {
       expect(link).toHaveAccessibleDescription(view.description);
     }
     expect(screen.getByRole("status")).toHaveTextContent(
-      "27 record types found",
+      `${recordViews.length} record types found`,
     );
   });
 
@@ -72,7 +72,7 @@ describe("application directory", () => {
     fireEvent.click(screen.getByRole("button", { name: "Clear filter" }));
     expect(filter).toHaveValue("");
     expect(screen.getByRole("status")).toHaveTextContent(
-      "27 record types found",
+      `${recordViews.length} record types found`,
     );
   });
 });

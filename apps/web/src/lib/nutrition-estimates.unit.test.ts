@@ -4,6 +4,7 @@ import {
   type NutritionTotals,
   withMacros,
 } from "@cubby/schemas/nutrition";
+import { TIER1_NUTRIENT_KEYS } from "@cubby/usda-schemas";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -89,7 +90,9 @@ describe("nutrition estimate arithmetic", () => {
   it("returns complete catalog-shaped empty totals", () => {
     const aggregate = aggregateTotals([]);
     expect(aggregate.cost).toEqual({ status: "unavailable", reason: "empty" });
-    expect(Object.keys(aggregate.nutrition)).toHaveLength(22);
+    expect(Object.keys(aggregate.nutrition).sort()).toEqual(
+      [...TIER1_NUTRIENT_KEYS].sort(),
+    );
     expect(aggregate.nutrition.protein).toEqual({
       status: "unavailable",
       reason: "empty",

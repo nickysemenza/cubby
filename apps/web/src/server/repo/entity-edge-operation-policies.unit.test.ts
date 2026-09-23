@@ -57,7 +57,7 @@ describe("incoming-edge operation policies", () => {
  * `!== "metadata"` filter; this test is what makes that a failure instead.
  */
 describe("product retaining edges", () => {
-  const RETAINING: readonly string[] = [
+  const RETAINING = [
     // A book Product a Cookbook claims as its physical copy. Retaining, like
     // Location.productId, because the policy vocabulary has no set-null effect
     // and the only non-blocking alternatives would soft-delete the cookbook
@@ -83,7 +83,7 @@ describe("product retaining edges", () => {
     // A photo group proposal's chosen Product: retaining for orphan
     // detection while proposed, but detached (not blocking) on delete.
     "PhotoGroupProposal.productId",
-  ];
+  ] as const;
 
   // Every retaining edge except the two that detach instead of blocking —
   // see their comments in RETAINING above.
@@ -91,7 +91,7 @@ describe("product retaining edges", () => {
     "Device.productId",
     "PhotoGroupProposal.productId",
   ]);
-  const BLOCKING = RETAINING.filter((key) => !DETACHING.has(key));
+  const BLOCKING = RETAINING.filter((key: string) => !DETACHING.has(key));
 
   it("retains exactly the acquisition, history, association, reference and usage edges", () => {
     expect(
@@ -124,20 +124,7 @@ describe("product retaining edges", () => {
   it("ProductRetainingEdgeKey stays the same literal-key union, not never", () => {
     expectTypeOf<ProductRetainingEdgeKey>().not.toEqualTypeOf<never>();
     expectTypeOf<ProductRetainingEdgeKey>().toEqualTypeOf<
-      | "Cookbook.productId"
-      | "Expense.productId"
-      | "InventoryEntry.productId"
-      | "ImportRunTarget.productId"
-      | "Location.productId"
-      | "MealFoodEntry.productId"
-      | "Planting.sourceProductId"
-      | "ProductComponent.componentProductId"
-      | "ProjectToolUsage.productId"
-      | "PurchaseProduct.productId"
-      | "Task.subjectProductId"
-      | "WishCandidate.productId"
-      | "Device.productId"
-      | "PhotoGroupProposal.productId"
+      (typeof RETAINING)[number]
     >();
   });
 });

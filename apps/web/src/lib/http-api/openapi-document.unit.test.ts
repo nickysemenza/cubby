@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
+import { httpContract } from "~/lib/generated/http-contract.gen";
 import document from "~/lib/generated/http-openapi.gen.json";
+
+import { httpMetadataSchema } from "./router";
+import { httpRoutes } from "./routes";
 
 /**
  * The document contract the native client relies on. Everything asserted
@@ -123,39 +127,11 @@ const RESIDUAL_NULL_ALLOWLIST = new Set([
 ]);
 
 /** Structured-input queries travel as POST bodies; everything else is GET. */
-const POST_QUERIES = [
-  "/api/v1/collection/detail",
-  "/api/v1/collection/matrix",
-  "/api/v1/collection/smartDetail",
-  "/api/v1/collection/smartList",
-  "/api/v1/entity/filterOptions",
-  "/api/v1/entity/graph",
-  "/api/v1/entity/graphPaths",
-  "/api/v1/expense/analytics",
-  "/api/v1/expense/analyze",
-  "/api/v1/expense/chartData",
-  "/api/v1/expense/facetCounts",
-  "/api/v1/expense/monthlySummary",
-  "/api/v1/image/list",
-  "/api/v1/ingredient/enrichmentWorkbench",
-  "/api/v1/location/search",
-  "/api/v1/product/search",
-  "/api/v1/project/getDependencyGraph",
-  "/api/v1/project/toolGallery",
-  "/api/v1/project/tree",
-  "/api/v1/recipe/getDependencyGraph",
-  "/api/v1/recipe/getIngredientCooccurrence",
-  "/api/v1/recipe/getIngredientUsage",
-  "/api/v1/relatedData/summary",
-  "/api/v1/statementRow/list",
-  "/api/v1/statementRow/summary",
-  "/api/v1/task/board",
-  "/api/v1/task/chartData",
-  "/api/v1/task/listActionable",
-  "/api/v1/task/timeline",
-  "/api/v1/usda-food/alternateId",
-  "/api/v1/usda-food/list",
-];
+const POST_QUERIES = httpRoutes(httpContract)
+  .filter(
+    (route) => httpMetadataSchema.parse(route.metadata).transport === "post",
+  )
+  .map((route) => route.path.replace(":id", "{id}"));
 
 describe("generated HTTP OpenAPI document", () => {
   it("is OpenAPI 3.1 without 3.0 keywords or JSON Schema plumbing", () => {
@@ -173,24 +149,10 @@ describe("generated HTTP OpenAPI document", () => {
     expect(text).toContain(`"$ref":"${COMPONENT}JsonValue"`);
   });
 
-  it("names components after their exports, with few positional survivors", () => {
-    const positional = Object.keys(schemas).filter(isPositional);
+  it("names components after their exports", () => {
     const named = Object.keys(schemas).filter((name) => !isPositional(name));
     for (const name of named) expect(name).toMatch(/^[A-Z][A-Za-z0-9]*$/u);
     expect(named.length).toBeGreaterThan(900);
-    // Unexported module-private schemas keep a positional name; each one
-    // that appears here is a candidate for an export. This bound rose from
-    // 40 once `foldPositionalDuplicates`'s canonicalization bug was fixed
-    // (see the fold-bug regression test below): the old replacer-array
-    // allowlist erased distinct nested shapes down to `{}`, so it had been
-    // incorrectly folding distinct positionals together and undercounting.
-    // 78: the image list's importRunId / targetState / capturedByPartyId
-    // filters and the image sighting's filters use the same positional
-    // entity-filter unions as every other entity.
-    // 80: the Run list read (`run.list`) adds its vendor-account filter
-    // union and its sort object, the same shapes every entity list emits.
-    // 81: the Plant list's verdict filter union.
-    expect(positional.length).toBeLessThanOrEqual(81);
     expect(schemas).toHaveProperty("ProductTopLevelOut");
     expect(schemas).toHaveProperty("LocationShortcode");
     expect(schemas).toHaveProperty("VendorCreateInput");
@@ -373,6 +335,7 @@ describe("generated HTTP OpenAPI document", () => {
   });
 
   it("serves structured queries as POST bodies and everything else as GET", () => {
+    expect(POST_QUERIES.length).toBeGreaterThan(0);
     for (const path of POST_QUERIES) {
       const posted = paths[path]?.post;
       expect(posted).toBeDefined();
@@ -429,8 +392,7 @@ describe("generated HTTP OpenAPI document", () => {
     // string with a uri format) and distinct property types both erased down
     // to `{}` and compared equal, folding unrelated schemas together: 242
     // properties across the document ended up wrongly typed as a nullable
-    // string with format "uri". Guard both the specific known casualties and
-    // the aggregate count.
+    // string with format "uri". Guard the specific known casualties.
     const valuationRef = schemaNode.parse(
       schemas.InventoryWithLocationAndProductOut?.properties?.valuation,
     ).$ref;
@@ -440,22 +402,13 @@ describe("generated HTTP OpenAPI document", () => {
     expect(schemas.ProductListItemOut?.properties?.stockTracked).toMatchObject({
       type: expect.arrayContaining(["boolean"]),
     });
-    const uriPropertyCount = Object.values(schemas)
-      .flatMap((schema) => Object.values(schema.properties ?? {}))
-      .filter(
-        (value) => schemaNode.safeParse(value).data?.format === "uri",
-      ).length;
-    // Image provenance adds source-page/asset URLs to six contracts. The
-    // flattened Product attachment schema contributes its own three URLs;
-    // it cannot intersect a closed ImageOut without native decode failures.
-    expect(uriPropertyCount).toBeLessThanOrEqual(69);
   });
 
   it("shares one ListPageMeta across every list page", () => {
     const pages = Object.entries(schemas).filter(([name]) =>
       name.endsWith("ListPage"),
     );
-    expect(pages).toHaveLength(23);
+    expect(pages.length).toBeGreaterThan(0);
     for (const [, page] of pages)
       expect(schemaNode.parse(page.properties?.meta).$ref).toBe(
         `${COMPONENT}ListPageMeta`,

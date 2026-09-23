@@ -51,18 +51,6 @@ const splitList = (value: string | undefined): string[] =>
 const joinList = (values: ReadonlySet<string>): string | undefined =>
   values.size > 0 ? [...values].join(",") : undefined;
 
-/** The search-param keys this filter bar owns. Used to assert disjointness
- * against the project table's manifest-managed keys (see
- * `dashboard-filter-state.unit.test.ts`) — two filter systems now share the
- * `/projects` URL and must not collide on a key. */
-export const DASHBOARD_FILTER_SEARCH_KEYS = [
-  "statuses",
-  "kinds",
-  "locations",
-  "date",
-  "completed",
-] as const;
-
 export type DateRangeBounds = {
   /** Inclusive `YYYY-MM-DD` bounds — compare plain-date strings lexicographically. */
   from: string;

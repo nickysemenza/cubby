@@ -662,7 +662,7 @@ async function enqueueLocationAiRefresh(ctx: HandlerContext): Promise<void> {
 // changed-field detection.
 //
 // Location valuation has no side effect: it is computed on read from inventory.
-export const mutationSideEffectManifest = {
+const mutationSideEffectManifest = {
   product: {
     onCreate: [refreshOwnEmbedding, refreshInventoryEmbeddingsForProduct],
     onUpdate: [

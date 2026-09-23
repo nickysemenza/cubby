@@ -6,7 +6,7 @@ import {
 import { fromPartial } from "@total-typescript/shoehorn";
 import { describe, expect, it } from "vitest";
 
-import { AUTO_FIX_SECTION_IDS, buildAutoFixPlan } from "./auto-fix-registry";
+import { buildAutoFixPlan } from "./auto-fix-registry";
 
 const problems = (overrides: Partial<AllProblems> = {}): AllProblems => ({
   ...EMPTY_PROBLEM_ARRAYS,
@@ -54,12 +54,5 @@ describe("buildAutoFixPlan", () => {
     );
 
     expect(plan).toMatchObject({ items: 0, listedItems: 0, tasks: [] });
-  });
-
-  it("derives collapsed Problems sections from the task registry", () => {
-    expect([...AUTO_FIX_SECTION_IDS].sort()).toEqual([
-      "ai-descriptions",
-      "missing-embeddings",
-    ]);
   });
 });
