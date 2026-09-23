@@ -118,7 +118,6 @@ describe("data-quality registry", () => {
     scoredEntities.filter((entity) => dataQualityExceptionEntities[entity]),
   )("%s declares fingerprint inputs for every check", (entity) => {
     const entry = entryFor(entity);
-    expect(entry.exceptions).toBeDefined();
     expect(
       Object.entries(entry.checks).flatMap(([check, binding]) =>
         binding.fingerprint ? [] : [check],

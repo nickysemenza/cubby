@@ -12,6 +12,7 @@ import { z } from "zod";
 
 import {
   auditLog,
+  entityAttachment,
   expense,
   financialTransaction,
   financialTransactionAllocation,
@@ -24,9 +25,7 @@ import {
   importSourceClaim,
   oauthRefreshToken,
   product,
-  productImage,
   purchase,
-  purchaseImage,
   purchasePaymentEvidence,
   session,
 } from "~/server/db/schema";
@@ -274,12 +273,12 @@ async function protectedBusinessSnapshot(
     database.select().from(image),
     database
       .select()
-      .from(purchaseImage)
-      .where(eq(purchaseImage.purchaseId, input.purchaseId)),
+      .from(entityAttachment)
+      .where(eq(entityAttachment.subjectEntityId, input.purchaseId)),
     database
       .select()
-      .from(productImage)
-      .where(eq(productImage.productId, input.productId)),
+      .from(entityAttachment)
+      .where(eq(entityAttachment.subjectEntityId, input.productId)),
     database.select().from(importSourceClaim),
     database.select().from(purchasePaymentEvidence),
     database.select().from(financialTransaction),

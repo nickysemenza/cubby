@@ -105,7 +105,63 @@ export async function listProductMatchRows(
 }
 
 /**
- * The delete/merge edge policy for both product columns: a review row dies
+ * The merge edge policy for both product columns: every review naming a loser
+ * moves onto the survivor so an agent's evidence and source links outlive the
+ * merge. The merged pair itself would become a self-pair and is dropped. When
+ * the repointed pair already exists, the rows fold: a dismissal still stands,
+ * agent evidence outranks a bare detector dismissal, and source links union.
+ */
+export async function repointProductMatchCandidatesTx(
+  tx: DrizzleTransaction,
+  keepId: ProductId,
+  loserIds: readonly ProductId[],
+): Promise<void> {
+  if (loserIds.length === 0) return;
+  const losers = new Set<string>(loserIds);
+  const moved = await tx
+    .delete(productMatchCandidate)
+    .where(
+      or(
+        inArray(productMatchCandidate.productAId, [...loserIds]),
+        inArray(productMatchCandidate.productBId, [...loserIds]),
+      ),
+    )
+    .returning();
+  const survivorOf = (id: ProductId): ProductId =>
+    losers.has(id) ? keepId : id;
+  for (const row of moved) {
+    const a = survivorOf(row.productAId);
+    const b = survivorOf(row.productBId);
+    if (a === b) continue;
+    const existing = productMatchCandidate;
+    await tx
+      .insert(productMatchCandidate)
+      .values({
+        ...canonicalProductPair(a, b),
+        source: row.source,
+        state: row.state,
+        evidence: row.evidence,
+        sourceUrls: row.sourceUrls,
+        createdAt: row.createdAt,
+      })
+      .onConflictDoUpdate({
+        target: [
+          productMatchCandidate.productAId,
+          productMatchCandidate.productBId,
+        ],
+        set: {
+          state: sql`CASE WHEN ${existing.state} = 'dismissed' OR excluded."state" = 'dismissed' THEN 'dismissed' ELSE 'open' END`,
+          source: sql`CASE WHEN ${existing.source} = 'agent' OR excluded."source" = 'agent' THEN 'agent' ELSE 'detector' END`,
+          evidence: sql`CASE WHEN ${existing.source} = 'agent' THEN COALESCE(${existing.evidence}, excluded."evidence") ELSE COALESCE(excluded."evidence", ${existing.evidence}) END`,
+          sourceUrls: sql`ARRAY(SELECT DISTINCT unnest(${existing.sourceUrls} || excluded."sourceUrls"))`,
+          updatedAt: new Date(),
+        },
+      });
+  }
+}
+
+/**
+ * The delete edge policy for both product columns: a review row dies
  * with either product, so a merged pair can never linger as a self-pair and
  * the table never points at a tombstone.
  */

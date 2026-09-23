@@ -8,7 +8,7 @@ import { eq } from "drizzle-orm";
 import { TEST_USER_ID, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { productImage } from "~/server/db/schema";
+import { entityAttachment } from "~/server/db/schema";
 import { callMcpTool } from "~/server/mcp/mcp-test-utils";
 import { createMcpServer } from "~/server/mcp/server";
 import { getDb } from "~/server/repo/database-helpers";
@@ -334,16 +334,16 @@ describe("product match queue", () => {
       createImageFixture(ctx.db, "own", { source: "own" }),
     ]);
     await getDb(ctx.db)
-      .insert(productImage)
+      .insert(entityAttachment)
       .values([
-        { productId: bought.entityId, imageId: catalog.id, sortOrder: 0 },
+        { subjectEntityId: bought.entityId, imageId: catalog.id, sortOrder: 0 },
         {
-          productId: photo.entityId,
+          subjectEntityId: photo.entityId,
           imageId: label.id,
           sortOrder: 0,
           purpose: "label",
         },
-        { productId: photo.entityId, imageId: own.id, sortOrder: 1 },
+        { subjectEntityId: photo.entityId, imageId: own.id, sortOrder: 1 },
       ]);
     const base = createTestRequestContext(ctx.db, {
       auth: { userId: testUserId(TEST_USER_ID) },
@@ -356,10 +356,10 @@ describe("product match queue", () => {
     );
 
     const order = await getDb(ctx.db)
-      .select({ imageId: productImage.imageId })
-      .from(productImage)
-      .where(eq(productImage.productId, bought.entityId))
-      .orderBy(productImage.sortOrder);
+      .select({ imageId: entityAttachment.imageId })
+      .from(entityAttachment)
+      .where(eq(entityAttachment.subjectEntityId, bought.entityId))
+      .orderBy(entityAttachment.sortOrder);
     expect(order.map((row) => row.imageId)).toEqual([
       own.id,
       catalog.id,

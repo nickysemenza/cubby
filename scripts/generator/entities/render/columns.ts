@@ -50,9 +50,7 @@ const storageJsonTypes = {
   "imageSighting.camera": "ImageSightingCamera | null",
   "inventory.amount": "Amount",
   "location.valuation": "LocationValuation | null",
-  "product.dataExceptions": "DataException[]",
   "product.labelNutrition": "ProductLabelNutrition | null",
-  "purchase.dataExceptions": "DataException[]",
   "recipe.meta": "RecipeStoredMeta | null",
   "recipe.totals": "StoredRecipeTotals | null",
   "recipe.yield": "RecipeYield",
@@ -211,7 +209,6 @@ export const renderEntityColumnsArtifact = (
   return (
     generatedHeader +
     'import type { Amount } from "@cubby/schemas/codec";\n' +
-    'import type { DataException } from "@cubby/schemas/data-quality";\n' +
     'import type { FinancialAccountCardNumber, FinancialAccountIdentity, FinancialAccountSourceAlias } from "@cubby/schemas/financial-account";\n' +
     'import type { FinancialTransactionSourceRef } from "@cubby/schemas/financial-transaction";\n' +
     `import type { ${Object.values(identifierTypeNames).sort().join(", ")} } from "@cubby/schemas/identifiers";\n` +

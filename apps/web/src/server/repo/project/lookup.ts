@@ -14,7 +14,7 @@ import { parseShortcode } from "@cubby/shared";
 import { and, asc, eq, inArray, isNull, or, type SQL, sql } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
-import { image, project, projectImage } from "~/server/db/schema";
+import { entityAttachment, image, project } from "~/server/db/schema";
 import { loadDataQualities } from "~/server/repo/data-quality";
 import {
   auditDateWhereConditions,
@@ -217,13 +217,13 @@ export const buildProjectListQuery = async (
   // `displayableImageWhere` gate, and Image is separately soft-deletable from
   // ProjectImage.
   const projectIdsWithImages = getDb(db)
-    .select({ projectId: projectImage.projectId })
-    .from(projectImage)
+    .select({ projectId: entityAttachment.subjectEntityId })
+    .from(entityAttachment)
     .innerJoin(
       image,
-      and(eq(image.id, projectImage.imageId), notDeleted(image)),
+      and(eq(image.id, entityAttachment.imageId), notDeleted(image)),
     )
-    .where(and(notDeleted(projectImage), displayableImageWhere));
+    .where(and(notDeleted(entityAttachment), displayableImageWhere));
 
   // `search` (name ∪ notes ∪ locations), `status`, `kind` and `location` (an
   // overlap over the `locations` array) are declared stored filters — applied

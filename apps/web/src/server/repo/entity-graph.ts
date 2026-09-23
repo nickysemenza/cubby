@@ -418,7 +418,7 @@ export async function readEntityGraph(
         rootEntity,
         source.provenance.steps,
         `graph_${source.key.replaceAll(/[^a-zA-Z0-9]/g, "_")}`,
-        { root: "s", leaf: "t" },
+        { root: "s", leaf: "t", to: relationship.target },
       );
       return sql`
             SELECT s."shortcode" AS "rootShortcode", ${relationship.key}::text AS "relationshipKey", ${relationship.target}::text AS "targetEntity",

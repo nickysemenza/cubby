@@ -6,11 +6,11 @@ import { describe, expect, it } from "vitest";
 
 import {
   aiAnalysis,
-  imageDescriptionCorrection,
+  entityAttachment,
   image,
-  productCategory,
-  productImage,
+  imageDescriptionCorrection,
   imageProcessingJob,
+  productCategory,
 } from "~/server/db/schema";
 
 import { getDb } from "../database-helpers";
@@ -44,10 +44,10 @@ describe("retained classification evidence", () => {
         .set({ sha256: "a".repeat(64) })
         .where(eq(image.id, source.id));
     await getDb(ctx.db)
-      .insert(productImage)
+      .insert(entityAttachment)
       .values([
-        { productId: product.id, imageId: item.id, purpose: "item" },
-        { productId: product.id, imageId: label.id, purpose: "label" },
+        { subjectEntityId: product.id, imageId: item.id, purpose: "item" },
+        { subjectEntityId: product.id, imageId: label.id, purpose: "label" },
       ]);
     const itemJobs = await persistImageProcessingSubmission(ctx.db, {
       id: item.shortcode,
@@ -77,8 +77,8 @@ describe("retained classification evidence", () => {
       name: "Shared original item",
       manufacturer: "Example",
     });
-    await getDb(ctx.db).insert(productImage).values({
-      productId: secondProduct.id,
+    await getDb(ctx.db).insert(entityAttachment).values({
+      subjectEntityId: secondProduct.id,
       imageId: label.id,
       purpose: "item",
     });
@@ -109,16 +109,16 @@ describe("retained classification evidence", () => {
       size: 64,
     });
     await getDb(ctx.db)
-      .insert(productImage)
+      .insert(entityAttachment)
       .values([
         {
-          productId: product.id,
+          subjectEntityId: product.id,
           imageId: photo.id,
           purpose: "item",
           sortOrder: 0,
         },
         {
-          productId: product.id,
+          subjectEntityId: product.id,
           imageId: label.id,
           purpose: "label",
           sortOrder: 1,

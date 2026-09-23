@@ -230,7 +230,7 @@ export const PRODUCT_DELETE_EDGE_POLICY = {
     reason: "PRODUCT_HAS_COOKBOOKS",
     label: "cookbooks",
   },
-  "ProductImage.productId": {
+  "EntityAttachment.subjectEntityId": {
     code: "soft-delete-association",
     effect: "soft-delete",
     description:

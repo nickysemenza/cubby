@@ -7,6 +7,7 @@ import {
   uniqueIndex,
 } from "drizzle-orm/pg-core";
 
+import { entityIdentityFk } from "./entity-identity-schema";
 import { generatedProductCategoryColumns } from "./generated/entity-columns.gen";
 
 /** Kept separate so the self-reference can receive the table's real column. */
@@ -17,6 +18,7 @@ export const productCategory = pgTable(
   }),
   (table) => [
     uniqueIndex("ProductCategory_shortcode_unique").on(table.shortcode),
+    entityIdentityFk("ProductCategory", table),
     uniqueIndex("ProductCategory_parent_name_key")
       .on(table.parentId, table.name)
       .where(sql`${table.deletedAt} IS NULL`),

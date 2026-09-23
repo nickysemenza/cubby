@@ -35,13 +35,20 @@ import { and, eq, sql } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
-import { cookbook, image, product, recipe } from "~/server/db/schema";
+import {
+  cookbook,
+  entityAttachment,
+  image,
+  product,
+  recipe,
+} from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
 import { runWithConflictRecovery } from "~/server/errors/db-errors";
 import { logAuditEntry } from "~/server/repo/audit-log";
 import { loadDataQualities } from "~/server/repo/data-quality";
 import {
   getDb,
+  imageCascadeChild,
   notDeleted,
   updateAndReturn,
   withTransaction,
@@ -59,9 +66,19 @@ import {
 } from "~/server/repo/recipe";
 import { removeEntity } from "~/server/repo/removal";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
+import {
+  replaceSingularAttachment,
+  singularAttachmentImageIds,
+} from "~/server/repo/singular-attachment";
 import { getR2PublicUrl } from "~/server/utils/r2-public-url";
 
 export const COOKBOOK_DELETE_EDGE_POLICY = {
+  "EntityAttachment.subjectEntityId": {
+    code: "cascade-delete-attachment",
+    effect: "soft-delete",
+    description:
+      "The cover association is soft-deleted with the cookbook; the cover image is reaped when nothing else uses it.",
+  },
   "Recipe.cookbookId": {
     code: "cascade-delete-entity",
     effect: "soft-delete",
@@ -106,8 +123,6 @@ export const upsertCookbook = async (
     sourceLabel: input.sourceLabel,
     importedAt: new Date(),
   };
-  // Omit when not provided so an update can't null out an existing cover.
-  if (input.coverImageId) values.coverImageId = input.coverImageId;
 
   const matchWhere = and(eq(cookbook.name, input.name), notDeleted(cookbook));
 
@@ -117,26 +132,26 @@ export const upsertCookbook = async (
     existingId: CookbookId | null,
   ): Promise<{ output: { id: CookbookShortcode }; entityId: CookbookId }> =>
     withTransaction(db, async (tx) => {
-      const current = existingId
-        ? await tx.query.cookbook.findFirst({
-            where: eq(cookbook.id, existingId),
-            columns: { coverImageId: true },
-          })
-        : null;
-      const shouldAttachCover =
-        input.coverImageId !== undefined && current?.coverImageId == null;
-      const { coverImageId: _requestedCoverImageId, ...valuesWithoutCover } =
-        values;
-      const writeValues = shouldAttachCover ? values : valuesWithoutCover;
+      // A metadata-only re-open upsert (no cover) must never clear a cover,
+      // and a re-import never replaces one already chosen.
+      const hasCover = existingId
+        ? (await singularAttachmentImageIds(tx, [existingId], "cover")).has(
+            existingId,
+          )
+        : false;
+      const shouldAttachCover = input.coverImageId !== undefined && !hasCover;
       const row = existingId
         ? await updateAndReturn(
             tx,
             cookbook,
-            writeValues,
+            values,
             eq(cookbook.id, existingId),
           )
-        : await insertWithShortcode(tx, "cookbook", writeValues);
+        : await insertWithShortcode(tx, "cookbook", values);
       const id = row.id;
+      if (shouldAttachCover && input.coverImageId) {
+        await replaceSingularAttachment(tx, id, "cover", input.coverImageId);
+      }
 
       // The cover image is now associated → mark it uploaded (it was PENDING from
       // the presigned upload, like the recipe/product image flow).
@@ -241,7 +256,15 @@ const readCookbookSummaries = async (
       recipe,
       and(eq(recipe.cookbookId, cookbook.id), notDeleted(recipe)),
     )
-    .leftJoin(image, eq(image.id, cookbook.coverImageId))
+    .leftJoin(
+      entityAttachment,
+      and(
+        eq(entityAttachment.subjectEntityId, cookbook.id),
+        eq(entityAttachment.role, "cover"),
+        notDeleted(entityAttachment),
+      ),
+    )
+    .leftJoin(image, eq(image.id, entityAttachment.imageId))
     .leftJoin(
       product,
       and(eq(product.id, cookbook.productId), notDeleted(product)),
@@ -474,15 +497,14 @@ export const deleteCookbook = async (
     const { recipeIds: deletedRecipeIds, detachedImageKeys: recipeImageKeys } =
       await deleteRecipesByCookbookTx(tx, id, actor);
 
-    // A cookbook cover is a direct FK, not a join row, so `removeEntity` cannot
-    // reap it — `cascadeRemoval` leaves `coverImageId` pointing at a live image
-    // on a tombstoned book, and `findReferencedImageIds` deliberately counts
-    // that as a reference. The cover therefore survives the book, by design.
+    // The cover is an attachment like any gallery photo (ADR 0006): it is
+    // detached with the book and reaped when nothing else uses it.
     const { detachedImageKeys } = await removeEntity(tx, {
       entity: "cookbook",
       ids: [id],
       removal: "soft",
       actor,
+      children: [imageCascadeChild()],
     });
 
     return {

@@ -10,13 +10,13 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { IMAGE_DESCRIPTION_FEATURE } from "~/server/ai/features";
 import { providerFor } from "~/server/ai/models";
 import {
+  aiAnalysis,
+  entityAttachment,
   image,
   imageDerivative,
-  imageProcessingOrphan,
   imageProcessingJob,
-  productImage,
+  imageProcessingOrphan,
   searchDocument,
-  aiAnalysis,
 } from "~/server/db/schema";
 import { imageDescriptionInputFingerprint } from "~/server/services/image-description.service";
 
@@ -214,9 +214,9 @@ describe("durable image representations", () => {
       ctx.actor,
     );
     await getDb(ctx.db)
-      .insert(productImage)
+      .insert(entityAttachment)
       .values({
-        productId: labelOwner.entityId,
+        subjectEntityId: labelOwner.entityId,
         imageId: parseEntityId("image", labelOnly.id),
         sortOrder: 0,
         purpose: "label",
@@ -241,12 +241,12 @@ describe("durable image representations", () => {
     expect(skippedDerivative?.status).toBe("skipped");
 
     await getDb(ctx.db)
-      .update(productImage)
+      .update(entityAttachment)
       .set({ purpose: "item" })
       .where(
         and(
-          eq(productImage.productId, labelOwner.entityId),
-          eq(productImage.imageId, parseEntityId("image", labelOnly.id)),
+          eq(entityAttachment.subjectEntityId, labelOwner.entityId),
+          eq(entityAttachment.imageId, parseEntityId("image", labelOnly.id)),
         ),
       );
     expect(
@@ -272,16 +272,16 @@ describe("durable image representations", () => {
       ctx.actor,
     );
     await getDb(ctx.db)
-      .insert(productImage)
+      .insert(entityAttachment)
       .values([
         {
-          productId: labelOwner.entityId,
+          subjectEntityId: labelOwner.entityId,
           imageId: parseEntityId("image", shared.id),
           sortOrder: 1,
           purpose: "label",
         },
         {
-          productId: itemOwner.entityId,
+          subjectEntityId: itemOwner.entityId,
           imageId: parseEntityId("image", shared.id),
           sortOrder: 0,
           purpose: "item",
@@ -390,8 +390,8 @@ describe("durable image representations", () => {
       makeProductInput({ name: "Search owner" }),
       ctx.actor,
     );
-    await getDb(ctx.db).insert(productImage).values({
-      productId: owner.entityId,
+    await getDb(ctx.db).insert(entityAttachment).values({
+      subjectEntityId: owner.entityId,
       imageId,
       sortOrder: 0,
     });

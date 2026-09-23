@@ -84,6 +84,32 @@ export const derivedProblemQueries = [
     },
   }),
   defineProblem({
+    key: "unconnectedEntities",
+    problemClass: PROBLEM_CLASS.unconnectedEntities,
+    executionLane: "fast",
+    continuation: {
+      kind: "none",
+      reason:
+        "Each result is a record of a checked kind, not a single entity type's grid.",
+    },
+    freshness: { kind: "live" },
+    title: "Unconnected records",
+    description:
+      "Locations, vendors, ingredients, cookbooks, plants, and images with no physical connection to anything else in the house.",
+    emptyMessage: "Every checked record connects to something.",
+    source: {
+      kind: "derived",
+      diagnostic: "unconnected-entities",
+      grain: "polymorphic",
+      operations: [
+        { label: "Load the live one-hop physical edge source" },
+        {
+          label: "Keep checked-kind records with no incoming or outgoing edge",
+        },
+      ],
+    },
+  }),
+  defineProblem({
     key: "partiallyImportedCookbooks",
     problemClass: PROBLEM_CLASS.partiallyImportedCookbooks,
     executionLane: "fast",

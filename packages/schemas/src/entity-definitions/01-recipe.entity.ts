@@ -767,14 +767,14 @@ export default defineEntity({
       provenance: {
         kind: "local-path",
         steps: [
-          { edge: "RecipeImage.recipeId", direction: "incoming" },
-          { edge: "RecipeImage.imageId", direction: "outgoing" },
+          { edge: "EntityAttachment.subjectEntityId", direction: "incoming" },
+          { edge: "EntityAttachment.imageId", direction: "outgoing" },
         ],
       },
       inverse: {
         steps: [
-          { edge: "RecipeImage.imageId", direction: "incoming" },
-          { edge: "RecipeImage.recipeId", direction: "outgoing" },
+          { edge: "EntityAttachment.imageId", direction: "incoming" },
+          { edge: "EntityAttachment.subjectEntityId", direction: "outgoing" },
         ],
       },
     },

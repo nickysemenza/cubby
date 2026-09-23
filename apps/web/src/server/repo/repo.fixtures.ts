@@ -201,7 +201,27 @@ export const updateProductNameFixtureRaw = async (
 };
 
 /**
- * Seed N live `SearchDocument` rows with no backing entity.
+ * Mint code-less deleted `Entity` identities: the tombstone a hard-deleted
+ * payload leaves, and the only identity a projection row may name without a
+ * backing payload row (`SearchDocument_entity_fk`, `EntityEmbedding_entity_fk`).
+ */
+export const seedEntityTombstonesFixtureRaw = async (
+  db: Database,
+  kind: SearchableEntity,
+  count: number,
+): Promise<string[]> => {
+  const result = await getDb(db).execute<{ id: string }>(sql`
+    INSERT INTO "Entity" (id, kind, "deletedAt")
+    SELECT gen_random_uuid(), ${kind}, now()
+    FROM generate_series(1, ${count})
+    RETURNING id
+  `);
+  return result.rows.map((row) => row.id);
+};
+
+/**
+ * Seed N live `SearchDocument` rows with no backing payload row; each names a
+ * tombstone identity.
  *
  * The embedding backfill coordinator's contract is over document PAGES, so a
  * test about how one page is divided needs documents, not entities — building
@@ -213,15 +233,23 @@ export const seedSearchDocumentsFixtureRaw = async (
   count: number,
 ): Promise<void> => {
   await getDb(db).execute(sql`
+    WITH identity AS (
+      INSERT INTO "Entity" (id, kind, "deletedAt")
+      SELECT gen_random_uuid(), ${entityType}, now()
+      FROM generate_series(1, ${count})
+      RETURNING id
+    ), numbered AS (
+      SELECT id, row_number() OVER (ORDER BY id) AS i FROM identity
+    )
     INSERT INTO "SearchDocument" (
       "entityType", "entityId", "shortcode", title, body,
       "semanticText", "normalizedText", "searchVector", "sourceHash"
     )
-    SELECT ${entityType}, gen_random_uuid(), 'SEED-' || i,
+    SELECT ${entityType}, id, 'SEED-' || i,
       'Seed fixture ' || i, 'Seed fixture body ' || i,
       'Seed fixture body ' || i, 'seed fixture body ' || i,
       to_tsvector('simple', 'seed fixture ' || i), 'seed-fixture-' || i
-    FROM generate_series(1, ${count}) AS i
+    FROM numbered
   `);
 };
 

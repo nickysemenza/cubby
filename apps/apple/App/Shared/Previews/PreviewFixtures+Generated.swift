@@ -1132,6 +1132,7 @@ extension PreviewFixtures {
             "duplicateInventory": 0,
             "duplicateProductIdentities": 0,
             "orphanedProducts": 0,
+            "unconnectedEntities": 0,
             "partiallyImportedCookbooks": 0,
             "soldButStillStocked": 0,
             "kitsCountedTwice": 0,

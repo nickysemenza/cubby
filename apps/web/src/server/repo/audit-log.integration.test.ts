@@ -59,19 +59,24 @@ describe("getAuditLog — channel + time window", () => {
     ).toEqual({ entries: [] });
   });
 
-  const makeEntry = (overrides: {
+  // Audit rows reference a real identity (ADR 0006), so each names a product.
+  const makeEntry = async (overrides: {
     createdAt: Date;
     channel?: AuditChannel;
-    entityType?: AuditEntityType;
-  }) =>
-    insertAndReturn(ctx.db, auditLog, {
-      entityType: overrides.entityType ?? "product",
-      entityId: randomUUID(),
+  }) => {
+    const subject = await insertWithShortcode(ctx.db, "product", {
+      name: `Audit subject ${randomUUID()}`,
+      manufacturer: "Test Mfr",
+    });
+    return insertAndReturn(ctx.db, auditLog, {
+      entityType: "product",
+      entityId: subject.id,
       action: "update",
       userId: ctx.actor.userId,
       channel: overrides.channel ?? "web",
       createdAt: overrides.createdAt,
     });
+  };
 
   const day1 = new Date("2026-07-01T00:00:00.000Z");
   const day2 = new Date("2026-07-15T00:00:00.000Z");

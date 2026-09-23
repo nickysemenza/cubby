@@ -949,7 +949,6 @@ extension EntityDescriptor {
                 case "spendMax": query.spendMax = try value.double(name)
                 case "latestPurchaseDateFrom": query.latestPurchaseDateFrom = try value.string(name)
                 case "latestPurchaseDateTo": query.latestPurchaseDateTo = try value.string(name)
-                case "logoImageId": query.logoImageId = value.strings.map { .init(value1: $0) }
                 case "dataStatus": query.dataStatus = try value.enumCases(name)
                 case "dataGap": query.dataGap = try value.enumCases(name)
                 case "latestPurchaseDatePresenceFilter": query.latestPurchaseDatePresenceFilter = try value.enumCase(name)

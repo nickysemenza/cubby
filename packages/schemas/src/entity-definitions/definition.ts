@@ -1112,7 +1112,10 @@ const metadataSchemas = () => {
   const entityDataQualityMetadataSchema = z
     .object({
       checks: z.array(entityDataQualityCheckMetadataSchema).min(1),
-      /** True only where the table carries a `dataExceptions` jsonb column. */
+      /**
+       * True where the entity may record `DataException` rows; every check
+       * then declares fingerprint inputs so an exception can go stale.
+       */
       exceptions: z
         .boolean({ error: "must be a boolean" })
         .optional()

@@ -150,9 +150,10 @@ export const purchaseFinancialMismatchFingerprintRawSql = (
 export const purchaseFinancialMismatchSql = (purchaseAlias: string) => `
   (${purchaseFinancialMismatchRawSql(purchaseAlias)})
   AND NOT EXISTS (
-    SELECT 1 FROM jsonb_array_elements(${purchaseAlias}."dataExceptions") exception
-    WHERE exception->>'check' = 'settlement_mismatch'
-      AND exception->>'fingerprint' = ${purchaseFinancialMismatchFingerprintRawSql(purchaseAlias)}
+    SELECT 1 FROM "DataException" exception
+    WHERE exception."entityId" = ${purchaseAlias}."id"
+      AND exception."check" = 'settlement_mismatch'
+      AND exception."fingerprint" = ${purchaseFinancialMismatchFingerprintRawSql(purchaseAlias)}
   )`;
 
 /**

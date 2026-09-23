@@ -40,6 +40,7 @@ import {
 import { runJevChoice, type JevChoiceResult } from "~/server/ai/jev";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
+  entityAttachment,
   expense,
   financialAccount,
   financialTransaction,
@@ -48,18 +49,16 @@ import {
   importRun,
   importRunMutation,
   importSourceClaim,
-  image,
   ledgerParty,
   ledgerSourceClaim,
-  purchase,
-  purchaseImage,
-  purchasePaymentEvidence,
   orderMail,
   orderMailAttachment,
   orderMailEvent,
-  vendorAccount,
   product,
   productExternalId,
+  purchase,
+  purchasePaymentEvidence,
+  vendorAccount,
 } from "~/server/db/schema";
 import { assertImportRunCapabilityById } from "~/server/purchase-import/capabilities";
 import {
@@ -244,9 +243,10 @@ async function attachEvidence(
   ].filter((row): row is NonNullable<typeof row> => row !== null);
   for (const attachment of attachments) {
     await tx
-      .insert(purchaseImage)
+      .insert(entityAttachment)
       .values({
-        purchaseId,
+        subjectEntityId: purchaseId,
+        role: "attachment",
         imageId: attachment.imageId,
         documentKind: attachment.documentKind,
       })
@@ -286,19 +286,16 @@ async function attachPendingMailEvidence(
   for (const attachment of attachments) {
     if (!attachment.imageId) continue;
     await tx
-      .insert(purchaseImage)
+      .insert(entityAttachment)
       .values({
-        purchaseId,
+        subjectEntityId: purchaseId,
+        role: "attachment",
         imageId: attachment.imageId,
         documentKind: attachment.filename.toLowerCase().includes("receipt")
           ? "receipt"
           : "invoice",
       })
       .onConflictDoNothing();
-    await tx
-      .update(image)
-      .set({ targetType: "purchase", targetId: purchaseId })
-      .where(eq(image.id, attachment.imageId));
   }
 }
 

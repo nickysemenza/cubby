@@ -1,9 +1,10 @@
 import { z } from "zod";
 
 import { displayImagesField } from "./display-images";
+import { entityAttachmentRoleValues } from "./entity-attachment";
 import { imageOut } from "./entity-definitions/field-primitives";
 
-export const entityAttachmentRole = z.enum(["attachment", "cover", "logo"]);
+export const entityAttachmentRole = z.enum(entityAttachmentRoleValues);
 
 export const entityAttachmentRead = imageOut.extend({
   role: entityAttachmentRole,
@@ -15,6 +16,10 @@ const listMediaFields = z.object({ displayImages: displayImagesField });
 const detailMediaFields = z.object({
   displayImages: displayImagesField,
   attachments: z.array(entityAttachmentRead),
+  /** The code a read asked for when it was a merged-away code (ADR 0006). */
+  redirectedFrom: z.string().nullable(),
+  /** Codes of entities merged into this one; each still redirects here. */
+  previousShortcodes: z.array(z.string()),
 });
 
 const entityReadObject = (schema: z.ZodType) => {

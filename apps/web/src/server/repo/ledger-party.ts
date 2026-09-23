@@ -40,6 +40,7 @@ import {
   mealFoodEntry,
   mealRecipe,
   mealRecipePortion,
+  photoGroupProposal,
 } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
 import {
@@ -173,6 +174,12 @@ export const LEDGER_PARTY_DELETE_EDGE_POLICY = {
     description:
       "Deleting a member clears the derived capturer on its images rather than blocking the delete — the image survives with no capturer until the next derivation.",
   },
+  "PhotoGroupProposal.inventoryOwnerPartyId": {
+    code: "clear-proposal-owner",
+    effect: "detach",
+    description:
+      "Deleting a member clears a photo group proposal's inventory owner; the group can still be approved without one.",
+  },
 } as const satisfies IncomingEdgePolicy<"ledgerParty", OperationDisposition>;
 
 export const LEDGER_PARTY_MERGE_EDGE_POLICY = {
@@ -271,6 +278,12 @@ export const LEDGER_PARTY_MERGE_EDGE_POLICY = {
     effect: "repoint",
     description:
       "Images derived to a merged member move to the surviving party.",
+  },
+  "PhotoGroupProposal.inventoryOwnerPartyId": {
+    code: "repoint-proposal-owner",
+    effect: "repoint",
+    description:
+      "A photo group proposed for a merged member is received by the surviving party.",
   },
 } as const satisfies IncomingEdgePolicy<"ledgerParty", OperationDisposition>;
 
@@ -655,6 +668,10 @@ export async function deleteLedgerParties(
       .update(image)
       .set({ capturedByPartyId: null })
       .where(and(inArray(image.capturedByPartyId, ids), notDeleted(image)));
+    await tx
+      .update(photoGroupProposal)
+      .set({ inventoryOwnerPartyId: null })
+      .where(inArray(photoGroupProposal.inventoryOwnerPartyId, ids));
     const { deleted } = await removeEntity(tx, {
       entity: "ledgerParty",
       ids,
@@ -1108,6 +1125,10 @@ export async function mergeLedgerParties(
       .where(
         and(inArray(image.capturedByPartyId, loserIds), notDeleted(image)),
       );
+    await tx
+      .update(photoGroupProposal)
+      .set({ inventoryOwnerPartyId: keepId })
+      .where(inArray(photoGroupProposal.inventoryOwnerPartyId, loserIds));
     await tx
       .update(ledgerTransfer)
       .set({ fromPartyId: keepId })

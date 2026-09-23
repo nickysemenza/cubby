@@ -256,6 +256,7 @@ const COMPILED_RELATED_JOINS = new Map<RelatedViewKey, SQL>(
     compileTraversal(view.source, relatedViewPath(view), "related", {
       root: "s",
       leaf: "t",
+      to: view.target,
     }).joins,
   ]),
 );
@@ -739,23 +740,13 @@ export async function loadRelatedSummary(
         AND (e."purchaseId" IS NULL OR p."id" IS NOT NULL)
     )`;
   })();
+  // Gallery photos and a vendor logo are all attachments (ADR 0006).
   const imageJoin = definition.imageTarget
-    ? definition.imageTarget === "vendor"
-      ? `LEFT JOIN LATERAL (
+    ? `LEFT JOIN LATERAL (
         SELECT i."id", i."key", i."filename", i."contentType"
-        FROM "Image" i
-        WHERE i."id" = t."logoImageId"
-          AND i."deletedAt" IS NULL
-          AND i."contentType" <> 'application/pdf'
-          AND (i."renderStatus" IS NULL OR i."renderStatus" <> 'failed')
-          AND (i."storageStatus" IS NULL OR i."storageStatus" NOT IN ('missing', 'metadata_mismatch'))
-        LIMIT 1
-      ) img ON TRUE`
-      : `LEFT JOIN LATERAL (
-        SELECT i."id", i."key", i."filename", i."contentType"
-        FROM "${definition.imageTarget === "product" ? "ProductImage" : "ProjectImage"}" ti
+        FROM "EntityAttachment" ti
         JOIN "Image" i ON i."id" = ti."imageId" AND i."deletedAt" IS NULL
-        WHERE ti."${definition.imageTarget}Id" = t."id"
+        WHERE ti."subjectEntityId" = t."id"
           AND ti."deletedAt" IS NULL
           AND i."contentType" <> 'application/pdf'
           AND (i."renderStatus" IS NULL OR i."renderStatus" <> 'failed')

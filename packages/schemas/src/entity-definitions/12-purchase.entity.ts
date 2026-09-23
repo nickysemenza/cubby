@@ -571,7 +571,6 @@ export default defineEntity({
         },
       },
       { key: "shortcode", kind: "text", readKey: null },
-      { key: "dataExceptions", kind: "json", readKey: null },
       { key: "deletedAt", kind: "timestamp", nullable: true, readKey: null },
     ],
     storage: [
@@ -590,12 +589,6 @@ export default defineEntity({
       "date",
       { key: "statedTotal", specialized: "double-precision" },
       "notes",
-      {
-        key: "dataExceptions",
-        default: "literal",
-        defaultValue: "'[]'::jsonb",
-        specialized: "json:dataExceptions",
-      },
       { key: "createdAt", default: "now" },
       { key: "updatedAt", default: "now", specialized: "updated-at" },
       "deletedAt",
@@ -1002,14 +995,14 @@ export default defineEntity({
       provenance: {
         kind: "local-path",
         steps: [
-          { edge: "PurchaseImage.purchaseId", direction: "incoming" },
-          { edge: "PurchaseImage.imageId", direction: "outgoing" },
+          { edge: "EntityAttachment.subjectEntityId", direction: "incoming" },
+          { edge: "EntityAttachment.imageId", direction: "outgoing" },
         ],
       },
       inverse: {
         steps: [
-          { edge: "PurchaseImage.imageId", direction: "incoming" },
-          { edge: "PurchaseImage.purchaseId", direction: "outgoing" },
+          { edge: "EntityAttachment.imageId", direction: "incoming" },
+          { edge: "EntityAttachment.subjectEntityId", direction: "outgoing" },
         ],
       },
     },

@@ -33,6 +33,8 @@ const withMedia = <T,>(value: T, url?: string) => ({
     ? [{ id: testShortcode("image", "IMG-PREVIEW"), url }]
     : [],
   attachments: [],
+  redirectedFrom: null,
+  previousShortcodes: [],
 });
 
 /** The planting card's first body block is its stats row; anything else is a test failure. */

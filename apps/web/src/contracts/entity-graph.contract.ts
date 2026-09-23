@@ -1,4 +1,8 @@
 import {
+  entityConnectionsInput,
+  entityConnectionsOut,
+} from "@cubby/schemas/entity-connections";
+import {
   entityGraphExploreInputSchema,
   entityGraphExploreOutputSchema,
   entityGraphInputSchema,
@@ -24,5 +28,10 @@ export const entityGraphContract = defineContract("entity", {
     native: "Native relationship path evidence",
     input: entityGraphPathsInputSchema,
     output: entityGraphPathsOutputSchema,
+  }),
+  connections: query({
+    native: "Native one-hop physical connections and delete/merge impact",
+    input: entityConnectionsInput,
+    output: entityConnectionsOut,
   }),
 });

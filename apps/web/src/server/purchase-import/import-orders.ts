@@ -39,20 +39,20 @@ import { z } from "zod";
 
 import type { Database } from "~/server/db";
 import {
+  entityAttachment,
   expense,
   image,
+  importHunt,
   importPreparedLine,
   importPreparedOrder,
-  importHunt,
   importRun,
   importRunEvidence,
-  importRunTarget,
   importRunMutation,
   importRunOperation,
+  importRunTarget,
   importSourceClaim,
   product,
   productExternalId,
-  productImage,
   purchase,
 } from "~/server/db/schema";
 import {
@@ -1330,11 +1330,11 @@ export async function commitProductEnrichment(
           });
         }
         if (importedImageId) {
-          const existingAttachment = await tx.query.productImage.findFirst({
+          const existingAttachment = await tx.query.entityAttachment.findFirst({
             where: and(
-              eq(productImage.productId, productId),
-              eq(productImage.imageId, importedImageId),
-              notDeleted(productImage),
+              eq(entityAttachment.subjectEntityId, productId),
+              eq(entityAttachment.imageId, importedImageId),
+              notDeleted(entityAttachment),
             ),
             columns: { id: true, purpose: true },
           });
@@ -1361,12 +1361,12 @@ export async function commitProductEnrichment(
           // A verified catalog image becomes the item cover without removing
           // household photos or label evidence; their relative order is kept.
           await tx
-            .update(productImage)
-            .set({ sortOrder: sql`${productImage.sortOrder} + 1` })
+            .update(entityAttachment)
+            .set({ sortOrder: sql`${entityAttachment.sortOrder} + 1` })
             .where(
               and(
-                eq(productImage.productId, productId),
-                notDeleted(productImage),
+                eq(entityAttachment.subjectEntityId, productId),
+                notDeleted(entityAttachment),
               ),
             );
           if (existingAttachment) {
@@ -1375,12 +1375,13 @@ export async function commitProductEnrichment(
             // place instead of attempting a duplicate insert; do not rewrite
             // its purpose or Image provenance merely because this URL recurs.
             await tx
-              .update(productImage)
+              .update(entityAttachment)
               .set({ sortOrder: 0 })
-              .where(eq(productImage.id, existingAttachment.id));
+              .where(eq(entityAttachment.id, existingAttachment.id));
           } else {
-            await tx.insert(productImage).values({
-              productId,
+            await tx.insert(entityAttachment).values({
+              subjectEntityId: productId,
+              role: "attachment",
               imageId: importedImageId,
               sortOrder: 0,
               purpose: "item",

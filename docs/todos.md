@@ -142,22 +142,6 @@ history is the archive. Permanent product constraints live in the
   grouping (`treePickerItems`) is not worth the wiring yet — revisit if
   either roster grows deep nesting.
 
-- **Keep agent match evidence through a product merge.** Merging a Product
-  deletes every `ProductMatchCandidate` row naming it, including an agent pair
-  with a third Product, so its evidence and source links vanish. Repoint those
-  rows onto the survivor (re-canonicalizing the pair order and dropping
-  self-pairs) instead of deleting them
-  (`apps/web/src/server/repo/product-match-candidate.ts`, merge edge policy in
-  `repo/product/merge.ts`).
-
-- **Clean up photo-group proposals whose photos went away.** Deleting a run
-  image hard-deletes its `ImportRunTarget`, but the id stays in
-  `PhotoGroupProposal.images`/`skip`; the review tolerates it and shows a count.
-  Strip the id from `proposed` rows on image delete, and let "Remove group"
-  work on a run that is no longer `running` (it currently goes through
-  `propose_photo_groups`, which refuses)
-  (`apps/web/src/server/photo-import-run/proposals.ts`).
-
 - **Cover the photo-group review's untested guards.** Add regression tests for
   the photo-groups route's household-member check (404 for a non-member), the
   `state='proposed'` guard on the approval `lastError` write, and the
@@ -422,25 +406,13 @@ history is the archive. Permanent product constraints live in the
   a CI job that diffs `application-schema.json` against the live schema and
   blocks merge on a missing column.
 
-- **HIGH PRIORITY — Generic durable data exceptions.** Every scored entity
-  (`dataChecksByEntity`/`scoredEntities` in
-  `packages/schemas/src/generated/data-quality-checks.gen.ts`) can now record
-  a computed 0–100 data-quality score and per-check gaps, but only Product
-  and Purchase can record a reasoned, evidence-fingerprinted "not available"
-  exception for one: those two tables alone carry a `dataExceptions` jsonb
-  column, and `set_data_exception`/`clear_data_exception` are hardcoded to
-  `dataExceptionEntity = z.enum(["purchase", "product"])`
-  (`packages/schemas/src/data-quality.ts`). As more entities gain
-  `capabilities.dataQuality` checks, they need the same "not applicable to
-  this row, and here's why" escape hatch. Likely shape: a polymorphic
-  `DataException` row keyed by `(entityType, entityId, check)`, with the
-  cascade/merge cleanup every other polymorphic-by-entity-type table needs.
-  This may relate to
-  [entity-identity-and-files.md § Follow-ups → 2. Selective conversion of
-  remaining polymorphic references](plans/entity-identity-and-files.md),
-  which already names data-quality exception records as a candidate family —
-  design this against that plan's reference-policy registry rather than in
-  isolation, so it doesn't reinvent a second polymorphic-reference story.
+- **Drop the legacy image joins and exception columns (entity identity PR 2).**
+  After production has run a full background and import cycle on `Entity` and
+  `EntityAttachment` with clean integrity detectors, drop the eight
+  `<Entity>Image` joins, `Cookbook.coverImageId`, `Vendor.logoImageId`,
+  `Image.targetType`/`targetId`/`idempotencyKey`, and the Product and Purchase
+  `dataExceptions` columns. See
+  [the runbook](runbooks/entity-identity-schema.md#pr-2-drop-the-legacy-storage).
 
 - **Finish the meal amount migration.** `MealFoodEntry` and
   `MealRecipePortion` still retain legacy `grams` columns and read/input
@@ -505,12 +477,6 @@ history is the archive. Permanent product constraints live in the
   location-by-time-window prose that the agent parses; give photo runs
   structured time-window → Location segments so proposals default their
   inventory location without interpretation.
-
-- **Link photo-group proposal category and owner as foreign keys.**
-  `PhotoGroupProposal.productCreate` stores category and owner as shortcodes in
-  JSON, so a merge or delete between proposing and approving is not followed
-  and the approval fails. Product and Location are already FKs with merge
-  repoint.
 
 ---
 
@@ -746,20 +712,12 @@ history is the archive. Permanent product constraints live in the
   the `runProjection` union (`apps/web/src/server/repo/activity.ts`) is a
   transport addition, giving cross-device history without a remodel.
 
-- **Durable Entity identity and shared files.** Three patterns coexist for a
-  row that points at any of several entity types: an untyped type-plus-id pair,
-  Image target fields plus per-entity joins, and an exclusive-arc CHECK. The
-  proposed end state gives local shortcode-bearing entities durable identity,
-  consolidates direct files in EntityAttachment, and preserves typed domain FKs
-  and joins. The unresolved design includes merge redirects, tombstones, payload
-  retention, workflow-file liveness, and migration gates; see [the detailed
-  plan](plans/entity-identity-and-files.md).
-
 - **MCP staged-file storage.** Before sharing a local upload beyond its signed
   grant, define no-copy activation, replay behavior for a signed grant,
   activation fencing, delete-before-grant-expiry handling for a recreated
-  orphan, and ownership of workflow evidence. This depends on the durable
-  identity and files design where applicable.
+  orphan, and ownership of workflow evidence. Build on the `EntityAttachment`
+  and file-liveness model from the
+  [durable identity plan](plans/entity-identity-and-files.md) once it ships.
 
 - **Host-provided MCP file references.** Adapt client-owned file handles and
   download URLs through capability-specific input metadata and the existing
@@ -811,16 +769,6 @@ history is the archive. Permanent product constraints live in the
   and Recipe creation pages; generate redirects from dialog-created entities'
   `/new` URLs into their list `?create=true` deep links. Validate recipe
   share-target and direct-link behavior before changing routes.
-
-- **Merge redirects.** A merged-away shortcode in a URL, note, or MCP
-  client resolves to nothing today; `finalizeMerge` records no forward.
-  This is now part of the durable identity plan above: `Entity.mergedIntoId`
-  is path-compressed at merge time, read resolution returns
-  `redirectedFrom`, and mutation resolution refuses redirected codes.
-  Otherwise merging `keep=A, loser=B` where B was earlier absorbed into A
-  resolves to a self-merge. Two tests assert the current 404
-  (`purchase.integration.test.ts`, `vendor.integration.test.ts`) and become
-  named regressions.
 
 - **Trial `@cf/baai/bge-base-en-v1.5` via AI Gateway alongside OpenAI.**
   Vectorize's per-vector cost is model-agnostic, so a cheaper/faster

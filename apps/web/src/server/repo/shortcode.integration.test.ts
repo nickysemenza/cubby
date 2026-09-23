@@ -291,9 +291,14 @@ describe("schema-level invariants", () => {
       FROM pg_indexes
       WHERE schemaname = 'public' AND indexname LIKE '%\\_shortcode\\_unique'
     `);
-    expect(found).toHaveLength(PUBLIC_SHORTCODE_PREFIXES.length);
-    expect(found.map((row) => row.indexname)).toContain(
-      "LedgerTransfer_shortcode_unique",
+    // One per payload table plus the identity table, which alone still holds
+    // a hard-deleted payload's code.
+    expect(found).toHaveLength(PUBLIC_SHORTCODE_PREFIXES.length + 1);
+    expect(found.map((row) => row.indexname)).toEqual(
+      expect.arrayContaining([
+        "LedgerTransfer_shortcode_unique",
+        "Entity_shortcode_unique",
+      ]),
     );
     for (const row of found) {
       expect(row.partial, `${row.indexname} must not be partial`).toBe(false);

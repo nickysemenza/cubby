@@ -2568,6 +2568,196 @@ public enum Operations {
             }
         }
     }
+    /// - Remark: HTTP `GET /api/v1/entity/connections`.
+    /// - Remark: Generated from `#/paths//api/v1/entity/connections/get(entity.connections)`.
+    public enum Entity_connections {
+        public static let id: Swift.String = "entity.connections"
+        public struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/api/v1/entity/connections/GET/query`.
+            public struct Query: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/entity/connections/GET/query/id`.
+                public var id: Swift.String
+                /// - Remark: Generated from `#/paths/api/v1/entity/connections/GET/query/operation`.
+                @frozen public enum OperationPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case delete = "delete"
+                    case merge = "merge"
+                }
+                /// - Remark: Generated from `#/paths/api/v1/entity/connections/GET/query/operation`.
+                public var operation: Operations.Entity_connections.Input.Query.OperationPayload?
+                /// - Remark: Generated from `#/paths/api/v1/entity/connections/GET/query/limitPerGroup`.
+                public var limitPerGroup: Swift.Int?
+                /// Creates a new `Query`.
+                ///
+                /// - Parameters:
+                ///   - id:
+                ///   - operation:
+                ///   - limitPerGroup:
+                public init(
+                    id: Swift.String,
+                    operation: Operations.Entity_connections.Input.Query.OperationPayload? = nil,
+                    limitPerGroup: Swift.Int? = nil
+                ) {
+                    self.id = id
+                    self.operation = operation
+                    self.limitPerGroup = limitPerGroup
+                }
+            }
+            public var query: Operations.Entity_connections.Input.Query
+            /// - Remark: Generated from `#/paths/api/v1/entity/connections/GET/header`.
+            public struct Headers: Sendable, Hashable {
+                public var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Entity_connections.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - accept:
+                public init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Entity_connections.AcceptableContentType>] = .defaultValues()) {
+                    self.accept = accept
+                }
+            }
+            public var headers: Operations.Entity_connections.Input.Headers
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - query:
+            ///   - headers:
+            public init(
+                query: Operations.Entity_connections.Input.Query,
+                headers: Operations.Entity_connections.Input.Headers = .init()
+            ) {
+                self.query = query
+                self.headers = headers
+            }
+        }
+        @frozen public enum Output: Sendable, Hashable {
+            public struct Ok: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/entity/connections/GET/responses/200/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/entity/connections/GET/responses/200/content/application\/json`.
+                    case json(Components.Schemas.EntityConnectionsOut)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.EntityConnectionsOut {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.Entity_connections.Output.Ok.Body
+                /// Creates a new `Ok`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.Entity_connections.Output.Ok.Body) {
+                    self.body = body
+                }
+            }
+            /// 200
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/entity/connections/get(entity.connections)/responses/200`.
+            ///
+            /// HTTP response code: `200 ok`.
+            case ok(Operations.Entity_connections.Output.Ok)
+            /// The associated value of the enum case if `self` is `.ok`.
+            ///
+            /// - Throws: An error if `self` is not `.ok`.
+            /// - SeeAlso: `.ok`.
+            public var ok: Operations.Entity_connections.Output.Ok {
+                get throws {
+                    switch self {
+                    case let .ok(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            public struct Default: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/entity/connections/GET/responses/default/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/entity/connections/GET/responses/default/content/application\/json`.
+                    case json(Components.Schemas.ApiError)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.ApiError {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.Entity_connections.Output.Default.Body
+                /// Creates a new `Default`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.Entity_connections.Output.Default.Body) {
+                    self.body = body
+                }
+            }
+            /// Error
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/entity/connections/get(entity.connections)/responses/default`.
+            ///
+            /// HTTP response code: `default`.
+            case `default`(statusCode: Swift.Int, Operations.Entity_connections.Output.Default)
+            /// The associated value of the enum case if `self` is `.`default``.
+            ///
+            /// - Throws: An error if `self` is not `.`default``.
+            /// - SeeAlso: `.`default``.
+            public var `default`: Operations.Entity_connections.Output.Default {
+                get throws {
+                    switch self {
+                    case let .`default`(_, response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "default",
+                            response: self
+                        )
+                    }
+                }
+            }
+        }
+        @frozen public enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            public init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            public var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            public static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
     /// - Remark: HTTP `POST /api/v1/entity/explore`.
     /// - Remark: Generated from `#/paths//api/v1/entity/explore/post(entity.explore)`.
     public enum Entity_explore {
@@ -34615,65 +34805,6 @@ public enum Operations {
                 ///
                 /// - Remark: Generated from `#/paths/api/v1/vendors/GET/query/latestPurchaseDateTo`.
                 public var latestPurchaseDateTo: Swift.String?
-                /// image shortcode, e.g. IMG-4K7M
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/vendors/GET/query/LogoImageIdPayload`.
-                public struct LogoImageIdPayloadPayload: Codable, Hashable, Sendable {
-                    /// image shortcode, e.g. IMG-4K7M
-                    ///
-                    /// - Remark: Generated from `#/paths/api/v1/vendors/GET/query/LogoImageIdPayload/value1`.
-                    public var value1: Swift.String?
-                    /// - Remark: Generated from `#/paths/api/v1/vendors/GET/query/LogoImageIdPayload/value2`.
-                    @frozen public enum Value2Payload: String, Codable, Hashable, Sendable, CaseIterable {
-                        case __unresolvableEntityFilter = "__unresolvable_entity_filter__"
-                    }
-                    /// - Remark: Generated from `#/paths/api/v1/vendors/GET/query/LogoImageIdPayload/value2`.
-                    public var value2: Operations.Resources_vendor_list.Input.Query.LogoImageIdPayloadPayload.Value2Payload?
-                    /// Creates a new `LogoImageIdPayloadPayload`.
-                    ///
-                    /// - Parameters:
-                    ///   - value1: image shortcode, e.g. IMG-4K7M
-                    ///   - value2:
-                    public init(
-                        value1: Swift.String? = nil,
-                        value2: Operations.Resources_vendor_list.Input.Query.LogoImageIdPayloadPayload.Value2Payload? = nil
-                    ) {
-                        self.value1 = value1
-                        self.value2 = value2
-                    }
-                    public init(from decoder: any Swift.Decoder) throws {
-                        var errors: [any Swift.Error] = []
-                        do {
-                            self.value1 = try decoder.decodeFromSingleValueContainer()
-                        } catch {
-                            errors.append(error)
-                        }
-                        do {
-                            self.value2 = try decoder.decodeFromSingleValueContainer()
-                        } catch {
-                            errors.append(error)
-                        }
-                        try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
-                            [
-                                self.value1,
-                                self.value2
-                            ],
-                            type: Self.self,
-                            codingPath: decoder.codingPath,
-                            errors: errors
-                        )
-                    }
-                    public func encode(to encoder: any Swift.Encoder) throws {
-                        try encoder.encodeFirstNonNilValueToSingleValueContainer([
-                            self.value1,
-                            self.value2
-                        ])
-                    }
-                }
-                /// - Remark: Generated from `#/paths/api/v1/vendors/GET/query/logoImageId`.
-                public typealias LogoImageIdPayload = [Operations.Resources_vendor_list.Input.Query.LogoImageIdPayloadPayload]
-                /// - Remark: Generated from `#/paths/api/v1/vendors/GET/query/logoImageId`.
-                public var logoImageId: Operations.Resources_vendor_list.Input.Query.LogoImageIdPayload?
                 /// - Remark: Generated from `#/paths/api/v1/vendors/GET/query/DataStatusPayload`.
                 @frozen public enum DataStatusPayloadPayload: String, Codable, Hashable, Sendable, CaseIterable {
                     case complete = "complete"
@@ -34764,7 +34895,6 @@ public enum Operations {
                 ///   - spendMax:
                 ///   - latestPurchaseDateFrom: Calendar day as "YYYY-MM-DD"
                 ///   - latestPurchaseDateTo: Calendar day as "YYYY-MM-DD"
-                ///   - logoImageId:
                 ///   - dataStatus:
                 ///   - dataGap:
                 ///   - latestPurchaseDatePresenceFilter:
@@ -34801,7 +34931,6 @@ public enum Operations {
                     spendMax: Swift.Double? = nil,
                     latestPurchaseDateFrom: Swift.String? = nil,
                     latestPurchaseDateTo: Swift.String? = nil,
-                    logoImageId: Operations.Resources_vendor_list.Input.Query.LogoImageIdPayload? = nil,
                     dataStatus: Operations.Resources_vendor_list.Input.Query.DataStatusPayload? = nil,
                     dataGap: Operations.Resources_vendor_list.Input.Query.DataGapPayload? = nil,
                     latestPurchaseDatePresenceFilter: Operations.Resources_vendor_list.Input.Query.LatestPurchaseDatePresenceFilterPayload? = nil,
@@ -34838,7 +34967,6 @@ public enum Operations {
                     self.spendMax = spendMax
                     self.latestPurchaseDateFrom = latestPurchaseDateFrom
                     self.latestPurchaseDateTo = latestPurchaseDateTo
-                    self.logoImageId = logoImageId
                     self.dataStatus = dataStatus
                     self.dataGap = dataGap
                     self.latestPurchaseDatePresenceFilter = latestPurchaseDatePresenceFilter

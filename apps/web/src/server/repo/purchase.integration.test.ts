@@ -24,10 +24,10 @@ import { describe, expect, it } from "vitest";
 import type { Database } from "~/server/db";
 import {
   auditLog,
+  entityAttachment,
   expense,
   image,
   purchase,
-  purchaseImage,
 } from "~/server/db/schema";
 import { requireActor } from "~/server/request-context";
 import { createTestRequestContext } from "~/server/testing/request-context";
@@ -436,8 +436,8 @@ describe("purchase repository — mergePurchases", () => {
       size: 100,
       status: "UPLOADED",
     });
-    const join = await insertAndReturn(ctx.db, purchaseImage, {
-      purchaseId: purchaseIdUuid,
+    const join = await insertAndReturn(ctx.db, entityAttachment, {
+      subjectEntityId: purchaseIdUuid,
       imageId: img.id,
     });
     return { imageId: img.id, joinId: join.id };
@@ -496,19 +496,19 @@ describe("purchase repository — mergePurchases", () => {
 
     // Documents follow their charge: a new join row against the keeper, and the
     // loser's own row tombstoned in the same transaction.
-    const keeperDocs = await getDb(ctx.db).query.purchaseImage.findMany({
+    const keeperDocs = await getDb(ctx.db).query.entityAttachment.findMany({
       where: and(
-        eq(purchaseImage.purchaseId, keeperUuid),
-        eq(purchaseImage.imageId, loserDoc.imageId),
+        eq(entityAttachment.subjectEntityId, keeperUuid),
+        eq(entityAttachment.imageId, loserDoc.imageId),
       ),
     });
     expect(keeperDocs).toHaveLength(1);
     expect(keeperDocs[0]?.deletedAt).toBeNull();
 
     const [oldJoin] = await getDb(ctx.db)
-      .select({ deletedAt: purchaseImage.deletedAt })
-      .from(purchaseImage)
-      .where(eq(purchaseImage.id, loserDoc.joinId));
+      .select({ deletedAt: entityAttachment.deletedAt })
+      .from(entityAttachment)
+      .where(eq(entityAttachment.id, loserDoc.joinId));
     expect(oldJoin?.deletedAt).not.toBeNull();
 
     // The loser is gone even at the public boundary: a soft-deleted shortcode
@@ -702,8 +702,8 @@ describe("purchase repository — deletion cascades", () => {
       size: 100,
       status: "UPLOADED",
     });
-    const join = await insertAndReturn(ctx.db, purchaseImage, {
-      purchaseId,
+    const join = await insertAndReturn(ctx.db, entityAttachment, {
+      subjectEntityId: purchaseId,
       imageId: document.id,
     });
 
@@ -724,8 +724,8 @@ describe("purchase repository — deletion cascades", () => {
     expect(
       await getDb(ctx.db)
         .select()
-        .from(purchaseImage)
-        .where(eq(purchaseImage.id, join.id)),
+        .from(entityAttachment)
+        .where(eq(entityAttachment.id, join.id)),
     ).toHaveLength(0);
     expect(
       await getDb(ctx.db)
@@ -813,8 +813,8 @@ describe("purchase repository — deletion cascades", () => {
       size: 100,
       status: "UPLOADED",
     });
-    const join = await insertAndReturn(ctx.db, purchaseImage, {
-      purchaseId: chargeUuid,
+    const join = await insertAndReturn(ctx.db, entityAttachment, {
+      subjectEntityId: chargeUuid,
       imageId: img.id,
     });
 
@@ -832,9 +832,9 @@ describe("purchase repository — deletion cascades", () => {
 
     // Removal-path invariant: the join rows go in the SAME transaction.
     const [joinRow] = await getDb(ctx.db)
-      .select({ deletedAt: purchaseImage.deletedAt })
-      .from(purchaseImage)
-      .where(eq(purchaseImage.id, join.id));
+      .select({ deletedAt: entityAttachment.deletedAt })
+      .from(entityAttachment)
+      .where(eq(entityAttachment.id, join.id));
     expect(joinRow?.deletedAt).not.toBeNull();
   });
 });

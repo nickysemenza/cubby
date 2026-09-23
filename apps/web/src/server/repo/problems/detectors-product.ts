@@ -46,7 +46,7 @@ import type { Database, DrizzleClient } from "~/server/db";
 import {
   cookbook,
   device,
-  photoGroupProposal,
+  entityAttachment,
   expense,
   image,
   importRunTarget,
@@ -54,11 +54,11 @@ import {
   inventoryEntry,
   location,
   mealFoodEntry,
-  product,
+  photoGroupProposal,
   planting,
+  product,
   productComponent,
   productExternalId,
-  productImage,
   productUnitMappings,
   project,
   projectToolUsage,
@@ -686,15 +686,15 @@ export const findProductsWithUpcGaps = async (
       hasImage: exists(
         dbClient
           .select({ id: sql`1` })
-          .from(productImage)
+          .from(entityAttachment)
           .innerJoin(
             image,
-            and(eq(image.id, productImage.imageId), notDeleted(image)),
+            and(eq(image.id, entityAttachment.imageId), notDeleted(image)),
           )
           .where(
             and(
-              eq(productImage.productId, product.id),
-              notDeleted(productImage),
+              eq(entityAttachment.subjectEntityId, product.id),
+              notDeleted(entityAttachment),
               displayableImageWhere,
             ),
           ),

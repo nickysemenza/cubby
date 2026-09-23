@@ -78,12 +78,12 @@ const activeExceptionSql = (
   check: DataCheck,
   t: ScoredTable,
 ): SQL | null => {
-  const entry = entryFor(entity);
-  if (!hasExceptions(entity) || !entry.exceptions) return null;
+  if (!hasExceptions(entity)) return null;
   return sql`EXISTS (
-  SELECT 1 FROM jsonb_array_elements(${entry.exceptions(t)}) dq_exception
-  WHERE dq_exception->>'check' = ${check}
-    AND dq_exception->>'fingerprint' = ${fingerprintSql(entity, check, t)}
+  SELECT 1 FROM "DataException" dq_exception
+  WHERE dq_exception."entityId" = ${t.id}
+    AND dq_exception."check" = ${check}
+    AND dq_exception."fingerprint" = ${fingerprintSql(entity, check, t)}
 )`;
 };
 

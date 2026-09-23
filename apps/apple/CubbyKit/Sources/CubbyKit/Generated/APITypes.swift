@@ -116,11 +116,16 @@ public typealias DisplayImagesField = Components.Schemas.DisplayImagesField
 public typealias DisplayImageSummary = Components.Schemas.DisplayImageSummary
 public typealias DuplicateUniqueProduct = Components.Schemas.DuplicateUniqueProduct
 public typealias EdgeKey = Components.Schemas.EdgeKey
+public typealias EdgeRole = Components.Schemas.EdgeRole
 public typealias EffectiveInventoryOwnership = Components.Schemas.EffectiveInventoryOwnership
 public typealias EmbeddingReadiness = Components.Schemas.EmbeddingReadiness
 public typealias Entity = Components.Schemas.Entity
 public typealias EntityAttachmentRead = Components.Schemas.EntityAttachmentRead
 public typealias EntityAttachmentRole = Components.Schemas.EntityAttachmentRole
+public typealias EntityConnectionDirection = Components.Schemas.EntityConnectionDirection
+public typealias EntityConnectionGroup = Components.Schemas.EntityConnectionGroup
+public typealias EntityConnectionItem = Components.Schemas.EntityConnectionItem
+public typealias EntityConnectionsOut = Components.Schemas.EntityConnectionsOut
 public typealias EntityGraphBranch = Components.Schemas.EntityGraphBranch
 public typealias EntityGraphBranches = Components.Schemas.EntityGraphBranches
 public typealias EntityGraphEdge = Components.Schemas.EntityGraphEdge
@@ -515,6 +520,7 @@ public typealias NutrientUnitName = Components.Schemas.NutrientUnitName
 public typealias NutritionEstimate = Components.Schemas.NutritionEstimate
 public typealias NutritionInfo = Components.Schemas.NutritionInfo
 public typealias NutritionMeal = Components.Schemas.NutritionMeal
+public typealias OperationDisposition = Components.Schemas.OperationDisposition
 public typealias OperationEffect = Components.Schemas.OperationEffect
 public typealias OptionalFieldResolutions = Components.Schemas.OptionalFieldResolutions
 public typealias OptionalImageRepresentations = Components.Schemas.OptionalImageRepresentations
@@ -778,6 +784,8 @@ extension Components.Schemas.DeviceOut: Identifiable {}
 extension Components.Schemas.DisplayImageSummary: Identifiable {}
 extension Components.Schemas.DuplicateUniqueProduct: Identifiable {}
 extension Components.Schemas.EntityAttachmentRead: Identifiable {}
+extension Components.Schemas.EntityConnectionItem: Identifiable {}
+extension Components.Schemas.EntityConnectionsOut: Identifiable {}
 extension Components.Schemas.EntityGraphEdge: Identifiable {}
 extension Components.Schemas.EntityTimelineEvent: Identifiable {}
 extension Components.Schemas.EntityTimelineLink: Identifiable {}

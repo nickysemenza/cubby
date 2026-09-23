@@ -38,6 +38,7 @@ import {
   imageJoinBindings,
   nextImageSortOrder,
   notDeleted,
+  withTransaction,
   withTransactionDatabase,
 } from "~/server/repo/database-helpers";
 import { compileTraversal } from "~/server/repo/relatedness/traversal";
@@ -45,6 +46,11 @@ import {
   resolveAllOrThrow,
   resolveOrThrow,
 } from "~/server/repo/shortcode-resolver";
+import {
+  replaceSingularAttachment,
+  type SingularRole,
+  singularAttachmentImageIds,
+} from "~/server/repo/singular-attachment";
 
 export interface ImportImageRow {
   id: string;
@@ -397,7 +403,7 @@ export async function photoImportRelationExists(
       sourceEntity,
       plan.steps,
       `photo_import_${index}_`,
-      { root: "s", leaf: "t" },
+      { root: "s", leaf: "t", to: targetEntity },
     );
     return sql`SELECT 1 FROM ${sql.raw(`"${traversal.rootTable}"`)} s
       ${traversal.joins}
@@ -446,87 +452,57 @@ export async function attachImportedGalleryImages<E extends GalleryEntity>(
 }
 
 interface SingularImageOwnerBinding {
-  occupied(db: Database, destinationCode: string): Promise<boolean>;
-  attach(
-    db: Database,
-    destinationCode: string,
-    imageCode: string,
-    replaceConfirmed: boolean,
-  ): Promise<void>;
+  role: SingularRole;
+  table: typeof cookbook | typeof vendor;
+  label: string;
 }
 
 const singularImageOwnerBindings = {
-  cookbook: {
-    occupied: async (db, destinationCode) => {
-      const destinationId = await resolveOrThrow(
-        db,
-        "cookbook",
-        destinationCode,
-      );
-      const [current] = await getDb(db)
-        .select({ imageId: cookbook.coverImageId })
-        .from(cookbook)
-        .where(and(eq(cookbook.id, destinationId), notDeleted(cookbook)))
-        .limit(1);
-      return current?.imageId != null;
-    },
-    attach: async (db, destinationCode, imageCode, replaceConfirmed) => {
-      const destinationId = await resolveOrThrow(
-        db,
-        "cookbook",
-        destinationCode,
-      );
-      const imageId = await resolveOrThrow(db, "image", imageCode);
-      const client = getDb(db);
-      const [current] = await client
-        .select({ imageId: cookbook.coverImageId })
-        .from(cookbook)
-        .where(and(eq(cookbook.id, destinationId), notDeleted(cookbook)))
-        .limit(1);
-      if (current?.imageId && !replaceConfirmed) {
-        throw createAppError(
-          "CONSTRAINT_VIOLATION",
-          "Replacing this cookbook cover requires explicit confirmation",
-        );
-      }
-      await client
-        .update(cookbook)
-        .set({ coverImageId: imageId, updatedAt: new Date() })
-        .where(and(eq(cookbook.id, destinationId), notDeleted(cookbook)));
-    },
-  },
-  vendor: {
-    occupied: async (db, destinationCode) => {
-      const destinationId = await resolveOrThrow(db, "vendor", destinationCode);
-      const [current] = await getDb(db)
-        .select({ imageId: vendor.logoImageId })
-        .from(vendor)
-        .where(and(eq(vendor.id, destinationId), notDeleted(vendor)))
-        .limit(1);
-      return current?.imageId != null;
-    },
-    attach: async (db, destinationCode, imageCode, replaceConfirmed) => {
-      const destinationId = await resolveOrThrow(db, "vendor", destinationCode);
-      const imageId = await resolveOrThrow(db, "image", imageCode);
-      const client = getDb(db);
-      const [current] = await client
-        .select({ imageId: vendor.logoImageId })
-        .from(vendor)
-        .where(and(eq(vendor.id, destinationId), notDeleted(vendor)))
-        .limit(1);
-      if (current?.imageId && !replaceConfirmed) {
-        throw createAppError(
-          "CONSTRAINT_VIOLATION",
-          "Replacing this vendor logo requires explicit confirmation",
-        );
-      }
-      await client
-        .update(vendor)
-        .set({ logoImageId: imageId, updatedAt: new Date() })
-        .where(and(eq(vendor.id, destinationId), notDeleted(vendor)));
-    },
-  },
+  cookbook: { role: "cover", table: cookbook, label: "cookbook cover" },
+  vendor: { role: "logo", table: vendor, label: "vendor logo" },
 } satisfies Record<CoverEntity | LogoEntity, SingularImageOwnerBinding>;
+
+const singularSlotOccupied = async (
+  db: Database,
+  entity: keyof typeof singularImageOwnerBindings,
+  destinationCode: string,
+): Promise<boolean> => {
+  const destinationId = await resolveOrThrow(db, entity, destinationCode);
+  const binding = singularImageOwnerBindings[entity];
+  return (
+    await singularAttachmentImageIds(db, [destinationId], binding.role)
+  ).has(destinationId);
+};
+
+const attachSingularImage = async (
+  db: Database,
+  entity: keyof typeof singularImageOwnerBindings,
+  destinationCode: string,
+  imageCode: string,
+  replaceConfirmed: boolean,
+): Promise<void> => {
+  const destinationId = await resolveOrThrow(db, entity, destinationCode);
+  const imageId = await resolveOrThrow(db, "image", imageCode);
+  const binding: SingularImageOwnerBinding = singularImageOwnerBindings[entity];
+  await withTransaction(db, async (tx) => {
+    const occupied = (
+      await singularAttachmentImageIds(tx, [destinationId], binding.role)
+    ).has(destinationId);
+    if (occupied && !replaceConfirmed) {
+      throw createAppError(
+        "CONSTRAINT_VIOLATION",
+        `Replacing this ${binding.label} requires explicit confirmation`,
+      );
+    }
+    await replaceSingularAttachment(tx, destinationId, binding.role, imageId);
+    await tx
+      .update(binding.table)
+      .set({ updatedAt: new Date() })
+      .where(
+        and(eq(binding.table.id, destinationId), notDeleted(binding.table)),
+      );
+  });
+};
 
 export const isSingularImageOwner = (
   entity: string,
@@ -540,16 +516,10 @@ export const attachImportedSingularImage = async (
   imageCode: string,
   replaceConfirmed: boolean,
 ): Promise<void> =>
-  singularImageOwnerBindings[entity].attach(
-    db,
-    destinationCode,
-    imageCode,
-    replaceConfirmed,
-  );
+  attachSingularImage(db, entity, destinationCode, imageCode, replaceConfirmed);
 
 export const importedSingularImageIsOccupied = (
   db: Database,
   entity: keyof typeof singularImageOwnerBindings,
   destinationCode: string,
-): Promise<boolean> =>
-  singularImageOwnerBindings[entity].occupied(db, destinationCode);
+): Promise<boolean> => singularSlotOccupied(db, entity, destinationCode);

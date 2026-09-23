@@ -13,6 +13,9 @@ import {
   product,
 } from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
+import { deleteImages } from "~/server/repo/image";
+import { mergeLedgerParties } from "~/server/repo/ledger-party";
+import { deleteProductCategories } from "~/server/repo/product-category";
 import { mergeProducts } from "~/server/repo/product/merge";
 import {
   createImageFixture,
@@ -454,6 +457,105 @@ describe("photo group proposals", () => {
       kind: "existing",
       existing: { id: keeper.id },
     });
+  });
+
+  // Regression: the category and owner were shortcodes in the proposal's
+  // JSON, so a merge or delete between proposing and approving broke the
+  // approval. They are FK columns now, followed like the product FK.
+  it("follows a member merge and a category delete on a proposed new Product", async () => {
+    const { run, codes } = await seedRun(1);
+    const loserMember = await insertWithShortcode(ctx.db, "ledgerParty", {
+      name: "Synthetic Owner Duplicate",
+      kind: "member" as const,
+    });
+    const keeperMember = await insertWithShortcode(ctx.db, "ledgerParty", {
+      name: "Synthetic Owner",
+      kind: "member" as const,
+    });
+    const category = await insertWithShortcode(ctx.db, "productCategory", {
+      name: "Synthetic Proposal Category",
+      sortOrder: 0,
+    });
+    await proposePhotoGroups(ctx.db, {
+      runId: run.shortcode,
+      groups: [
+        {
+          ...createGroup("owned", codes),
+          product: {
+            kind: "create",
+            create: {
+              name: "Synthetic Owned Lamp",
+              categoryId: parseShortcodeFor(
+                "productCategory",
+                category.shortcode,
+              ),
+            },
+          },
+          inventory: {
+            locationId: parseShortcodeFor("location", TEST_HOME_SHORTCODE),
+            ownershipMode: "person",
+            ownerPartyId: parseShortcodeFor(
+              "ledgerParty",
+              loserMember.shortcode,
+            ),
+            quantity: 1,
+          },
+        },
+      ],
+    });
+
+    await mergeLedgerParties(
+      ctx.db,
+      {
+        keepId: parseShortcodeFor("ledgerParty", keeperMember.shortcode),
+        mergeIds: [parseShortcodeFor("ledgerParty", loserMember.shortcode)],
+      },
+      ctx.actor,
+    );
+    await deleteProductCategories(
+      ctx.db,
+      [parseShortcodeFor("productCategory", category.shortcode)],
+      ctx.actor,
+    );
+
+    const [view] = (await listPhotoGroupProposals(ctx.db, run.shortcode))
+      .proposals;
+    expect(view?.inventory?.ownerPartyId).toBe(keeperMember.shortcode);
+    expect(view?.product).toMatchObject({
+      kind: "create",
+      create: { name: "Synthetic Owned Lamp", categoryId: null },
+    });
+  });
+
+  it("drops a deleted run photo from its proposed group", async () => {
+    const { run, codes } = await seedRun(2);
+    await proposePhotoGroups(ctx.db, {
+      runId: run.shortcode,
+      groups: [createGroup("pair", codes)],
+    });
+    const [, second] = (await readRow(run.id, "pair"))!.images;
+    await deleteImages(ctx.db, [parseEntityId("image", second!.imageId)]);
+
+    expect((await readRow(run.id, "pair"))?.images).toHaveLength(1);
+  });
+
+  it("removes a proposed group after its run stopped", async () => {
+    const { run, codes } = await seedRun(1);
+    await proposePhotoGroups(ctx.db, {
+      runId: run.shortcode,
+      groups: [createGroup("late", codes)],
+    });
+    await getDb(ctx.db)
+      .update(importRun)
+      .set({ status: "failed" })
+      .where(eq(importRun.id, run.id));
+
+    await proposePhotoGroups(ctx.db, {
+      runId: run.shortcode,
+      groups: [],
+      removeGroupKeys: ["late"],
+    });
+    expect(await readRow(run.id, "late")).toBeUndefined();
   });
 
   // Regression: deleting a run photo hard-deletes its ImportRunTarget but not

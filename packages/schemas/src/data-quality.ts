@@ -5,8 +5,11 @@ import {
   dataCheck,
   dataCheckKind,
   dataChecksByEntity,
+  dataQualityExceptionEntities,
+  scoredEntities,
 } from "./generated/data-quality-checks.gen";
 import { anyShortcodeSchema } from "./identifier-fields";
+import { nonEmptyTuple } from "./identifiers";
 
 export {
   dataCheck,
@@ -53,11 +56,22 @@ export type PurchaseDataCheck = z.infer<typeof purchaseDataCheck>;
 export const productDataCheck = dataChecksByEntity.product;
 export type ProductDataCheck = z.infer<typeof productDataCheck>;
 
-/** Only Product and Purchase carry a `dataExceptions` column today; the
- * generic durable-exception store is a tracked follow-up (docs/todos.md). */
-export const dataExceptionEntity = z.enum(["purchase", "product"]);
+type ExceptionEntityMap = typeof dataQualityExceptionEntities;
+/** Entities whose declaration enables `DataException` records (ADR 0006). */
+export type DataExceptionEntity = {
+  [E in keyof ExceptionEntityMap]: ExceptionEntityMap[E] extends true
+    ? E
+    : never;
+}[keyof ExceptionEntityMap];
 
-/** A stored `dataExceptions` row: typed against the check registry. */
+export const dataExceptionEntities = nonEmptyTuple(
+  scoredEntities.filter((entity): entity is DataExceptionEntity =>
+    Boolean(dataQualityExceptionEntities[entity]),
+  ),
+);
+export const dataExceptionEntity = z.enum(dataExceptionEntities);
+
+/** One `DataException` row as the read path carries it. */
 export const dataException = z.object({
   check: dataCheck,
   reason: dataExceptionReason,
@@ -71,7 +85,7 @@ export const isDefectDataCheck = (check: DataCheck): boolean =>
   dataCheckKind[check] === "defect";
 
 export const setDataExceptionInput = z.object({
-  entityId: anyShortcodeSchema(["purchase", "product"]),
+  entityId: anyShortcodeSchema(dataExceptionEntities),
   check: dataCheck,
   reason: dataExceptionReason,
   note: z.string().trim().min(1, "Exception note must not be blank"),
@@ -79,7 +93,7 @@ export const setDataExceptionInput = z.object({
 export type SetDataExceptionInput = z.infer<typeof setDataExceptionInput>;
 
 export const clearDataExceptionInput = z.object({
-  entityId: anyShortcodeSchema(["purchase", "product"]),
+  entityId: anyShortcodeSchema(dataExceptionEntities),
   check: dataCheck,
 });
 export type ClearDataExceptionInput = z.infer<typeof clearDataExceptionInput>;

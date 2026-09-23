@@ -7,8 +7,8 @@ import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import {
+  entityAttachment,
   inventoryEntry,
-  productImage,
   planting,
   product,
   productExternalId,
@@ -28,6 +28,12 @@ import {
   attachProductComponents,
   listProductComponents,
 } from "~/server/repo/product-components";
+import {
+  dismissProductMatch,
+  listProductMatchRows,
+  productPairKey,
+  upsertAgentProductMatch,
+} from "~/server/repo/product-match-candidate";
 import {
   createPlantFixture,
   makeLocationInput,
@@ -331,6 +337,56 @@ describe("mergeProducts", () => {
     ]);
   });
 
+  // Regression: merging used to hard-delete every match review naming a loser,
+  // so an agent's evidence against a third product vanished with the merge.
+  it("keeps match reviews against third products, folding and dropping self-pairs", async () => {
+    const keeper = await seedProduct("Match Keeper");
+    const loser = await seedProduct("Match Loser");
+    const third = await seedProduct("Match Third");
+    const fourth = await seedProduct("Match Fourth");
+    await upsertAgentProductMatch(ctx.db, {
+      productIds: [keeper.id, loser.id],
+      evidence: "same item",
+      sourceUrls: [],
+    });
+    await upsertAgentProductMatch(ctx.db, {
+      productIds: [loser.id, third.id],
+      evidence: "loser matches third",
+      sourceUrls: ["https://example.com/a"],
+    });
+    await dismissProductMatch(ctx.db, [keeper.id, fourth.id]);
+    await upsertAgentProductMatch(ctx.db, {
+      productIds: [loser.id, fourth.id],
+      evidence: "loser matches fourth",
+      sourceUrls: ["https://example.com/b"],
+    });
+
+    await mergeProducts(
+      ctx.db,
+      { keepId: keeper.shortcode, mergeIds: [loser.shortcode] },
+      TEST_ACTOR,
+    );
+
+    const rows = await listProductMatchRows(ctx.db);
+    const byPair = new Map(
+      rows.map((row) => [productPairKey(row.productAId, row.productBId), row]),
+    );
+    expect(rows).toHaveLength(2);
+    expect(byPair.get(productPairKey(keeper.id, third.id))).toMatchObject({
+      source: "agent",
+      state: "open",
+      evidence: "loser matches third",
+      sourceUrls: ["https://example.com/a"],
+    });
+    // The person's dismissal stands; the loser's agent evidence rides along.
+    expect(byPair.get(productPairKey(keeper.id, fourth.id))).toMatchObject({
+      source: "agent",
+      state: "dismissed",
+      evidence: "loser matches fourth",
+      sourceUrls: ["https://example.com/b"],
+    });
+  });
+
   it("dedupes separately stored product images with the same verified hash", async () => {
     const keeper = await seedProduct("Image keeper");
     const loser = await seedProduct("Image duplicate");
@@ -350,10 +406,10 @@ describe("mergeProducts", () => {
       sha256,
     });
     await getDb(ctx.db)
-      .insert(productImage)
+      .insert(entityAttachment)
       .values([
-        { productId: keeper.id, imageId: keeperImage.id },
-        { productId: loser.id, imageId: loserImage.id },
+        { subjectEntityId: keeper.id, imageId: keeperImage.id },
+        { subjectEntityId: loser.id, imageId: loserImage.id },
       ]);
 
     await mergeProducts(
@@ -362,10 +418,10 @@ describe("mergeProducts", () => {
       TEST_ACTOR,
     );
 
-    const liveImages = await getDb(ctx.db).query.productImage.findMany({
+    const liveImages = await getDb(ctx.db).query.entityAttachment.findMany({
       where: and(
-        eq(productImage.productId, keeper.id),
-        notDeleted(productImage),
+        eq(entityAttachment.subjectEntityId, keeper.id),
+        notDeleted(entityAttachment),
       ),
       columns: { imageId: true },
     });
@@ -382,10 +438,10 @@ describe("mergeProducts", () => {
       size: 100,
     });
     await getDb(ctx.db)
-      .insert(productImage)
+      .insert(entityAttachment)
       .values([
-        { productId: keeper.id, imageId: image.id, purpose: null },
-        { productId: loser.id, imageId: image.id, purpose: "label" },
+        { subjectEntityId: keeper.id, imageId: image.id, purpose: null },
+        { subjectEntityId: loser.id, imageId: image.id, purpose: "label" },
       ]);
 
     await mergeProducts(
@@ -394,11 +450,11 @@ describe("mergeProducts", () => {
       TEST_ACTOR,
     );
 
-    const [surviving] = await getDb(ctx.db).query.productImage.findMany({
+    const [surviving] = await getDb(ctx.db).query.entityAttachment.findMany({
       where: and(
-        eq(productImage.productId, keeper.id),
-        eq(productImage.imageId, image.id),
-        notDeleted(productImage),
+        eq(entityAttachment.subjectEntityId, keeper.id),
+        eq(entityAttachment.imageId, image.id),
+        notDeleted(entityAttachment),
       ),
       columns: { purpose: true },
     });

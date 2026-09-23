@@ -187,6 +187,7 @@ function buildEdgeAuditSpecs(): EdgeAuditSpec[] {
 function detailBranch(spec: EdgeAuditSpec): SQL {
   return sql`(
     SELECT ${spec.edgeKey}::text AS "edgeKey",
+           ${spec.targetEntity}::text AS "targetEntity",
            s.${sql.identifier(spec.sourceIdColumnName)}::text AS "sourceId",
            t.id::text AS "targetId"
     FROM ${sql.identifier(spec.sourceTableName)} s
@@ -201,6 +202,7 @@ function detailBranch(spec: EdgeAuditSpec): SQL {
 function countBranch(spec: EdgeAuditSpec): SQL {
   return sql`
     SELECT ${spec.edgeKey}::text AS "edgeKey",
+           ${spec.targetEntity}::text AS "targetEntity",
            count(*)::int AS "count"
     FROM ${sql.identifier(spec.sourceTableName)} s
     JOIN ${sql.identifier(spec.targetTableName)} t
@@ -226,12 +228,14 @@ function describeViolation(
 
 type DetailRow = Record<string, string> & {
   edgeKey: string;
+  targetEntity: string;
   sourceId: string;
   targetId: string;
 };
 
 type CountRow = Record<string, string | number> & {
   edgeKey: string;
+  targetEntity: string;
   count: number;
 };
 
@@ -261,7 +265,11 @@ export const findReferentialLivenessViolations = async (
   db: Database,
 ): Promise<ReferentialLivenessViolation[]> => {
   const specs = buildEdgeAuditSpecs();
-  const specByKey = new Map(specs.map((s) => [s.edgeKey, s]));
+  // `EntityAttachment.subjectEntityId` is one column audited against every
+  // attachable entity, so an edge key alone does not name a spec.
+  const specKey = (row: { edgeKey: string; targetEntity: string }) =>
+    `${row.targetEntity}:${row.edgeKey}`;
+  const specByKey = new Map(specs.map((s) => [specKey(s), s]));
 
   const dbClient = getDb(db);
   const detailQuery = sql.join(
@@ -279,22 +287,22 @@ export const findReferentialLivenessViolations = async (
   ]);
 
   const countByKey = new Map(
-    countResult.rows.map((r) => [r.edgeKey, Number(r.count)]),
+    countResult.rows.map((r) => [specKey(r), Number(r.count)]),
   );
   const shownByKey = new Map<string, number>();
   for (const row of detailResult.rows) {
-    shownByKey.set(row.edgeKey, (shownByKey.get(row.edgeKey) ?? 0) + 1);
+    shownByKey.set(specKey(row), (shownByKey.get(specKey(row)) ?? 0) + 1);
   }
 
   return detailResult.rows.map((row): ReferentialLivenessViolation => {
-    const spec = specByKey.get(row.edgeKey);
+    const spec = specByKey.get(specKey(row));
     if (!spec) {
       throw new Error(
         `Detail row references unknown edge "${row.edgeKey}" — the detail and spec queries have drifted.`,
       );
     }
-    const shown = shownByKey.get(row.edgeKey) ?? 0;
-    const trueCount = countByKey.get(row.edgeKey) ?? shown;
+    const shown = shownByKey.get(specKey(row)) ?? 0;
+    const trueCount = countByKey.get(specKey(row)) ?? shown;
 
     return {
       edgeKey: spec.edgeKey,

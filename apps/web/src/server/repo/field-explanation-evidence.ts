@@ -7,6 +7,7 @@ import { z } from "zod";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
   cookbook,
+  entityAttachment,
   expense,
   financialAccount,
   financialTransaction,
@@ -17,7 +18,6 @@ import {
   product,
   productComponent,
   purchase,
-  purchaseImage,
   recipe,
   recipeSection,
   recipeSectionIngredient,
@@ -424,20 +424,20 @@ async function loadPurchaseDocumentEvidence(
     .select({
       shortcode: image.shortcode,
       filename: image.filename,
-      documentKind: purchaseImage.documentKind,
+      documentKind: entityAttachment.documentKind,
     })
-    .from(purchaseImage)
-    .innerJoin(purchase, eq(purchase.id, purchaseImage.purchaseId))
-    .innerJoin(image, eq(image.id, purchaseImage.imageId))
+    .from(entityAttachment)
+    .innerJoin(purchase, eq(purchase.id, entityAttachment.subjectEntityId))
+    .innerJoin(image, eq(image.id, entityAttachment.imageId))
     .where(
       and(
         eq(purchase.shortcode, shortcode),
         notDeleted(purchase),
-        notDeleted(purchaseImage),
+        notDeleted(entityAttachment),
         notDeleted(image),
       ),
     )
-    .orderBy(asc(purchaseImage.sortOrder), asc(purchaseImage.createdAt))
+    .orderBy(asc(entityAttachment.sortOrder), asc(entityAttachment.createdAt))
     .limit(QUERY_LIMIT);
   return sourcesFromRows(rows, (row) => ({
     label: "Purchase document",
