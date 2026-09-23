@@ -4,9 +4,12 @@ import {
   type Locator,
   type Page,
   type Route,
+  test,
   type TestInfo,
 } from "@playwright/test";
 import { z } from "zod";
+
+import { NAVIGATION_ANNOTATION } from "./navigation-timing";
 
 /** A public shortcode body, for composing route and id patterns. */
 export const SHORTCODE = `[${SHORTCODE_CHARS}]{${SHORTCODE_BODY_LENGTH}}`;
@@ -174,9 +177,20 @@ export async function gotoAuthenticatedPage(
   path: string,
   ready?: Locator,
 ) {
-  await page.goto(path, { waitUntil: "domcontentloaded" });
-  await waitForAppHydration(page);
+  await timedNavigation(async () => {
+    await page.goto(path, { waitUntil: "domcontentloaded" });
+    await waitForAppHydration(page);
+  });
   if (ready) await expect(ready).toBeVisible({ timeout: 15000 });
+}
+
+async function timedNavigation(step: () => Promise<void>) {
+  const started = performance.now();
+  await step();
+  test.info().annotations.push({
+    type: NAVIGATION_ANNOTATION,
+    description: String(Math.round(performance.now() - started)),
+  });
 }
 
 /**
@@ -230,8 +244,10 @@ export async function expectViewportBounded(page: Page) {
 }
 
 export async function reloadAuthenticatedPage(page: Page, ready?: Locator) {
-  await page.reload({ waitUntil: "domcontentloaded" });
-  await waitForAppHydration(page);
+  await timedNavigation(async () => {
+    await page.reload({ waitUntil: "domcontentloaded" });
+    await waitForAppHydration(page);
+  });
   if (ready) await expect(ready).toBeVisible({ timeout: 15000 });
 }
 

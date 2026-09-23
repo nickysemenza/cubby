@@ -49,7 +49,12 @@ function headlineText({
 }): string | null {
   if (checking) return "Checking suggestions…";
   if (unasked) return `Not checked — add a ${unasked} first`;
-  if (evaluated === 0 && skipped === 0) return null;
+  // A check that failed outright still reports it. Returning null here also
+  // unmounted the "Checking suggestions…" trigger a form dialog had given
+  // initial focus to, and the dialog then pulled focus back to its shell,
+  // off whatever control the person had moved to.
+  if (evaluated === 0 && skipped === 0)
+    return failures > 0 ? "Suggestions unavailable" : null;
   const suggestionsText =
     count === 0
       ? "No suggestions"
