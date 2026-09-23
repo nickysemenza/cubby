@@ -1734,12 +1734,6 @@ extension EntityDescriptor {
         }
     }
 
-    func delete(id: String, client: Client) async throws {
-        switch key {
-        default: throw EntityOperationError.unsupported(key, .delete)
-        }
-    }
-
     /// `resources.<key>.update` with only `pendingImageIds` set, for the entities whose update
     /// body declares it (the same set `OperationRoute.imageAttachableEntities` lists).
     func attachImages(_ imageIds: [ImageCode], to id: String, client: Client) async throws {
