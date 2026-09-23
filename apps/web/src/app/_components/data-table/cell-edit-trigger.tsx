@@ -135,6 +135,9 @@ export function CellEditTrigger<TSaved>({
         // every plain cell, so "—" and text line up across columns; the hover
         // wash still bleeds into that padding.
         "in-data-[slot=table-cell]:-mx-1.5 in-data-[slot=table-cell]:max-w-[calc(100%+0.75rem)] in-data-[slot=table-cell]:px-1.5 in-data-[slot=table-cell]:py-0.5",
+        // Same in a detail facts ledger: text starts on the value column's
+        // edge like links and "—" beside it.
+        "in-data-[slot=basic-info-value]:-ms-2 in-data-[slot=basic-info-value]:max-w-[calc(100%+0.5rem)] in-data-[slot=basic-info-value]:py-0.5",
         "focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
         "data-[clipboard-flash]:ring-2 data-[clipboard-flash]:ring-ring",
         className,
@@ -167,7 +170,10 @@ export function CellEditTrigger<TSaved>({
         children
       ) : (
         <>
-          <span className="min-w-0 truncate">{children}</span>
+          {/* A ledger has room to wrap a long name; a table row stays one line. */}
+          <span className="min-w-0 truncate in-data-[slot=basic-info-value]:line-clamp-3 in-data-[slot=basic-info-value]:break-words in-data-[slot=basic-info-value]:whitespace-normal">
+            {children}
+          </span>
           {/* Overlays the value's trailing edge on hover rather than reserving
               width it only uses on hover; touch keeps it in flow. */}
           <span

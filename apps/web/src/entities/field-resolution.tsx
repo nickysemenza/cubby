@@ -1,5 +1,6 @@
 import { auditEntitySchema } from "@cubby/schemas/audit";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
+import { entitySummary } from "@cubby/schemas/entity-summary";
 import {
   fieldResolutionsSchema,
   type FieldResolution,
@@ -18,13 +19,13 @@ import { z } from "zod";
 
 import type { BulkAction } from "~/app/_components/data-table/bulk-actions.types";
 import { EntityInlineLinkById } from "~/app/_components/EntityInlineLinkById";
-import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { parseEntityEditUpdateInput } from "~/entities/editing/mutation-data";
 import { useEntityCommands } from "~/entities/editing/use-entity-commands";
 import type { StandardEntity } from "~/entities/entity-contracts";
 import { generatedBrowserCrudEntities } from "~/entities/generated/entity-routes.gen";
 import { getErrorMessage } from "~/lib/error-utils";
+import { cn } from "~/lib/utils";
 
 const resolutionRecordSchema = z.looseObject({
   id: z.string().optional(),
@@ -123,6 +124,23 @@ export function fieldResolutionFor(
   return fieldResolutionEntryFor(parsedRecord.data, field)?.resolution ?? null;
 }
 
+/** Whether a resolution tells the reader anything the value doesn't. An empty
+ * inherited value already reads as `—`, and an explicit value with nothing to
+ * inherit is simply the value — marking either as "Unassigned"/"Override" was
+ * noise, and offering to reset the latter would only clear it. */
+export function resolutionIsInformative(resolution: FieldResolution): boolean {
+  switch (resolution.mode) {
+    case "inherit":
+      return resolution.value !== null;
+    case "explicit":
+      return resolution.matchesFallback || resolution.fallbackValue !== null;
+    case "none":
+      return resolution.fallbackValue !== null;
+    case "allocated":
+      return true;
+  }
+}
+
 function resolutionLabel(resolution: FieldResolution): string {
   switch (resolution.mode) {
     case "inherit":
@@ -137,6 +155,46 @@ function resolutionLabel(resolution: FieldResolution): string {
         : "Override";
   }
 }
+
+function resolutionIcon(resolution: FieldResolution) {
+  if (resolution.mode === "explicit" && resolution.matchesFallback)
+    return TriangleAlert;
+  switch (resolution.mode) {
+    case "inherit":
+      return CornerDownRight;
+    case "allocated":
+      return PieChart;
+    case "none":
+      return CircleSlash;
+    case "explicit":
+      return RotateCcw;
+  }
+}
+
+/** The caption's lead-in: where the value comes from, read left to right into
+ * the source link ("From project [Garden]"). */
+function resolutionPhrase(resolution: FieldResolution): string {
+  switch (resolution.mode) {
+    case "inherit":
+      return resolution.sourceEntity
+        ? `From ${resolution.sourceEntity.entityType === "task" ? "parent task" : entitySummary[resolution.sourceEntity.entityType].singular.toLowerCase()}`
+        : sentenceCase(resolution.source);
+    case "allocated":
+      return "Allocated from";
+    case "none":
+      return "Set to none here";
+    case "explicit":
+      return resolution.matchesFallback
+        ? "Same as inherited value"
+        : "Set here";
+  }
+}
+
+const sentenceCase = (value: string): string =>
+  value.charAt(0).toUpperCase() + value.slice(1);
+
+/** Caption actions read as inline text links, not 24px buttons. */
+export const resolutionActionClassName = "h-auto p-0 text-xs";
 
 /** Compact provenance for values whose stored assignment differs from the
  * effective value shown in forms and tables. */
@@ -154,7 +212,7 @@ export function FieldResolutionBadge({
   compact?: boolean;
 }) {
   const entry = fieldResolutionEntryFor(record, field);
-  if (!entry) return null;
+  if (!entry || !resolutionIsInformative(entry.resolution)) return null;
   return (
     <FieldResolutionStatus
       compact={compact}
@@ -243,12 +301,15 @@ function BoundFieldResolutionActions({
     }
   };
   return (
-    <span className="inline-flex flex-wrap items-center gap-1">
-      {resolution.canReset && redundancy === "eligible" ? (
+    <>
+      {resolution.canReset &&
+      redundancy === "eligible" &&
+      resolution.fallbackValue !== null ? (
         <Button
           type="button"
           variant="link"
           size="xs"
+          className={resolutionActionClassName}
           disabled={pending}
           onClick={(event) => {
             event.stopPropagation();
@@ -258,18 +319,19 @@ function BoundFieldResolutionActions({
           Use inherited value
         </Button>
       ) : null}
-      {resolution.mode === "inherit" && none ? (
+      {resolution.mode === "inherit" && resolution.value !== null && none ? (
         <Button
           type="button"
-          variant="ghost"
+          variant="link"
           size="xs"
+          className={resolutionActionClassName}
           disabled={pending}
           onClick={(event) => {
             event.stopPropagation();
             void submit({ ...none });
           }}
         >
-          None
+          Set to none
         </Button>
       ) : null}
       {error ? (
@@ -277,7 +339,7 @@ function BoundFieldResolutionActions({
           {error}
         </span>
       ) : null}
-    </span>
+    </>
   );
 }
 
@@ -296,15 +358,7 @@ export function FieldResolutionStatus({
     ? auditEntitySchema.safeParse(resolution.sourceEntity.entityType)
     : null;
   if (compact) {
-    const Icon = redundant
-      ? TriangleAlert
-      : resolution.mode === "inherit"
-        ? CornerDownRight
-        : resolution.mode === "allocated"
-          ? PieChart
-          : resolution.mode === "none"
-            ? CircleSlash
-            : RotateCcw;
+    const Icon = resolutionIcon(resolution);
     return (
       <span
         className="inline-flex shrink-0 text-muted-foreground"
@@ -315,26 +369,32 @@ export function FieldResolutionStatus({
       </span>
     );
   }
+  if (!resolutionIsInformative(resolution)) return action ?? null;
+  const Icon = resolutionIcon(resolution);
   return (
-    <span className="inline-flex min-w-0 flex-wrap items-center gap-1">
-      <Badge
-        variant={redundant ? "warning" : "secondary"}
-        title={`${resolutionLabel(resolution)} · effective value from ${resolution.source}`}
-      >
-        {redundant ? (
-          <TriangleAlert aria-hidden="true" />
-        ) : resolution.mode === "inherit" ? (
-          <CornerDownRight aria-hidden="true" />
-        ) : resolution.canReset ? (
-          <RotateCcw aria-hidden="true" />
-        ) : null}
-        {resolutionLabel(resolution)}
-      </Badge>
-      {resolution.sourceEntity && sourceEntity?.success ? (
-        <EntityInlineLinkById
-          entityType={sourceEntity.data}
-          entityId={resolution.sourceEntity.entityId}
-        />
+    <span
+      data-slot="field-resolution"
+      className={cn(
+        "flex min-w-0 flex-wrap items-center gap-x-1 gap-y-0.5 text-xs text-muted-foreground [&>[data-slot=button]]:ms-1",
+        redundant && "text-warning-ink",
+      )}
+      title={`Effective value from ${resolution.source}`}
+    >
+      <span className="inline-flex shrink-0 items-center gap-1">
+        <Icon aria-hidden="true" className="size-3 shrink-0" />
+        {resolutionPhrase(resolution)}
+      </span>
+      {(resolution.mode === "inherit" || resolution.mode === "allocated") &&
+      resolution.sourceEntity &&
+      sourceEntity?.success ? (
+        // Its own flex item: a long source name wraps to a full line
+        // before it truncates.
+        <span className="flex max-w-full min-w-0">
+          <EntityInlineLinkById
+            entityType={sourceEntity.data}
+            entityId={resolution.sourceEntity.entityId}
+          />
+        </span>
       ) : null}
       {action}
     </span>
