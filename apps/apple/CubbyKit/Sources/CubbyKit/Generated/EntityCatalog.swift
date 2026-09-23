@@ -248,6 +248,8 @@ public struct RelationSectionSpec: Codable, Sendable, Hashable {
   public let limit: Int?
   /// Skip the whole section, on both platforms, when its first page is empty.
   public let hideWhenEmpty: Bool
+  /// Keep the header and create action but fold the rows away when the first page is empty.
+  public let collapseWhenEmpty: Bool
 }
 
 public struct RelationSectionPrefill: Codable, Sendable, Hashable {
@@ -545,25 +547,26 @@ public enum EntityCatalog {
       FilterDescriptor(columnId: "related:product.projects", urlKey: "related-project", kind: .idMulti, placeholder: "Filter by project...", label: nil, options: nil, wire: .param(name: "projectId"), targetEntity: .project),
       FilterDescriptor(columnId: "related:product.usedOnProjects", urlKey: "related-usedOnProject", kind: .text, placeholder: "Search related used on projects...", label: nil, options: nil, wire: .param(name: "usedOnProjectSearch"), targetEntity: nil),
       FilterDescriptor(columnId: "kitId", urlKey: "kitId", kind: .idMulti, placeholder: "Filter by kit...", label: nil, options: nil, wire: .param(name: "kitId"), targetEntity: .product),
+      FilterDescriptor(columnId: "componentId", urlKey: "componentId", kind: .idMulti, placeholder: "Filter by component...", label: nil, options: nil, wire: .param(name: "componentId"), targetEntity: .product),
       FilterDescriptor(columnId: "usedOnProjectId", urlKey: "usedOnProjectId", kind: .idMulti, placeholder: "Filter by related used on projects id...", label: nil, options: nil, wire: .param(name: "usedOnProjectId"), targetEntity: .project),
       FilterDescriptor(columnId: "usedOnProjectPresenceFilter", urlKey: "usedOnProjectPresenceFilter", kind: .presence, placeholder: "Filter related used on projects presence...", label: nil, options: nil, wire: .param(name: "usedOnProjectPresenceFilter"), targetEntity: nil),
       FilterDescriptor(columnId: "related:product.purchases", urlKey: "related-purchase", kind: .idMulti, placeholder: "Filter by purchase...", label: nil, options: nil, wire: .param(name: "purchaseId"), targetEntity: .purchase),
       FilterDescriptor(columnId: "related:product.expenses", urlKey: "related-expense", kind: .text, placeholder: "Search related expenses...", label: nil, options: nil, wire: .param(name: "expenseSearch"), targetEntity: nil),
-      FilterDescriptor(columnId: "expenseId", urlKey: "expenseId", kind: .idMulti, placeholder: "Filter by related expenses id...", label: nil, options: nil, wire: .param(name: "expenseId"), targetEntity: nil),
+      FilterDescriptor(columnId: "expenseId", urlKey: "expenseId", kind: .idMulti, placeholder: "Filter by related expenses id...", label: nil, options: nil, wire: .param(name: "expenseId"), targetEntity: .expense),
       FilterDescriptor(columnId: "expensePresenceFilter", urlKey: "expensePresenceFilter", kind: .presence, placeholder: "Filter related expenses presence...", label: nil, options: nil, wire: .param(name: "expensePresenceFilter"), targetEntity: nil),
       FilterDescriptor(columnId: "related:product.inventory", urlKey: "related-relatedInventory", kind: .text, placeholder: "Search related inventory...", label: nil, options: nil, wire: .param(name: "relatedInventorySearch"), targetEntity: nil),
-      FilterDescriptor(columnId: "relatedInventoryId", urlKey: "relatedInventoryId", kind: .idMulti, placeholder: "Filter by related inventory id...", label: nil, options: nil, wire: .param(name: "relatedInventoryId"), targetEntity: nil),
+      FilterDescriptor(columnId: "relatedInventoryId", urlKey: "relatedInventoryId", kind: .idMulti, placeholder: "Filter by related inventory id...", label: nil, options: nil, wire: .param(name: "relatedInventoryId"), targetEntity: .inventory),
       FilterDescriptor(columnId: "relatedInventoryPresenceFilter", urlKey: "relatedInventoryPresenceFilter", kind: .presence, placeholder: "Filter related inventory presence...", label: nil, options: nil, wire: .param(name: "relatedInventoryPresenceFilter"), targetEntity: nil),
       FilterDescriptor(columnId: "related:product.wishes", urlKey: "related-wish", kind: .text, placeholder: "Search related wishlist candidates...", label: nil, options: nil, wire: .param(name: "wishSearch"), targetEntity: nil),
-      FilterDescriptor(columnId: "wishId", urlKey: "wishId", kind: .idMulti, placeholder: "Filter by related wishlist candidates id...", label: nil, options: nil, wire: .param(name: "wishId"), targetEntity: nil),
+      FilterDescriptor(columnId: "wishId", urlKey: "wishId", kind: .idMulti, placeholder: "Filter by related wishlist candidates id...", label: nil, options: nil, wire: .param(name: "wishId"), targetEntity: .wish),
       FilterDescriptor(columnId: "wishPresenceFilter", urlKey: "wishPresenceFilter", kind: .presence, placeholder: "Filter related wishlist candidates presence...", label: nil, options: nil, wire: .param(name: "wishPresenceFilter"), targetEntity: nil),
       FilterDescriptor(columnId: "related:product.tasks", urlKey: "related:product.tasks", kind: .range, placeholder: "Filter tasks...", label: nil, options: [LabeledOption(value: "has", label: "Has task"), LabeledOption(value: "none", label: "(none)"), LabeledOption(value: "open", label: "Has open task"), LabeledOption(value: "not_started", label: "Not started"), LabeledOption(value: "later", label: "Later"), LabeledOption(value: "in_progress", label: "In progress"), LabeledOption(value: "blocked", label: "Blocked"), LabeledOption(value: "done", label: "Done"), LabeledOption(value: "overdue", label: "Overdue"), LabeledOption(value: "week", label: "Due this week"), LabeledOption(value: "30d", label: "Due in 30 days")], wire: .range(from: "taskDueFrom", to: "taskDueTo", presence: "taskPresenceFilter"), targetEntity: nil),
-      FilterDescriptor(columnId: "taskId", urlKey: "taskId", kind: .idMulti, placeholder: "Filter by related tasks id...", label: nil, options: nil, wire: .param(name: "taskId"), targetEntity: nil),
+      FilterDescriptor(columnId: "taskId", urlKey: "taskId", kind: .idMulti, placeholder: "Filter by related tasks id...", label: nil, options: nil, wire: .param(name: "taskId"), targetEntity: .task),
       FilterDescriptor(columnId: "related:product.meals", urlKey: "related-meal", kind: .text, placeholder: "Search related meals...", label: nil, options: nil, wire: .param(name: "mealSearch"), targetEntity: nil),
-      FilterDescriptor(columnId: "mealId", urlKey: "mealId", kind: .idMulti, placeholder: "Filter by related meals id...", label: nil, options: nil, wire: .param(name: "mealId"), targetEntity: nil),
+      FilterDescriptor(columnId: "mealId", urlKey: "mealId", kind: .idMulti, placeholder: "Filter by related meals id...", label: nil, options: nil, wire: .param(name: "mealId"), targetEntity: .meal),
       FilterDescriptor(columnId: "mealPresenceFilter", urlKey: "mealPresenceFilter", kind: .presence, placeholder: "Filter related meals presence...", label: nil, options: nil, wire: .param(name: "mealPresenceFilter"), targetEntity: nil),
       FilterDescriptor(columnId: "related:product.eaters", urlKey: "related-eater", kind: .text, placeholder: "Search related eaters...", label: nil, options: nil, wire: .param(name: "eaterSearch"), targetEntity: nil),
-      FilterDescriptor(columnId: "eaterId", urlKey: "eaterId", kind: .idMulti, placeholder: "Filter by related eaters id...", label: nil, options: nil, wire: .param(name: "eaterId"), targetEntity: nil),
+      FilterDescriptor(columnId: "eaterId", urlKey: "eaterId", kind: .idMulti, placeholder: "Filter by related eaters id...", label: nil, options: nil, wire: .param(name: "eaterId"), targetEntity: .ledgerParty),
       FilterDescriptor(columnId: "eaterPresenceFilter", urlKey: "eaterPresenceFilter", kind: .presence, placeholder: "Filter related eaters presence...", label: nil, options: nil, wire: .param(name: "eaterPresenceFilter"), targetEntity: nil),
       FilterDescriptor(columnId: "dataQuality", urlKey: "dataQuality", kind: .select, placeholder: "Filter data quality...", label: nil, options: [LabeledOption(value: "complete", label: "Complete"), LabeledOption(value: "needs_data", label: "Needs data"), LabeledOption(value: "defect", label: "Defect")], wire: .param(name: "dataStatus"), targetEntity: nil),
       FilterDescriptor(columnId: "dataGaps", urlKey: "dataGaps", kind: .multiselect, placeholder: "Filter data gaps...", label: nil, options: [LabeledOption(value: "product_manufacturer", label: "Manufacturer"), LabeledOption(value: "product_external_id", label: "External ID"), LabeledOption(value: "product_category", label: "Category"), LabeledOption(value: "product_model", label: "Model"), LabeledOption(value: "product_price", label: "Price (stocked)"), LabeledOption(value: "product_image", label: "No image (stocked)"), LabeledOption(value: "amazon_asin", label: "Amazon ASIN"), LabeledOption(value: "product_unpurchased", label: "Not purchased"), LabeledOption(value: "duplicate_external_id", label: "Duplicate external ID")], wire: .param(name: "dataGap"), targetEntity: nil),
@@ -589,7 +592,8 @@ public enum EntityCatalog {
       RelationDescriptor(key: "images", label: "Images", target: .image, cardinality: .many),
       RelationDescriptor(key: "components", label: "Components", target: .product, cardinality: .many),
       RelationDescriptor(key: "containing-kits", label: "Containing kits", target: .product, cardinality: .many),
-      RelationDescriptor(key: "usda-food", label: "USDA food", target: .usdaFood, cardinality: .one)
+      RelationDescriptor(key: "usda-food", label: "USDA food", target: .usdaFood, cardinality: .one),
+      RelationDescriptor(key: "devices", label: "Devices", target: .device, cardinality: .many)
     ],
     presentation: EntityPresentation(
       detailVariant: .standard,
@@ -600,14 +604,17 @@ public enum EntityCatalog {
       heroActions: ["edit", "addToInventory", "recordSale", "discard"],
       detailSections: [
         DetailSection(id: "basic-information", title: "Basic information", placement: .supporting, collapsed: false, explanationField: nil, kind: .fields(["name", "id", "manufacturer", "model", "price", "categoryId", "primaryGtin", "fdc_id", "ingredientId", "growsIngredientId", "externalIds", "tags", "notes"])),
-        DetailSection(id: "plantings", title: "Plantings", placement: .primary, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "plantings", filterDescriptor: "sourceProductId", prefill: nil, columns: nil, sort: nil, limit: nil, hideWhenEmpty: true))),
-        DetailSection(id: "stocked-at", title: "Stocked at", placement: .primary, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "inventory", filterDescriptor: "productId", prefill: nil, columns: ["amount", "placement", "verifiedAt"], sort: nil, limit: nil, hideWhenEmpty: false))),
-        DetailSection(id: "expense-history", title: "Expense history", placement: .primary, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "expenses", filterDescriptor: "productId", prefill: nil, columns: ["name", "cost", "date", "lineKind", "project"], sort: SectionSort(field: "date", direction: .desc), limit: nil, hideWhenEmpty: false))),
-        DetailSection(id: "purchases", title: "Purchases", placement: .primary, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "purchases", filterDescriptor: "productId", prefill: nil, columns: ["vendor", "displayLabel", "date", "statedTotal"], sort: SectionSort(field: "date", direction: .desc), limit: nil, hideWhenEmpty: false))),
-        DetailSection(id: "kit-components", title: "Kit components", placement: .primary, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "components", filterDescriptor: "kitId", prefill: nil, columns: ["name", "manufacturer", "onHandUnits"], sort: nil, limit: nil, hideWhenEmpty: false))),
-        DetailSection(id: "vendors", title: "Vendors", placement: .primary, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "vendors", filterDescriptor: "productId", prefill: nil, columns: ["name", "purchaseCount", "spend", "latestPurchaseDate"], sort: nil, limit: nil, hideWhenEmpty: false))),
-        DetailSection(id: "project-uses", title: "Used on projects", placement: .primary, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "project-uses", filterDescriptor: "usedToolId", prefill: nil, columns: ["name", "status", "kind", "startDate"], sort: nil, limit: nil, hideWhenEmpty: false))),
-        DetailSection(id: "tasks", title: "Tasks", placement: .primary, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "tasks", filterDescriptor: "subjectProduct", prefill: nil, columns: ["name", "status", "dueDate", "trade"], sort: SectionSort(field: "dueDate", direction: .desc), limit: nil, hideWhenEmpty: false))),
+        DetailSection(id: "plantings", title: "Plantings", placement: .primary, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "plantings", filterDescriptor: "sourceProductId", prefill: nil, columns: nil, sort: nil, limit: nil, hideWhenEmpty: true, collapseWhenEmpty: false))),
+        DetailSection(id: "stocked-at", title: "Stocked at", placement: .primary, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "inventory", filterDescriptor: "productId", prefill: nil, columns: ["amount", "placement", "verifiedAt"], sort: nil, limit: nil, hideWhenEmpty: false, collapseWhenEmpty: false))),
+        DetailSection(id: "expense-history", title: "Expense history", placement: .primary, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "expenses", filterDescriptor: "productId", prefill: nil, columns: ["name", "cost", "date", "lineKind", "project"], sort: SectionSort(field: "date", direction: .desc), limit: nil, hideWhenEmpty: false, collapseWhenEmpty: false))),
+        DetailSection(id: "purchases", title: "Purchases", placement: .primary, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "purchases", filterDescriptor: "productId", prefill: nil, columns: ["vendor", "displayLabel", "date", "statedTotal"], sort: SectionSort(field: "date", direction: .desc), limit: nil, hideWhenEmpty: false, collapseWhenEmpty: false))),
+        DetailSection(id: "kit-components", title: "Kit components", placement: .primary, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "components", filterDescriptor: "kitId", prefill: nil, columns: ["name", "manufacturer", "onHandUnits"], sort: nil, limit: nil, hideWhenEmpty: false, collapseWhenEmpty: false))),
+        DetailSection(id: "vendors", title: "Vendors", placement: .primary, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "vendors", filterDescriptor: "productId", prefill: nil, columns: ["name", "purchaseCount", "spend", "latestPurchaseDate"], sort: nil, limit: nil, hideWhenEmpty: false, collapseWhenEmpty: false))),
+        DetailSection(id: "project-uses", title: "Used on projects", placement: .primary, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "project-uses", filterDescriptor: "usedToolId", prefill: nil, columns: ["name", "status", "kind", "startDate"], sort: nil, limit: nil, hideWhenEmpty: false, collapseWhenEmpty: false))),
+        DetailSection(id: "tasks", title: "Tasks", placement: .primary, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "tasks", filterDescriptor: "subjectProduct", prefill: nil, columns: ["name", "status", "dueDate", "trade"], sort: SectionSort(field: "dueDate", direction: .desc), limit: nil, hideWhenEmpty: false, collapseWhenEmpty: false))),
+        DetailSection(id: "purchased-for-projects", title: "Purchased for projects", placement: .primary, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "purchased-projects", filterDescriptor: "purchasedProductId", prefill: nil, columns: ["name", "status", "kind"], sort: nil, limit: nil, hideWhenEmpty: false, collapseWhenEmpty: true))),
+        DetailSection(id: "wishes", title: "Wishlist", placement: .primary, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "wishes", filterDescriptor: "related:wish.candidates", prefill: nil, columns: nil, sort: nil, limit: nil, hideWhenEmpty: false, collapseWhenEmpty: true))),
+        DetailSection(id: "containing-kits", title: "Part of kits", placement: .primary, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "containing-kits", filterDescriptor: "componentId", prefill: nil, columns: ["name", "manufacturer"], sort: nil, limit: nil, hideWhenEmpty: false, collapseWhenEmpty: true))),
         DetailSection(id: "movements", title: "Movements", placement: .full, collapsed: false, explanationField: nil, kind: .timeline(mode: .events)),
         DetailSection(id: "product.labels", title: "Labels", placement: .primary, collapsed: false, explanationField: nil, kind: .slot),
         DetailSection(id: "product.nutrition", title: "Nutrition", placement: .primary, collapsed: false, explanationField: nil, kind: .slot),
@@ -615,7 +622,10 @@ public enum EntityCatalog {
         DetailSection(id: "product.fits-with", title: "Fits with", placement: .primary, collapsed: false, explanationField: nil, kind: .slot),
         DetailSection(id: "product.cookbooks", title: "Cookbooks", placement: .primary, collapsed: false, explanationField: nil, kind: .slot),
         DetailSection(id: "product.recipe-appearances", title: "Appears in recipes", placement: .primary, collapsed: false, explanationField: nil, kind: .slot),
-        DetailSection(id: "product.import-runs", title: "Import runs", placement: .primary, collapsed: false, explanationField: nil, kind: .slot)
+        DetailSection(id: "product.import-runs", title: "Import runs", placement: .primary, collapsed: false, explanationField: nil, kind: .slot),
+        DetailSection(id: "meals", title: "Eaten at meals", placement: .primary, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "meals", filterDescriptor: "foodProductId", prefill: nil, columns: nil, sort: nil, limit: nil, hideWhenEmpty: false, collapseWhenEmpty: true))),
+        DetailSection(id: "locations", title: "Serving as locations", placement: .primary, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "locations", filterDescriptor: "product", prefill: nil, columns: nil, sort: nil, limit: nil, hideWhenEmpty: false, collapseWhenEmpty: true))),
+        DetailSection(id: "devices", title: "Devices", placement: .primary, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "devices", filterDescriptor: "productId", prefill: nil, columns: nil, sort: nil, limit: nil, hideWhenEmpty: false, collapseWhenEmpty: true)))
       ],
       listViews: [.table, .shelf, .timeline],
       shelfSubtitle: ["price", "category"],
@@ -688,7 +698,7 @@ public enum EntityCatalog {
       FilterDescriptor(columnId: "totalMinutes", urlKey: "totalMinutes", kind: .range, placeholder: "Filter total time...", label: nil, options: [LabeledOption(value: "under30", label: "Under 30 min"), LabeledOption(value: "30to60", label: "30–60 min"), LabeledOption(value: "60plus", label: "Over an hour")], wire: .range(from: "totalMinutesMin", to: "totalMinutesMax", presence: nil), targetEntity: nil),
       FilterDescriptor(columnId: "related:recipe.ingredients", urlKey: "related-ingredient", kind: .idMulti, placeholder: "Filter by ingredient...", label: nil, options: nil, wire: .param(name: "ingredientId"), targetEntity: .ingredient),
       FilterDescriptor(columnId: "related:recipe.meals", urlKey: "related-meal", kind: .text, placeholder: "Search related meals...", label: nil, options: nil, wire: .param(name: "mealSearch"), targetEntity: nil),
-      FilterDescriptor(columnId: "mealId", urlKey: "mealId", kind: .idMulti, placeholder: "Filter by related meals id...", label: nil, options: nil, wire: .param(name: "mealId"), targetEntity: nil),
+      FilterDescriptor(columnId: "mealId", urlKey: "mealId", kind: .idMulti, placeholder: "Filter by related meals id...", label: nil, options: nil, wire: .param(name: "mealId"), targetEntity: .meal),
       FilterDescriptor(columnId: "mealPresenceFilter", urlKey: "mealPresenceFilter", kind: .presence, placeholder: "Filter related meals presence...", label: nil, options: nil, wire: .param(name: "mealPresenceFilter"), targetEntity: nil),
       FilterDescriptor(columnId: "dataQuality", urlKey: "dataQuality", kind: .select, placeholder: "Filter data quality...", label: nil, options: [LabeledOption(value: "complete", label: "Complete"), LabeledOption(value: "needs_data", label: "Needs data"), LabeledOption(value: "defect", label: "Defect")], wire: .param(name: "dataStatus"), targetEntity: nil),
       FilterDescriptor(columnId: "dataGaps", urlKey: "dataGaps", kind: .multiselect, placeholder: "Filter data gaps...", label: nil, options: [LabeledOption(value: "recipe_ingredients", label: "Ingredients"), LabeledOption(value: "recipe_instructions", label: "Instructions"), LabeledOption(value: "recipe_source", label: "Source")], wire: .param(name: "dataGap"), targetEntity: nil),
@@ -714,7 +724,7 @@ public enum EntityCatalog {
         DetailSection(id: "overview", title: "Overview", placement: .supporting, collapsed: false, explanationField: nil, kind: .fields(["name", "servings", "yield", "meta", "tags", "source", "forkedFromRecipeId", "notes", "createdAt", "updatedAt"])),
         DetailSection(id: "contents", title: "Recipe", placement: .primary, collapsed: false, explanationField: nil, kind: .fields(["sections", "totals"])),
         DetailSection(id: "recipe.workflow", title: nil, placement: .full, collapsed: false, explanationField: nil, kind: .slot),
-        DetailSection(id: "meals", title: "Meals", placement: .primary, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "meals", filterDescriptor: "recipeId", prefill: nil, columns: ["date", "name", "mealType"], sort: SectionSort(field: "date", direction: .desc), limit: nil, hideWhenEmpty: false)))
+        DetailSection(id: "meals", title: "Meals", placement: .primary, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "meals", filterDescriptor: "recipeId", prefill: nil, columns: ["date", "name", "mealType"], sort: SectionSort(field: "date", direction: .desc), limit: nil, hideWhenEmpty: false, collapseWhenEmpty: false)))
       ],
       listViews: [.table, .shelf],
       shelfSubtitle: [],
@@ -765,10 +775,10 @@ public enum EntityCatalog {
       FilterDescriptor(columnId: "ownRecipes", urlKey: "ownRecipes", kind: .presence, placeholder: "Filter own recipes...", label: nil, options: [LabeledOption(value: "has", label: "Has own recipes"), LabeledOption(value: "none", label: "(none)")], wire: .param(name: "ownRecipePresenceFilter"), targetEntity: nil),
       FilterDescriptor(columnId: "appearsInRecipes", urlKey: "appearsInRecipes", kind: .presence, placeholder: "Filter recipes...", label: nil, options: [LabeledOption(value: "has", label: "Has recipes"), LabeledOption(value: "none", label: "(none)")], wire: .param(name: "recipePresenceFilter"), targetEntity: nil),
       FilterDescriptor(columnId: "related:ingredient.meals", urlKey: "related-meal", kind: .text, placeholder: "Search related meals...", label: nil, options: nil, wire: .param(name: "mealSearch"), targetEntity: nil),
-      FilterDescriptor(columnId: "mealId", urlKey: "mealId", kind: .idMulti, placeholder: "Filter by related meals id...", label: nil, options: nil, wire: .param(name: "mealId"), targetEntity: nil),
+      FilterDescriptor(columnId: "mealId", urlKey: "mealId", kind: .idMulti, placeholder: "Filter by related meals id...", label: nil, options: nil, wire: .param(name: "mealId"), targetEntity: .meal),
       FilterDescriptor(columnId: "mealPresenceFilter", urlKey: "mealPresenceFilter", kind: .presence, placeholder: "Filter related meals presence...", label: nil, options: nil, wire: .param(name: "mealPresenceFilter"), targetEntity: nil),
       FilterDescriptor(columnId: "related:ingredient.eaters", urlKey: "related-eater", kind: .text, placeholder: "Search related eaters...", label: nil, options: nil, wire: .param(name: "eaterSearch"), targetEntity: nil),
-      FilterDescriptor(columnId: "eaterId", urlKey: "eaterId", kind: .idMulti, placeholder: "Filter by related eaters id...", label: nil, options: nil, wire: .param(name: "eaterId"), targetEntity: nil),
+      FilterDescriptor(columnId: "eaterId", urlKey: "eaterId", kind: .idMulti, placeholder: "Filter by related eaters id...", label: nil, options: nil, wire: .param(name: "eaterId"), targetEntity: .ledgerParty),
       FilterDescriptor(columnId: "eaterPresenceFilter", urlKey: "eaterPresenceFilter", kind: .presence, placeholder: "Filter related eaters presence...", label: nil, options: nil, wire: .param(name: "eaterPresenceFilter"), targetEntity: nil),
       FilterDescriptor(columnId: "dataQuality", urlKey: "dataQuality", kind: .select, placeholder: "Filter data quality...", label: nil, options: [LabeledOption(value: "complete", label: "Complete"), LabeledOption(value: "needs_data", label: "Needs data"), LabeledOption(value: "defect", label: "Defect")], wire: .param(name: "dataStatus"), targetEntity: nil),
       FilterDescriptor(columnId: "dataGaps", urlKey: "dataGaps", kind: .multiselect, placeholder: "Filter data gaps...", label: nil, options: [LabeledOption(value: "ingredient_product", label: "Product link")], wire: .param(name: "dataGap"), targetEntity: nil),
@@ -794,10 +804,11 @@ public enum EntityCatalog {
       detailSections: [
         DetailSection(id: "basic-information", title: "Basic information", placement: .supporting, collapsed: false, explanationField: nil, kind: .fields(["name", "aliases", "usuallyOnHand", "gardenGuideKey", "guideSowWindow", "guideTransplantWindow", "createdAt", "updatedAt"])),
         DetailSection(id: "ingredient.nutrition-product", title: "Nutrition", placement: .primary, collapsed: false, explanationField: nil, kind: .slot),
-        DetailSection(id: "products", title: "Products", placement: .primary, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "products", filterDescriptor: "ingredient", prefill: nil, columns: ["name", "manufacturer", "category", "onHandUnits"], sort: nil, limit: nil, hideWhenEmpty: false))),
-        DetailSection(id: "plantings", title: "Plantings", placement: .primary, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "plantings", filterDescriptor: "ingredientId", prefill: nil, columns: nil, sort: nil, limit: nil, hideWhenEmpty: true))),
-        DetailSection(id: "grown-by", title: "Grown by", placement: .supporting, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "grown-by", filterDescriptor: "growsIngredient", prefill: nil, columns: ["name", "manufacturer", "category", "onHandUnits"], sort: nil, limit: nil, hideWhenEmpty: true))),
-        DetailSection(id: "recipes", title: "Appears in recipes", placement: .primary, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "recipes", filterDescriptor: "related:recipe.ingredients", prefill: nil, columns: ["name", "tags", "meals"], sort: nil, limit: nil, hideWhenEmpty: false)))
+        DetailSection(id: "products", title: "Products", placement: .primary, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "products", filterDescriptor: "ingredient", prefill: nil, columns: ["name", "manufacturer", "category", "onHandUnits"], sort: nil, limit: nil, hideWhenEmpty: false, collapseWhenEmpty: false))),
+        DetailSection(id: "plantings", title: "Plantings", placement: .primary, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "plantings", filterDescriptor: "ingredientId", prefill: nil, columns: nil, sort: nil, limit: nil, hideWhenEmpty: true, collapseWhenEmpty: false))),
+        DetailSection(id: "grown-by", title: "Grown by", placement: .supporting, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "grown-by", filterDescriptor: "growsIngredient", prefill: nil, columns: ["name", "manufacturer", "category", "onHandUnits"], sort: nil, limit: nil, hideWhenEmpty: true, collapseWhenEmpty: false))),
+        DetailSection(id: "recipes", title: "Appears in recipes", placement: .primary, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "recipes", filterDescriptor: "related:recipe.ingredients", prefill: nil, columns: ["name", "tags", "meals"], sort: nil, limit: nil, hideWhenEmpty: false, collapseWhenEmpty: false))),
+        DetailSection(id: "meals", title: "Eaten at meals", placement: .primary, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "meals", filterDescriptor: "foodIngredientId", prefill: nil, columns: nil, sort: nil, limit: nil, hideWhenEmpty: false, collapseWhenEmpty: true)))
       ],
       listViews: [.table, .shelf],
       shelfSubtitle: [],
@@ -864,7 +875,7 @@ public enum EntityCatalog {
         DetailSection(id: "overview", title: "Overview", placement: .supporting, collapsed: false, explanationField: nil, kind: .fields(["name", "author", "subjects", "recipeCount", "sourceRecipeCount", "needsReextract", "coverUrl"])),
         DetailSection(id: "physical-copy", title: "Physical copy", placement: .supporting, collapsed: false, explanationField: nil, kind: .fields(["product"])),
         DetailSection(id: "cookbook.toc", title: "Contents", placement: .primary, collapsed: false, explanationField: nil, kind: .slot),
-        DetailSection(id: "recipes", title: "Recipes", placement: .primary, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "recipes", filterDescriptor: "source", prefill: nil, columns: ["name", "tags", "costTotal"], sort: nil, limit: nil, hideWhenEmpty: false))),
+        DetailSection(id: "recipes", title: "Recipes", placement: .primary, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "recipes", filterDescriptor: "source", prefill: nil, columns: ["name", "tags", "costTotal"], sort: nil, limit: nil, hideWhenEmpty: false, collapseWhenEmpty: false))),
         DetailSection(id: "cookbook.import-progress", title: "Import", placement: .primary, collapsed: false, explanationField: nil, kind: .slot)
       ],
       listViews: [.table, .shelf],
@@ -928,7 +939,7 @@ public enum EntityCatalog {
       FilterDescriptor(columnId: "inventoryEntries", urlKey: "inventoryEntries", kind: .range, placeholder: "Filter inventory...", label: nil, options: [LabeledOption(value: "has", label: "Has items"), LabeledOption(value: "none", label: "(none)"), LabeledOption(value: "1", label: "1+ items"), LabeledOption(value: "2", label: "2+ items"), LabeledOption(value: "5", label: "5+ items")], wire: .range(from: "directItemCountMin", to: "directItemCountMax", presence: nil), targetEntity: nil),
       FilterDescriptor(columnId: "valuation", urlKey: "valuation", kind: .range, placeholder: "Filter valuation...", label: nil, options: [LabeledOption(value: "positive", label: "Positive basis"), LabeledOption(value: "zero", label: "Zero basis"), LabeledOption(value: "negative", label: "Credit / negative"), LabeledOption(value: "gte100", label: "$100 and up"), LabeledOption(value: "gte500", label: "$500 and up")], wire: .range(from: "valuationMin", to: "valuationMax", presence: nil), targetEntity: nil),
       FilterDescriptor(columnId: "related:location.ingredients", urlKey: "related-ingredient", kind: .text, placeholder: "Search related ingredients...", label: nil, options: nil, wire: .param(name: "ingredientSearch"), targetEntity: nil),
-      FilterDescriptor(columnId: "ingredientId", urlKey: "ingredientId", kind: .idMulti, placeholder: "Filter by related ingredients id...", label: nil, options: nil, wire: .param(name: "ingredientId"), targetEntity: nil),
+      FilterDescriptor(columnId: "ingredientId", urlKey: "ingredientId", kind: .idMulti, placeholder: "Filter by related ingredients id...", label: nil, options: nil, wire: .param(name: "ingredientId"), targetEntity: .ingredient),
       FilterDescriptor(columnId: "ingredientPresenceFilter", urlKey: "ingredientPresenceFilter", kind: .presence, placeholder: "Filter related ingredients presence...", label: nil, options: nil, wire: .param(name: "ingredientPresenceFilter"), targetEntity: nil),
       FilterDescriptor(columnId: "dataQuality", urlKey: "dataQuality", kind: .select, placeholder: "Filter data quality...", label: nil, options: [LabeledOption(value: "complete", label: "Complete"), LabeledOption(value: "needs_data", label: "Needs data"), LabeledOption(value: "defect", label: "Defect")], wire: .param(name: "dataStatus"), targetEntity: nil),
       FilterDescriptor(columnId: "dataGaps", urlKey: "dataGaps", kind: .multiselect, placeholder: "Filter data gaps...", label: nil, options: [LabeledOption(value: "location_ai_description", label: "AI description"), LabeledOption(value: "location_type", label: "Type")], wire: .param(name: "dataGap"), targetEntity: nil),
@@ -953,13 +964,13 @@ public enum EntityCatalog {
       heroImages: true,
       heroActions: ["edit"],
       detailSections: [
-        DetailSection(id: "inventory", title: "Contents", placement: .primary, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "inventory", filterDescriptor: "locationId", prefill: nil, columns: ["amount", "placement", "verifiedAt"], sort: nil, limit: nil, hideWhenEmpty: false))),
-        DetailSection(id: "children", title: "Sub-locations", placement: .primary, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "children", filterDescriptor: "parent", prefill: nil, columns: ["name", "type", "valuation"], sort: nil, limit: nil, hideWhenEmpty: false))),
+        DetailSection(id: "inventory", title: "Contents", placement: .primary, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "inventory", filterDescriptor: "locationId", prefill: nil, columns: ["amount", "placement", "verifiedAt"], sort: nil, limit: nil, hideWhenEmpty: false, collapseWhenEmpty: false))),
+        DetailSection(id: "children", title: "Sub-locations", placement: .primary, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "children", filterDescriptor: "parent", prefill: nil, columns: ["name", "type", "valuation"], sort: nil, limit: nil, hideWhenEmpty: false, collapseWhenEmpty: false))),
         DetailSection(id: "basic-information", title: "Basic information", placement: .supporting, collapsed: false, explanationField: nil, kind: .fields(["id", "type", "productId", "parentId", "lastBulkInventory", "notes", "aliases", "tags", "createdAt", "updatedAt"])),
         DetailSection(id: "location.contents-valuation", title: "Valuation", placement: .supporting, collapsed: false, explanationField: "valuation", kind: .slot),
         DetailSection(id: "location.ai-description", title: "AI description", placement: .supporting, collapsed: false, explanationField: nil, kind: .slot),
-        DetailSection(id: "plantings", title: "Plantings", placement: .supporting, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "plantings", filterDescriptor: "locationId", prefill: nil, columns: nil, sort: nil, limit: nil, hideWhenEmpty: true))),
-        DetailSection(id: "garden-entries", title: "Garden entries", placement: .supporting, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "garden-entries", filterDescriptor: "locationId", prefill: nil, columns: nil, sort: SectionSort(field: "observedOn", direction: .desc), limit: nil, hideWhenEmpty: true)))
+        DetailSection(id: "plantings", title: "Plantings", placement: .supporting, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "plantings", filterDescriptor: "locationId", prefill: nil, columns: nil, sort: nil, limit: nil, hideWhenEmpty: true, collapseWhenEmpty: false))),
+        DetailSection(id: "garden-entries", title: "Garden entries", placement: .supporting, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "garden-entries", filterDescriptor: "locationId", prefill: nil, columns: nil, sort: SectionSort(field: "observedOn", direction: .desc), limit: nil, hideWhenEmpty: true, collapseWhenEmpty: false)))
       ],
       listViews: [.slot(id: "location.gallery", label: "Contents", searchKeys: []), .table, .slot(id: "location.visualizations", label: "Visualizations", searchKeys: []), .shelf],
       shelfSubtitle: ["type"],
@@ -1017,8 +1028,9 @@ public enum EntityCatalog {
       FilterDescriptor(columnId: "locationRole", urlKey: "locationRole", kind: .select, placeholder: "Filter location role...", label: nil, options: [LabeledOption(value: "global_unknown", label: "Global Unknown")], wire: .param(name: "locationRole"), targetEntity: nil),
       FilterDescriptor(columnId: "valuationStatus", urlKey: "valuationStatus", kind: .select, placeholder: "Filter valuation...", label: nil, options: [LabeledOption(value: "valued", label: "Valued"), LabeledOption(value: "missing", label: "Missing valuation"), LabeledOption(value: "missing_with_priced_product", label: "Missing despite product price")], wire: .param(name: "valuationStatus"), targetEntity: nil),
       FilterDescriptor(columnId: "related:inventory.ingredient", urlKey: "related-ingredient", kind: .text, placeholder: "Search related ingredient...", label: nil, options: nil, wire: .param(name: "ingredientSearch"), targetEntity: nil),
-      FilterDescriptor(columnId: "ingredientId", urlKey: "ingredientId", kind: .idMulti, placeholder: "Filter by related ingredient id...", label: nil, options: nil, wire: .param(name: "ingredientId"), targetEntity: nil),
+      FilterDescriptor(columnId: "ingredientId", urlKey: "ingredientId", kind: .idMulti, placeholder: "Filter by related ingredient id...", label: nil, options: nil, wire: .param(name: "ingredientId"), targetEntity: .ingredient),
       FilterDescriptor(columnId: "ingredientPresenceFilter", urlKey: "ingredientPresenceFilter", kind: .presence, placeholder: "Filter related ingredient presence...", label: nil, options: nil, wire: .param(name: "ingredientPresenceFilter"), targetEntity: nil),
+      FilterDescriptor(columnId: "ownerLedgerPartyId", urlKey: "ownerLedgerPartyId", kind: .idMulti, placeholder: "Filter by ledger party...", label: nil, options: nil, wire: .param(name: "ownerLedgerPartyId"), targetEntity: .ledgerParty),
       FilterDescriptor(columnId: "dataQuality", urlKey: "dataQuality", kind: .select, placeholder: "Filter data quality...", label: nil, options: [LabeledOption(value: "complete", label: "Complete"), LabeledOption(value: "needs_data", label: "Needs data"), LabeledOption(value: "defect", label: "Defect")], wire: .param(name: "dataStatus"), targetEntity: nil),
       FilterDescriptor(columnId: "dataGaps", urlKey: "dataGaps", kind: .multiselect, placeholder: "Filter data gaps...", label: nil, options: [LabeledOption(value: "inventory_verified", label: "Verified")], wire: .param(name: "dataGap"), targetEntity: nil),
       FilterDescriptor(columnId: "createdAt", urlKey: "createdAt", kind: .range, placeholder: "Filter by created date...", label: nil, options: [LabeledOption(value: "30d", label: "Last 30 days"), LabeledOption(value: "90d", label: "Last 90 days"), LabeledOption(value: "ytd", label: "Year to date"), LabeledOption(value: "1y", label: "Last 12 months")], wire: .range(from: "createdFrom", to: "createdTo", presence: nil), targetEntity: nil),
@@ -1096,13 +1108,13 @@ public enum EntityCatalog {
       FilterDescriptor(columnId: "related:meal.recipes", urlKey: "related-recipe", kind: .presence, placeholder: "Filter recipes...", label: nil, options: [LabeledOption(value: "has", label: "Has recipes"), LabeledOption(value: "none", label: "(none)")], wire: .param(name: "recipePresenceFilter"), targetEntity: nil),
       FilterDescriptor(columnId: "recipeId", urlKey: "recipeId", kind: .idMulti, placeholder: "Filter by related recipe id...", label: nil, options: nil, wire: .param(name: "recipeId"), targetEntity: .recipe),
       FilterDescriptor(columnId: "related:meal.foodProducts", urlKey: "related-foodProduct", kind: .text, placeholder: "Search related food products...", label: nil, options: nil, wire: .param(name: "foodProductSearch"), targetEntity: nil),
-      FilterDescriptor(columnId: "foodProductId", urlKey: "foodProductId", kind: .idMulti, placeholder: "Filter by related food products id...", label: nil, options: nil, wire: .param(name: "foodProductId"), targetEntity: nil),
+      FilterDescriptor(columnId: "foodProductId", urlKey: "foodProductId", kind: .idMulti, placeholder: "Filter by related food products id...", label: nil, options: nil, wire: .param(name: "foodProductId"), targetEntity: .product),
       FilterDescriptor(columnId: "foodProductPresenceFilter", urlKey: "foodProductPresenceFilter", kind: .presence, placeholder: "Filter related food products presence...", label: nil, options: nil, wire: .param(name: "foodProductPresenceFilter"), targetEntity: nil),
       FilterDescriptor(columnId: "related:meal.foodIngredients", urlKey: "related-foodIngredient", kind: .text, placeholder: "Search related food ingredients...", label: nil, options: nil, wire: .param(name: "foodIngredientSearch"), targetEntity: nil),
-      FilterDescriptor(columnId: "foodIngredientId", urlKey: "foodIngredientId", kind: .idMulti, placeholder: "Filter by related food ingredients id...", label: nil, options: nil, wire: .param(name: "foodIngredientId"), targetEntity: nil),
+      FilterDescriptor(columnId: "foodIngredientId", urlKey: "foodIngredientId", kind: .idMulti, placeholder: "Filter by related food ingredients id...", label: nil, options: nil, wire: .param(name: "foodIngredientId"), targetEntity: .ingredient),
       FilterDescriptor(columnId: "foodIngredientPresenceFilter", urlKey: "foodIngredientPresenceFilter", kind: .presence, placeholder: "Filter related food ingredients presence...", label: nil, options: nil, wire: .param(name: "foodIngredientPresenceFilter"), targetEntity: nil),
       FilterDescriptor(columnId: "related:meal.eaters", urlKey: "related-eater", kind: .text, placeholder: "Search related eaters...", label: nil, options: nil, wire: .param(name: "eaterSearch"), targetEntity: nil),
-      FilterDescriptor(columnId: "eaterId", urlKey: "eaterId", kind: .idMulti, placeholder: "Filter by related eaters id...", label: nil, options: nil, wire: .param(name: "eaterId"), targetEntity: nil),
+      FilterDescriptor(columnId: "eaterId", urlKey: "eaterId", kind: .idMulti, placeholder: "Filter by related eaters id...", label: nil, options: nil, wire: .param(name: "eaterId"), targetEntity: .ledgerParty),
       FilterDescriptor(columnId: "eaterPresenceFilter", urlKey: "eaterPresenceFilter", kind: .presence, placeholder: "Filter related eaters presence...", label: nil, options: nil, wire: .param(name: "eaterPresenceFilter"), targetEntity: nil),
       FilterDescriptor(columnId: "dataQuality", urlKey: "dataQuality", kind: .select, placeholder: "Filter data quality...", label: nil, options: [LabeledOption(value: "complete", label: "Complete"), LabeledOption(value: "needs_data", label: "Needs data"), LabeledOption(value: "defect", label: "Defect")], wire: .param(name: "dataStatus"), targetEntity: nil),
       FilterDescriptor(columnId: "dataGaps", urlKey: "dataGaps", kind: .multiselect, placeholder: "Filter data gaps...", label: nil, options: [LabeledOption(value: "meal_contents", label: "Contents")], wire: .param(name: "dataGap"), targetEntity: nil),
@@ -1169,10 +1181,10 @@ public enum EntityCatalog {
       FilterDescriptor(columnId: "name", urlKey: "q", kind: .text, placeholder: "Search ledger parties...", label: nil, options: nil, wire: .param(name: "search"), targetEntity: nil),
       FilterDescriptor(columnId: "kind", urlKey: "kind", kind: .multiselect, placeholder: "Filter by kind...", label: nil, options: [LabeledOption(value: "member", label: "Member"), LabeledOption(value: "guest", label: "Guest"), LabeledOption(value: "household", label: "Household")], wire: .param(name: "kind"), targetEntity: nil),
       FilterDescriptor(columnId: "related:ledgerParty.meals", urlKey: "related-meal", kind: .text, placeholder: "Search related meals...", label: nil, options: nil, wire: .param(name: "mealSearch"), targetEntity: nil),
-      FilterDescriptor(columnId: "mealId", urlKey: "mealId", kind: .idMulti, placeholder: "Filter by related meals id...", label: nil, options: nil, wire: .param(name: "mealId"), targetEntity: nil),
+      FilterDescriptor(columnId: "mealId", urlKey: "mealId", kind: .idMulti, placeholder: "Filter by related meals id...", label: nil, options: nil, wire: .param(name: "mealId"), targetEntity: .meal),
       FilterDescriptor(columnId: "mealPresenceFilter", urlKey: "mealPresenceFilter", kind: .presence, placeholder: "Filter related meals presence...", label: nil, options: nil, wire: .param(name: "mealPresenceFilter"), targetEntity: nil),
       FilterDescriptor(columnId: "related:ledgerParty.recipesEaten", urlKey: "related-recipe", kind: .text, placeholder: "Search related recipes...", label: nil, options: nil, wire: .param(name: "recipeSearch"), targetEntity: nil),
-      FilterDescriptor(columnId: "recipeId", urlKey: "recipeId", kind: .idMulti, placeholder: "Filter by related recipes id...", label: nil, options: nil, wire: .param(name: "recipeId"), targetEntity: nil),
+      FilterDescriptor(columnId: "recipeId", urlKey: "recipeId", kind: .idMulti, placeholder: "Filter by related recipes id...", label: nil, options: nil, wire: .param(name: "recipeId"), targetEntity: .recipe),
       FilterDescriptor(columnId: "recipePresenceFilter", urlKey: "recipePresenceFilter", kind: .presence, placeholder: "Filter related recipes presence...", label: nil, options: nil, wire: .param(name: "recipePresenceFilter"), targetEntity: nil),
       FilterDescriptor(columnId: "dataQuality", urlKey: "dataQuality", kind: .select, placeholder: "Filter data quality...", label: nil, options: [LabeledOption(value: "complete", label: "Complete"), LabeledOption(value: "needs_data", label: "Needs data"), LabeledOption(value: "defect", label: "Defect")], wire: .param(name: "dataStatus"), targetEntity: nil),
       FilterDescriptor(columnId: "dataGaps", urlKey: "dataGaps", kind: .multiselect, placeholder: "Filter data gaps...", label: nil, options: [LabeledOption(value: "ledger_party_financial_account", label: "Financial account")], wire: .param(name: "dataGap"), targetEntity: nil),
@@ -1185,7 +1197,13 @@ public enum EntityCatalog {
       RelationDescriptor(key: "outgoing-transfers", label: "Outgoing transfers", target: .ledgerTransfer, cardinality: .many),
       RelationDescriptor(key: "incoming-transfers", label: "Incoming transfers", target: .ledgerTransfer, cardinality: .many),
       RelationDescriptor(key: "meals", label: "Meals eaten", target: .meal, cardinality: .many),
-      RelationDescriptor(key: "recipes-eaten", label: "Recipes eaten", target: .recipe, cardinality: .many)
+      RelationDescriptor(key: "recipes-eaten", label: "Recipes eaten", target: .recipe, cardinality: .many),
+      RelationDescriptor(key: "inventory", label: "Inventory", target: .inventory, cardinality: .many),
+      RelationDescriptor(key: "images", label: "Images", target: .image, cardinality: .many),
+      RelationDescriptor(key: "vendor-accounts", label: "Vendor accounts", target: .vendorAccount, cardinality: .many),
+      RelationDescriptor(key: "runs", label: "Runs", target: .importRun, cardinality: .many),
+      RelationDescriptor(key: "devices", label: "Devices", target: .device, cardinality: .many),
+      RelationDescriptor(key: "image-sightings", label: "Image sightings", target: .imageSighting, cardinality: .many)
     ],
     presentation: EntityPresentation(
       detailVariant: .standard,
@@ -1197,9 +1215,15 @@ public enum EntityCatalog {
       detailSections: [
         DetailSection(id: "ledgerParty.wardrobe", title: "Wardrobe", placement: .primary, collapsed: false, explanationField: nil, kind: .slot),
         DetailSection(id: "overview", title: "Overview", placement: .supporting, collapsed: false, explanationField: nil, kind: .fields(["name", "kind", "notes", "createdAt", "updatedAt"])),
-        DetailSection(id: "financial-accounts", title: "Financial accounts", placement: .primary, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "financial-accounts", filterDescriptor: "ledgerPartyId", prefill: nil, columns: ["name", "identity", "transactionCount"], sort: nil, limit: nil, hideWhenEmpty: false))),
-        DetailSection(id: "outgoing-transfers", title: "Outgoing transfers", placement: .primary, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "outgoing-transfers", filterDescriptor: "fromPartyId", prefill: nil, columns: ["toPartyId", "amount", "date"], sort: SectionSort(field: "date", direction: .desc), limit: nil, hideWhenEmpty: false))),
-        DetailSection(id: "incoming-transfers", title: "Incoming transfers", placement: .primary, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "incoming-transfers", filterDescriptor: "toPartyId", prefill: nil, columns: ["fromPartyId", "amount", "date"], sort: SectionSort(field: "date", direction: .desc), limit: nil, hideWhenEmpty: false)))
+        DetailSection(id: "financial-accounts", title: "Financial accounts", placement: .primary, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "financial-accounts", filterDescriptor: "ledgerPartyId", prefill: nil, columns: ["name", "identity", "transactionCount"], sort: nil, limit: nil, hideWhenEmpty: false, collapseWhenEmpty: false))),
+        DetailSection(id: "outgoing-transfers", title: "Outgoing transfers", placement: .primary, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "outgoing-transfers", filterDescriptor: "fromPartyId", prefill: nil, columns: ["toPartyId", "amount", "date"], sort: SectionSort(field: "date", direction: .desc), limit: nil, hideWhenEmpty: false, collapseWhenEmpty: false))),
+        DetailSection(id: "incoming-transfers", title: "Incoming transfers", placement: .primary, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "incoming-transfers", filterDescriptor: "toPartyId", prefill: nil, columns: ["fromPartyId", "amount", "date"], sort: SectionSort(field: "date", direction: .desc), limit: nil, hideWhenEmpty: false, collapseWhenEmpty: false))),
+        DetailSection(id: "expenses", title: "Attributed expenses", placement: .primary, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "expenses", filterDescriptor: "ledgerPartyId", prefill: nil, columns: nil, sort: nil, limit: nil, hideWhenEmpty: false, collapseWhenEmpty: true))),
+        DetailSection(id: "meals", title: "Meals eaten", placement: .primary, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "meals", filterDescriptor: "eaterId", prefill: nil, columns: nil, sort: nil, limit: nil, hideWhenEmpty: false, collapseWhenEmpty: true))),
+        DetailSection(id: "inventory", title: "Inventory", placement: .primary, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "inventory", filterDescriptor: "ownerLedgerPartyId", prefill: nil, columns: nil, sort: nil, limit: nil, hideWhenEmpty: false, collapseWhenEmpty: true))),
+        DetailSection(id: "vendor-accounts", title: "Vendor accounts", placement: .primary, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "vendor-accounts", filterDescriptor: "ledgerPartyId", prefill: nil, columns: nil, sort: nil, limit: nil, hideWhenEmpty: false, collapseWhenEmpty: true))),
+        DetailSection(id: "devices", title: "Devices", placement: .primary, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "devices", filterDescriptor: "ledgerPartyId", prefill: nil, columns: nil, sort: nil, limit: nil, hideWhenEmpty: false, collapseWhenEmpty: true))),
+        DetailSection(id: "image-sightings", title: "Image sightings", placement: .primary, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "image-sightings", filterDescriptor: "ledgerPartyId", prefill: nil, columns: nil, sort: nil, limit: nil, hideWhenEmpty: false, collapseWhenEmpty: true)))
       ],
       listViews: [.table, .shelf],
       shelfSubtitle: [],
@@ -1268,7 +1292,8 @@ public enum EntityCatalog {
       heroActions: ["edit"],
       detailSections: [
         DetailSection(id: "overview", title: "Overview", placement: .supporting, collapsed: false, explanationField: nil, kind: .fields(["fromPartyId", "toPartyId", "amount", "date", "notes", "classification", "createdAt", "updatedAt"])),
-        DetailSection(id: "evidence", title: "Evidence transactions", placement: .primary, collapsed: false, explanationField: nil, kind: .fields(["evidenceTransactionIds"]))
+        DetailSection(id: "evidence", title: "Evidence transactions", placement: .primary, collapsed: false, explanationField: nil, kind: .fields(["evidenceTransactionIds"])),
+        DetailSection(id: "evidence-transactions", title: "Evidence transactions", placement: .primary, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "evidence-transactions", filterDescriptor: "ledgerTransferId", prefill: nil, columns: nil, sort: nil, limit: nil, hideWhenEmpty: false, collapseWhenEmpty: true)))
       ],
       listViews: [.table, .shelf],
       shelfSubtitle: [],
@@ -1337,19 +1362,19 @@ public enum EntityCatalog {
       FilterDescriptor(columnId: "completionYear", urlKey: "completed", kind: .select, placeholder: "Filter by completion year...", label: nil, options: nil, wire: .param(name: "completionYear"), targetEntity: nil),
       FilterDescriptor(columnId: "parent", urlKey: "parent", kind: .idMulti, placeholder: "Filter by parent project...", label: nil, options: nil, wire: .param(name: "parentProjectId"), targetEntity: .project),
       FilterDescriptor(columnId: "related:project.blockedBy", urlKey: "related-project", kind: .text, placeholder: "Search related blocked by...", label: nil, options: nil, wire: .param(name: "projectSearch"), targetEntity: nil),
-      FilterDescriptor(columnId: "projectId", urlKey: "projectId", kind: .idMulti, placeholder: "Filter by related blocked by id...", label: nil, options: nil, wire: .param(name: "projectId"), targetEntity: nil),
+      FilterDescriptor(columnId: "projectId", urlKey: "projectId", kind: .idMulti, placeholder: "Filter by related blocked by id...", label: nil, options: nil, wire: .param(name: "projectId"), targetEntity: .project),
       FilterDescriptor(columnId: "projectPresenceFilter", urlKey: "projectPresenceFilter", kind: .presence, placeholder: "Filter related blocked by presence...", label: nil, options: nil, wire: .param(name: "projectPresenceFilter"), targetEntity: nil),
       FilterDescriptor(columnId: "related:project.tasks", urlKey: "related-task", kind: .text, placeholder: "Search related tasks...", label: nil, options: nil, wire: .param(name: "taskSearch"), targetEntity: nil),
-      FilterDescriptor(columnId: "taskId", urlKey: "taskId", kind: .idMulti, placeholder: "Filter by related tasks id...", label: nil, options: nil, wire: .param(name: "taskId"), targetEntity: nil),
+      FilterDescriptor(columnId: "taskId", urlKey: "taskId", kind: .idMulti, placeholder: "Filter by related tasks id...", label: nil, options: nil, wire: .param(name: "taskId"), targetEntity: .task),
       FilterDescriptor(columnId: "taskPresenceFilter", urlKey: "taskPresenceFilter", kind: .presence, placeholder: "Filter related tasks presence...", label: nil, options: nil, wire: .param(name: "taskPresenceFilter"), targetEntity: nil),
       FilterDescriptor(columnId: "related:project.expenses", urlKey: "related-expense", kind: .text, placeholder: "Search related expenses...", label: nil, options: nil, wire: .param(name: "expenseSearch"), targetEntity: nil),
-      FilterDescriptor(columnId: "expenseId", urlKey: "expenseId", kind: .idMulti, placeholder: "Filter by related expenses id...", label: nil, options: nil, wire: .param(name: "expenseId"), targetEntity: nil),
+      FilterDescriptor(columnId: "expenseId", urlKey: "expenseId", kind: .idMulti, placeholder: "Filter by related expenses id...", label: nil, options: nil, wire: .param(name: "expenseId"), targetEntity: .expense),
       FilterDescriptor(columnId: "expensePresenceFilter", urlKey: "expensePresenceFilter", kind: .presence, placeholder: "Filter related expenses presence...", label: nil, options: nil, wire: .param(name: "expensePresenceFilter"), targetEntity: nil),
       FilterDescriptor(columnId: "related:project.taskProducts", urlKey: "related-taskProduct", kind: .text, placeholder: "Search related task products...", label: nil, options: nil, wire: .param(name: "taskProductSearch"), targetEntity: nil),
-      FilterDescriptor(columnId: "taskProductId", urlKey: "taskProductId", kind: .idMulti, placeholder: "Filter by related task products id...", label: nil, options: nil, wire: .param(name: "taskProductId"), targetEntity: nil),
+      FilterDescriptor(columnId: "taskProductId", urlKey: "taskProductId", kind: .idMulti, placeholder: "Filter by related task products id...", label: nil, options: nil, wire: .param(name: "taskProductId"), targetEntity: .product),
       FilterDescriptor(columnId: "taskProductPresenceFilter", urlKey: "taskProductPresenceFilter", kind: .presence, placeholder: "Filter related task products presence...", label: nil, options: nil, wire: .param(name: "taskProductPresenceFilter"), targetEntity: nil),
       FilterDescriptor(columnId: "related:project.purchasedProducts", urlKey: "related-purchasedProduct", kind: .text, placeholder: "Search related purchased products...", label: nil, options: nil, wire: .param(name: "purchasedProductSearch"), targetEntity: nil),
-      FilterDescriptor(columnId: "purchasedProductId", urlKey: "purchasedProductId", kind: .idMulti, placeholder: "Filter by related purchased products id...", label: nil, options: nil, wire: .param(name: "purchasedProductId"), targetEntity: nil),
+      FilterDescriptor(columnId: "purchasedProductId", urlKey: "purchasedProductId", kind: .idMulti, placeholder: "Filter by related purchased products id...", label: nil, options: nil, wire: .param(name: "purchasedProductId"), targetEntity: .product),
       FilterDescriptor(columnId: "purchasedProductPresenceFilter", urlKey: "purchasedProductPresenceFilter", kind: .presence, placeholder: "Filter related purchased products presence...", label: nil, options: nil, wire: .param(name: "purchasedProductPresenceFilter"), targetEntity: nil),
       FilterDescriptor(columnId: "related:project.usedTools", urlKey: "related-usedTool", kind: .text, placeholder: "Search related reusable resources...", label: nil, options: nil, wire: .param(name: "usedToolSearch"), targetEntity: nil),
       FilterDescriptor(columnId: "usedToolId", urlKey: "usedToolId", kind: .idMulti, placeholder: "Filter by related reusable resources id...", label: nil, options: nil, wire: .param(name: "usedToolId"), targetEntity: .product),
@@ -1386,16 +1411,16 @@ public enum EntityCatalog {
       detailSections: [
         DetailSection(id: "project.budget", title: "Budget", placement: .primary, collapsed: false, explanationField: nil, kind: .slot),
         DetailSection(id: "project.contribution", title: "Contribution", placement: .supporting, collapsed: false, explanationField: nil, kind: .slot),
-        DetailSection(id: "tasks", title: "Tasks", placement: .primary, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "tasks", filterDescriptor: "project", prefill: nil, columns: ["name", "status", "dueDate", "trade"], sort: nil, limit: nil, hideWhenEmpty: false))),
+        DetailSection(id: "tasks", title: "Tasks", placement: .primary, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "tasks", filterDescriptor: "project", prefill: nil, columns: ["name", "status", "dueDate", "trade"], sort: nil, limit: nil, hideWhenEmpty: false, collapseWhenEmpty: false))),
         DetailSection(id: "overview", title: "Overview", placement: .supporting, collapsed: false, explanationField: nil, kind: .fields(["name", "icon", "status", "kind", "startDate", "endDate", "costEstimate", "parentProjectId", "locations", "defaultTrade", "updatedAt"])),
-        DetailSection(id: "reusable-resources", title: "Reusable resources", placement: .primary, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "resources", filterDescriptor: "usedOnProjectId", prefill: nil, columns: ["name", "manufacturer", "category"], sort: nil, limit: nil, hideWhenEmpty: false))),
+        DetailSection(id: "reusable-resources", title: "Reusable resources", placement: .primary, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "resources", filterDescriptor: "usedOnProjectId", prefill: nil, columns: ["name", "manufacturer", "category"], sort: nil, limit: nil, hideWhenEmpty: false, collapseWhenEmpty: false))),
         DetailSection(id: "resources", title: "Resources", placement: .supporting, collapsed: false, explanationField: nil, kind: .fields(["googleDriveFolderUrl", "notionPageUrl"])),
         DetailSection(id: "dependencies", title: "Dependencies", placement: .supporting, collapsed: false, explanationField: nil, kind: .fields(["blockedByIds", "blockingIds"])),
-        DetailSection(id: "sub-projects", title: "Sub-projects", placement: .primary, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "sub-projects", filterDescriptor: "parent", prefill: nil, columns: ["name", "status", "kind", "costEstimate"], sort: nil, limit: nil, hideWhenEmpty: false))),
-        DetailSection(id: "expenses", title: "Expenses", placement: .primary, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "expenses", filterDescriptor: "project", prefill: nil, columns: ["name", "cost", "date", "costType", "trade", "product"], sort: SectionSort(field: "date", direction: .desc), limit: nil, hideWhenEmpty: false))),
-        DetailSection(id: "purchases", title: "Purchases", placement: .primary, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "purchases", filterDescriptor: "related:purchase.projects", prefill: nil, columns: ["vendor", "displayLabel", "date", "statedTotal"], sort: SectionSort(field: "date", direction: .desc), limit: nil, hideWhenEmpty: false))),
-        DetailSection(id: "purchased-products", title: "Purchased products", placement: .primary, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "purchased-products", filterDescriptor: "related:product.projects", prefill: nil, columns: ["name", "manufacturer", "category", "expenseTotal"], sort: nil, limit: nil, hideWhenEmpty: false))),
-        DetailSection(id: "vendors", title: "Vendors", placement: .primary, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "vendors", filterDescriptor: "projectId", prefill: nil, columns: ["name", "purchaseCount", "spend"], sort: nil, limit: nil, hideWhenEmpty: false))),
+        DetailSection(id: "sub-projects", title: "Sub-projects", placement: .primary, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "sub-projects", filterDescriptor: "parent", prefill: nil, columns: ["name", "status", "kind", "costEstimate"], sort: nil, limit: nil, hideWhenEmpty: false, collapseWhenEmpty: false))),
+        DetailSection(id: "expenses", title: "Expenses", placement: .primary, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "expenses", filterDescriptor: "project", prefill: nil, columns: ["name", "cost", "date", "costType", "trade", "product"], sort: SectionSort(field: "date", direction: .desc), limit: nil, hideWhenEmpty: false, collapseWhenEmpty: false))),
+        DetailSection(id: "purchases", title: "Purchases", placement: .primary, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "purchases", filterDescriptor: "related:purchase.projects", prefill: nil, columns: ["vendor", "displayLabel", "date", "statedTotal"], sort: SectionSort(field: "date", direction: .desc), limit: nil, hideWhenEmpty: false, collapseWhenEmpty: false))),
+        DetailSection(id: "purchased-products", title: "Purchased products", placement: .primary, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "purchased-products", filterDescriptor: "related:product.projects", prefill: nil, columns: ["name", "manufacturer", "category", "expenseTotal"], sort: nil, limit: nil, hideWhenEmpty: false, collapseWhenEmpty: false))),
+        DetailSection(id: "vendors", title: "Vendors", placement: .primary, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "vendors", filterDescriptor: "projectId", prefill: nil, columns: ["name", "purchaseCount", "spend"], sort: nil, limit: nil, hideWhenEmpty: false, collapseWhenEmpty: false))),
         DetailSection(id: "notes", title: "Notes", placement: .supporting, collapsed: false, explanationField: nil, kind: .fields(["notes"])),
         DetailSection(id: "project.analytics", title: "Analytics", placement: .full, collapsed: true, explanationField: nil, kind: .slot)
       ],
@@ -1469,10 +1494,10 @@ public enum EntityCatalog {
       FilterDescriptor(columnId: "subjectProduct", urlKey: "subjectProduct", kind: .idMulti, placeholder: "Filter by product...", label: nil, options: nil, wire: .param(name: "subjectProductId"), targetEntity: .product),
       FilterDescriptor(columnId: "parentTask", urlKey: "parentTask", kind: .idMulti, placeholder: "Filter by parent task...", label: nil, options: nil, wire: .param(name: "parentTaskId"), targetEntity: .task),
       FilterDescriptor(columnId: "related:task.blockedBy", urlKey: "related-blockedByTask", kind: .text, placeholder: "Search related blocked by...", label: nil, options: nil, wire: .param(name: "blockedByTaskSearch"), targetEntity: nil),
-      FilterDescriptor(columnId: "blockedByTaskId", urlKey: "blockedByTaskId", kind: .idMulti, placeholder: "Filter by related blocked by id...", label: nil, options: nil, wire: .param(name: "blockedByTaskId"), targetEntity: nil),
+      FilterDescriptor(columnId: "blockedByTaskId", urlKey: "blockedByTaskId", kind: .idMulti, placeholder: "Filter by related blocked by id...", label: nil, options: nil, wire: .param(name: "blockedByTaskId"), targetEntity: .task),
       FilterDescriptor(columnId: "blockedByTaskPresenceFilter", urlKey: "blockedByTaskPresenceFilter", kind: .presence, placeholder: "Filter related blocked by presence...", label: nil, options: nil, wire: .param(name: "blockedByTaskPresenceFilter"), targetEntity: nil),
       FilterDescriptor(columnId: "related:task.parent", urlKey: "related-parentTask", kind: .text, placeholder: "Search related parent task...", label: nil, options: nil, wire: .param(name: "parentTaskSearch"), targetEntity: nil),
-      FilterDescriptor(columnId: "parentTaskId", urlKey: "parentTaskId", kind: .idMulti, placeholder: "Filter by related parent task id...", label: nil, options: nil, wire: .param(name: "parentTaskId"), targetEntity: nil),
+      FilterDescriptor(columnId: "parentTaskId", urlKey: "parentTaskId", kind: .idMulti, placeholder: "Filter by related parent task id...", label: nil, options: nil, wire: .param(name: "parentTaskId"), targetEntity: .task),
       FilterDescriptor(columnId: "parentTaskPresenceFilter", urlKey: "parentTaskPresenceFilter", kind: .presence, placeholder: "Filter related parent task presence...", label: nil, options: nil, wire: .param(name: "parentTaskPresenceFilter"), targetEntity: nil),
       FilterDescriptor(columnId: "dataQuality", urlKey: "dataQuality", kind: .select, placeholder: "Filter data quality...", label: nil, options: [LabeledOption(value: "complete", label: "Complete"), LabeledOption(value: "needs_data", label: "Needs data"), LabeledOption(value: "defect", label: "Defect")], wire: .param(name: "dataStatus"), targetEntity: nil),
       FilterDescriptor(columnId: "dataGaps", urlKey: "dataGaps", kind: .multiselect, placeholder: "Filter data gaps...", label: nil, options: [LabeledOption(value: "task_due_date", label: "Due date"), LabeledOption(value: "task_trade", label: "Trade")], wire: .param(name: "dataGap"), targetEntity: nil),
@@ -1485,7 +1510,8 @@ public enum EntityCatalog {
       RelationDescriptor(key: "subject", label: "Subject product", target: .product, cardinality: .one),
       RelationDescriptor(key: "parent", label: "Parent task", target: .task, cardinality: .one),
       RelationDescriptor(key: "blocked-by", label: "Blocked by", target: .task, cardinality: .many),
-      RelationDescriptor(key: "images", label: "Images", target: .image, cardinality: .many)
+      RelationDescriptor(key: "images", label: "Images", target: .image, cardinality: .many),
+      RelationDescriptor(key: "plantings", label: "Plantings", target: .planting, cardinality: .many)
     ],
     presentation: EntityPresentation(
       detailVariant: .standard,
@@ -1497,7 +1523,8 @@ public enum EntityCatalog {
       detailSections: [
         DetailSection(id: "overview", title: "Overview", placement: .supporting, collapsed: false, explanationField: nil, kind: .fields(["name", "status", "trade", "dueDate", "dueEndDate", "projectId", "subjectProductId", "parentTaskId"])),
         DetailSection(id: "dependencies", title: "Dependencies", placement: .supporting, collapsed: false, explanationField: nil, kind: .fields(["blockedByIds", "blockingIds"])),
-        DetailSection(id: "subtasks", title: "Subtasks", placement: .primary, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "subtasks", filterDescriptor: "parentTask", prefill: nil, columns: ["name", "status", "dueDate"], sort: nil, limit: nil, hideWhenEmpty: false)))
+        DetailSection(id: "subtasks", title: "Subtasks", placement: .primary, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "subtasks", filterDescriptor: "parentTask", prefill: nil, columns: ["name", "status", "dueDate"], sort: nil, limit: nil, hideWhenEmpty: false, collapseWhenEmpty: false))),
+        DetailSection(id: "plantings", title: "Plantings", placement: .primary, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "plantings", filterDescriptor: "taskId", prefill: nil, columns: nil, sort: nil, limit: nil, hideWhenEmpty: false, collapseWhenEmpty: true)))
       ],
       listViews: [.table, .slot(id: "task.agenda", label: "Next", searchKeys: []), .slot(id: "task.board", label: "Board", searchKeys: ["cols", "lane", "q"]), .timeline, .shelf],
       shelfSubtitle: ["status"],
@@ -1554,10 +1581,10 @@ public enum EntityCatalog {
       FilterDescriptor(columnId: "latestPurchaseDate", urlKey: "latestPurchaseDate", kind: .range, placeholder: "Filter latest purchase...", label: nil, options: [LabeledOption(value: "has", label: "Has purchase"), LabeledOption(value: "none", label: "(none)"), LabeledOption(value: "30d", label: "Last 30 days"), LabeledOption(value: "90d", label: "Last 90 days"), LabeledOption(value: "ytd", label: "Year to date"), LabeledOption(value: "1y", label: "Last 12 months")], wire: .range(from: "latestPurchaseDateFrom", to: "latestPurchaseDateTo", presence: nil), targetEntity: nil),
       FilterDescriptor(columnId: "logo", urlKey: "logo", kind: .presence, placeholder: "Filter logos...", label: nil, options: [LabeledOption(value: "has", label: "Has logo"), LabeledOption(value: "none", label: "(none)")], wire: .param(name: "logoPresenceFilter"), targetEntity: nil),
       FilterDescriptor(columnId: "related:vendor.expenses", urlKey: "related-expense", kind: .text, placeholder: "Search related recent expenses...", label: nil, options: nil, wire: .param(name: "expenseSearch"), targetEntity: nil),
-      FilterDescriptor(columnId: "expenseId", urlKey: "expenseId", kind: .idMulti, placeholder: "Filter by related recent expenses id...", label: nil, options: nil, wire: .param(name: "expenseId"), targetEntity: nil),
+      FilterDescriptor(columnId: "expenseId", urlKey: "expenseId", kind: .idMulti, placeholder: "Filter by related recent expenses id...", label: nil, options: nil, wire: .param(name: "expenseId"), targetEntity: .expense),
       FilterDescriptor(columnId: "expensePresenceFilter", urlKey: "expensePresenceFilter", kind: .presence, placeholder: "Filter related recent expenses presence...", label: nil, options: nil, wire: .param(name: "expensePresenceFilter"), targetEntity: nil),
       FilterDescriptor(columnId: "related:vendor.purchases", urlKey: "related-purchase", kind: .text, placeholder: "Search related purchases...", label: nil, options: nil, wire: .param(name: "purchaseSearch"), targetEntity: nil),
-      FilterDescriptor(columnId: "purchaseId", urlKey: "purchaseId", kind: .idMulti, placeholder: "Filter by related purchases id...", label: nil, options: nil, wire: .param(name: "purchaseId"), targetEntity: nil),
+      FilterDescriptor(columnId: "purchaseId", urlKey: "purchaseId", kind: .idMulti, placeholder: "Filter by related purchases id...", label: nil, options: nil, wire: .param(name: "purchaseId"), targetEntity: .purchase),
       FilterDescriptor(columnId: "purchasePresenceFilter", urlKey: "purchasePresenceFilter", kind: .presence, placeholder: "Filter related purchases presence...", label: nil, options: nil, wire: .param(name: "purchasePresenceFilter"), targetEntity: nil),
       FilterDescriptor(columnId: "related:vendor.products", urlKey: "related-product", kind: .text, placeholder: "Search related products...", label: nil, options: nil, wire: .param(name: "productSearch"), targetEntity: nil),
       FilterDescriptor(columnId: "productId", urlKey: "productId", kind: .idMulti, placeholder: "Filter by related products id...", label: nil, options: nil, wire: .param(name: "productId"), targetEntity: .product),
@@ -1566,8 +1593,9 @@ public enum EntityCatalog {
       FilterDescriptor(columnId: "projectId", urlKey: "projectId", kind: .idMulti, placeholder: "Filter by related projects id...", label: nil, options: nil, wire: .param(name: "projectId"), targetEntity: .project),
       FilterDescriptor(columnId: "projectPresenceFilter", urlKey: "projectPresenceFilter", kind: .presence, placeholder: "Filter related projects presence...", label: nil, options: nil, wire: .param(name: "projectPresenceFilter"), targetEntity: nil),
       FilterDescriptor(columnId: "related:vendor.transactions", urlKey: "related-financialTransaction", kind: .text, placeholder: "Search related financial transactions...", label: nil, options: nil, wire: .param(name: "financialTransactionSearch"), targetEntity: nil),
-      FilterDescriptor(columnId: "financialTransactionId", urlKey: "financialTransactionId", kind: .idMulti, placeholder: "Filter by related financial transactions id...", label: nil, options: nil, wire: .param(name: "financialTransactionId"), targetEntity: nil),
+      FilterDescriptor(columnId: "financialTransactionId", urlKey: "financialTransactionId", kind: .idMulti, placeholder: "Filter by related financial transactions id...", label: nil, options: nil, wire: .param(name: "financialTransactionId"), targetEntity: .financialTransaction),
       FilterDescriptor(columnId: "financialTransactionPresenceFilter", urlKey: "financialTransactionPresenceFilter", kind: .presence, placeholder: "Filter related financial transactions presence...", label: nil, options: nil, wire: .param(name: "financialTransactionPresenceFilter"), targetEntity: nil),
+      FilterDescriptor(columnId: "logoImageId", urlKey: "logoImageId", kind: .idMulti, placeholder: "Filter by image...", label: nil, options: nil, wire: .param(name: "logoImageId"), targetEntity: .image),
       FilterDescriptor(columnId: "dataQuality", urlKey: "dataQuality", kind: .select, placeholder: "Filter data quality...", label: nil, options: [LabeledOption(value: "complete", label: "Complete"), LabeledOption(value: "needs_data", label: "Needs data"), LabeledOption(value: "defect", label: "Defect")], wire: .param(name: "dataStatus"), targetEntity: nil),
       FilterDescriptor(columnId: "dataGaps", urlKey: "dataGaps", kind: .multiselect, placeholder: "Filter data gaps...", label: nil, options: [LabeledOption(value: "vendor_order_evidence", label: "Order evidence"), LabeledOption(value: "vendor_logo", label: "Logo"), LabeledOption(value: "vendor_website", label: "Website")], wire: .param(name: "dataGap"), targetEntity: nil),
       FilterDescriptor(columnId: "createdAt", urlKey: "createdAt", kind: .range, placeholder: "Filter by created date...", label: nil, options: [LabeledOption(value: "30d", label: "Last 30 days"), LabeledOption(value: "90d", label: "Last 90 days"), LabeledOption(value: "ytd", label: "Year to date"), LabeledOption(value: "1y", label: "Last 12 months")], wire: .range(from: "createdFrom", to: "createdTo", presence: nil), targetEntity: nil),
@@ -1579,7 +1607,9 @@ public enum EntityCatalog {
       RelationDescriptor(key: "purchases", label: "Purchases", target: .purchase, cardinality: .many),
       RelationDescriptor(key: "products", label: "Products", target: .product, cardinality: .many),
       RelationDescriptor(key: "projects", label: "Projects", target: .project, cardinality: .many),
-      RelationDescriptor(key: "transactions", label: "Financial transactions", target: .financialTransaction, cardinality: .many)
+      RelationDescriptor(key: "transactions", label: "Financial transactions", target: .financialTransaction, cardinality: .many),
+      RelationDescriptor(key: "vendor-accounts", label: "Vendor accounts", target: .vendorAccount, cardinality: .many),
+      RelationDescriptor(key: "runs", label: "Runs", target: .importRun, cardinality: .many)
     ],
     presentation: EntityPresentation(
       detailVariant: .standard,
@@ -1590,10 +1620,12 @@ public enum EntityCatalog {
       heroActions: ["edit"],
       detailSections: [
         DetailSection(id: "overview", title: "Overview", placement: .supporting, collapsed: false, explanationField: nil, kind: .fields(["name", "website", "orderUrlTemplate", "orderEvidence", "orderEmailSenders", "browserDomains", "returnWindowDays", "agentHints", "notes", "purchaseCount", "spend", "latestPurchaseDate", "createdAt", "updatedAt"])),
-        DetailSection(id: "purchases", title: "Purchases", placement: .primary, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "purchases", filterDescriptor: "vendor", prefill: nil, columns: ["displayLabel", "orderId", "date", "statedTotal", "expenseCount"], sort: SectionSort(field: "date", direction: .desc), limit: nil, hideWhenEmpty: false))),
-        DetailSection(id: "purchased-products", title: "Purchased products", placement: .primary, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "products", filterDescriptor: "related:product.vendors", prefill: nil, columns: ["name", "manufacturer", "category", "expenseTotal"], sort: nil, limit: nil, hideWhenEmpty: false))),
-        DetailSection(id: "projects", title: "Projects", placement: .primary, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "projects", filterDescriptor: "vendorId", prefill: nil, columns: ["name", "status", "kind"], sort: nil, limit: nil, hideWhenEmpty: false))),
-        DetailSection(id: "expenses", title: "Expenses", placement: .primary, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "expenses", filterDescriptor: "vendor", prefill: nil, columns: ["name", "cost", "date", "project"], sort: SectionSort(field: "date", direction: .desc), limit: nil, hideWhenEmpty: false)))
+        DetailSection(id: "purchases", title: "Purchases", placement: .primary, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "purchases", filterDescriptor: "vendor", prefill: nil, columns: ["displayLabel", "orderId", "date", "statedTotal", "expenseCount"], sort: SectionSort(field: "date", direction: .desc), limit: nil, hideWhenEmpty: false, collapseWhenEmpty: false))),
+        DetailSection(id: "purchased-products", title: "Purchased products", placement: .primary, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "products", filterDescriptor: "related:product.vendors", prefill: nil, columns: ["name", "manufacturer", "category", "expenseTotal"], sort: nil, limit: nil, hideWhenEmpty: false, collapseWhenEmpty: false))),
+        DetailSection(id: "projects", title: "Projects", placement: .primary, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "projects", filterDescriptor: "vendorId", prefill: nil, columns: ["name", "status", "kind"], sort: nil, limit: nil, hideWhenEmpty: false, collapseWhenEmpty: false))),
+        DetailSection(id: "expenses", title: "Expenses", placement: .primary, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "expenses", filterDescriptor: "vendor", prefill: nil, columns: ["name", "cost", "date", "project"], sort: SectionSort(field: "date", direction: .desc), limit: nil, hideWhenEmpty: false, collapseWhenEmpty: false))),
+        DetailSection(id: "transactions", title: "Financial transactions", placement: .primary, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "transactions", filterDescriptor: "vendorId", prefill: nil, columns: nil, sort: nil, limit: nil, hideWhenEmpty: false, collapseWhenEmpty: true))),
+        DetailSection(id: "vendor-accounts", title: "Vendor accounts", placement: .primary, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "vendor-accounts", filterDescriptor: "vendorId", prefill: nil, columns: nil, sort: nil, limit: nil, hideWhenEmpty: false, collapseWhenEmpty: true)))
       ],
       listViews: [.table, .shelf],
       shelfSubtitle: [],
@@ -1670,10 +1702,10 @@ public enum EntityCatalog {
       FilterDescriptor(columnId: "expenseTotalMin", urlKey: "lineTotalMin", kind: .text, placeholder: "Minimum expense total...", label: nil, options: nil, wire: .param(name: "expenseTotalMin"), targetEntity: nil),
       FilterDescriptor(columnId: "expenseTotalMax", urlKey: "lineTotalMax", kind: .text, placeholder: "Maximum expense total...", label: nil, options: nil, wire: .param(name: "expenseTotalMax"), targetEntity: nil),
       FilterDescriptor(columnId: "related:purchase.expenses", urlKey: "related-expense", kind: .text, placeholder: "Search related expenses...", label: nil, options: nil, wire: .param(name: "expenseSearch"), targetEntity: nil),
-      FilterDescriptor(columnId: "expenseId", urlKey: "expenseId", kind: .idMulti, placeholder: "Filter by related expenses id...", label: nil, options: nil, wire: .param(name: "expenseId"), targetEntity: nil),
+      FilterDescriptor(columnId: "expenseId", urlKey: "expenseId", kind: .idMulti, placeholder: "Filter by related expenses id...", label: nil, options: nil, wire: .param(name: "expenseId"), targetEntity: .expense),
       FilterDescriptor(columnId: "expensePresenceFilter", urlKey: "expensePresenceFilter", kind: .presence, placeholder: "Filter related expenses presence...", label: nil, options: nil, wire: .param(name: "expensePresenceFilter"), targetEntity: nil),
       FilterDescriptor(columnId: "related:purchase.transactions", urlKey: "related-financialTransaction", kind: .text, placeholder: "Search related financial transactions...", label: nil, options: nil, wire: .param(name: "financialTransactionSearch"), targetEntity: nil),
-      FilterDescriptor(columnId: "financialTransactionId", urlKey: "financialTransactionId", kind: .idMulti, placeholder: "Filter by related financial transactions id...", label: nil, options: nil, wire: .param(name: "financialTransactionId"), targetEntity: nil),
+      FilterDescriptor(columnId: "financialTransactionId", urlKey: "financialTransactionId", kind: .idMulti, placeholder: "Filter by related financial transactions id...", label: nil, options: nil, wire: .param(name: "financialTransactionId"), targetEntity: .financialTransaction),
       FilterDescriptor(columnId: "financialTransactionPresenceFilter", urlKey: "financialTransactionPresenceFilter", kind: .presence, placeholder: "Filter related financial transactions presence...", label: nil, options: nil, wire: .param(name: "financialTransactionPresenceFilter"), targetEntity: nil),
       FilterDescriptor(columnId: "related:purchase.products", urlKey: "related-product", kind: .text, placeholder: "Search related products...", label: nil, options: nil, wire: .param(name: "productSearch"), targetEntity: nil),
       FilterDescriptor(columnId: "productId", urlKey: "productId", kind: .idMulti, placeholder: "Filter by related products id...", label: nil, options: nil, wire: .param(name: "productId"), targetEntity: .product),
@@ -1681,6 +1713,7 @@ public enum EntityCatalog {
       FilterDescriptor(columnId: "related:purchase.projects", urlKey: "related-project", kind: .idMulti, placeholder: "Filter by project...", label: nil, options: nil, wire: .param(name: "projectId"), targetEntity: .project),
       FilterDescriptor(columnId: "projectId", urlKey: "projectId", kind: .idMulti, placeholder: "Filter by project id...", label: nil, options: nil, wire: .param(name: "projectId"), targetEntity: .project),
       FilterDescriptor(columnId: "projectPresenceFilter", urlKey: "projectPresenceFilter", kind: .presence, placeholder: "Filter project presence...", label: nil, options: nil, wire: .param(name: "projectPresenceFilter"), targetEntity: nil),
+      FilterDescriptor(columnId: "vendorAccountId", urlKey: "vendorAccountId", kind: .idMulti, placeholder: "Filter by vendor account...", label: nil, options: nil, wire: .param(name: "vendorAccountId"), targetEntity: .vendorAccount),
       FilterDescriptor(columnId: "dataQuality", urlKey: "dataQuality", kind: .select, placeholder: "Filter data quality...", label: nil, options: [LabeledOption(value: "complete", label: "Complete"), LabeledOption(value: "needs_data", label: "Needs data"), LabeledOption(value: "defect", label: "Defect")], wire: .param(name: "dataStatus"), targetEntity: nil),
       FilterDescriptor(columnId: "dataGaps", urlKey: "dataGaps", kind: .multiselect, placeholder: "Filter data gaps...", label: nil, options: [LabeledOption(value: "purchase_date", label: "Missing date"), LabeledOption(value: "order_id", label: "Missing order ID"), LabeledOption(value: "stated_total", label: "Missing stated total"), LabeledOption(value: "primary_document", label: "No primary document"), LabeledOption(value: "empty_expenses", label: "No expense lines"), LabeledOption(value: "unpriced_expense", label: "Unpriced expense line"), LabeledOption(value: "paperwork_mismatch", label: "Paperwork mismatch"), LabeledOption(value: "settlement_reference", label: "No settlement evidence"), LabeledOption(value: "settlement_mismatch", label: "Settlement mismatch"), LabeledOption(value: "product_manufacturer", label: "Manufacturer"), LabeledOption(value: "product_external_id", label: "External ID"), LabeledOption(value: "product_category", label: "Category"), LabeledOption(value: "product_model", label: "Model"), LabeledOption(value: "product_price", label: "Price (stocked)"), LabeledOption(value: "product_image", label: "No image (stocked)"), LabeledOption(value: "amazon_asin", label: "Amazon ASIN"), LabeledOption(value: "product_unpurchased", label: "Not purchased"), LabeledOption(value: "duplicate_external_id", label: "Duplicate external ID")], wire: .param(name: "dataGap"), targetEntity: nil),
       FilterDescriptor(columnId: "createdAt", urlKey: "createdAt", kind: .range, placeholder: "Filter by created date...", label: nil, options: [LabeledOption(value: "30d", label: "Last 30 days"), LabeledOption(value: "90d", label: "Last 90 days"), LabeledOption(value: "ytd", label: "Year to date"), LabeledOption(value: "1y", label: "Last 12 months")], wire: .range(from: "createdFrom", to: "createdTo", presence: nil), targetEntity: nil),
@@ -1704,8 +1737,8 @@ public enum EntityCatalog {
       heroImages: true,
       heroActions: ["edit"],
       detailSections: [
-        DetailSection(id: "expenses", title: "Expenses", placement: .primary, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "expenses", filterDescriptor: "purchaseId", prefill: nil, columns: ["name", "cost", "date", "lineKind", "product", "project"], sort: nil, limit: nil, hideWhenEmpty: false))),
-        DetailSection(id: "products", title: "Products", placement: .primary, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "products", filterDescriptor: "related:product.purchases", prefill: nil, columns: ["name", "manufacturer", "category", "price"], sort: nil, limit: nil, hideWhenEmpty: false))),
+        DetailSection(id: "expenses", title: "Expenses", placement: .primary, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "expenses", filterDescriptor: "purchaseId", prefill: nil, columns: ["name", "cost", "date", "lineKind", "product", "project"], sort: nil, limit: nil, hideWhenEmpty: false, collapseWhenEmpty: false))),
+        DetailSection(id: "products", title: "Products", placement: .primary, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "products", filterDescriptor: "related:product.purchases", prefill: nil, columns: ["name", "manufacturer", "category", "price"], sort: nil, limit: nil, hideWhenEmpty: false, collapseWhenEmpty: false))),
         DetailSection(id: "purchase.project-allocation", title: "Project allocation", placement: .primary, collapsed: false, explanationField: nil, kind: .slot),
         DetailSection(id: "purchase.import-runs", title: "Import runs", placement: .primary, collapsed: false, explanationField: nil, kind: .slot),
         DetailSection(id: "overview", title: "Overview", placement: .supporting, collapsed: false, explanationField: nil, kind: .fields(["vendorId", "vendorAccountId", "defaultProjectId", "defaultTrade", "orderId", "displayLabel", "date", "statedTotal", "notes"])),
@@ -1766,13 +1799,13 @@ public enum EntityCatalog {
       FilterDescriptor(columnId: "source", urlKey: "source", kind: .multiselect, placeholder: "Filter by source...", label: nil, options: nil, wire: .param(name: "source"), targetEntity: nil),
       FilterDescriptor(columnId: "externalAccountId", urlKey: "externalAccountId", kind: .multiselect, placeholder: "Filter by external account id...", label: nil, options: nil, wire: .param(name: "externalAccountId"), targetEntity: nil),
       FilterDescriptor(columnId: "related:financialAccount.transactions", urlKey: "related-financialTransaction", kind: .text, placeholder: "Search related transactions...", label: nil, options: nil, wire: .param(name: "financialTransactionSearch"), targetEntity: nil),
-      FilterDescriptor(columnId: "financialTransactionId", urlKey: "financialTransactionId", kind: .idMulti, placeholder: "Filter by related transactions id...", label: nil, options: nil, wire: .param(name: "financialTransactionId"), targetEntity: nil),
+      FilterDescriptor(columnId: "financialTransactionId", urlKey: "financialTransactionId", kind: .idMulti, placeholder: "Filter by related transactions id...", label: nil, options: nil, wire: .param(name: "financialTransactionId"), targetEntity: .financialTransaction),
       FilterDescriptor(columnId: "financialTransactionPresenceFilter", urlKey: "financialTransactionPresenceFilter", kind: .presence, placeholder: "Filter related transactions presence...", label: nil, options: nil, wire: .param(name: "financialTransactionPresenceFilter"), targetEntity: nil),
       FilterDescriptor(columnId: "related:financialAccount.purchases", urlKey: "related-purchase", kind: .text, placeholder: "Search related purchases...", label: nil, options: nil, wire: .param(name: "purchaseSearch"), targetEntity: nil),
-      FilterDescriptor(columnId: "purchaseId", urlKey: "purchaseId", kind: .idMulti, placeholder: "Filter by related purchases id...", label: nil, options: nil, wire: .param(name: "purchaseId"), targetEntity: nil),
+      FilterDescriptor(columnId: "purchaseId", urlKey: "purchaseId", kind: .idMulti, placeholder: "Filter by related purchases id...", label: nil, options: nil, wire: .param(name: "purchaseId"), targetEntity: .purchase),
       FilterDescriptor(columnId: "purchasePresenceFilter", urlKey: "purchasePresenceFilter", kind: .presence, placeholder: "Filter related purchases presence...", label: nil, options: nil, wire: .param(name: "purchasePresenceFilter"), targetEntity: nil),
       FilterDescriptor(columnId: "related:financialAccount.vendors", urlKey: "related-vendor", kind: .text, placeholder: "Search related vendors...", label: nil, options: nil, wire: .param(name: "vendorSearch"), targetEntity: nil),
-      FilterDescriptor(columnId: "vendorId", urlKey: "vendorId", kind: .idMulti, placeholder: "Filter by related vendors id...", label: nil, options: nil, wire: .param(name: "vendorId"), targetEntity: nil),
+      FilterDescriptor(columnId: "vendorId", urlKey: "vendorId", kind: .idMulti, placeholder: "Filter by related vendors id...", label: nil, options: nil, wire: .param(name: "vendorId"), targetEntity: .vendor),
       FilterDescriptor(columnId: "vendorPresenceFilter", urlKey: "vendorPresenceFilter", kind: .presence, placeholder: "Filter related vendors presence...", label: nil, options: nil, wire: .param(name: "vendorPresenceFilter"), targetEntity: nil),
       FilterDescriptor(columnId: "dataQuality", urlKey: "dataQuality", kind: .select, placeholder: "Filter data quality...", label: nil, options: [LabeledOption(value: "complete", label: "Complete"), LabeledOption(value: "needs_data", label: "Needs data"), LabeledOption(value: "defect", label: "Defect")], wire: .param(name: "dataStatus"), targetEntity: nil),
       FilterDescriptor(columnId: "dataGaps", urlKey: "dataGaps", kind: .multiselect, placeholder: "Filter data gaps...", label: nil, options: [LabeledOption(value: "financial_account_ledger_party", label: "Ledger party"), LabeledOption(value: "financial_account_confirmed", label: "Confirmed")], wire: .param(name: "dataGap"), targetEntity: nil),
@@ -1794,7 +1827,7 @@ public enum EntityCatalog {
       heroActions: ["edit"],
       detailSections: [
         DetailSection(id: "overview", title: "Overview", placement: .supporting, collapsed: false, explanationField: nil, kind: .fields(["name", "identity", "provisional", "sourceAliases", "cardNumbers", "ledgerPartyId", "inventoryOwnerDefaultEnabled", "notes", "transactionCount", "createdAt", "updatedAt"])),
-        DetailSection(id: "transactions", title: "Transactions", placement: .primary, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "transactions", filterDescriptor: "accountId", prefill: nil, columns: ["merchant", "amount", "kind", "status", "postedDate"], sort: SectionSort(field: "postedDate", direction: .desc), limit: nil, hideWhenEmpty: false)))
+        DetailSection(id: "transactions", title: "Transactions", placement: .primary, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "transactions", filterDescriptor: "accountId", prefill: nil, columns: ["merchant", "amount", "kind", "status", "postedDate"], sort: SectionSort(field: "postedDate", direction: .desc), limit: nil, hideWhenEmpty: false, collapseWhenEmpty: false)))
       ],
       listViews: [.table, .shelf],
       shelfSubtitle: [],
@@ -1868,14 +1901,15 @@ public enum EntityCatalog {
       FilterDescriptor(columnId: "postedDateFrom", urlKey: "postedDateFrom", kind: .text, placeholder: "Posted date from...", label: nil, options: nil, wire: .param(name: "postedDateFrom"), targetEntity: nil),
       FilterDescriptor(columnId: "postedDateTo", urlKey: "postedDateTo", kind: .text, placeholder: "Posted date to...", label: nil, options: nil, wire: .param(name: "postedDateTo"), targetEntity: nil),
       FilterDescriptor(columnId: "related:financialTransaction.vendor", urlKey: "related-vendor", kind: .text, placeholder: "Search related vendor...", label: nil, options: nil, wire: .param(name: "vendorSearch"), targetEntity: nil),
-      FilterDescriptor(columnId: "vendorId", urlKey: "vendorId", kind: .idMulti, placeholder: "Filter by related vendor id...", label: nil, options: nil, wire: .param(name: "vendorId"), targetEntity: nil),
+      FilterDescriptor(columnId: "vendorId", urlKey: "vendorId", kind: .idMulti, placeholder: "Filter by related vendor id...", label: nil, options: nil, wire: .param(name: "vendorId"), targetEntity: .vendor),
       FilterDescriptor(columnId: "vendorPresenceFilter", urlKey: "vendorPresenceFilter", kind: .presence, placeholder: "Filter related vendor presence...", label: nil, options: nil, wire: .param(name: "vendorPresenceFilter"), targetEntity: nil),
       FilterDescriptor(columnId: "related:financialTransaction.expenses", urlKey: "related-expense", kind: .text, placeholder: "Search related expenses...", label: nil, options: nil, wire: .param(name: "expenseSearch"), targetEntity: nil),
-      FilterDescriptor(columnId: "expenseId", urlKey: "expenseId", kind: .idMulti, placeholder: "Filter by related expenses id...", label: nil, options: nil, wire: .param(name: "expenseId"), targetEntity: nil),
+      FilterDescriptor(columnId: "expenseId", urlKey: "expenseId", kind: .idMulti, placeholder: "Filter by related expenses id...", label: nil, options: nil, wire: .param(name: "expenseId"), targetEntity: .expense),
       FilterDescriptor(columnId: "expensePresenceFilter", urlKey: "expensePresenceFilter", kind: .presence, placeholder: "Filter related expenses presence...", label: nil, options: nil, wire: .param(name: "expensePresenceFilter"), targetEntity: nil),
       FilterDescriptor(columnId: "related:financialTransaction.products", urlKey: "related-product", kind: .text, placeholder: "Search related products...", label: nil, options: nil, wire: .param(name: "productSearch"), targetEntity: nil),
-      FilterDescriptor(columnId: "productId", urlKey: "productId", kind: .idMulti, placeholder: "Filter by related products id...", label: nil, options: nil, wire: .param(name: "productId"), targetEntity: nil),
+      FilterDescriptor(columnId: "productId", urlKey: "productId", kind: .idMulti, placeholder: "Filter by related products id...", label: nil, options: nil, wire: .param(name: "productId"), targetEntity: .product),
       FilterDescriptor(columnId: "productPresenceFilter", urlKey: "productPresenceFilter", kind: .presence, placeholder: "Filter related products presence...", label: nil, options: nil, wire: .param(name: "productPresenceFilter"), targetEntity: nil),
+      FilterDescriptor(columnId: "ledgerTransferId", urlKey: "ledgerTransferId", kind: .idMulti, placeholder: "Filter by ledger transfer...", label: nil, options: nil, wire: .param(name: "ledgerTransferId"), targetEntity: .ledgerTransfer),
       FilterDescriptor(columnId: "dataQuality", urlKey: "dataQuality", kind: .select, placeholder: "Filter data quality...", label: nil, options: [LabeledOption(value: "complete", label: "Complete"), LabeledOption(value: "needs_data", label: "Needs data"), LabeledOption(value: "defect", label: "Defect")], wire: .param(name: "dataStatus"), targetEntity: nil),
       FilterDescriptor(columnId: "dataGaps", urlKey: "dataGaps", kind: .multiselect, placeholder: "Filter data gaps...", label: nil, options: [LabeledOption(value: "financial_transaction_allocation", label: "Allocation"), LabeledOption(value: "financial_transaction_merchant", label: "Merchant")], wire: .param(name: "dataGap"), targetEntity: nil),
       FilterDescriptor(columnId: "createdAt", urlKey: "createdAt", kind: .range, placeholder: "Filter by created date...", label: nil, options: [LabeledOption(value: "30d", label: "Last 30 days"), LabeledOption(value: "90d", label: "Last 90 days"), LabeledOption(value: "ytd", label: "Year to date"), LabeledOption(value: "1y", label: "Last 12 months")], wire: .range(from: "createdFrom", to: "createdTo", presence: nil), targetEntity: nil),
@@ -1898,7 +1932,9 @@ public enum EntityCatalog {
       heroActions: ["edit"],
       detailSections: [
         DetailSection(id: "overview", title: "Overview", placement: .supporting, collapsed: false, explanationField: nil, kind: .fields(["merchant", "vendorInference", "amount", "kind", "status", "accountId", "allocations", "postedDate", "sourceRefs"])),
-        DetailSection(id: "expenses", title: "Expenses", placement: .primary, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "expenses", filterDescriptor: "financialTransactionId", prefill: nil, columns: ["name", "cost", "date", "product", "project"], sort: nil, limit: nil, hideWhenEmpty: false)))
+        DetailSection(id: "expenses", title: "Expenses", placement: .primary, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "expenses", filterDescriptor: "financialTransactionId", prefill: nil, columns: ["name", "cost", "date", "product", "project"], sort: nil, limit: nil, hideWhenEmpty: false, collapseWhenEmpty: false))),
+        DetailSection(id: "purchase", title: "Purchase", placement: .primary, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "purchase", filterDescriptor: "financialTransactionId", prefill: nil, columns: nil, sort: nil, limit: nil, hideWhenEmpty: false, collapseWhenEmpty: true))),
+        DetailSection(id: "vendor", title: "Vendor", placement: .primary, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "vendor", filterDescriptor: "financialTransactionId", prefill: nil, columns: nil, sort: nil, limit: nil, hideWhenEmpty: false, collapseWhenEmpty: true)))
       ],
       listViews: [.table, .shelf],
       shelfSubtitle: [],
@@ -1946,7 +1982,7 @@ public enum EntityCatalog {
       FilterDescriptor(columnId: "name", urlKey: "q", kind: .text, placeholder: "Search wishlist...", label: nil, options: nil, wire: .param(name: "search"), targetEntity: nil),
       FilterDescriptor(columnId: "acquired", urlKey: "acquired", kind: .boolean, placeholder: "Filter by status...", label: nil, options: [LabeledOption(value: "false", label: "Wanted"), LabeledOption(value: "true", label: "Acquired")], wire: .param(name: "acquired"), targetEntity: nil),
       FilterDescriptor(columnId: "related:wish.candidates", urlKey: "related-product", kind: .idMulti, placeholder: "Filter by candidate product...", label: nil, options: nil, wire: .param(name: "candidateProductId"), targetEntity: .product),
-      FilterDescriptor(columnId: "productId", urlKey: "productId", kind: .idMulti, placeholder: "Filter by candidate product id...", label: nil, options: nil, wire: .param(name: "productId"), targetEntity: nil),
+      FilterDescriptor(columnId: "productId", urlKey: "productId", kind: .idMulti, placeholder: "Filter by candidate product id...", label: nil, options: nil, wire: .param(name: "productId"), targetEntity: .product),
       FilterDescriptor(columnId: "productPresenceFilter", urlKey: "productPresenceFilter", kind: .presence, placeholder: "Filter candidate presence...", label: nil, options: nil, wire: .param(name: "productPresenceFilter"), targetEntity: nil),
       FilterDescriptor(columnId: "dataQuality", urlKey: "dataQuality", kind: .select, placeholder: "Filter data quality...", label: nil, options: [LabeledOption(value: "complete", label: "Complete"), LabeledOption(value: "needs_data", label: "Needs data"), LabeledOption(value: "defect", label: "Defect")], wire: .param(name: "dataStatus"), targetEntity: nil),
       FilterDescriptor(columnId: "dataGaps", urlKey: "dataGaps", kind: .multiselect, placeholder: "Filter data gaps...", label: nil, options: [LabeledOption(value: "wish_candidate", label: "Candidate")], wire: .param(name: "dataGap"), targetEntity: nil),
@@ -2058,6 +2094,7 @@ public enum EntityCatalog {
       FilterDescriptor(columnId: "vendor", urlKey: "vendor", kind: .idMulti, placeholder: "Filter by vendor...", label: nil, options: nil, wire: .param(name: "vendorId"), targetEntity: .vendor),
       FilterDescriptor(columnId: "orderId", urlKey: "orderId", kind: .presence, placeholder: "Filter by order id...", label: nil, options: [LabeledOption(value: "has", label: "Has order id"), LabeledOption(value: "none", label: "(none)")], wire: .param(name: "orderIdPresenceFilter"), targetEntity: nil),
       FilterDescriptor(columnId: "orderIdExact", urlKey: "order", kind: .id, placeholder: "Filter by order id...", label: nil, options: nil, wire: .param(name: "orderId"), targetEntity: nil),
+      FilterDescriptor(columnId: "ledgerPartyId", urlKey: "ledgerPartyId", kind: .idMulti, placeholder: "Filter by attributed party...", label: nil, options: nil, wire: .param(name: "ledgerPartyId"), targetEntity: .ledgerParty),
       FilterDescriptor(columnId: "purchaseId", urlKey: "purchaseId", kind: .id, placeholder: "Filter by purchase id...", label: nil, options: nil, wire: .param(name: "purchaseId"), targetEntity: .purchase),
       FilterDescriptor(columnId: "related:expense.transactions", urlKey: "related-financialTransaction", kind: .text, placeholder: "Search related purchase transactions...", label: nil, options: nil, wire: .param(name: "financialTransactionSearch"), targetEntity: nil),
       FilterDescriptor(columnId: "financialTransactionId", urlKey: "financialTransactionId", kind: .idMulti, placeholder: "Filter by related purchase transactions id...", label: nil, options: nil, wire: .param(name: "financialTransactionId"), targetEntity: .financialTransaction),
@@ -2225,7 +2262,8 @@ public enum EntityCatalog {
     ],
     relations: [
       RelationDescriptor(key: "captured-by", label: "Captured by", target: .ledgerParty, cardinality: .one),
-      RelationDescriptor(key: "sightings", label: "Sightings", target: .imageSighting, cardinality: .many)
+      RelationDescriptor(key: "sightings", label: "Sightings", target: .imageSighting, cardinality: .many),
+      RelationDescriptor(key: "vendors", label: "Vendors", target: .vendor, cardinality: .many)
     ],
     presentation: EntityPresentation(
       detailVariant: .standard,
@@ -2237,7 +2275,7 @@ public enum EntityCatalog {
       detailSections: [
         DetailSection(id: "overview", title: "Overview", placement: .supporting, collapsed: false, explanationField: nil, kind: .fields(["filename", "url", "key", "size", "contentType", "status", "width", "height", "detectedContentType", "sha256", "renderStatus", "storageStatus", "useOriginal", "source", "sourcePageUrl", "sourceAssetUrl", "sourceName", "verifiedAt", "capturedAt", "capturedAtOffsetMinutes", "captureLocation", "capturePlaceName", "captureDeviceLabel", "capturedByPartyId", "captureAttribution", "provenanceEvidence", "createdAt", "updatedAt"])),
         DetailSection(id: "image.associations", title: "Used by", placement: .primary, collapsed: false, explanationField: nil, kind: .slot),
-        DetailSection(id: "sightings", title: "Sightings", placement: .supporting, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "sightings", filterDescriptor: "imageId", prefill: nil, columns: ["ledgerPartyName", "deviceName", "capturedAt", "matchKind"], sort: nil, limit: nil, hideWhenEmpty: true)))
+        DetailSection(id: "sightings", title: "Sightings", placement: .supporting, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "sightings", filterDescriptor: "imageId", prefill: nil, columns: ["ledgerPartyName", "deviceName", "capturedAt", "matchKind"], sort: nil, limit: nil, hideWhenEmpty: true, collapseWhenEmpty: false)))
       ],
       listViews: [.table, .shelf],
       shelfSubtitle: ["contentType"],
@@ -2299,6 +2337,7 @@ public enum EntityCatalog {
       FilterDescriptor(columnId: "ingredientId", urlKey: "ingredientId", kind: .idMulti, placeholder: "Filter by crop...", label: nil, options: nil, wire: .param(name: "ingredientId"), targetEntity: .ingredient),
       FilterDescriptor(columnId: "taskId", urlKey: "taskId", kind: .idMulti, placeholder: "Filter by task...", label: nil, options: nil, wire: .param(name: "taskId"), targetEntity: .task),
       FilterDescriptor(columnId: "sourceProductId", urlKey: "sourceProductId", kind: .idMulti, placeholder: "Filter by seed source...", label: nil, options: nil, wire: .param(name: "sourceProductId"), targetEntity: .product),
+      FilterDescriptor(columnId: "gardenEntryId", urlKey: "gardenEntryId", kind: .idMulti, placeholder: "Filter by garden entry...", label: nil, options: nil, wire: .param(name: "gardenEntryId"), targetEntity: .gardenEntry),
       FilterDescriptor(columnId: "dataQuality", urlKey: "dataQuality", kind: .select, placeholder: "Filter data quality...", label: nil, options: [LabeledOption(value: "complete", label: "Complete"), LabeledOption(value: "needs_data", label: "Needs data"), LabeledOption(value: "defect", label: "Defect")], wire: .param(name: "dataStatus"), targetEntity: nil),
       FilterDescriptor(columnId: "dataGaps", urlKey: "dataGaps", kind: .multiselect, placeholder: "Filter data gaps...", label: nil, options: [LabeledOption(value: "planting_variety", label: "Variety"), LabeledOption(value: "planting_location", label: "Location")], wire: .param(name: "dataGap"), targetEntity: nil),
       FilterDescriptor(columnId: "createdAt", urlKey: "createdAt", kind: .range, placeholder: "Filter by created date...", label: nil, options: [LabeledOption(value: "30d", label: "Last 30 days"), LabeledOption(value: "90d", label: "Last 90 days"), LabeledOption(value: "ytd", label: "Year to date"), LabeledOption(value: "1y", label: "Last 12 months")], wire: .range(from: "createdFrom", to: "createdTo", presence: nil), targetEntity: nil),
@@ -2319,7 +2358,7 @@ public enum EntityCatalog {
       heroImages: false,
       heroActions: ["edit"],
       detailSections: [
-        DetailSection(id: "garden-history", title: "Journal", placement: .primary, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "entries", filterDescriptor: "journalPlantingId", prefill: RelationSectionPrefill(field: "plantingIds"), columns: ["kind", "observedOn", "locationId", "note", "harvestAmount"], sort: SectionSort(field: "observedOn", direction: .desc), limit: nil, hideWhenEmpty: false))),
+        DetailSection(id: "garden-history", title: "Journal", placement: .primary, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "entries", filterDescriptor: "journalPlantingId", prefill: RelationSectionPrefill(field: "plantingIds"), columns: ["kind", "observedOn", "locationId", "note", "harvestAmount"], sort: SectionSort(field: "observedOn", direction: .desc), limit: nil, hideWhenEmpty: false, collapseWhenEmpty: false))),
         DetailSection(id: "overview", title: "Planting details", placement: .supporting, collapsed: false, explanationField: nil, kind: .fields(["ingredientId", "variety", "status", "locationId", "sourceProductId", "quantity", "plannedWindow", "sowedOn", "transplantedOn", "finishedOn", "notes", "taskId", "guideSowWindow", "guideTransplantWindow"]))
       ],
       listViews: [.table, .timeline, .shelf],
@@ -2393,7 +2432,8 @@ public enum EntityCatalog {
       heroImages: true,
       heroActions: ["edit"],
       detailSections: [
-        DetailSection(id: "entry", title: "Entry", placement: .primary, collapsed: false, explanationField: nil, kind: .fields(["kind", "observedOn", "locationId", "plantings", "note", "harvestAmount"]))
+        DetailSection(id: "entry", title: "Entry", placement: .primary, collapsed: false, explanationField: nil, kind: .fields(["kind", "observedOn", "locationId", "plantings", "note", "harvestAmount"])),
+        DetailSection(id: "plantings", title: "Plantings", placement: .primary, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "plantings", filterDescriptor: "gardenEntryId", prefill: nil, columns: nil, sort: nil, limit: nil, hideWhenEmpty: false, collapseWhenEmpty: true)))
       ],
       listViews: [.table, .timeline, .shelf],
       shelfSubtitle: [],
@@ -2448,7 +2488,9 @@ public enum EntityCatalog {
     ],
     relations: [
       RelationDescriptor(key: "vendor", label: "Vendor", target: .vendor, cardinality: .one),
-      RelationDescriptor(key: "ledger-party", label: "Member", target: .ledgerParty, cardinality: .one)
+      RelationDescriptor(key: "ledger-party", label: "Member", target: .ledgerParty, cardinality: .one),
+      RelationDescriptor(key: "purchases", label: "Purchases", target: .purchase, cardinality: .many),
+      RelationDescriptor(key: "runs", label: "Runs", target: .importRun, cardinality: .many)
     ],
     presentation: EntityPresentation(
       detailVariant: .standard,
@@ -2458,7 +2500,8 @@ public enum EntityCatalog {
       heroImages: false,
       heroActions: ["edit"],
       detailSections: [
-        DetailSection(id: "overview", title: "Overview", placement: .supporting, collapsed: false, explanationField: nil, kind: .fields(["label", "vendorId", "ledgerPartyId", "inventoryOwnerDefaultEnabled", "status", "browser", "lastRunAt", "lastSuccessAt", "createdAt", "updatedAt"]))
+        DetailSection(id: "overview", title: "Overview", placement: .supporting, collapsed: false, explanationField: nil, kind: .fields(["label", "vendorId", "ledgerPartyId", "inventoryOwnerDefaultEnabled", "status", "browser", "lastRunAt", "lastSuccessAt", "createdAt", "updatedAt"])),
+        DetailSection(id: "purchases", title: "Purchases", placement: .primary, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "purchases", filterDescriptor: "vendorAccountId", prefill: nil, columns: nil, sort: nil, limit: nil, hideWhenEmpty: false, collapseWhenEmpty: true)))
       ],
       listViews: [.table, .shelf],
       shelfSubtitle: [],
@@ -2504,13 +2547,16 @@ public enum EntityCatalog {
     ],
     filters: [
       FilterDescriptor(columnId: "name", urlKey: "q", kind: .text, placeholder: "Search product categories...", label: nil, options: nil, wire: .param(name: "search"), targetEntity: nil),
+      FilterDescriptor(columnId: "parentId", urlKey: "parentId", kind: .idMulti, placeholder: "Filter by product category...", label: nil, options: nil, wire: .param(name: "parentId"), targetEntity: .productCategory),
       FilterDescriptor(columnId: "dataQuality", urlKey: "dataQuality", kind: .select, placeholder: "Filter data quality...", label: nil, options: [LabeledOption(value: "complete", label: "Complete"), LabeledOption(value: "needs_data", label: "Needs data"), LabeledOption(value: "defect", label: "Defect")], wire: .param(name: "dataStatus"), targetEntity: nil),
       FilterDescriptor(columnId: "dataGaps", urlKey: "dataGaps", kind: .multiselect, placeholder: "Filter data gaps...", label: nil, options: [LabeledOption(value: "category_description", label: "Description"), LabeledOption(value: "category_feature", label: "Feature")], wire: .param(name: "dataGap"), targetEntity: nil),
       FilterDescriptor(columnId: "createdAt", urlKey: "createdAt", kind: .range, placeholder: "Filter by created date...", label: nil, options: [LabeledOption(value: "30d", label: "Last 30 days"), LabeledOption(value: "90d", label: "Last 90 days"), LabeledOption(value: "ytd", label: "Year to date"), LabeledOption(value: "1y", label: "Last 12 months")], wire: .range(from: "createdFrom", to: "createdTo", presence: nil), targetEntity: nil),
       FilterDescriptor(columnId: "updatedAt", urlKey: "updatedAt", kind: .range, placeholder: "Filter by updated date...", label: nil, options: [LabeledOption(value: "30d", label: "Last 30 days"), LabeledOption(value: "90d", label: "Last 90 days"), LabeledOption(value: "ytd", label: "Year to date"), LabeledOption(value: "1y", label: "Last 12 months")], wire: .range(from: "updatedFrom", to: "updatedTo", presence: nil), targetEntity: nil)
     ],
     relations: [
-      RelationDescriptor(key: "parent", label: "Parent category", target: .productCategory, cardinality: .one)
+      RelationDescriptor(key: "parent", label: "Parent category", target: .productCategory, cardinality: .one),
+      RelationDescriptor(key: "children", label: "Subcategories", target: .productCategory, cardinality: .many),
+      RelationDescriptor(key: "products", label: "Products", target: .product, cardinality: .many)
     ],
     presentation: EntityPresentation(
       detailVariant: .standard,
@@ -2520,7 +2566,9 @@ public enum EntityCatalog {
       heroImages: false,
       heroActions: ["edit"],
       detailSections: [
-        DetailSection(id: "overview", title: "Overview", placement: .supporting, collapsed: false, explanationField: nil, kind: .fields(["name", "aliases", "description", "parentId", "sortOrder", "feature", "path", "createdAt", "updatedAt"]))
+        DetailSection(id: "overview", title: "Overview", placement: .supporting, collapsed: false, explanationField: nil, kind: .fields(["name", "aliases", "description", "parentId", "sortOrder", "feature", "path", "createdAt", "updatedAt"])),
+        DetailSection(id: "children", title: "Subcategories", placement: .primary, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "children", filterDescriptor: "parentId", prefill: nil, columns: nil, sort: nil, limit: nil, hideWhenEmpty: false, collapseWhenEmpty: true))),
+        DetailSection(id: "products", title: "Products", placement: .primary, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "products", filterDescriptor: "category", prefill: nil, columns: nil, sort: nil, limit: nil, hideWhenEmpty: false, collapseWhenEmpty: true)))
       ],
       listViews: [.table, .slot(id: "productCategory.hierarchy", label: "Hierarchy", searchKeys: []), .shelf],
       shelfSubtitle: [],
@@ -2665,6 +2713,7 @@ public enum EntityCatalog {
       FilterDescriptor(columnId: "automaticWork", urlKey: "automaticWork", kind: .boolean, placeholder: "Filter by automatic work...", label: nil, options: [LabeledOption(value: "true", label: "Automatic work on"), LabeledOption(value: "false", label: "Automatic work off")], wire: .param(name: "automaticWork"), targetEntity: nil),
       FilterDescriptor(columnId: "remotePaused", urlKey: "remotePaused", kind: .boolean, placeholder: "Filter by paused state...", label: nil, options: [LabeledOption(value: "true", label: "Paused"), LabeledOption(value: "false", label: "Not paused")], wire: .param(name: "remotePaused"), targetEntity: nil),
       FilterDescriptor(columnId: "ledgerPartyId", urlKey: "ledgerPartyId", kind: .idMulti, placeholder: "Filter by owner...", label: nil, options: nil, wire: .param(name: "ledgerPartyId"), targetEntity: .ledgerParty),
+      FilterDescriptor(columnId: "productId", urlKey: "productId", kind: .idMulti, placeholder: "Filter by product...", label: nil, options: nil, wire: .param(name: "productId"), targetEntity: .product),
       FilterDescriptor(columnId: "dataQuality", urlKey: "dataQuality", kind: .select, placeholder: "Filter data quality...", label: nil, options: [LabeledOption(value: "complete", label: "Complete"), LabeledOption(value: "needs_data", label: "Needs data"), LabeledOption(value: "defect", label: "Defect")], wire: .param(name: "dataStatus"), targetEntity: nil),
       FilterDescriptor(columnId: "dataGaps", urlKey: "dataGaps", kind: .multiselect, placeholder: "Filter data gaps...", label: nil, options: [LabeledOption(value: "device_owner_missing", label: "Owner"), LabeledOption(value: "device_stale", label: "Last seen")], wire: .param(name: "dataGap"), targetEntity: nil),
       FilterDescriptor(columnId: "createdAt", urlKey: "createdAt", kind: .range, placeholder: "Filter by created date...", label: nil, options: [LabeledOption(value: "30d", label: "Last 30 days"), LabeledOption(value: "90d", label: "Last 90 days"), LabeledOption(value: "ytd", label: "Year to date"), LabeledOption(value: "1y", label: "Last 12 months")], wire: .range(from: "createdFrom", to: "createdTo", presence: nil), targetEntity: nil),
@@ -2672,7 +2721,8 @@ public enum EntityCatalog {
     ],
     relations: [
       RelationDescriptor(key: "owner", label: "Owner", target: .ledgerParty, cardinality: .one),
-      RelationDescriptor(key: "hardware", label: "Hardware", target: .product, cardinality: .one)
+      RelationDescriptor(key: "hardware", label: "Hardware", target: .product, cardinality: .one),
+      RelationDescriptor(key: "image-sightings", label: "Image sightings", target: .imageSighting, cardinality: .many)
     ],
     presentation: EntityPresentation(
       detailVariant: .standard,
@@ -2682,7 +2732,8 @@ public enum EntityCatalog {
       heroImages: false,
       heroActions: ["edit"],
       detailSections: [
-        DetailSection(id: "overview", title: "Overview", placement: .supporting, collapsed: false, explanationField: nil, kind: .fields(["name", "platform", "appVersion", "osVersion", "lastSeenAt", "automaticWork", "remotePaused", "ledgerPartyId", "productId", "installationId", "createdAt", "updatedAt"]))
+        DetailSection(id: "overview", title: "Overview", placement: .supporting, collapsed: false, explanationField: nil, kind: .fields(["name", "platform", "appVersion", "osVersion", "lastSeenAt", "automaticWork", "remotePaused", "ledgerPartyId", "productId", "installationId", "createdAt", "updatedAt"])),
+        DetailSection(id: "image-sightings", title: "Image sightings", placement: .primary, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "image-sightings", filterDescriptor: "deviceId", prefill: nil, columns: nil, sort: nil, limit: nil, hideWhenEmpty: false, collapseWhenEmpty: true)))
       ],
       listViews: [.table, .shelf],
       shelfSubtitle: [],

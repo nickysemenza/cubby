@@ -29,6 +29,10 @@ export default defineEntity({
     },
     icons: { lucide: "ListChecks", sfSymbol: "checklist", emoji: "✅" },
     detail: {
+      omitRelations: {
+        "blocked-by":
+          "The Dependencies section edits Blocked by and Blocking in place.",
+      },
       hero: {
         chip: "status",
         actions: ["edit", "bulkEdit", "delete"],
@@ -848,6 +852,7 @@ export default defineEntity({
         columnId: "blockedByTaskId",
         kind: "idMulti",
         placeholder: "Filter by related blocked by id...",
+        brandRef: { entity: "task" },
         urlOnly: true,
       },
       {
@@ -867,6 +872,7 @@ export default defineEntity({
         columnId: "parentTaskId",
         kind: "idMulti",
         placeholder: "Filter by related parent task id...",
+        brandRef: { entity: "task" },
         urlOnly: true,
       },
       {

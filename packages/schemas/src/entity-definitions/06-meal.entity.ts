@@ -34,6 +34,15 @@ export default defineEntity({
       emoji: "🍽️",
     },
     detail: {
+      omitRelations: {
+        eaters: "The composition slot renders each eater's portions.",
+        "food-ingredients":
+          "The composition slot renders food entries with their amounts.",
+        "food-products":
+          "The composition slot renders food entries with their amounts.",
+        recipes:
+          "The composition slot renders served recipes with their portions.",
+      },
       hero: { images: true },
       sections: [
         {
@@ -543,6 +552,7 @@ export default defineEntity({
         columnId: "foodProductId",
         kind: "idMulti",
         placeholder: "Filter by related food products id...",
+        brandRef: { entity: "product" },
         urlOnly: true,
       },
       {
@@ -562,6 +572,7 @@ export default defineEntity({
         columnId: "foodIngredientId",
         kind: "idMulti",
         placeholder: "Filter by related food ingredients id...",
+        brandRef: { entity: "ingredient" },
         urlOnly: true,
       },
       {
@@ -581,6 +592,7 @@ export default defineEntity({
         columnId: "eaterId",
         kind: "idMulti",
         placeholder: "Filter by related eaters id...",
+        brandRef: { entity: "ledgerParty" },
         urlOnly: true,
       },
       {

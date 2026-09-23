@@ -63,6 +63,10 @@ export default defineEntity({
       emoji: "💳",
     },
     detail: {
+      omitRelations: {
+        products:
+          "Reached through the Purchases table on this page; the product path is three joins deep.",
+      },
       hero: { stats: ["amount", "status"] },
       sections: [
         {
@@ -806,6 +810,7 @@ export default defineEntity({
         columnId: "vendorId",
         kind: "idMulti",
         placeholder: "Filter by related vendor id...",
+        brandRef: { entity: "vendor" },
         urlOnly: true,
       },
       {
@@ -825,6 +830,7 @@ export default defineEntity({
         columnId: "expenseId",
         kind: "idMulti",
         placeholder: "Filter by related expenses id...",
+        brandRef: { entity: "expense" },
         urlOnly: true,
       },
       {
@@ -844,6 +850,7 @@ export default defineEntity({
         columnId: "productId",
         kind: "idMulti",
         placeholder: "Filter by related products id...",
+        brandRef: { entity: "product" },
         urlOnly: true,
       },
       {

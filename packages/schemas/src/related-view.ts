@@ -527,7 +527,7 @@ const ENTITIES_WITHOUT_RELATED_VIEWS = {
   // The one entity with no shortcode, no detail route, and no list table.
   image: "no detail route or list table to hang a preview column on",
   planting:
-    "its cross-entity relationships (ingredient, location, source product, task) are already reachable from those entities' own declared relation sections",
+    "its cross-entity relationships (ingredient, location, source product, task) are already reachable from those entities' own relation sections",
   gardenEntry: "garden timelines render entries directly",
   vendorAccount:
     "vendor account ownership and vendor links are rendered as detail fields",

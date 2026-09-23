@@ -63,6 +63,7 @@ import {
   mapImages,
   type MappableImageRecord,
   notDeleted,
+  shortcodeSetCondition,
   syncEntityImages,
   unwrapDb,
   updateLiveAndReturn,
@@ -702,6 +703,15 @@ export const plantingList = async (
     eqAnyRequested(planting.ingredientId, ingredientIds),
     eqAnyRequested(planting.taskId, taskIds),
     eqAnyRequested(planting.sourceProductId, sourceProductIds),
+    filters.gardenEntryId === undefined
+      ? undefined
+      : sql`EXISTS (
+          SELECT 1
+          FROM "GardenEntryPlanting" gep
+          JOIN "GardenEntry" ge ON ge."id" = gep."gardenEntryId" AND ge."deletedAt" IS NULL
+          WHERE gep."plantingId" = ${planting.id}
+            AND gep."deletedAt" IS NULL
+            AND ${shortcodeSetCondition(sql`ge."shortcode"`, filters.gardenEntryId)})`,
   ]);
   const orderByArray = plantingScaffold.orderBy(sorts, undefined, filters);
   const { take, skip } = plantingScaffold.page(pagination);

@@ -69,7 +69,14 @@ const expectDeclaredEntityParity = (
     ...(definition.model?.output ?? []),
     ...(definition.capabilities.dataQuality ? ["dataQuality"] : []),
   ]);
-  expect(compiled.descriptor.relationships).toEqual(
+  // Derived inverses (`derived: true`) are appended by the compiler; the
+  // declared ones must survive unchanged and in order.
+  expect(
+    z
+      .array(z.looseObject({ derived: z.literal(true).optional() }))
+      .parse(compiled.descriptor.relationships)
+      .filter((relation) => relation.derived !== true),
+  ).toEqual(
     definition.relations.map((relation) => ({
       ...relation,
       sourceKey: relation.sourceKey ?? relation.key,

@@ -316,7 +316,8 @@ const renderDetailSectionLiteral = (
         `columns: ${swiftOptionalStringArray(section.columns)}, ` +
         `sort: ${sort}, ` +
         `limit: ${swiftOptionalInt(section.limit)}, ` +
-        `hideWhenEmpty: ${swiftBool(section.hideWhenEmpty)})))`
+        `hideWhenEmpty: ${swiftBool(section.hideWhenEmpty)}, ` +
+        `collapseWhenEmpty: ${swiftBool(section.collapseWhenEmpty)})))`
       );
     }
     case "timeline":
@@ -679,6 +680,8 @@ export const renderSwiftEntityCatalog = (
     "  public let limit: Int?\n" +
     "  /// Skip the whole section, on both platforms, when its first page is empty.\n" +
     "  public let hideWhenEmpty: Bool\n" +
+    "  /// Keep the header and create action but fold the rows away when the first page is empty.\n" +
+    "  public let collapseWhenEmpty: Bool\n" +
     "}\n\n" +
     "public struct RelationSectionPrefill: Codable, Sendable, Hashable {\n" +
     "  public let field: String\n" +

@@ -137,6 +137,7 @@ extension EntityDescriptor {
                 case "automaticWork": query.automaticWork = try value.bool(name)
                 case "remotePaused": query.remotePaused = try value.bool(name)
                 case "ledgerPartyId": query.ledgerPartyId = value.strings.map { .init(value1: $0) }
+                case "productId": query.productId = value.strings.map { .init(value1: $0) }
                 case "dataStatus": query.dataStatus = try value.enumCases(name)
                 case "dataGap": query.dataGap = try value.enumCases(name)
                 case "groupBy": query.groupBy = try value.enumCase(name)
@@ -175,6 +176,7 @@ extension EntityDescriptor {
                 case "urlSearch": query.urlSearch = try value.string(name)
                 case "dataStatus": query.dataStatus = try value.enumCases(name)
                 case "dataGap": query.dataGap = try value.enumCases(name)
+                case "ledgerPartyId": query.ledgerPartyId = value.strings
                 case "projectId": query.projectId = value.strings.map { .init(value1: $0) }
                 case "includeSubProjects": query.includeSubProjects = try value.bool(name)
                 case "projectPresenceFilter": query.projectPresenceFilter = try value.enumCase(name)
@@ -274,6 +276,7 @@ extension EntityDescriptor {
                 case "transactionDateTo": query.transactionDateTo = try value.string(name)
                 case "amountMin": query.amountMin = try value.double(name)
                 case "amountMax": query.amountMax = try value.double(name)
+                case "ledgerTransferId": query.ledgerTransferId = value.strings.map { .init(value1: $0) }
                 case "dataStatus": query.dataStatus = try value.enumCases(name)
                 case "dataGap": query.dataGap = try value.enumCases(name)
                 case "accountId": query.accountId = value.strings.map { .init(value1: $0) }
@@ -386,6 +389,7 @@ extension EntityDescriptor {
                 case "ingredientId": query.ingredientId = value.strings
                 case "ingredientPresenceFilter": query.ingredientPresenceFilter = try value.enumCase(name)
                 case "ingredientSearch": query.ingredientSearch = try value.string(name)
+                case "ownerLedgerPartyId": query.ownerLedgerPartyId = value.strings.map { .init(value1: $0) }
                 case "dataStatus": query.dataStatus = try value.enumCases(name)
                 case "dataGap": query.dataGap = try value.enumCases(name)
                 case "productNameFilter": query.productNameFilter = try value.string(name)
@@ -556,6 +560,7 @@ extension EntityDescriptor {
                 case "ingredientId": query.ingredientId = value.strings
                 case "taskId": query.taskId = value.strings
                 case "sourceProductId": query.sourceProductId = value.strings
+                case "gardenEntryId": query.gardenEntryId = value.strings
                 case "activeOn": query.activeOn = try value.string(name)
                 case "searchQuery": query.searchQuery = try value.string(name)
                 case "groupBy": query.groupBy = try value.enumCase(name)
@@ -621,6 +626,7 @@ extension EntityDescriptor {
                 case "dataStatus": query.dataStatus = try value.enumCases(name)
                 case "dataGap": query.dataGap = try value.enumCases(name)
                 case "kitId": query.kitId = value.strings
+                case "componentId": query.componentId = value.strings
                 case "upcPresenceFilter": query.upcPresenceFilter = try value.enumCase(name)
                 case "externalIdSource": query.externalIdSource = value.strings
                 case "externalIdPresenceFilter": query.externalIdPresenceFilter = try value.enumCase(name)
@@ -678,6 +684,7 @@ extension EntityDescriptor {
                 case "updatedFrom": query.updatedFrom = try value.string(name)
                 case "updatedTo": query.updatedTo = try value.string(name)
                 case "search": query.search = try value.string(name)
+                case "parentId": query.parentId = value.strings.map { .init(value1: $0) }
                 case "dataStatus": query.dataStatus = try value.enumCases(name)
                 case "dataGap": query.dataGap = try value.enumCases(name)
                 case "groupBy": query.groupBy = try value.enumCase(name)
@@ -760,6 +767,7 @@ extension EntityDescriptor {
                 case "statedTotalPresenceFilter": query.statedTotalPresenceFilter = try value.enumCase(name)
                 case "expenseTotalMin": query.expenseTotalMin = try value.double(name)
                 case "expenseTotalMax": query.expenseTotalMax = try value.double(name)
+                case "vendorAccountId": query.vendorAccountId = value.strings.map { .init(value1: $0) }
                 case "dataStatus": query.dataStatus = try value.enumCases(name)
                 case "dataGap": query.dataGap = try value.enumCases(name)
                 case "vendorId": query.vendorId = value.strings.map { .init(value1: $0) }
@@ -912,6 +920,7 @@ extension EntityDescriptor {
                 case "spendMax": query.spendMax = try value.double(name)
                 case "latestPurchaseDateFrom": query.latestPurchaseDateFrom = try value.string(name)
                 case "latestPurchaseDateTo": query.latestPurchaseDateTo = try value.string(name)
+                case "logoImageId": query.logoImageId = value.strings.map { .init(value1: $0) }
                 case "dataStatus": query.dataStatus = try value.enumCases(name)
                 case "dataGap": query.dataGap = try value.enumCases(name)
                 case "latestPurchaseDatePresenceFilter": query.latestPurchaseDatePresenceFilter = try value.enumCase(name)
@@ -1333,6 +1342,7 @@ extension EntityDescriptor {
                 case "ingredientId": query.ingredientId = value.strings
                 case "taskId": query.taskId = value.strings
                 case "sourceProductId": query.sourceProductId = value.strings
+                case "gardenEntryId": query.gardenEntryId = value.strings
                 case "activeOn": query.activeOn = try value.string(name)
                 case "searchQuery": query.searchQuery = try value.string(name)
                 case "ids": query.ids = value.strings
@@ -1399,6 +1409,7 @@ extension EntityDescriptor {
                 case "dataStatus": query.dataStatus = try value.enumCases(name)
                 case "dataGap": query.dataGap = try value.enumCases(name)
                 case "kitId": query.kitId = value.strings
+                case "componentId": query.componentId = value.strings
                 case "upcPresenceFilter": query.upcPresenceFilter = try value.enumCase(name)
                 case "externalIdSource": query.externalIdSource = value.strings
                 case "externalIdPresenceFilter": query.externalIdPresenceFilter = try value.enumCase(name)

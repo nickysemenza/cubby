@@ -60,6 +60,10 @@ export default defineEntity({
       emoji: "🤖",
     },
     detail: {
+      omitRelations: {
+        purchases:
+          "The Changes slot's audit log lists every record the run wrote, purchases included; Purchase stores no run reference to filter by.",
+      },
       hero: {
         chip: "status",
         // Order counts belong to import runs only; the `import-workflow`
@@ -611,6 +615,8 @@ export default defineEntity({
       label: "Predecessor",
       target: "importRun",
       cardinality: "one",
+      inverseOmit:
+        "A run links its predecessor; a retry chain is short and read from the newest run back.",
       provenance: {
         kind: "local-path",
         steps: [{ edge: "ImportRun.predecessorRunId", direction: "outgoing" }],

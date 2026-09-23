@@ -1,29 +1,18 @@
 import type { Entity } from "@cubby/schemas/entity";
-import { generatedEntityEditIntents } from "@cubby/schemas/entity-edit-intents";
 import {
   allEntities,
   type EntityDescriptor,
+  type EntityInspectorMetadata,
   entityInspectorMetadata,
   entityManifest,
-  entityReferences,
   photoCategories,
 } from "@cubby/schemas/entity-manifest";
-import { generatedEntitySort } from "@cubby/schemas/entity-sort";
-import type { EntityPresentation } from "@cubby/schemas/entity-summary";
 import { LEGACY_SHORTCODE_PREFIX } from "@cubby/shared";
 import { useQuery } from "@tanstack/react-query";
-import { Check, Copy, Minus, Stamp } from "lucide-react";
-import { type ReactNode, useId } from "react";
-import { toast } from "sonner";
+import { Fragment, type ReactNode } from "react";
 
 import { Stack } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
-import { Button } from "~/components/ui/button";
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "~/components/ui/collapsible";
 import {
   Table,
   TableBody,
@@ -43,27 +32,15 @@ import {
 } from "~/entities/entity-inspector-health";
 import { viewsForEntity } from "~/entities/view-manifest";
 import { authClient } from "~/lib/auth-client";
-import { copyText } from "~/lib/clipboard";
 import { ENTITY_NATIVE_COVERAGE } from "~/lib/generated/entity-native-coverage.gen";
-import { HTTP_RESOURCES } from "~/lib/generated/http-resources.gen";
 import { cn } from "~/lib/utils";
 
 import { EntityReferenceGraph } from "./EntityReferenceGraph";
 
-const mono = "font-mono text-xs tabular-nums";
+const mono = "font-mono tabular-nums";
 const dash = <span className="text-muted-foreground/40">—</span>;
-const contractRow = (label: string, value: ReactNode): [string, ReactNode] => [
-  label,
-  value,
-];
-
-function Bool({ value }: { value: boolean }) {
-  return value ? (
-    <Check className="size-4 text-positive" aria-label="yes" />
-  ) : (
-    <Minus className="size-4 text-muted-foreground/40" aria-label="no" />
-  );
-}
+const cellCls = "px-2 py-1";
+const headCls = "h-6 px-2 py-1 text-[10px] leading-none";
 
 function Chips({ items }: { items: readonly string[] }) {
   if (items.length === 0) return dash;
@@ -82,33 +59,62 @@ export function SavedViewChips({ entity }: { entity: Entity }) {
   return <Chips items={viewsForEntity(entity).map((view) => view.label)} />;
 }
 
-function referencesInto(target: Entity): Entity[] {
-  return allEntities.filter((entity) =>
-    entityReferences(entity).includes(target),
+/** A dense boolean marker: filled dot for `true`, faint mid-dot for `false`. */
+function Dot({ value, title }: { value: boolean; title?: string }) {
+  return (
+    <span
+      title={title}
+      aria-label={value ? "yes" : "no"}
+      className={value ? "text-foreground" : "text-muted-foreground/25"}
+    >
+      {value ? "●" : "·"}
+    </span>
+  );
+}
+
+/** A count, with the full item list in a `title` tooltip; a dash when empty. */
+function CountTip({ items }: { items: readonly string[] }) {
+  if (items.length === 0) return dash;
+  return (
+    <span className={mono} title={items.join(", ")}>
+      {items.length}
+    </span>
   );
 }
 
 function emittedCode(entity: Entity) {
-  const prefix = entityInspectorMetadata[entity].shortcodePrefix;
+  const prefix = metadataFor(entity).shortcodePrefix;
   return prefix ? `${prefix}XXXX` : null;
-}
-
-function sourceRef(ref: { module: string; export: string } | null) {
-  return ref ? `${ref.module}#${ref.export}` : "not declared";
 }
 
 /**
  * `entityManifest[entity]`'s generated literal type omits an `optional()`
  * schema key entirely for an entity that leaves it unset, rather than typing
- * it `| undefined` — so a union-wide read of `countFilter`/
- * `relatednessSignals`/`mcpNames` doesn't type-check against every member.
- * Widen back to the zod-inferred shape, which `parsedEntityManifest` in
- * `entity-manifest.ts` already verifies every entry satisfies.
+ * it `| undefined` — so a union-wide read of `relationships[i].derived` /
+ * `.inverseOmit` doesn't type-check against every member. Widen back to the
+ * zod-inferred shape, which `parsedEntityManifest` in `entity-manifest.ts`
+ * already verifies every entry satisfies.
  */
 function extendedManifest(entity: Entity): EntityDescriptor {
   // SAFETY: see doc comment above — `entityManifest[entity]` always
   // satisfies `entityDescriptor`, just not through a type TS can see here.
   return entityManifest[entity] as EntityDescriptor;
+}
+
+type Relationship = EntityDescriptor["relationships"][number];
+
+/**
+ * Same widening trap as `extendedManifest`, one level up: `entityInspectorMetadata[entity]`
+ * indexed by the union `Entity` type collapses tuple-typed fields
+ * (`kernelActions`, `detail.sections`, …) to `never` because each entity's
+ * generated literal narrows them differently. Widen back to the exported
+ * `EntityInspectorMetadata` shape.
+ */
+function metadataFor(entity: Entity): EntityInspectorMetadata {
+  // SAFETY: see doc comment above — every entity's generated record already
+  // satisfies `EntityInspectorMetadata`, just not through a type TS can see
+  // when indexed by a union key.
+  return entityInspectorMetadata[entity] as EntityInspectorMetadata;
 }
 
 /**
@@ -125,7 +131,7 @@ function legacyPrefix(entity: Entity): string | null {
 }
 
 function acceptedCodes(entity: Entity) {
-  return [entityInspectorMetadata[entity].shortcodePrefix, legacyPrefix(entity)]
+  return [metadataFor(entity).shortcodePrefix, legacyPrefix(entity)]
     .filter((prefix) => prefix !== null)
     .map((prefix) => `${prefix}XXXX`);
 }
@@ -145,82 +151,12 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
   );
 }
 
-function ContractRows({
-  rows,
-}: {
-  rows: readonly [label: string, value: ReactNode][];
-}) {
-  return (
-    <dl className="divide-y divide-border/60 border-y border-border/60">
-      {rows.map(([label, value]) => (
-        <div
-          key={label}
-          className="grid gap-1 py-2 sm:grid-cols-[10rem_minmax(0,1fr)]"
-        >
-          <dt className="text-xs text-muted-foreground">{label}</dt>
-          <dd className="min-w-0 text-sm">{value}</dd>
-        </div>
-      ))}
-    </dl>
-  );
-}
-
-function PrintedLabelContract({ entity }: { entity: "product" | "location" }) {
-  const metadata = entityInspectorMetadata[entity];
-  return (
-    <div className="border-y border-primary/40 bg-primary/[0.04] px-4 py-4">
-      <div className="flex items-center gap-2 text-sm font-medium text-primary">
-        <Stamp className="size-4" /> Printed-label contract
-      </div>
-      <p className="mt-1 text-sm">
-        Cubby emits <code>{metadata.shortcodePrefix}XXXX</code> and permanently
-        accepts <code>{legacyPrefix(entity)}XXXX</code> inbound because physical
-        labels using the shorter prefix already exist.
-      </p>
-    </div>
-  );
-}
-
-function EntityPrintedLabelContract({ entity }: { entity: Entity }) {
-  return printsLabels(entity) ? <PrintedLabelContract entity={entity} /> : null;
-}
-
 function countFor(
   entity: Entity,
   counts: EntityInspectorHealth["counts"] | undefined,
 ) {
   if (!counts) return undefined;
   return entityManifest[entity].countable ? counts[entity] : undefined;
-}
-
-function EntityIndex({
-  selected,
-  onSelect,
-}: {
-  selected: Entity;
-  onSelect: (entity: Entity) => void;
-}) {
-  return (
-    <nav
-      aria-label="Entity index"
-      className="grid grid-cols-2 border-y sm:grid-cols-3 md:hidden"
-    >
-      {allEntities.map((entity) => (
-        <button
-          key={entity}
-          type="button"
-          aria-current={selected === entity ? "true" : undefined}
-          onClick={() => onSelect(entity)}
-          className={cn(
-            "min-h-11 border-r border-b border-border/60 px-4 py-2 text-left font-mono text-xs",
-            selected === entity && "bg-primary text-primary-foreground",
-          )}
-        >
-          {entity}
-        </button>
-      ))}
-    </nav>
-  );
 }
 
 function PhotoCategoriesSection() {
@@ -257,277 +193,20 @@ function PhotoCategoriesSection() {
   );
 }
 
-function ComparisonMatrix({
-  selected,
-  counts,
-  onSelect,
-}: {
-  selected: Entity;
-  counts: EntityInspectorHealth["counts"] | undefined;
-  onSelect: (entity: Entity) => void;
-}) {
-  return (
-    <div className="hidden overflow-x-auto border-y md:block">
-      <Table className="min-w-[1100px] table-auto">
-        <TableHeader>
-          <TableRow>
-            <TableHead>Entity</TableHead>
-            <TableHead>Rows</TableHead>
-            <TableHead>Actions</TableHead>
-            <TableHead>Search / embed</TableHead>
-            <TableHead>MCP</TableHead>
-            <TableHead>Lifecycle</TableHead>
-            <TableHead>Relations</TableHead>
-            <TableHead>Canonical</TableHead>
-            <TableHead>Inbound aliases</TableHead>
-            <TableHead>Prints labels</TableHead>
-            <TableHead>Native</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {allEntities.map((entity) => {
-            const metadata = entityInspectorMetadata[entity];
-            return (
-              <TableRow
-                key={entity}
-                data-state={selected === entity ? "selected" : undefined}
-                className="cursor-pointer"
-                onClick={() => onSelect(entity)}
-              >
-                <TableCell>
-                  <span className="font-mono text-xs">{entity}</span>
-                </TableCell>
-                <TableCell className={mono}>
-                  {countFor(entity, counts) ?? "—"}
-                </TableCell>
-                <TableCell>
-                  <Chips items={metadata.kernelActions} />
-                </TableCell>
-                <TableCell className="whitespace-nowrap">
-                  {metadata.searchable ? "lexical · semantic" : "—"}
-                </TableCell>
-                <TableCell className={mono}>
-                  {metadata.mcpOperations.length}
-                </TableCell>
-                <TableCell className="text-xs whitespace-nowrap">
-                  {metadata.lifecycle.delete?.mode ?? "—"}
-                  {metadata.lifecycle.merge ? " · merge" : ""}
-                </TableCell>
-                <TableCell className={mono}>
-                  {metadata.references.length}
-                </TableCell>
-                <TableCell className={mono}>
-                  {emittedCode(entity) ?? "—"}
-                </TableCell>
-                <TableCell>
-                  <Chips items={acceptedCodes(entity).slice(1)} />
-                </TableCell>
-                <TableCell>
-                  <Bool value={printsLabels(entity)} />
-                </TableCell>
-                <TableCell className="text-xs whitespace-nowrap">
-                  {nativeCoverageLabel(entity)}
-                </TableCell>
-              </TableRow>
-            );
-          })}
-        </TableBody>
-      </Table>
-    </div>
-  );
-}
-
-function physicalCompatibility(entity: Entity) {
-  if (printsLabels(entity)) {
-    return "Permanent inbound rewrite; Cubby never emits the legacy form.";
-  }
-  if (entity === "recipe") {
-    return "Canonical RCP- only. The removed R- form is intentionally rejected.";
-  }
-  return "Canonical prefix only.";
-}
-
-function physicalPermanence(entity: Entity) {
-  return printsLabels(entity)
-    ? "permanent — printed labels"
-    : "canonical contract only";
-}
-
-function schemaOwnershipRows(entity: Entity) {
-  const sourceRefs = entityInspectorMetadata[entity].sourceRefs;
-  if (!sourceRefs) {
-    return [
-      contractRow(
-        "Schema ownership",
-        "Workflow extension; no generic CRUD schema contract",
-      ),
-    ];
-  }
-  return Object.entries(sourceRefs).map(([name, ref]) =>
-    contractRow(
-      name,
-      <span key={name} className={mono}>
-        {ref} · generated binding
-      </span>,
-    ),
-  );
-}
-
-function searchPortLabel(
-  searchable: boolean,
-  port: Parameters<typeof sourceRef>[0],
-  suffix: string,
-) {
-  return searchable ? `${sourceRef(port)}${suffix}` : "not exposed";
-}
-
 function inspectorRoute(entity: Entity) {
   return isBrowserRoutedEntity(entity)
     ? browserEntityDefinition(entity).routes
     : null;
 }
 
-function mcpFieldLabel(entity: Entity) {
-  const metadata = entityInspectorMetadata[entity];
-  return metadata.mcpOwner === "kernel"
-    ? "generated kernel command schema"
-    : "specialized workflow schema";
-}
-
 function mcpTransportLabel(entity: Entity) {
-  const metadata = entityInspectorMetadata[entity];
-  return `${metadata.mcpOwner}: ${metadata.mcpOperations.join(", ")}`;
+  const metadata = metadataFor(entity);
+  return `${metadata.mcpOwner ?? "none"}: ${metadata.mcpOperations.join(", ") || "—"}`;
 }
 
 function routeCoverageLabel(entity: Entity) {
   const route = inspectorRoute(entity);
   return route ? `${route.list} · ${route.detail}` : "workflow-owned";
-}
-
-function dependentRefreshLabel(entity: Entity) {
-  const metadata = entityInspectorMetadata[entity];
-  return metadata.searchable
-    ? sourceRef(metadata.ports.search.dependentRefresh)
-    : "none";
-}
-
-function startTransportLabel(entity: Entity) {
-  const metadata = entityInspectorMetadata[entity];
-  if (entity === "usda-food" || entity === "cookbook") {
-    return "specialized list · detail";
-  }
-  if (entity === "image") return "dedicated list · detail · writes";
-  if (metadata.kernelActions.length === 0) return "—";
-  return [
-    metadata.kernelActions.includes("get") && "detail",
-    metadata.kernelActions.includes("list") && "list/filter",
-    metadata.kernelActions.some((action) =>
-      ["create", "update", "delete", "merge"].includes(action),
-    ) && "generic writes",
-  ]
-    .filter(Boolean)
-    .join(" · ");
-}
-
-/** `singular / plural`, falling back to `—` for a name half the manifest leaves unset. */
-function mcpNamesLabel(entity: Entity) {
-  const names = extendedManifest(entity).mcpNames;
-  if (!names) return dash;
-  return `${names.singular ?? "—"} / ${names.plural ?? "—"}`;
-}
-
-/** The browser route's base path, or a dash for an entity with no browser route. */
-function basePathFor(entity: Entity) {
-  return isBrowserRoutedEntity(entity) ? (
-    <code key="basePath">{browserEntityDefinition(entity).basePath}</code>
-  ) : (
-    dash
-  );
-}
-
-/** The declared `countFilter` enum value, or a dash when the entity leaves it unset. */
-function countFilterCell(entity: Entity) {
-  const countFilter = extendedManifest(entity).countFilter;
-  return countFilter ? <code key="countFilter">{countFilter}</code> : dash;
-}
-
-/** Each declared relatedness signal's `kind: label`, or a dash when none are declared. */
-function relatednessSignalsCell(entity: Entity) {
-  const signals = extendedManifest(entity).relatednessSignals;
-  if (!signals?.length) return dash;
-  return (
-    <Chips
-      key="relatedness"
-      items={signals.map((signal) => `${signal.kind}: ${signal.label}`)}
-    />
-  );
-}
-
-function RelationshipContract({ entity }: { entity: Entity }) {
-  const { relationships } = entityManifest[entity];
-  if (relationships.length === 0) return dash;
-  return relationships.map((relation) => (
-    <div
-      key={relation.key}
-      className="grid gap-1 border-b border-border/60 pb-2 text-xs sm:grid-cols-[9rem_1fr]"
-    >
-      <code>{relation.key}</code>
-      <Stack gap="tight">
-        <span>
-          → {relation.target} · {relation.cardinality} ·{" "}
-          {relation.provenance.kind} · inverse{" "}
-          {"inverse" in relation ? "declared" : "external"}
-        </span>
-        <div className="text-muted-foreground">
-          sources: {relation.sourceKey}
-          {relation.sources.map((source) => `, ${source.key}`).join("")}
-          {"mutation" in relation
-            ? ` · mutable via ${relation.mutation.source} (${relation.mutation.audiences.join(", ")})`
-            : ""}
-        </div>
-      </Stack>
-    </div>
-  ));
-}
-
-function PresentationSection({ entity }: { entity: Entity }) {
-  const metadata = entityInspectorMetadata[entity];
-  // The `as const` roster types each entity's block exactly; widen once so an
-  // optional `actionLabel` reads the same for every entity.
-  const emptyState: EntityPresentation["emptyState"] = metadata.emptyState;
-  const images =
-    metadata.imageStorage === false
-      ? dash
-      : metadata.imageStorage === "gallery"
-        ? "gallery (ordered join table)"
-        : "cover (single coverImageId)";
-  return (
-    <Section title="Presentation">
-      <ContractRows
-        rows={[
-          ["Title field", <code key="title">{metadata.titleField}</code>],
-          ["Domain", metadata.domain ?? "none (no wayfinding line)"],
-          ["Description", metadata.description],
-          [
-            "Icons",
-            <span key="icons" className="inline-flex items-center gap-2">
-              <EntityIcon entity={entity} className="size-4" />
-              <code>{metadata.icons.lucide}</code>
-              <span className="text-muted-foreground/60">web ·</span>
-              <code>{metadata.icons.sfSymbol}</code>
-              <span className="text-muted-foreground/60">native ·</span>
-              <span aria-hidden="true">{metadata.icons.emoji}</span>
-              <span className="text-muted-foreground/60">emoji</span>
-            </span>,
-          ],
-          ["Empty state", emptyState.title],
-          ["Empty copy", emptyState.description],
-          ["Empty action", emptyState.actionLabel ?? dash],
-          ["Images", images],
-        ]}
-      />
-    </Section>
-  );
 }
 
 /** `list · get · update` plus a `+N rpc` suffix; a dash when the app never touches it. */
@@ -540,382 +219,663 @@ function nativeCoverageLabel(entity: Entity): string {
 }
 
 /**
- * The native shell draws four domain lines; the declaration vocabulary has
- * five. Mirrors `AppDomain.init(_:)` in
- * `apps/apple/App/Shared/Theme/PorcelainTokens.swift`: pantry files under
- * House, and an entity on no line (image) files under House too.
+ * Kernel actions condensed to a fixed-position `CRUD` letter mask — `C`
+ * (create), `R` (both `get` and `list`), `U` (update), `D` (delete) — plus
+ * any extra action (`search`, `bulkUpdate`, `merge`) as a `+name` suffix. All
+ * four slots present renders as the plain word `CRUD`.
  */
-const nativeDomain = (domain: EntityPresentation["domain"]): string =>
-  domain === null || domain === "pantry" ? "house (fallback)" : domain;
+type KernelAction = EntityInspectorMetadata["kernelActions"][number];
 
-/**
- * What the native app can do with this entity, from
- * `entity-native-coverage.gen.ts` (emitted by the same script that writes
- * `EntityOperations.swift`). "HTTP exposes" is the web API's resource verbs
- * — what Swift's `httpActions` mirrors; "Native client" is the set the
- * filtered OpenAPI client carries (every list/get/create/update/timeline
- * verb; delete stays off it).
- */
-function NativeSection({ entity }: { entity: Entity }) {
-  const metadata = entityInspectorMetadata[entity];
-  const coverage = ENTITY_NATIVE_COVERAGE[entity];
-  // SAFETY: `HTTP_RESOURCES` is `satisfies Partial<Record<Entity, …>>`; an
-  // entity with no HTTP resource simply has no entry.
-  const resource = (
-    HTTP_RESOURCES as Partial<Record<Entity, { verbs: readonly string[] }>>
-  )[entity];
+const CRUD_SLOTS = [
+  { code: "C", needs: ["create"] },
+  { code: "R", needs: ["get", "list"] },
+  { code: "U", needs: ["update"] },
+  { code: "D", needs: ["delete"] },
+] as const satisfies readonly {
+  code: string;
+  needs: readonly KernelAction[];
+}[];
+const CRUD_KNOWN_ACTIONS = new Set<KernelAction>(
+  CRUD_SLOTS.flatMap((slot) => slot.needs),
+);
+
+function kernelActionsLabel(entity: Entity) {
+  const actions = metadataFor(entity).kernelActions;
+  const mask = CRUD_SLOTS.map((slot) =>
+    slot.needs.every((need) => actions.includes(need)) ? slot.code : "·",
+  ).join("");
+  return {
+    mask,
+    full: mask === "CRUD",
+    extras: actions.filter((action) => !CRUD_KNOWN_ACTIONS.has(action)),
+  };
+}
+
+function KernelActionsCell({ entity }: { entity: Entity }) {
+  const { mask, full, extras } = kernelActionsLabel(entity);
   return (
-    <Section title="Native app">
-      <ContractRows
-        rows={[
-          ["Domain (app)", nativeDomain(metadata.domain)],
-          ["Countable", <Bool key="countable" value={metadata.countable} />],
-          ["HTTP exposes", <Chips key="verbs" items={resource?.verbs ?? []} />],
-          [
-            "Native client",
-            <Chips key="native" items={coverage.httpActions} />,
-          ],
-          [
-            "Image attach / reorder",
-            <span key="images" className="inline-flex items-center gap-2">
-              <Bool value={coverage.imageAttach} />
-              <span className="text-muted-foreground/60">·</span>
-              <Bool value={coverage.imageOrder} />
-            </span>,
-          ],
-          ["RPC operations", <Chips key="rpc" items={coverage.rpcIds} />],
-        ]}
-      />
-    </Section>
+    <span className={cn("whitespace-nowrap", mono)}>
+      <span className={full ? "text-muted-foreground" : undefined}>{mask}</span>
+      {extras.length > 0 && (
+        <span className="ml-1 text-muted-foreground">
+          {extras.map((extra) => `+${extra}`).join(" ")}
+        </span>
+      )}
+    </span>
   );
 }
 
-type SortRoster =
-  (typeof generatedEntitySort)[keyof typeof generatedEntitySort];
-
-function sortRosterFor(entity: Entity): SortRoster | undefined {
-  // SAFETY: `generatedEntitySort` is `satisfies Partial<Record<Entity, …>>`;
-  // an entity with no declared list-sort roster simply has no entry.
-  return (generatedEntitySort as Partial<Record<Entity, SortRoster>>)[entity];
+function idFilterCount(entity: Entity) {
+  return metadataFor(entity).filterDescriptors.filter(
+    (filter) => filter.kind === "id" || filter.kind === "idMulti",
+  ).length;
 }
 
+function cardinalitySplit(entity: Entity) {
+  const relationships = extendedManifest(entity).relationships;
+  const one = relationships.filter(
+    (relation) => relation.cardinality === "one",
+  ).length;
+  return { one, many: relationships.length - one };
+}
+
+type RelationDetailStatus =
+  | "declared"
+  | "derived"
+  | "omitted"
+  | "no-list"
+  | "one";
+
+/** Compiler auto-omit reasons end with this sentence — the target simply has
+ * no list page to render as a table, distinct from a hand-declared omission. */
+const NO_LIST_SUFFIX = "has no list page to render as a table.";
+
+const DETAIL_STATUS_LABEL = {
+  declared: "declared",
+  derived: "derived",
+  omitted: "omitted",
+  "no-list": "no list",
+  one: "—",
+} satisfies Record<RelationDetailStatus, string>;
+
+type RelationDetail = {
+  status: RelationDetailStatus;
+  reason?: string;
+  descriptor?: string;
+};
+
 /**
- * The `model.sort` roster from `entity-sort.gen.ts`. An empty `groupable`
- * means every sortable field is groupable (see docs/entities.md); an entity
- * with no roster at all (only `usda-food` today) gets a single explanatory
- * row rather than an empty section.
+ * Where a relation's detail table stands, per the compiled `detail` block:
+ * `one`-cardinality relations never get a table (only `inverseOmit` explains
+ * why no inverse exists); a `many` relation is `declared` when a hand-written
+ * `kind:"relation"` section names it, `derived` when the compiler generated
+ * that section, or `omitted`/`no-list` when `detail.omitRelations` records
+ * why no section exists at all.
  */
-function SortingSection({ entity }: { entity: Entity }) {
-  const roster = sortRosterFor(entity);
+function relationDetailStatus(
+  entity: Entity,
+  relation: Relationship,
+): RelationDetail {
+  if (relation.cardinality === "one") {
+    return { status: "one", reason: relation.inverseOmit };
+  }
+  const { sections, omitRelations } = metadataFor(entity).detail;
+  const section = sections.find(
+    (candidate) =>
+      candidate.kind === "relation" && candidate.relation === relation.key,
+  );
+  if (section && section.kind === "relation") {
+    return {
+      status: section.derived ? "derived" : "declared",
+      descriptor: section.filter.descriptor,
+    };
+  }
+  const reason = omitRelations[relation.key];
+  if (reason) {
+    return {
+      status: reason.endsWith(NO_LIST_SUFFIX) ? "no-list" : "omitted",
+      reason,
+    };
+  }
+  return {
+    status: "omitted",
+    reason: "not declared, not recorded as omitted",
+  };
+}
+
+function manyDetailTally(entity: Entity) {
+  const relationships = extendedManifest(entity).relationships.filter(
+    (relation) => relation.cardinality === "many",
+  );
+  let declared = 0;
+  let derived = 0;
+  let omitted = 0;
+  for (const relation of relationships) {
+    const { status } = relationDetailStatus(entity, relation);
+    if (status === "declared") declared += 1;
+    else if (status === "derived") derived += 1;
+    else omitted += 1;
+  }
+  return { declared, derived, omitted, total: relationships.length };
+}
+
+/** The value most entities share for a column — the rendering caller mutes
+ * this value and leaves outliers at normal weight, so a scan of the column
+ * finds the exceptions instead of rereading the norm 24 times. */
+function mostCommon<T extends string>(values: readonly T[]): T {
+  const counts = new Map<T, number>();
+  for (const value of values) counts.set(value, (counts.get(value) ?? 0) + 1);
+  // SAFETY: every caller passes `allEntities.map(...)`, which is always
+  // non-empty, so `values[0]` is always a `T`, never `undefined`.
+  let best = values[0] as T;
+  let bestCount = 0;
+  for (const [value, count] of counts) {
+    if (count > bestCount) {
+      best = value;
+      bestCount = count;
+    }
+  }
+  return best;
+}
+
+const MODAL_MCP_OWNER = mostCommon(
+  allEntities.map((entity) => metadataFor(entity).mcpOwner ?? "none"),
+);
+const MODAL_DETAIL_VARIANT = mostCommon(
+  allEntities.map((entity) => metadataFor(entity).detail.variant),
+);
+
+/** `shortcodePrefix` without its trailing dash, already a stable 3-4 letter
+ * abbreviation the rest of the app uses — reused here as the matrix's
+ * column/row header instead of inventing a second abbreviation scheme. */
+function abbrev(entity: Entity): string {
+  const prefix = metadataFor(entity).shortcodePrefix;
+  return prefix ? prefix.replace(/-$/, "") : entity.slice(0, 4).toUpperCase();
+}
+
+function matrixStatusClass(status: RelationDetailStatus): string {
+  switch (status) {
+    case "declared":
+      return "text-foreground";
+    case "derived":
+      return "text-primary";
+    case "omitted":
+      return "text-destructive";
+    case "no-list":
+      return "text-muted-foreground/50";
+    case "one":
+      return "text-muted-foreground/30";
+  }
+}
+
+const MATRIX_LEGEND: readonly [RelationDetailStatus, string][] = [
+  ["declared", "declared detail table"],
+  ["derived", "compiler-derived detail table"],
+  ["omitted", "explicitly omitted"],
+  ["no-list", "target has no list page"],
+  ["one", "one-cardinality (no table)"],
+];
+
+/** Entity × entity relation coverage. Rows are the relation's source, columns
+ * its target; each dot is one declared relationship, colored by whether its
+ * detail table is declared, derived, or missing — the place coverage gaps
+ * stay visible at a glance instead of hiding in 24 separate detail views. */
+function RelationsMatrix() {
   return (
-    <Section title="Sorting">
-      <ContractRows
-        rows={
-          roster
-            ? [
-                ["Default", <code key="default">{roster.default}</code>],
-                ["Fields", <Chips key="fields" items={roster.fields} />],
-                [
-                  "Computed",
-                  roster.computed.length ? (
-                    <Chips key="computed" items={roster.computed} />
-                  ) : (
-                    dash
-                  ),
-                ],
-                [
-                  "Groupable",
-                  roster.groupable.length ? (
-                    <Chips key="groupable" items={roster.groupable} />
-                  ) : (
-                    "all sortable fields"
-                  ),
-                ],
-              ]
-            : [["Declared", "none (hand roster)"]]
-        }
-      />
-    </Section>
+    <div className="space-y-1">
+      <Table
+        containerClassName="border-y"
+        className="w-max table-auto text-[10px]"
+      >
+        <TableHeader>
+          <TableRow>
+            <TableHead
+              className={cn(headCls, "sticky top-0 left-0 z-20 bg-muted")}
+            >
+              from \ to
+            </TableHead>
+            {allEntities.map((target) => (
+              <TableHead
+                key={target}
+                title={target}
+                className={cn(
+                  headCls,
+                  "sticky top-0 z-10 bg-muted text-center",
+                )}
+              >
+                {abbrev(target)}
+              </TableHead>
+            ))}
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {allEntities.map((source) => (
+            <TableRow key={source}>
+              <TableCell
+                title={source}
+                className={cn(
+                  cellCls,
+                  "sticky left-0 z-10 bg-background font-mono",
+                )}
+              >
+                {abbrev(source)}
+              </TableCell>
+              {allEntities.map((target) => {
+                const relations = extendedManifest(source).relationships.filter(
+                  (relation) => relation.target === target,
+                );
+                if (relations.length === 0) {
+                  return (
+                    <TableCell
+                      key={target}
+                      className={cn(
+                        cellCls,
+                        "text-center text-muted-foreground/15",
+                      )}
+                    >
+                      ·
+                    </TableCell>
+                  );
+                }
+                const details = relations.map((relation) => ({
+                  relation,
+                  detail: relationDetailStatus(source, relation),
+                }));
+                const title = details
+                  .map(
+                    ({ relation, detail }) =>
+                      `${relation.key}: ${detail.status}${detail.reason ? ` — ${detail.reason}` : ""}`,
+                  )
+                  .join("\n");
+                return (
+                  <TableCell
+                    key={target}
+                    title={title}
+                    className={cn(cellCls, "text-center")}
+                  >
+                    {details.map(({ relation, detail }) => (
+                      <span
+                        key={relation.key}
+                        className={cn(
+                          "mx-px",
+                          matrixStatusClass(detail.status),
+                        )}
+                      >
+                        {relation.cardinality === "many" ? "●" : "○"}
+                      </span>
+                    ))}
+                  </TableCell>
+                );
+              })}
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+      <div className="flex flex-wrap gap-3 px-1 text-2xs text-muted-foreground">
+        {MATRIX_LEGEND.map(([status, label]) => (
+          <span key={status} className="inline-flex items-center gap-1">
+            <span className={matrixStatusClass(status)}>●</span> {label}
+          </span>
+        ))}
+      </div>
+    </div>
   );
 }
 
-type EditIntents =
-  (typeof generatedEntityEditIntents)[keyof typeof generatedEntityEditIntents];
-
-function editIntentsFor(entity: Entity): EditIntents | undefined {
-  // SAFETY: `generatedEntityEditIntents` is `satisfies Partial<Record<Entity, …>>`;
-  // an entity with no browser editor declaration simply has no entry.
-  return (generatedEntityEditIntents as Partial<Record<Entity, EditIntents>>)[
-    entity
-  ];
-}
-
-/**
- * The editor's named field fragments (`fields`) and the ordered intent names
- * `create`/`update` accept, from `entity-edit-intents.gen.ts`. An entity
- * absent from the map (`cookbook`, `image`, `usda-food` today) has no
- * browser-editable form at all.
- */
-function EditIntentsSection({ entity }: { entity: Entity }) {
-  const intents = editIntentsFor(entity);
-  if (!intents) {
+/** The expanded sub-row: every declared relationship for one entity, dense
+ * enough to read origin (declared vs. compiler-derived) and detail-table
+ * coverage without opening a second page. */
+function RelationsSubRow({ entity }: { entity: Entity }) {
+  const relationships = extendedManifest(entity).relationships;
+  if (relationships.length === 0) {
     return (
-      <Section title="Edit intents">
-        <ContractRows rows={[["Editable", "not editable in the browser"]]} />
-      </Section>
+      <TableRow className="bg-muted/20 hover:bg-muted/20">
+        <TableCell
+          colSpan={COLUMN_COUNT}
+          className="px-4 py-2 text-2xs text-muted-foreground italic"
+        >
+          {entity} declares no relations.
+        </TableCell>
+      </TableRow>
     );
   }
   return (
-    <Section title="Edit intents">
-      <ContractRows
-        rows={[
-          ["Create intents", <Chips key="create" items={intents.create} />],
-          ["Update intents", <Chips key="update" items={intents.update} />],
-          ...Object.entries(intents.fields).map(([name, fields]) =>
-            contractRow(name, <Chips key={name} items={fields} />),
-          ),
-        ]}
-      />
-    </Section>
+    <TableRow className="bg-muted/20 hover:bg-muted/20">
+      <TableCell colSpan={COLUMN_COUNT} className="p-0">
+        <Table className="w-full table-auto text-2xs">
+          <TableHeader>
+            <TableRow>
+              <TableHead className={headCls}>Key</TableHead>
+              <TableHead className={headCls}>Target</TableHead>
+              <TableHead className={headCls}>Cardinality</TableHead>
+              <TableHead className={headCls}>Origin</TableHead>
+              <TableHead className={headCls}>Detail table</TableHead>
+              <TableHead className={headCls}>Filter</TableHead>
+              <TableHead className={headCls}>Notes</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {relationships.map((relation) => {
+              const detail = relationDetailStatus(entity, relation);
+              return (
+                <TableRow key={relation.key}>
+                  <TableCell className={cn(cellCls, "font-mono")}>
+                    {relation.key}
+                  </TableCell>
+                  <TableCell className={cn(cellCls, "font-mono")}>
+                    {relation.target}
+                  </TableCell>
+                  <TableCell className={cellCls}>
+                    {relation.cardinality}
+                  </TableCell>
+                  <TableCell className={cellCls}>
+                    {relation.derived ? "derived" : "declared"}
+                  </TableCell>
+                  <TableCell
+                    title={detail.reason}
+                    className={cn(cellCls, matrixStatusClass(detail.status))}
+                  >
+                    {DETAIL_STATUS_LABEL[detail.status]}
+                  </TableCell>
+                  <TableCell className={cn(cellCls, "font-mono")}>
+                    {detail.descriptor ?? dash}
+                  </TableCell>
+                  <TableCell
+                    className={cn(cellCls, "max-w-md text-muted-foreground")}
+                  >
+                    {detail.reason ?? relation.label}
+                  </TableCell>
+                </TableRow>
+              );
+            })}
+          </TableBody>
+        </Table>
+      </TableCell>
+    </TableRow>
   );
 }
+const COLUMN_COUNT = 20; // entity + 19 data columns (see the two header rows below)
 
-export function EntityInspector({
-  entity,
-  count,
-  health,
+/**
+ * One row per entity, grouped columns, sticky header and first column,
+ * `text-[11px]` throughout. Replaces the old `ComparisonMatrix` plus the
+ * separate per-entity detail cards: clicking a row expands a dense relations
+ * sub-table in place instead of navigating to a second view. Reuses the
+ * `selected` / `onSelect` props as the (always-one-expanded) row so deep
+ * links keep working.
+ */
+function MegaTable({
+  selected,
+  counts,
+  onSelect,
 }: {
-  entity: Entity;
-  count?: number;
-  health?: EntityInspectorHealth["search"][keyof EntityInspectorHealth["search"]];
+  selected: Entity;
+  counts: EntityInspectorHealth["counts"] | undefined;
+  onSelect: (entity: Entity) => void;
 }) {
-  const descriptor = entityManifest[entity];
-  const metadata = entityInspectorMetadata[entity];
-  const headingId = useId();
-  const route = inspectorRoute(entity);
-  const json = JSON.stringify(
-    {
-      entity,
-      ...metadata,
-      storage: { table: descriptor.dbTable, idBrand: descriptor.idBrand },
-      acceptedInbound: acceptedCodes(entity),
-      emits: emittedCode(entity),
-      printsLabels: printsLabels(entity),
-      relationships: descriptor.relationships,
-    },
-    null,
-    2,
-  );
-
   return (
-    <article className="space-y-6" aria-labelledby={headingId}>
-      <header className="border-l border-primary pl-3">
-        <div className="flex flex-wrap items-baseline gap-2">
-          <h2 id={headingId} className="font-heading text-2xl">
-            {metadata.singular}
-          </h2>
-          <Badge variant="outline" className="font-mono text-2xs">
-            {entity}
-          </Badge>
-          <Badge variant="outline" className="text-2xs">
-            {metadata.sourceRefs ? "explicit port" : "workflow extension"}
-          </Badge>
-        </div>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Compiled from the literal specification; SQL, transactions, and
-          workflow behavior remain behind explicit runtime ports.
-        </p>
-      </header>
-
-      <EntityPrintedLabelContract entity={entity} />
-
-      <Section title="Identity and storage">
-        <ContractRows
-          rows={[
-            ["Route", route?.detail ?? "No browser detail route"],
-            ["Base path", basePathFor(entity)],
-            ["Table", descriptor.dbTable ?? dash],
-            ["ID brand", descriptor.idBrand ?? dash],
-            ["Live rows", count ?? "Unavailable"],
-          ]}
-        />
-      </Section>
-
-      <PresentationSection entity={entity} />
-
-      <Section title="Physical identifiers">
-        <ContractRows
-          rows={[
-            [
-              "Prints labels",
-              <Bool key="print" value={printsLabels(entity)} />,
-            ],
-            [
-              "Canonical emitted",
-              <code key="emit">{emittedCode(entity) ?? "—"}</code>,
-            ],
-            [
-              "Accepted inbound",
-              <Chips key="accept" items={acceptedCodes(entity)} />,
-            ],
-            ["Compatibility", physicalCompatibility(entity)],
-            ["Alias direction", legacyPrefix(entity) ? "inbound only" : "none"],
-            ["Permanence", physicalPermanence(entity)],
-          ]}
-        />
-      </Section>
-
-      <Section title="Schemas and ports">
-        <ContractRows
-          rows={[
-            ...schemaOwnershipRows(entity),
-            ["Repository adapter", sourceRef(metadata.ports.repository)],
-            ["Reference label", sourceRef(metadata.ports.references.label)],
-            [
-              "Reference resolver",
-              sourceRef(metadata.ports.references.resolver),
-            ],
-          ]}
-        />
-      </Section>
-
-      <Section title="Kernel actions and filters">
-        <Chips items={metadata.kernelActions} />
-        <p className="my-2 text-xs text-muted-foreground">
-          Missing detail records return null; routes translate that to not-found
-          UI.
-        </p>
-        <ContractRows
-          rows={[
-            [
-              "Descriptor ownership",
-              `${metadata.filterDescriptors.length} literal descriptors · generated bindings`,
-            ],
-            [
-              "Descriptor kinds",
-              <Chips
-                key="kinds"
-                items={[
-                  ...new Set(
-                    metadata.filterDescriptors.map((filter) => filter.kind),
-                  ),
-                ]}
-              />,
-            ],
-            [
-              "URL codec keys",
-              <Chips key="url" items={metadata.filterUrlKeys} />,
-            ],
-            ["Validation", "generated Zod field bindings"],
-            ["Controls and codecs", sourceRef(metadata.ports.filters)],
-            ["SQL predicates", "explicit repository predicates"],
-            ["Option loaders", "generated static/deferred bindings"],
-            ["MCP fields", mcpFieldLabel(entity)],
-            ["Count filter", countFilterCell(entity)],
-          ]}
-        />
-      </Section>
-
-      <SortingSection entity={entity} />
-
-      <EditIntentsSection entity={entity} />
-
-      <Section title="Search">
-        <ContractRows
-          rows={[
-            [
-              "Lexical projection",
-              searchPortLabel(
-                metadata.searchable,
-                metadata.ports.search.projection,
-                "",
-              ),
-            ],
-            [
-              "Semantic text",
-              searchPortLabel(
-                metadata.searchable,
-                metadata.ports.search.semanticText,
-                " · pgvector",
-              ),
-            ],
-            ["Dependent refresh", dependentRefreshLabel(entity)],
-          ]}
-        />
-      </Section>
-
-      <Section title="Relations and lifecycle">
-        <Stack gap="sm">
-          <RelationshipContract entity={entity} />
-        </Stack>
-        <div className="mt-4">
-          <Chips
-            items={[
-              `delete:${metadata.lifecycle.delete?.mode ?? "none"}`,
-              `merge:${metadata.lifecycle.merge}`,
-            ]}
-          />
-        </div>
-        <ContractRows
-          rows={[
-            ["Delete owner", metadata.operationOwners.delete ?? "none"],
-            ["Merge owner", metadata.operationOwners.merge ?? "none"],
-            ["Relatedness signals", relatednessSignalsCell(entity)],
-          ]}
-        />
-      </Section>
-
-      <Section title="Transports, UI, and coverage">
-        <ContractRows
-          rows={[
-            ["Start", startTransportLabel(entity)],
-            ["Extensions", "explicit workflow extensions only"],
-            ["MCP", mcpTransportLabel(entity)],
-            ["MCP names", mcpNamesLabel(entity)],
-            ["Routes / pages", routeCoverageLabel(entity)],
-            ["Saved views", <SavedViewChips key="views" entity={entity} />],
-            ["Contract tiers", "generated · unit · PostgreSQL · UI · E2E"],
-            [
-              "Live health",
-              `rows ${count ?? "unavailable"} · documents ${health?.documents ?? "—"} · embeddings ${health?.embeddings ?? "—"}`,
-            ],
-            [
-              "Referenced by",
-              <Chips key="inbound" items={referencesInto(entity)} />,
-            ],
-          ]}
-        />
-      </Section>
-
-      <NativeSection entity={entity} />
-
-      <Collapsible>
-        <div className="flex items-center justify-between border-y py-2">
-          <CollapsibleTrigger className="font-mono text-xs tracking-wider uppercase">
-            Compiled contract JSON
-          </CollapsibleTrigger>
-          <Button
-            type="button"
-            size="sm"
-            variant="ghost"
-            onClick={() =>
-              void copyText(json).then((ok) =>
-                ok
-                  ? toast.success("Contract copied")
-                  : toast.error("Copy failed"),
-              )
-            }
-          >
-            <Copy className="size-4" /> Copy
-          </Button>
-        </div>
-        <CollapsibleContent>
-          <pre className="max-h-[32rem] overflow-auto bg-muted/35 p-4 text-xs">
-            {json}
-          </pre>
-        </CollapsibleContent>
-      </Collapsible>
-    </article>
+    <div>
+      <Table
+        containerClassName="border-y"
+        className="w-max table-auto text-[11px]"
+      >
+        <TableHeader>
+          <TableRow>
+            <TableHead
+              rowSpan={2}
+              className={cn(
+                headCls,
+                "sticky top-0 left-0 z-30 bg-muted align-bottom",
+              )}
+            >
+              Entity
+            </TableHead>
+            <TableHead
+              colSpan={4}
+              className={cn(headCls, "sticky top-0 z-10 bg-muted text-center")}
+            >
+              Identity
+            </TableHead>
+            <TableHead
+              colSpan={1}
+              className={cn(headCls, "sticky top-0 z-10 bg-muted text-center")}
+            >
+              Kernel
+            </TableHead>
+            <TableHead
+              colSpan={2}
+              className={cn(headCls, "sticky top-0 z-10 bg-muted text-center")}
+            >
+              Filters
+            </TableHead>
+            <TableHead
+              colSpan={1}
+              className={cn(headCls, "sticky top-0 z-10 bg-muted text-center")}
+            >
+              Search
+            </TableHead>
+            <TableHead
+              colSpan={2}
+              className={cn(headCls, "sticky top-0 z-10 bg-muted text-center")}
+            >
+              Relations
+            </TableHead>
+            <TableHead
+              colSpan={2}
+              className={cn(headCls, "sticky top-0 z-10 bg-muted text-center")}
+            >
+              Lifecycle
+            </TableHead>
+            <TableHead
+              colSpan={3}
+              className={cn(headCls, "sticky top-0 z-10 bg-muted text-center")}
+            >
+              Transports / MCP
+            </TableHead>
+            <TableHead
+              colSpan={2}
+              className={cn(headCls, "sticky top-0 z-10 bg-muted text-center")}
+            >
+              Presentation
+            </TableHead>
+            <TableHead
+              colSpan={1}
+              className={cn(headCls, "sticky top-0 z-10 bg-muted text-center")}
+            >
+              Native
+            </TableHead>
+            <TableHead
+              colSpan={1}
+              className={cn(headCls, "sticky top-0 z-10 bg-muted text-center")}
+            >
+              Labels
+            </TableHead>
+          </TableRow>
+          <TableRow>
+            <TableHead className={cn(headCls, "sticky top-6 z-10 bg-muted")}>
+              Code
+            </TableHead>
+            <TableHead className={cn(headCls, "sticky top-6 z-10 bg-muted")}>
+              Aliases
+            </TableHead>
+            <TableHead className={cn(headCls, "sticky top-6 z-10 bg-muted")}>
+              Table
+            </TableHead>
+            <TableHead className={cn(headCls, "sticky top-6 z-10 bg-muted")}>
+              Rows
+            </TableHead>
+            <TableHead className={cn(headCls, "sticky top-6 z-10 bg-muted")}>
+              Actions
+            </TableHead>
+            <TableHead className={cn(headCls, "sticky top-6 z-10 bg-muted")}>
+              Filters
+            </TableHead>
+            <TableHead className={cn(headCls, "sticky top-6 z-10 bg-muted")}>
+              ID
+            </TableHead>
+            <TableHead className={cn(headCls, "sticky top-6 z-10 bg-muted")}>
+              Search
+            </TableHead>
+            <TableHead className={cn(headCls, "sticky top-6 z-10 bg-muted")}>
+              1:N
+            </TableHead>
+            <TableHead className={cn(headCls, "sticky top-6 z-10 bg-muted")}>
+              Detail
+            </TableHead>
+            <TableHead className={cn(headCls, "sticky top-6 z-10 bg-muted")}>
+              Delete
+            </TableHead>
+            <TableHead className={cn(headCls, "sticky top-6 z-10 bg-muted")}>
+              Merge
+            </TableHead>
+            <TableHead className={cn(headCls, "sticky top-6 z-10 bg-muted")}>
+              MCP
+            </TableHead>
+            <TableHead className={cn(headCls, "sticky top-6 z-10 bg-muted")}>
+              Owner
+            </TableHead>
+            <TableHead className={cn(headCls, "sticky top-6 z-10 bg-muted")}>
+              Routes
+            </TableHead>
+            <TableHead className={cn(headCls, "sticky top-6 z-10 bg-muted")}>
+              Variant
+            </TableHead>
+            <TableHead className={cn(headCls, "sticky top-6 z-10 bg-muted")}>
+              Sect.
+            </TableHead>
+            <TableHead className={cn(headCls, "sticky top-6 z-10 bg-muted")}>
+              Native
+            </TableHead>
+            <TableHead className={cn(headCls, "sticky top-6 z-10 bg-muted")}>
+              Print
+            </TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {allEntities.map((entity) => {
+            const metadata = metadataFor(entity);
+            const isSelected = selected === entity;
+            const { one, many } = cardinalitySplit(entity);
+            const tally = manyDetailTally(entity);
+            const routed = isBrowserRoutedEntity(entity);
+            return (
+              <Fragment key={entity}>
+                <TableRow
+                  data-state={isSelected ? "selected" : undefined}
+                  className="cursor-pointer"
+                  onClick={() => onSelect(entity)}
+                >
+                  <TableCell
+                    className={cn(
+                      cellCls,
+                      "sticky left-0 z-10 bg-background font-mono",
+                    )}
+                  >
+                    <span className="inline-flex items-center gap-1.5">
+                      <EntityIcon entity={entity} className="size-3.5" />
+                      {entity}
+                    </span>
+                  </TableCell>
+                  <TableCell className={cn(cellCls, mono)}>
+                    {emittedCode(entity) ?? dash}
+                  </TableCell>
+                  <TableCell className={cellCls}>
+                    <CountTip items={acceptedCodes(entity).slice(1)} />
+                  </TableCell>
+                  <TableCell className={cn(cellCls, "font-mono")}>
+                    {entityManifest[entity].dbTable ?? dash}
+                  </TableCell>
+                  <TableCell className={cn(cellCls, mono)}>
+                    {countFor(entity, counts) ?? dash}
+                  </TableCell>
+                  <TableCell className={cellCls}>
+                    <KernelActionsCell entity={entity} />
+                  </TableCell>
+                  <TableCell className={cn(cellCls, mono)}>
+                    {metadata.filterDescriptors.length}
+                  </TableCell>
+                  <TableCell className={cn(cellCls, mono)}>
+                    {idFilterCount(entity) || (
+                      <span className="text-muted-foreground/30">0</span>
+                    )}
+                  </TableCell>
+                  <TableCell className={cellCls}>
+                    <Dot
+                      value={metadata.searchable}
+                      title={
+                        metadata.searchable
+                          ? "lexical + semantic search"
+                          : "not searchable"
+                      }
+                    />
+                  </TableCell>
+                  <TableCell
+                    className={cn(cellCls, mono)}
+                    title={`${one} one-cardinality · ${many} many-cardinality`}
+                  >
+                    {one}/{many}
+                  </TableCell>
+                  <TableCell
+                    className={cn(cellCls, mono)}
+                    title={`${tally.declared} declared · ${tally.derived} derived · ${tally.omitted} omitted (of ${tally.total} many-relations)`}
+                  >
+                    {tally.total === 0
+                      ? dash
+                      : `${tally.declared}/${tally.derived}/${tally.omitted}`}
+                  </TableCell>
+                  <TableCell className={cellCls}>
+                    {metadata.lifecycle.delete?.mode ?? dash}
+                  </TableCell>
+                  <TableCell className={cellCls}>
+                    <Dot value={metadata.lifecycle.merge} />
+                  </TableCell>
+                  <TableCell
+                    className={cn(cellCls, mono)}
+                    title={mcpTransportLabel(entity)}
+                  >
+                    {metadata.mcpOperations.length}
+                  </TableCell>
+                  <TableCell
+                    className={cn(
+                      cellCls,
+                      (metadata.mcpOwner ?? "none") === MODAL_MCP_OWNER &&
+                        "text-muted-foreground",
+                    )}
+                  >
+                    {metadata.mcpOwner ?? "none"}
+                  </TableCell>
+                  <TableCell className={cellCls}>
+                    <Dot value={routed} title={routeCoverageLabel(entity)} />
+                  </TableCell>
+                  <TableCell
+                    className={cn(
+                      cellCls,
+                      metadata.detail.variant === MODAL_DETAIL_VARIANT &&
+                        "text-muted-foreground",
+                    )}
+                  >
+                    {metadata.detail.variant}
+                  </TableCell>
+                  <TableCell className={cn(cellCls, mono)}>
+                    {metadata.detail.sections.length}
+                  </TableCell>
+                  <TableCell
+                    className={cn(cellCls, "max-w-[14rem] truncate")}
+                    title={nativeCoverageLabel(entity)}
+                  >
+                    {nativeCoverageLabel(entity)}
+                  </TableCell>
+                  <TableCell className={cellCls}>
+                    <Dot value={printsLabels(entity)} />
+                  </TableCell>
+                </TableRow>
+                {isSelected && <RelationsSubRow entity={entity} />}
+              </Fragment>
+            );
+          })}
+        </TableBody>
+      </Table>
+    </div>
   );
 }
 
@@ -935,16 +895,16 @@ export function EntityManifestGrid({
   });
   const counts = health?.counts;
   const crudCount = allEntities.filter(
-    (entity) => entityInspectorMetadata[entity].kernelActions.length > 0,
+    (entity) => metadataFor(entity).kernelActions.length > 0,
   ).length;
   const searchCount = allEntities.filter(
-    (entity) => entityInspectorMetadata[entity].searchable,
+    (entity) => metadataFor(entity).searchable,
   ).length;
   const mcpCount = allEntities.filter(
-    (entity) => entityInspectorMetadata[entity].mcpOperations.length > 0,
+    (entity) => metadataFor(entity).mcpOperations.length > 0,
   ).length;
   const explicitPortCount = allEntities.filter(
-    (entity) => entityInspectorMetadata[entity].ports.repository !== null,
+    (entity) => metadataFor(entity).ports.repository !== null,
   ).length;
 
   return (
@@ -982,17 +942,12 @@ export function EntityManifestGrid({
         ))}
       </div>
 
-      <EntityIndex selected={selected} onSelect={onSelect} />
-      <ComparisonMatrix
-        selected={selected}
-        counts={counts}
-        onSelect={onSelect}
-      />
-      <EntityInspector
-        entity={selected}
-        count={countFor(selected, counts)}
-        health={health?.search[selected]}
-      />
+      <MegaTable selected={selected} counts={counts} onSelect={onSelect} />
+
+      <Section title="Relations matrix">
+        <RelationsMatrix />
+      </Section>
+
       <PhotoCategoriesSection />
       <Section title="Reference graph">
         <EntityReferenceGraph />

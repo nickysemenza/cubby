@@ -1964,6 +1964,31 @@
             "explode": true
           },
           {
+            "name": "productId",
+            "in": "query",
+            "schema": {
+              "type": "array",
+              "items": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "pattern": "^PRD-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
+                    "description": "product shortcode, e.g. PRD-4K7M"
+                  },
+                  {
+                    "type": "string",
+                    "const": "__unresolvable_entity_filter__"
+                  }
+                ],
+                "type": "string",
+                "pattern": "^PRD-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
+                "description": "product shortcode, e.g. PRD-4K7M"
+              }
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
             "name": "dataStatus",
             "in": "query",
             "schema": {
@@ -3134,6 +3159,20 @@
                 "enum": [
                   "expense_cost"
                 ]
+              }
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "ledgerPartyId",
+            "in": "query",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^LPY-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
+                "description": "ledgerParty shortcode, e.g. LPY-4K7M"
               }
             },
             "style": "form",
@@ -4694,6 +4733,31 @@
             "in": "query",
             "schema": {
               "type": "number"
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "ledgerTransferId",
+            "in": "query",
+            "schema": {
+              "type": "array",
+              "items": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "pattern": "^LTR-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
+                    "description": "ledgerTransfer shortcode, e.g. LTR-4K7M"
+                  },
+                  {
+                    "type": "string",
+                    "const": "__unresolvable_entity_filter__"
+                  }
+                ],
+                "type": "string",
+                "pattern": "^LTR-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
+                "description": "ledgerTransfer shortcode, e.g. LTR-4K7M"
+              }
             },
             "style": "form",
             "explode": true
@@ -8303,6 +8367,31 @@
             "in": "query",
             "schema": {
               "type": "string"
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "ownerLedgerPartyId",
+            "in": "query",
+            "schema": {
+              "type": "array",
+              "items": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "pattern": "^LPY-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
+                    "description": "ledgerParty shortcode, e.g. LPY-4K7M"
+                  },
+                  {
+                    "type": "string",
+                    "const": "__unresolvable_entity_filter__"
+                  }
+                ],
+                "type": "string",
+                "pattern": "^LPY-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
+                "description": "ledgerParty shortcode, e.g. LPY-4K7M"
+              }
             },
             "style": "form",
             "explode": true
@@ -13349,6 +13438,20 @@
             "explode": true
           },
           {
+            "name": "gardenEntryId",
+            "in": "query",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^GDE-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
+                "description": "gardenEntry shortcode, e.g. GDE-4K7M"
+              }
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
             "name": "activeOn",
             "in": "query",
             "description": "Calendar day as \"YYYY-MM-DD\"",
@@ -13778,6 +13881,20 @@
                 "type": "string",
                 "pattern": "^PRD-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
                 "description": "product shortcode, e.g. PRD-4K7M"
+              }
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "gardenEntryId",
+            "in": "query",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^GDE-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
+                "description": "gardenEntry shortcode, e.g. GDE-4K7M"
               }
             },
             "style": "form",
@@ -14483,6 +14600,31 @@
             "in": "query",
             "schema": {
               "type": "string"
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "parentId",
+            "in": "query",
+            "schema": {
+              "type": "array",
+              "items": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "pattern": "^CAT-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
+                    "description": "productCategory shortcode, e.g. CAT-4K7M"
+                  },
+                  {
+                    "type": "string",
+                    "const": "__unresolvable_entity_filter__"
+                  }
+                ],
+                "type": "string",
+                "pattern": "^CAT-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
+                "description": "productCategory shortcode, e.g. CAT-4K7M"
+              }
             },
             "style": "form",
             "explode": true
@@ -16383,6 +16525,20 @@
             "explode": true
           },
           {
+            "name": "componentId",
+            "in": "query",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^PRD-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
+                "description": "product shortcode, e.g. PRD-4K7M"
+              }
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
             "name": "upcPresenceFilter",
             "in": "query",
             "schema": {
@@ -17754,6 +17910,20 @@
           },
           {
             "name": "kitId",
+            "in": "query",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^PRD-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
+                "description": "product shortcode, e.g. PRD-4K7M"
+              }
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "componentId",
             "in": "query",
             "schema": {
               "type": "array",
@@ -20508,6 +20678,31 @@
             "in": "query",
             "schema": {
               "type": "number"
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "vendorAccountId",
+            "in": "query",
+            "schema": {
+              "type": "array",
+              "items": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "pattern": "^VACCT-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
+                    "description": "vendorAccount shortcode, e.g. VACCT-4K7M"
+                  },
+                  {
+                    "type": "string",
+                    "const": "__unresolvable_entity_filter__"
+                  }
+                ],
+                "type": "string",
+                "pattern": "^VACCT-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
+                "description": "vendorAccount shortcode, e.g. VACCT-4K7M"
+              }
             },
             "style": "form",
             "explode": true
@@ -27002,6 +27197,31 @@
             "schema": {
               "type": "string",
               "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "logoImageId",
+            "in": "query",
+            "schema": {
+              "type": "array",
+              "items": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "pattern": "^IMG-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
+                    "description": "image shortcode, e.g. IMG-4K7M"
+                  },
+                  {
+                    "type": "string",
+                    "const": "__unresolvable_entity_filter__"
+                  }
+                ],
+                "type": "string",
+                "pattern": "^IMG-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
+                "description": "image shortcode, e.g. IMG-4K7M"
+              }
             },
             "style": "form",
             "explode": true
@@ -36759,6 +36979,14 @@
               "adapter",
               "audiences"
             ]
+          },
+          "derived": {
+            "type": "boolean",
+            "const": true
+          },
+          "inverseOmit": {
+            "type": "string",
+            "minLength": 1
           }
         },
         "required": [
@@ -38157,6 +38385,19 @@
                   "enum": [
                     "expense_cost"
                   ]
+                }
+              }
+            ]
+          },
+          "ledgerPartyId": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LedgerPartyShortcode"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/LedgerPartyShortcode"
                 }
               }
             ]
@@ -60172,6 +60413,19 @@
             ]
           },
           "kitId": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ProductShortcode"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/ProductShortcode"
+                }
+              }
+            ]
+          },
+          "componentId": {
             "anyOf": [
               {
                 "$ref": "#/components/schemas/ProductShortcode"

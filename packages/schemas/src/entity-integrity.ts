@@ -167,6 +167,10 @@ export const entityRelationshipSchema = z.object({
     .optional(),
   sources: z.array(relationshipSourceSchema).default([]),
   mutation: relationshipMutationSchema.optional(),
+  /** The compiler derived this `many` inverse from another entity's FK. */
+  derived: z.literal(true).optional(),
+  /** Why this single-FK `one` relation's target gets no derived inverse. */
+  inverseOmit: z.string().min(1).optional(),
 });
 export type EntityRelationship = z.infer<typeof entityRelationshipSchema>;
 

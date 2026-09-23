@@ -19,6 +19,7 @@ import {
   compileDataQuality,
   validateDataQualityDeclarations,
 } from "./data-quality.ts";
+import { deriveInverseRelations, deriveRelationSections } from "./derive.ts";
 import type {
   CompiledEntity,
   DeclarationObject,
@@ -692,6 +693,13 @@ const validateFilterReference = (
       `${context} rendered ${kind} filters require brandRef so browser URL values stay shortcode-native.`,
     );
   }
+  // A URL-only id filter still names the entity it scopes by, so a detail
+  // page can find it as a back-filter; `brandRef: null` marks a non-entity id.
+  if (isIdentifier && value.brandRef === undefined) {
+    throw new EntityDeclarationError(
+      `${context} ${kind} filters must declare brandRef (null for an id that names no entity).`,
+    );
+  }
   if (value.brandRef != null && !isIdentifier) {
     throw new EntityDeclarationError(
       `${context} brandRef is only valid for id/idMulti filters.`,
@@ -962,6 +970,9 @@ const serializedDeclarationRelations = (
         relation.inverse,
         `${relationContext}.inverse`,
       );
+    if (relation.derived === true) serialized.derived = true;
+    if (relation.inverseOmit !== undefined)
+      serialized.inverseOmit = relation.inverseOmit;
     if (relation.mutation !== undefined) {
       serialized.mutation = {
         source: relation.mutation.source,
@@ -2051,8 +2062,14 @@ export const compileEntityDeclarations = (
 ): CompiledEntity[] => {
   if (declarations.length === 0)
     throw new EntityDeclarationError("Entity declarations must not be empty.");
-  const entities = validateDataQualityDeclarations(
-    declarations.map(compileEntity),
+  const entities = deriveRelationSections(
+    validateDataQualityDeclarations(
+      deriveInverseRelations(
+        declarations.map((value, index) =>
+          objectValue(value, `ENTITY_DECLARATIONS[${index}]`),
+        ),
+      ).map(compileEntity),
+    ),
   );
   validateEntityIdentities(entities);
   validateReferenceScopes(entities);

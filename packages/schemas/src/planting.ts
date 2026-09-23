@@ -3,6 +3,7 @@ import { z } from "zod";
 import { auditDateFilterFields, plainDate } from "./base-entity";
 import { displayImagesField } from "./display-images";
 import {
+  gardenEntryShortcode,
   ingredientShortcode,
   locationShortcode,
   plantingShortcode,
@@ -32,6 +33,8 @@ export const plantingFilterFields = {
   ingredientId: oneOrMany(ingredientShortcode).optional(),
   taskId: oneOrMany(taskShortcode).optional(),
   sourceProductId: oneOrMany(productShortcode).optional(),
+  /** Plantings a garden entry is logged against (`GardenEntryPlanting`). */
+  gardenEntryId: oneOrMany(gardenEntryShortcode).optional(),
   activeOn: plainDate.optional(),
 };
 export const plantingFiltersSchema = z.object(plantingFilterFields);

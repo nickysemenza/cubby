@@ -168,6 +168,24 @@ export function useSectionVisible(visible: boolean) {
 }
 
 /**
+ * A `collapseWhenEmpty` relation section reports here once its first page
+ * resolves empty: the card keeps its header (title, `0` count, "+Add") and
+ * hides only the body, so an empty relation stays one line tall yet still
+ * offers its first create. Same effect-based shape as `useSectionVisible`.
+ */
+const SectionCollapsedContext = createContext<
+  ((collapsed: boolean) => void) | null
+>(null);
+
+export function useSectionCollapsed(collapsed: boolean) {
+  const setCollapsed = useContext(SectionCollapsedContext);
+  useEffect(() => {
+    setCollapsed?.(collapsed);
+    return () => setCollapsed?.(false);
+  }, [setCollapsed, collapsed]);
+}
+
+/**
  * Mirrors each `SectionCard`'s own (per-card) visibility up to `DetailSections`,
  * keyed by section id, so the jump index (`DetailAnchorIndex`) can drop a
  * `hideWhenEmpty` section that is currently hidden instead of always listing
@@ -192,6 +210,7 @@ function SectionCard({
   const [open, setOpen] = useState(!section.collapsed);
   const [count, setCount] = useState<number | undefined>(undefined);
   const [visible, setVisible] = useState(true);
+  const [bodyCollapsed, setBodyCollapsed] = useState(false);
   const registerVisibility = useContext(SectionVisibilityRegistryContext);
   const sectionId = section.id;
   const reportVisible = useCallback(
@@ -275,7 +294,11 @@ function SectionCard({
         </div>
         {open ? (
           <SectionCountContext.Provider value={setCount}>
-            <div className="mt-2">{section.content}</div>
+            <SectionCollapsedContext.Provider value={setBodyCollapsed}>
+              <div className="mt-2" hidden={bodyCollapsed}>
+                {section.content}
+              </div>
+            </SectionCollapsedContext.Provider>
           </SectionCountContext.Provider>
         ) : null}
       </section>

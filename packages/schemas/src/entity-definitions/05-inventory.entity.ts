@@ -559,6 +559,7 @@ export default defineEntity({
         columnId: "ingredientId",
         kind: "idMulti",
         placeholder: "Filter by related ingredient id...",
+        brandRef: { entity: "ingredient" },
         urlOnly: true,
       },
       {

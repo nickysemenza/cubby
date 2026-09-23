@@ -333,6 +333,19 @@ export default defineEntity({
         steps: [{ edge: "ProductCategory.parentId", direction: "incoming" }],
       },
     },
+    {
+      key: "children",
+      label: "Subcategories",
+      target: "productCategory",
+      cardinality: "many",
+      provenance: {
+        kind: "local-path",
+        steps: [{ edge: "ProductCategory.parentId", direction: "incoming" }],
+      },
+      inverse: {
+        steps: [{ edge: "ProductCategory.parentId", direction: "outgoing" }],
+      },
+    },
   ],
   search: { enabled: false },
   capabilities: {

@@ -766,6 +766,12 @@ export function createEntityDisplayColumns<TRecord extends object>(
      * columns as-is.
      */
     only?: readonly string[];
+    /**
+     * An embedded relation table with no declared `columns` shows the
+     * target's list columns minus the computed ones only a list page's
+     * specialized renderer can fill, instead of failing on them.
+     */
+    skipSpecialized?: boolean;
     /** Manifest-backed scalar write. The list owner supplies the typed entity mutation. */
     onSaveField?: (
       row: TRecord,
@@ -787,7 +793,7 @@ export function createEntityDisplayColumns<TRecord extends object>(
     >
   )[entity];
   const sortableColumnIds: readonly string[] = sortRoster?.fields ?? [];
-  const { only, onSaveField } = options;
+  const { only, skipSpecialized, onSaveField } = options;
   const titleField = entitySummary[entity].titleField;
   const updateFields: readonly string[] = entityFieldModels[entity].update;
   const listFields = orderedListFields(entity);
@@ -986,6 +992,7 @@ export function createEntityDisplayColumns<TRecord extends object>(
         // structured values render through the detail renderer.
         const readable = field.readKey !== null || field.reference !== null;
         if (!readable && only === undefined) {
+          if (skipSpecialized) continue;
           throw new Error(
             `Display field ${entity}.${field.key} needs a specialized column`,
           );
