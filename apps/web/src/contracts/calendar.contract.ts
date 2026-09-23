@@ -5,6 +5,7 @@ import {
   calendarFeedInspectionOut,
   calendarRangeInput,
   calendarRangeOut,
+  calendarScheduleOut,
   calendarRevokeCredentialOut,
   calendarRotateCredentialOut,
   calendarRotateFeedOut,
@@ -17,6 +18,10 @@ export const calendarContract = defineContract("calendar", {
   range: query({
     input: calendarRangeInput,
     output: calendarRangeOut,
+  }),
+  schedule: query({
+    input: calendarRangeInput,
+    output: calendarScheduleOut,
   }),
   getFeed: query({
     input: z.undefined(),

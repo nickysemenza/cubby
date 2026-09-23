@@ -15,6 +15,8 @@ import type { CalendarPeriod } from "~/components/reui/event-calendar/event-cale
 import { HOUSEHOLD_TIMEZONE } from "~/lib/household-date";
 import { parsePlainDate } from "~/lib/plain-date";
 
+export type CalendarViewPeriod = CalendarPeriod | "schedule";
+
 function householdCalendarDate(plainDate: string) {
   const parsed = parsePlainDate(plainDate);
   return new TZDate(
@@ -26,12 +28,12 @@ function householdCalendarDate(plainDate: string) {
 }
 
 /** Weeks a period covers when it is week-aligned; month is not. */
-const WEEK_ALIGNED_SPAN = new Map<CalendarPeriod, number>([
+const WEEK_ALIGNED_SPAN = new Map<CalendarViewPeriod, number>([
   ["week", 1],
   ["fortnight", 2],
 ]);
 
-function getCalendarPeriodRange(anchor: Date, period: CalendarPeriod) {
+function getCalendarPeriodRange(anchor: Date, period: CalendarViewPeriod) {
   const weeks = WEEK_ALIGNED_SPAN.get(period);
   const activeStart = weeks
     ? startOfWeek(anchor, { weekStartsOn: 0 })
@@ -39,7 +41,7 @@ function getCalendarPeriodRange(anchor: Date, period: CalendarPeriod) {
   const activeEnd = weeks
     ? addWeeks(activeStart, weeks)
     : addDays(endOfMonth(anchor), 1);
-  if (weeks) {
+  if (weeks || period === "schedule") {
     return {
       activeStart,
       activeEnd,
@@ -54,7 +56,7 @@ function getCalendarPeriodRange(anchor: Date, period: CalendarPeriod) {
 
 function shiftCalendarPeriod(
   anchor: Date,
-  period: CalendarPeriod,
+  period: CalendarViewPeriod,
   direction: -1 | 1,
 ) {
   const weeks = WEEK_ALIGNED_SPAN.get(period);
@@ -65,10 +67,11 @@ function shiftCalendarPeriod(
 
 function formatCalendarPeriodTitle(
   anchor: Date,
-  period: CalendarPeriod,
+  period: CalendarViewPeriod,
   activeEnd: Date,
 ) {
-  if (period === "month") return format(anchor, "MMMM yyyy");
+  if (period === "month" || period === "schedule")
+    return format(anchor, "MMMM yyyy");
   // Week and fortnight share the compact range label; `anchor` is the period's
   // first day for both, so the branches below need no period of their own.
   const end = addDays(activeEnd, -1);

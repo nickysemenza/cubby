@@ -23,6 +23,7 @@ import {
   ScanBarcode,
   ShoppingCart,
   Sparkles,
+  Sprout,
   Warehouse,
   Wrench,
 } from "lucide-react";
@@ -198,6 +199,12 @@ export const activityViews = [
         "planting",
         "Record plantings, photos, harvests, and plans for your growing areas.",
       ),
+      {
+        to: "/garden-workbench",
+        label: "Garden workbench",
+        description: "Compare planting timing, household practice, and plans.",
+        icon: Sprout,
+      },
       {
         to: "/tools",
         label: "Tool coverage",

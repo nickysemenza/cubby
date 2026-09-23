@@ -81,8 +81,18 @@ export default defineEntity({
       ],
     },
     list: {
-      views: ["table", "timeline"],
+      views: [
+        "table",
+        {
+          kind: "slot",
+          id: "schedule",
+          label: "Schedule",
+          searchKeys: ["year"],
+        },
+        "timeline",
+      ],
       actions: ["delete"],
+      links: [{ label: "Garden workbench", path: "/garden-workbench" }],
       timeline: {
         fields: [
           "sowedOn",

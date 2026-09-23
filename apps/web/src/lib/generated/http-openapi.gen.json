@@ -1412,6 +1412,256 @@
         }
       }
     },
+    "/api/v1/calendar/schedule": {
+      "get": {
+        "tags": [
+          "calendar"
+        ],
+        "parameters": [
+          {
+            "name": "startDate",
+            "in": "query",
+            "description": "Calendar day as \"YYYY-MM-DD\"",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "endDateExclusive",
+            "in": "query",
+            "description": "Calendar day as \"YYYY-MM-DD\"",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "kinds",
+            "in": "query",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "meal",
+                  "task",
+                  "expense",
+                  "project",
+                  "planting"
+                ]
+              }
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "projectId",
+            "in": "query",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^PRJ-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
+                "description": "project shortcode, e.g. PRJ-4K7M"
+              }
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "projectPresenceFilter",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "has",
+                "none"
+              ]
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "includeSubProjects",
+            "in": "query",
+            "schema": {
+              "type": "boolean"
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "taskStatus",
+            "in": "query",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "not_started",
+                  "later",
+                  "in_progress",
+                  "blocked",
+                  "done"
+                ]
+              }
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "taskTrade",
+            "in": "query",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "planning",
+                  "demolition",
+                  "building",
+                  "drywall",
+                  "electrical",
+                  "plumbing",
+                  "mechanical",
+                  "cabinetry",
+                  "countertop",
+                  "flooring",
+                  "millwork",
+                  "finishes",
+                  "appliances",
+                  "landscaping",
+                  "logistics",
+                  "metalworking",
+                  "crafts",
+                  "auto",
+                  "other"
+                ]
+              }
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "expenseVendorId",
+            "in": "query",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^VEN-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
+                "description": "vendor shortcode, e.g. VEN-4K7M"
+              }
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "expenseVendorPresenceFilter",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "has",
+                "none"
+              ]
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "expenseFuture",
+            "in": "query",
+            "schema": {
+              "type": "boolean"
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "projectStatus",
+            "in": "query",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "planning",
+                  "not_started",
+                  "in_progress",
+                  "done"
+                ]
+              }
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "projectKind",
+            "in": "query",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "furniture",
+                  "workshop",
+                  "household",
+                  "renovation",
+                  "garden",
+                  "trip"
+                ]
+              }
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "projectKindPresenceFilter",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "has",
+                "none"
+              ]
+            },
+            "style": "form",
+            "explode": true
+          }
+        ],
+        "operationId": "calendar.schedule",
+        "responses": {
+          "200": {
+            "description": "200",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarScheduleOut"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/collection/create": {
       "post": {
         "tags": [
@@ -32080,6 +32330,27 @@
         },
         "required": [
           "token"
+        ]
+      },
+      "CalendarScheduleOut": {
+        "type": "object",
+        "properties": {
+          "tasks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TaskOut"
+            }
+          },
+          "plantings": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PlantingOut"
+            }
+          }
+        },
+        "required": [
+          "tasks",
+          "plantings"
         ]
       },
       "CalendarTaskItem": {

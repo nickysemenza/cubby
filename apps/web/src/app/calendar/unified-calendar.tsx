@@ -2,6 +2,7 @@ import type {
   CalendarDaySummary,
   CalendarItem,
   CalendarItemKind,
+  CalendarRangeInput,
 } from "@cubby/schemas/calendar";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { addDays, format } from "date-fns";
@@ -30,7 +31,6 @@ import {
 } from "~/components/reui/event-calendar/event-calendar";
 import type {
   CalendarEvent,
-  CalendarPeriod,
   EventCalendarProposedUpdate,
 } from "~/components/reui/event-calendar/event-calendar-types";
 import { Button } from "~/components/ui/button";
@@ -58,7 +58,9 @@ import {
   getCalendarPeriodRange,
   householdCalendarDate,
   shiftCalendarPeriod,
+  type CalendarViewPeriod,
 } from "./calendar-period";
+import { CalendarSchedule } from "./calendar-schedule";
 import { EMPTY_DAY_SUMMARY, WeekSummaryGrid } from "./calendar-week-summary";
 import { calendar } from "./calendar.functions";
 
@@ -69,10 +71,14 @@ const CALENDAR_ACTIVATION = {
 const ALL_KINDS: CalendarItemKind[] = ["meal", "task", "expense", "project"];
 const NO_ITEMS: CalendarItem[] = [];
 const NO_DAY_SUMMARIES: Record<string, CalendarDaySummary> = {};
-const PERIOD_OPTIONS = [
+const GRID_PERIOD_OPTIONS = [
   { value: "month", label: "Month" },
   { value: "fortnight", label: "Fortnight" },
   { value: "week", label: "Week" },
+] as const;
+const PERIOD_OPTIONS = [
+  ...GRID_PERIOD_OPTIONS,
+  { value: "schedule", label: "Schedule" },
 ] as const;
 /**
  * Fortnight density, built on ONE vertical unit: 1.75rem, the month's bar
@@ -116,7 +122,7 @@ const KIND_LABELS = {
 type CreateKind = CalendarItemKind | null;
 
 interface UnifiedCalendarProps {
-  period: CalendarPeriod;
+  period: CalendarViewPeriod;
   date?: string;
   day?: string;
   /**
@@ -131,7 +137,7 @@ interface UnifiedCalendarProps {
    * behaviour fetched four kinds a month to throw three away.
    */
   lockedKinds?: CalendarItemKind[];
-  onPeriodChange: (period: CalendarPeriod) => void;
+  onPeriodChange: (period: CalendarViewPeriod) => void;
   onDateChange: (date?: string) => void;
   onDayChange?: (day?: string) => void;
 }
@@ -198,6 +204,51 @@ function CalendarFortnightChip({
 const itemIncludesDay = (item: CalendarItem, day: string) =>
   item.startDate <= day && item.endDateExclusive > day;
 
+const scheduleQueryInput = (
+  startDate: string,
+  endDateExclusive: string,
+  filters?: CalendarFilters,
+  lockedKinds?: CalendarItemKind[],
+): CalendarRangeInput => {
+  const selectedKinds = (lockedKinds ?? filters?.kinds)?.filter(
+    (kind) => kind === "task" || kind === "planting",
+  );
+  const input: CalendarRangeInput = {
+    startDate,
+    endDateExclusive,
+    projectId: filters?.projectId,
+    projectPresenceFilter: filters?.projectPresenceFilter,
+    includeSubProjects: filters?.includeSubProjects,
+    taskStatus: filters?.taskStatus,
+    taskTrade: filters?.taskTrade,
+  };
+  if (selectedKinds?.length) {
+    input.kinds = [selectedKinds[0]!, ...selectedKinds.slice(1)];
+  }
+  return input;
+};
+
+function CalendarScheduleRead({ input }: { input: CalendarRangeInput }) {
+  const { data, isError, error, refetch } = useQuery(
+    calendar.schedule.queryOptions(input),
+  );
+  if (isError) {
+    return <CalendarRangeError error={error} onRetry={() => void refetch()} />;
+  }
+  if (!data) return <Description>Loading schedule…</Description>;
+  return (
+    <CalendarSchedule
+      data={data}
+      window={{
+        startDate: input.startDate,
+        endDate: formatPlainDate(
+          addDays(parsePlainDate(input.endDateExclusive), -1),
+        ),
+      }}
+    />
+  );
+}
+
 export function UnifiedCalendar({
   period,
   date,
@@ -248,8 +299,19 @@ export function UnifiedCalendar({
     }),
     [filters, lockedKinds, visibleRange],
   );
+  const scheduleRange = useMemo(
+    () =>
+      scheduleQueryInput(
+        activePeriod.startDate,
+        activePeriod.endDateExclusive,
+        filters,
+        lockedKinds,
+      ),
+    [activePeriod, filters, lockedKinds],
+  );
   const { data, isLoading, isError, error, refetch } = useQuery({
     ...calendar.range.queryOptions(range),
+    enabled: period !== "schedule",
     // Without this every chip toggle blanks the month grid mid-flight.
     placeholderData: keepPreviousData,
   });
@@ -432,21 +494,23 @@ export function UnifiedCalendar({
           <ChoiceSwitcher
             className="ml-auto"
             ariaLabel="Calendar period"
-            options={PERIOD_OPTIONS}
+            options={lockedKinds ? GRID_PERIOD_OPTIONS : PERIOD_OPTIONS}
             value={period}
             onValueChange={onPeriodChange}
           />
         </Row>
 
-        {isError && (
+        {period === "schedule" ? (
+          <CalendarScheduleRead input={scheduleRange} />
+        ) : isError ? (
           <CalendarRangeError error={error} onRetry={() => void refetch()} />
-        )}
+        ) : null}
 
         {/* Both trees render; the BREAKPOINT decides, not JS. `useIsMobile`
             reports false on the server, so a JS-only switch would paint the
             seven-column grid on a phone until hydration — the same trap
             `RTable` documents at length. */}
-        {!isError && (
+        {period !== "schedule" && !isError && (
           <>
             <div className="md:hidden">
               <CalendarAgenda
@@ -512,27 +576,29 @@ export function UnifiedCalendar({
         )}
       </Stack>
 
-      <CalendarDaySheet
-        day={selectedDay}
-        items={selectedItems}
-        summary={selectedSummary}
-        onOpenChange={(open) => {
-          if (!open) setSelectedDay(undefined);
-        }}
-        onCreate={setCreateKind}
-        renderItem={(item) => (
-          <PopoverTrigger
-            handle={editorHandle}
-            payload={item}
-            className={calendarItemTriggerClassName(item)}
-            onClick={() => {
-              requestAnimationFrame(() => setSelectedDay(undefined));
-            }}
-          >
-            <CalendarItemPresentation item={item} variant="rich" />
-          </PopoverTrigger>
-        )}
-      />
+      {period !== "schedule" && (
+        <CalendarDaySheet
+          day={selectedDay}
+          items={selectedItems}
+          summary={selectedSummary}
+          onOpenChange={(open) => {
+            if (!open) setSelectedDay(undefined);
+          }}
+          onCreate={setCreateKind}
+          renderItem={(item) => (
+            <PopoverTrigger
+              handle={editorHandle}
+              payload={item}
+              className={calendarItemTriggerClassName(item)}
+              onClick={() => {
+                requestAnimationFrame(() => setSelectedDay(undefined));
+              }}
+            >
+              <CalendarItemPresentation item={item} variant="rich" />
+            </PopoverTrigger>
+          )}
+        />
+      )}
 
       <CalendarItemInspector handle={editorHandle} />
 

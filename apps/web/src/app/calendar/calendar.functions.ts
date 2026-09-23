@@ -4,6 +4,7 @@ import { defineOperationDomain } from "~/integrations/tanstack-query/operation-c
 
 export const calendar = defineOperationDomain(calendarContract, {
   range: { tags: [["calendar", "range"]] },
+  schedule: { tags: [["calendar", "range"]] },
   getFeed: { tags: [["calendar", "feed"]] },
   getCredential: { tags: [["calendar", "credential"]], cache: "live-status" },
   inspectFeed: { tags: [["calendar", "feed"]], cache: "live-status" },

@@ -145,6 +145,7 @@ public enum EntityDetailSlotID: String, CaseIterable, Codable, Sendable {
   case projectAnalytics = "project.analytics"
   case projectBudget = "project.budget"
   case projectContribution = "project.contribution"
+  case projectSchedule = "project.schedule"
   case purchaseFinancialSettlement = "purchase.financial-settlement"
   case purchaseImportRuns = "purchase.import-runs"
   case purchaseProjectAllocation = "purchase.project-allocation"
@@ -158,9 +159,11 @@ public enum EntityListSlotID: String, CaseIterable, Codable, Sendable {
   case locationVisualizations = "location.visualizations"
   case mealCalendar = "meal.calendar"
   case mealNutrition = "meal.nutrition"
+  case plantingSchedule = "planting.schedule"
   case productCategoryHierarchy = "productCategory.hierarchy"
   case projectAnalytics = "project.analytics"
   case projectOverview = "project.overview"
+  case projectSchedule = "project.schedule"
   case taskAgenda = "task.agenda"
   case taskBoard = "task.board"
 }
@@ -1459,6 +1462,7 @@ public enum EntityCatalog {
       heroActions: [.edit, .setStatus],
       detailSections: [
         DetailSection(id: EntityDetailSlotID.projectBudget.rawValue, title: "Budget", placement: .primary, collapsed: false, explanationField: nil, kind: .slot),
+        DetailSection(id: EntityDetailSlotID.projectSchedule.rawValue, title: "Schedule", placement: .full, collapsed: false, explanationField: nil, kind: .slot),
         DetailSection(id: EntityDetailSlotID.projectContribution.rawValue, title: "Contribution", placement: .supporting, collapsed: false, explanationField: nil, kind: .slot),
         DetailSection(id: "tasks", title: "Tasks", placement: .primary, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "tasks", filterDescriptor: "project", prefill: nil, columns: ["name", "status", "dueDate", "trade"], sort: nil, limit: nil, hideWhenEmpty: false, collapseWhenEmpty: false))),
         DetailSection(id: "overview", title: "Overview", placement: .supporting, collapsed: false, explanationField: nil, kind: .fields(["name", "icon", "status", "kind", "startDate", "endDate", "costEstimate", "parentProjectId", "locations", "defaultTrade", "updatedAt"])),
@@ -1473,7 +1477,7 @@ public enum EntityCatalog {
         DetailSection(id: "notes", title: "Notes", placement: .supporting, collapsed: false, explanationField: nil, kind: .fields(["notes"])),
         DetailSection(id: EntityDetailSlotID.projectAnalytics.rawValue, title: "Analytics", placement: .full, collapsed: true, explanationField: nil, kind: .slot)
       ],
-      listViews: [.table, .slot(id: EntityListSlotID.projectOverview.rawValue, label: "Overview", searchKeys: ["rows"]), .slot(id: EntityListSlotID.projectAnalytics.rawValue, label: "Analytics", searchKeys: []), .shelf],
+      listViews: [.table, .slot(id: EntityListSlotID.projectSchedule.rawValue, label: "Schedule", searchKeys: ["rows"]), .slot(id: EntityListSlotID.projectOverview.rawValue, label: "Overview", searchKeys: ["rows"]), .slot(id: EntityListSlotID.projectAnalytics.rawValue, label: "Analytics", searchKeys: []), .shelf],
       shelfSubtitle: [],
       listActions: ["setStatus", "delete"],
       timelineFields: [],
@@ -2412,7 +2416,7 @@ public enum EntityCatalog {
         DetailSection(id: "garden-history", title: "Journal", placement: .primary, collapsed: false, explanationField: nil, kind: .relation(RelationSectionSpec(relation: "entries", filterDescriptor: "journalPlantingId", prefill: RelationSectionPrefill(field: "plantingIds"), columns: ["kind", "observedOn", "locationId", "note", "harvestAmount"], sort: SectionSort(field: "observedOn", direction: .desc), limit: nil, hideWhenEmpty: false, collapseWhenEmpty: false))),
         DetailSection(id: "overview", title: "Planting details", placement: .supporting, collapsed: false, explanationField: nil, kind: .fields(["plantId", "status", "outcome", "locationId", "sourceProductId", "quantity", "plannedWindow", "sowedOn", "transplantedOn", "finishedOn", "notes", "taskId", "expectedHarvest", "guideSowWindow", "guideTransplantWindow"]))
       ],
-      listViews: [.table, .timeline, .shelf],
+      listViews: [.table, .slot(id: EntityListSlotID.plantingSchedule.rawValue, label: "Schedule", searchKeys: ["year"]), .timeline, .shelf],
       shelfSubtitle: [],
       listActions: ["delete"],
       timelineFields: ["sowedOn", "transplantedOn", "expectedHarvestStart", "finishedOn"],

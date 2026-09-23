@@ -151,6 +151,11 @@ export const detailSlots = {
     ),
   },
   project: {
+    schedule: slot(() =>
+      import("~/app/projects/slots").then((m) => ({
+        default: m.ProjectSchedule,
+      })),
+    ),
     budget: slot(() =>
       import("~/app/projects/slots").then((m) => ({
         default: m.ProjectBudget,

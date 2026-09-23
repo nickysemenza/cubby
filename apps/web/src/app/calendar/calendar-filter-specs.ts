@@ -129,3 +129,17 @@ export const calendarFilterSpecs: readonly FilterSpec[] = [
     nullable: { field: "projectKindPresenceFilter", label: "kind" },
   },
 ];
+
+/** Schedule has only Task and Planting lanes. Expense and Project record
+ * filters remain in the URL for other calendar modes but are not shown here. */
+export const calendarScheduleFilterSpecs: readonly FilterSpec[] = [
+  {
+    ...calendarFilterSpecs[0]!,
+    options: itemKindOptions.filter(
+      (option) => option.value === "task" || option.value === "planting",
+    ),
+  },
+  ...calendarFilterSpecs.filter((spec) =>
+    ["project", "taskStatus", "taskTrade"].includes(spec.columnId),
+  ),
+];

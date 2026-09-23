@@ -27,6 +27,7 @@ describe("Porcelain Transit domain wayfinding", () => {
     ["/labels", "pantry"],
     ["/meals/shopping-list", "plan"],
     ["/projects/tools", "house"],
+    ["/garden-workbench?mode=plan", "house"],
     ["/tools", "house"],
     ["/expenses/EXP-42?view=list", "finance"],
   ])("classifies %s as %s", (path, expected) => {

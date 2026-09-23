@@ -39,6 +39,19 @@ describe("calendar period", () => {
     expect(formatPlainDate(range.visibleEnd)).toBe("2026-08-09");
   });
 
+  it("anchors Schedule to the calendar month without six-week grid padding", () => {
+    const anchor = new TZDate(2026, 6, 14, 12, 0, 0, zone);
+    const range = getCalendarPeriodRange(anchor, "schedule");
+
+    expect(formatPlainDate(range.activeStart)).toBe("2026-07-01");
+    expect(formatPlainDate(range.activeEnd)).toBe("2026-08-01");
+    expect(range.visibleStart).toBe(range.activeStart);
+    expect(range.visibleEnd).toBe(range.activeEnd);
+    expect(formatPlainDate(shiftCalendarPeriod(anchor, "schedule", 1))).toBe(
+      "2026-08-14",
+    );
+  });
+
   it("snaps a fortnight to the anchor week and spans fourteen days", () => {
     const range = getCalendarPeriodRange(
       new TZDate(2026, 7, 20, 12, 0, 0, zone),

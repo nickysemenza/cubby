@@ -37,7 +37,7 @@ export const BasicInfo: FC<BasicInfoProps> = ({
           // every label lines up, sentence-case secondary text rather than
           // an eyebrow, and no per-row hairline. Phone widens the label
           // column and the type a step, per DESIGN.md's fact-grid sentence.
-          "basic-info-ledger grid grid-cols-[7.5rem_minmax(0,1fr)] gap-x-3 gap-y-1.5 text-[13px]/[18px] max-md:grid-cols-[6.5rem_minmax(0,1fr)] max-md:gap-y-2.5 max-md:text-sm"
+          "basic-info-ledger grid grid-cols-[7.5rem_minmax(0,1fr)] gap-x-3 gap-y-1 text-[13px]/[18px] max-md:grid-cols-[6.5rem_minmax(0,1fr)] max-md:gap-y-2.5 max-md:text-sm"
         }
       >
         {visibleFields.map((field) => (

@@ -47,6 +47,7 @@ describe("application view manifest", () => {
         "/projects",
         "/tasks",
         "/plantings",
+        "/garden-workbench",
         "/projects/tools",
         "/household-contribution",
         "/statement-rows",

@@ -260,7 +260,7 @@ function SectionCard({
         tabIndex={-1}
         hidden={!visible}
         className={cn(
-          "scroll-mt-[calc(var(--app-chrome-top)+3rem)] px-3 py-3 focus:outline-none md:px-4",
+          "scroll-mt-[calc(var(--app-chrome-top)+3rem)] px-3 py-3 focus:outline-none md:px-3 md:py-2",
           section.overflowVisible && "overflow-visible",
           className,
         )}
@@ -295,7 +295,7 @@ function SectionCard({
         {open ? (
           <SectionCountContext.Provider value={setCount}>
             <SectionCollapsedContext.Provider value={setBodyCollapsed}>
-              <div className="mt-2" hidden={bodyCollapsed}>
+              <div className="mt-2 md:mt-1.5" hidden={bodyCollapsed}>
                 {section.content}
               </div>
             </SectionCollapsedContext.Provider>
@@ -569,21 +569,24 @@ function renderResponsiveLayout({
       <div
         key={`run-${blocks.length}`}
         className={cn(
-          "grid items-start gap-4",
+          "grid items-start gap-4 md:gap-2",
           primary.length > 0 && hasSupportingRail
             ? "md:grid-cols-[minmax(0,3fr)_minmax(17rem,2fr)] lg:grid-cols-[minmax(0,1fr)_20rem]"
             : "grid-cols-1",
         )}
       >
         {primary.length > 0 ? (
-          <div data-testid="detail-primary-stack" className="min-w-0 space-y-4">
+          <div
+            data-testid="detail-primary-stack"
+            className="min-w-0 space-y-4 md:space-y-2"
+          >
             {renderSectionStack(primary)}
           </div>
         ) : null}
         {hasSupportingRail ? (
           <aside
             data-testid="detail-supporting-rail"
-            className="min-w-0 space-y-4"
+            className="min-w-0 space-y-4 md:space-y-2"
           >
             {pendingVisual ? (
               <div data-testid="detail-rail-media" className="hidden md:block">
@@ -607,7 +610,7 @@ function renderResponsiveLayout({
     }
   }
   flushRun();
-  return <div className="space-y-4">{blocks}</div>;
+  return <div className="space-y-4 md:space-y-2">{blocks}</div>;
 }
 
 interface DetailSectionsProps {
@@ -860,7 +863,11 @@ export const DetailSections: FC<DetailSectionsProps> = ({
     <SectionVisibilityRegistryContext.Provider
       value={registerSectionVisibility}
     >
-      <Tabs value={activeMode} onValueChange={selectMode} className="gap-4">
+      <Tabs
+        value={activeMode}
+        onValueChange={selectMode}
+        className="gap-4 md:gap-2"
+      >
         <DetailCommandStrip
           activeMode={activeMode}
           hasRelations={hasRelations}
@@ -872,7 +879,7 @@ export const DetailSections: FC<DetailSectionsProps> = ({
 
         {activeMode === "overview" ? (
           <TabsContent value="overview" className="text-sm/5">
-            <div className="space-y-4">
+            <div className="space-y-4 md:space-y-2">
               <div className="animate-in duration-150 fade-in-0 slide-in-from-bottom-1 motion-reduce:animate-none">
                 {renderResponsiveLayout({
                   sections: overviewSections,

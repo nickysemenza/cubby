@@ -6,7 +6,10 @@ import {
   filterGetterFromSearch,
 } from "~/entities/filters";
 
-import { calendarFilterSpecs } from "./calendar-filter-specs";
+import {
+  calendarFilterSpecs,
+  calendarScheduleFilterSpecs,
+} from "./calendar-filter-specs";
 import { buildCalendarFilters } from "./calendar-filters";
 import { calendarSearchSchema } from "./calendar-search";
 
@@ -34,6 +37,20 @@ describe("calendarFilterSpecs drift guards", () => {
       // oxlint-disable-next-line vitest/no-conditional-expect -- The data-dependent branch determines whether this optional case is applicable.
       if (spec.nullable) expect(allowed).toContain(spec.nullable.field);
     }
+  });
+});
+
+describe("calendarScheduleFilterSpecs", () => {
+  it("offers only the two Schedule kinds and filters that constrain them", () => {
+    expect(calendarScheduleFilterSpecs.map((spec) => spec.columnId)).toEqual([
+      "kinds",
+      "project",
+      "taskStatus",
+      "taskTrade",
+    ]);
+    expect(
+      calendarScheduleFilterSpecs[0]?.options?.map((item) => item.value),
+    ).toEqual(["task", "planting"]);
   });
 });
 

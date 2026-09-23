@@ -11,10 +11,12 @@ import {
 import { oneOrMany, presenceFilter } from "./pagination";
 import { mealKindSchema, mealTypeSchema } from "./meal-classification";
 import { nutritionTotals } from "./nutrition";
+import { plantingOut } from "./planting";
 import {
   plainDate,
   projectKindSchema,
   projectStatusSchema,
+  taskOut,
   taskStatusSchema,
   tradeSchema,
 } from "./project";
@@ -226,6 +228,15 @@ export const calendarRangeOut = z.object({
   days: z.record(plainDate, calendarDaySummary),
 });
 export type CalendarRangeOut = z.infer<typeof calendarRangeOut>;
+
+/** Schedule is a two-kind read. It uses the calendar range and project/task
+ * filters, while meal, expense, and project-only filters do not constrain its
+ * rows. Fully undated Tasks and Plantings remain visible in every window. */
+export const calendarScheduleOut = z.object({
+  tasks: z.array(taskOut),
+  plantings: z.array(plantingOut),
+});
+export type CalendarScheduleOut = z.infer<typeof calendarScheduleOut>;
 
 export const calendarFeedOut = z.object({ token: z.string().nullable() });
 export const calendarRotateFeedOut = z.object({ token: z.string() });

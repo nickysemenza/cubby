@@ -5,6 +5,7 @@ import {
   getCalendarCredentialWorkflow,
   getCalendarFeedWorkflow,
   getCalendarRangeWorkflow,
+  getCalendarScheduleWorkflow,
   inspectCalendarFeedWorkflow,
   revokeCalendarCredentialWorkflow,
   rotateCalendarCredentialWorkflow,
@@ -13,6 +14,7 @@ import {
 
 export const calendarHandlers = implementOperationDomain(calendarContract, {
   range: (context, input) => getCalendarRangeWorkflow(context.db, input),
+  schedule: (context, input) => getCalendarScheduleWorkflow(context.db, input),
   getFeed: (context) =>
     getCalendarFeedWorkflow(calendarOrigin(context.headers)),
   getCredential: (context) =>

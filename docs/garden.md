@@ -1,8 +1,9 @@
 # Garden
 
-Garden is `plant`, `planting` and `gardenEntry`, three generic manifest entities with no
-bespoke UI, workflow module, or hand-registered MCP tools. `/plantings` and `/plants` are
-the list entry points; `/garden` is gone. See
+Garden is `plant`, `planting` and `gardenEntry`, three generic manifest entities.
+`/plantings` and `/plants` are the record entry points. `/garden-workbench` is a
+read-only view of guide timing, household practice, and planting plans; it has
+no write workflow or hand-registered MCP tools. `/garden` is gone. See
 [terminology.md](terminology.md#garden) for the naming glossary.
 
 A **Plant** is a cultivar ("Sun Gold F1") or, without one, a species
@@ -31,6 +32,15 @@ only. The timeline's `lifecycle.start` is a generic ordered fallback
 first non-null field, so a bought seedling's interval starts at
 `transplantedOn` and renders marked "Inferred" (the row's `confident: false`)
 rather than needing an origin enum.
+
+The Plantings list has an opt-in Schedule beside Table and Timeline. It groups
+records by current location, with one row per Planting and separate marks for
+recorded dates and derived expected harvest. Source-linked guide windows sit
+on reference rows for represented crops. The workbench compares these records
+with source-specific recurring windows on a selected twelve-month year axis;
+that axis does not turn a recommendation into a household plan. `plannedWindow`
+remains text in an undated lane. Schedule and workbench record views load all
+pages before rendering their result.
 
 A **GardenEntry** is a dated `note | harvest` against a required `Location`,
 explicitly associated with zero or more Plantings, with photos. Explicitly

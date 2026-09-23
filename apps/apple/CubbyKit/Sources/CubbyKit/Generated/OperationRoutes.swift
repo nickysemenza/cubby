@@ -33,6 +33,7 @@ extension OperationRoute {
         OperationRoute(operationID: "calendar.revokeCredential", method: .post, path: "/api/v1/calendar/revokeCredential", pathParameters: [], queryParameters: [], hasBody: true),
         OperationRoute(operationID: "calendar.rotateCredential", method: .post, path: "/api/v1/calendar/rotateCredential", pathParameters: [], queryParameters: [], hasBody: true),
         OperationRoute(operationID: "calendar.rotateFeed", method: .post, path: "/api/v1/calendar/rotateFeed", pathParameters: [], queryParameters: [], hasBody: true),
+        OperationRoute(operationID: "calendar.schedule", method: .get, path: "/api/v1/calendar/schedule", pathParameters: [], queryParameters: ["endDateExclusive", "expenseFuture", "expenseVendorId", "expenseVendorPresenceFilter", "includeSubProjects", "kinds", "projectId", "projectKind", "projectKindPresenceFilter", "projectPresenceFilter", "projectStatus", "startDate", "taskStatus", "taskTrade"], hasBody: false),
         OperationRoute(operationID: "collection.create", method: .post, path: "/api/v1/collection/create", pathParameters: [], queryParameters: [], hasBody: true),
         OperationRoute(operationID: "collection.detail", method: .post, path: "/api/v1/collection/detail", pathParameters: [], queryParameters: [], hasBody: true),
         OperationRoute(operationID: "collection.list", method: .get, path: "/api/v1/collection/list", pathParameters: [], queryParameters: [], hasBody: false),
