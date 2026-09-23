@@ -2,6 +2,7 @@
 // different pnpm workspace, so it can't import this module directly).
 const ALLOWED_HOSTS = new Set(["localhost", "127.0.0.1"]);
 const DEV_DB_NAME = "cubby_dev";
+const DEV_DB_PORT = "55432";
 
 /**
  * Refuse to run a destructive dev-database operation (schema push, corpus
@@ -24,13 +25,19 @@ export function assertDevDatabaseUrl(databaseUrl: string | undefined): URL {
     throw new Error(`DATABASE_URL is not a valid URL: ${databaseUrl}`);
   }
   const database = url.pathname.replace(/^\//, "");
-  if (!ALLOWED_HOSTS.has(url.hostname) || database !== DEV_DB_NAME) {
+  if (
+    url.protocol !== "postgresql:" ||
+    !ALLOWED_HOSTS.has(url.hostname) ||
+    url.port !== DEV_DB_PORT ||
+    url.username !== "postgres" ||
+    url.password !== "password" ||
+    database !== DEV_DB_NAME ||
+    url.search !== "" ||
+    url.hash !== ""
+  ) {
     throw new Error(
-      `Refusing to run against DATABASE_URL host "${url.hostname}" database ` +
-        `"${database}". This command only ever runs against the local dev ` +
-        `database (host: localhost/127.0.0.1, database: "${DEV_DB_NAME}"), ` +
-        `never the shared household database. Run \`pnpm db:dev:up\` first ` +
-        `and use \`pnpm db:dev:push\` / \`pnpm db:dev:seed\`.`,
+      "Refusing DATABASE_URL: expected the exact local dev PostgreSQL " +
+        `connection (postgres@localhost/127.0.0.1:${DEV_DB_PORT}/${DEV_DB_NAME}).`,
     );
   }
   return url;

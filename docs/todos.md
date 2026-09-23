@@ -360,14 +360,6 @@ text: none` plus candidate names and passes through as "Deterministic local
   shelf-versus-ledger disagreement worklist so the pass visits the products that
   actually disagree wherever they live.
 
-- **Local passwordless dev sign-in.** Agents cannot type credentials, so
-  browser-pane verification against the seeded local dev database
-  (`pnpm dev:local`) needs a human to sign in. Add a route that mints the
-  synthetic dev user's better-auth session, registered only under `vite dev`
-  with a `DATABASE_URL` that passes `tooling/dev-db-guard.ts`, excluded from
-  the Workers build, same-origin redirects only, and documented next to
-  `pnpm dev:local`.
-
 - **Flue `photo_inventory` coordinator.** A hosted coordinator that works a
   photo run through `propose_photo_groups` and `propose_product_match` from
   on-device analysis text (never raw bytes): a coordinator prompt,
@@ -691,8 +683,7 @@ example vegetable` must not resolve to the weight of an entire linked bag
   [docs/agents/xcode-mcp.md](agents/xcode-mcp.md) without Storybook's weight.
   Promote when agents keep reproducing edge states against real data; decide
   how it stays out of the production bundle (`mock-schema.ts` imports faker).
-  The data half is now covered: `pnpm db:dev:up/push/seed` plus `pnpm
-dev:local` (`apps/web/tooling/scenarios/corpus.ts`) gives a persistent
+  The data half is now covered: `pnpm dev:local` sets up a persistent
   local database with named, non-empty entities in every state the corpus
   covers, so `dev:local` no longer needs the shared prod `DATABASE_URL` for
   this. What remains is the route/component-preview half — driving one

@@ -6,6 +6,11 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      simulator_e2e:
+        description: Run the disposable-database iPhone simulator E2E lane
+        type: boolean
+        default: false
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -19,6 +24,7 @@ permissions:
 jobs:
   scope:
     name: Scope
+    if: github.event_name != 'workflow_dispatch' || !inputs.simulator_e2e
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
@@ -596,3 +602,44 @@ jobs:
         with:
           targets: ${{ matrix.targets }}
           profile: dist
+
+  simulator-e2e:
+    name: iPhone simulator E2E (manual)
+    if: github.event_name == 'workflow_dispatch' && inputs.simulator_e2e
+    runs-on: macos-26
+    timeout-minutes: 70
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: ./.github/actions/setup-node-with-deps
+        with:
+          wasm: restore
+      - uses: ./.github/actions/setup-apple-ffi
+        with:
+          targets: sim
+      - uses: ./.github/actions/setup-apple-tools
+      - name: Start native PostgreSQL 17 with pgvector
+        shell: bash
+        run: |
+          set -euo pipefail
+          brew install postgresql@17 pgvector
+          pg_bin="$(brew --prefix postgresql@17)/bin"
+          echo "$pg_bin" >> "$GITHUB_PATH"
+          "$pg_bin/initdb" -D "$RUNNER_TEMP/cubby-sim-pg" -A trust -U postgres
+          "$pg_bin/pg_ctl" -D "$RUNNER_TEMP/cubby-sim-pg" -l "$RUNNER_TEMP/cubby-sim-pg.log" -o '-h 127.0.0.1 -p 55432' start
+          "$pg_bin/psql" -h 127.0.0.1 -p 55432 -U postgres -d postgres -c "ALTER USER postgres WITH PASSWORD 'password'"
+          "$pg_bin/psql" -h 127.0.0.1 -p 55432 -U postgres -d postgres -Atc "SELECT name FROM pg_available_extensions WHERE name = 'vector'" | grep -qx vector
+      - name: Run native read and write against a disposable database
+        env:
+          CUBBY_SIM_DB_EXTERNAL: "1"
+          CI: "1"
+        run: pnpm test:e2e:sim
+      - name: Retain simulator diagnostics on failure
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: simulator-e2e-failure
+          if-no-files-found: warn
+          path: |
+            artifacts/sim-e2e/**
+            apps/apple/DerivedData/Logs/**
+            ${{ runner.temp }}/cubby-sim-pg.log

@@ -9,8 +9,10 @@ import viteReact from "@vitejs/plugin-react";
 import { defineConfig, loadEnv, type Plugin, type PluginOption } from "vite";
 import wasm from "vite-plugin-wasm";
 import { isGitWorktree } from "./tooling/git-worktree.ts";
+import { assertDevDatabaseUrl } from "./tooling/dev-db-guard.ts";
 import { mcpAppAsset } from "./tooling/mcp-app-asset.ts";
 import { createServerFunctionIdGenerator } from "./tooling/server-function-id.ts";
+import { viteDevLogin } from "./tooling/vite-dev-login.ts";
 import { readR2PublicUrlFromWrangler } from "./tooling/wrangler-public-config.ts";
 
 const isCloudflare = process.env.DEPLOY_TARGET === "cloudflare";
@@ -189,6 +191,15 @@ function cfSentryShim(): Plugin {
 }
 
 export default defineConfig(async ({ command, mode }) => {
+  let enableDevLogin = false;
+  if (command === "serve") {
+    try {
+      assertDevDatabaseUrl(process.env.DATABASE_URL);
+      enableDevLogin = true;
+    } catch {
+      // Only the fixed local development database can enable this middleware.
+    }
+  }
   const r2PublicUrl = resolveR2PublicUrl(command, mode);
   // CF Workers build: use @cloudflare/vite-plugin (Vite Environment API).
   // Dev server runs without a deploy plugin (plain Node.js via vite dev).
@@ -277,6 +288,7 @@ export default defineConfig(async ({ command, mode }) => {
           ],
     },
     plugins: [
+      ...(enableDevLogin ? [viteDevLogin()] : []),
       // Permit the JS Self-Profiling API in dev (`window.__jsProfile`, see
       // lib/perf/js-self-profile.ts). The header must be on the SSR document, and
       // `server.headers` doesn't reach TanStack Start's response — set it via

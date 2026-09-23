@@ -2,6 +2,8 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { request, type APIRequestContext } from "@playwright/test";
+import { faker } from "@faker-js/faker";
+import { Pool } from "pg";
 import { createTestHarness, type TestHarness } from "wrangler";
 import { z } from "zod";
 
@@ -140,7 +142,9 @@ export function createHarness(
   });
 }
 
-async function authenticate(baseURL: string): Promise<E2EStorageState> {
+async function authenticate(
+  baseURL: string,
+): Promise<{ storageState: E2EStorageState; userId: string }> {
   const email = process.env.E2E_TEST_USER_EMAIL;
   const password = process.env.E2E_TEST_USER_PASSWORD;
   if (!email || !password) {
@@ -168,11 +172,15 @@ async function authenticate(baseURL: string): Promise<E2EStorageState> {
       );
     }
 
+    const { user } = z
+      .object({ user: z.object({ id: z.string().min(1) }) })
+      .parse(await response.json());
+
     const state = await context.storageState();
     state.cookies = state.cookies.filter(
       (cookie) => !cookie.name.endsWith("session_data"),
     );
-    return state;
+    return { storageState: state, userId: user.id };
   } finally {
     await context.dispose();
   }
@@ -181,9 +189,11 @@ async function authenticate(baseURL: string): Promise<E2EStorageState> {
 export async function createE2EWorkerRuntime({
   authenticated,
   parallelIndex,
+  corpus = false,
 }: {
   authenticated: boolean;
   parallelIndex: number;
+  corpus?: boolean;
 }): Promise<E2EWorkerRuntime> {
   const resources: E2EWorkerResources = {};
   let restoreEnvironment = () => {};
@@ -217,10 +227,23 @@ export async function createE2EWorkerRuntime({
     const { url } = await harness.listen();
     const baseURL = url.origin;
     logPhase("harness create+listen");
-    const storageState = authenticated
-      ? await authenticate(baseURL)
-      : { cookies: [], origins: [] };
+    const identity = authenticated ? await authenticate(baseURL) : undefined;
+    const storageState = identity?.storageState ?? { cookies: [], origins: [] };
     logPhase("auth");
+
+    if (corpus) {
+      if (!identity)
+        throw new Error("Corpus E2E runtime requires authentication");
+      const pool = new Pool({ connectionString: database.databaseUrl });
+      try {
+        const { seedCorpus } = await import("../../tooling/scenarios/corpus");
+        faker.seed(1);
+        await seedCorpus(pool, identity.userId);
+      } finally {
+        await pool.end();
+      }
+      logPhase("corpus seed");
+    }
 
     console.log(`[E2E Worker ${parallelIndex}] ${database.name} at ${baseURL}`);
 

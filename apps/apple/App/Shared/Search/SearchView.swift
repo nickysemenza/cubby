@@ -246,10 +246,12 @@ struct SearchContent: View {
                                 .tag(RecordSelection(key: group.key, id: hit.id))
                                 .accessibilityIdentifier("search.result.\(hit.id)")
                         #else
-                            NavigationLink(value: Route.entityDetail(group.key, id: hit.id)) {
+                            Button {
+                                openEntity(group.key, id: hit.id)
+                            } label: {
                                 SearchHitRow(hit: hit)
                             }
-                            .simultaneousGesture(TapGesture().onEnded { RecentEntities.record(hit.id) })
+                            .buttonStyle(.plain)
                             .accessibilityIdentifier("search.result.\(hit.id)")
                         #endif
                     }
@@ -308,7 +310,12 @@ struct SearchContent: View {
     private func openEntity(_ key: EntityKey, id: String) {
         RecentEntities.record(id)
         dismissSearch()
-        model.navigator.openInPlace(.entity(key, id: id))
+        #if os(iOS)
+            // Search can live under TabView's More controller; its in-place path does not push there.
+            model.navigator.open(.entity(key, id: id))
+        #else
+            model.navigator.openInPlace(.entity(key, id: id))
+        #endif
     }
 
     private func handleSubmit() async {

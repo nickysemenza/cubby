@@ -16,9 +16,30 @@ struct CubbyApp: App {
     #endif
 
     init() {
+        #if DEBUG && os(iOS)
+            let e2eURL = Self.e2eServerURL
+            if e2eURL != nil {
+                // A fresh simulator stays a plain viewer without presenting the
+                // first-install companion-work decision over the E2E flow.
+                DeviceParticipation(automaticWork: false, answeredAt: .now).save(to: .standard)
+            }
+        #else
+            let e2eURL: URL? = nil
+        #endif
         // Before anything else so a crash during model setup is still reported.
-        Diagnostics.start(baseURL: AppModel.persistedBaseURL)
-        let model = AppModel()
+        Diagnostics.start(baseURL: e2eURL ?? AppModel.persistedBaseURL)
+        #if DEBUG && os(iOS)
+            let model =
+                e2eURL.map {
+                    AppModel(
+                        store: FileSessionTokenStore(
+                            fileURL: URL.applicationSupportDirectory.appending(
+                                path: "Cubby/e2e-credentials.json")),
+                        baseURL: $0)
+                } ?? AppModel()
+        #else
+            let model = AppModel()
+        #endif
         // `CubbyApp` is instantiated exactly once per process by SwiftUI; `model` is a local
         // built inside `init()`, not an external init parameter, and there is no re-presentation
         // to go stale across.
@@ -55,7 +76,16 @@ struct CubbyApp: App {
         RootView()
             .environment(model)
             .tint(PorcelainTokens.cobalt)
-            .task { await model.restoreSession() }
+            .task {
+                await model.restoreSession()
+                #if DEBUG && os(iOS)
+                    if Self.e2eServerURL != nil {
+                        // This uses the normal AuthFlow and credential store against the
+                        // disposable loopback workerd server selected at launch.
+                        await model.signIn(email: "sim@cubby.localhost", password: "cubby-sim-local-only")
+                    }
+                #endif
+            }
             .onAppear {
                 #if os(macOS)
                     DockBadge.clear()
@@ -89,4 +119,21 @@ struct CubbyApp: App {
                 }
             }
     }
+
+    #if DEBUG && os(iOS)
+        private static var e2eServerURL: URL? {
+            let arguments = ProcessInfo.processInfo.arguments
+            guard let index = arguments.firstIndex(of: "--cubby-e2e-server"),
+                arguments.indices.contains(index + 1),
+                let url = URL(string: arguments[index + 1]),
+                url.scheme == "http",
+                ["localhost", "127.0.0.1"].contains(url.host ?? ""),
+                url.port != nil,
+                url.path.isEmpty || url.path == "/",
+                url.query == nil,
+                url.fragment == nil
+            else { return nil }
+            return url
+        }
+    #endif
 }

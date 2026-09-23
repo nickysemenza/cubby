@@ -17,6 +17,20 @@ describe("assertDevDatabaseUrl", () => {
       "127.0.0.1 but the wrong database name",
       "postgresql://postgres:password@127.0.0.1:55432/postgres",
     ],
+    [
+      "wrong local port",
+      "postgresql://postgres:password@localhost:5432/cubby_dev",
+    ],
+    ["wrong user", "postgresql://other:password@localhost:55432/cubby_dev"],
+    ["wrong password", "postgresql://postgres:other@localhost:55432/cubby_dev"],
+    [
+      "unexpected options",
+      "postgresql://postgres:password@localhost:55432/cubby_dev?sslmode=require",
+    ],
+    [
+      "wrong protocol",
+      "postgres://postgres:password@localhost:55432/cubby_dev",
+    ],
   ];
 
   it.each(cases)("refuses %s", (_name, url) => {
