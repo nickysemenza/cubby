@@ -105,10 +105,13 @@ const DISPLAY_SOURCES: readonly DisplaySource[] = allEntities.flatMap(
         target: relationship.target,
         priority: binding.priority,
         ordering: binding.ordering,
-        path: [
-          ...relationship.steps,
-          ...imageRelationshipSteps(relationship.target),
-        ],
+        path:
+          relationship.target === "image"
+            ? relationship.steps
+            : [
+                ...relationship.steps,
+                ...imageRelationshipSteps(relationship.target),
+              ],
       };
     }),
 );
@@ -181,7 +184,10 @@ const displaySourceBranch = (source: DisplaySource, index: number): SQL => {
     `display_source_${index}_${sourceAlias(source.entity)}`,
     { root: "s", leaf: "i" },
   );
-  const targetImageSteps = imageRelationshipSteps(source.target).length;
+  const targetImageSteps =
+    source.target === "image"
+      ? 0
+      : imageRelationshipSteps(source.target).length;
   const targetHopIndex = traversal.hops.length - targetImageSteps - 1;
   const groupHop = traversal.hops.at(targetHopIndex);
   const groupAlias = groupHop?.alias ?? "s";

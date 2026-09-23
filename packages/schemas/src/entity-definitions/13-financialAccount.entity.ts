@@ -698,7 +698,17 @@ export default defineEntity({
   search: { enabled: true },
   capabilities: {
     auditable: true,
-    images: { storage: false },
+    images: {
+      storage: false,
+      displaySources: [
+        {
+          relationPath: ["provider-vendor"],
+          priority: 0,
+          ordering: "declared",
+          identityEvidence: false,
+        },
+      ],
+    },
     countable: true,
     softDelete: true,
     delete: { mode: "soft", bulk: true },

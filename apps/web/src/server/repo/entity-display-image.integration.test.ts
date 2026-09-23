@@ -9,6 +9,7 @@ import {
   entityKernelContextSchema,
   executeEntity,
 } from "~/server/entity-kernel";
+import { createDevice } from "~/server/repo/device";
 import { createExpense } from "~/server/repo/expense/crud";
 import { createGardenEntry, createPlanting } from "~/server/repo/garden";
 import { createUploadedImageRecord } from "~/server/repo/image";
@@ -80,6 +81,42 @@ describe("entity display image resolver", () => {
       size: 100,
       ...overrides,
     });
+
+  it("uses a linked product image for a device without image storage", async () => {
+    const hardware = await createProductFixture(
+      ctx.db,
+      makeProductInput({ name: "Synthetic tablet" }),
+      ctx.actor,
+    );
+    const photo = await makeImage();
+    await getDb(ctx.db).insert(entityAttachment).values({
+      subjectEntityId: hardware.entityId,
+      imageId: photo.id,
+      sortOrder: 0,
+    });
+    const device = await createDevice(
+      ctx.db,
+      {
+        installationId: crypto.randomUUID(),
+        name: "Test device",
+        platform: "ios",
+        appVersion: null,
+        osVersion: null,
+        automaticWork: true,
+        remotePaused: false,
+        productId: hardware.id,
+      },
+      ctx.actor,
+    );
+
+    const rows = await withDisplayImages(
+      ctx.db,
+      "device",
+      [{ id: device.entityId }],
+      (row) => ({ id: row.id }),
+    );
+    expect(rows[0]?.displayImages).toEqual([expectedDisplayImage(photo)]);
+  });
 
   describe("product", () => {
     it("orders displayImages by sortOrder and excludes PDF, missing, and soft-deleted links", async () => {
