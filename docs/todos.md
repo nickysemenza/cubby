@@ -1186,15 +1186,17 @@ history is the archive. Permanent product constraints live in the
   split into two sections; product's hero lost its stock-stats row.
 
 - **Native specialized-renderer editors** — Promote per field as a native
-  workflow needs to write it. The generic editor has no native control for
-  product `unitMappings`/`labelNutrition`, recipe `sections`/`yield`/`meta`,
-  meal `recipes`, expense `beneficiaries`/`funders`/`sourceClaims`,
-  ledgerTransfer `sourceClaims`, financialAccount
-  `identity`/`sourceAliases`/`cardNumbers`, or financialTransaction
-  `sourceRefs`; those fields are silently left out of the native create/edit
-  form (`EntityFieldControls.swift`). On web, `cardNumbers` has no editor at
-  all — only the create form's "Last four" seeds a primary entry; the dated
-  history is MCP-only.
+  workflow needs to write it. The native generic editor has no control for
+  product `unitMappings`/`labelNutrition`, financialAccount `sourceAliases`,
+  financialTransaction `sourceRefs`, or any `structured-field` (recipe
+  `sections`/`yield`/`meta`, meal `recipes`, expense and ledgerTransfer
+  `sourceClaims`, financialAccount `identity`/`cardNumbers`).
+  `NativePresentationCoverage` classifies them as unsupported and
+  `EntityEditorSheet` shows "Additional fields are available on web", so they
+  are not dropped silently. Expense `beneficiaries`/`funders` are done
+  (`LedgerAttributionsControl`). On web, `cardNumbers` has no editor at all —
+  only the create form's "Last four" seeds a primary entry; the dated history
+  is MCP-only.
 
 - **Receipt-minted provisional accounts** — Promote when the next one appears.
   A provisional `FinancialAccount` with no source aliases whose every live
@@ -1349,10 +1351,30 @@ history is the archive. Permanent product constraints live in the
   strips section and line ids, so an update omitting section `id` replaces every
   section.
 
-- **Splitwise re-export dedupe** — Promote if the Coachella-era Splitwise rows
-  are ever re-imported. That export carries no row id, so source keys were
-  derived from date + description + cost; a later export with an edited
+- **Shared-expense export re-import dedupe** — Promote if a shared-expense
+  group export (such as a Splitwise CSV) is imported and later re-exported and
+  imported again. That export carries no row id, so source-claim provider ids
+  are derived from date + description + amount; a later export with an edited
   description will not dedupe against the first import.
+
+- **Person-to-person repayment discovery** — Promote when entering Ledger
+  Transfers by hand becomes a chore. Two sources: already-imported aggregator
+  statement rows whose person-to-person payments (payment apps such as Venmo
+  or Zelle) were never promoted to Financial Transactions, and Gmail "paid you"
+  emails. Review-only: propose a transfer, a person confirms, and confirmation
+  creates the `LedgerTransfer` and its source claim. Never resolve a
+  counterparty automatically (`CONTEXT.md` avoids automatic matches). Context:
+  `docs/plans/household-ledger-attribution-followups.md`.
+
+- **Project default beneficiaries** — Promote if shared-cost projects become
+  frequent. A fallback tier between an expense's explicit beneficiaries and the
+  assumed Household party (explicit, then project default, then household),
+  following the live-inheritance pattern in `expense-inheritance.ts`. Needs a
+  schema change and an allocation-SQL change.
+
+- **Attribution prefill** — Promote with the same evidence as project default
+  beneficiaries: default the expense editor's beneficiaries/funders to the last
+  set used with the same vendor.
 
 - **ImportFinding as a manifest entity** — Promote once a second parent needs
   its list: today findings render as a slot on the run page and through the
