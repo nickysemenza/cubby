@@ -103,6 +103,7 @@ export function CalendarSchedule({ data, window }: CalendarScheduleProps) {
       return (
         <Link
           {...entityDetailLink("task", row.id.slice("task:".length))}
+          title={row.name}
           className="truncate hover:text-primary hover:underline focus-visible:ring-2 focus-visible:ring-ring"
         >
           {row.name}
@@ -113,6 +114,7 @@ export function CalendarSchedule({ data, window }: CalendarScheduleProps) {
       return (
         <Link
           {...entityDetailLink("planting", row.id.slice("planting:".length))}
+          title={row.name}
           className="truncate hover:text-primary hover:underline focus-visible:ring-2 focus-visible:ring-ring"
         >
           {row.name}

@@ -97,6 +97,7 @@ function ProjectDependencyInspection({
             key={id}
             to={entities[entry.entity].routes.detail}
             params={entityDetailParams(id)}
+            title={names.get(id) ?? id}
             className="inline-flex min-h-10 items-center rounded-sm border border-border px-2 text-xs text-primary hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none md:min-h-7"
           >
             {names.get(id) ?? id}
@@ -156,6 +157,7 @@ function ProjectScheduleSurface({
           <Link
             to={entities[entry.entity].routes.detail}
             params={entityDetailParams(entry.id)}
+            title={entry.name}
             className="min-w-0 flex-1 truncate rounded-sm text-foreground hover:text-primary hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
           >
             {entry.name}
