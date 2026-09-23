@@ -8,11 +8,11 @@ import SwiftUI
 struct PhotoImportHero: View {
     let items: [PhotoSelectionItem]
     let selectedIDs: Set<String>
-    /// The manifest's `focusedItemID`, when the caller needs the hero's focus to double as the
-    /// review sheet's default single-photo selection scope. `nil` keeps focus purely local (every
-    /// other caller, which only ever displays photos here).
+    /// The manifest's `focusedItemID` keeps the review preview in sync with the focused filmstrip
+    /// photo. `nil` keeps focus local for callers that only display photos here.
     private let externalFocusedID: Binding<String>?
     let onToggle: ((String) -> Void)?
+    let compact: Bool
 
     // Literal default, no init parameter: falls back to `items.first` lazily in `focusedID`
     // rather than being seeded from `items`/`focusedID` at init, so a reused view can never show
@@ -30,12 +30,14 @@ struct PhotoImportHero: View {
         items: [PhotoSelectionItem], selectedIDs: Set<String> = [],
         focusedID: Binding<String>? = nil,
         heightCap: (points: CGFloat, fraction: CGFloat) = (220, 0.22),
+        compact: Bool = false,
         onToggle: ((String) -> Void)? = nil
     ) {
         self.items = items
         self.selectedIDs = selectedIDs
         self.externalFocusedID = focusedID
         self.heightCap = heightCap
+        self.compact = compact
         self.onToggle = onToggle
     }
 
@@ -57,7 +59,11 @@ struct PhotoImportHero: View {
     var body: some View {
         if let focusedItem {
             VStack(spacing: 8) {
-                heroButton(for: focusedItem)
+                if compact {
+                    compactPreview(for: focusedItem)
+                } else {
+                    heroButton(for: focusedItem)
+                }
                 filmstrip(focused: focusedItem)
             }
             .padding(.horizontal, 12)
@@ -68,6 +74,24 @@ struct PhotoImportHero: View {
                 items: items,
                 initialID: focusedItem.id
             )
+        }
+    }
+
+    private func compactPreview(for item: PhotoSelectionItem) -> some View {
+        let position = (items.firstIndex(where: { $0.id == item.id }) ?? 0) + 1
+        return HStack(spacing: 10) {
+            PhotoImportProgressiveImage(item: item, maxPixelSize: 220)
+                .frame(width: 56, height: 56)
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+            Text("Viewing photo \(position) of \(items.count)")
+                .font(.subheadline)
+            Spacer(minLength: 0)
+            Button("View photo", systemImage: "arrow.up.left.and.arrow.down.right") {
+                showingFullScreen = true
+            }
+            .labelStyle(.iconOnly)
+            .accessibilityLabel("View focused photo full screen")
+            .frame(minWidth: 44, minHeight: 44)
         }
     }
 
@@ -111,11 +135,8 @@ struct PhotoImportHero: View {
                         size: thumbnailSize,
                         isFocused: item.id == focused.id,
                         isSelected: selectedIDs.contains(item.id),
-                        showsSelection: onToggle != nil
-                    ) {
-                        setFocusedID(item.id)
-                        onToggle?(item.id)
-                    }
+                        onFocus: { setFocusedID(item.id) },
+                        onToggle: onToggle.map { toggle in { toggle(item.id) } })
                 }
             }
             .padding(.horizontal, 16)
@@ -134,30 +155,35 @@ private struct PhotoImportFilmstripThumb: View {
     let size: CGFloat
     let isFocused: Bool
     let isSelected: Bool
-    let showsSelection: Bool
-    let action: () -> Void
+    let onFocus: () -> Void
+    let onToggle: (() -> Void)?
 
     var body: some View {
-        Button(action: action) {
-            PhotoImportProgressiveImage(item: item, maxPixelSize: 220, loadsImmediately: false)
-                .frame(width: size, height: size)
-                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-                .overlay {
-                    RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .stroke(isFocused ? Color.accentColor : .clear, lineWidth: 3)
-                }
-                .overlay(alignment: .topTrailing) {
-                    if showsSelection { selectionMark }
-                }
+        HStack(spacing: 2) {
+            Button(action: onFocus) {
+                PhotoImportProgressiveImage(item: item, maxPixelSize: 220, loadsImmediately: false)
+                    .frame(width: size, height: size)
+                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .stroke(isFocused ? Color.accentColor : .clear, lineWidth: 3)
+                    }
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("View photo \(position)")
+            .accessibilityValue(isFocused ? "Focused" : "")
+            .accessibilityHint("Changes the preview; use Select for assignment")
+            .accessibilityIdentifier("photos.import.filmstrip.\(item.id)")
+            if let onToggle {
+                Button(action: onToggle) { selectionMark }
+                    .buttonStyle(.plain)
+                    .frame(width: 44, height: 44)
+                    .accessibilityLabel("Select photo \(position) for assignment")
+                    .accessibilityValue(isSelected ? "Selected" : "Not selected")
+                    .accessibilityAddTraits(isSelected ? .isSelected : [])
+                    .accessibilityIdentifier("photos.import.select.\(item.id)")
+            }
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel("Photo \(position)")
-        .accessibilityValue(accessibilityValue)
-        .accessibilityHint(
-            showsSelection ? "Double tap to focus and change selection" : "Double tap to inspect this photo"
-        )
-        .accessibilityAddTraits(isFocused ? .isSelected : [])
-        .accessibilityIdentifier("photos.import.filmstrip.\(item.id)")
     }
 
     private var selectionMark: some View {
@@ -166,14 +192,6 @@ private struct PhotoImportFilmstripThumb: View {
             .padding(3)
     }
 
-    private var accessibilityValue: String {
-        switch (isFocused, isSelected) {
-        case (true, true): "Focused, selected"
-        case (true, false): "Focused"
-        case (false, true): "Selected"
-        case (false, false): "Not selected"
-        }
-    }
 }
 
 private struct PhotoImportProgressiveImage: View {
