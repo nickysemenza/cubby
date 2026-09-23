@@ -1,9 +1,8 @@
-import type { ProductCategory } from "@cubby/shared";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 
 import { useProductCategories } from "~/app/_components/hooks/useProductCategories";
-import { getCategoryColor } from "~/app/_components/products/category-theme";
+import { getFeatureColor } from "~/app/_components/products/category-theme";
 import { product } from "~/app/products/product.functions";
 
 import {
@@ -33,10 +32,4 @@ export function useCategoryHierarchy() {
 }
 
 export const categoryNodeColor = (node: CategoryHierarchyNode): string =>
-  // `getCategoryColor` reads only the feature binding.
-  getCategoryColor({
-    id: node.id,
-    name: node.name,
-    path: [],
-    feature: node.feature,
-  } satisfies ProductCategory);
+  getFeatureColor(node.feature);

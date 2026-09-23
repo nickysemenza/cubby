@@ -18,6 +18,7 @@ export type ScalarDisplayValue =
       label: string;
       color: string;
       icon?: ReactNode;
+      description?: string;
     }
   | { kind: "number"; raw: number }
   | { kind: "boolean"; raw: boolean }
@@ -101,7 +102,11 @@ export function renderScalarValue(
     case "enum":
       if (surface === "plain") return value.label;
       return (
-        <EnumPill color={value.color} icon={value.icon}>
+        <EnumPill
+          color={value.color}
+          icon={value.icon}
+          description={value.description}
+        >
           {value.label}
         </EnumPill>
       );

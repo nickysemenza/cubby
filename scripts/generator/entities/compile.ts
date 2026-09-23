@@ -1087,6 +1087,7 @@ const compiledInspector = (
       capabilities: declaration.capabilities,
       ports,
       hasUpdate: declaration.fields?.update != null,
+      entityKey: declaration.key,
     },
     `${context}.presentation`,
   ),

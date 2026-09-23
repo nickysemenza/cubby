@@ -1,10 +1,10 @@
 import { testShortcode } from "@cubby/schemas/testing";
-import { sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { taxonomyShortcode } from "tooling/product-category-fixtures";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { project } from "~/server/db/schema";
+import { product as productTable, project } from "~/server/db/schema";
 import { getDb } from "~/server/repo/database-helpers";
 import { createExpense } from "~/server/repo/expense";
 import {
@@ -16,6 +16,8 @@ import {
 import {
   createProductCategory,
   deleteProductCategories,
+  getProductCategoryByShortcode,
+  listProductCategories,
   listProductCategoryTreeOptions,
   updateProductCategory,
 } from "./product-category";
@@ -24,6 +26,78 @@ import { categoryDescendantsSql } from "./product-category-sql";
 const ctx = withTestDb();
 
 describe("product category hierarchy", () => {
+  it("counts live products across a subtree and reports the inherited feature", async () => {
+    const group = await createProductCategory(
+      ctx.db,
+      {
+        name: "Counted group",
+        aliases: [],
+        description: null,
+        parentId: taxonomyShortcode("tools"),
+        sortOrder: 0,
+        feature: null,
+      },
+      ctx.actor,
+    );
+    const type = await createProductCategory(
+      ctx.db,
+      {
+        name: "Counted type",
+        aliases: [],
+        description: null,
+        parentId: group.output.id,
+        sortOrder: 0,
+        feature: null,
+      },
+      ctx.actor,
+    );
+    await createProductFixture(
+      ctx.db,
+      makeProductInput({ name: "Group product", categoryId: group.output.id }),
+      ctx.actor,
+    );
+    await createProductFixture(
+      ctx.db,
+      makeProductInput({ name: "Type product", categoryId: type.output.id }),
+      ctx.actor,
+    );
+    const removed = await createProductFixture(
+      ctx.db,
+      makeProductInput({ name: "Removed product", categoryId: type.output.id }),
+      ctx.actor,
+    );
+    await getDb(ctx.db)
+      .update(productTable)
+      .set({ deletedAt: new Date() })
+      .where(eq(productTable.id, removed.entityId));
+
+    const { data } = await listProductCategories(ctx.db, {}, [], {
+      pageIndex: 0,
+      pageSize: 500,
+    });
+    const listed = new Map(data.map((row) => [row.id, row]));
+    expect(listed.get(type.output.id)?.productCount).toBe(1);
+    expect(listed.get(group.output.id)?.productCount).toBe(2);
+    expect(
+      listed.get(taxonomyShortcode("tools"))?.productCount,
+    ).toBeGreaterThanOrEqual(2);
+    expect(listed.get(taxonomyShortcode("tools"))?.fieldResolutions).toBe(
+      undefined,
+    );
+
+    const detail = await getProductCategoryByShortcode(ctx.db, type.output.id);
+    expect(detail?.productCount).toBe(1);
+    expect(detail?.feature).toBeNull();
+    expect(detail?.fieldResolutions?.feature).toMatchObject({
+      mode: "inherit",
+      value: "tools",
+      sourceEntity: {
+        entityType: "productCategory",
+        entityId: taxonomyShortcode("tools"),
+      },
+    });
+  });
+
   it("returns a root-first path and rejects a cycle or fourth level", async () => {
     const root = await createProductCategory(
       ctx.db,

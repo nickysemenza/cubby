@@ -1,4 +1,8 @@
-import { formatCategoryLabel, getCategoryColor } from "@cubby/shared";
+import {
+  formatCategoryLabel,
+  getCategoryColor,
+  getFeatureColor,
+} from "@cubby/shared";
 import {
   Archive,
   Bolt,
@@ -16,7 +20,7 @@ import {
 } from "lucide-react";
 
 // Re-export colors/helpers from @cubby/shared for existing consumers
-export { formatCategoryLabel, getCategoryColor };
+export { formatCategoryLabel, getCategoryColor, getFeatureColor };
 
 const featureIcons = {
   food: Utensils,

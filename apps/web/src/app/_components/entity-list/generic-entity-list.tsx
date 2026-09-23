@@ -40,7 +40,10 @@ import { Stack } from "~/components/layout";
 import { usePageCount } from "~/components/page/Page";
 import { entities } from "~/entities/entities";
 import type { StandardEntity } from "~/entities/entity-contracts";
-import { createEntityDisplayColumns } from "~/entities/entity-display";
+import {
+  createEntityDisplayColumns,
+  entityListHiddenColumns,
+} from "~/entities/entity-display";
 import { entityListFor } from "~/entities/entity-list.functions";
 import {
   type ListEntity,
@@ -69,6 +72,7 @@ import {
   type ListSlotProps,
 } from "./list-slot-types";
 import { listSlotFor } from "./list-slots";
+import { manifestTree } from "./manifest-tree";
 
 type CardDensity = "cards" | "compact";
 const CardDensityContext = createContext<{
@@ -279,7 +283,12 @@ function ServerListBody({
   operations: GenericEntityListProps["operations"];
 }) {
   const { density } = useEntityListCardDensity();
-  const parts = override.use(context);
+  const overrideParts = override.use(context);
+  // A module's hand-written tree (heterogeneous rows, like wish candidates)
+  // wins; otherwise the manifest's declared `list.tree` nests the rows.
+  const parts = overrideParts.tree
+    ? overrideParts
+    : { ...overrideParts, tree: manifestTree(entity) ?? undefined };
   const referenceFilterOptions = useDeferredReferenceFilterOptions(entity);
   const filterOptions = useFilterOptions({
     ...referenceFilterOptions,
@@ -303,12 +312,19 @@ function ServerListBody({
 
   // `deletable` defaults ON: a top-level list page owns its entity's rows,
   // where an embedded relationship ledger does not.
+  // Declared `display.listHidden` columns start hidden even for an entity
+  // with no list module; a module's own visibility map still wins.
+  const initialColumnVisibility = useMemo(
+    () => entityListHiddenColumns(entity),
+    [entity],
+  );
   const list = useEntityList<BaseListRow, object, BaseListRow>({
     entity,
     queryOptions,
     columns,
     deletable: true,
     preview: DEFAULT_PREVIEW,
+    initialColumnVisibility,
     ...listOptions,
     filterOptions,
     // SAFETY: the flat and tree overloads only differ in whether `tree` is

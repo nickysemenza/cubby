@@ -31,12 +31,13 @@ const featureColors = {
   supplies: "var(--chart-6)",
 } as const satisfies Record<string, string>;
 
+export const getFeatureColor = (feature: string | null | undefined): string =>
+  Object.entries(featureColors).find(([key]) => key === feature)?.[1] ??
+  "var(--chart-neutral)";
+
 export const getCategoryColor = (
   category: ProductCategory | null | undefined,
-): string =>
-  Object.entries(featureColors).find(
-    ([feature]) => feature === category?.feature,
-  )?.[1] ?? "var(--chart-neutral)";
+): string => getFeatureColor(category?.feature);
 
 export const formatCategoryLabel = (
   category: ProductCategory | null | undefined,

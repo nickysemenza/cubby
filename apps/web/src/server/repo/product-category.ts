@@ -1,6 +1,7 @@
 import type { ActorContext } from "@cubby/schemas/context";
 import type { DataQuality } from "@cubby/schemas/data-quality";
 import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
+import type { FieldResolutions } from "@cubby/schemas/field-resolution";
 import {
   type ProductCategoryId,
   type ProductCategoryShortcode,
@@ -170,13 +171,85 @@ const pathsFor = async (
   return new Map(rows.rows.map((row) => [row.root, row.path]));
 };
 
+/**
+ * Live products in each category's subtree. One recursive walk seeded by
+ * every requested id, with the same depth bound and visited-array guard as
+ * `categoryDescendantsSql`, so a stored cycle cannot make a read loop.
+ */
+const productCountsFor = async (
+  db: Database | DrizzleTransaction,
+  ids: readonly string[],
+): Promise<Map<string, number>> => {
+  if (ids.length === 0) return new Map();
+  const rows = await unwrapDb(db).execute<{ root: string; count: number }>(sql`
+    WITH RECURSIVE descendants AS (
+      SELECT c."id" AS root, c."id", ARRAY[c."id"] AS visited
+      FROM "ProductCategory" c
+      WHERE c."id" IN (${sql.join(
+        ids.map((id) => sql`${id}::uuid`),
+        sql`, `,
+      )})
+        AND c."deletedAt" IS NULL
+      UNION ALL
+      SELECT d.root, child."id", d.visited || child."id"
+      FROM descendants d
+      JOIN "ProductCategory" child ON child."parentId" = d."id"
+      WHERE child."deletedAt" IS NULL
+        AND array_length(d.visited, 1) < ${MAX_PRODUCT_CATEGORY_DEPTH}
+        AND NOT child."id" = ANY(d.visited)
+    )
+    SELECT d.root, count(p."id")::int AS count
+    FROM descendants d
+    JOIN "Product" p ON p."categoryId" = d."id" AND p."deletedAt" IS NULL
+    GROUP BY d.root
+  `);
+  return new Map(rows.rows.map((row) => [row.root, row.count]));
+};
+
+/**
+ * A category with no feature of its own takes the closest ancestor's
+ * (`categoryFeatureSql`). Reported as an inherited resolution so the generic
+ * table and detail badges show it, while `feature` keeps meaning the stored
+ * binding for edits and MCP.
+ */
+const inheritedFeatureResolution = (
+  row: CategoryRow,
+  path: CategoryPathRow["path"],
+): FieldResolutions | undefined => {
+  if (row.feature !== null) return undefined;
+  const source = path
+    .slice(0, -1)
+    .reverse()
+    .find((ancestor) => ancestor.feature !== null);
+  if (!source) return undefined;
+  const feature = parseFeature(source.feature);
+  return {
+    feature: {
+      mode: "inherit",
+      storedValue: null,
+      value: feature,
+      fallbackValue: feature,
+      source: source.name,
+      sourceEntity: { entityType: "productCategory", entityId: source.id },
+      matchesFallback: true,
+      canReset: false,
+    },
+  };
+};
+
 const toOut = async (
   db: Database | DrizzleTransaction,
   row: CategoryRow,
   dataQuality: DataQuality,
-  paths?: Map<string, CategoryPathRow["path"]>,
+  batch?: {
+    paths: Map<string, CategoryPathRow["path"]>;
+    productCounts: Map<string, number>;
+  },
 ): Promise<ProductCategoryOut> => {
-  const path = paths?.get(row.id) ?? (await pathsFor(db, [row.id])).get(row.id);
+  const path =
+    batch?.paths.get(row.id) ?? (await pathsFor(db, [row.id])).get(row.id);
+  const productCounts =
+    batch?.productCounts ?? (await productCountsFor(db, [row.id]));
   const parsedPath = (path ?? []).map((part) => ({
     id: parseShortcodeFor("productCategory", part.id),
     name: part.name,
@@ -200,6 +273,7 @@ const toOut = async (
         .limit(1)
     : [];
   return productCategoryOut.parse({
+    fieldResolutions: inheritedFeatureResolution(row, path ?? []),
     id: parseShortcodeFor("productCategory", row.shortcode),
     name: row.name,
     aliases: row.aliases,
@@ -211,6 +285,7 @@ const toOut = async (
     sortOrder: row.sortOrder,
     feature: parseFeature(row.feature),
     path: parsedPath,
+    productCount: productCounts.get(row.id) ?? 0,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
     dataQuality,
@@ -240,21 +315,18 @@ export async function listProductCategories(
       .offset(skip),
     countWhere(db, productCategory, where),
   );
-  const [paths, dataQualities] = await Promise.all([
-    pathsFor(
-      db,
-      data.map((row) => row.id),
-    ),
-    loadDataQualities(
-      db,
-      "productCategory",
-      data.map((row) => row.id),
-    ),
+  const ids = data.map((row) => row.id);
+  const [paths, productCounts, dataQualities] = await Promise.all([
+    pathsFor(db, ids),
+    productCountsFor(db, ids),
+    loadDataQualities(db, "productCategory", ids),
   ]);
   return {
     data: await Promise.all(
       // SAFETY: `row` came from `data`, which `dataQualities` was loaded for.
-      data.map((row) => toOut(db, row, dataQualities.get(row.id)!, paths)),
+      data.map((row) =>
+        toOut(db, row, dataQualities.get(row.id)!, { paths, productCounts }),
+      ),
     ),
     count,
   };

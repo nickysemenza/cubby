@@ -13,6 +13,7 @@ import {
 import { ledgerPartyKindOptions } from "~/app/finance/ledger-party-options";
 import { imageStatusOptions } from "~/app/images/image-options";
 import { mealKindOptions, mealTypeOptions } from "~/app/meals/meal-options";
+import { productCategoryFeatureOptions } from "~/app/product-categories/feature-options";
 import {
   PROJECT_STATUS_OPTIONS,
   projectKindOptions,
@@ -25,6 +26,8 @@ import { colorizeSelectOptions } from "~/lib/select-options";
 export type EntitySelectOption = Readonly<{
   value: string;
   label: string;
+  /** What choosing this option means; shown as the pill's tooltip. */
+  description?: string;
   icon?: ReactNode;
   color?: string;
 }>;
@@ -95,6 +98,7 @@ const ENTITY_SELECT_OPTIONS = {
     ...expenseLineKindOptions,
   ],
   "location.type": locationTypeOptionsWithTheme,
+  "productCategory.feature": productCategoryFeatureOptions,
 } satisfies Readonly<Record<string, readonly EntitySelectOption[]>>;
 
 /**
