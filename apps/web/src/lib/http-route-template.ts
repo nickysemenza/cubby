@@ -52,6 +52,7 @@ const STATIC_TRACE_ROUTES = new Set([
   "/docs",
   "/entities",
   "/graph",
+  "/garden-workbench",
   "/household-contribution",
   "/ingredients/equivalences",
   "/ingredients/workbench",

@@ -136,6 +136,7 @@ enum NativePresentationCoverage {
             .projectBudget,
             .projectContribution,
             .projectAnalytics,
+            .projectSchedule,
             .purchaseProjectAllocation,
             .purchaseImportRuns,
             .purchaseReconciliation,
@@ -161,7 +162,9 @@ enum NativePresentationCoverage {
             "productCategory.hierarchy",
             "project.overview",
             "project.analytics",
+            "project.schedule",
             "project.gallery",
+            "planting.schedule",
             "task.agenda",
             "task.board",
             "expense.analytics":
