@@ -54,7 +54,6 @@ import type {
 import type { Database } from "~/server/db";
 import {
   entityAttachment,
-  expense,
   financialTransaction,
   financialTransactionAllocation,
   image,
@@ -75,7 +74,6 @@ import {
   product,
   productExternalId,
   purchase,
-  purchasePaymentEvidence,
   user,
   vendor,
   vendorAccount,
@@ -98,6 +96,7 @@ import {
 import { finalizeImportedImages } from "~/server/services/photo-import-finalize.service";
 import { getR2PublicUrl } from "~/server/utils/r2-public-url";
 
+import { loadPurchaseAuditBatch } from "./audit-batch";
 import type { PurchaseImportDurableObjectRpc } from "./contracts";
 import { resolveImportFinding } from "./findings";
 import { attachPendingOrderMailEvidence } from "./gmail/process";
@@ -2205,85 +2204,13 @@ export async function auditImportBatch(
   assertRunActive(scope.public.status);
   if (!scope.actorUserId) throw new Error("Import run actor is unavailable");
   const runId = importRunId.parse(input.runId);
-  const importedPurchases = await getDb(db)
-    .selectDistinct({
-      id: purchase.id,
-      orderId: purchase.orderId,
-      statedTotal: purchase.statedTotal,
-      displayLabel: purchase.displayLabel,
-    })
-    .from(importRunMutation)
-    .innerJoin(
-      purchase,
-      and(eq(purchase.id, importRunMutation.targetId), notDeleted(purchase)),
-    )
-    .where(
-      and(
-        eq(importRunMutation.runId, runId),
-        eq(importRunMutation.targetType, "purchase"),
-      ),
-    )
-    .orderBy(asc(purchase.id))
-    .limit(25)
-    .offset(z.number().int().nonnegative().parse(input.offset));
-  if (importedPurchases.length === 0) return { findings: 0, nextOffset: null };
-  const purchaseIds = importedPurchases.map(({ id }) => id);
-  const [expenseRows, paymentRows] = await Promise.all([
-    getDb(db)
-      .select({
-        purchaseId: expense.purchaseId,
-        id: expense.id,
-        name: expense.name,
-        amount: expense.cost,
-        lineKind: expense.lineKind,
-        quantity: expense.productQuantity,
-        productId: product.id,
-        productName: product.name,
-        productManufacturer: product.manufacturer,
-        productModel: product.model,
-      })
-      .from(expense)
-      .leftJoin(
-        product,
-        and(eq(product.id, expense.productId), notDeleted(product)),
-      )
-      .where(
-        and(inArray(expense.purchaseId, purchaseIds), notDeleted(expense)),
-      ),
-    getDb(db)
-      .select({
-        purchaseId: purchasePaymentEvidence.purchaseId,
-        amount: purchasePaymentEvidence.amount,
-        chargedAt: purchasePaymentEvidence.chargedAt,
-        cardLastFour: purchasePaymentEvidence.cardLastFour,
-        description: purchasePaymentEvidence.description,
-      })
-      .from(purchasePaymentEvidence)
-      .where(inArray(purchasePaymentEvidence.purchaseId, purchaseIds)),
-  ]);
-  const renderedBatch = importedPurchases.map((row) => ({
-    ...row,
-    expenses: expenseRows
-      .filter((expenseRow) => expenseRow.purchaseId === row.id)
-      .map((expenseRow) => ({
-        id: expenseRow.id,
-        name: expenseRow.name,
-        amount: expenseRow.amount,
-        lineKind: expenseRow.lineKind,
-        quantity: expenseRow.quantity,
-        product: expenseRow.productId
-          ? {
-              id: expenseRow.productId,
-              name: expenseRow.productName,
-              manufacturer: expenseRow.productManufacturer,
-              model: expenseRow.productModel,
-            }
-          : null,
-      })),
-    paymentEvidence: paymentRows
-      .filter((payment) => payment.purchaseId === row.id)
-      .map(({ purchaseId: _purchaseId, ...payment }) => payment),
-  }));
+  const renderedBatch = await loadPurchaseAuditBatch(
+    db,
+    runId,
+    z.number().int().nonnegative().parse(input.offset),
+  );
+  if (renderedBatch.length === 0) return { findings: 0, nextOffset: null };
+  const purchaseIds = renderedBatch.map(({ id }) => id);
   const { auditPurchaseImportBatch } =
     await import("~/server/agents/purchase-import/extract");
   const audit = await auditPurchaseImportBatch({
@@ -2359,7 +2286,7 @@ export async function auditImportBatch(
   }
   return {
     findings: stored,
-    nextOffset: importedPurchases.length === 25 ? input.offset + 25 : null,
+    nextOffset: renderedBatch.length === 25 ? input.offset + 25 : null,
   };
 }
 

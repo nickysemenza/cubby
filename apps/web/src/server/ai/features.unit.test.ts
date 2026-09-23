@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
 import {
-  AGENT_ASK_FEATURE,
   AI_FEATURES,
   buildLocationAnalysisFingerprint,
   LOCATION_INVENTORY_DETECTION_FEATURE,
@@ -80,14 +79,14 @@ describe("the AI feature table", () => {
     // cacheable must therefore be one (a decision call is single-turn by
     // construction).
     for (const feature of AI_FEATURES) {
-      if (!feature.cache || feature.tier === "decision") continue;
+      if (
+        !feature.cache ||
+        feature.tier === "decision" ||
+        feature.tier === "embedding"
+      )
+        continue;
       expect("schema" in feature).toBe(true);
     }
-  });
-
-  it("leaves the streaming, tool-calling agent uncacheable", () => {
-    expect(AGENT_ASK_FEATURE.cache).toBe(false);
-    expect("schema" in AGENT_ASK_FEATURE).toBe(false);
   });
 
   it("gives every feature a unique label", () => {
@@ -97,7 +96,7 @@ describe("the AI feature table", () => {
 
   it("caps every chat feature's output", () => {
     for (const feature of AI_FEATURES) {
-      if (feature.tier === "decision") continue;
+      if (feature.tier === "decision" || feature.tier === "embedding") continue;
       expect(feature.maxTokens).toBeGreaterThan(0);
     }
   });

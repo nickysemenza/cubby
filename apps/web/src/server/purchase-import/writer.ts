@@ -81,6 +81,8 @@ import {
 } from "./writer-policy";
 
 const PURCHASE_EXTERNAL_ID_KIND = "retailer_sku" as const;
+export const PRODUCT_IDENTITY_RULES =
+  "Choose an existing product only when the title, model, size, count, and variant identify the same sellable item. Choose none for a distinct or uncertain variant.";
 
 const sha256 = async (value: string): Promise<string> => {
   const bytes = new TextEncoder().encode(value);
@@ -363,9 +365,9 @@ const lineDecisionSubject = (line: ExtractedPurchaseLine) =>
     productUrl: line.productUrl ?? null,
   });
 
-async function chooseLineStage(
+export async function chooseLineStage(
   db: Database,
-  input: ImportWriterInput,
+  runId: string,
   index: number,
   line: ExtractedPurchaseLine,
   stage: "role" | "kit" | "promotion" | "reversal",
@@ -406,7 +408,7 @@ async function chooseLineStage(
     usage: {
       db,
       operation: `purchaseImport.${stage}.${index}`,
-      runId: importRunId.parse(input.runId),
+      runId: importRunId.parse(runId),
     },
   });
 }
@@ -431,18 +433,18 @@ async function decideLineIdentities(
   const candidate = input.extraction.candidate;
   if (!candidate) return [];
   for (const [index, line] of candidate.lines.entries()) {
-    const role = await chooseLineStage(db, input, index, line, "role");
+    const role = await chooseLineStage(db, input.runId, index, line, "role");
     const selectedRole = expenseLineKindValues[role.selectedIndex ?? -1];
     const lineKind =
       selectedRole && role.probability >= 0.85 ? selectedRole : line.lineKind;
-    const kit = await chooseLineStage(db, input, index, line, "kit");
+    const kit = await chooseLineStage(db, input.runId, index, line, "kit");
     const kitKind =
       (["kit_with_components", "single", "n_pack"] as const)[
         kit.selectedIndex ?? 1
       ] ?? "single";
     const promotion = await chooseLineStage(
       db,
-      input,
+      input.runId,
       index,
       line,
       "promotion",
@@ -451,7 +453,7 @@ async function decideLineIdentities(
       promotion.selectedIndex === 0 && promotion.probability >= 0.6;
     const reversal =
       line.amount < 0
-        ? await chooseLineStage(db, input, index, line, "reversal")
+        ? await chooseLineStage(db, input.runId, index, line, "reversal")
         : null;
     const reversalKind = reversal
       ? ((["return", "concession", "cancellation", "replacement"] as const)[
@@ -560,8 +562,7 @@ async function decideLineIdentities(
         seller: line.seller ?? null,
         productUrl: line.productUrl ?? null,
       }),
-      rules:
-        "Choose an existing product only when the title, model, size, count, and variant identify the same sellable item. Choose none for a distinct or uncertain variant.",
+      rules: PRODUCT_IDENTITY_RULES,
       choices: candidates.map(
         (candidate) =>
           `${candidate.name} | manufacturer=${candidate.manufacturer || "unknown"} | model=${candidate.model ?? "unknown"}`,
@@ -820,7 +821,8 @@ export async function importVendorOrder(
       ? await explicitLineDecisions(
           input.extraction.candidate?.lines ?? [],
           explicitResolutions,
-          (index, line) => chooseLineStage(db, input, index, line, "reversal"),
+          (index, line) =>
+            chooseLineStage(db, input.runId, index, line, "reversal"),
         )
       : await decideLineIdentities(db, input);
   // The callback is the transaction's explicit policy matrix; splitting it

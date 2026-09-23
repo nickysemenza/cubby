@@ -46,7 +46,9 @@ import type { z } from "zod";
 
 import {
   type AiModel,
+  type SupportedEmbeddingModel,
   type SupportedDecisionModel,
+  DEFAULT_EMBEDDING_MODEL,
   DECISION_MODEL,
   FAST_MODEL,
   REASONING_MODEL,
@@ -59,12 +61,13 @@ import type {
   OpenAiEffort,
 } from "~/server/clients/ai-adapters";
 
-/**
- * The three measured chat tiers a feature can be assigned to, plus the
- * decision tier: Jev answers one closed-set choice with a calibrated
- * probability over the options and writes no prose (`ai/jev.ts`).
- */
-export type AiTier = "fast" | "visionBatch" | "reasoning" | "decision";
+/** Embeddings share the catalog, while retaining their vector runner. */
+export type AiTier =
+  | "fast"
+  | "visionBatch"
+  | "reasoning"
+  | "decision"
+  | "embedding";
 
 /**
  * The single place a tier's model is written down. `models.ts` owns the
@@ -75,7 +78,8 @@ export const MODEL_FOR_TIER = {
   visionBatch: VISION_BATCH_MODEL,
   reasoning: REASONING_MODEL,
   decision: DECISION_MODEL,
-} as const satisfies Record<AiTier, AiModel>;
+  embedding: DEFAULT_EMBEDDING_MODEL,
+} as const satisfies Record<AiTier, AiModel | SupportedEmbeddingModel>;
 
 interface AiFeatureShared {
   /** AI Gateway dashboard label, and the `AiUsage`/`AiAnalysis` feature key. */
@@ -109,6 +113,7 @@ type AiChatFeatureTier = (
 type AiDecisionFeatureTier = { tier: "decision" };
 
 type AiFeatureTier = AiChatFeatureTier | AiDecisionFeatureTier;
+type AiEmbeddingFeatureTier = { tier: "embedding" };
 
 // `model` is derived from {@link MODEL_FOR_TIER}, never written by hand; it
 // is typed per family so a chat runner can only ever be handed a chat model.
@@ -118,8 +123,10 @@ export type AiChatFeature = AiFeatureShared &
 /** A feature placed as one closed-set choice by `ai/jev.ts`. */
 export type AiDecisionFeature = AiFeatureShared &
   AiDecisionFeatureTier & { model: SupportedDecisionModel };
+export type AiEmbeddingFeature = AiFeatureShared &
+  AiEmbeddingFeatureTier & { model: typeof DEFAULT_EMBEDDING_MODEL };
 /** One feature's full declaration. A discriminated union on `tier`. */
-export type AiFeature = AiChatFeature | AiDecisionFeature;
+export type AiFeature = AiChatFeature | AiDecisionFeature | AiEmbeddingFeature;
 
 /** Distribute over {@link AiChatFeature}'s union so `switch (spec.tier)`
  * still narrows after the extra field is intersected on. Only chat features
@@ -142,9 +149,9 @@ export type AiStructuredFeature<T> = WithField<"schema", T>;
 export type AiAnalysisFeature<T> = WithField<"analysisSchema", T>;
 
 /** Fill in the tier-derived `model`. */
-function defineFeature<S extends AiFeatureShared & AiFeatureTier>(
-  declaration: S,
-): S & { model: (typeof MODEL_FOR_TIER)[S["tier"]] } {
+function defineFeature<
+  S extends AiFeatureShared & (AiFeatureTier | AiEmbeddingFeatureTier),
+>(declaration: S): S & { model: (typeof MODEL_FOR_TIER)[S["tier"]] } {
   // SAFETY: indexing `MODEL_FOR_TIER` with a `S["tier"]`-typed value yields
   // exactly `(typeof MODEL_FOR_TIER)[S["tier"]]`, but the compiler widens the
   // lookup to the whole union because `S` is still a type parameter here.
@@ -363,20 +370,19 @@ export const PURCHASE_IMPORT_REPAIR_FEATURE = defineFeature({
   schema: importExtractionModelOutput,
 }) satisfies AiStructuredFeature<ImportExtractionModelOutput>;
 
-/**
- * The agent is declared here for its tier/cap/effort, but it does NOT run
- * through {@link runStructuredFeature}: it streams, calls tools across
- * several iterations, and has no output schema. `cache: false` — a
- * tool-calling conversation is not deterministic on its first request body.
- */
-export const AGENT_ASK_FEATURE = defineFeature({
-  feature: "agent-ask",
-  tier: "reasoning",
-  maxTokens: 4000,
-  effort: "low",
-  cache: false,
-  promptVersion: "2026-09-11.1",
-}) satisfies AiFeature;
+export const SEMANTIC_QUERY_FEATURE = defineFeature({
+  feature: "semantic-query",
+  tier: "embedding",
+  cache: true,
+  promptVersion: "1",
+}) satisfies AiEmbeddingFeature;
+
+export const ENTITY_EMBEDDING_FEATURE = defineFeature({
+  feature: "entity-embedding",
+  tier: "embedding",
+  cache: true,
+  promptVersion: "1",
+}) satisfies AiEmbeddingFeature;
 
 /** Every declared feature, for the registry assertions in the unit test. */
 export const AI_FEATURES = [
@@ -384,6 +390,10 @@ export const AI_FEATURES = [
   INGREDIENT_MERGE_FEATURE,
   FIELD_SUGGESTION_FEATURE,
   PURCHASE_IMPORT_PRODUCT_IDENTITY_FEATURE,
+  PURCHASE_IMPORT_EXPENSE_LINE_ROLE_FEATURE,
+  PURCHASE_IMPORT_KIT_DETECTION_FEATURE,
+  PURCHASE_IMPORT_PRODUCT_PROMOTION_FEATURE,
+  PURCHASE_IMPORT_REVERSAL_KIND_FEATURE,
   SELECTION_OVERFLOW_FEATURE,
   PRODUCT_IDENTIFICATION_FEATURE,
   LOCATION_INVENTORY_DETECTION_FEATURE,
@@ -395,7 +405,8 @@ export const AI_FEATURES = [
   RECIPE_FLOW_PRIMARY_FEATURE,
   PURCHASE_IMPORT_AUDIT_FEATURE,
   PURCHASE_IMPORT_REPAIR_FEATURE,
-  AGENT_ASK_FEATURE,
+  SEMANTIC_QUERY_FEATURE,
+  ENTITY_EMBEDDING_FEATURE,
 ] as const satisfies readonly AiFeature[];
 
 interface LocationAnalysisImageInput {

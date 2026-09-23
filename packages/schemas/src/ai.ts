@@ -327,6 +327,7 @@ export const aiRunUsageOut = z.object({
       durationMs: true,
       status: true,
       gatewayLogId: true,
+      cacheStatus: true,
       applicationCacheStatus: true,
       estimatedCost: true,
     }),

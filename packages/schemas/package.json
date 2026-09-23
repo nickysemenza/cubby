@@ -91,6 +91,7 @@
     "./suggestions": "./src/suggestions.ts",
     "./audit": "./src/audit.ts",
     "./ai": "./src/ai.ts",
+    "./ai-smoke": "./src/ai-smoke.ts",
     "./background-jobs": "./src/background-jobs.ts",
     "./background-tasks": "./src/background-tasks.ts",
     "./maintenance": "./src/maintenance.ts",
