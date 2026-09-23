@@ -857,6 +857,32 @@ export const viewManifest = defineViewManifest({
       },
     },
   ],
+  importRun: [
+    {
+      id: "imports",
+      label: "Imports",
+      description: "Account syncs, validations, enrichments and photo batches",
+      filters: [
+        {
+          id: "purpose",
+          value: [
+            "account_sync",
+            "purchase_validation",
+            "product_enrichment",
+            "photo_inventory",
+          ],
+        },
+      ],
+    },
+    {
+      id: "ai-work",
+      label: "AI work",
+      description: "Jev suggestion passes, AI actions and background AI work",
+      filters: [
+        { id: "purpose", value: ["ai_suggest", "ai_action", "background"] },
+      ],
+    },
+  ],
   wish: [
     {
       id: "hide-acquired",

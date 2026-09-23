@@ -176,7 +176,7 @@ export default defineEntity({
             { value: "ephemeral", label: "Ephemeral" },
           ],
         },
-        display: { list: true, detail: true, width: "sm", listHidden: true },
+        display: { list: true, detail: true, width: "sm" },
         validation: readOnly(importRunTrigger),
       },
       {
@@ -528,12 +528,14 @@ export default defineEntity({
         deriveSchema: true,
         stored: true,
         schemaFromRead: true,
-        options: [
-          { value: "account_sync", label: "Account sync" },
-          { value: "purchase_validation", label: "Purchase validation" },
-          { value: "product_enrichment", label: "Product enrichment" },
-          { value: "photo_inventory", label: "Photo inventory" },
-        ],
+      },
+      {
+        columnId: "trigger",
+        kind: "multiselect",
+        placeholder: "Filter by trigger...",
+        deriveSchema: true,
+        stored: true,
+        schemaFromRead: true,
       },
       {
         columnId: "vendorAccountId",
