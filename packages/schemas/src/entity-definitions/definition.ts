@@ -1320,7 +1320,7 @@ const metadataSchemas = () => {
 
   const entityExtensionsMetadataSchema = z
     .object({
-      countFilter: nonEmptyString().nullable(),
+      countFilter: nonEmptyString().nullable().optional().default(null),
       relatednessSignals: z
         .array(
           z.union([
@@ -1345,7 +1345,9 @@ const metadataSchemas = () => {
               .strict(),
           ]),
         )
-        .nullable(),
+        .nullable()
+        .optional()
+        .default(null),
       mcpNames: z
         .object({
           singular: nonEmptyString().optional(),
@@ -1353,7 +1355,9 @@ const metadataSchemas = () => {
           overrides: z.record(nonEmptyString(), nonEmptyString()).optional(),
         })
         .strict()
-        .nullable(),
+        .nullable()
+        .optional()
+        .default(null),
       ports: z
         .object({
           repository: sourceRefMetadataSchema.nullable(),
@@ -1362,15 +1366,32 @@ const metadataSchemas = () => {
               label: sourceRefMetadataSchema.nullable(),
               resolver: sourceRefMetadataSchema.nullable(),
             })
-            .strict(),
-          filters: sourceRefMetadataSchema.nullable(),
+            .strict()
+            .optional()
+            .default({
+              label: { module: "~/entities/entities", export: "entityLabel" },
+              resolver: {
+                module: "~/server/repo/shortcode-resolver",
+                export: "resolveLiveShortcode",
+              },
+            }),
+          filters: sourceRefMetadataSchema.nullable().optional().default({
+            module: "~/entities/filter-manifest",
+            export: "getEntityFilters",
+          }),
           search: z
             .object({
               projection: sourceRefMetadataSchema.nullable(),
               semanticText: sourceRefMetadataSchema.nullable(),
               dependentRefresh: sourceRefMetadataSchema.nullable(),
             })
-            .strict(),
+            .strict()
+            .optional()
+            .default({
+              projection: null,
+              semanticText: null,
+              dependentRefresh: null,
+            }),
           /** `(context, input) => EntityTimelineOut` for `capabilities.timeline: "custom"`. */
           timeline: sourceRefMetadataSchema.nullable().optional().default(null),
         })

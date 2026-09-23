@@ -557,23 +557,11 @@ export default defineEntity({
   },
   extensions: {
     countFilter: "recipeIdNull",
-    relatednessSignals: null,
     mcpNames: { overrides: { list: "search_ingredients" } },
     ports: {
       repository: {
         module: "~/server/repo/ingredient/entity-adapter",
         export: "ingredientEntityAdapter",
-      },
-      references: {
-        label: { module: "~/entities/entities", export: "entityLabel" },
-        resolver: {
-          module: "~/server/repo/shortcode-resolver",
-          export: "resolveLiveShortcode",
-        },
-      },
-      filters: {
-        module: "~/entities/filter-manifest",
-        export: "getEntityFilters",
       },
       search: {
         projection: {

@@ -1253,24 +1253,10 @@ export default defineEntity({
     mcp: ["get", "list", "search", "create", "update", "delete", "merge"],
   },
   extensions: {
-    countFilter: null,
-    relatednessSignals: null,
-    mcpNames: null,
     ports: {
       repository: {
         module: "~/server/repo/purchase.entity-adapter",
         export: "purchaseEntityAdapter",
-      },
-      references: {
-        label: { module: "~/entities/entities", export: "entityLabel" },
-        resolver: {
-          module: "~/server/repo/shortcode-resolver",
-          export: "resolveLiveShortcode",
-        },
-      },
-      filters: {
-        module: "~/entities/filter-manifest",
-        export: "getEntityFilters",
       },
       search: {
         projection: {

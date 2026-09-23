@@ -407,26 +407,12 @@ export default defineEntity({
     },
   },
   extensions: {
-    countFilter: null,
-    relatednessSignals: null,
     mcpNames: { plural: "ledger_parties" },
     ports: {
       repository: {
         module: "~/server/repo/ledger-party.entity-adapter",
         export: "ledgerPartyEntityAdapter",
       },
-      references: {
-        label: { module: "~/entities/entities", export: "entityLabel" },
-        resolver: {
-          module: "~/server/repo/shortcode-resolver",
-          export: "resolveLiveShortcode",
-        },
-      },
-      filters: {
-        module: "~/entities/filter-manifest",
-        export: "getEntityFilters",
-      },
-      search: { projection: null, semanticText: null, dependentRefresh: null },
     },
   },
 });

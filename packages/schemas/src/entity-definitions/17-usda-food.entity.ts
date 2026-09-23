@@ -364,8 +364,6 @@ export default defineEntity({
     mcp: ["get", "list"],
   },
   extensions: {
-    countFilter: null,
-    relatednessSignals: null,
     mcpNames: { overrides: { list: "search_usda_foods" } },
     ports: {
       repository: null,
@@ -373,11 +371,6 @@ export default defineEntity({
         label: { module: "~/entities/entities", export: "entityLabel" },
         resolver: null,
       },
-      filters: {
-        module: "~/entities/filter-manifest",
-        export: "getEntityFilters",
-      },
-      search: { projection: null, semanticText: null, dependentRefresh: null },
     },
   },
 });

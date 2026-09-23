@@ -980,24 +980,11 @@ export default defineEntity({
     },
   },
   extensions: {
-    countFilter: null,
-    relatednessSignals: null,
     mcpNames: { overrides: { delete: "delete_recipe" } },
     ports: {
       repository: {
         module: "~/server/repo/recipe/entity-adapter",
         export: "recipeEntityAdapter",
-      },
-      references: {
-        label: { module: "~/entities/entities", export: "entityLabel" },
-        resolver: {
-          module: "~/server/repo/shortcode-resolver",
-          export: "resolveLiveShortcode",
-        },
-      },
-      filters: {
-        module: "~/entities/filter-manifest",
-        export: "getEntityFilters",
       },
       search: {
         projection: {
