@@ -28064,10 +28064,10 @@
             ]
           },
           "blockedByIds": {
-            "$ref": "#/components/schemas/output_schema360"
+            "$ref": "#/components/schemas/output_schema361"
           },
           "blockingIds": {
-            "$ref": "#/components/schemas/output_schema360"
+            "$ref": "#/components/schemas/output_schema361"
           },
           "subtaskCount": {
             "type": "integer",
@@ -34766,7 +34766,7 @@
             "$ref": "#/components/schemas/DisplayImagesField"
           },
           "attachments": {
-            "$ref": "#/components/schemas/output_schema486"
+            "$ref": "#/components/schemas/output_schema487"
           }
         },
         "required": [
@@ -37661,10 +37661,10 @@
             "type": "object",
             "properties": {
               "scope": {
-                "$ref": "#/components/schemas/output_schema387"
+                "$ref": "#/components/schemas/output_schema388"
               },
               "grid": {
-                "$ref": "#/components/schemas/output_schema387"
+                "$ref": "#/components/schemas/output_schema388"
               }
             },
             "required": [
@@ -37676,19 +37676,19 @@
             "type": "object",
             "properties": {
               "tail": {
-                "$ref": "#/components/schemas/output_schema387"
+                "$ref": "#/components/schemas/output_schema388"
               },
               "causes": {
                 "type": "object",
                 "properties": {
                   "adjustments": {
-                    "$ref": "#/components/schemas/output_schema387"
+                    "$ref": "#/components/schemas/output_schema388"
                   },
                   "unattributedProject": {
-                    "$ref": "#/components/schemas/output_schema387"
+                    "$ref": "#/components/schemas/output_schema388"
                   },
                   "unattributedVendor": {
-                    "$ref": "#/components/schemas/output_schema387"
+                    "$ref": "#/components/schemas/output_schema388"
                   }
                 },
                 "required": [
@@ -37999,10 +37999,10 @@
             "$ref": "#/components/schemas/PlainDate"
           },
           "lineKind": {
-            "$ref": "#/components/schemas/output_schema391"
+            "$ref": "#/components/schemas/output_schema392"
           },
           "lineBasis": {
-            "$ref": "#/components/schemas/output_schema392"
+            "$ref": "#/components/schemas/output_schema393"
           },
           "costType": {
             "$ref": "#/components/schemas/CostType"
@@ -38110,7 +38110,7 @@
             "$ref": "#/components/schemas/DisplayImagesField"
           },
           "attachments": {
-            "$ref": "#/components/schemas/output_schema486"
+            "$ref": "#/components/schemas/output_schema487"
           }
         },
         "required": [
@@ -38585,10 +38585,10 @@
             "$ref": "#/components/schemas/PlainDate"
           },
           "lineKind": {
-            "$ref": "#/components/schemas/output_schema391"
+            "$ref": "#/components/schemas/output_schema392"
           },
           "lineBasis": {
-            "$ref": "#/components/schemas/output_schema392"
+            "$ref": "#/components/schemas/output_schema393"
           },
           "costType": {
             "$ref": "#/components/schemas/CostType"
@@ -38802,10 +38802,10 @@
             "$ref": "#/components/schemas/PlainDate"
           },
           "lineKind": {
-            "$ref": "#/components/schemas/output_schema391"
+            "$ref": "#/components/schemas/output_schema392"
           },
           "lineBasis": {
-            "$ref": "#/components/schemas/output_schema392"
+            "$ref": "#/components/schemas/output_schema393"
           },
           "costType": {
             "$ref": "#/components/schemas/CostType"
@@ -39593,7 +39593,8 @@
             "enum": [
               "project",
               "task",
-              "purchase"
+              "purchase",
+              "productCategory"
             ]
           },
           "entityId": {
@@ -39914,7 +39915,7 @@
             "$ref": "#/components/schemas/DisplayImagesField"
           },
           "attachments": {
-            "$ref": "#/components/schemas/output_schema486"
+            "$ref": "#/components/schemas/output_schema487"
           }
         },
         "required": [
@@ -40865,7 +40866,7 @@
             "$ref": "#/components/schemas/DisplayImagesField"
           },
           "attachments": {
-            "$ref": "#/components/schemas/output_schema486"
+            "$ref": "#/components/schemas/output_schema487"
           }
         },
         "required": [
@@ -41535,7 +41536,7 @@
             "$ref": "#/components/schemas/DisplayImagesField"
           },
           "attachments": {
-            "$ref": "#/components/schemas/output_schema486"
+            "$ref": "#/components/schemas/output_schema487"
           }
         },
         "required": [
@@ -45688,7 +45689,7 @@
             "$ref": "#/components/schemas/DisplayImagesField"
           },
           "attachments": {
-            "$ref": "#/components/schemas/output_schema486"
+            "$ref": "#/components/schemas/output_schema487"
           }
         },
         "required": [
@@ -47804,7 +47805,7 @@
             "$ref": "#/components/schemas/DisplayImagesField"
           },
           "attachments": {
-            "$ref": "#/components/schemas/output_schema486"
+            "$ref": "#/components/schemas/output_schema487"
           }
         },
         "required": [
@@ -49861,7 +49862,7 @@
             "$ref": "#/components/schemas/DisplayImagesField"
           },
           "attachments": {
-            "$ref": "#/components/schemas/output_schema486"
+            "$ref": "#/components/schemas/output_schema487"
           }
         },
         "required": [
@@ -50958,7 +50959,7 @@
             "$ref": "#/components/schemas/DisplayImagesField"
           },
           "attachments": {
-            "$ref": "#/components/schemas/output_schema486"
+            "$ref": "#/components/schemas/output_schema487"
           }
         },
         "required": [
@@ -51516,7 +51517,7 @@
             "$ref": "#/components/schemas/DisplayImagesField"
           },
           "attachments": {
-            "$ref": "#/components/schemas/output_schema486"
+            "$ref": "#/components/schemas/output_schema487"
           }
         },
         "required": [
@@ -52117,7 +52118,7 @@
             "$ref": "#/components/schemas/DisplayImagesField"
           },
           "attachments": {
-            "$ref": "#/components/schemas/output_schema486"
+            "$ref": "#/components/schemas/output_schema487"
           }
         },
         "required": [
@@ -53265,16 +53266,16 @@
                   "type": "string"
                 },
                 "inputSchema": {
-                  "$ref": "#/components/schemas/output_schema451"
+                  "$ref": "#/components/schemas/output_schema452"
                 },
                 "outputSchema": {
-                  "$ref": "#/components/schemas/output_schema451"
+                  "$ref": "#/components/schemas/output_schema452"
                 },
                 "annotations": {
-                  "$ref": "#/components/schemas/output_schema453"
+                  "$ref": "#/components/schemas/output_schema454"
                 },
                 "_meta": {
-                  "$ref": "#/components/schemas/output_schema451"
+                  "$ref": "#/components/schemas/output_schema452"
                 }
               },
               "required": [
@@ -53343,10 +53344,10 @@
                   "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
                 },
                 "user": {
-                  "$ref": "#/components/schemas/output_schema454"
+                  "$ref": "#/components/schemas/output_schema455"
                 },
                 "client": {
-                  "$ref": "#/components/schemas/output_schema455"
+                  "$ref": "#/components/schemas/output_schema456"
                 }
               },
               "required": [
@@ -53444,7 +53445,7 @@
           "daily": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/output_schema456"
+              "$ref": "#/components/schemas/output_schema457"
             }
           },
           "tools": {
@@ -53468,13 +53469,13 @@
                   ]
                 },
                 "inputSchema": {
-                  "$ref": "#/components/schemas/output_schema451"
+                  "$ref": "#/components/schemas/output_schema452"
                 },
                 "outputSchema": {
-                  "$ref": "#/components/schemas/output_schema451"
+                  "$ref": "#/components/schemas/output_schema452"
                 },
                 "annotations": {
-                  "$ref": "#/components/schemas/output_schema453"
+                  "$ref": "#/components/schemas/output_schema454"
                 },
                 "status": {
                   "$ref": "#/components/schemas/McpToolUsageStatus"
@@ -53527,19 +53528,19 @@
                 "daily": {
                   "type": "array",
                   "items": {
-                    "$ref": "#/components/schemas/output_schema456"
+                    "$ref": "#/components/schemas/output_schema457"
                   }
                 },
                 "users": {
                   "type": "array",
                   "items": {
-                    "$ref": "#/components/schemas/output_schema454"
+                    "$ref": "#/components/schemas/output_schema455"
                   }
                 },
                 "clients": {
                   "type": "array",
                   "items": {
-                    "$ref": "#/components/schemas/output_schema455"
+                    "$ref": "#/components/schemas/output_schema456"
                   }
                 }
               },
@@ -53565,25 +53566,25 @@
           "users": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/output_schema457"
+              "$ref": "#/components/schemas/output_schema458"
             }
           },
           "clients": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/output_schema457"
+              "$ref": "#/components/schemas/output_schema458"
             }
           },
           "surfaces": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/output_schema457"
+              "$ref": "#/components/schemas/output_schema458"
             }
           },
           "entities": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/output_schema457"
+              "$ref": "#/components/schemas/output_schema458"
             }
           }
         },
@@ -53760,7 +53761,7 @@
             "$ref": "#/components/schemas/DisplayImagesField"
           },
           "attachments": {
-            "$ref": "#/components/schemas/output_schema486"
+            "$ref": "#/components/schemas/output_schema487"
           }
         },
         "required": [
@@ -56356,19 +56357,19 @@
           ]
         }
       },
-      "output_schema360": {
+      "output_schema361": {
         "type": "array",
         "items": {
           "$ref": "#/components/schemas/TaskShortcode"
         }
       },
-      "output_schema381": {
+      "output_schema382": {
         "type": "array",
         "items": {
           "$ref": "#/components/schemas/ProjectShortcode"
         }
       },
-      "output_schema387": {
+      "output_schema388": {
         "type": "object",
         "properties": {
           "current": {
@@ -56382,11 +56383,11 @@
           "current"
         ]
       },
-      "output_schema391": {
+      "output_schema392": {
         "description": "Receipt role. Principal lines are the purchased item/service; every other value is a purchase-level adjustment.",
         "$ref": "#/components/schemas/ExpenseLineKind"
       },
-      "output_schema392": {
+      "output_schema393": {
         "description": "Whether this row is a line item or a slice of a total that was never itemized. 'allocation' means the money was cut by payment schedule (a deposit and a balance on one order) or by an estimated materials/labor split of a lump-sum contract — such a row can never carry a productId, and its costType may be an estimate rather than a vendor-stated fact.",
         "$ref": "#/components/schemas/ExpenseLineBasis"
       },
@@ -56595,7 +56596,7 @@
           "updatedAt"
         ]
       },
-      "output_schema440": {
+      "output_schema441": {
         "oneOf": [
           {
             "$ref": "#/components/schemas/RowDiagnosticOwnFull"
@@ -56624,7 +56625,7 @@
           }
         }
       },
-      "output_schema441": {
+      "output_schema442": {
         "oneOf": [
           {
             "$ref": "#/components/schemas/RowDiagnosticTrue"
@@ -56634,7 +56635,7 @@
           }
         ]
       },
-      "output_schema451": {
+      "output_schema452": {
         "type": "object",
         "propertyNames": {
           "type": "string"
@@ -56643,7 +56644,7 @@
           "$ref": "#/components/schemas/JsonValue"
         }
       },
-      "output_schema453": {
+      "output_schema454": {
         "type": "object",
         "properties": {
           "readOnlyHint": {
@@ -56660,7 +56661,7 @@
           }
         }
       },
-      "output_schema454": {
+      "output_schema455": {
         "type": "object",
         "properties": {
           "id": {
@@ -56682,7 +56683,7 @@
           "email"
         ]
       },
-      "output_schema455": {
+      "output_schema456": {
         "type": "object",
         "properties": {
           "id": {
@@ -56703,7 +56704,7 @@
           "name"
         ]
       },
-      "output_schema456": {
+      "output_schema457": {
         "type": "object",
         "properties": {
           "day": {
@@ -56732,7 +56733,7 @@
           "total"
         ]
       },
-      "output_schema457": {
+      "output_schema458": {
         "type": "object",
         "properties": {
           "key": {
@@ -56753,13 +56754,13 @@
           "count"
         ]
       },
-      "output_schema480": {
+      "output_schema481": {
         "type": "array",
         "items": {
           "$ref": "#/components/schemas/WishCandidateOut"
         }
       },
-      "output_schema486": {
+      "output_schema487": {
         "type": "array",
         "items": {
           "$ref": "#/components/schemas/EntityAttachmentRead"
@@ -57919,7 +57920,7 @@
             "$ref": "#/components/schemas/DisplayImagesField"
           },
           "attachments": {
-            "$ref": "#/components/schemas/output_schema486"
+            "$ref": "#/components/schemas/output_schema487"
           }
         },
         "required": [
@@ -59131,6 +59132,9 @@
       "ProductCategoryDetail": {
         "type": "object",
         "properties": {
+          "fieldResolutions": {
+            "$ref": "#/components/schemas/OptionalFieldResolutions"
+          },
           "id": {
             "$ref": "#/components/schemas/ProductCategoryShortcode"
           },
@@ -59167,6 +59171,11 @@
           "path": {
             "$ref": "#/components/schemas/output_schema346"
           },
+          "productCount": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
           "createdAt": {
             "type": "string",
             "format": "date-time",
@@ -59184,7 +59193,7 @@
             "$ref": "#/components/schemas/DisplayImagesField"
           },
           "attachments": {
-            "$ref": "#/components/schemas/output_schema486"
+            "$ref": "#/components/schemas/output_schema487"
           }
         },
         "required": [
@@ -59195,6 +59204,7 @@
           "sortOrder",
           "parentName",
           "path",
+          "productCount",
           "createdAt",
           "updatedAt",
           "dataQuality",
@@ -59266,6 +59276,9 @@
       "ProductCategoryListItem": {
         "type": "object",
         "properties": {
+          "fieldResolutions": {
+            "$ref": "#/components/schemas/OptionalFieldResolutions"
+          },
           "id": {
             "$ref": "#/components/schemas/ProductCategoryShortcode"
           },
@@ -59302,6 +59315,11 @@
           "path": {
             "$ref": "#/components/schemas/output_schema346"
           },
+          "productCount": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
           "createdAt": {
             "type": "string",
             "format": "date-time",
@@ -59327,6 +59345,7 @@
           "sortOrder",
           "parentName",
           "path",
+          "productCount",
           "createdAt",
           "updatedAt",
           "dataQuality",
@@ -59354,6 +59373,9 @@
       "ProductCategoryOut": {
         "type": "object",
         "properties": {
+          "fieldResolutions": {
+            "$ref": "#/components/schemas/OptionalFieldResolutions"
+          },
           "id": {
             "$ref": "#/components/schemas/ProductCategoryShortcode"
           },
@@ -59390,6 +59412,11 @@
           "path": {
             "$ref": "#/components/schemas/output_schema346"
           },
+          "productCount": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
           "createdAt": {
             "type": "string",
             "format": "date-time",
@@ -59412,6 +59439,7 @@
           "sortOrder",
           "parentName",
           "path",
+          "productCount",
           "createdAt",
           "updatedAt",
           "dataQuality"
@@ -59906,7 +59934,7 @@
             "$ref": "#/components/schemas/DisplayImagesField"
           },
           "attachments": {
-            "$ref": "#/components/schemas/output_schema486"
+            "$ref": "#/components/schemas/output_schema487"
           }
         },
         "required": [
@@ -64724,13 +64752,13 @@
             ]
           },
           "childProjectIds": {
-            "$ref": "#/components/schemas/output_schema381"
+            "$ref": "#/components/schemas/output_schema382"
           },
           "blockedByIds": {
-            "$ref": "#/components/schemas/output_schema381"
+            "$ref": "#/components/schemas/output_schema382"
           },
           "blockingIds": {
-            "$ref": "#/components/schemas/output_schema381"
+            "$ref": "#/components/schemas/output_schema382"
           },
           "createdAt": {
             "type": "string",
@@ -64755,7 +64783,7 @@
             "$ref": "#/components/schemas/DisplayImagesField"
           },
           "attachments": {
-            "$ref": "#/components/schemas/output_schema486"
+            "$ref": "#/components/schemas/output_schema487"
           }
         },
         "required": [
@@ -65253,13 +65281,13 @@
             ]
           },
           "childProjectIds": {
-            "$ref": "#/components/schemas/output_schema381"
+            "$ref": "#/components/schemas/output_schema382"
           },
           "blockedByIds": {
-            "$ref": "#/components/schemas/output_schema381"
+            "$ref": "#/components/schemas/output_schema382"
           },
           "blockingIds": {
-            "$ref": "#/components/schemas/output_schema381"
+            "$ref": "#/components/schemas/output_schema382"
           },
           "createdAt": {
             "type": "string",
@@ -65378,13 +65406,13 @@
             ]
           },
           "childProjectIds": {
-            "$ref": "#/components/schemas/output_schema381"
+            "$ref": "#/components/schemas/output_schema382"
           },
           "blockedByIds": {
-            "$ref": "#/components/schemas/output_schema381"
+            "$ref": "#/components/schemas/output_schema382"
           },
           "blockingIds": {
-            "$ref": "#/components/schemas/output_schema381"
+            "$ref": "#/components/schemas/output_schema382"
           },
           "createdAt": {
             "type": "string",
@@ -65555,13 +65583,13 @@
             ]
           },
           "childProjectIds": {
-            "$ref": "#/components/schemas/output_schema381"
+            "$ref": "#/components/schemas/output_schema382"
           },
           "blockedByIds": {
-            "$ref": "#/components/schemas/output_schema381"
+            "$ref": "#/components/schemas/output_schema382"
           },
           "blockingIds": {
-            "$ref": "#/components/schemas/output_schema381"
+            "$ref": "#/components/schemas/output_schema382"
           },
           "createdAt": {
             "type": "string",
@@ -67030,7 +67058,7 @@
             "$ref": "#/components/schemas/DisplayImagesField"
           },
           "attachments": {
-            "$ref": "#/components/schemas/output_schema486"
+            "$ref": "#/components/schemas/output_schema487"
           }
         },
         "required": [
@@ -68100,7 +68128,7 @@
             "$ref": "#/components/schemas/DisplayImagesField"
           },
           "attachments": {
-            "$ref": "#/components/schemas/output_schema486"
+            "$ref": "#/components/schemas/output_schema487"
           }
         },
         "required": [
@@ -71323,13 +71351,13 @@
             "type": "object",
             "properties": {
               "cost": {
-                "$ref": "#/components/schemas/output_schema440"
+                "$ref": "#/components/schemas/output_schema441"
               },
               "weight": {
-                "$ref": "#/components/schemas/output_schema440"
+                "$ref": "#/components/schemas/output_schema441"
               },
               "nutrients": {
-                "$ref": "#/components/schemas/output_schema440"
+                "$ref": "#/components/schemas/output_schema441"
               }
             },
             "required": [
@@ -71345,10 +71373,10 @@
             ]
           },
           "price": {
-            "$ref": "#/components/schemas/output_schema441"
+            "$ref": "#/components/schemas/output_schema442"
           },
           "gram": {
-            "$ref": "#/components/schemas/output_schema441"
+            "$ref": "#/components/schemas/output_schema442"
           },
           "nutrient": {
             "oneOf": [
@@ -74150,10 +74178,10 @@
             ]
           },
           "blockedByIds": {
-            "$ref": "#/components/schemas/output_schema360"
+            "$ref": "#/components/schemas/output_schema361"
           },
           "blockingIds": {
-            "$ref": "#/components/schemas/output_schema360"
+            "$ref": "#/components/schemas/output_schema361"
           },
           "subtaskCount": {
             "type": "integer",
@@ -74185,7 +74213,7 @@
             "$ref": "#/components/schemas/DisplayImagesField"
           },
           "attachments": {
-            "$ref": "#/components/schemas/output_schema486"
+            "$ref": "#/components/schemas/output_schema487"
           }
         },
         "required": [
@@ -74469,10 +74497,10 @@
             ]
           },
           "blockedByIds": {
-            "$ref": "#/components/schemas/output_schema360"
+            "$ref": "#/components/schemas/output_schema361"
           },
           "blockingIds": {
-            "$ref": "#/components/schemas/output_schema360"
+            "$ref": "#/components/schemas/output_schema361"
           },
           "subtaskCount": {
             "type": "integer",
@@ -74602,10 +74630,10 @@
             ]
           },
           "blockedByIds": {
-            "$ref": "#/components/schemas/output_schema360"
+            "$ref": "#/components/schemas/output_schema361"
           },
           "blockingIds": {
-            "$ref": "#/components/schemas/output_schema360"
+            "$ref": "#/components/schemas/output_schema361"
           },
           "subtaskCount": {
             "type": "integer",
@@ -76325,7 +76353,7 @@
             "$ref": "#/components/schemas/DisplayImagesField"
           },
           "attachments": {
-            "$ref": "#/components/schemas/output_schema486"
+            "$ref": "#/components/schemas/output_schema487"
           }
         },
         "required": [
@@ -76785,7 +76813,7 @@
             "$ref": "#/components/schemas/DisplayImagesField"
           },
           "attachments": {
-            "$ref": "#/components/schemas/output_schema486"
+            "$ref": "#/components/schemas/output_schema487"
           }
         },
         "required": [
@@ -77345,7 +77373,7 @@
             "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
           },
           "candidates": {
-            "$ref": "#/components/schemas/output_schema480"
+            "$ref": "#/components/schemas/output_schema481"
           },
           "candidateCount": {
             "type": "integer",
@@ -77372,7 +77400,7 @@
             "$ref": "#/components/schemas/DisplayImagesField"
           },
           "attachments": {
-            "$ref": "#/components/schemas/output_schema486"
+            "$ref": "#/components/schemas/output_schema487"
           }
         },
         "required": [
@@ -77415,7 +77443,7 @@
             "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
           },
           "candidates": {
-            "$ref": "#/components/schemas/output_schema480"
+            "$ref": "#/components/schemas/output_schema481"
           },
           "candidateCount": {
             "type": "integer",
@@ -77499,7 +77527,7 @@
             "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
           },
           "candidates": {
-            "$ref": "#/components/schemas/output_schema480"
+            "$ref": "#/components/schemas/output_schema481"
           },
           "candidateCount": {
             "type": "integer",

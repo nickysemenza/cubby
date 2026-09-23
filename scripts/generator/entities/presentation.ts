@@ -20,6 +20,7 @@ type PresentationFacts = Readonly<{
   capabilities: EntityDeclarationMetadata["capabilities"];
   ports: CompiledEntity["ports"];
   hasUpdate: boolean;
+  entityKey: string;
 }>;
 
 /**
@@ -184,6 +185,7 @@ const checkList = (
   capabilities: EntityDeclarationMetadata["capabilities"],
   timelineSection: boolean,
   lookup: FieldLookup,
+  entityKey: string,
 ) => {
   const { context } = lookup;
   const viewIds = new Set<string>();
@@ -197,6 +199,17 @@ const checkList = (
   }
   for (const key of list.shelf?.subtitle ?? [])
     lookup.read(key, "list.shelf.subtitle");
+  if (list.tree !== null) {
+    const parent = lookup.read(list.tree.parentField, "list.tree.parentField");
+    if (
+      parent.reference?.entity !== entityKey ||
+      parent.reference.multiple ||
+      parent.readKey === null
+    )
+      throw new EntityDeclarationError(
+        `${lookup.context}.list.tree.parentField ${list.tree.parentField} must be a readable single reference to ${entityKey}.`,
+      );
+  }
   if (
     (timelineSection || viewIds.has("timeline")) &&
     capabilities.timeline === null
@@ -359,7 +372,7 @@ export const compilePresentation = (
     relations,
     lookup,
   );
-  checkList(list, capabilities, timelineSection, lookup);
+  checkList(list, capabilities, timelineSection, lookup, facts.entityKey);
   if ((capabilities.timeline === "custom") !== (ports.timeline !== null))
     throw new EntityDeclarationError(
       `${context}.capabilities.timeline "custom" and extensions.ports.timeline must be declared together.`,

@@ -1,42 +1,14 @@
 import type { ProductCategoryFeature } from "@cubby/schemas/product-category";
 
+import {
+  nestByParent,
+  type TreeRow,
+} from "~/app/_components/entity-list/manifest-tree";
+
 interface CategoryTreeInput {
   id: string;
   parentId: string | null;
 }
-
-export type CategoryTreeRow<T extends CategoryTreeInput> = T & {
-  subRows?: CategoryTreeRow<T>[];
-};
-
-/**
- * Nests flat category rows under their parents, keeping the input's sibling
- * order. A row whose parent is not among `rows` (a search match, or a parent
- * on a page not yet loaded) becomes a root, so filtering never hides a match.
- */
-export function nestProductCategories<T extends CategoryTreeInput>(
-  rows: readonly T[],
-): CategoryTreeRow<T>[] {
-  const nodes = new Map<string, CategoryTreeRow<T>>(
-    rows.map((row) => [row.id, { ...row }]),
-  );
-  const roots: CategoryTreeRow<T>[] = [];
-  for (const row of rows) {
-    const node = nodes.get(row.id);
-    if (!node) continue;
-    const parent =
-      row.parentId && row.parentId !== row.id
-        ? nodes.get(row.parentId)
-        : undefined;
-    if (parent) (parent.subRows ??= []).push(node);
-    else roots.push(node);
-  }
-  return roots;
-}
-
-export const productCategorySubRows = <T extends CategoryTreeInput>(
-  row: CategoryTreeRow<T>,
-) => row.subRows;
 
 export interface CategoryHierarchyNode {
   id: string;
@@ -64,7 +36,7 @@ export function buildCategoryHierarchy(
   directCounts: ReadonlyMap<string, number>,
 ): CategoryHierarchyNode {
   const toNode = (
-    row: CategoryTreeRow<(typeof categories)[number]>,
+    row: TreeRow<(typeof categories)[number]>,
     inherited: ProductCategoryFeature | null,
   ): CategoryHierarchyNode => {
     const feature = row.feature ?? inherited;
@@ -82,7 +54,7 @@ export function buildCategoryHierarchy(
     if (children) node.children = children;
     return node;
   };
-  const children = nestProductCategories(categories).map((row) =>
+  const children = nestByParent(categories, (row) => row.parentId).map((row) =>
     toNode(row, null),
   );
   return {

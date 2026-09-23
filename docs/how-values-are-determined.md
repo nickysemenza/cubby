@@ -1197,6 +1197,14 @@ The root-to-category classification path, including this category.
 - Rule: `productCategory.path`, version 1
 - Resolver: Declared field projection
 
+### Products (`productCount`)
+
+Live products in this category or any category below it.
+
+- Rule: `productCategory.product-count`, version 1
+- Resolver: Declared field projection
+- Value paths: Default `productCount`
+
 ### Data quality (`dataQuality`)
 
 Data-quality gaps and the 0–100 completeness score are evaluated from the checks this entity declares.

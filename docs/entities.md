@@ -409,7 +409,11 @@ and widths. The generator emits narrowed TypeScript renderer IDs and Swift
 renderer enums. Each platform keeps an exhaustive registry that marks every
 declared renderer and slot as implemented, generic, owned by its container, or
 unsupported with a reason. Executable queries, runtime option providers,
-trees, dialogs, and workflows remain handwritten. A legacy field override and
+heterogeneous trees (rows of another entity nested under a row), dialogs, and
+workflows remain handwritten. A self-referencing tree is declared:
+`presentation.list.tree.parentField` names a readable single reference to the
+entity itself, and the generic list nests rows under it, keeping a row whose
+parent is not loaded at the top level. A legacy field override and
 a manifest renderer may not claim the same surface; the compiler or registry
 test fails instead of choosing one silently. `control.renderer` follows the
 same contract for form controls. `display.columnId` preserves an existing computed column identity when
@@ -436,6 +440,16 @@ generated list columns (model order also drives form field order, so it cannot
 be re-sequenced), and `display.columnId` keeps a persisted column id when the
 field key differs — ids are saved layouts, filter bindings, sort ids and
 saved-view keys, so a rename is never free.
+
+Three generic display rules follow from declarations rather than code. A
+select option's `description` is shown as the tooltip of its pill wherever
+the value renders. A `number` field whose provenance is `derived` from one
+`{ entity, relation }` source links to that target's list, filtered by the
+entity's relation section for the same relation, both in its list cell and as
+the detail fact's filter action. A read that reports
+`fieldResolutions[field].mode === "inherit"` for an empty stored value
+displays the inherited value beside its `FieldResolutionBadge`, while the
+field itself keeps reading the stored value for edits.
 
 Every list column falls in one of three buckets. A generic column is a
 declared `list: true` scalar rendered by `createEntityDisplayColumns` with no
