@@ -92,6 +92,8 @@ struct EntityRowPresentationTests {
         #expect(NativePresentationCoverage.detail(.recipeSource) == .implemented)
         #expect(NativePresentationCoverage.detail(.productExternalIds) == .generic)
         #expect(NativePresentationCoverage.detail(.recipeMeta).isUnsupported)
+        #expect(NativePresentationCoverage.heroAction(.edit) == .ownedElsewhere)
+        #expect(NativePresentationCoverage.heroAction(.addToInventory).isUnsupported)
 
         let declaredDetailSlots = EntityCatalog.all.flatMap { descriptor in
             descriptor.presentation.detailSections.compactMap { section in

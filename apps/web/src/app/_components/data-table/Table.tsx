@@ -1089,7 +1089,7 @@ function RTableInner<TItem extends RowData>(props: RTableProps<TItem>) {
           if (item.kind === "header") {
             return (
               <TableRow
-                key={`group-${item.title}`}
+                key={`group-${item.key ?? item.title}`}
                 className="border-b border-border/30"
                 style={{ height: `${virtualRow.size}px` }}
               >

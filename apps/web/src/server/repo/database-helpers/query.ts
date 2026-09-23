@@ -207,6 +207,7 @@ export const buildOrderBy = <T extends PgTable & { id: AnyColumn }>(
     groupBy?: string;
     resolve?: (s: SortParams) => SQL[] | null;
     tieBreaker?: SQL;
+    leadingOrderBy?: SQL[];
   },
 ): SQL[] => {
   const clauses: SQL[] = [];
@@ -215,20 +216,29 @@ export const buildOrderBy = <T extends PgTable & { id: AnyColumn }>(
     Object.entries(getTableColumns(table)),
   );
 
-  // Prepend group-by column as primary sort (if provided, valid, and not
-  // already the user's own sort)
-  if (
-    groupBy &&
-    allowedFields.includes(groupBy) &&
-    !sorts.some((s) => s.orderBy === groupBy)
-  ) {
-    const groupColumn = columnsByName.get(groupBy);
-    if (groupColumn) {
-      clauses.push(sql`${groupColumn} asc nulls last`);
+  // A requested group is the primary order even if its sort appears later in
+  // the stack. Resolve computed group fields through the same SQL path as a
+  // normal sort, then keep every other user sort within the group.
+  if (groupBy && allowedFields.includes(groupBy)) {
+    const groupSort = sorts.find((sort) => sort.orderBy === groupBy) ?? {
+      orderBy: groupBy,
+      direction: "asc" as const,
+    };
+    const special = resolve?.(groupSort);
+    if (special) clauses.push(...special);
+    else {
+      const groupColumn = columnsByName.get(groupBy);
+      if (groupColumn)
+        clauses.push(
+          sql`${groupColumn} ${sql.raw(groupSort.direction)} nulls last`,
+        );
     }
   }
 
+  clauses.push(...(opts?.leadingOrderBy ?? []));
+
   for (const s of sorts) {
+    if (s.orderBy === groupBy) continue;
     const special = resolve?.(s);
     if (special) {
       clauses.push(...special);

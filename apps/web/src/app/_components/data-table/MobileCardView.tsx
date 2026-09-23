@@ -735,6 +735,7 @@ export function MobileCardView<TItem extends RowData>({
             keyFn: (model: (typeof mobileRows)[number]) =>
               groupConfig.keyFn(model.row.original),
             colorFn: groupConfig.colorFn,
+            groups: groupConfig.groups,
           }
         : undefined,
     [groupConfig],
@@ -768,7 +769,7 @@ export function MobileCardView<TItem extends RowData>({
         const item = groupedItems[index];
         if (!item) return `missing:${index}`;
         return item.kind === "header"
-          ? `group:${item.title}`
+          ? `group:${item.key ?? item.title}`
           : `row:${item.item.row.id}`;
       }
       return `row:${mobileRows[index]?.row.id ?? index}`;
@@ -816,7 +817,7 @@ export function MobileCardView<TItem extends RowData>({
       if (gItem.kind === "header") {
         return (
           <VirtualRow
-            key={`header-${gItem.title}`}
+            key={`header-${gItem.key ?? gItem.title}`}
             vi={vi}
             virtualizer={virtualizer}
             role="presentation"

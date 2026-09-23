@@ -2,7 +2,11 @@ import type { ActorContext } from "@cubby/schemas/context";
 import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 import { generatedEntitySort } from "@cubby/schemas/entity-sort";
 import type { EntityId } from "@cubby/schemas/identifiers";
-import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
+import type {
+  ListGroupSummary,
+  PaginationParams,
+  SortParams,
+} from "@cubby/schemas/pagination";
 import { type output as ZodOutput, type ZodSchema, z } from "zod";
 
 import { deferPublications } from "~/server/background-tasks/publish";
@@ -136,6 +140,7 @@ export type EntityInternalId<E extends EntitySchemaBindingEntity> = EntityId<E>;
 export interface EntitySortContract {
   fields: readonly [string, ...string[]];
   default: string;
+  direction: "asc" | "desc";
   groupable?: readonly [string, ...string[]];
 }
 
@@ -158,6 +163,7 @@ const derivedEntitySort = (entity: string): EntitySortContract => {
       {
         fields: readonly [string, ...string[]];
         default: string;
+        direction: "asc" | "desc";
         groupable: readonly string[];
       }
     >
@@ -169,6 +175,7 @@ const derivedEntitySort = (entity: string): EntitySortContract => {
   return {
     fields: declared.fields,
     default: declared.default,
+    direction: declared.direction,
     // SAFETY: the length check on the line above confirms at least one
     // element, matching the non-empty tuple this asserts.
     groupable:
@@ -255,6 +262,7 @@ export type EntityRepository<
     data: ZodOutput<S["repositoryList"]>[];
     count: number;
     sums?: Record<string, number>;
+    groups?: ListGroupSummary[];
   }>;
   delete(
     ctx: EntityKernelContext,

@@ -123,27 +123,6 @@ const resultName = (
   return parsed.name || fallback;
 };
 
-function MealCaptureFields() {
-  return <EntityIntentFields entity="meal" intent="capture" />;
-}
-
-function TaskCaptureFields() {
-  return <EntityIntentFields entity="task" intent="capture" />;
-}
-
-/**
- * `EntityIntentFields` renders every "capture"-roster field generically,
- * `name` focused first (its own special case, mirroring the old hand-rolled
- * `focusOnMount`). Two behaviors the hand-rolled version had are accepted
- * losses (see the plan): the "Planned" switch's date label no longer flips
- * between "Expected date"/"Expense date" (`future`'s manifest checkbox has a
- * fixed label), and the vendor placeholder no longer varies with
- * `context.disposition` ("Sold to / given to" vs "Where from?").
- */
-function ExpenseCaptureFields() {
-  return <EntityIntentFields entity="expense" intent="capture" />;
-}
-
 function ExpenseSettleFields({ record }: EntityEditorFieldsProps) {
   return (
     <EntityIntentFields
@@ -153,10 +132,6 @@ function ExpenseSettleFields({ record }: EntityEditorFieldsProps) {
       record={record}
     />
   );
-}
-
-function ProjectCaptureFields() {
-  return <EntityIntentFields entity="project" intent="capture" />;
 }
 
 /**
@@ -235,18 +210,6 @@ function IngredientCaptureFields(props: EntityEditorFieldsProps) {
   );
 }
 
-function IngredientFullFields() {
-  return <EntityIntentFields entity="ingredient" intent="full" mode="edit" />;
-}
-
-function InventoryCaptureFields() {
-  return <EntityIntentFields entity="inventory" intent="capture" />;
-}
-
-function InventoryFullFields() {
-  return <EntityIntentFields entity="inventory" intent="full" mode="edit" />;
-}
-
 /**
  * Location's rich fields beyond what `EntityIntentFields` renders generically:
  * `type` is a manifest `select` control (`control.suggest: { basis: ["name"] }`)
@@ -276,14 +239,6 @@ function LocationFields({ form, record }: EntityEditorFieldsProps) {
       )}
     </>
   );
-}
-
-function VendorCaptureFields() {
-  return <EntityIntentFields entity="vendor" intent="capture" />;
-}
-
-function PurchaseCaptureFields() {
-  return <EntityIntentFields entity="purchase" intent="capture" />;
 }
 
 /**
@@ -604,7 +559,7 @@ const presentations = {
     title: () => "New Meal",
     description: () =>
       "Plan a meal onto the calendar — add recipes once it's created.",
-    Fields: MealCaptureFields,
+    Fields: () => <EntityIntentFields entity="meal" intent="capture" />,
     successMessage: (result) => {
       if (result.name) {
         return `Added "${result.name}"`;
@@ -616,7 +571,7 @@ const presentations = {
     title: () => "New Task",
     description: () =>
       "Add a step to work through — optionally attach it to a project or product.",
-    Fields: TaskCaptureFields,
+    Fields: () => <EntityIntentFields entity="task" intent="capture" />,
     successMessage: (result) => `Added "${resultName(result, "task")}"`,
   },
   "expense:create:capture": {
@@ -626,7 +581,7 @@ const presentations = {
       context.disposition === true
         ? "Enter a negative cost for a sale or return, or 0 with a negative quantity if it broke or was given away."
         : "Log what you bought (or plan to) — the fastest way to keep a project's cost honest.",
-    Fields: ExpenseCaptureFields,
+    Fields: () => <EntityIntentFields entity="expense" intent="capture" />,
     successMessage: (result) => `Logged "${resultName(result, "expense")}"`,
   },
   "expense:update:settle": {
@@ -643,21 +598,21 @@ const presentations = {
       context.parentProjectId ? "New Sub-project" : "New Project",
     description: () =>
       "Start tracking a household undertaking — tasks and expenses attach to it afterward.",
-    Fields: ProjectCaptureFields,
+    Fields: () => <EntityIntentFields entity="project" intent="capture" />,
     successMessage: (result) => `Added "${resultName(result, "project")}"`,
   },
   "vendor:create:capture": {
     title: () => "New Vendor",
     description: () =>
       "A place money goes. Purchases attach to it afterward; all spend lives on their expenses.",
-    Fields: VendorCaptureFields,
+    Fields: () => <EntityIntentFields entity="vendor" intent="capture" />,
     successMessage: (result) => `Added "${resultName(result, "vendor")}"`,
   },
   "purchase:create:capture": {
     title: () => "New Purchase",
     description: () =>
       "One vendor order or receipt event. Its Expenses are the categorized spend lines added afterward, and every dollar lives on them.",
-    Fields: PurchaseCaptureFields,
+    Fields: () => <EntityIntentFields entity="purchase" intent="capture" />,
     successMessage: (result) => `Logged "${purchaseLabel(result)}"`,
   },
   "product:create:full": {
@@ -736,13 +691,15 @@ const presentations = {
     title: () => "Edit Ingredient",
     description: () => "Aliases replace the complete alternate-name list.",
     submitLabel: "Save changes",
-    Fields: IngredientFullFields,
+    Fields: () => (
+      <EntityIntentFields entity="ingredient" intent="full" mode="edit" />
+    ),
     successMessage: () => "Ingredient updated",
   },
   "inventory:create:capture": {
     title: () => "Add to Inventory",
     description: () => "Record an approximate quantity at a physical location.",
-    Fields: InventoryCaptureFields,
+    Fields: () => <EntityIntentFields entity="inventory" intent="capture" />,
     successMessage: () => "Added to inventory",
   },
   "inventory:update:full": {
@@ -750,7 +707,9 @@ const presentations = {
     description: () =>
       "Move it, correct the quantity, or flip it between stock and installed.",
     submitLabel: "Save changes",
-    Fields: InventoryFullFields,
+    Fields: () => (
+      <EntityIntentFields entity="inventory" intent="full" mode="edit" />
+    ),
     successMessage: () => "Inventory item updated",
   },
   "location:create:capture": {

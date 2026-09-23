@@ -20,24 +20,6 @@ import type {
 } from "~/entities/entity-contracts";
 import { getErrorMessage } from "~/lib/error-utils";
 
-/** Mutation factories are callable without callbacks; the hook composes those itself. */
-type MutationOptionsFn = () => object;
-
-/** The mutation's success-result type, recovered from the options it produces. */
-export type DataOf<TFn extends MutationOptionsFn> =
-  ReturnType<TFn> extends UseMutationOptions<infer TData, infer _E, infer _V>
-    ? TData
-    : never;
-/** The mutation's input/variables type, recovered from the options it produces. */
-export type VariablesOf<TFn extends MutationOptionsFn> =
-  ReturnType<TFn> extends UseMutationOptions<
-    infer _D,
-    infer _E,
-    infer TVariables
-  >
-    ? TVariables
-    : never;
-
 type ActionSuccess<TData> = ReactNode | ((data: TData) => ReactNode);
 /**
  * A static string is a PREFIX, not the whole toast title: the shown title is

@@ -1,31 +1,28 @@
 import CubbyKit
 import SwiftUI
 
-/// The one sanctioned `switch (key, id)` in the App: which declared detail slots and hero verbs
-/// native fills. Unsupported declared slots are surfaced once by the detail screen rather than
-/// disappearing silently; a verb it does not know is not offered.
+/// The one sanctioned `switch (key, id)` in the App: which declared detail slots native fills and
+/// which entity-specific supplements appear. Unsupported declaration features are surfaced by
+/// the detail screen.
 enum DetailSlotRegistry {
     /// Section content for `slot` on `key`'s detail; nil renders nothing (the section is skipped).
     @MainActor
     static func view(for key: EntityKey, slot: String, row: EntityRow, appModel: AppModel) -> AnyView? {
+        guard let slot = EntityDetailSlotID(rawValue: slot) else { return nil }
         switch (key, slot) {
-        case (.meal, "meal.nutrition"):
-            AnyView(MealNutritionSlot(mealID: row.id))
-        case (.ledgerParty, "ledgerParty.wardrobe"):
-            AnyView(WardrobeDetailSlot(ownerID: row.id, ownerName: row.title))
+        case (.meal, .mealNutrition):
+            return AnyView(MealNutritionSlot(mealID: row.id))
+        case (.ledgerParty, .ledgerPartyWardrobe):
+            return AnyView(WardrobeDetailSlot(ownerID: row.id, ownerName: row.title))
         default:
-            nil
+            return nil
         }
     }
 
-    /// The hero action row for the verbs `declared` on `key`'s presentation, minus `edit`
-    /// (the toolbar's); nil when none of the declared verbs has a native handler. No entity
-    /// currently declares a hero verb beyond the default `edit`, so this always returns nil —
-    /// kept as the registration point for the next one that does.
+    /// Ownership is a dedicated, evidence-aware inventory affordance. It is not a manifest hero
+    /// action and must remain available when the manifest declares no native hero verb.
     @MainActor
-    static func heroActions(
-        for key: EntityKey, declared: [String], row: EntityRow, onChanged: @escaping () -> Void
-    ) -> AnyView? {
+    static func supplement(for key: EntityKey, row: EntityRow, onChanged: @escaping () -> Void) -> AnyView? {
         switch key {
         case .inventory:
             guard let detail = try? row.decode(InventoryDetail.self) else { return nil }

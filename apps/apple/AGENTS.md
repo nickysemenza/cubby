@@ -137,8 +137,7 @@ generated shape.
 - `swift build --package-path apps/apple/CubbyKit`
 - `swift test --package-path apps/apple/CubbyKit`
 - `xcodegen generate --spec apps/apple/project.yml` (when `project.yml` changes)
-- Full app build needs the xcframework from `ensure-apple-ffi.ts` first; that script and its inputs
-  belong to W1.
+- Full app build needs the xcframework from `ensure-apple-ffi.ts` first.
 - `swift format lint --strict --configuration apps/apple/.swift-format --recursive` (see
   `scripts/apple-check.sh`, the `apple` Nx target on `apps/apple/project.json`) gates
   formatting; run

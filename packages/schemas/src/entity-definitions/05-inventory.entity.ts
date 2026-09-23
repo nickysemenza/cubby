@@ -709,8 +709,6 @@ export default defineEntity({
     },
   },
   extensions: {
-    countFilter: null,
-    relatednessSignals: null,
     mcpNames: {
       singular: "inventory_entry",
       plural: "inventory_entries",
@@ -721,31 +719,7 @@ export default defineEntity({
         module: "~/server/repo/inventory/entity-adapter",
         export: "inventoryEntityAdapter",
       },
-      references: {
-        label: { module: "~/entities/entities", export: "entityLabel" },
-        resolver: {
-          module: "~/server/repo/shortcode-resolver",
-          export: "resolveLiveShortcode",
-        },
-      },
-      filters: {
-        module: "~/entities/filter-manifest",
-        export: "getEntityFilters",
-      },
-      search: {
-        projection: {
-          module: "~/server/repo/search-document",
-          export: "refreshSearchDocument",
-        },
-        semanticText: {
-          module: "~/server/repo/search-document",
-          export: "getSearchDocumentEmbeddingText",
-        },
-        dependentRefresh: {
-          module: "~/server/services/mutation-side-effects",
-          export: "runMutationSideEffects",
-        },
-      },
+      search: "document",
     },
   },
 });

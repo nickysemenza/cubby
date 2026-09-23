@@ -92,7 +92,7 @@ const presentationLabel = (
 /** Kebab/camel source identifier -> Swift camelCase (`usda-food` -> `usdaFood`). */
 const swiftIdentifier = (raw: string): string =>
   raw
-    .split("-")
+    .split(/[-.]/)
     .map((segment, index) =>
       index === 0
         ? segment.charAt(0).toLowerCase() + segment.slice(1)
@@ -294,8 +294,12 @@ const renderDetailSectionLiteral = (
   section: DetailSection,
 ): string => {
   const id = section.kind === "slot" ? `${entity}.${section.id}` : section.id;
+  const idLiteral =
+    section.kind === "slot"
+      ? `EntityDetailSlotID.${swiftCaseName(id)}.rawValue`
+      : swiftString(id);
   const common =
-    `id: ${swiftString(id)}, ` +
+    `id: ${idLiteral}, ` +
     `title: ${swiftOptionalString(section.title)}, ` +
     `placement: .${section.placement}, ` +
     `collapsed: ${swiftBool(section.collapsed)}, ` +
@@ -331,7 +335,7 @@ type ListView = CompiledEntity["inspector"]["list"]["views"][number];
 
 const renderListViewLiteral = (entity: string, view: ListView): string =>
   isSlotListView(view)
-    ? `.slot(id: ${swiftString(`${entity}.${view.id}`)}, label: ${swiftString(view.label)}, searchKeys: ${swiftStringArray(view.searchKeys)})`
+    ? `.slot(id: EntityListSlotID.${swiftCaseName(`${entity}.${view.id}`)}.rawValue, label: ${swiftString(view.label)}, searchKeys: ${swiftStringArray(view.searchKeys)})`
     : `.${view}`;
 
 const renderReadOnlyMatch = (value: string | boolean): string =>
@@ -369,7 +373,7 @@ const renderPresentationLiteral = (
     `${inner}heroStats: ${swiftStringArray(detail.hero.stats)},\n` +
     `${inner}heroBreadcrumb: ${swiftOptionalString(detail.hero.breadcrumb)},\n` +
     `${inner}heroImages: ${swiftBool(detail.hero.images)},\n` +
-    `${inner}heroActions: ${swiftStringArray(detail.hero.actions)},\n` +
+    `${inner}heroActions: [${detail.hero.actions.map((action) => `.${swiftCaseName(action)}`).join(", ")}],\n` +
     `${inner}detailSections: ${sections},\n` +
     `${inner}listViews: [${list.views.map((view) => renderListViewLiteral(entity, view)).join(", ")}],\n` +
     `${inner}shelfSubtitle: ${swiftStringArray(list.shelf?.subtitle ?? [])},\n` +
@@ -523,6 +527,38 @@ export const renderSwiftEntityCatalog = (
     "DetailRendererID",
     rendererIds("detail"),
   );
+  const heroActionEnum = renderStringEnum(
+    "EntityHeroActionID",
+    [
+      ...new Set(
+        entities.flatMap((entity) => entity.inspector.detail.hero.actions),
+      ),
+    ].sort(),
+  );
+  const detailSlotEnum = renderStringEnum(
+    "EntityDetailSlotID",
+    [
+      ...new Set(
+        entities.flatMap((entity) =>
+          entity.inspector.detail.sections.flatMap((section) =>
+            section.kind === "slot" ? [`${entity.key}.${section.id}`] : [],
+          ),
+        ),
+      ),
+    ].sort(),
+  );
+  const listSlotEnum = renderStringEnum(
+    "EntityListSlotID",
+    [
+      ...new Set(
+        entities.flatMap((entity) =>
+          entity.inspector.list.views.flatMap((view) =>
+            isSlotListView(view) ? [`${entity.key}.${view.id}`] : [],
+          ),
+        ),
+      ),
+    ].sort(),
+  );
   // One static per entity rather than a single ~900-line array literal:
   // Release/WMO spent ~650 s inside the SIL optimizer's COWArrayOpt pass
   // (ColdBlockInfo::analyze) on the one-time initializer of `all` when the
@@ -557,6 +593,12 @@ export const renderSwiftEntityCatalog = (
     listRendererEnum +
     "\n" +
     detailRendererEnum +
+    "\n" +
+    heroActionEnum +
+    "\n" +
+    detailSlotEnum +
+    "\n" +
+    listSlotEnum +
     "\n" +
     "/// A `{value, label}` choice: a filter's options or a select control's options.\n" +
     "public struct LabeledOption: Codable, Sendable, Hashable {\n" +
@@ -782,7 +824,7 @@ export const renderSwiftEntityCatalog = (
     "  public let heroStats: [String]\n" +
     "  public let heroBreadcrumb: String?\n" +
     "  public let heroImages: Bool\n" +
-    "  public let heroActions: [String]\n" +
+    "  public let heroActions: [EntityHeroActionID]\n" +
     "  public let detailSections: [DetailSection]\n" +
     "  public let listViews: [ListView]\n" +
     "  /// Shelf card subtitle fields, in order; empty when there is no shelf view.\n" +

@@ -109,19 +109,19 @@ export function listScaffold<
       filters?: Filters,
     ): SQL[] {
       const searchQuery = searchQueryFromFilters(filters);
-      if (searchable && searchQuery !== undefined && sorts.length === 0) {
-        return [
-          asc(lexicalRelevance(entity, table.id, searchQuery)),
-          desc(table.updatedAt),
-          asc(table.shortcode),
-        ];
-      }
       return buildOrderBy(
         table,
         sorts,
         [...generatedEntitySort[entity].fields],
         {
           ...opts,
+          leadingOrderBy:
+            searchable && searchQuery !== undefined && sorts.length === 0
+              ? [
+                  asc(lexicalRelevance(entity, table.id, searchQuery)),
+                  desc(table.updatedAt),
+                ]
+              : undefined,
           resolve: (sort) => scoreSort?.(sort) ?? opts?.resolve?.(sort) ?? null,
           // Offset pagination must be deterministic. Repositories may keep a
           // domain-specific tie-breaker, but every explicit list sort then

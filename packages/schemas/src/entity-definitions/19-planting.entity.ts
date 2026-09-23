@@ -771,23 +771,12 @@ export default defineEntity({
     },
   },
   extensions: {
-    countFilter: null,
-    relatednessSignals: null,
-    mcpNames: null,
     ports: {
       repository: {
         module: "~/server/repo/garden/entity-adapters",
         export: "plantingEntityAdapter",
       },
-      references: {
-        label: { module: "~/entities/entities", export: "entityLabel" },
-        resolver: {
-          module: "~/server/repo/shortcode-resolver",
-          export: "resolveLiveShortcode",
-        },
-      },
       filters: null,
-      search: { projection: null, semanticText: null, dependentRefresh: null },
       timeline: {
         module: "~/server/repo/garden/timeline",
         export: "plantingTimeline",

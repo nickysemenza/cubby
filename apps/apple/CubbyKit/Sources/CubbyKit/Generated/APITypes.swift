@@ -456,6 +456,7 @@ public typealias LedgerTransferOut = Components.Schemas.LedgerTransferOut
 public typealias LedgerTransferShortcode = Components.Schemas.LedgerTransferShortcode
 public typealias LedgerTransferUpdateData = Components.Schemas.LedgerTransferUpdateData
 public typealias LegacyFoodInfo = Components.Schemas.LegacyFoodInfo
+public typealias ListGroupSummary = Components.Schemas.ListGroupSummary
 public typealias ListPageMeta = Components.Schemas.ListPageMeta
 public typealias ListReceiptHuntsOut = Components.Schemas.ListReceiptHuntsOut
 public typealias LocationBulkUpdateParentInput = Components.Schemas.LocationBulkUpdateParentInput

@@ -466,12 +466,6 @@ ${renderFilterSwitch(parameters, entity)}
             _ = try await client.${swiftMethod(entity, "update")}(path: .init(id: id), body: .json(try body.decoded())).ok`,
     )
     .join("\n");
-  const deleteCases = withGenerated("delete")
-    .map(
-      ([entity]) => `        case .${swiftCase(entity)}:
-            _ = try await client.${swiftMethod(entity, "delete")}(path: .init(id: id)).ok`,
-    )
-    .join("\n");
   const attachCases = withGenerated("update")
     .filter(([entity]) => bodyHas(entity, "pendingImageIds"))
     .map(
@@ -576,10 +570,6 @@ ${switchBody(createCases, "create")}
     /// \`resources.<key>.update\` with \`body\` decoded into the typed update payload.
     func update(_ body: JSONValue, id: String, client: Client) async throws {
 ${switchBody(updateCases, "update")}
-    }
-
-    func delete(id: String, client: Client) async throws {
-${switchBody(deleteCases, "delete")}
     }
 
     /// \`resources.<key>.update\` with only \`pendingImageIds\` set, for the entities whose update

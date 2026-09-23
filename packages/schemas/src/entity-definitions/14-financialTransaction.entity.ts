@@ -1114,39 +1114,12 @@ export default defineEntity({
     },
   },
   extensions: {
-    countFilter: null,
-    relatednessSignals: null,
-    mcpNames: null,
     ports: {
       repository: {
         module: "~/server/repo/financial-transaction.entity-adapter",
         export: "financialTransactionEntityAdapter",
       },
-      references: {
-        label: { module: "~/entities/entities", export: "entityLabel" },
-        resolver: {
-          module: "~/server/repo/shortcode-resolver",
-          export: "resolveLiveShortcode",
-        },
-      },
-      filters: {
-        module: "~/entities/filter-manifest",
-        export: "getEntityFilters",
-      },
-      search: {
-        projection: {
-          module: "~/server/repo/search-document",
-          export: "refreshSearchDocument",
-        },
-        semanticText: {
-          module: "~/server/repo/search-document",
-          export: "getSearchDocumentEmbeddingText",
-        },
-        dependentRefresh: {
-          module: "~/server/services/mutation-side-effects",
-          export: "runMutationSideEffects",
-        },
-      },
+      search: "document",
     },
   },
 });
