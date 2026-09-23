@@ -12,8 +12,8 @@ test:file:postgres src/...`. Read a failed run's ending and
 `apps/web/.vitest-failures.txt` before deciding what to change; do not rerun an
 unchanged tier to rediscover its failures.
 
-One root agent owns any broad validation that the change needs. Subagents run
-focused tests and return their result, command, duration, relevant output, and
+One root agent owns any broad validation that the change needs. A subagent runs
+only focused tests and return their result, command, duration, relevant output, and
 limits. Reuse valid results at handoff; choose checks for the changed behavior
 rather than running a blanket `pnpm check` or affected suite. Keep expensive
 local gates sequential.

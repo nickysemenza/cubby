@@ -508,6 +508,12 @@ history is the archive. Permanent product constraints live in the
 
 ## Requires thought or evidence
 
+- **Measure the delegate-less routing change.** Around 2026-10-06, re-measure
+  30 days of Claude session transcripts against the baseline in
+  [model routing](agents/model-routing.md#delegate-or-not): share of sessions
+  that spawn subagents (about half), subagent share of context tokens (47%),
+  and subagent output on Opus/Fable. Keep the rule if the shares fell without
+  slower or lower-quality sessions; otherwise revise it.
 - **Jev suggestion for `product.ingredientId`.** The manifest and registry
   already support it (`readKey: null` reference targets work in
   `scripts/generator/entities/compile.ts` and `readReferenceField` in

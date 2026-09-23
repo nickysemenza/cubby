@@ -8,7 +8,7 @@
 - A failing test run already lists what failed, at the end of its output and in
   `apps/web/.vitest-failures.txt`. Read those instead of re-running the tier —
   measured, 24% of all test runs were a re-run of one that had just failed.
-- Subagents run focused tests and return distilled evidence (result, command,
+- A subagent runs only focused tests and returns distilled evidence (result, command,
   duration, relevant output, and limits). The root owns any needed broad
   validation; others continue useful work while it runs. Reuse unchanged
   results at handoff instead of rerunning checks for publication.
@@ -16,10 +16,11 @@
   deployed-code compatibility before pushing, then verify the schema afterward.
 - Keep edits disjoint across agents/worktrees. Claude main sessions default to
   `opus` at medium effort (`.claude/settings.json`); Codex pins no model. A
-  session's explicit `/model` or effort choice wins. Route bounded
-  implementation, investigation, test, and log-analysis subagents to the cheaper
-  lanes in model routing; use an independent review agent only for broad or
-  risky work.
+  session's explicit `/model` or effort choice wins. Work directly by default:
+  finish in the main session anything a handful of tool calls covers, including
+  lookups in a known file. Delegate only independent tracks that run in
+  parallel, a broad read-heavy sweep, or an approved multi-unit implementation;
+  use an independent review agent only for broad or risky work.
 - Use synthetic data in repository content and outward-facing engineering text.
   Never include personal or household information, real Cubby entity identifiers
   or records, or private source material in docs, comments, fixtures, examples,
@@ -41,7 +42,8 @@
   if it changed since you read it, and read a region of a large one. Never `cd`
   — use absolute paths, `git -C`, and `pnpm --dir`, which also survives the
   per-call working directory reset.
-- **Model, delegation, and context routing:** before spawning, load [model
+- **Model, delegation, and context routing:** before spawning (including a
+  Codex hand-off), load [model
   routing](docs/agents/model-routing.md), select an explicit supported
   model/effort pair, and use its compact handoff contract. Preserve an explicit
   user model choice and the current main session.

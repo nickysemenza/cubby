@@ -14,6 +14,7 @@
 # prose rule this is enforced by the runtime.
 tool_output_token_limit = 24000
 
+# Subagents are for parallel, read-heavy work; see docs/agents/model-routing.md.
 [agents]
 enabled = true
 max_concurrent_threads_per_session = 3
