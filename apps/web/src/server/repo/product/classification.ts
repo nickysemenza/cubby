@@ -1,5 +1,9 @@
 import type { ProductCategoryId, ProductId } from "@cubby/schemas/identifiers";
 import { hasFoodIndicators } from "@cubby/schemas/product";
+import {
+  isProjectResourceFeature,
+  projectResourceFeatureLabels,
+} from "@cubby/schemas/product-category-fields";
 import { and, eq } from "drizzle-orm";
 
 import type { DrizzleTransaction } from "~/server/db";
@@ -8,7 +12,6 @@ import {
   productExternalId,
   projectToolUsage,
   planting,
-  wishCandidate,
 } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
 import { notDeleted } from "~/server/repo/database-helpers";
@@ -22,7 +25,7 @@ import { externalIdsContainIsbn } from "./update-helpers";
 /**
  * Resolve one requested category against Product evidence and live dependent
  * edges. Import and direct-update paths share this rather than letting a raw
- * scalar write bypass food, ISBN, wishlist, or project-resource admission.
+ * scalar write bypass food, ISBN, or project-resource admission.
  */
 export async function assertProductCategoryChange(
   tx: DrizzleTransaction,
@@ -54,19 +57,6 @@ export async function assertProductCategoryChange(
     requiredFeature,
   );
   const feature = await getCategoryFeature(tx, categoryId);
-  const wishlist = await tx.query.wishCandidate.findFirst({
-    where: and(
-      eq(wishCandidate.productId, productId),
-      notDeleted(wishCandidate),
-    ),
-    columns: { id: true },
-  });
-  if (wishlist && feature !== "tools") {
-    throw createAppError(
-      "PRODUCT_HAS_WISH_CANDIDATES",
-      "Remove this Product from the Wishlist before changing it out of the Tools category.",
-    );
-  }
   const projectUsage = await tx.query.projectToolUsage.findFirst({
     where: and(
       eq(projectToolUsage.productId, productId),
@@ -74,10 +64,10 @@ export async function assertProductCategoryChange(
     ),
     columns: { id: true },
   });
-  if (projectUsage && feature !== "tools" && feature !== "software") {
+  if (projectUsage && !isProjectResourceFeature(feature)) {
     throw createAppError(
       "PRODUCT_CATEGORY_INELIGIBLE",
-      "A Product used as a project resource must remain Tools or Software.",
+      `A Product used as a project resource must be in a category that allows project resources (${projectResourceFeatureLabels}).`,
     );
   }
   const gardenSource = await tx.query.planting.findFirst({

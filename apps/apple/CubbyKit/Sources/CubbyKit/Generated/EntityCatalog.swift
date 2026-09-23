@@ -1986,7 +1986,7 @@ public enum EntityCatalog {
       FilterDescriptor(columnId: "updatedAt", urlKey: "updatedAt", kind: .range, placeholder: "Filter by updated date...", label: nil, options: [LabeledOption(value: "30d", label: "Last 30 days"), LabeledOption(value: "90d", label: "Last 90 days"), LabeledOption(value: "ytd", label: "Year to date"), LabeledOption(value: "1y", label: "Last 12 months")], wire: .range(from: "updatedFrom", to: "updatedTo", presence: nil), targetEntity: nil)
     ],
     relations: [
-      RelationDescriptor(key: "candidates", label: "Tool candidates", target: .product, cardinality: .many)
+      RelationDescriptor(key: "candidates", label: "Candidate products", target: .product, cardinality: .many)
     ],
     presentation: EntityPresentation(
       detailVariant: .standard,
@@ -1997,7 +1997,7 @@ public enum EntityCatalog {
       heroActions: ["edit", "markPurchased"],
       detailSections: [
         DetailSection(id: "overview", title: "Overview", placement: .supporting, collapsed: false, explanationField: nil, kind: .fields(["name", "notes", "acquiredAt", "createdAt", "updatedAt"])),
-        DetailSection(id: "candidates", title: "Tool alternatives", placement: .primary, collapsed: false, explanationField: nil, kind: .fields(["candidates"]))
+        DetailSection(id: "candidates", title: "Candidate alternatives", placement: .primary, collapsed: false, explanationField: nil, kind: .fields(["candidates"]))
       ],
       listViews: [.table, .shelf],
       shelfSubtitle: [],

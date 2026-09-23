@@ -43,6 +43,29 @@ export const categoryFeatureSql = (
   ) SELECT "feature" = ${featureLiteral(feature)} FROM ancestors WHERE "feature" IS NOT NULL ORDER BY depth LIMIT 1
 ), false)`;
 
+/** True only when the closest non-null ancestor feature is one of `features`. */
+export const categoryFeatureInSql = (
+  categoryIdExpr: SQL,
+  features: readonly ProductCategoryFeature[],
+) => {
+  if (features.length === 0) return sql<boolean>`false`;
+  const literals = sql.join(
+    features.map((feature) => featureLiteral(feature)),
+    sql`, `,
+  );
+  return sql<boolean>`COALESCE((
+    WITH RECURSIVE ancestors AS (
+      SELECT c."id", c."parentId", c."feature", 0 AS depth, ARRAY[c."id"] AS visited
+      FROM "ProductCategory" c WHERE c."id" = ${categoryIdExpr} AND c."deletedAt" IS NULL
+      UNION ALL
+      SELECT parent."id", parent."parentId", parent."feature", a.depth + 1, a.visited || parent."id"
+      FROM ancestors a JOIN "ProductCategory" parent ON parent."id" = a."parentId"
+      WHERE parent."deletedAt" IS NULL AND a.depth < ${MAX_ANCESTOR_DEPTH}
+        AND NOT parent."id" = ANY(a.visited)
+    ) SELECT "feature" IN (${literals}) FROM ancestors WHERE "feature" IS NOT NULL ORDER BY depth LIMIT 1
+  ), false)`;
+};
+
 /** Parenthesized id subquery containing the selected categories and descendants. */
 export const categoryDescendantsSql = (
   selectedIds: readonly ProductCategoryId[],

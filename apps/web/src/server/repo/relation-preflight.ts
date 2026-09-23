@@ -34,13 +34,14 @@ import type {
 } from "@cubby/schemas/entity-integrity";
 import { toPublicImpact } from "@cubby/schemas/entity-integrity";
 import type { ProductId } from "@cubby/schemas/identifiers";
+import { projectResourceFeatures } from "@cubby/schemas/product-category-fields";
 import type { AppErrorReason } from "@cubby/shared";
 import { inArray, sql } from "drizzle-orm";
 
 import type { DrizzleClient, DrizzleTransaction } from "~/server/db";
 import { product } from "~/server/db/schema";
 import { createBlockedError } from "~/server/errors/app-error";
-import { categoryFeatureSql } from "~/server/repo/product-category-sql";
+import { categoryFeatureInSql } from "~/server/repo/product-category-sql";
 
 /**
  * What a relation pre-validation found, in the id space the repo works in.
@@ -68,8 +69,9 @@ export interface RelationPreflight {
   missing: ProductId[];
   /**
    * Live products the parent's category gate rejects. Project resources only —
-   * a `ProjectToolUsage` row may only name a `tools` or `software` Product.
-   * Kept apart from `missing` because conflating them is the defect this
+   * a `ProjectToolUsage` row may only name a Product whose resolved category
+   * grants the project-resource capability. Kept apart from `missing` because
+   * conflating them is the defect this
    * module exists to fix: `PRODUCT_NOT_FOUND` for a product that plainly
    * exists sends the caller looking for a typo that isn't there.
    */
@@ -134,10 +136,10 @@ export async function loadRelationProducts(
     .select({
       id: product.id,
       shortcode: product.shortcode,
-      reusable: sql<boolean>`(
-        ${categoryFeatureSql(sql`${product.categoryId}`, "tools")}
-        OR ${categoryFeatureSql(sql`${product.categoryId}`, "software")}
-      )`,
+      reusable: categoryFeatureInSql(
+        sql`${product.categoryId}`,
+        projectResourceFeatures,
+      ),
       deletedAt: product.deletedAt,
     })
     .from(product)

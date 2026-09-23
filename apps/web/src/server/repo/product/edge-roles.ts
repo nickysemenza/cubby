@@ -23,7 +23,7 @@
  *  - history: `Task.subjectProductId` (work performed on the product; deleting
  *    the subject would leave that durable task history nameless) and
  *    `ProjectToolUsage.productId` (a reusable tool's project-use history).
- *  - association: `WishCandidate.productId` (a Tool alternative remains
+ *  - association: `WishCandidate.productId` (a candidate alternative remains
  *    meaningful until removed from its Wishlist entries).
  *  - reference: `Location.productId` (a Location that IS this product — the
  *    bin itself) and `Cookbook.productId` (a Cookbook whose physical copy
@@ -199,7 +199,7 @@ export const PRODUCT_DELETE_EDGE_POLICY = {
     code: "block-live-wishlist-candidate",
     effect: "block",
     description:
-      "A tool on the Wishlist remains a live alternative until it is removed from every Wish.",
+      "A product on the Wishlist remains a live alternative until it is removed from every Wish.",
     reason: "PRODUCT_HAS_WISH_CANDIDATES",
     label: "wishlist candidates",
   },
