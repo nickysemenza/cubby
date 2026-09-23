@@ -275,7 +275,8 @@ export function AiUsagePage() {
               <TableHead>Provider</TableHead>
               <TableHead>Model</TableHead>
               <TableHead>Operation</TableHead>
-              <TableHead>Cache</TableHead>
+              <TableHead>App cache</TableHead>
+              <TableHead>Analysis cache</TableHead>
               <TableHead>Calls</TableHead>
               <TableHead>Input</TableHead>
               <TableHead>Output</TableHead>
@@ -286,7 +287,7 @@ export function AiUsagePage() {
           <TableBody>
             {summaryRows?.map((row) => (
               <TableRow
-                key={`${row.day}:${row.feature}:${row.provider}:${row.model}:${row.operation}:${row.cacheStatus ?? ""}`}
+                key={`${row.day}:${row.feature}:${row.provider}:${row.model}:${row.operation}:${row.cacheStatus ?? ""}:${row.applicationCacheStatus ?? ""}`}
               >
                 <TableCell>{row.day}</TableCell>
                 <TableCell className="whitespace-normal">
@@ -297,6 +298,7 @@ export function AiUsagePage() {
                 <TableCell className="whitespace-normal">
                   {row.operation}
                 </TableCell>
+                <TableCell>{row.applicationCacheStatus ?? "-"}</TableCell>
                 <TableCell>{row.cacheStatus ?? "-"}</TableCell>
                 <TableCell>{formatTokens(row.count)}</TableCell>
                 <TableCell>{formatTokens(row.inputTokens)}</TableCell>
@@ -330,7 +332,8 @@ export function AiUsagePage() {
               <TableHead>Feature</TableHead>
               <TableHead>Provider / model</TableHead>
               <TableHead>Operation</TableHead>
-              <TableHead>Cache</TableHead>
+              <TableHead>App cache</TableHead>
+              <TableHead>Analysis cache</TableHead>
               <TableHead>Entity</TableHead>
               <TableHead>Input</TableHead>
               <TableHead>Output</TableHead>
@@ -351,6 +354,7 @@ export function AiUsagePage() {
                 <TableCell className="whitespace-normal">
                   {row.operation}
                 </TableCell>
+                <TableCell>{row.applicationCacheStatus ?? "-"}</TableCell>
                 <TableCell>{row.cacheStatus ?? "-"}</TableCell>
                 <TableCell>
                   <UsageEntityLink row={row} />

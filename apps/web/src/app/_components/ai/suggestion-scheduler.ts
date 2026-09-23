@@ -4,7 +4,7 @@
  * for ~80s (37 failed suggestFields plus every other query in that window) and produced
  * 135 AI Gateway 429s. Halving to 16 leaves total work unchanged — rows just fill in
  * later — until Jev response caching removes the redundant calls entirely. */
-export function createSuggestionScheduler(limit = 16) {
+export function createSuggestionScheduler(limit = 4) {
   let active = 0;
   const queued: Array<() => void> = [];
   const drain = () => {

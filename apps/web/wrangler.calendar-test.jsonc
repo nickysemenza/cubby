@@ -17,6 +17,10 @@
         "name": "PURCHASE_IMPORT",
         "class_name": "PurchaseImportDurableObject",
       },
+      {
+        "name": "AI_RESPONSE_CACHE",
+        "class_name": "AiResponseCacheDurableObject",
+      },
     ],
   },
   "exports": {
@@ -29,6 +33,10 @@
       "storage": "sqlite",
     },
     "PurchaseImportDurableObject": {
+      "type": "durable-object",
+      "storage": "sqlite",
+    },
+    "AiResponseCacheDurableObject": {
       "type": "durable-object",
       "storage": "sqlite",
     },

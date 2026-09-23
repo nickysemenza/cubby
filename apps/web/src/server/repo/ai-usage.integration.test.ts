@@ -48,4 +48,29 @@ describe("listAiUsageForRun", () => {
     ]);
     expect(second.nextCursor).toBeNull();
   });
+
+  it("retains an application hit as a zero-cost usage event", async () => {
+    const runId = await ensureRun(ctx.db, ctx.actor, { purpose: "ai_action" });
+    await getDb(ctx.db).insert(aiUsage).values({
+      feature: "field-suggestion",
+      provider: "typesafe",
+      model: "typesafe/jev",
+      operation: "suggestFields.product.categoryId",
+      runId,
+      applicationCacheStatus: "hit",
+      attempt: 0,
+      inputTokens: 0,
+      outputTokens: 0,
+      estimatedCost: 0,
+      durationMs: 2,
+    });
+    const usage = await listAiUsageForRun(ctx.db, runId);
+    expect(usage.pricedSubtotal).toBe(0);
+    expect(usage.unpricedCount).toBe(0);
+    expect(usage.records[0]).toMatchObject({
+      applicationCacheStatus: "hit",
+      attempt: 0,
+      estimatedCost: 0,
+    });
+  });
 });

@@ -7,6 +7,10 @@ import { z } from "zod";
 
 import { recordAiUsage } from "~/server/ai-usage";
 import type { AiDecisionFeature } from "~/server/ai/features";
+import {
+  type ApplicationCacheStatus,
+  withAiResponseCache,
+} from "~/server/ai/response-cache";
 import type { AiRunContext } from "~/server/ai/run-feature";
 import { cachedCall } from "~/server/clients/ai-adapters";
 import {
@@ -138,6 +142,7 @@ async function requestJev(
   input: JevChoiceInput,
   ctx: AiRunContext,
   feature: AiDecisionFeature,
+  applicationCacheStatus: ApplicationCacheStatus,
 ): Promise<JevChoiceResponse> {
   const metadata: GatewayMetadata = {
     feature: feature.feature,
@@ -205,6 +210,7 @@ async function requestJev(
         outputTokens: parsed?.usage?.output_tokens ?? null,
         durationMs: Math.max(0, Math.round(performance.now() - startedAt)),
         cacheStatus: ctx.cacheStatus ?? "none",
+        applicationCacheStatus,
         entity: ctx.entity ?? null,
         attempt,
         status: parsed ? "succeeded" : "failed",
@@ -283,40 +289,103 @@ export async function runJevChoice(args: {
     );
   }
 
-  const response = await (args.port
-    ? args.port(input)
-    : requestJev(input, args.usage, args.feature));
-  const answer = response.answers.selection;
-  validateProbabilities(answer.probabilities, new Set(Object.keys(criteria)));
-  const selectedProbability = answer.probabilities[answer.choice];
-  if (selectedProbability === undefined) {
-    throw new Error("Jev selected a key absent from its probability map.");
-  }
-  const confidence = decisionConfidence(selectedProbability);
-  const ranked = Object.entries(answer.probabilities)
-    .filter(([key]) => key !== NONE_KEY)
-    .map(([key, probability]) => ({ index: Number(key.slice(1)), probability }))
-    .sort((a, b) => b.probability - a.probability);
-
-  if (answer.choice === NONE_KEY) {
-    return {
-      selectedIndex: null,
-      confidence,
-      probability: selectedProbability,
-      ranked,
-    };
-  }
-  const selectedIndex = Number(answer.choice.slice(1));
-  if (
-    !Number.isInteger(selectedIndex) ||
-    selectedIndex >= args.choices.length
-  ) {
-    throw new Error("Jev selected an unknown candidate key.");
-  }
-  return {
-    selectedIndex,
-    confidence,
-    probability: selectedProbability,
-    ranked,
+  const validate = (value: unknown): JevChoiceResult => {
+    const result = z
+      .object({
+        selectedIndex: z.number().int().nonnegative().nullable(),
+        confidence: z.enum(["low", "medium", "high"]),
+        probability: z.number().finite().min(0).max(1),
+        ranked: z.array(
+          z.object({
+            index: z.number().int().nonnegative(),
+            probability: z.number().finite().min(0).max(1),
+          }),
+        ),
+      })
+      .parse(value);
+    if (
+      result.selectedIndex !== null &&
+      result.selectedIndex >= args.choices.length
+    ) {
+      throw new Error("Jev cached an unknown candidate key.");
+    }
+    if (result.ranked.some(({ index }) => index >= args.choices.length)) {
+      throw new Error("Jev cached an unknown ranked choice.");
+    }
+    return result;
   };
+  return withAiResponseCache({
+    enabled: args.feature.cache && !args.port,
+    force: args.usage.force,
+    keyInput: {
+      feature: args.feature.feature,
+      model: args.feature.model,
+      promptVersion: args.feature.promptVersion,
+      input,
+    },
+    validate,
+    onHit: async (durationMs) => {
+      if (!args.usage.db) return;
+      await recordAiUsage(args.usage.db, {
+        provider: "typesafe",
+        model: args.feature.model,
+        feature: args.feature.feature,
+        operation: args.usage.operation,
+        runId: args.usage.runId,
+        jobKind: args.usage.job?.kind ?? null,
+        jobId: args.usage.job?.id ?? null,
+        entity: args.usage.entity ?? null,
+        cacheStatus: args.usage.cacheStatus ?? "none",
+        applicationCacheStatus: "hit",
+        inputTokens: 0,
+        outputTokens: 0,
+        estimatedCost: 0,
+        attempt: 0,
+        durationMs,
+      });
+    },
+    compute: async (applicationCacheStatus) => {
+      const response = await (args.port
+        ? args.port(input)
+        : requestJev(input, args.usage, args.feature, applicationCacheStatus));
+      const answer = response.answers.selection;
+      validateProbabilities(
+        answer.probabilities,
+        new Set(Object.keys(criteria)),
+      );
+      const selectedProbability = answer.probabilities[answer.choice];
+      if (selectedProbability === undefined) {
+        throw new Error("Jev selected a key absent from its probability map.");
+      }
+      const confidence = decisionConfidence(selectedProbability);
+      const ranked = Object.entries(answer.probabilities)
+        .filter(([key]) => key !== NONE_KEY)
+        .map(([key, probability]) => ({
+          index: Number(key.slice(1)),
+          probability,
+        }))
+        .sort((a, b) => b.probability - a.probability);
+      if (answer.choice === NONE_KEY) {
+        return {
+          selectedIndex: null,
+          confidence,
+          probability: selectedProbability,
+          ranked,
+        };
+      }
+      const selectedIndex = Number(answer.choice.slice(1));
+      if (
+        !Number.isInteger(selectedIndex) ||
+        selectedIndex >= args.choices.length
+      ) {
+        throw new Error("Jev selected an unknown candidate key.");
+      }
+      return {
+        selectedIndex,
+        confidence,
+        probability: selectedProbability,
+        ranked,
+      };
+    },
+  });
 }

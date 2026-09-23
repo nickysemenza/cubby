@@ -2918,7 +2918,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/DeviceDetail/displayImages`.
             public var displayImages: Components.Schemas.DisplayImagesField
             /// - Remark: Generated from `#/components/schemas/DeviceDetail/attachments`.
-            public var attachments: Components.Schemas.OutputSchema504
+            public var attachments: Components.Schemas.OutputSchema505
             /// Creates a new `DeviceDetail`.
             ///
             /// - Parameters:
@@ -2958,7 +2958,7 @@ extension Components {
                 updatedAt: Foundation.Date,
                 dataQuality: Components.Schemas.DataQuality,
                 displayImages: Components.Schemas.DisplayImagesField,
-                attachments: Components.Schemas.OutputSchema504
+                attachments: Components.Schemas.OutputSchema505
             ) {
                 self.id = id
                 self.installationId = installationId
@@ -5013,9 +5013,9 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/ExpenseDetail/date`.
             public var date: Components.Schemas.PlainDate?
             /// - Remark: Generated from `#/components/schemas/ExpenseDetail/lineKind`.
-            public var lineKind: Components.Schemas.OutputSchema409
+            public var lineKind: Components.Schemas.OutputSchema410
             /// - Remark: Generated from `#/components/schemas/ExpenseDetail/lineBasis`.
-            public var lineBasis: Components.Schemas.OutputSchema410
+            public var lineBasis: Components.Schemas.OutputSchema411
             /// - Remark: Generated from `#/components/schemas/ExpenseDetail/costType`.
             public var costType: Components.Schemas.CostType
             /// - Remark: Generated from `#/components/schemas/ExpenseDetail/trade`.
@@ -5069,7 +5069,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/ExpenseDetail/displayImages`.
             public var displayImages: Components.Schemas.DisplayImagesField
             /// - Remark: Generated from `#/components/schemas/ExpenseDetail/attachments`.
-            public var attachments: Components.Schemas.OutputSchema504
+            public var attachments: Components.Schemas.OutputSchema505
             /// Creates a new `ExpenseDetail`.
             ///
             /// - Parameters:
@@ -5114,8 +5114,8 @@ extension Components {
                 name: Swift.String,
                 cost: Components.Schemas.WholeCentAmount? = nil,
                 date: Components.Schemas.PlainDate? = nil,
-                lineKind: Components.Schemas.OutputSchema409,
-                lineBasis: Components.Schemas.OutputSchema410,
+                lineKind: Components.Schemas.OutputSchema410,
+                lineBasis: Components.Schemas.OutputSchema411,
                 costType: Components.Schemas.CostType,
                 trade: Components.Schemas.Trade? = nil,
                 url: Swift.String? = nil,
@@ -5141,7 +5141,7 @@ extension Components {
                 updatedAt: Foundation.Date,
                 dataQuality: Components.Schemas.DataQuality,
                 displayImages: Components.Schemas.DisplayImagesField,
-                attachments: Components.Schemas.OutputSchema504
+                attachments: Components.Schemas.OutputSchema505
             ) {
                 self.fieldResolutions = fieldResolutions
                 self.projectAllocations = projectAllocations
@@ -5247,9 +5247,9 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/ExpenseListItem/date`.
             public var date: Components.Schemas.PlainDate?
             /// - Remark: Generated from `#/components/schemas/ExpenseListItem/lineKind`.
-            public var lineKind: Components.Schemas.OutputSchema409
+            public var lineKind: Components.Schemas.OutputSchema410
             /// - Remark: Generated from `#/components/schemas/ExpenseListItem/lineBasis`.
-            public var lineBasis: Components.Schemas.OutputSchema410
+            public var lineBasis: Components.Schemas.OutputSchema411
             /// - Remark: Generated from `#/components/schemas/ExpenseListItem/costType`.
             public var costType: Components.Schemas.CostType
             /// - Remark: Generated from `#/components/schemas/ExpenseListItem/trade`.
@@ -5345,8 +5345,8 @@ extension Components {
                 name: Swift.String,
                 cost: Components.Schemas.WholeCentAmount? = nil,
                 date: Components.Schemas.PlainDate? = nil,
-                lineKind: Components.Schemas.OutputSchema409,
-                lineBasis: Components.Schemas.OutputSchema410,
+                lineKind: Components.Schemas.OutputSchema410,
+                lineBasis: Components.Schemas.OutputSchema411,
                 costType: Components.Schemas.CostType,
                 trade: Components.Schemas.Trade? = nil,
                 url: Swift.String? = nil,
@@ -5483,9 +5483,9 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/ExpenseOut/date`.
             public var date: Components.Schemas.PlainDate?
             /// - Remark: Generated from `#/components/schemas/ExpenseOut/lineKind`.
-            public var lineKind: Components.Schemas.OutputSchema409
+            public var lineKind: Components.Schemas.OutputSchema410
             /// - Remark: Generated from `#/components/schemas/ExpenseOut/lineBasis`.
-            public var lineBasis: Components.Schemas.OutputSchema410
+            public var lineBasis: Components.Schemas.OutputSchema411
             /// - Remark: Generated from `#/components/schemas/ExpenseOut/costType`.
             public var costType: Components.Schemas.CostType
             /// - Remark: Generated from `#/components/schemas/ExpenseOut/trade`.
@@ -5578,8 +5578,8 @@ extension Components {
                 name: Swift.String,
                 cost: Components.Schemas.WholeCentAmount? = nil,
                 date: Components.Schemas.PlainDate? = nil,
-                lineKind: Components.Schemas.OutputSchema409,
-                lineBasis: Components.Schemas.OutputSchema410,
+                lineKind: Components.Schemas.OutputSchema410,
+                lineBasis: Components.Schemas.OutputSchema411,
                 costType: Components.Schemas.CostType,
                 trade: Components.Schemas.Trade? = nil,
                 url: Swift.String? = nil,
@@ -6519,7 +6519,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/FinancialAccountDetail/displayImages`.
             public var displayImages: Components.Schemas.DisplayImagesField
             /// - Remark: Generated from `#/components/schemas/FinancialAccountDetail/attachments`.
-            public var attachments: Components.Schemas.OutputSchema504
+            public var attachments: Components.Schemas.OutputSchema505
             /// Creates a new `FinancialAccountDetail`.
             ///
             /// - Parameters:
@@ -6559,7 +6559,7 @@ extension Components {
                 updatedAt: Foundation.Date,
                 dataQuality: Components.Schemas.DataQuality,
                 displayImages: Components.Schemas.DisplayImagesField,
-                attachments: Components.Schemas.OutputSchema504
+                attachments: Components.Schemas.OutputSchema505
             ) {
                 self.id = id
                 self.name = name
@@ -7857,7 +7857,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/FinancialTransactionDetail/displayImages`.
             public var displayImages: Components.Schemas.DisplayImagesField
             /// - Remark: Generated from `#/components/schemas/FinancialTransactionDetail/attachments`.
-            public var attachments: Components.Schemas.OutputSchema504
+            public var attachments: Components.Schemas.OutputSchema505
             /// Creates a new `FinancialTransactionDetail`.
             ///
             /// - Parameters:
@@ -7907,7 +7907,7 @@ extension Components {
                 updatedAt: Foundation.Date,
                 dataQuality: Components.Schemas.DataQuality,
                 displayImages: Components.Schemas.DisplayImagesField,
-                attachments: Components.Schemas.OutputSchema504
+                attachments: Components.Schemas.OutputSchema505
             ) {
                 self.id = id
                 self.accountId = accountId
@@ -8840,7 +8840,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/GardenEntryDetail/locationId`.
             public var locationId: Components.Schemas.LocationShortcode
             /// - Remark: Generated from `#/components/schemas/GardenEntryDetail/plantingIds`.
-            public var plantingIds: Components.Schemas.OutputSchema164
+            public var plantingIds: Components.Schemas.OutputSchema165
             /// - Remark: Generated from `#/components/schemas/GardenEntryDetail/kind`.
             public var kind: Components.Schemas.GardenEntryKind
             /// - Remark: Generated from `#/components/schemas/GardenEntryDetail/observedOn`.
@@ -8850,13 +8850,13 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/GardenEntryDetail/harvestAmount`.
             public var harvestAmount: Swift.String?
             /// - Remark: Generated from `#/components/schemas/GardenEntryDetail/images`.
-            public var images: Components.Schemas.OutputSchema166
+            public var images: Components.Schemas.OutputSchema167
             /// - Remark: Generated from `#/components/schemas/GardenEntryDetail/displayName`.
             public var displayName: Swift.String
             /// - Remark: Generated from `#/components/schemas/GardenEntryDetail/locationName`.
             public var locationName: Swift.String
             /// - Remark: Generated from `#/components/schemas/GardenEntryDetail/plantings`.
-            public var plantings: Components.Schemas.OutputSchema169
+            public var plantings: Components.Schemas.OutputSchema170
             /// - Remark: Generated from `#/components/schemas/GardenEntryDetail/createdAt`.
             public var createdAt: Foundation.Date
             /// - Remark: Generated from `#/components/schemas/GardenEntryDetail/updatedAt`.
@@ -8866,7 +8866,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/GardenEntryDetail/displayImages`.
             public var displayImages: Components.Schemas.DisplayImagesField
             /// - Remark: Generated from `#/components/schemas/GardenEntryDetail/attachments`.
-            public var attachments: Components.Schemas.OutputSchema504
+            public var attachments: Components.Schemas.OutputSchema505
             /// Creates a new `GardenEntryDetail`.
             ///
             /// - Parameters:
@@ -8889,20 +8889,20 @@ extension Components {
             public init(
                 id: Components.Schemas.GardenEntryShortcode,
                 locationId: Components.Schemas.LocationShortcode,
-                plantingIds: Components.Schemas.OutputSchema164,
+                plantingIds: Components.Schemas.OutputSchema165,
                 kind: Components.Schemas.GardenEntryKind,
                 observedOn: Components.Schemas.PlainDate,
                 note: Swift.String? = nil,
                 harvestAmount: Swift.String? = nil,
-                images: Components.Schemas.OutputSchema166,
+                images: Components.Schemas.OutputSchema167,
                 displayName: Swift.String,
                 locationName: Swift.String,
-                plantings: Components.Schemas.OutputSchema169,
+                plantings: Components.Schemas.OutputSchema170,
                 createdAt: Foundation.Date,
                 updatedAt: Foundation.Date,
                 dataQuality: Components.Schemas.DataQuality,
                 displayImages: Components.Schemas.DisplayImagesField,
-                attachments: Components.Schemas.OutputSchema504
+                attachments: Components.Schemas.OutputSchema505
             ) {
                 self.id = id
                 self.locationId = locationId
@@ -8952,7 +8952,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/GardenEntryListItem/locationId`.
             public var locationId: Components.Schemas.LocationShortcode
             /// - Remark: Generated from `#/components/schemas/GardenEntryListItem/plantingIds`.
-            public var plantingIds: Components.Schemas.OutputSchema164
+            public var plantingIds: Components.Schemas.OutputSchema165
             /// - Remark: Generated from `#/components/schemas/GardenEntryListItem/kind`.
             public var kind: Components.Schemas.GardenEntryKind
             /// - Remark: Generated from `#/components/schemas/GardenEntryListItem/observedOn`.
@@ -8962,13 +8962,13 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/GardenEntryListItem/harvestAmount`.
             public var harvestAmount: Swift.String?
             /// - Remark: Generated from `#/components/schemas/GardenEntryListItem/images`.
-            public var images: Components.Schemas.OutputSchema166
+            public var images: Components.Schemas.OutputSchema167
             /// - Remark: Generated from `#/components/schemas/GardenEntryListItem/displayName`.
             public var displayName: Swift.String
             /// - Remark: Generated from `#/components/schemas/GardenEntryListItem/locationName`.
             public var locationName: Swift.String
             /// - Remark: Generated from `#/components/schemas/GardenEntryListItem/plantings`.
-            public var plantings: Components.Schemas.OutputSchema169
+            public var plantings: Components.Schemas.OutputSchema170
             /// - Remark: Generated from `#/components/schemas/GardenEntryListItem/createdAt`.
             public var createdAt: Foundation.Date
             /// - Remark: Generated from `#/components/schemas/GardenEntryListItem/updatedAt`.
@@ -8998,15 +8998,15 @@ extension Components {
             public init(
                 id: Components.Schemas.GardenEntryShortcode,
                 locationId: Components.Schemas.LocationShortcode,
-                plantingIds: Components.Schemas.OutputSchema164,
+                plantingIds: Components.Schemas.OutputSchema165,
                 kind: Components.Schemas.GardenEntryKind,
                 observedOn: Components.Schemas.PlainDate,
                 note: Swift.String? = nil,
                 harvestAmount: Swift.String? = nil,
-                images: Components.Schemas.OutputSchema166,
+                images: Components.Schemas.OutputSchema167,
                 displayName: Swift.String,
                 locationName: Swift.String,
-                plantings: Components.Schemas.OutputSchema169,
+                plantings: Components.Schemas.OutputSchema170,
                 createdAt: Foundation.Date,
                 updatedAt: Foundation.Date,
                 dataQuality: Components.Schemas.DataQuality,
@@ -9076,7 +9076,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/GardenEntryOut/locationId`.
             public var locationId: Components.Schemas.LocationShortcode
             /// - Remark: Generated from `#/components/schemas/GardenEntryOut/plantingIds`.
-            public var plantingIds: Components.Schemas.OutputSchema164
+            public var plantingIds: Components.Schemas.OutputSchema165
             /// - Remark: Generated from `#/components/schemas/GardenEntryOut/kind`.
             public var kind: Components.Schemas.GardenEntryKind
             /// - Remark: Generated from `#/components/schemas/GardenEntryOut/observedOn`.
@@ -9086,13 +9086,13 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/GardenEntryOut/harvestAmount`.
             public var harvestAmount: Swift.String?
             /// - Remark: Generated from `#/components/schemas/GardenEntryOut/images`.
-            public var images: Components.Schemas.OutputSchema166
+            public var images: Components.Schemas.OutputSchema167
             /// - Remark: Generated from `#/components/schemas/GardenEntryOut/displayName`.
             public var displayName: Swift.String
             /// - Remark: Generated from `#/components/schemas/GardenEntryOut/locationName`.
             public var locationName: Swift.String
             /// - Remark: Generated from `#/components/schemas/GardenEntryOut/plantings`.
-            public var plantings: Components.Schemas.OutputSchema169
+            public var plantings: Components.Schemas.OutputSchema170
             /// - Remark: Generated from `#/components/schemas/GardenEntryOut/createdAt`.
             public var createdAt: Foundation.Date
             /// - Remark: Generated from `#/components/schemas/GardenEntryOut/updatedAt`.
@@ -9119,15 +9119,15 @@ extension Components {
             public init(
                 id: Components.Schemas.GardenEntryShortcode,
                 locationId: Components.Schemas.LocationShortcode,
-                plantingIds: Components.Schemas.OutputSchema164,
+                plantingIds: Components.Schemas.OutputSchema165,
                 kind: Components.Schemas.GardenEntryKind,
                 observedOn: Components.Schemas.PlainDate,
                 note: Swift.String? = nil,
                 harvestAmount: Swift.String? = nil,
-                images: Components.Schemas.OutputSchema166,
+                images: Components.Schemas.OutputSchema167,
                 displayName: Swift.String,
                 locationName: Swift.String,
-                plantings: Components.Schemas.OutputSchema169,
+                plantings: Components.Schemas.OutputSchema170,
                 createdAt: Foundation.Date,
                 updatedAt: Foundation.Date,
                 dataQuality: Components.Schemas.DataQuality
@@ -14466,7 +14466,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/ImageSightingDetail/displayImages`.
             public var displayImages: Components.Schemas.DisplayImagesField
             /// - Remark: Generated from `#/components/schemas/ImageSightingDetail/attachments`.
-            public var attachments: Components.Schemas.OutputSchema504
+            public var attachments: Components.Schemas.OutputSchema505
             /// Creates a new `ImageSightingDetail`.
             ///
             /// - Parameters:
@@ -14522,7 +14522,7 @@ extension Components {
                 createdAt: Foundation.Date,
                 updatedAt: Foundation.Date,
                 displayImages: Components.Schemas.DisplayImagesField,
-                attachments: Components.Schemas.OutputSchema504
+                attachments: Components.Schemas.OutputSchema505
             ) {
                 self.id = id
                 self.imageId = imageId
@@ -15707,7 +15707,7 @@ extension Components {
                 }
             }
             /// - Remark: Generated from `#/components/schemas/InfLocation/tags`.
-            public var tags: Components.Schemas.OutputSchema225? {
+            public var tags: Components.Schemas.OutputSchema226? {
                 get  {
                     self.storage.value.tags
                 }
@@ -15761,7 +15761,7 @@ extension Components {
                 }
             }
             /// - Remark: Generated from `#/components/schemas/InfLocation/images`.
-            public var images: Components.Schemas.OutputSchema166 {
+            public var images: Components.Schemas.OutputSchema167 {
                 get  {
                     self.storage.value.images
                 }
@@ -15806,7 +15806,7 @@ extension Components {
                 }
             }
             /// - Remark: Generated from `#/components/schemas/InfLocation/children`.
-            public var children: Components.Schemas.OutputSchema250? {
+            public var children: Components.Schemas.OutputSchema251? {
                 get  {
                     self.storage.value.children
                 }
@@ -15815,7 +15815,7 @@ extension Components {
                 }
             }
             /// - Remark: Generated from `#/components/schemas/InfLocation/parent`.
-            public var parent: Components.Schemas.OutputSchema251? {
+            public var parent: Components.Schemas.OutputSchema252? {
                 get  {
                     self.storage.value.parent
                 }
@@ -15851,7 +15851,7 @@ extension Components {
                 }
             }
             /// - Remark: Generated from `#/components/schemas/InfLocation/inventoryItems`.
-            public var inventoryItems: Components.Schemas.OutputSchema255? {
+            public var inventoryItems: Components.Schemas.OutputSchema256? {
                 get  {
                     self.storage.value.inventoryItems
                 }
@@ -15886,23 +15886,23 @@ extension Components {
                 id: Components.Schemas.LocationShortcode,
                 name: Swift.String,
                 aliases: Components.Schemas.InputSchema90,
-                tags: Components.Schemas.OutputSchema225? = nil,
+                tags: Components.Schemas.OutputSchema226? = nil,
                 _type: Components.Schemas.LocationType? = nil,
                 notes: Swift.String? = nil,
                 product: Components.Schemas.LocationIdentityProductOut? = nil,
                 lastBulkInventory: Foundation.Date? = nil,
                 aiDescription: Swift.String? = nil,
-                images: Components.Schemas.OutputSchema166,
+                images: Components.Schemas.OutputSchema167,
                 valuation: Components.Schemas.LocationValuation? = nil,
                 createdAt: Foundation.Date,
                 updatedAt: Foundation.Date,
                 dataQuality: Components.Schemas.DataQuality,
-                children: Components.Schemas.OutputSchema250? = nil,
-                parent: Components.Schemas.OutputSchema251? = nil,
+                children: Components.Schemas.OutputSchema251? = nil,
+                parent: Components.Schemas.OutputSchema252? = nil,
                 childCount: Swift.Int? = nil,
                 directItemCount: Swift.Int? = nil,
                 totalItemCount: Swift.Int? = nil,
-                inventoryItems: Components.Schemas.OutputSchema255? = nil
+                inventoryItems: Components.Schemas.OutputSchema256? = nil
             ) {
                 self.storage = .init(value: .init(
                     id: id,
@@ -15967,7 +15967,7 @@ extension Components {
                 /// - Remark: Generated from `#/components/schemas/InfLocation/aliases`.
                 var aliases: Components.Schemas.InputSchema90
                 /// - Remark: Generated from `#/components/schemas/InfLocation/tags`.
-                var tags: Components.Schemas.OutputSchema225?
+                var tags: Components.Schemas.OutputSchema226?
                 /// - Remark: Generated from `#/components/schemas/InfLocation/type`.
                 var _type: Components.Schemas.LocationType?
                 /// - Remark: Generated from `#/components/schemas/InfLocation/notes`.
@@ -15979,7 +15979,7 @@ extension Components {
                 /// - Remark: Generated from `#/components/schemas/InfLocation/aiDescription`.
                 var aiDescription: Swift.String?
                 /// - Remark: Generated from `#/components/schemas/InfLocation/images`.
-                var images: Components.Schemas.OutputSchema166
+                var images: Components.Schemas.OutputSchema167
                 /// - Remark: Generated from `#/components/schemas/InfLocation/valuation`.
                 var valuation: Components.Schemas.LocationValuation?
                 /// - Remark: Generated from `#/components/schemas/InfLocation/createdAt`.
@@ -15989,9 +15989,9 @@ extension Components {
                 /// - Remark: Generated from `#/components/schemas/InfLocation/dataQuality`.
                 var dataQuality: Components.Schemas.DataQuality
                 /// - Remark: Generated from `#/components/schemas/InfLocation/children`.
-                var children: Components.Schemas.OutputSchema250?
+                var children: Components.Schemas.OutputSchema251?
                 /// - Remark: Generated from `#/components/schemas/InfLocation/parent`.
-                var parent: Components.Schemas.OutputSchema251?
+                var parent: Components.Schemas.OutputSchema252?
                 /// - Remark: Generated from `#/components/schemas/InfLocation/childCount`.
                 var childCount: Swift.Int?
                 /// - Remark: Generated from `#/components/schemas/InfLocation/directItemCount`.
@@ -15999,28 +15999,28 @@ extension Components {
                 /// - Remark: Generated from `#/components/schemas/InfLocation/totalItemCount`.
                 var totalItemCount: Swift.Int?
                 /// - Remark: Generated from `#/components/schemas/InfLocation/inventoryItems`.
-                var inventoryItems: Components.Schemas.OutputSchema255?
+                var inventoryItems: Components.Schemas.OutputSchema256?
                 init(
                     id: Components.Schemas.LocationShortcode,
                     name: Swift.String,
                     aliases: Components.Schemas.InputSchema90,
-                    tags: Components.Schemas.OutputSchema225? = nil,
+                    tags: Components.Schemas.OutputSchema226? = nil,
                     _type: Components.Schemas.LocationType? = nil,
                     notes: Swift.String? = nil,
                     product: Components.Schemas.LocationIdentityProductOut? = nil,
                     lastBulkInventory: Foundation.Date? = nil,
                     aiDescription: Swift.String? = nil,
-                    images: Components.Schemas.OutputSchema166,
+                    images: Components.Schemas.OutputSchema167,
                     valuation: Components.Schemas.LocationValuation? = nil,
                     createdAt: Foundation.Date,
                     updatedAt: Foundation.Date,
                     dataQuality: Components.Schemas.DataQuality,
-                    children: Components.Schemas.OutputSchema250? = nil,
-                    parent: Components.Schemas.OutputSchema251? = nil,
+                    children: Components.Schemas.OutputSchema251? = nil,
+                    parent: Components.Schemas.OutputSchema252? = nil,
                     childCount: Swift.Int? = nil,
                     directItemCount: Swift.Int? = nil,
                     totalItemCount: Swift.Int? = nil,
-                    inventoryItems: Components.Schemas.OutputSchema255? = nil
+                    inventoryItems: Components.Schemas.OutputSchema256? = nil
                 ) {
                     self.id = id
                     self.name = name
@@ -16098,7 +16098,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/IngredientDetail/aliases`.
             public var aliases: Components.Schemas.InputSchema90
             /// - Remark: Generated from `#/components/schemas/IngredientDetail/naKinds`.
-            public var naKinds: Components.Schemas.OutputSchema195
+            public var naKinds: Components.Schemas.OutputSchema196
             /// - Remark: Generated from `#/components/schemas/IngredientDetail/usuallyOnHand`.
             public var usuallyOnHand: Swift.Bool
             /// - Remark: Generated from `#/components/schemas/IngredientDetail/createdAt`.
@@ -16110,15 +16110,15 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/IngredientDetail/recipe`.
             public var recipe: Components.Schemas.RecipeTopLevel?
             /// - Remark: Generated from `#/components/schemas/IngredientDetail/recipeUsages`.
-            public var recipeUsages: Components.Schemas.OutputSchema211
+            public var recipeUsages: Components.Schemas.OutputSchema212
             /// - Remark: Generated from `#/components/schemas/IngredientDetail/appearsInRecipes`.
-            public var appearsInRecipes: Components.Schemas.OutputSchema212
+            public var appearsInRecipes: Components.Schemas.OutputSchema213
             /// - Remark: Generated from `#/components/schemas/IngredientDetail/product`.
-            public var product: Components.Schemas.OutputSchema213
+            public var product: Components.Schemas.OutputSchema214
             /// - Remark: Generated from `#/components/schemas/IngredientDetail/displayImages`.
             public var displayImages: Components.Schemas.DisplayImagesField
             /// - Remark: Generated from `#/components/schemas/IngredientDetail/attachments`.
-            public var attachments: Components.Schemas.OutputSchema504
+            public var attachments: Components.Schemas.OutputSchema505
             /// Creates a new `IngredientDetail`.
             ///
             /// - Parameters:
@@ -16140,17 +16140,17 @@ extension Components {
                 id: Components.Schemas.IngredientShortcode,
                 name: Swift.String,
                 aliases: Components.Schemas.InputSchema90,
-                naKinds: Components.Schemas.OutputSchema195,
+                naKinds: Components.Schemas.OutputSchema196,
                 usuallyOnHand: Swift.Bool,
                 createdAt: Foundation.Date,
                 updatedAt: Foundation.Date,
                 dataQuality: Components.Schemas.DataQuality,
                 recipe: Components.Schemas.RecipeTopLevel? = nil,
-                recipeUsages: Components.Schemas.OutputSchema211,
-                appearsInRecipes: Components.Schemas.OutputSchema212,
-                product: Components.Schemas.OutputSchema213,
+                recipeUsages: Components.Schemas.OutputSchema212,
+                appearsInRecipes: Components.Schemas.OutputSchema213,
+                product: Components.Schemas.OutputSchema214,
                 displayImages: Components.Schemas.DisplayImagesField,
-                attachments: Components.Schemas.OutputSchema504
+                attachments: Components.Schemas.OutputSchema505
             ) {
                 self.id = id
                 self.name = name
@@ -16195,7 +16195,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/IngredientListItem/aliases`.
             public var aliases: Components.Schemas.InputSchema90
             /// - Remark: Generated from `#/components/schemas/IngredientListItem/naKinds`.
-            public var naKinds: Components.Schemas.OutputSchema195
+            public var naKinds: Components.Schemas.OutputSchema196
             /// - Remark: Generated from `#/components/schemas/IngredientListItem/usuallyOnHand`.
             public var usuallyOnHand: Swift.Bool
             /// - Remark: Generated from `#/components/schemas/IngredientListItem/createdAt`.
@@ -16231,7 +16231,7 @@ extension Components {
                 id: Components.Schemas.IngredientShortcode,
                 name: Swift.String,
                 aliases: Components.Schemas.InputSchema90,
-                naKinds: Components.Schemas.OutputSchema195,
+                naKinds: Components.Schemas.OutputSchema196,
                 usuallyOnHand: Swift.Bool,
                 createdAt: Foundation.Date,
                 updatedAt: Foundation.Date,
@@ -16303,7 +16303,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/IngredientOut/aliases`.
             public var aliases: Components.Schemas.InputSchema90
             /// - Remark: Generated from `#/components/schemas/IngredientOut/naKinds`.
-            public var naKinds: Components.Schemas.OutputSchema195
+            public var naKinds: Components.Schemas.OutputSchema196
             /// - Remark: Generated from `#/components/schemas/IngredientOut/usuallyOnHand`.
             public var usuallyOnHand: Swift.Bool
             /// - Remark: Generated from `#/components/schemas/IngredientOut/createdAt`.
@@ -16327,7 +16327,7 @@ extension Components {
                 id: Components.Schemas.IngredientShortcode,
                 name: Swift.String,
                 aliases: Components.Schemas.InputSchema90,
-                naKinds: Components.Schemas.OutputSchema195,
+                naKinds: Components.Schemas.OutputSchema196,
                 usuallyOnHand: Swift.Bool,
                 createdAt: Foundation.Date,
                 updatedAt: Foundation.Date,
@@ -17267,7 +17267,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/InventoryDetail/id`.
             public var id: Components.Schemas.InventoryShortcode
             /// - Remark: Generated from `#/components/schemas/InventoryDetail/amount`.
-            public var amount: Components.Schemas.OutputSchema214
+            public var amount: Components.Schemas.OutputSchema215
             /// Manual per-item valuation/replacement-price override; null resumes the Expense-derived fallback.
             ///
             /// - Remark: Generated from `#/components/schemas/InventoryDetail/valuation`.
@@ -17275,7 +17275,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/InventoryDetail/verifiedAt`.
             public var verifiedAt: Foundation.Date?
             /// - Remark: Generated from `#/components/schemas/InventoryDetail/placement`.
-            public var placement: Components.Schemas.OutputSchema218
+            public var placement: Components.Schemas.OutputSchema219
             /// - Remark: Generated from `#/components/schemas/InventoryDetail/ownershipMode`.
             public var ownershipMode: Components.Schemas.InventoryOwnershipMode
             /// - Remark: Generated from `#/components/schemas/InventoryDetail/ownerLedgerPartyId`.
@@ -17297,7 +17297,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/InventoryDetail/displayImages`.
             public var displayImages: Components.Schemas.DisplayImagesField
             /// - Remark: Generated from `#/components/schemas/InventoryDetail/attachments`.
-            public var attachments: Components.Schemas.OutputSchema504
+            public var attachments: Components.Schemas.OutputSchema505
             /// Creates a new `InventoryDetail`.
             ///
             /// - Parameters:
@@ -17319,10 +17319,10 @@ extension Components {
             ///   - attachments:
             public init(
                 id: Components.Schemas.InventoryShortcode,
-                amount: Components.Schemas.OutputSchema214,
+                amount: Components.Schemas.OutputSchema215,
                 valuation: Components.Schemas.Money? = nil,
                 verifiedAt: Foundation.Date? = nil,
-                placement: Components.Schemas.OutputSchema218,
+                placement: Components.Schemas.OutputSchema219,
                 ownershipMode: Components.Schemas.InventoryOwnershipMode,
                 ownerLedgerPartyId: Components.Schemas.LedgerPartyShortcode? = nil,
                 effectiveOwnership: Components.Schemas.EffectiveInventoryOwnership,
@@ -17333,7 +17333,7 @@ extension Components {
                 location: Components.Schemas.LocationOut,
                 displayName: Swift.String,
                 displayImages: Components.Schemas.DisplayImagesField,
-                attachments: Components.Schemas.OutputSchema504
+                attachments: Components.Schemas.OutputSchema505
             ) {
                 self.id = id
                 self.amount = amount
@@ -17485,7 +17485,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/InventoryEntryOut/id`.
             public var id: Components.Schemas.InventoryShortcode
             /// - Remark: Generated from `#/components/schemas/InventoryEntryOut/amount`.
-            public var amount: Components.Schemas.OutputSchema214
+            public var amount: Components.Schemas.OutputSchema215
             /// Manual per-item valuation/replacement-price override; null resumes the Expense-derived fallback.
             ///
             /// - Remark: Generated from `#/components/schemas/InventoryEntryOut/valuation`.
@@ -17493,7 +17493,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/InventoryEntryOut/verifiedAt`.
             public var verifiedAt: Foundation.Date?
             /// - Remark: Generated from `#/components/schemas/InventoryEntryOut/placement`.
-            public var placement: Components.Schemas.OutputSchema218
+            public var placement: Components.Schemas.OutputSchema219
             /// - Remark: Generated from `#/components/schemas/InventoryEntryOut/ownershipMode`.
             public var ownershipMode: Components.Schemas.InventoryOwnershipMode
             /// - Remark: Generated from `#/components/schemas/InventoryEntryOut/ownerLedgerPartyId`.
@@ -17522,10 +17522,10 @@ extension Components {
             ///   - dataQuality:
             public init(
                 id: Components.Schemas.InventoryShortcode,
-                amount: Components.Schemas.OutputSchema214,
+                amount: Components.Schemas.OutputSchema215,
                 valuation: Components.Schemas.Money? = nil,
                 verifiedAt: Foundation.Date? = nil,
-                placement: Components.Schemas.OutputSchema218,
+                placement: Components.Schemas.OutputSchema219,
                 ownershipMode: Components.Schemas.InventoryOwnershipMode,
                 ownerLedgerPartyId: Components.Schemas.LedgerPartyShortcode? = nil,
                 effectiveOwnership: Components.Schemas.EffectiveInventoryOwnership,
@@ -17564,7 +17564,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/InventoryListItem/id`.
             public var id: Components.Schemas.InventoryShortcode
             /// - Remark: Generated from `#/components/schemas/InventoryListItem/amount`.
-            public var amount: Components.Schemas.OutputSchema214
+            public var amount: Components.Schemas.OutputSchema215
             /// Manual per-item valuation/replacement-price override; null resumes the Expense-derived fallback.
             ///
             /// - Remark: Generated from `#/components/schemas/InventoryListItem/valuation`.
@@ -17572,7 +17572,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/InventoryListItem/verifiedAt`.
             public var verifiedAt: Foundation.Date?
             /// - Remark: Generated from `#/components/schemas/InventoryListItem/placement`.
-            public var placement: Components.Schemas.OutputSchema218
+            public var placement: Components.Schemas.OutputSchema219
             /// - Remark: Generated from `#/components/schemas/InventoryListItem/ownershipMode`.
             public var ownershipMode: Components.Schemas.InventoryOwnershipMode
             /// - Remark: Generated from `#/components/schemas/InventoryListItem/ownerLedgerPartyId`.
@@ -17613,10 +17613,10 @@ extension Components {
             ///   - displayName:
             public init(
                 id: Components.Schemas.InventoryShortcode,
-                amount: Components.Schemas.OutputSchema214,
+                amount: Components.Schemas.OutputSchema215,
                 valuation: Components.Schemas.Money? = nil,
                 verifiedAt: Foundation.Date? = nil,
-                placement: Components.Schemas.OutputSchema218,
+                placement: Components.Schemas.OutputSchema219,
                 ownershipMode: Components.Schemas.InventoryOwnershipMode,
                 ownerLedgerPartyId: Components.Schemas.LedgerPartyShortcode? = nil,
                 effectiveOwnership: Components.Schemas.EffectiveInventoryOwnership,
@@ -18309,7 +18309,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/InventoryWithLocationAndProductOut/id`.
             public var id: Components.Schemas.InventoryShortcode
             /// - Remark: Generated from `#/components/schemas/InventoryWithLocationAndProductOut/amount`.
-            public var amount: Components.Schemas.OutputSchema214
+            public var amount: Components.Schemas.OutputSchema215
             /// Manual per-item valuation/replacement-price override; null resumes the Expense-derived fallback.
             ///
             /// - Remark: Generated from `#/components/schemas/InventoryWithLocationAndProductOut/valuation`.
@@ -18317,7 +18317,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/InventoryWithLocationAndProductOut/verifiedAt`.
             public var verifiedAt: Foundation.Date?
             /// - Remark: Generated from `#/components/schemas/InventoryWithLocationAndProductOut/placement`.
-            public var placement: Components.Schemas.OutputSchema218
+            public var placement: Components.Schemas.OutputSchema219
             /// - Remark: Generated from `#/components/schemas/InventoryWithLocationAndProductOut/ownershipMode`.
             public var ownershipMode: Components.Schemas.InventoryOwnershipMode
             /// - Remark: Generated from `#/components/schemas/InventoryWithLocationAndProductOut/ownerLedgerPartyId`.
@@ -18355,10 +18355,10 @@ extension Components {
             ///   - displayName:
             public init(
                 id: Components.Schemas.InventoryShortcode,
-                amount: Components.Schemas.OutputSchema214,
+                amount: Components.Schemas.OutputSchema215,
                 valuation: Components.Schemas.Money? = nil,
                 verifiedAt: Foundation.Date? = nil,
-                placement: Components.Schemas.OutputSchema218,
+                placement: Components.Schemas.OutputSchema219,
                 ownershipMode: Components.Schemas.InventoryOwnershipMode,
                 ownerLedgerPartyId: Components.Schemas.LedgerPartyShortcode? = nil,
                 effectiveOwnership: Components.Schemas.EffectiveInventoryOwnership,
@@ -18518,7 +18518,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/LedgerPartyDetail/displayImages`.
             public var displayImages: Components.Schemas.DisplayImagesField
             /// - Remark: Generated from `#/components/schemas/LedgerPartyDetail/attachments`.
-            public var attachments: Components.Schemas.OutputSchema504
+            public var attachments: Components.Schemas.OutputSchema505
             /// Creates a new `LedgerPartyDetail`.
             ///
             /// - Parameters:
@@ -18540,7 +18540,7 @@ extension Components {
                 updatedAt: Foundation.Date,
                 dataQuality: Components.Schemas.DataQuality,
                 displayImages: Components.Schemas.DisplayImagesField,
-                attachments: Components.Schemas.OutputSchema504
+                attachments: Components.Schemas.OutputSchema505
             ) {
                 self.id = id
                 self.name = name
@@ -19251,7 +19251,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/LedgerTransferDetail/sourceClaims`.
             public var sourceClaims: Components.Schemas.LedgerSourceClaimsOut
             /// - Remark: Generated from `#/components/schemas/LedgerTransferDetail/evidenceTransactionIds`.
-            public var evidenceTransactionIds: Components.Schemas.OutputSchema247
+            public var evidenceTransactionIds: Components.Schemas.OutputSchema248
             /// - Remark: Generated from `#/components/schemas/LedgerTransferDetail/createdAt`.
             public var createdAt: Foundation.Date
             /// - Remark: Generated from `#/components/schemas/LedgerTransferDetail/updatedAt`.
@@ -19261,7 +19261,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/LedgerTransferDetail/displayImages`.
             public var displayImages: Components.Schemas.DisplayImagesField
             /// - Remark: Generated from `#/components/schemas/LedgerTransferDetail/attachments`.
-            public var attachments: Components.Schemas.OutputSchema504
+            public var attachments: Components.Schemas.OutputSchema505
             /// Creates a new `LedgerTransferDetail`.
             ///
             /// - Parameters:
@@ -19292,12 +19292,12 @@ extension Components {
                 notes: Swift.String? = nil,
                 classification: Components.Schemas.LedgerTransferClassification,
                 sourceClaims: Components.Schemas.LedgerSourceClaimsOut,
-                evidenceTransactionIds: Components.Schemas.OutputSchema247,
+                evidenceTransactionIds: Components.Schemas.OutputSchema248,
                 createdAt: Foundation.Date,
                 updatedAt: Foundation.Date,
                 dataQuality: Components.Schemas.DataQuality,
                 displayImages: Components.Schemas.DisplayImagesField,
-                attachments: Components.Schemas.OutputSchema504
+                attachments: Components.Schemas.OutputSchema505
             ) {
                 self.id = id
                 self.fromPartyId = fromPartyId
@@ -19360,7 +19360,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/LedgerTransferListItem/sourceClaims`.
             public var sourceClaims: Components.Schemas.LedgerSourceClaimsOut
             /// - Remark: Generated from `#/components/schemas/LedgerTransferListItem/evidenceTransactionIds`.
-            public var evidenceTransactionIds: Components.Schemas.OutputSchema247
+            public var evidenceTransactionIds: Components.Schemas.OutputSchema248
             /// - Remark: Generated from `#/components/schemas/LedgerTransferListItem/createdAt`.
             public var createdAt: Foundation.Date
             /// - Remark: Generated from `#/components/schemas/LedgerTransferListItem/updatedAt`.
@@ -19398,7 +19398,7 @@ extension Components {
                 notes: Swift.String? = nil,
                 classification: Components.Schemas.LedgerTransferClassification,
                 sourceClaims: Components.Schemas.LedgerSourceClaimsOut,
-                evidenceTransactionIds: Components.Schemas.OutputSchema247,
+                evidenceTransactionIds: Components.Schemas.OutputSchema248,
                 createdAt: Foundation.Date,
                 updatedAt: Foundation.Date,
                 dataQuality: Components.Schemas.DataQuality,
@@ -19484,7 +19484,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/LedgerTransferOut/sourceClaims`.
             public var sourceClaims: Components.Schemas.LedgerSourceClaimsOut
             /// - Remark: Generated from `#/components/schemas/LedgerTransferOut/evidenceTransactionIds`.
-            public var evidenceTransactionIds: Components.Schemas.OutputSchema247
+            public var evidenceTransactionIds: Components.Schemas.OutputSchema248
             /// - Remark: Generated from `#/components/schemas/LedgerTransferOut/createdAt`.
             public var createdAt: Foundation.Date
             /// - Remark: Generated from `#/components/schemas/LedgerTransferOut/updatedAt`.
@@ -19519,7 +19519,7 @@ extension Components {
                 notes: Swift.String? = nil,
                 classification: Components.Schemas.LedgerTransferClassification,
                 sourceClaims: Components.Schemas.LedgerSourceClaimsOut,
-                evidenceTransactionIds: Components.Schemas.OutputSchema247,
+                evidenceTransactionIds: Components.Schemas.OutputSchema248,
                 createdAt: Foundation.Date,
                 updatedAt: Foundation.Date,
                 dataQuality: Components.Schemas.DataQuality
@@ -19845,7 +19845,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/LocationDetail/aliases`.
             public var aliases: Components.Schemas.InputSchema90
             /// - Remark: Generated from `#/components/schemas/LocationDetail/tags`.
-            public var tags: Components.Schemas.OutputSchema225?
+            public var tags: Components.Schemas.OutputSchema226?
             /// - Remark: Generated from `#/components/schemas/LocationDetail/type`.
             public var _type: Components.Schemas.LocationType?
             /// - Remark: Generated from `#/components/schemas/LocationDetail/notes`.
@@ -19857,7 +19857,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/LocationDetail/aiDescription`.
             public var aiDescription: Swift.String?
             /// - Remark: Generated from `#/components/schemas/LocationDetail/images`.
-            public var images: Components.Schemas.OutputSchema166
+            public var images: Components.Schemas.OutputSchema167
             /// - Remark: Generated from `#/components/schemas/LocationDetail/valuation`.
             public var valuation: Components.Schemas.LocationValuation?
             /// - Remark: Generated from `#/components/schemas/LocationDetail/createdAt`.
@@ -19867,9 +19867,9 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/LocationDetail/dataQuality`.
             public var dataQuality: Components.Schemas.DataQuality
             /// - Remark: Generated from `#/components/schemas/LocationDetail/children`.
-            public var children: Components.Schemas.OutputSchema250?
+            public var children: Components.Schemas.OutputSchema251?
             /// - Remark: Generated from `#/components/schemas/LocationDetail/parent`.
-            public var parent: Components.Schemas.OutputSchema251?
+            public var parent: Components.Schemas.OutputSchema252?
             /// - Remark: Generated from `#/components/schemas/LocationDetail/childCount`.
             public var childCount: Swift.Int?
             /// - Remark: Generated from `#/components/schemas/LocationDetail/directItemCount`.
@@ -19877,11 +19877,11 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/LocationDetail/totalItemCount`.
             public var totalItemCount: Swift.Int?
             /// - Remark: Generated from `#/components/schemas/LocationDetail/inventoryItems`.
-            public var inventoryItems: Components.Schemas.OutputSchema255?
+            public var inventoryItems: Components.Schemas.OutputSchema256?
             /// - Remark: Generated from `#/components/schemas/LocationDetail/displayImages`.
             public var displayImages: Components.Schemas.DisplayImagesField
             /// - Remark: Generated from `#/components/schemas/LocationDetail/attachments`.
-            public var attachments: Components.Schemas.OutputSchema504
+            public var attachments: Components.Schemas.OutputSchema505
             /// Creates a new `LocationDetail`.
             ///
             /// - Parameters:
@@ -19911,25 +19911,25 @@ extension Components {
                 id: Components.Schemas.LocationShortcode,
                 name: Swift.String,
                 aliases: Components.Schemas.InputSchema90,
-                tags: Components.Schemas.OutputSchema225? = nil,
+                tags: Components.Schemas.OutputSchema226? = nil,
                 _type: Components.Schemas.LocationType? = nil,
                 notes: Swift.String? = nil,
                 product: Components.Schemas.LocationIdentityProductOut? = nil,
                 lastBulkInventory: Foundation.Date? = nil,
                 aiDescription: Swift.String? = nil,
-                images: Components.Schemas.OutputSchema166,
+                images: Components.Schemas.OutputSchema167,
                 valuation: Components.Schemas.LocationValuation? = nil,
                 createdAt: Foundation.Date,
                 updatedAt: Foundation.Date,
                 dataQuality: Components.Schemas.DataQuality,
-                children: Components.Schemas.OutputSchema250? = nil,
-                parent: Components.Schemas.OutputSchema251? = nil,
+                children: Components.Schemas.OutputSchema251? = nil,
+                parent: Components.Schemas.OutputSchema252? = nil,
                 childCount: Swift.Int? = nil,
                 directItemCount: Swift.Int? = nil,
                 totalItemCount: Swift.Int? = nil,
-                inventoryItems: Components.Schemas.OutputSchema255? = nil,
+                inventoryItems: Components.Schemas.OutputSchema256? = nil,
                 displayImages: Components.Schemas.DisplayImagesField,
-                attachments: Components.Schemas.OutputSchema504
+                attachments: Components.Schemas.OutputSchema505
             ) {
                 self.id = id
                 self.name = name
@@ -20051,7 +20051,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/LocationListItem/aliases`.
             public var aliases: Components.Schemas.InputSchema90
             /// - Remark: Generated from `#/components/schemas/LocationListItem/tags`.
-            public var tags: Components.Schemas.OutputSchema225?
+            public var tags: Components.Schemas.OutputSchema226?
             /// - Remark: Generated from `#/components/schemas/LocationListItem/type`.
             public var _type: Components.Schemas.LocationType?
             /// - Remark: Generated from `#/components/schemas/LocationListItem/notes`.
@@ -20063,7 +20063,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/LocationListItem/aiDescription`.
             public var aiDescription: Swift.String?
             /// - Remark: Generated from `#/components/schemas/LocationListItem/images`.
-            public var images: Components.Schemas.OutputSchema166
+            public var images: Components.Schemas.OutputSchema167
             /// - Remark: Generated from `#/components/schemas/LocationListItem/valuation`.
             public var valuation: Components.Schemas.LocationValuation?
             /// - Remark: Generated from `#/components/schemas/LocationListItem/createdAt`.
@@ -20243,13 +20243,13 @@ extension Components {
                 id: Components.Schemas.LocationShortcode,
                 name: Swift.String,
                 aliases: Components.Schemas.InputSchema90,
-                tags: Components.Schemas.OutputSchema225? = nil,
+                tags: Components.Schemas.OutputSchema226? = nil,
                 _type: Components.Schemas.LocationType? = nil,
                 notes: Swift.String? = nil,
                 product: Components.Schemas.LocationIdentityProductOut? = nil,
                 lastBulkInventory: Foundation.Date? = nil,
                 aiDescription: Swift.String? = nil,
-                images: Components.Schemas.OutputSchema166,
+                images: Components.Schemas.OutputSchema167,
                 valuation: Components.Schemas.LocationValuation? = nil,
                 createdAt: Foundation.Date,
                 updatedAt: Foundation.Date,
@@ -20362,7 +20362,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/LocationOut/aliases`.
             public var aliases: Components.Schemas.InputSchema90
             /// - Remark: Generated from `#/components/schemas/LocationOut/tags`.
-            public var tags: Components.Schemas.OutputSchema225?
+            public var tags: Components.Schemas.OutputSchema226?
             /// - Remark: Generated from `#/components/schemas/LocationOut/type`.
             public var _type: Components.Schemas.LocationType?
             /// - Remark: Generated from `#/components/schemas/LocationOut/notes`.
@@ -20374,7 +20374,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/LocationOut/aiDescription`.
             public var aiDescription: Swift.String?
             /// - Remark: Generated from `#/components/schemas/LocationOut/images`.
-            public var images: Components.Schemas.OutputSchema166
+            public var images: Components.Schemas.OutputSchema167
             /// - Remark: Generated from `#/components/schemas/LocationOut/valuation`.
             public var valuation: Components.Schemas.LocationValuation?
             /// - Remark: Generated from `#/components/schemas/LocationOut/createdAt`.
@@ -20404,13 +20404,13 @@ extension Components {
                 id: Components.Schemas.LocationShortcode,
                 name: Swift.String,
                 aliases: Components.Schemas.InputSchema90,
-                tags: Components.Schemas.OutputSchema225? = nil,
+                tags: Components.Schemas.OutputSchema226? = nil,
                 _type: Components.Schemas.LocationType? = nil,
                 notes: Swift.String? = nil,
                 product: Components.Schemas.LocationIdentityProductOut? = nil,
                 lastBulkInventory: Foundation.Date? = nil,
                 aiDescription: Swift.String? = nil,
-                images: Components.Schemas.OutputSchema166,
+                images: Components.Schemas.OutputSchema167,
                 valuation: Components.Schemas.LocationValuation? = nil,
                 createdAt: Foundation.Date,
                 updatedAt: Foundation.Date,
@@ -20557,9 +20557,9 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/LocationValuation/totalItemCount`.
             public var totalItemCount: Swift.Int
             /// - Remark: Generated from `#/components/schemas/LocationValuation/direct`.
-            public var direct: Components.Schemas.OutputSchema234
+            public var direct: Components.Schemas.OutputSchema235
             /// - Remark: Generated from `#/components/schemas/LocationValuation/total`.
-            public var total: Components.Schemas.OutputSchema234
+            public var total: Components.Schemas.OutputSchema235
             /// - Remark: Generated from `#/components/schemas/LocationValuation/installed`.
             public struct InstalledPayload: Codable, Hashable, Sendable {
                 /// - Remark: Generated from `#/components/schemas/LocationValuation/installed/directValuation`.
@@ -20650,8 +20650,8 @@ extension Components {
                 totalValuation: Components.Schemas.Money,
                 directItemCount: Swift.Int,
                 totalItemCount: Swift.Int,
-                direct: Components.Schemas.OutputSchema234,
-                total: Components.Schemas.OutputSchema234,
+                direct: Components.Schemas.OutputSchema235,
+                total: Components.Schemas.OutputSchema235,
                 installed: Components.Schemas.LocationValuation.InstalledPayload? = nil,
                 container: Components.Schemas.LocationValuation.ContainerPayload? = nil
             ) {
@@ -20788,11 +20788,11 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/MealDetail/mealKind`.
             public var mealKind: Components.Schemas.MealKind
             /// - Remark: Generated from `#/components/schemas/MealDetail/recipes`.
-            public var recipes: Components.Schemas.OutputSchema279
+            public var recipes: Components.Schemas.OutputSchema280
             /// - Remark: Generated from `#/components/schemas/MealDetail/totals`.
             public var totals: Components.Schemas.MealTotals
             /// - Remark: Generated from `#/components/schemas/MealDetail/images`.
-            public var images: Components.Schemas.OutputSchema166
+            public var images: Components.Schemas.OutputSchema167
             /// - Remark: Generated from `#/components/schemas/MealDetail/displayName`.
             public var displayName: Swift.String
             /// - Remark: Generated from `#/components/schemas/MealDetail/recipeNames`.
@@ -20806,7 +20806,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/MealDetail/displayImages`.
             public var displayImages: Components.Schemas.DisplayImagesField
             /// - Remark: Generated from `#/components/schemas/MealDetail/attachments`.
-            public var attachments: Components.Schemas.OutputSchema504
+            public var attachments: Components.Schemas.OutputSchema505
             /// Creates a new `MealDetail`.
             ///
             /// - Parameters:
@@ -20833,16 +20833,16 @@ extension Components {
                 sortOrder: Swift.Int? = nil,
                 mealType: Components.Schemas.MealType? = nil,
                 mealKind: Components.Schemas.MealKind,
-                recipes: Components.Schemas.OutputSchema279,
+                recipes: Components.Schemas.OutputSchema280,
                 totals: Components.Schemas.MealTotals,
-                images: Components.Schemas.OutputSchema166,
+                images: Components.Schemas.OutputSchema167,
                 displayName: Swift.String,
                 recipeNames: Components.Schemas.InputSchema90,
                 createdAt: Foundation.Date,
                 updatedAt: Foundation.Date,
                 dataQuality: Components.Schemas.DataQuality,
                 displayImages: Components.Schemas.DisplayImagesField,
-                attachments: Components.Schemas.OutputSchema504
+                attachments: Components.Schemas.OutputSchema505
             ) {
                 self.id = id
                 self.date = date
@@ -20946,11 +20946,11 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/MealListItem/mealKind`.
             public var mealKind: Components.Schemas.MealKind
             /// - Remark: Generated from `#/components/schemas/MealListItem/recipes`.
-            public var recipes: Components.Schemas.OutputSchema279
+            public var recipes: Components.Schemas.OutputSchema280
             /// - Remark: Generated from `#/components/schemas/MealListItem/totals`.
             public var totals: Components.Schemas.MealTotals
             /// - Remark: Generated from `#/components/schemas/MealListItem/images`.
-            public var images: Components.Schemas.OutputSchema166
+            public var images: Components.Schemas.OutputSchema167
             /// - Remark: Generated from `#/components/schemas/MealListItem/displayName`.
             public var displayName: Swift.String
             /// - Remark: Generated from `#/components/schemas/MealListItem/recipeNames`.
@@ -20988,9 +20988,9 @@ extension Components {
                 sortOrder: Swift.Int? = nil,
                 mealType: Components.Schemas.MealType? = nil,
                 mealKind: Components.Schemas.MealKind,
-                recipes: Components.Schemas.OutputSchema279,
+                recipes: Components.Schemas.OutputSchema280,
                 totals: Components.Schemas.MealTotals,
-                images: Components.Schemas.OutputSchema166,
+                images: Components.Schemas.OutputSchema167,
                 displayName: Swift.String,
                 recipeNames: Components.Schemas.InputSchema90,
                 createdAt: Foundation.Date,
@@ -21606,11 +21606,11 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/MealOut/mealKind`.
             public var mealKind: Components.Schemas.MealKind
             /// - Remark: Generated from `#/components/schemas/MealOut/recipes`.
-            public var recipes: Components.Schemas.OutputSchema279
+            public var recipes: Components.Schemas.OutputSchema280
             /// - Remark: Generated from `#/components/schemas/MealOut/totals`.
             public var totals: Components.Schemas.MealTotals
             /// - Remark: Generated from `#/components/schemas/MealOut/images`.
-            public var images: Components.Schemas.OutputSchema166
+            public var images: Components.Schemas.OutputSchema167
             /// - Remark: Generated from `#/components/schemas/MealOut/displayName`.
             public var displayName: Swift.String
             /// - Remark: Generated from `#/components/schemas/MealOut/recipeNames`.
@@ -21645,9 +21645,9 @@ extension Components {
                 sortOrder: Swift.Int? = nil,
                 mealType: Components.Schemas.MealType? = nil,
                 mealKind: Components.Schemas.MealKind,
-                recipes: Components.Schemas.OutputSchema279,
+                recipes: Components.Schemas.OutputSchema280,
                 totals: Components.Schemas.MealTotals,
-                images: Components.Schemas.OutputSchema166,
+                images: Components.Schemas.OutputSchema167,
                 displayName: Swift.String,
                 recipeNames: Components.Schemas.InputSchema90,
                 createdAt: Foundation.Date,
@@ -22012,7 +22012,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/MeasureEstimateComplete/upper`.
             public var upper: Swift.Double?
             /// - Remark: Generated from `#/components/schemas/MeasureEstimateComplete/coverage`.
-            public var coverage: Components.Schemas.OutputSchema86
+            public var coverage: Components.Schemas.OutputSchema87
             /// Creates a new `MeasureEstimateComplete`.
             ///
             /// - Parameters:
@@ -22024,7 +22024,7 @@ extension Components {
                 status: Components.Schemas.MeasureEstimateComplete.StatusPayload,
                 lower: Swift.Double,
                 upper: Swift.Double? = nil,
-                coverage: Components.Schemas.OutputSchema86
+                coverage: Components.Schemas.OutputSchema87
             ) {
                 self.status = status
                 self.lower = lower
@@ -22051,7 +22051,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/MeasureEstimatePartial/upper`.
             public var upper: Swift.Double?
             /// - Remark: Generated from `#/components/schemas/MeasureEstimatePartial/coverage`.
-            public var coverage: Components.Schemas.OutputSchema86
+            public var coverage: Components.Schemas.OutputSchema87
             /// Creates a new `MeasureEstimatePartial`.
             ///
             /// - Parameters:
@@ -22063,7 +22063,7 @@ extension Components {
                 status: Components.Schemas.MeasureEstimatePartial.StatusPayload,
                 lower: Swift.Double,
                 upper: Swift.Double? = nil,
-                coverage: Components.Schemas.OutputSchema86
+                coverage: Components.Schemas.OutputSchema87
             ) {
                 self.status = status
                 self.lower = lower
@@ -22126,7 +22126,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/MeasureEstimateUnavailable/reason`.
             public var reason: Components.Schemas.MeasureEstimateUnavailable.ReasonPayload
             /// - Remark: Generated from `#/components/schemas/MeasureEstimateUnavailable/coverage`.
-            public var coverage: Components.Schemas.OutputSchema86?
+            public var coverage: Components.Schemas.OutputSchema87?
             /// Creates a new `MeasureEstimateUnavailable`.
             ///
             /// - Parameters:
@@ -22136,7 +22136,7 @@ extension Components {
             public init(
                 status: Components.Schemas.MeasureEstimateUnavailable.StatusPayload,
                 reason: Components.Schemas.MeasureEstimateUnavailable.ReasonPayload,
-                coverage: Components.Schemas.OutputSchema86? = nil
+                coverage: Components.Schemas.OutputSchema87? = nil
             ) {
                 self.status = status
                 self.reason = reason
@@ -22571,17 +22571,17 @@ extension Components {
         public typealias OptionalImageRepresentations = Components.Schemas.ImageRepresentations
         /// - Remark: Generated from `#/components/schemas/OptionalProjectAllocations`.
         public typealias OptionalProjectAllocations = Components.Schemas.ProjectAllocations
-        /// - Remark: Generated from `#/components/schemas/output_schema164`.
-        public typealias OutputSchema164 = [Components.Schemas.PlantingShortcode]
-        /// - Remark: Generated from `#/components/schemas/output_schema166`.
-        public typealias OutputSchema166 = [Components.Schemas.ImageOut]
-        /// - Remark: Generated from `#/components/schemas/OutputSchema169`.
-        public struct OutputSchema169Payload: Codable, Hashable, Sendable {
-            /// - Remark: Generated from `#/components/schemas/OutputSchema169/id`.
+        /// - Remark: Generated from `#/components/schemas/output_schema165`.
+        public typealias OutputSchema165 = [Components.Schemas.PlantingShortcode]
+        /// - Remark: Generated from `#/components/schemas/output_schema167`.
+        public typealias OutputSchema167 = [Components.Schemas.ImageOut]
+        /// - Remark: Generated from `#/components/schemas/OutputSchema170`.
+        public struct OutputSchema170Payload: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/OutputSchema170/id`.
             public var id: Components.Schemas.PlantingShortcode
-            /// - Remark: Generated from `#/components/schemas/OutputSchema169/name`.
+            /// - Remark: Generated from `#/components/schemas/OutputSchema170/name`.
             public var name: Swift.String
-            /// Creates a new `OutputSchema169Payload`.
+            /// Creates a new `OutputSchema170Payload`.
             ///
             /// - Parameters:
             ///   - id:
@@ -22598,27 +22598,27 @@ extension Components {
                 case name
             }
         }
-        /// - Remark: Generated from `#/components/schemas/output_schema169`.
-        public typealias OutputSchema169 = [Components.Schemas.OutputSchema169Payload]
-        /// - Remark: Generated from `#/components/schemas/output_schema195`.
-        public typealias OutputSchema195 = [Components.Schemas.BaseKind]
-        /// - Remark: Generated from `#/components/schemas/output_schema211`.
-        public typealias OutputSchema211 = [Components.Schemas.RecipeUsageOut]
+        /// - Remark: Generated from `#/components/schemas/output_schema170`.
+        public typealias OutputSchema170 = [Components.Schemas.OutputSchema170Payload]
+        /// - Remark: Generated from `#/components/schemas/output_schema196`.
+        public typealias OutputSchema196 = [Components.Schemas.BaseKind]
         /// - Remark: Generated from `#/components/schemas/output_schema212`.
-        public typealias OutputSchema212 = [Components.Schemas.RecipeTopLevel]
+        public typealias OutputSchema212 = [Components.Schemas.RecipeUsageOut]
         /// - Remark: Generated from `#/components/schemas/output_schema213`.
-        public typealias OutputSchema213 = [Components.Schemas.ProductWithMappingsAndFoodOut]
+        public typealias OutputSchema213 = [Components.Schemas.RecipeTopLevel]
+        /// - Remark: Generated from `#/components/schemas/output_schema214`.
+        public typealias OutputSchema214 = [Components.Schemas.ProductWithMappingsAndFoodOut]
         /// Quantity on hand
         ///
-        /// - Remark: Generated from `#/components/schemas/output_schema214`.
-        public struct OutputSchema214: Codable, Hashable, Sendable {
-            /// - Remark: Generated from `#/components/schemas/output_schema214/value`.
+        /// - Remark: Generated from `#/components/schemas/output_schema215`.
+        public struct OutputSchema215: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/output_schema215/value`.
             public var value: Swift.Double
-            /// - Remark: Generated from `#/components/schemas/output_schema214/unit`.
+            /// - Remark: Generated from `#/components/schemas/output_schema215/unit`.
             public var unit: Swift.String
-            /// - Remark: Generated from `#/components/schemas/output_schema214/upperValue`.
+            /// - Remark: Generated from `#/components/schemas/output_schema215/upperValue`.
             public var upperValue: Swift.Double?
-            /// Creates a new `OutputSchema214`.
+            /// Creates a new `OutputSchema215`.
             ///
             /// - Parameters:
             ///   - value:
@@ -22641,21 +22641,21 @@ extension Components {
         }
         /// 'stock' = movable stock; 'installed' = a fixed installation, kept as a record but excluded from browsing, counting and audits
         ///
-        /// - Remark: Generated from `#/components/schemas/output_schema218`.
-        public typealias OutputSchema218 = Components.Schemas.InventoryPlacement
+        /// - Remark: Generated from `#/components/schemas/output_schema219`.
+        public typealias OutputSchema219 = Components.Schemas.InventoryPlacement
         /// Namespaced Collection tags assigned directly to this location
         ///
-        /// - Remark: Generated from `#/components/schemas/output_schema225`.
-        public typealias OutputSchema225 = Components.Schemas.InputSchema90
-        /// - Remark: Generated from `#/components/schemas/output_schema234`.
-        public struct OutputSchema234: Codable, Hashable, Sendable {
-            /// - Remark: Generated from `#/components/schemas/output_schema234/priced`.
+        /// - Remark: Generated from `#/components/schemas/output_schema226`.
+        public typealias OutputSchema226 = Components.Schemas.InputSchema90
+        /// - Remark: Generated from `#/components/schemas/output_schema235`.
+        public struct OutputSchema235: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/output_schema235/priced`.
             public var priced: Swift.Int
-            /// - Remark: Generated from `#/components/schemas/output_schema234/missingPricing`.
+            /// - Remark: Generated from `#/components/schemas/output_schema235/missingPricing`.
             public var missingPricing: Swift.Int
-            /// - Remark: Generated from `#/components/schemas/output_schema234/miscNoPrice`.
+            /// - Remark: Generated from `#/components/schemas/output_schema235/miscNoPrice`.
             public var miscNoPrice: Swift.Int
-            /// Creates a new `OutputSchema234`.
+            /// Creates a new `OutputSchema235`.
             ///
             /// - Parameters:
             ///   - priced:
@@ -22676,23 +22676,23 @@ extension Components {
                 case miscNoPrice
             }
         }
-        /// - Remark: Generated from `#/components/schemas/output_schema247`.
-        public typealias OutputSchema247 = [Components.Schemas.FinancialTransactionShortcode]
-        /// - Remark: Generated from `#/components/schemas/output_schema250`.
-        public typealias OutputSchema250 = [Components.Schemas.InfLocation]
+        /// - Remark: Generated from `#/components/schemas/output_schema248`.
+        public typealias OutputSchema248 = [Components.Schemas.FinancialTransactionShortcode]
         /// - Remark: Generated from `#/components/schemas/output_schema251`.
-        public typealias OutputSchema251 = Components.Schemas.InfLocation
-        /// - Remark: Generated from `#/components/schemas/OutputSchema255`.
-        public struct OutputSchema255Payload: Codable, Hashable, Sendable {
-            /// - Remark: Generated from `#/components/schemas/OutputSchema255/id`.
+        public typealias OutputSchema251 = [Components.Schemas.InfLocation]
+        /// - Remark: Generated from `#/components/schemas/output_schema252`.
+        public typealias OutputSchema252 = Components.Schemas.InfLocation
+        /// - Remark: Generated from `#/components/schemas/OutputSchema256`.
+        public struct OutputSchema256Payload: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/OutputSchema256/id`.
             public var id: Components.Schemas.InventoryShortcode
-            /// - Remark: Generated from `#/components/schemas/OutputSchema255/amount`.
+            /// - Remark: Generated from `#/components/schemas/OutputSchema256/amount`.
             public var amount: Components.Schemas.Amount
-            /// - Remark: Generated from `#/components/schemas/OutputSchema255/productName`.
+            /// - Remark: Generated from `#/components/schemas/OutputSchema256/productName`.
             public var productName: Swift.String
-            /// - Remark: Generated from `#/components/schemas/OutputSchema255/productId`.
+            /// - Remark: Generated from `#/components/schemas/OutputSchema256/productId`.
             public var productId: Components.Schemas.ProductShortcode
-            /// Creates a new `OutputSchema255Payload`.
+            /// Creates a new `OutputSchema256Payload`.
             ///
             /// - Parameters:
             ///   - id:
@@ -22717,19 +22717,19 @@ extension Components {
                 case productId
             }
         }
-        /// - Remark: Generated from `#/components/schemas/output_schema255`.
-        public typealias OutputSchema255 = [Components.Schemas.OutputSchema255Payload]
-        /// - Remark: Generated from `#/components/schemas/output_schema267`.
-        public typealias OutputSchema267 = [Components.Schemas.Amount]
-        /// - Remark: Generated from `#/components/schemas/output_schema279`.
-        public typealias OutputSchema279 = [Components.Schemas.MealRecipeOut]
-        /// - Remark: Generated from `#/components/schemas/output_schema28`.
-        @frozen public enum OutputSchema28: Codable, Hashable, Sendable {
-            /// - Remark: Generated from `#/components/schemas/output_schema28/UnitMappingWithMetadataFood`.
+        /// - Remark: Generated from `#/components/schemas/output_schema256`.
+        public typealias OutputSchema256 = [Components.Schemas.OutputSchema256Payload]
+        /// - Remark: Generated from `#/components/schemas/output_schema268`.
+        public typealias OutputSchema268 = [Components.Schemas.Amount]
+        /// - Remark: Generated from `#/components/schemas/output_schema280`.
+        public typealias OutputSchema280 = [Components.Schemas.MealRecipeOut]
+        /// - Remark: Generated from `#/components/schemas/output_schema29`.
+        @frozen public enum OutputSchema29: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/output_schema29/UnitMappingWithMetadataFood`.
             case food(Components.Schemas.UnitMappingWithMetadataFood)
-            /// - Remark: Generated from `#/components/schemas/output_schema28/UnitMappingWithMetadataManual`.
+            /// - Remark: Generated from `#/components/schemas/output_schema29/UnitMappingWithMetadataManual`.
             case manual(Components.Schemas.UnitMappingWithMetadataManual)
-            /// - Remark: Generated from `#/components/schemas/output_schema28/UnitMappingWithMetadataProduct`.
+            /// - Remark: Generated from `#/components/schemas/output_schema29/UnitMappingWithMetadataProduct`.
             case product(Components.Schemas.UnitMappingWithMetadataProduct)
             public enum CodingKeys: String, CodingKey {
                 case _type = "type"
@@ -22766,23 +22766,23 @@ extension Components {
                 }
             }
         }
-        /// - Remark: Generated from `#/components/schemas/output_schema339`.
-        public typealias OutputSchema339 = [Components.Schemas.UnitMappingOut]
-        /// - Remark: Generated from `#/components/schemas/output_schema346`.
-        public struct OutputSchema346: Codable, Hashable, Sendable {
-            /// - Remark: Generated from `#/components/schemas/output_schema346/id`.
+        /// - Remark: Generated from `#/components/schemas/output_schema340`.
+        public typealias OutputSchema340 = [Components.Schemas.UnitMappingOut]
+        /// - Remark: Generated from `#/components/schemas/output_schema347`.
+        public struct OutputSchema347: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/output_schema347/id`.
             public var id: Components.Schemas.IngredientShortcode
-            /// - Remark: Generated from `#/components/schemas/output_schema346/name`.
+            /// - Remark: Generated from `#/components/schemas/output_schema347/name`.
             public var name: Swift.String
-            /// - Remark: Generated from `#/components/schemas/output_schema346/aliases`.
+            /// - Remark: Generated from `#/components/schemas/output_schema347/aliases`.
             public var aliases: [Swift.String]
-            /// - Remark: Generated from `#/components/schemas/output_schema346/naKinds`.
+            /// - Remark: Generated from `#/components/schemas/output_schema347/naKinds`.
             public var naKinds: [Components.Schemas.BaseKind]
-            /// - Remark: Generated from `#/components/schemas/output_schema346/createdAt`.
+            /// - Remark: Generated from `#/components/schemas/output_schema347/createdAt`.
             public var createdAt: Foundation.Date
-            /// - Remark: Generated from `#/components/schemas/output_schema346/updatedAt`.
+            /// - Remark: Generated from `#/components/schemas/output_schema347/updatedAt`.
             public var updatedAt: Foundation.Date
-            /// Creates a new `OutputSchema346`.
+            /// Creates a new `OutputSchema347`.
             ///
             /// - Parameters:
             ///   - id:
@@ -22815,63 +22815,63 @@ extension Components {
                 case updatedAt
             }
         }
-        /// - Remark: Generated from `#/components/schemas/output_schema347`.
-        public typealias OutputSchema347 = [Components.Schemas.ProductListInventoryEntryOut]
-        /// - Remark: Generated from `#/components/schemas/output_schema353`.
-        public struct OutputSchema353: Codable, Hashable, Sendable {
-            /// - Remark: Generated from `#/components/schemas/output_schema353/id`.
+        /// - Remark: Generated from `#/components/schemas/output_schema348`.
+        public typealias OutputSchema348 = [Components.Schemas.ProductListInventoryEntryOut]
+        /// - Remark: Generated from `#/components/schemas/output_schema354`.
+        public struct OutputSchema354: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/output_schema354/id`.
             public var id: Components.Schemas.InventoryShortcode
-            /// - Remark: Generated from `#/components/schemas/output_schema353/amount`.
+            /// - Remark: Generated from `#/components/schemas/output_schema354/amount`.
             public var amount: Components.Schemas.Amount
-            /// - Remark: Generated from `#/components/schemas/output_schema353/valuation`.
+            /// - Remark: Generated from `#/components/schemas/output_schema354/valuation`.
             public var valuation: Components.Schemas.Money?
-            /// - Remark: Generated from `#/components/schemas/output_schema353/verifiedAt`.
+            /// - Remark: Generated from `#/components/schemas/output_schema354/verifiedAt`.
             public var verifiedAt: Foundation.Date?
-            /// - Remark: Generated from `#/components/schemas/output_schema353/placement`.
+            /// - Remark: Generated from `#/components/schemas/output_schema354/placement`.
             @frozen public enum PlacementPayload: String, Codable, Hashable, Sendable, CaseIterable {
                 case stock = "stock"
                 case installed = "installed"
             }
-            /// - Remark: Generated from `#/components/schemas/output_schema353/placement`.
-            public var placement: Components.Schemas.OutputSchema353.PlacementPayload
-            /// - Remark: Generated from `#/components/schemas/output_schema353/createdAt`.
+            /// - Remark: Generated from `#/components/schemas/output_schema354/placement`.
+            public var placement: Components.Schemas.OutputSchema354.PlacementPayload
+            /// - Remark: Generated from `#/components/schemas/output_schema354/createdAt`.
             public var createdAt: Foundation.Date
-            /// - Remark: Generated from `#/components/schemas/output_schema353/updatedAt`.
+            /// - Remark: Generated from `#/components/schemas/output_schema354/updatedAt`.
             public var updatedAt: Foundation.Date
-            /// - Remark: Generated from `#/components/schemas/output_schema353/location`.
+            /// - Remark: Generated from `#/components/schemas/output_schema354/location`.
             public struct LocationPayload: Codable, Hashable, Sendable {
-                /// - Remark: Generated from `#/components/schemas/output_schema353/location/id`.
+                /// - Remark: Generated from `#/components/schemas/output_schema354/location/id`.
                 public var id: Components.Schemas.LocationShortcode
                 /// name of location
                 ///
-                /// - Remark: Generated from `#/components/schemas/output_schema353/location/name`.
+                /// - Remark: Generated from `#/components/schemas/output_schema354/location/name`.
                 public var name: Swift.String
-                /// - Remark: Generated from `#/components/schemas/output_schema353/location/aliases`.
+                /// - Remark: Generated from `#/components/schemas/output_schema354/location/aliases`.
                 public var aliases: Components.Schemas.InputSchema90
-                /// - Remark: Generated from `#/components/schemas/output_schema353/location/tags`.
-                public var tags: Components.Schemas.OutputSchema225?
-                /// - Remark: Generated from `#/components/schemas/output_schema353/location/type`.
+                /// - Remark: Generated from `#/components/schemas/output_schema354/location/tags`.
+                public var tags: Components.Schemas.OutputSchema226?
+                /// - Remark: Generated from `#/components/schemas/output_schema354/location/type`.
                 public var _type: Components.Schemas.LocationType?
-                /// - Remark: Generated from `#/components/schemas/output_schema353/location/notes`.
+                /// - Remark: Generated from `#/components/schemas/output_schema354/location/notes`.
                 public var notes: Swift.String?
-                /// - Remark: Generated from `#/components/schemas/output_schema353/location/product`.
+                /// - Remark: Generated from `#/components/schemas/output_schema354/location/product`.
                 public var product: Components.Schemas.LocationIdentityProductOut?
-                /// - Remark: Generated from `#/components/schemas/output_schema353/location/lastBulkInventory`.
+                /// - Remark: Generated from `#/components/schemas/output_schema354/location/lastBulkInventory`.
                 public var lastBulkInventory: Foundation.Date?
-                /// - Remark: Generated from `#/components/schemas/output_schema353/location/aiDescription`.
+                /// - Remark: Generated from `#/components/schemas/output_schema354/location/aiDescription`.
                 public var aiDescription: Swift.String?
-                /// - Remark: Generated from `#/components/schemas/output_schema353/location/images`.
-                public var images: Components.Schemas.OutputSchema166
-                /// - Remark: Generated from `#/components/schemas/output_schema353/location/valuation`.
+                /// - Remark: Generated from `#/components/schemas/output_schema354/location/images`.
+                public var images: Components.Schemas.OutputSchema167
+                /// - Remark: Generated from `#/components/schemas/output_schema354/location/valuation`.
                 public var valuation: Components.Schemas.LocationValuation?
-                /// - Remark: Generated from `#/components/schemas/output_schema353/location/createdAt`.
+                /// - Remark: Generated from `#/components/schemas/output_schema354/location/createdAt`.
                 public var createdAt: Foundation.Date
-                /// - Remark: Generated from `#/components/schemas/output_schema353/location/updatedAt`.
+                /// - Remark: Generated from `#/components/schemas/output_schema354/location/updatedAt`.
                 public var updatedAt: Foundation.Date
-                /// - Remark: Generated from `#/components/schemas/output_schema353/location/displayImage`.
+                /// - Remark: Generated from `#/components/schemas/output_schema354/location/displayImage`.
                 public var displayImage: Components.Schemas.ImageUrlSummary?
-                /// - Remark: Generated from `#/components/schemas/output_schema353/location/ancestors`.
-                public var ancestors: [Components.Schemas.OutputSchema354]
+                /// - Remark: Generated from `#/components/schemas/output_schema354/location/ancestors`.
+                public var ancestors: [Components.Schemas.OutputSchema355]
                 /// Creates a new `LocationPayload`.
                 ///
                 /// - Parameters:
@@ -22894,18 +22894,18 @@ extension Components {
                     id: Components.Schemas.LocationShortcode,
                     name: Swift.String,
                     aliases: Components.Schemas.InputSchema90,
-                    tags: Components.Schemas.OutputSchema225? = nil,
+                    tags: Components.Schemas.OutputSchema226? = nil,
                     _type: Components.Schemas.LocationType? = nil,
                     notes: Swift.String? = nil,
                     product: Components.Schemas.LocationIdentityProductOut? = nil,
                     lastBulkInventory: Foundation.Date? = nil,
                     aiDescription: Swift.String? = nil,
-                    images: Components.Schemas.OutputSchema166,
+                    images: Components.Schemas.OutputSchema167,
                     valuation: Components.Schemas.LocationValuation? = nil,
                     createdAt: Foundation.Date,
                     updatedAt: Foundation.Date,
                     displayImage: Components.Schemas.ImageUrlSummary? = nil,
-                    ancestors: [Components.Schemas.OutputSchema354]
+                    ancestors: [Components.Schemas.OutputSchema355]
                 ) {
                     self.id = id
                     self.name = name
@@ -22941,9 +22941,9 @@ extension Components {
                     case ancestors
                 }
             }
-            /// - Remark: Generated from `#/components/schemas/output_schema353/location`.
-            public var location: Components.Schemas.OutputSchema353.LocationPayload
-            /// Creates a new `OutputSchema353`.
+            /// - Remark: Generated from `#/components/schemas/output_schema354/location`.
+            public var location: Components.Schemas.OutputSchema354.LocationPayload
+            /// Creates a new `OutputSchema354`.
             ///
             /// - Parameters:
             ///   - id:
@@ -22959,10 +22959,10 @@ extension Components {
                 amount: Components.Schemas.Amount,
                 valuation: Components.Schemas.Money? = nil,
                 verifiedAt: Foundation.Date? = nil,
-                placement: Components.Schemas.OutputSchema353.PlacementPayload,
+                placement: Components.Schemas.OutputSchema354.PlacementPayload,
                 createdAt: Foundation.Date,
                 updatedAt: Foundation.Date,
-                location: Components.Schemas.OutputSchema353.LocationPayload
+                location: Components.Schemas.OutputSchema354.LocationPayload
             ) {
                 self.id = id
                 self.amount = amount
@@ -22984,17 +22984,17 @@ extension Components {
                 case location
             }
         }
-        /// - Remark: Generated from `#/components/schemas/output_schema354`.
-        public struct OutputSchema354: Codable, Hashable, Sendable {
-            /// - Remark: Generated from `#/components/schemas/output_schema354/id`.
+        /// - Remark: Generated from `#/components/schemas/output_schema355`.
+        public struct OutputSchema355: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/output_schema355/id`.
             public var id: Components.Schemas.LocationShortcode
-            /// - Remark: Generated from `#/components/schemas/output_schema354/name`.
+            /// - Remark: Generated from `#/components/schemas/output_schema355/name`.
             public var name: Swift.String
-            /// - Remark: Generated from `#/components/schemas/output_schema354/type`.
+            /// - Remark: Generated from `#/components/schemas/output_schema355/type`.
             public var _type: Components.Schemas.LocationType?
-            /// - Remark: Generated from `#/components/schemas/output_schema354/displayImage`.
+            /// - Remark: Generated from `#/components/schemas/output_schema355/displayImage`.
             public var displayImage: Components.Schemas.ImageUrlSummary?
-            /// Creates a new `OutputSchema354`.
+            /// Creates a new `OutputSchema355`.
             ///
             /// - Parameters:
             ///   - id:
@@ -23019,19 +23019,19 @@ extension Components {
                 case displayImage
             }
         }
-        /// - Remark: Generated from `#/components/schemas/output_schema355`.
-        public struct OutputSchema355: Codable, Hashable, Sendable {
-            /// - Remark: Generated from `#/components/schemas/output_schema355/id`.
+        /// - Remark: Generated from `#/components/schemas/output_schema356`.
+        public struct OutputSchema356: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/output_schema356/id`.
             public var id: Components.Schemas.LocationShortcode
-            /// - Remark: Generated from `#/components/schemas/output_schema355/name`.
+            /// - Remark: Generated from `#/components/schemas/output_schema356/name`.
             public var name: Swift.String
-            /// - Remark: Generated from `#/components/schemas/output_schema355/type`.
+            /// - Remark: Generated from `#/components/schemas/output_schema356/type`.
             public var _type: Components.Schemas.LocationType?
-            /// - Remark: Generated from `#/components/schemas/output_schema355/displayImage`.
+            /// - Remark: Generated from `#/components/schemas/output_schema356/displayImage`.
             public var displayImage: Components.Schemas.ImageUrlSummary?
-            /// - Remark: Generated from `#/components/schemas/output_schema355/ancestors`.
-            public var ancestors: [Components.Schemas.OutputSchema354]
-            /// Creates a new `OutputSchema355`.
+            /// - Remark: Generated from `#/components/schemas/output_schema356/ancestors`.
+            public var ancestors: [Components.Schemas.OutputSchema355]
+            /// Creates a new `OutputSchema356`.
             ///
             /// - Parameters:
             ///   - id:
@@ -23044,7 +23044,7 @@ extension Components {
                 name: Swift.String,
                 _type: Components.Schemas.LocationType? = nil,
                 displayImage: Components.Schemas.ImageUrlSummary? = nil,
-                ancestors: [Components.Schemas.OutputSchema354]
+                ancestors: [Components.Schemas.OutputSchema355]
             ) {
                 self.id = id
                 self.name = name
@@ -23060,13 +23060,13 @@ extension Components {
                 case ancestors
             }
         }
-        /// - Remark: Generated from `#/components/schemas/OutputSchema363`.
-        public struct OutputSchema363Payload: Codable, Hashable, Sendable {
-            /// - Remark: Generated from `#/components/schemas/OutputSchema363/id`.
+        /// - Remark: Generated from `#/components/schemas/OutputSchema364`.
+        public struct OutputSchema364Payload: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/OutputSchema364/id`.
             public var id: Components.Schemas.ProductCategoryShortcode
-            /// - Remark: Generated from `#/components/schemas/OutputSchema363/name`.
+            /// - Remark: Generated from `#/components/schemas/OutputSchema364/name`.
             public var name: Swift.String
-            /// Creates a new `OutputSchema363Payload`.
+            /// Creates a new `OutputSchema364Payload`.
             ///
             /// - Parameters:
             ///   - id:
@@ -23083,99 +23083,103 @@ extension Components {
                 case name
             }
         }
-        /// - Remark: Generated from `#/components/schemas/output_schema363`.
-        public typealias OutputSchema363 = [Components.Schemas.OutputSchema363Payload]
-        /// - Remark: Generated from `#/components/schemas/output_schema378`.
-        public typealias OutputSchema378 = [Components.Schemas.TaskShortcode]
-        /// - Remark: Generated from `#/components/schemas/output_schema399`.
-        public typealias OutputSchema399 = [Components.Schemas.ProjectShortcode]
-        /// - Remark: Generated from `#/components/schemas/output_schema40`.
-        public typealias OutputSchema40 = [Components.Schemas.OutputSchema41]
+        /// - Remark: Generated from `#/components/schemas/output_schema364`.
+        public typealias OutputSchema364 = [Components.Schemas.OutputSchema364Payload]
+        /// - Remark: Generated from `#/components/schemas/output_schema379`.
+        public typealias OutputSchema379 = [Components.Schemas.TaskShortcode]
+        /// - Remark: Generated from `#/components/schemas/output_schema400`.
+        public typealias OutputSchema400 = [Components.Schemas.ProjectShortcode]
+        /// - Remark: Generated from `#/components/schemas/output_schema41`.
+        public typealias OutputSchema41 = [Components.Schemas.OutputSchema42]
         /// Receipt role. Principal lines are the purchased item/service; every other value is a purchase-level adjustment.
         ///
-        /// - Remark: Generated from `#/components/schemas/output_schema409`.
-        public typealias OutputSchema409 = Components.Schemas.ExpenseLineKind
-        /// - Remark: Generated from `#/components/schemas/output_schema41`.
-        public struct OutputSchema41: Codable, Hashable, Sendable {
-            /// - Remark: Generated from `#/components/schemas/output_schema41/representations`.
+        /// - Remark: Generated from `#/components/schemas/output_schema410`.
+        public typealias OutputSchema410 = Components.Schemas.ExpenseLineKind
+        /// Whether this row is a line item or a slice of a total that was never itemized. 'allocation' means the money was cut by payment schedule (a deposit and a balance on one order) or by an estimated materials/labor split of a lump-sum contract — such a row can never carry a productId, and its costType may be an estimate rather than a vendor-stated fact.
+        ///
+        /// - Remark: Generated from `#/components/schemas/output_schema411`.
+        public typealias OutputSchema411 = Components.Schemas.ExpenseLineBasis
+        /// - Remark: Generated from `#/components/schemas/output_schema42`.
+        public struct OutputSchema42: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/output_schema42/representations`.
             public var representations: Components.Schemas.OptionalImageRepresentations?
-            /// - Remark: Generated from `#/components/schemas/output_schema41/id`.
+            /// - Remark: Generated from `#/components/schemas/output_schema42/id`.
             public var id: Components.Schemas.ImageShortcode
-            /// - Remark: Generated from `#/components/schemas/output_schema41/url`.
+            /// - Remark: Generated from `#/components/schemas/output_schema42/url`.
             public var url: Swift.String
-            /// - Remark: Generated from `#/components/schemas/output_schema41/key`.
+            /// - Remark: Generated from `#/components/schemas/output_schema42/key`.
             public var key: Swift.String
-            /// - Remark: Generated from `#/components/schemas/output_schema41/filename`.
+            /// - Remark: Generated from `#/components/schemas/output_schema42/filename`.
             public var filename: Swift.String
-            /// - Remark: Generated from `#/components/schemas/output_schema41/size`.
+            /// - Remark: Generated from `#/components/schemas/output_schema42/size`.
             public var size: Swift.Int
-            /// - Remark: Generated from `#/components/schemas/output_schema41/contentType`.
+            /// - Remark: Generated from `#/components/schemas/output_schema42/contentType`.
             public var contentType: Swift.String
-            /// - Remark: Generated from `#/components/schemas/output_schema41/status`.
+            /// - Remark: Generated from `#/components/schemas/output_schema42/status`.
             public var status: Components.Schemas.ImageStatus
-            /// - Remark: Generated from `#/components/schemas/output_schema41/width`.
+            /// - Remark: Generated from `#/components/schemas/output_schema42/width`.
             public var width: Swift.Int?
-            /// - Remark: Generated from `#/components/schemas/output_schema41/height`.
+            /// - Remark: Generated from `#/components/schemas/output_schema42/height`.
             public var height: Swift.Int?
-            /// - Remark: Generated from `#/components/schemas/output_schema41/detectedContentType`.
+            /// - Remark: Generated from `#/components/schemas/output_schema42/detectedContentType`.
             public var detectedContentType: Swift.String?
-            /// - Remark: Generated from `#/components/schemas/output_schema41/sha256`.
+            /// - Remark: Generated from `#/components/schemas/output_schema42/sha256`.
             public var sha256: Swift.String?
-            /// - Remark: Generated from `#/components/schemas/output_schema41/renderStatus`.
+            /// - Remark: Generated from `#/components/schemas/output_schema42/renderStatus`.
             public var renderStatus: Components.Schemas.ImageRenderStatus?
-            /// - Remark: Generated from `#/components/schemas/output_schema41/storageStatus`.
+            /// - Remark: Generated from `#/components/schemas/output_schema42/storageStatus`.
             public var storageStatus: Components.Schemas.ImageStorageStatus?
-            /// - Remark: Generated from `#/components/schemas/output_schema41/source`.
+            /// - Remark: Generated from `#/components/schemas/output_schema42/source`.
             @frozen public enum SourcePayload: String, Codable, Hashable, Sendable, CaseIterable {
                 case own = "own"
                 case catalog = "catalog"
                 case unknown = "unknown"
                 case screenshot = "screenshot"
             }
-            /// - Remark: Generated from `#/components/schemas/output_schema41/source`.
-            public var source: Components.Schemas.OutputSchema41.SourcePayload
-            /// - Remark: Generated from `#/components/schemas/output_schema41/sourcePageUrl`.
+            /// - Remark: Generated from `#/components/schemas/output_schema42/source`.
+            public var source: Components.Schemas.OutputSchema42.SourcePayload
+            /// - Remark: Generated from `#/components/schemas/output_schema42/sourcePageUrl`.
             public var sourcePageUrl: Swift.String?
-            /// - Remark: Generated from `#/components/schemas/output_schema41/sourceAssetUrl`.
+            /// - Remark: Generated from `#/components/schemas/output_schema42/sourceAssetUrl`.
             public var sourceAssetUrl: Swift.String?
-            /// - Remark: Generated from `#/components/schemas/output_schema41/sourceName`.
+            /// - Remark: Generated from `#/components/schemas/output_schema42/sourceName`.
             public var sourceName: Swift.String?
-            /// - Remark: Generated from `#/components/schemas/output_schema41/useOriginal`.
+            /// - Remark: Generated from `#/components/schemas/output_schema42/useOriginal`.
             public var useOriginal: Swift.Bool
-            /// - Remark: Generated from `#/components/schemas/output_schema41/verifiedAt`.
+            /// - Remark: Generated from `#/components/schemas/output_schema42/verifiedAt`.
             public var verifiedAt: Foundation.Date?
-            /// - Remark: Generated from `#/components/schemas/output_schema41/capturedAt`.
+            /// - Remark: Generated from `#/components/schemas/output_schema42/capturedAt`.
             public var capturedAt: Foundation.Date?
-            /// - Remark: Generated from `#/components/schemas/output_schema41/capturedAtOffsetMinutes`.
+            /// - Remark: Generated from `#/components/schemas/output_schema42/capturedAtOffsetMinutes`.
             public var capturedAtOffsetMinutes: Swift.Int?
-            /// - Remark: Generated from `#/components/schemas/output_schema41/captureLocation`.
+            /// - Remark: Generated from `#/components/schemas/output_schema42/captureLocation`.
             public var captureLocation: Components.Schemas.ImageCaptureLocation?
-            /// - Remark: Generated from `#/components/schemas/output_schema41/capturePlaceName`.
+            /// - Remark: Generated from `#/components/schemas/output_schema42/capturePlaceName`.
             public var capturePlaceName: Swift.String?
-            /// - Remark: Generated from `#/components/schemas/output_schema41/captureDeviceLabel`.
+            /// - Remark: Generated from `#/components/schemas/output_schema42/captureDeviceLabel`.
             public var captureDeviceLabel: Swift.String?
-            /// - Remark: Generated from `#/components/schemas/output_schema41/capturedByPartyId`.
+            /// - Remark: Generated from `#/components/schemas/output_schema42/capturedByPartyId`.
             public var capturedByPartyId: Components.Schemas.LedgerPartyShortcode?
-            /// - Remark: Generated from `#/components/schemas/output_schema41/capturedByName`.
+            /// - Remark: Generated from `#/components/schemas/output_schema42/capturedByName`.
             public var capturedByName: Swift.String?
-            /// - Remark: Generated from `#/components/schemas/output_schema41/captureAttribution`.
+            /// - Remark: Generated from `#/components/schemas/output_schema42/captureAttribution`.
             public var captureAttribution: Components.Schemas.ImageCaptureAttribution
-            /// - Remark: Generated from `#/components/schemas/output_schema41/provenanceEvidence`.
+            /// - Remark: Generated from `#/components/schemas/output_schema42/provenanceEvidence`.
             public var provenanceEvidence: Components.Schemas.ImageProvenanceEvidence?
-            /// - Remark: Generated from `#/components/schemas/output_schema41/createdAt`.
+            /// - Remark: Generated from `#/components/schemas/output_schema42/createdAt`.
             public var createdAt: Foundation.Date
-            /// - Remark: Generated from `#/components/schemas/output_schema41/updatedAt`.
+            /// - Remark: Generated from `#/components/schemas/output_schema42/updatedAt`.
             public var updatedAt: Foundation.Date
-            /// - Remark: Generated from `#/components/schemas/output_schema41/purpose`.
+            /// - Remark: Generated from `#/components/schemas/output_schema42/purpose`.
             @frozen public enum PurposePayload: String, Codable, Hashable, Sendable, CaseIterable {
                 case item = "item"
                 case label = "label"
             }
-            /// - Remark: Generated from `#/components/schemas/output_schema41/purpose`.
-            public var purpose: Components.Schemas.OutputSchema41.PurposePayload?
-            /// - Remark: Generated from `#/components/schemas/output_schema41/analysisSummary`.
+            /// - Remark: Generated from `#/components/schemas/output_schema42/purpose`.
+            public var purpose: Components.Schemas.OutputSchema42.PurposePayload?
+            /// - Remark: Generated from `#/components/schemas/output_schema42/analysisSummary`.
             public var analysisSummary: Components.Schemas.ImageAnalysisSummary?
-            /// Creates a new `OutputSchema41`.
+            /// Creates a new `OutputSchema42`.
             ///
             /// - Parameters:
             ///   - representations:
@@ -23226,7 +23230,7 @@ extension Components {
                 sha256: Swift.String? = nil,
                 renderStatus: Components.Schemas.ImageRenderStatus? = nil,
                 storageStatus: Components.Schemas.ImageStorageStatus? = nil,
-                source: Components.Schemas.OutputSchema41.SourcePayload,
+                source: Components.Schemas.OutputSchema42.SourcePayload,
                 sourcePageUrl: Swift.String? = nil,
                 sourceAssetUrl: Swift.String? = nil,
                 sourceName: Swift.String? = nil,
@@ -23243,7 +23247,7 @@ extension Components {
                 provenanceEvidence: Components.Schemas.ImageProvenanceEvidence? = nil,
                 createdAt: Foundation.Date,
                 updatedAt: Foundation.Date,
-                purpose: Components.Schemas.OutputSchema41.PurposePayload? = nil,
+                purpose: Components.Schemas.OutputSchema42.PurposePayload? = nil,
                 analysisSummary: Components.Schemas.ImageAnalysisSummary? = nil
             ) {
                 self.representations = representations
@@ -23316,23 +23320,19 @@ extension Components {
                 case analysisSummary
             }
         }
-        /// Whether this row is a line item or a slice of a total that was never itemized. 'allocation' means the money was cut by payment schedule (a deposit and a balance on one order) or by an estimated materials/labor split of a lump-sum contract — such a row can never carry a productId, and its costType may be an estimate rather than a vendor-stated fact.
-        ///
-        /// - Remark: Generated from `#/components/schemas/output_schema410`.
-        public typealias OutputSchema410 = Components.Schemas.ExpenseLineBasis
-        /// - Remark: Generated from `#/components/schemas/output_schema498`.
-        public typealias OutputSchema498 = [Components.Schemas.WishCandidateOut]
-        /// - Remark: Generated from `#/components/schemas/output_schema504`.
-        public typealias OutputSchema504 = [Components.Schemas.EntityAttachmentRead]
-        /// - Remark: Generated from `#/components/schemas/output_schema69`.
-        public typealias OutputSchema69 = [Components.Schemas.ExternalIdOut]
-        /// - Remark: Generated from `#/components/schemas/output_schema86`.
-        public struct OutputSchema86: Codable, Hashable, Sendable {
-            /// - Remark: Generated from `#/components/schemas/output_schema86/covered`.
+        /// - Remark: Generated from `#/components/schemas/output_schema499`.
+        public typealias OutputSchema499 = [Components.Schemas.WishCandidateOut]
+        /// - Remark: Generated from `#/components/schemas/output_schema505`.
+        public typealias OutputSchema505 = [Components.Schemas.EntityAttachmentRead]
+        /// - Remark: Generated from `#/components/schemas/output_schema70`.
+        public typealias OutputSchema70 = [Components.Schemas.ExternalIdOut]
+        /// - Remark: Generated from `#/components/schemas/output_schema87`.
+        public struct OutputSchema87: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/output_schema87/covered`.
             public var covered: Swift.Int
-            /// - Remark: Generated from `#/components/schemas/output_schema86/total`.
+            /// - Remark: Generated from `#/components/schemas/output_schema87/total`.
             public var total: Swift.Int
-            /// Creates a new `OutputSchema86`.
+            /// Creates a new `OutputSchema87`.
             ///
             /// - Parameters:
             ///   - covered:
@@ -24561,7 +24561,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/PlantDetail/displayImages`.
             public var displayImages: Components.Schemas.DisplayImagesField
             /// - Remark: Generated from `#/components/schemas/PlantDetail/attachments`.
-            public var attachments: Components.Schemas.OutputSchema504
+            public var attachments: Components.Schemas.OutputSchema505
             /// Creates a new `PlantDetail`.
             ///
             /// - Parameters:
@@ -24609,7 +24609,7 @@ extension Components {
                 updatedAt: Foundation.Date,
                 dataQuality: Components.Schemas.DataQuality,
                 displayImages: Components.Schemas.DisplayImagesField,
-                attachments: Components.Schemas.OutputSchema504
+                attachments: Components.Schemas.OutputSchema505
             ) {
                 self.id = id
                 self.name = name
@@ -24799,7 +24799,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/PlantingDetail/displayImages`.
             public var displayImages: Components.Schemas.DisplayImagesField
             /// - Remark: Generated from `#/components/schemas/PlantingDetail/attachments`.
-            public var attachments: Components.Schemas.OutputSchema504
+            public var attachments: Components.Schemas.OutputSchema505
             /// Creates a new `PlantingDetail`.
             ///
             /// - Parameters:
@@ -24859,7 +24859,7 @@ extension Components {
                 updatedAt: Foundation.Date,
                 dataQuality: Components.Schemas.DataQuality,
                 displayImages: Components.Schemas.DisplayImagesField,
-                attachments: Components.Schemas.OutputSchema504
+                attachments: Components.Schemas.OutputSchema505
             ) {
                 self.id = id
                 self.plantId = plantId
@@ -26246,7 +26246,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/ProductCategoryDetail/parentName`.
             public var parentName: Swift.String?
             /// - Remark: Generated from `#/components/schemas/ProductCategoryDetail/path`.
-            public var path: Components.Schemas.OutputSchema363
+            public var path: Components.Schemas.OutputSchema364
             /// - Remark: Generated from `#/components/schemas/ProductCategoryDetail/productCount`.
             public var productCount: Swift.Int
             /// - Remark: Generated from `#/components/schemas/ProductCategoryDetail/createdAt`.
@@ -26258,7 +26258,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/ProductCategoryDetail/displayImages`.
             public var displayImages: Components.Schemas.DisplayImagesField
             /// - Remark: Generated from `#/components/schemas/ProductCategoryDetail/attachments`.
-            public var attachments: Components.Schemas.OutputSchema504
+            public var attachments: Components.Schemas.OutputSchema505
             /// Creates a new `ProductCategoryDetail`.
             ///
             /// - Parameters:
@@ -26288,13 +26288,13 @@ extension Components {
                 sortOrder: Swift.Int,
                 feature: Components.Schemas.ProductCategoryFeature? = nil,
                 parentName: Swift.String? = nil,
-                path: Components.Schemas.OutputSchema363,
+                path: Components.Schemas.OutputSchema364,
                 productCount: Swift.Int,
                 createdAt: Foundation.Date,
                 updatedAt: Foundation.Date,
                 dataQuality: Components.Schemas.DataQuality,
                 displayImages: Components.Schemas.DisplayImagesField,
-                attachments: Components.Schemas.OutputSchema504
+                attachments: Components.Schemas.OutputSchema505
             ) {
                 self.fieldResolutions = fieldResolutions
                 self.id = id
@@ -26368,7 +26368,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/ProductCategoryListItem/parentName`.
             public var parentName: Swift.String?
             /// - Remark: Generated from `#/components/schemas/ProductCategoryListItem/path`.
-            public var path: Components.Schemas.OutputSchema363
+            public var path: Components.Schemas.OutputSchema364
             /// - Remark: Generated from `#/components/schemas/ProductCategoryListItem/productCount`.
             public var productCount: Swift.Int
             /// - Remark: Generated from `#/components/schemas/ProductCategoryListItem/createdAt`.
@@ -26407,7 +26407,7 @@ extension Components {
                 sortOrder: Swift.Int,
                 feature: Components.Schemas.ProductCategoryFeature? = nil,
                 parentName: Swift.String? = nil,
-                path: Components.Schemas.OutputSchema363,
+                path: Components.Schemas.OutputSchema364,
                 productCount: Swift.Int,
                 createdAt: Foundation.Date,
                 updatedAt: Foundation.Date,
@@ -26492,7 +26492,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/ProductCategoryOut/parentName`.
             public var parentName: Swift.String?
             /// - Remark: Generated from `#/components/schemas/ProductCategoryOut/path`.
-            public var path: Components.Schemas.OutputSchema363
+            public var path: Components.Schemas.OutputSchema364
             /// - Remark: Generated from `#/components/schemas/ProductCategoryOut/productCount`.
             public var productCount: Swift.Int
             /// - Remark: Generated from `#/components/schemas/ProductCategoryOut/createdAt`.
@@ -26528,7 +26528,7 @@ extension Components {
                 sortOrder: Swift.Int,
                 feature: Components.Schemas.ProductCategoryFeature? = nil,
                 parentName: Swift.String? = nil,
-                path: Components.Schemas.OutputSchema363,
+                path: Components.Schemas.OutputSchema364,
                 productCount: Swift.Int,
                 createdAt: Foundation.Date,
                 updatedAt: Foundation.Date,
@@ -26911,9 +26911,9 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/ProductDetail/growsPlantId`.
             public var growsPlantId: Components.Schemas.PlantShortcode?
             /// - Remark: Generated from `#/components/schemas/ProductDetail/images`.
-            public var images: Components.Schemas.OutputSchema40
+            public var images: Components.Schemas.OutputSchema41
             /// - Remark: Generated from `#/components/schemas/ProductDetail/externalIds`.
-            public var externalIds: Components.Schemas.OutputSchema69
+            public var externalIds: Components.Schemas.OutputSchema70
             /// Manual per-item valuation/replacement-price override; null resumes the Expense-derived fallback.
             ///
             /// - Remark: Generated from `#/components/schemas/ProductDetail/price`.
@@ -26937,7 +26937,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/ProductDetail/labelImageCount`.
             public var labelImageCount: Swift.Int
             /// - Remark: Generated from `#/components/schemas/ProductDetail/labelImages`.
-            public var labelImages: Components.Schemas.OutputSchema40
+            public var labelImages: Components.Schemas.OutputSchema41
             /// - Remark: Generated from `#/components/schemas/ProductDetail/classificationEvidence`.
             public var classificationEvidence: Swift.String
             /// - Remark: Generated from `#/components/schemas/ProductDetail/dataQuality`.
@@ -26945,13 +26945,13 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/ProductDetail/coverImageUrl`.
             public var coverImageUrl: Swift.String?
             /// - Remark: Generated from `#/components/schemas/ProductDetail/ingredient`.
-            public var ingredient: Components.Schemas.OutputSchema346?
+            public var ingredient: Components.Schemas.OutputSchema347?
             /// - Remark: Generated from `#/components/schemas/ProductDetail/unitMappings`.
             public var unitMappings: [Components.Schemas.UnitMappingOut]
             /// - Remark: Generated from `#/components/schemas/ProductDetail/inventoryEntry`.
-            public var inventoryEntry: [Components.Schemas.OutputSchema353]
+            public var inventoryEntry: [Components.Schemas.OutputSchema354]
             /// - Remark: Generated from `#/components/schemas/ProductDetail/servingAsLocations`.
-            public var servingAsLocations: [Components.Schemas.OutputSchema355]
+            public var servingAsLocations: [Components.Schemas.OutputSchema356]
             /// - Remark: Generated from `#/components/schemas/ProductDetail/componentCount`.
             public var componentCount: Swift.Int
             /// - Remark: Generated from `#/components/schemas/ProductDetail/food`.
@@ -26969,7 +26969,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/ProductDetail/displayImages`.
             public var displayImages: Components.Schemas.DisplayImagesField
             /// - Remark: Generated from `#/components/schemas/ProductDetail/attachments`.
-            public var attachments: Components.Schemas.OutputSchema504
+            public var attachments: Components.Schemas.OutputSchema505
             /// Creates a new `ProductDetail`.
             ///
             /// - Parameters:
@@ -27027,8 +27027,8 @@ extension Components {
                 expectedQuantity: Swift.Double? = nil,
                 categoryId: Components.Schemas.ProductCategoryShortcode? = nil,
                 growsPlantId: Components.Schemas.PlantShortcode? = nil,
-                images: Components.Schemas.OutputSchema40,
-                externalIds: Components.Schemas.OutputSchema69,
+                images: Components.Schemas.OutputSchema41,
+                externalIds: Components.Schemas.OutputSchema70,
                 price: Components.Schemas.Money? = nil,
                 pricing: Components.Schemas.ProductPricingOut,
                 usdaUnavailable: Swift.Bool? = nil,
@@ -27039,14 +27039,14 @@ extension Components {
                 category: Components.Schemas.ProductCategorySummary? = nil,
                 itemImageCount: Swift.Int,
                 labelImageCount: Swift.Int,
-                labelImages: Components.Schemas.OutputSchema40,
+                labelImages: Components.Schemas.OutputSchema41,
                 classificationEvidence: Swift.String,
                 dataQuality: Components.Schemas.DataQuality,
                 coverImageUrl: Swift.String? = nil,
-                ingredient: Components.Schemas.OutputSchema346? = nil,
+                ingredient: Components.Schemas.OutputSchema347? = nil,
                 unitMappings: [Components.Schemas.UnitMappingOut],
-                inventoryEntry: [Components.Schemas.OutputSchema353],
-                servingAsLocations: [Components.Schemas.OutputSchema355],
+                inventoryEntry: [Components.Schemas.OutputSchema354],
+                servingAsLocations: [Components.Schemas.OutputSchema356],
                 componentCount: Swift.Int,
                 food: Components.Schemas.FoodSummary? = nil,
                 recipeUsages: [Components.Schemas.RecipeUsageOut],
@@ -27055,7 +27055,7 @@ extension Components {
                 onHandUnits: Swift.Double? = nil,
                 quantityVariance: Swift.Double? = nil,
                 displayImages: Components.Schemas.DisplayImagesField,
-                attachments: Components.Schemas.OutputSchema504
+                attachments: Components.Schemas.OutputSchema505
             ) {
                 self.id = id
                 self.name = name
@@ -27506,9 +27506,9 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/ProductListItem/growsPlantId`.
             public var growsPlantId: Components.Schemas.PlantShortcode?
             /// - Remark: Generated from `#/components/schemas/ProductListItem/images`.
-            public var images: Components.Schemas.OutputSchema40
+            public var images: Components.Schemas.OutputSchema41
             /// - Remark: Generated from `#/components/schemas/ProductListItem/externalIds`.
-            public var externalIds: Components.Schemas.OutputSchema69
+            public var externalIds: Components.Schemas.OutputSchema70
             /// Manual per-item valuation/replacement-price override; null resumes the Expense-derived fallback.
             ///
             /// - Remark: Generated from `#/components/schemas/ProductListItem/price`.
@@ -27532,7 +27532,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/ProductListItem/labelImageCount`.
             public var labelImageCount: Swift.Int
             /// - Remark: Generated from `#/components/schemas/ProductListItem/labelImages`.
-            public var labelImages: Components.Schemas.OutputSchema40
+            public var labelImages: Components.Schemas.OutputSchema41
             /// - Remark: Generated from `#/components/schemas/ProductListItem/classificationEvidence`.
             public var classificationEvidence: Swift.String
             /// - Remark: Generated from `#/components/schemas/ProductListItem/dataQuality`.
@@ -27540,7 +27540,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/ProductListItem/displayImages`.
             public var displayImages: Components.Schemas.DisplayImagesField
             /// - Remark: Generated from `#/components/schemas/ProductListItem/unitMappings`.
-            public var unitMappings: Components.Schemas.OutputSchema339
+            public var unitMappings: Components.Schemas.OutputSchema340
             /// - Remark: Generated from `#/components/schemas/ProductListItem/unitPriceMappings`.
             public var unitPriceMappings: Components.Schemas.ProductUnitPriceMappings
             /// - Remark: Generated from `#/components/schemas/ProductListItem/unitPrice`.
@@ -27602,9 +27602,9 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/ProductListItem/dataGaps`.
             public var dataGaps: Components.Schemas.ProductDataGaps
             /// - Remark: Generated from `#/components/schemas/ProductListItem/ingredient`.
-            public var ingredient: Components.Schemas.OutputSchema346?
+            public var ingredient: Components.Schemas.OutputSchema347?
             /// - Remark: Generated from `#/components/schemas/ProductListItem/inventoryEntry`.
-            public var inventoryEntry: Components.Schemas.OutputSchema347
+            public var inventoryEntry: Components.Schemas.OutputSchema348
             /// - Remark: Generated from `#/components/schemas/ProductListItem/expenseCount`.
             public var expenseCount: Swift.Int
             /// - Remark: Generated from `#/components/schemas/ProductListItem/componentCount`.
@@ -27680,8 +27680,8 @@ extension Components {
                 expectedQuantity: Swift.Double? = nil,
                 categoryId: Components.Schemas.ProductCategoryShortcode? = nil,
                 growsPlantId: Components.Schemas.PlantShortcode? = nil,
-                images: Components.Schemas.OutputSchema40,
-                externalIds: Components.Schemas.OutputSchema69,
+                images: Components.Schemas.OutputSchema41,
+                externalIds: Components.Schemas.OutputSchema70,
                 price: Components.Schemas.Money? = nil,
                 pricing: Components.Schemas.ProductPricingOut,
                 usdaUnavailable: Swift.Bool? = nil,
@@ -27692,11 +27692,11 @@ extension Components {
                 category: Components.Schemas.ProductCategorySummary? = nil,
                 itemImageCount: Swift.Int,
                 labelImageCount: Swift.Int,
-                labelImages: Components.Schemas.OutputSchema40,
+                labelImages: Components.Schemas.OutputSchema41,
                 classificationEvidence: Swift.String,
                 dataQuality: Components.Schemas.DataQuality,
                 displayImages: Components.Schemas.DisplayImagesField,
-                unitMappings: Components.Schemas.OutputSchema339,
+                unitMappings: Components.Schemas.OutputSchema340,
                 unitPriceMappings: Components.Schemas.ProductUnitPriceMappings,
                 unitPrice: Components.Schemas.ProductListItem.UnitPricePayload? = nil,
                 food: Components.Schemas.FoodSummary? = nil,
@@ -27704,8 +27704,8 @@ extension Components {
                 upcPresence: Swift.Bool,
                 notesPresence: Swift.Bool,
                 dataGaps: Components.Schemas.ProductDataGaps,
-                ingredient: Components.Schemas.OutputSchema346? = nil,
-                inventoryEntry: Components.Schemas.OutputSchema347,
+                ingredient: Components.Schemas.OutputSchema347? = nil,
+                inventoryEntry: Components.Schemas.OutputSchema348,
                 expenseCount: Swift.Int,
                 componentCount: Swift.Int,
                 expenseTotal: Components.Schemas.Money,
@@ -28032,9 +28032,9 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/ProductTopLevelOut/growsPlantId`.
             public var growsPlantId: Components.Schemas.PlantShortcode?
             /// - Remark: Generated from `#/components/schemas/ProductTopLevelOut/images`.
-            public var images: Components.Schemas.OutputSchema40
+            public var images: Components.Schemas.OutputSchema41
             /// - Remark: Generated from `#/components/schemas/ProductTopLevelOut/externalIds`.
-            public var externalIds: Components.Schemas.OutputSchema69
+            public var externalIds: Components.Schemas.OutputSchema70
             /// Manual per-item valuation/replacement-price override; null resumes the Expense-derived fallback.
             ///
             /// - Remark: Generated from `#/components/schemas/ProductTopLevelOut/price`.
@@ -28058,7 +28058,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/ProductTopLevelOut/labelImageCount`.
             public var labelImageCount: Swift.Int
             /// - Remark: Generated from `#/components/schemas/ProductTopLevelOut/labelImages`.
-            public var labelImages: Components.Schemas.OutputSchema40
+            public var labelImages: Components.Schemas.OutputSchema41
             /// - Remark: Generated from `#/components/schemas/ProductTopLevelOut/classificationEvidence`.
             public var classificationEvidence: Swift.String
             /// - Remark: Generated from `#/components/schemas/ProductTopLevelOut/dataQuality`.
@@ -28109,8 +28109,8 @@ extension Components {
                 expectedQuantity: Swift.Double? = nil,
                 categoryId: Components.Schemas.ProductCategoryShortcode? = nil,
                 growsPlantId: Components.Schemas.PlantShortcode? = nil,
-                images: Components.Schemas.OutputSchema40,
-                externalIds: Components.Schemas.OutputSchema69,
+                images: Components.Schemas.OutputSchema41,
+                externalIds: Components.Schemas.OutputSchema70,
                 price: Components.Schemas.Money? = nil,
                 pricing: Components.Schemas.ProductPricingOut,
                 usdaUnavailable: Swift.Bool? = nil,
@@ -28121,7 +28121,7 @@ extension Components {
                 category: Components.Schemas.ProductCategorySummary? = nil,
                 itemImageCount: Swift.Int,
                 labelImageCount: Swift.Int,
-                labelImages: Components.Schemas.OutputSchema40,
+                labelImages: Components.Schemas.OutputSchema41,
                 classificationEvidence: Swift.String,
                 dataQuality: Components.Schemas.DataQuality,
                 coverImageUrl: Swift.String? = nil
@@ -28393,9 +28393,9 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/ProductWithMappingsAndFoodOut/growsPlantId`.
             public var growsPlantId: Components.Schemas.PlantShortcode?
             /// - Remark: Generated from `#/components/schemas/ProductWithMappingsAndFoodOut/images`.
-            public var images: Components.Schemas.OutputSchema40
+            public var images: Components.Schemas.OutputSchema41
             /// - Remark: Generated from `#/components/schemas/ProductWithMappingsAndFoodOut/externalIds`.
-            public var externalIds: Components.Schemas.OutputSchema69
+            public var externalIds: Components.Schemas.OutputSchema70
             /// Manual per-item valuation/replacement-price override; null resumes the Expense-derived fallback.
             ///
             /// - Remark: Generated from `#/components/schemas/ProductWithMappingsAndFoodOut/price`.
@@ -28419,7 +28419,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/ProductWithMappingsAndFoodOut/labelImageCount`.
             public var labelImageCount: Swift.Int
             /// - Remark: Generated from `#/components/schemas/ProductWithMappingsAndFoodOut/labelImages`.
-            public var labelImages: Components.Schemas.OutputSchema40
+            public var labelImages: Components.Schemas.OutputSchema41
             /// - Remark: Generated from `#/components/schemas/ProductWithMappingsAndFoodOut/classificationEvidence`.
             public var classificationEvidence: Swift.String
             /// - Remark: Generated from `#/components/schemas/ProductWithMappingsAndFoodOut/dataQuality`.
@@ -28476,8 +28476,8 @@ extension Components {
                 expectedQuantity: Swift.Double? = nil,
                 categoryId: Components.Schemas.ProductCategoryShortcode? = nil,
                 growsPlantId: Components.Schemas.PlantShortcode? = nil,
-                images: Components.Schemas.OutputSchema40,
-                externalIds: Components.Schemas.OutputSchema69,
+                images: Components.Schemas.OutputSchema41,
+                externalIds: Components.Schemas.OutputSchema70,
                 price: Components.Schemas.Money? = nil,
                 pricing: Components.Schemas.ProductPricingOut,
                 usdaUnavailable: Swift.Bool? = nil,
@@ -28488,7 +28488,7 @@ extension Components {
                 category: Components.Schemas.ProductCategorySummary? = nil,
                 itemImageCount: Swift.Int,
                 labelImageCount: Swift.Int,
-                labelImages: Components.Schemas.OutputSchema40,
+                labelImages: Components.Schemas.OutputSchema41,
                 classificationEvidence: Swift.String,
                 dataQuality: Components.Schemas.DataQuality,
                 coverImageUrl: Swift.String? = nil,
@@ -28588,9 +28588,9 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/ProductWithMappingsOut/growsPlantId`.
             public var growsPlantId: Components.Schemas.PlantShortcode?
             /// - Remark: Generated from `#/components/schemas/ProductWithMappingsOut/images`.
-            public var images: Components.Schemas.OutputSchema40
+            public var images: Components.Schemas.OutputSchema41
             /// - Remark: Generated from `#/components/schemas/ProductWithMappingsOut/externalIds`.
-            public var externalIds: Components.Schemas.OutputSchema69
+            public var externalIds: Components.Schemas.OutputSchema70
             /// Manual per-item valuation/replacement-price override; null resumes the Expense-derived fallback.
             ///
             /// - Remark: Generated from `#/components/schemas/ProductWithMappingsOut/price`.
@@ -28614,7 +28614,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/ProductWithMappingsOut/labelImageCount`.
             public var labelImageCount: Swift.Int
             /// - Remark: Generated from `#/components/schemas/ProductWithMappingsOut/labelImages`.
-            public var labelImages: Components.Schemas.OutputSchema40
+            public var labelImages: Components.Schemas.OutputSchema41
             /// - Remark: Generated from `#/components/schemas/ProductWithMappingsOut/classificationEvidence`.
             public var classificationEvidence: Swift.String
             /// - Remark: Generated from `#/components/schemas/ProductWithMappingsOut/dataQuality`.
@@ -28668,8 +28668,8 @@ extension Components {
                 expectedQuantity: Swift.Double? = nil,
                 categoryId: Components.Schemas.ProductCategoryShortcode? = nil,
                 growsPlantId: Components.Schemas.PlantShortcode? = nil,
-                images: Components.Schemas.OutputSchema40,
-                externalIds: Components.Schemas.OutputSchema69,
+                images: Components.Schemas.OutputSchema41,
+                externalIds: Components.Schemas.OutputSchema70,
                 price: Components.Schemas.Money? = nil,
                 pricing: Components.Schemas.ProductPricingOut,
                 usdaUnavailable: Swift.Bool? = nil,
@@ -28680,7 +28680,7 @@ extension Components {
                 category: Components.Schemas.ProductCategorySummary? = nil,
                 itemImageCount: Swift.Int,
                 labelImageCount: Swift.Int,
-                labelImages: Components.Schemas.OutputSchema40,
+                labelImages: Components.Schemas.OutputSchema41,
                 classificationEvidence: Swift.String,
                 dataQuality: Components.Schemas.DataQuality,
                 coverImageUrl: Swift.String? = nil,
@@ -28950,11 +28950,11 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/ProjectDetail/parentProjectName`.
             public var parentProjectName: Swift.String?
             /// - Remark: Generated from `#/components/schemas/ProjectDetail/childProjectIds`.
-            public var childProjectIds: Components.Schemas.OutputSchema399
+            public var childProjectIds: Components.Schemas.OutputSchema400
             /// - Remark: Generated from `#/components/schemas/ProjectDetail/blockedByIds`.
-            public var blockedByIds: Components.Schemas.OutputSchema399
+            public var blockedByIds: Components.Schemas.OutputSchema400
             /// - Remark: Generated from `#/components/schemas/ProjectDetail/blockingIds`.
-            public var blockingIds: Components.Schemas.OutputSchema399
+            public var blockingIds: Components.Schemas.OutputSchema400
             /// - Remark: Generated from `#/components/schemas/ProjectDetail/createdAt`.
             public var createdAt: Foundation.Date
             /// - Remark: Generated from `#/components/schemas/ProjectDetail/updatedAt`.
@@ -28968,7 +28968,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/ProjectDetail/displayImages`.
             public var displayImages: Components.Schemas.DisplayImagesField
             /// - Remark: Generated from `#/components/schemas/ProjectDetail/attachments`.
-            public var attachments: Components.Schemas.OutputSchema504
+            public var attachments: Components.Schemas.OutputSchema505
             /// Creates a new `ProjectDetail`.
             ///
             /// - Parameters:
@@ -29015,16 +29015,16 @@ extension Components {
                 googleDriveFolderUrl: Swift.String? = nil,
                 notionPageUrl: Swift.String? = nil,
                 parentProjectName: Swift.String? = nil,
-                childProjectIds: Components.Schemas.OutputSchema399,
-                blockedByIds: Components.Schemas.OutputSchema399,
-                blockingIds: Components.Schemas.OutputSchema399,
+                childProjectIds: Components.Schemas.OutputSchema400,
+                blockedByIds: Components.Schemas.OutputSchema400,
+                blockingIds: Components.Schemas.OutputSchema400,
                 createdAt: Foundation.Date,
                 updatedAt: Foundation.Date,
                 rollup: Components.Schemas.ProjectOutputFieldsProjectRollup,
                 dates: Components.Schemas.ProjectOutputFieldsProjectDateWindow,
                 dataQuality: Components.Schemas.DataQuality,
                 displayImages: Components.Schemas.DisplayImagesField,
-                attachments: Components.Schemas.OutputSchema504
+                attachments: Components.Schemas.OutputSchema505
             ) {
                 self.fieldResolutions = fieldResolutions
                 self.id = id
@@ -29140,11 +29140,11 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/ProjectListItem/parentProjectName`.
             public var parentProjectName: Swift.String?
             /// - Remark: Generated from `#/components/schemas/ProjectListItem/childProjectIds`.
-            public var childProjectIds: Components.Schemas.OutputSchema399
+            public var childProjectIds: Components.Schemas.OutputSchema400
             /// - Remark: Generated from `#/components/schemas/ProjectListItem/blockedByIds`.
-            public var blockedByIds: Components.Schemas.OutputSchema399
+            public var blockedByIds: Components.Schemas.OutputSchema400
             /// - Remark: Generated from `#/components/schemas/ProjectListItem/blockingIds`.
-            public var blockingIds: Components.Schemas.OutputSchema399
+            public var blockingIds: Components.Schemas.OutputSchema400
             /// - Remark: Generated from `#/components/schemas/ProjectListItem/createdAt`.
             public var createdAt: Foundation.Date
             /// - Remark: Generated from `#/components/schemas/ProjectListItem/updatedAt`.
@@ -29202,9 +29202,9 @@ extension Components {
                 googleDriveFolderUrl: Swift.String? = nil,
                 notionPageUrl: Swift.String? = nil,
                 parentProjectName: Swift.String? = nil,
-                childProjectIds: Components.Schemas.OutputSchema399,
-                blockedByIds: Components.Schemas.OutputSchema399,
-                blockingIds: Components.Schemas.OutputSchema399,
+                childProjectIds: Components.Schemas.OutputSchema400,
+                blockedByIds: Components.Schemas.OutputSchema400,
+                blockingIds: Components.Schemas.OutputSchema400,
                 createdAt: Foundation.Date,
                 updatedAt: Foundation.Date,
                 rollup: Components.Schemas.ProjectOutputFieldsProjectRollup,
@@ -29338,11 +29338,11 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/ProjectOut/parentProjectName`.
             public var parentProjectName: Swift.String?
             /// - Remark: Generated from `#/components/schemas/ProjectOut/childProjectIds`.
-            public var childProjectIds: Components.Schemas.OutputSchema399
+            public var childProjectIds: Components.Schemas.OutputSchema400
             /// - Remark: Generated from `#/components/schemas/ProjectOut/blockedByIds`.
-            public var blockedByIds: Components.Schemas.OutputSchema399
+            public var blockedByIds: Components.Schemas.OutputSchema400
             /// - Remark: Generated from `#/components/schemas/ProjectOut/blockingIds`.
-            public var blockingIds: Components.Schemas.OutputSchema399
+            public var blockingIds: Components.Schemas.OutputSchema400
             /// - Remark: Generated from `#/components/schemas/ProjectOut/createdAt`.
             public var createdAt: Foundation.Date
             /// - Remark: Generated from `#/components/schemas/ProjectOut/updatedAt`.
@@ -29397,9 +29397,9 @@ extension Components {
                 googleDriveFolderUrl: Swift.String? = nil,
                 notionPageUrl: Swift.String? = nil,
                 parentProjectName: Swift.String? = nil,
-                childProjectIds: Components.Schemas.OutputSchema399,
-                blockedByIds: Components.Schemas.OutputSchema399,
-                blockingIds: Components.Schemas.OutputSchema399,
+                childProjectIds: Components.Schemas.OutputSchema400,
+                blockedByIds: Components.Schemas.OutputSchema400,
+                blockingIds: Components.Schemas.OutputSchema400,
                 createdAt: Foundation.Date,
                 updatedAt: Foundation.Date,
                 rollup: Components.Schemas.ProjectOutputFieldsProjectRollup,
@@ -29886,7 +29886,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/PurchaseDetail/displayImages`.
             public var displayImages: Components.Schemas.DisplayImagesField
             /// - Remark: Generated from `#/components/schemas/PurchaseDetail/attachments`.
-            public var attachments: Components.Schemas.OutputSchema504
+            public var attachments: Components.Schemas.OutputSchema505
             /// Creates a new `PurchaseDetail`.
             ///
             /// - Parameters:
@@ -29942,7 +29942,7 @@ extension Components {
                 updatedAt: Foundation.Date,
                 dataQuality: Components.Schemas.DataQuality,
                 displayImages: Components.Schemas.DisplayImagesField,
-                attachments: Components.Schemas.OutputSchema504
+                attachments: Components.Schemas.OutputSchema505
             ) {
                 self.id = id
                 self.vendorId = vendorId
@@ -30664,7 +30664,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/RecipeDetail/totals`.
             public var totals: Components.Schemas.MealTotals?
             /// - Remark: Generated from `#/components/schemas/RecipeDetail/images`.
-            public var images: Components.Schemas.OutputSchema166
+            public var images: Components.Schemas.OutputSchema167
             /// - Remark: Generated from `#/components/schemas/RecipeDetail/forkedFromRecipeId`.
             public var forkedFromRecipeId: Components.Schemas.RecipeShortcode?
             /// - Remark: Generated from `#/components/schemas/RecipeDetail/forkedFromRecipeName`.
@@ -30674,7 +30674,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/RecipeDetail/displayImages`.
             public var displayImages: Components.Schemas.DisplayImagesField
             /// - Remark: Generated from `#/components/schemas/RecipeDetail/attachments`.
-            public var attachments: Components.Schemas.OutputSchema504
+            public var attachments: Components.Schemas.OutputSchema505
             /// Creates a new `RecipeDetail`.
             ///
             /// - Parameters:
@@ -30709,12 +30709,12 @@ extension Components {
                 notes: Components.Schemas.RecipeNotes? = nil,
                 sections: Components.Schemas.RecipeSectionsOut,
                 totals: Components.Schemas.MealTotals? = nil,
-                images: Components.Schemas.OutputSchema166,
+                images: Components.Schemas.OutputSchema167,
                 forkedFromRecipeId: Components.Schemas.RecipeShortcode? = nil,
                 forkedFromRecipeName: Swift.String? = nil,
                 dataQuality: Components.Schemas.DataQuality,
                 displayImages: Components.Schemas.DisplayImagesField,
-                attachments: Components.Schemas.OutputSchema504
+                attachments: Components.Schemas.OutputSchema505
             ) {
                 self.id = id
                 self.name = name
@@ -30818,7 +30818,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/RecipeDetailMcpOut/totals`.
             public var totals: Components.Schemas.MealTotals?
             /// - Remark: Generated from `#/components/schemas/RecipeDetailMcpOut/images`.
-            public var images: Components.Schemas.OutputSchema166
+            public var images: Components.Schemas.OutputSchema167
             /// - Remark: Generated from `#/components/schemas/RecipeDetailMcpOut/forkedFromRecipeId`.
             public var forkedFromRecipeId: Components.Schemas.RecipeShortcode?
             /// - Remark: Generated from `#/components/schemas/RecipeDetailMcpOut/forkedFromRecipeName`.
@@ -30857,7 +30857,7 @@ extension Components {
                 notes: Components.Schemas.RecipeNotes? = nil,
                 sections: Components.Schemas.RecipeSectionsOut,
                 totals: Components.Schemas.MealTotals? = nil,
-                images: Components.Schemas.OutputSchema166,
+                images: Components.Schemas.OutputSchema167,
                 forkedFromRecipeId: Components.Schemas.RecipeShortcode? = nil,
                 forkedFromRecipeName: Swift.String? = nil,
                 dataQuality: Components.Schemas.DataQuality
@@ -31368,7 +31368,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/RecipeSectionIngredientOutIngredient/id`.
             public var id: Swift.String
             /// - Remark: Generated from `#/components/schemas/RecipeSectionIngredientOutIngredient/amounts`.
-            public var amounts: Components.Schemas.OutputSchema267
+            public var amounts: Components.Schemas.OutputSchema268
             /// - Remark: Generated from `#/components/schemas/RecipeSectionIngredientOutIngredient/rawLine`.
             public var rawLine: Swift.String?
             /// - Remark: Generated from `#/components/schemas/RecipeSectionIngredientOutIngredient/modifier`.
@@ -31439,7 +31439,7 @@ extension Components {
             ///   - ingredient:
             public init(
                 id: Swift.String,
-                amounts: Components.Schemas.OutputSchema267,
+                amounts: Components.Schemas.OutputSchema268,
                 rawLine: Swift.String? = nil,
                 modifier: Swift.String? = nil,
                 createdAt: Foundation.Date,
@@ -31474,7 +31474,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/RecipeSectionIngredientOutRecipe/id`.
             public var id: Swift.String
             /// - Remark: Generated from `#/components/schemas/RecipeSectionIngredientOutRecipe/amounts`.
-            public var amounts: Components.Schemas.OutputSchema267
+            public var amounts: Components.Schemas.OutputSchema268
             /// - Remark: Generated from `#/components/schemas/RecipeSectionIngredientOutRecipe/rawLine`.
             public var rawLine: Swift.String?
             /// - Remark: Generated from `#/components/schemas/RecipeSectionIngredientOutRecipe/modifier`.
@@ -31504,7 +31504,7 @@ extension Components {
             ///   - recipe:
             public init(
                 id: Swift.String,
-                amounts: Components.Schemas.OutputSchema267,
+                amounts: Components.Schemas.OutputSchema268,
                 rawLine: Swift.String? = nil,
                 modifier: Swift.String? = nil,
                 createdAt: Foundation.Date,
@@ -33453,15 +33453,15 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/TaskDetail/parentTaskName`.
             public var parentTaskName: Swift.String?
             /// - Remark: Generated from `#/components/schemas/TaskDetail/blockedByIds`.
-            public var blockedByIds: Components.Schemas.OutputSchema378
+            public var blockedByIds: Components.Schemas.OutputSchema379
             /// - Remark: Generated from `#/components/schemas/TaskDetail/blockingIds`.
-            public var blockingIds: Components.Schemas.OutputSchema378
+            public var blockingIds: Components.Schemas.OutputSchema379
             /// - Remark: Generated from `#/components/schemas/TaskDetail/subtaskCount`.
             public var subtaskCount: Swift.Int
             /// - Remark: Generated from `#/components/schemas/TaskDetail/doneSubtaskCount`.
             public var doneSubtaskCount: Swift.Int
             /// - Remark: Generated from `#/components/schemas/TaskDetail/images`.
-            public var images: Components.Schemas.OutputSchema166
+            public var images: Components.Schemas.OutputSchema167
             /// - Remark: Generated from `#/components/schemas/TaskDetail/createdAt`.
             public var createdAt: Foundation.Date
             /// - Remark: Generated from `#/components/schemas/TaskDetail/updatedAt`.
@@ -33471,7 +33471,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/TaskDetail/displayImages`.
             public var displayImages: Components.Schemas.DisplayImagesField
             /// - Remark: Generated from `#/components/schemas/TaskDetail/attachments`.
-            public var attachments: Components.Schemas.OutputSchema504
+            public var attachments: Components.Schemas.OutputSchema505
             /// Creates a new `TaskDetail`.
             ///
             /// - Parameters:
@@ -33514,16 +33514,16 @@ extension Components {
                 projectName: Swift.String? = nil,
                 subjectProductName: Swift.String? = nil,
                 parentTaskName: Swift.String? = nil,
-                blockedByIds: Components.Schemas.OutputSchema378,
-                blockingIds: Components.Schemas.OutputSchema378,
+                blockedByIds: Components.Schemas.OutputSchema379,
+                blockingIds: Components.Schemas.OutputSchema379,
                 subtaskCount: Swift.Int,
                 doneSubtaskCount: Swift.Int,
-                images: Components.Schemas.OutputSchema166,
+                images: Components.Schemas.OutputSchema167,
                 createdAt: Foundation.Date,
                 updatedAt: Foundation.Date,
                 dataQuality: Components.Schemas.DataQuality,
                 displayImages: Components.Schemas.DisplayImagesField,
-                attachments: Components.Schemas.OutputSchema504
+                attachments: Components.Schemas.OutputSchema505
             ) {
                 self.fieldResolutions = fieldResolutions
                 self.id = id
@@ -33610,15 +33610,15 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/TaskListItem/parentTaskName`.
             public var parentTaskName: Swift.String?
             /// - Remark: Generated from `#/components/schemas/TaskListItem/blockedByIds`.
-            public var blockedByIds: Components.Schemas.OutputSchema378
+            public var blockedByIds: Components.Schemas.OutputSchema379
             /// - Remark: Generated from `#/components/schemas/TaskListItem/blockingIds`.
-            public var blockingIds: Components.Schemas.OutputSchema378
+            public var blockingIds: Components.Schemas.OutputSchema379
             /// - Remark: Generated from `#/components/schemas/TaskListItem/subtaskCount`.
             public var subtaskCount: Swift.Int
             /// - Remark: Generated from `#/components/schemas/TaskListItem/doneSubtaskCount`.
             public var doneSubtaskCount: Swift.Int
             /// - Remark: Generated from `#/components/schemas/TaskListItem/images`.
-            public var images: Components.Schemas.OutputSchema166
+            public var images: Components.Schemas.OutputSchema167
             /// - Remark: Generated from `#/components/schemas/TaskListItem/createdAt`.
             public var createdAt: Foundation.Date
             /// - Remark: Generated from `#/components/schemas/TaskListItem/updatedAt`.
@@ -33668,11 +33668,11 @@ extension Components {
                 projectName: Swift.String? = nil,
                 subjectProductName: Swift.String? = nil,
                 parentTaskName: Swift.String? = nil,
-                blockedByIds: Components.Schemas.OutputSchema378,
-                blockingIds: Components.Schemas.OutputSchema378,
+                blockedByIds: Components.Schemas.OutputSchema379,
+                blockingIds: Components.Schemas.OutputSchema379,
                 subtaskCount: Swift.Int,
                 doneSubtaskCount: Swift.Int,
-                images: Components.Schemas.OutputSchema166,
+                images: Components.Schemas.OutputSchema167,
                 createdAt: Foundation.Date,
                 updatedAt: Foundation.Date,
                 dataQuality: Components.Schemas.DataQuality,
@@ -33784,15 +33784,15 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/TaskOut/parentTaskName`.
             public var parentTaskName: Swift.String?
             /// - Remark: Generated from `#/components/schemas/TaskOut/blockedByIds`.
-            public var blockedByIds: Components.Schemas.OutputSchema378
+            public var blockedByIds: Components.Schemas.OutputSchema379
             /// - Remark: Generated from `#/components/schemas/TaskOut/blockingIds`.
-            public var blockingIds: Components.Schemas.OutputSchema378
+            public var blockingIds: Components.Schemas.OutputSchema379
             /// - Remark: Generated from `#/components/schemas/TaskOut/subtaskCount`.
             public var subtaskCount: Swift.Int
             /// - Remark: Generated from `#/components/schemas/TaskOut/doneSubtaskCount`.
             public var doneSubtaskCount: Swift.Int
             /// - Remark: Generated from `#/components/schemas/TaskOut/images`.
-            public var images: Components.Schemas.OutputSchema166
+            public var images: Components.Schemas.OutputSchema167
             /// - Remark: Generated from `#/components/schemas/TaskOut/createdAt`.
             public var createdAt: Foundation.Date
             /// - Remark: Generated from `#/components/schemas/TaskOut/updatedAt`.
@@ -33839,11 +33839,11 @@ extension Components {
                 projectName: Swift.String? = nil,
                 subjectProductName: Swift.String? = nil,
                 parentTaskName: Swift.String? = nil,
-                blockedByIds: Components.Schemas.OutputSchema378,
-                blockingIds: Components.Schemas.OutputSchema378,
+                blockedByIds: Components.Schemas.OutputSchema379,
+                blockingIds: Components.Schemas.OutputSchema379,
                 subtaskCount: Swift.Int,
                 doneSubtaskCount: Swift.Int,
-                images: Components.Schemas.OutputSchema166,
+                images: Components.Schemas.OutputSchema167,
                 createdAt: Foundation.Date,
                 updatedAt: Foundation.Date,
                 dataQuality: Components.Schemas.DataQuality
@@ -34330,7 +34330,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/UnitMappingOut/source`.
             public var source: Swift.String?
             /// - Remark: Generated from `#/components/schemas/UnitMappingOut/sourceMetadata`.
-            public var sourceMetadata: Components.Schemas.OutputSchema28
+            public var sourceMetadata: Components.Schemas.OutputSchema29
             /// - Remark: Generated from `#/components/schemas/UnitMappingOut/createdAt`.
             public var createdAt: Foundation.Date
             /// - Remark: Generated from `#/components/schemas/UnitMappingOut/updatedAt`.
@@ -34350,7 +34350,7 @@ extension Components {
                 a: Components.Schemas.UnitMappingOut.APayload,
                 b: Components.Schemas.UnitMappingOut.BPayload,
                 source: Swift.String? = nil,
-                sourceMetadata: Components.Schemas.OutputSchema28,
+                sourceMetadata: Components.Schemas.OutputSchema29,
                 createdAt: Foundation.Date,
                 updatedAt: Foundation.Date
             ) {
@@ -34449,7 +34449,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/UnitMappingWithMetadata/source`.
             public var source: Swift.String?
             /// - Remark: Generated from `#/components/schemas/UnitMappingWithMetadata/sourceMetadata`.
-            public var sourceMetadata: Components.Schemas.OutputSchema28
+            public var sourceMetadata: Components.Schemas.OutputSchema29
             /// Creates a new `UnitMappingWithMetadata`.
             ///
             /// - Parameters:
@@ -34461,7 +34461,7 @@ extension Components {
                 a: Components.Schemas.UnitMappingWithMetadata.APayload,
                 b: Components.Schemas.UnitMappingWithMetadata.BPayload,
                 source: Swift.String? = nil,
-                sourceMetadata: Components.Schemas.OutputSchema28
+                sourceMetadata: Components.Schemas.OutputSchema29
             ) {
                 self.a = a
                 self.b = b
@@ -34932,7 +34932,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/VendorAccountDetail/displayImages`.
             public var displayImages: Components.Schemas.DisplayImagesField
             /// - Remark: Generated from `#/components/schemas/VendorAccountDetail/attachments`.
-            public var attachments: Components.Schemas.OutputSchema504
+            public var attachments: Components.Schemas.OutputSchema505
             /// Creates a new `VendorAccountDetail`.
             ///
             /// - Parameters:
@@ -34968,7 +34968,7 @@ extension Components {
                 createdAt: Foundation.Date,
                 updatedAt: Foundation.Date,
                 displayImages: Components.Schemas.DisplayImagesField,
-                attachments: Components.Schemas.OutputSchema504
+                attachments: Components.Schemas.OutputSchema505
             ) {
                 self.id = id
                 self.label = label
@@ -35461,7 +35461,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/VendorDetail/displayImages`.
             public var displayImages: Components.Schemas.DisplayImagesField
             /// - Remark: Generated from `#/components/schemas/VendorDetail/attachments`.
-            public var attachments: Components.Schemas.OutputSchema504
+            public var attachments: Components.Schemas.OutputSchema505
             /// Creates a new `VendorDetail`.
             ///
             /// - Parameters:
@@ -35503,7 +35503,7 @@ extension Components {
                 updatedAt: Foundation.Date,
                 dataQuality: Components.Schemas.DataQuality,
                 displayImages: Components.Schemas.DisplayImagesField,
-                attachments: Components.Schemas.OutputSchema504
+                attachments: Components.Schemas.OutputSchema505
             ) {
                 self.id = id
                 self.name = name
@@ -35980,7 +35980,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/WishDetail/acquiredAt`.
             public var acquiredAt: Foundation.Date?
             /// - Remark: Generated from `#/components/schemas/WishDetail/candidates`.
-            public var candidates: Components.Schemas.OutputSchema498
+            public var candidates: Components.Schemas.OutputSchema499
             /// - Remark: Generated from `#/components/schemas/WishDetail/candidateCount`.
             public var candidateCount: Swift.Int
             /// - Remark: Generated from `#/components/schemas/WishDetail/priceRange`.
@@ -35994,7 +35994,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/WishDetail/displayImages`.
             public var displayImages: Components.Schemas.DisplayImagesField
             /// - Remark: Generated from `#/components/schemas/WishDetail/attachments`.
-            public var attachments: Components.Schemas.OutputSchema504
+            public var attachments: Components.Schemas.OutputSchema505
             /// Creates a new `WishDetail`.
             ///
             /// - Parameters:
@@ -36015,14 +36015,14 @@ extension Components {
                 name: Swift.String,
                 notes: Swift.String? = nil,
                 acquiredAt: Foundation.Date? = nil,
-                candidates: Components.Schemas.OutputSchema498,
+                candidates: Components.Schemas.OutputSchema499,
                 candidateCount: Swift.Int,
                 priceRange: Components.Schemas.WishPriceRangeOut? = nil,
                 createdAt: Foundation.Date,
                 updatedAt: Foundation.Date,
                 dataQuality: Components.Schemas.DataQuality,
                 displayImages: Components.Schemas.DisplayImagesField,
-                attachments: Components.Schemas.OutputSchema504
+                attachments: Components.Schemas.OutputSchema505
             ) {
                 self.id = id
                 self.name = name
@@ -36063,7 +36063,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/WishListItem/acquiredAt`.
             public var acquiredAt: Foundation.Date?
             /// - Remark: Generated from `#/components/schemas/WishListItem/candidates`.
-            public var candidates: Components.Schemas.OutputSchema498
+            public var candidates: Components.Schemas.OutputSchema499
             /// - Remark: Generated from `#/components/schemas/WishListItem/candidateCount`.
             public var candidateCount: Swift.Int
             /// - Remark: Generated from `#/components/schemas/WishListItem/priceRange`.
@@ -36095,7 +36095,7 @@ extension Components {
                 name: Swift.String,
                 notes: Swift.String? = nil,
                 acquiredAt: Foundation.Date? = nil,
-                candidates: Components.Schemas.OutputSchema498,
+                candidates: Components.Schemas.OutputSchema499,
                 candidateCount: Swift.Int,
                 priceRange: Components.Schemas.WishPriceRangeOut? = nil,
                 createdAt: Foundation.Date,
@@ -36163,7 +36163,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/WishOut/acquiredAt`.
             public var acquiredAt: Foundation.Date?
             /// - Remark: Generated from `#/components/schemas/WishOut/candidates`.
-            public var candidates: Components.Schemas.OutputSchema498
+            public var candidates: Components.Schemas.OutputSchema499
             /// - Remark: Generated from `#/components/schemas/WishOut/candidateCount`.
             public var candidateCount: Swift.Int
             /// - Remark: Generated from `#/components/schemas/WishOut/priceRange`.
@@ -36192,7 +36192,7 @@ extension Components {
                 name: Swift.String,
                 notes: Swift.String? = nil,
                 acquiredAt: Foundation.Date? = nil,
-                candidates: Components.Schemas.OutputSchema498,
+                candidates: Components.Schemas.OutputSchema499,
                 candidateCount: Swift.Int,
                 priceRange: Components.Schemas.WishPriceRangeOut? = nil,
                 createdAt: Foundation.Date,
