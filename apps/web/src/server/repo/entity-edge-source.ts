@@ -435,7 +435,10 @@ export async function findOrphanEntities(
   const result = await unwrapDb(db).execute(sql`
     WITH edge AS (${entityEdgeSourceSql()}),
     connected AS (
-      SELECT "sourceId" AS id FROM edge UNION SELECT "targetId" FROM edge
+      -- A same-kind edge (a location's parent) counts only for its target: a
+      -- location that merely sits in the tree is still empty.
+      SELECT "sourceId" AS id FROM edge WHERE "sourceKind" <> "targetKind"
+      UNION SELECT "targetId" FROM edge
     ),
     orphan AS (
       SELECT e."id", e."kind", e."shortcode", e."createdAt"

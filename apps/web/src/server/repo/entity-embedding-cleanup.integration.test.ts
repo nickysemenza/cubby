@@ -8,13 +8,13 @@ import { describe, expect, it } from "vitest";
 import { searchDocument } from "~/server/db/schema";
 import { getDb } from "~/server/repo/database-helpers";
 import { selectRecentlySoftDeletedSearchRefs } from "~/server/repo/entity-embedding-cleanup";
+import { seedEntityTombstonesFixtureRaw } from "~/server/repo/repo.fixtures";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const ENTITY_TYPE: SearchableEntity = "product";
 
-/** Minimal, fabricated `SearchDocument` row — no real entity backs `entityId`,
- * matching the existing `embeddingProbes.seedEmbedding` fixture style: the
- * table has no FK to the entity it describes. */
+/** Minimal `SearchDocument` row naming a tombstone identity, so no payload row
+ * is needed. */
 const insertSearchDocumentRow = (
   ctx: TestDbContext,
   entityId: string,
@@ -48,25 +48,21 @@ describe("selectRecentlySoftDeletedSearchRefs", () => {
     // history and whether the reconcile query should return it.
     const cases: Array<{
       name: string;
-      entityId: string;
       rows: Array<{ deletedAt: Date | null }>;
       expectReturned: boolean;
     }> = [
       {
         name: "soft-deleted within window",
-        entityId: randomUUID(),
         rows: [{ deletedAt: withinWindow }],
         expectReturned: true,
       },
       {
         name: "soft-deleted outside window",
-        entityId: randomUUID(),
         rows: [{ deletedAt: outsideWindow }],
         expectReturned: false,
       },
       {
         name: "live only",
-        entityId: randomUUID(),
         rows: [{ deletedAt: null }],
         expectReturned: false,
       },
@@ -78,19 +74,26 @@ describe("selectRecentlySoftDeletedSearchRefs", () => {
         // this entity's vector because of the stale soft-deleted row would
         // remove a live entity's search result.
         name: "soft-deleted row with a live twin",
-        entityId: randomUUID(),
         rows: [{ deletedAt: withinWindow }, { deletedAt: null }],
         expectReturned: false,
       },
       {
         name: "two soft-deleted rows for the same entity",
-        entityId: randomUUID(),
         rows: [{ deletedAt: withinWindow }, { deletedAt: outsideWindow }],
         expectReturned: true,
       },
     ];
 
-    for (const testCase of cases) {
+    const tombstones = await seedEntityTombstonesFixtureRaw(
+      ctx.db,
+      ENTITY_TYPE,
+      cases.length,
+    );
+    const seeded = cases.map((testCase, index) => ({
+      ...testCase,
+      entityId: tombstones[index]!,
+    }));
+    for (const testCase of seeded) {
       for (const row of testCase.rows) {
         await insertSearchDocumentRow(ctx, testCase.entityId, row.deletedAt);
       }
@@ -100,7 +103,7 @@ describe("selectRecentlySoftDeletedSearchRefs", () => {
       since,
     });
 
-    const expectedIds = cases
+    const expectedIds = seeded
       .filter((testCase) => testCase.expectReturned)
       .map((testCase) => testCase.entityId);
     const returnedIds = result.refs.map((ref) => ref.entityId);

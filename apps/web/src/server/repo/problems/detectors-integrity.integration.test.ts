@@ -1063,6 +1063,28 @@ const SOURCE_FACTORIES = {
     });
   },
 
+  "PhotoGroupProposal.inventoryOwnerPartyId": async (db, targetId) => {
+    const run = await mkImportRun(db);
+    return insertAndReturn(db, photoGroupProposal, {
+      runId: run.id,
+      groupKey: uniq("group"),
+      productKind: "create",
+      productCreate: { name: uniq("Proposal") },
+      inventoryOwnerPartyId: parseEntityId("ledgerParty", targetId),
+    });
+  },
+
+  "PhotoGroupProposal.productCreateCategoryId": async (db, targetId) => {
+    const run = await mkImportRun(db);
+    return insertAndReturn(db, photoGroupProposal, {
+      runId: run.id,
+      groupKey: uniq("group"),
+      productKind: "create",
+      productCreate: { name: uniq("Proposal") },
+      productCreateCategoryId: parseEntityId("productCategory", targetId),
+    });
+  },
+
   "InventoryEntry.locationId": async (db, targetId) => {
     const p = await mkProduct(db);
     return insertWithShortcode(db, "inventory", {
