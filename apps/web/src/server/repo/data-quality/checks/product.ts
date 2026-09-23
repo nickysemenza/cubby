@@ -114,7 +114,6 @@ const derivedPrice = (t: Product) => derivedPriceFilterSql(t.id);
 export const productChecks = defineEntityChecks({
   entity: "product",
   table: product,
-  exceptions: (t) => t.dataExceptions,
   checks: {
     product_manufacturer: {
       expected: inScope,

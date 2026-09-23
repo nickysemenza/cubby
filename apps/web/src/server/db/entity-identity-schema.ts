@@ -69,6 +69,9 @@ export const entityIdentity = pgTable(
     uniqueIndex("Entity_shortcode_unique").on(table.shortcode),
     // The composite target of every payload's identity FK.
     unique("Entity_id_shortcode_key").on(table.id, table.shortcode),
+    // The composite target of kind-checked references (`DataException`,
+    // `AuditLog`, search projections): the row must name the right kind.
+    unique("Entity_id_kind_key").on(table.id, table.kind),
     index("Entity_mergedIntoId_idx").on(table.mergedIntoId),
     check("Entity_kind_check", entityKindCheck(table.kind)),
     check(

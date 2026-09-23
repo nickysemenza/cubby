@@ -124,6 +124,34 @@ export async function previousShortcodesFor(
   return result;
 }
 
+/**
+ * Each identity's own code (kept even after a hard delete removed its
+ * payload) and, when it was merged away, its survivor's code.
+ */
+export async function identityShortcodes(
+  db: Database | DrizzleTransaction,
+  ids: readonly string[],
+): Promise<
+  Map<string, { shortcode: string | null; canonicalShortcode: string | null }>
+> {
+  if (ids.length === 0) return new Map();
+  const rows = await unwrapDb(db)
+    .select({
+      id: entityIdentity.id,
+      shortcode: entityIdentity.shortcode,
+      canonicalShortcode: canonical.shortcode,
+    })
+    .from(entityIdentity)
+    .leftJoin(canonical, eq(canonical.id, entityIdentity.mergedIntoId))
+    .where(inArray(entityIdentity.id, [...ids]));
+  return new Map(
+    rows.map((row) => [
+      row.id,
+      { shortcode: row.shortcode, canonicalShortcode: row.canonicalShortcode },
+    ]),
+  );
+}
+
 const formatDate = (date: Date) => date.toISOString().slice(0, 10);
 
 /**

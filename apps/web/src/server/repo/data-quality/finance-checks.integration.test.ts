@@ -34,12 +34,14 @@ import {
   createVendor,
   findOrCreateVendor,
   getVendorByID,
+  updateVendor,
 } from "~/server/repo/vendor";
 import { createWish } from "~/server/repo/wish";
 
 import { getDb } from "../database-helpers";
 import { resolveLiveShortcode } from "../shortcode-resolver";
 import { insertWithShortcode } from "../shortcode-utils";
+import { setDataException } from "./exceptions";
 import { loadDataQualities } from "./hydrate";
 
 /**
@@ -190,6 +192,36 @@ describe("data quality: finance and project entities", () => {
       status: "complete",
       gaps: [],
     });
+
+    // Exceptions are no longer Product/Purchase-only (ADR 0006): a vendor
+    // records why its logo cannot be found, and a new website reopens it.
+    const excepted = await setDataException(
+      ctx.db,
+      {
+        entityId: gap.output.id,
+        check: "vendor_logo",
+        reason: "unavailable",
+        note: "A market stall with no published mark.",
+      },
+      ctx.actor,
+    );
+    expect(excepted.gaps.map((g) => g.check)).not.toContain("vendor_logo");
+    expect(excepted.exceptions).toContainEqual(
+      expect.objectContaining({ check: "vendor_logo", state: "active" }),
+    );
+    await updateVendor(
+      ctx.db,
+      gap.output.id,
+      { website: "https://stall.example.test" },
+      ctx.actor,
+    );
+    const reopened = (
+      await loadDataQualities(ctx.db, "vendor", [gap.entityId])
+    ).get(gap.entityId);
+    expect(reopened?.gaps.map((g) => g.check)).toContain("vendor_logo");
+    expect(reopened?.exceptions).toContainEqual(
+      expect.objectContaining({ check: "vendor_logo", state: "stale" }),
+    );
   });
 
   it("financialAccount: ledger party link and confirmation", async () => {

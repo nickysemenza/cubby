@@ -101,7 +101,6 @@ const paperworkMismatch = (t: Purchase) => {
 export const purchaseChecks = defineEntityChecks({
   entity: "purchase",
   table: purchase,
-  exceptions: (t) => t.dataExceptions,
   related: {
     product: (t, productId) => sql`EXISTS (
       SELECT 1 FROM "Expense" dq_pe

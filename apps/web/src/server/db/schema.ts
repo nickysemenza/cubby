@@ -58,6 +58,7 @@ import {
   customType,
   date,
   doublePrecision,
+  foreignKey,
   index,
   integer,
   jsonb,
@@ -743,6 +744,12 @@ export const entityEmbedding = pgTable(
     ...softDeletedAt(),
   },
   (table) => [
+    // A rebuildable projection of one live identity (ADR 0006).
+    foreignKey({
+      name: "EntityEmbedding_entity_fk",
+      columns: [table.entityId, table.entityType],
+      foreignColumns: [entityIdentity.id, entityIdentity.kind],
+    }),
     uniqueIndex("EntityEmbedding_entity_model_key")
       .on(
         table.entityType,
@@ -793,6 +800,12 @@ export const searchDocument = pgTable(
     ...softDeletedAt(),
   },
   (table) => [
+    // A rebuildable projection of one live identity (ADR 0006).
+    foreignKey({
+      name: "SearchDocument_entity_fk",
+      columns: [table.entityId, table.entityType],
+      foreignColumns: [entityIdentity.id, entityIdentity.kind],
+    }),
     uniqueIndex("SearchDocument_live_entity_key")
       .on(table.entityType, table.entityId)
       .where(sql`${table.deletedAt} IS NULL`),
@@ -977,6 +990,38 @@ export const image = pgTable(
     index("Image_createdAt_idx").on(table.createdAt),
     index("Image_status_idx").on(table.status),
     index("Image_capturedByPartyId_idx").on(table.capturedByPartyId),
+  ],
+);
+
+/**
+ * A reasoned, evidence-bound "this gap does not apply" for one data-quality
+ * check on one entity (ADR 0006). Replaces the per-table `dataExceptions`
+ * jsonb columns so any exception-capable entity can record one. The
+ * fingerprint is the check's evidence signature when the exception was set;
+ * any evidence change makes it stale.
+ */
+export const dataExceptionRecord = pgTable(
+  "DataException",
+  {
+    id: pkUuid(),
+    entityId: uuid("entityId").notNull(),
+    entityKind: text("entityKind").notNull(),
+    check: text("check").notNull(),
+    reason: text("reason").notNull(),
+    note: text("note").notNull(),
+    fingerprint: text("fingerprint"),
+    ...baseTimestamps(),
+  },
+  (table) => [
+    uniqueIndex("DataException_entity_check_key").on(
+      table.entityId,
+      table.check,
+    ),
+    foreignKey({
+      name: "DataException_entity_fk",
+      columns: [table.entityId, table.entityKind],
+      foreignColumns: [entityIdentity.id, entityIdentity.kind],
+    }),
   ],
 );
 
@@ -3521,6 +3566,13 @@ export const auditLog = pgTable(
   },
   (table) => [
     index("AuditLog_createdAt_idx").on(table.createdAt.desc()),
+    // Real identity FK (ADR 0006): the row names an entity that exists, of
+    // the kind it claims. History keeps the identity that received the event.
+    foreignKey({
+      name: "AuditLog_entity_fk",
+      columns: [table.entityId, table.entityType],
+      foreignColumns: [entityIdentity.id, entityIdentity.kind],
+    }),
     index("AuditLog_runId_idx")
       .on(table.runId)
       .where(sql`${table.runId} IS NOT NULL`),

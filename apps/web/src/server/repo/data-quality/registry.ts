@@ -1,6 +1,6 @@
 import type { DataCheckOf, ScoredEntity } from "@cubby/schemas/data-quality";
 import type { AnyColumn, SQL } from "drizzle-orm";
-import type { PgColumn, PgTable } from "drizzle-orm/pg-core";
+import type { PgTable } from "drizzle-orm/pg-core";
 
 /** The columns every scored table exposes to the generic SQL and hydration. */
 export type ScoredTable = PgTable & {
@@ -32,8 +32,6 @@ export interface EntityChecks<E extends ScoredEntity, T extends ScoredTable> {
   table: T;
   /** Exhaustive against the generated per-entity check union. */
   checks: { readonly [C in DataCheckOf<E>]: CheckBinding<T> };
-  /** The `dataExceptions` jsonb column, where the table has one. */
-  exceptions?(t: T): PgColumn;
   /**
    * How a related scored entity's row (by its id) links to this row, for the
    * manifest's `related` roll-up: `relatedGaps`, `relatedExceptions`, and the

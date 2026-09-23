@@ -950,6 +950,21 @@
           ],
           "onDelete": "set null",
           "onUpdate": "no action"
+        },
+        "AuditLog_entity_fk": {
+          "name": "AuditLog_entity_fk",
+          "tableFrom": "AuditLog",
+          "tableTo": "Entity",
+          "columnsFrom": [
+            "entityId",
+            "entityType"
+          ],
+          "columnsTo": [
+            "id",
+            "kind"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -1554,7 +1569,23 @@
           "with": {}
         }
       },
-      "foreignKeys": {},
+      "foreignKeys": {
+        "EntityEmbedding_entity_fk": {
+          "name": "EntityEmbedding_entity_fk",
+          "tableFrom": "EntityEmbedding",
+          "tableTo": "Entity",
+          "columnsFrom": [
+            "entityId",
+            "entityType"
+          ],
+          "columnsTo": [
+            "id",
+            "kind"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
@@ -12372,13 +12403,6 @@
           "primaryKey": false,
           "notNull": false
         },
-        "dataExceptions": {
-          "name": "dataExceptions",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'[]'::jsonb"
-        },
         "growsPlantId": {
           "name": "growsPlantId",
           "type": "uuid",
@@ -14148,13 +14172,6 @@
           "primaryKey": false,
           "notNull": false
         },
-        "dataExceptions": {
-          "name": "dataExceptions",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'[]'::jsonb"
-        },
         "createdAt": {
           "name": "createdAt",
           "type": "timestamp",
@@ -15458,7 +15475,23 @@
           "with": {}
         }
       },
-      "foreignKeys": {},
+      "foreignKeys": {
+        "SearchDocument_entity_fk": {
+          "name": "SearchDocument_entity_fk",
+          "tableFrom": "SearchDocument",
+          "tableTo": "Entity",
+          "columnsFrom": [
+            "entityId",
+            "entityType"
+          ],
+          "columnsTo": [
+            "id",
+            "kind"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
@@ -17924,6 +17957,14 @@
             "id",
             "shortcode"
           ]
+        },
+        "Entity_id_kind_key": {
+          "name": "Entity_id_kind_key",
+          "nullsNotDistinct": false,
+          "columns": [
+            "id",
+            "kind"
+          ]
         }
       },
       "policies": {},
@@ -18172,6 +18213,114 @@
           "value": "\"EntityAttachment\".\"purpose\" IS NULL OR \"EntityAttachment\".\"purpose\" IN ('item', 'label')"
         }
       },
+      "isRLSEnabled": false
+    },
+    "public.DataException": {
+      "name": "DataException",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "entityId": {
+          "name": "entityId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "entityKind": {
+          "name": "entityKind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "check": {
+          "name": "check",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "reason": {
+          "name": "reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "note": {
+          "name": "note",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "fingerprint": {
+          "name": "fingerprint",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updatedAt": {
+          "name": "updatedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "DataException_entity_check_key": {
+          "name": "DataException_entity_check_key",
+          "columns": [
+            {
+              "expression": "entityId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "check",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "DataException_entity_fk": {
+          "name": "DataException_entity_fk",
+          "tableFrom": "DataException",
+          "tableTo": "Entity",
+          "columnsFrom": [
+            "entityId",
+            "entityKind"
+          ],
+          "columnsTo": [
+            "id",
+            "kind"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
       "isRLSEnabled": false
     }
   },

@@ -8,6 +8,7 @@ import {
   entityKernelContextSchema,
   executeEntity,
 } from "~/server/entity-kernel";
+import { getAuditLog } from "~/server/repo/audit-log";
 import { getDb } from "~/server/repo/database-helpers";
 import { createUploadedImageRecord } from "~/server/repo/image";
 import { mergeProducts } from "~/server/repo/product";
@@ -157,6 +158,22 @@ describe("durable entity identity", () => {
         data: { notes: "through the old code" },
       }),
     ).rejects.toThrow(`was merged into ${keeper.id}`);
+
+    // History keeps the identity that received each event and adds the
+    // survivor as a read-time projection.
+    const loserId = (await identityOf(loser.id))?.id;
+    const { entries } = await getAuditLog(ctx.db, {
+      entityType: "product",
+      entityId: loserId,
+      limit: 50,
+    });
+    expect(entries.length).toBeGreaterThan(0);
+    for (const entry of entries) {
+      expect(entry).toMatchObject({
+        entityId: loser.id,
+        canonicalEntityId: keeper.id,
+      });
+    }
   });
 
   it("path-compresses redirects and refuses re-merging an absorbed code", async () => {

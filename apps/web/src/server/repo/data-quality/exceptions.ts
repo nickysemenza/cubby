@@ -2,30 +2,26 @@ import type { ActorContext } from "@cubby/schemas/context";
 import {
   type ClearDataExceptionInput,
   type DataCheck,
+  type DataExceptionEntity,
   type DataExceptionReason,
   type DataQuality,
   dataCheckEntity,
   dataException,
+  dataExceptionEntity,
   type SetDataExceptionInput,
 } from "@cubby/schemas/data-quality";
-import {
-  ENTITY_NOT_FOUND_REASON,
-  parseEntityId,
-} from "@cubby/schemas/identifiers";
+import { isAuditableEntity } from "@cubby/schemas/entity-manifest";
+import { ENTITY_NOT_FOUND_REASON } from "@cubby/schemas/identifiers";
 import { parseShortcode } from "@cubby/shared";
-import { sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import type { Database } from "~/server/db";
-import { product, purchase } from "~/server/db/schema";
+import { dataExceptionRecord } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
 import { computeChanges, logAuditEntry } from "~/server/repo/audit-log";
-import {
-  notDeleted,
-  updateLiveAndReturn,
-  withTransaction,
-} from "~/server/repo/database-helpers";
-import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
+import { notDeleted, withTransaction } from "~/server/repo/database-helpers";
+import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 
 import { loadDataQualities } from "./hydrate";
 import { entryFor, fingerprintSql, gapCondition } from "./sql";
@@ -59,38 +55,48 @@ const EXCEPTION_REASONS = {
   // dead ends. `not_applicable` covers a `misc:` bucket row, which is a
   // stocked pseudo-product that no single photograph describes.
   product_image: ["unavailable", "not_applicable"],
+  // A regional or defunct vendor can have no mark or site worth recording.
+  vendor_logo: ["unavailable"],
+  vendor_website: ["unavailable", "not_applicable"],
+  vendor_order_evidence: ["not_applicable"],
 } satisfies Partial<Record<DataCheck, readonly DataExceptionReason[]>>;
 
 const reasonsFor = (check: DataCheck): readonly DataExceptionReason[] =>
   Object.entries(EXCEPTION_REASONS).find(([key]) => key === check)?.[1] ?? [];
 
-/** Only these two tables carry `dataExceptions`; see `dataExceptionEntity`. */
-type ExceptionEntity = "purchase" | "product";
-const exceptionTable = { purchase, product } as const;
-
 const probeRow = z.object({
-  dataExceptions: z.array(dataException),
   fingerprint: z.string(),
   applies: z.boolean(),
 });
+
+const storedException = (row: {
+  check: string;
+  reason: string;
+  note: string;
+  fingerprint: string | null;
+}) => {
+  const base = { check: row.check, reason: row.reason, note: row.note };
+  // A legacy exception has no fingerprint; the read schema keeps it absent.
+  return dataException.parse(
+    row.fingerprint === null ? base : { ...base, fingerprint: row.fingerprint },
+  );
+};
 
 const mutateException = async (
   db: Database,
   input: SetDataExceptionInput | ClearDataExceptionInput,
   actor: ActorContext,
 ): Promise<DataQuality> => {
-  const parsed = parseShortcode(input.entityId);
-  if (parsed?.type !== "purchase" && parsed?.type !== "product") {
+  const parsed = dataExceptionEntity.safeParse(
+    parseShortcode(input.entityId)?.type,
+  );
+  if (!parsed.success) {
     throw createAppError(
       "CONSTRAINT_VIOLATION",
-      `${input.entityId} is not a Purchase or Product.`,
+      `${input.entityId} cannot record data exceptions.`,
     );
   }
-  // Captured after the guard above: the narrowing to purchase|product is lost
-  // inside the transaction closure below, and that only started mattering once
-  // `image` joined ShortcodeType without being auditable — so the un-narrowed
-  // type no longer satisfies the audit entity union.
-  const entityType: ExceptionEntity = parsed.type;
+  const entityType: DataExceptionEntity = parsed.data;
   if (dataCheckEntity[input.check] !== entityType) {
     throw createAppError(
       "CONSTRAINT_VIOLATION",
@@ -103,31 +109,20 @@ const mutateException = async (
       `${input.reason} is not allowed for ${input.check}.`,
     );
   }
-  const resolved = await resolveLiveShortcode(db, input.entityId, entityType);
-  if (!resolved) {
-    throw createAppError(
-      ENTITY_NOT_FOUND_REASON[entityType],
-      `${entityType} not found: ${input.entityId}`,
-    );
-  }
-  const id = parseEntityId(entityType, resolved);
-  const table = exceptionTable[entityType];
-  const entry = entryFor(entityType);
-  const exceptionsColumn = entry.exceptions?.(table);
-  if (!exceptionsColumn)
-    throw new Error(`${entityType} declares no dataExceptions column.`);
+  const id = await resolveOrThrow(db, entityType, input.entityId);
+  const table = entryFor(entityType).table;
 
   await withTransaction(db, async (tx) => {
     // `execute`, not the select builder: a single-table select renders its
     // selected columns unqualified, and the check's correlated subqueries
     // would then self-join (docs/agents/domain-rules.md).
     const probe = await tx.execute(sql`SELECT
-  ${exceptionsColumn} AS "dataExceptions",
   ${fingerprintSql(entityType, input.check, table)} AS "fingerprint",
   ${gapCondition(entityType, input.check, table)} AS "applies"
 FROM ${table}
 WHERE ${table.id} = ${id} AND ${notDeleted(table)}
-LIMIT 1`);
+LIMIT 1
+FOR UPDATE`);
     const currentRow = probeRow.safeParse(probe.rows[0]);
     if (!currentRow.success) {
       throw createAppError(
@@ -135,7 +130,13 @@ LIMIT 1`);
         `${entityType} not found: ${input.entityId}`,
       );
     }
-    const current = currentRow.data.dataExceptions;
+    const current = (
+      await tx
+        .select()
+        .from(dataExceptionRecord)
+        .where(eq(dataExceptionRecord.entityId, id))
+        .orderBy(dataExceptionRecord.check)
+    ).map(storedException);
     const currentFingerprint = currentRow.data.fingerprint;
     if ("reason" in input) {
       const currentlyActive = current.some(
@@ -153,6 +154,37 @@ LIMIT 1`);
     // Other exceptions retain their own evidence snapshot. Updating this row's
     // exception metadata is not evidence changing for a different check.
     const retained = current.filter((item) => item.check !== input.check);
+    if ("reason" in input) {
+      const note = input.note.trim();
+      await tx
+        .insert(dataExceptionRecord)
+        .values({
+          entityId: id,
+          entityKind: entityType,
+          check: input.check,
+          reason: input.reason,
+          note,
+          fingerprint: currentFingerprint,
+        })
+        .onConflictDoUpdate({
+          target: [dataExceptionRecord.entityId, dataExceptionRecord.check],
+          set: {
+            reason: input.reason,
+            note,
+            fingerprint: currentFingerprint,
+            updatedAt: now,
+          },
+        });
+    } else {
+      await tx
+        .delete(dataExceptionRecord)
+        .where(
+          and(
+            eq(dataExceptionRecord.entityId, id),
+            eq(dataExceptionRecord.check, input.check),
+          ),
+        );
+    }
     const next =
       "reason" in input
         ? [
@@ -165,27 +197,15 @@ LIMIT 1`);
             },
           ]
         : retained;
-    if (entityType === "purchase") {
-      await updateLiveAndReturn(
-        tx,
-        purchase,
-        { dataExceptions: next, updatedAt: now },
-        parseEntityId("purchase", resolved),
-      );
-    } else {
-      await updateLiveAndReturn(
-        tx,
-        product,
-        { dataExceptions: next, updatedAt: now },
-        parseEntityId("product", resolved),
-      );
-    }
+    await tx.execute(
+      sql`UPDATE ${table} SET "updatedAt" = ${now} WHERE ${table.id} = ${id}`,
+    );
     const changes = computeChanges(
       { dataExceptions: current },
       { dataExceptions: next },
       ["dataExceptions"],
     );
-    if (changes) {
+    if (changes && isAuditableEntity(entityType)) {
       await logAuditEntry(tx, actor, {
         entityType,
         entityId: id,

@@ -61,7 +61,7 @@ import { searchableEntities } from "@cubby/schemas/search";
 import { and, eq, inArray } from "drizzle-orm";
 
 import type { DrizzleTransaction } from "~/server/db";
-import { importFinding } from "~/server/db/schema";
+import { dataExceptionRecord, importFinding } from "~/server/db/schema";
 import type { AuditEntryInput } from "~/server/repo/audit-log";
 import { logAuditEntries } from "~/server/repo/audit-log";
 import { softDeleteEntitySearchArtifactsTx } from "~/server/repo/entity-embedding-cleanup";
@@ -172,6 +172,12 @@ export const cascadeRemoval = async <E extends RemovableEntity>(
     await softDeleteEntitySearchArtifactsTx(tx, entity, [...ids]);
     await softDeleteSuggestionDismissalsTx(tx, entity, [...ids]);
   }
+
+  // An exception is a decision about one entity's evidence (ADR 0006); it
+  // goes with the entity rather than carrying onto a merge survivor.
+  await tx
+    .delete(dataExceptionRecord)
+    .where(inArray(dataExceptionRecord.entityId, [...ids]));
 
   if (isImportFindingTarget(entity)) {
     await tx

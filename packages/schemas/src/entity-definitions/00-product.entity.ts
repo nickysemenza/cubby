@@ -1192,7 +1192,6 @@ export default defineEntity({
       },
       { key: "shortcode", kind: "text", readKey: null },
       { key: "deletedAt", kind: "timestamp", nullable: true, readKey: null },
-      { key: "dataExceptions", kind: "json", readKey: null },
     ],
     storage: [
       { key: "id", default: "generated", specialized: "primary-key:ProductId" },
@@ -1225,12 +1224,6 @@ export default defineEntity({
       "usdaUnavailable",
       "stockTracked",
       { key: "labelNutrition", specialized: "json:labelNutrition" },
-      {
-        key: "dataExceptions",
-        default: "literal",
-        defaultValue: "'[]'::jsonb",
-        specialized: "json:dataExceptions",
-      },
     ],
     create: [
       "name",

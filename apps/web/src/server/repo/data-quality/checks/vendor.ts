@@ -31,14 +31,18 @@ export const vendorChecks = defineEntityChecks({
     vendor_order_evidence: {
       expected: hasLivePurchase,
       missing: (t) => sql`${t.orderEvidence} IS NULL`,
+      fingerprint: (t) => [sql`${t.orderEvidence}`],
     },
     vendor_logo: {
       expected: hasLivePurchase,
       missing: (t) => sql`NOT ${hasDisplayableLogo(t)}`,
+      // A new website is new evidence for a logo search.
+      fingerprint: (t) => [sql`${t.website}`, hasDisplayableLogo(t)],
     },
     vendor_website: {
       expected: hasLivePurchase,
       missing: (t) => sql`(${t.website} IS NULL OR trim(${t.website}) = '')`,
+      fingerprint: (t) => [sql`${t.name}`, sql`${t.website}`],
     },
   },
 });

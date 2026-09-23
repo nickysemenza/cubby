@@ -103,6 +103,12 @@ export const auditLogEntryOut = z.object({
   entityType: auditEntitySchema,
   entityId: auditableEntityIdSchema.nullable(),
   /**
+   * The survivor's code when the audited entity was later merged away. The
+   * entry keeps the identity that received the event (`entityId`); this is
+   * a read-time projection (ADR 0006).
+   */
+  canonicalEntityId: auditableEntityIdSchema.nullable(),
+  /**
    * The subject's human display name, resolved at read time (never stored on
    * the row, which only ever held ids). Null when the entity has no name-shaped
    * column at all — an inventory entry is identified by its product and

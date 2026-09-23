@@ -873,6 +873,9 @@ export default defineEntity({
           message: "No website is recorded for this vendor.",
         },
       ],
+      // A vendor with no findable logo or website records why, so sweeps
+      // stop re-researching the same dead end.
+      exceptions: true,
     },
   },
   extensions: {

@@ -571,7 +571,6 @@ export default defineEntity({
         },
       },
       { key: "shortcode", kind: "text", readKey: null },
-      { key: "dataExceptions", kind: "json", readKey: null },
       { key: "deletedAt", kind: "timestamp", nullable: true, readKey: null },
     ],
     storage: [
@@ -590,12 +589,6 @@ export default defineEntity({
       "date",
       { key: "statedTotal", specialized: "double-precision" },
       "notes",
-      {
-        key: "dataExceptions",
-        default: "literal",
-        defaultValue: "'[]'::jsonb",
-        specialized: "json:dataExceptions",
-      },
       { key: "createdAt", default: "now" },
       { key: "updatedAt", default: "now", specialized: "updated-at" },
       "deletedAt",
