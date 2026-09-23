@@ -187,7 +187,9 @@ describe("generated HTTP OpenAPI document", () => {
     // 78: the image list's importRunId / targetState / capturedByPartyId
     // filters and the image sighting's filters use the same positional
     // entity-filter unions as every other entity.
-    expect(positional.length).toBeLessThanOrEqual(78);
+    // 80: the Run list read (`run.list`) adds its vendor-account filter
+    // union and its sort object, the same shapes every entity list emits.
+    expect(positional.length).toBeLessThanOrEqual(80);
     expect(schemas).toHaveProperty("ProductTopLevelOut");
     expect(schemas).toHaveProperty("LocationShortcode");
     expect(schemas).toHaveProperty("VendorCreateInput");
