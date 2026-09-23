@@ -412,6 +412,12 @@
           "primaryKey": false,
           "notNull": false
         },
+        "applicationCacheStatus": {
+          "name": "applicationCacheStatus",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
         "entityType": {
           "name": "entityType",
           "type": "text",
