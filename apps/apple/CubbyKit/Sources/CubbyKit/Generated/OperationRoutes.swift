@@ -364,6 +364,8 @@ extension OperationRoute {
         OperationRoute(operationID: "resources.wish.get", method: .get, path: "/api/v1/wishes/{id}", pathParameters: ["id"], queryParameters: [], hasBody: false),
         OperationRoute(operationID: "resources.wish.list", method: .get, path: "/api/v1/wishes", pathParameters: [], queryParameters: ["acquired", "candidateProductId", "createdFrom", "createdTo", "dataGap", "dataStatus", "groupBy", "page", "pageSize", "productId", "productPresenceFilter", "productSearch", "search", "searchQuery", "sort", "updatedFrom", "updatedTo"], hasBody: false),
         OperationRoute(operationID: "resources.wish.update", method: .patch, path: "/api/v1/wishes/{id}", pathParameters: ["id"], queryParameters: [], hasBody: true),
+        OperationRoute(operationID: "run.aiUsage", method: .get, path: "/api/v1/run/aiUsage", pathParameters: [], queryParameters: ["cursor", "limit", "runId"], hasBody: false),
+        OperationRoute(operationID: "run.detail", method: .get, path: "/api/v1/run/detail", pathParameters: [], queryParameters: ["shortcode"], hasBody: false),
         OperationRoute(operationID: "search.debug", method: .get, path: "/api/v1/search/debug", pathParameters: [], queryParameters: ["entityTypes", "limit", "query"], hasBody: false),
         OperationRoute(operationID: "search.find", method: .get, path: "/api/v1/search/find", pathParameters: [], queryParameters: ["entityTypes", "limit", "query"], hasBody: false),
         OperationRoute(operationID: "search.grouped", method: .get, path: "/api/v1/search/grouped", pathParameters: [], queryParameters: ["entityTypes", "limit", "query"], hasBody: false),

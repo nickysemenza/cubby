@@ -125,7 +125,11 @@ enum NativePresentationCoverage {
             "purchase.reconciliation",
             "purchase.financial-settlement",
             "expense.settlement",
-            "image.associations":
+            "image.associations",
+            "importRun.import-workflow",
+            "importRun.photo-batch",
+            "importRun.ai-usage",
+            "importRun.changes":
             .unsupported("This detail is available on web.")
         default:
             .unsupported("Unknown native detail slot.")

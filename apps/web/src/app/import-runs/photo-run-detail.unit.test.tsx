@@ -148,18 +148,12 @@ afterEach(() => {
 });
 
 describe("PhotoImportRunView", () => {
-  it("shows the run header, progress tally, and every run photo with its cutout and description", async () => {
+  // The run's status, owner, times and notes render in the generic Run
+  // detail's hero and overview; this slot owns only the worklist.
+  it("shows the progress tally and every run photo with its cutout and description", async () => {
     render(<PhotoImportRunView run={run} />, { wrapper: harness.wrapper });
 
-    expect(
-      await screen.findByRole("heading", { name: run.publicId }),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByText("Uploaded by Fixture household member"),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByText("Fall closet batch, top shelf"),
-    ).toBeInTheDocument();
+    expect(await screen.findByText("Progress")).toBeInTheDocument();
 
     // Progress tally derived from `run.targets`, not from the review fetch.
     // SAFETY: the "Progress" heading always renders inside its own `Card`

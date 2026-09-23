@@ -189,6 +189,8 @@ export const ripple = {
   calendar: exactRippleTags([["calendar"]]),
   relatednessProduct: exactRippleTags([["relatedness", "product"]]),
   projectOnly: exactRippleTags([["project"]]),
+  /** The Run record the generic run detail page reads (`run.detail`). */
+  runOnly: exactRippleTags([["run"]]),
   productOnly: exactRippleTags([["product"]]),
   recommendationPlacement: exactRippleTags([["recommendations", "placement"]]),
   recommendationTagPropagation: exactRippleTags([

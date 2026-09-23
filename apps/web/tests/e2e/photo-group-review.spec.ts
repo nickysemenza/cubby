@@ -65,7 +65,9 @@ test("reviews, approves, and discards proposed photo groups on the photo-invento
       exact: true,
     }),
   ).toBeVisible();
-  await expect(page.getByText("completed", { exact: true })).toBeVisible({
-    timeout: 10_000,
-  });
+  // The generic Run page's hero chip (and Overview) read the Run record,
+  // refreshed once the live run poll sees the new status.
+  await expect(
+    page.getByText("Completed", { exact: true }).first(),
+  ).toBeVisible({ timeout: 10_000 });
 });

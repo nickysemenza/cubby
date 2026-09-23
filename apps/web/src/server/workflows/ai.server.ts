@@ -1,5 +1,6 @@
 import type {
   aiLocationIdInput,
+  aiRunUsageInput,
   aiUsageRecentInput,
   aiUsageSummaryInput,
   approveDetectedInventoryItemInput,
@@ -23,7 +24,11 @@ import { suggestExternalIdKind } from "~/server/ai/external-id-kind";
 import { suggestFields } from "~/server/ai/field-suggest/suggest-fields";
 import { getAiClient } from "~/server/clients/ai";
 import type { Database } from "~/server/db";
-import { listRecentAiUsage, summarizeAiUsage } from "~/server/repo/ai-usage";
+import {
+  listAiUsageForRun,
+  listRecentAiUsage,
+  summarizeAiUsage,
+} from "~/server/repo/ai-usage";
 import {
   resolveAllOrThrow,
   resolveLiveShortcodes,
@@ -353,6 +358,14 @@ export const summarizeAiUsageWorkflow = defineWorkflowOperation(
   "ai.usageSummary",
   async (db: Database, input: z.output<typeof aiUsageSummaryInput>) =>
     summarizeAiUsage(db, input.days),
+);
+export const listRunAiUsageWorkflow = defineWorkflowOperation(
+  "ai.runUsage",
+  async (db: Database, input: z.output<typeof aiRunUsageInput>) =>
+    listAiUsageForRun(db, await resolveOrThrow(db, "importRun", input.runId), {
+      cursor: input.cursor,
+      limit: input.limit,
+    }),
 );
 export const suggestFieldsWorkflow = defineWorkflowOperation(
   "ai.suggestFields",

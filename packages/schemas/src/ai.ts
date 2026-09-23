@@ -4,6 +4,7 @@ import { mutationSideEffectsSchema } from "./background-jobs";
 import { shortcodeEntities } from "./entity-manifest";
 import { moneyNullable } from "./money";
 import {
+  importRunShortcode,
   ingredientShortcode,
   inventoryShortcode,
   locationShortcode,
@@ -297,6 +298,40 @@ export const aiUsageEntrySchema = z.object({
 
 export const aiUsageRecentOut = z.array(aiUsageEntrySchema);
 export type AiUsageEntry = z.infer<typeof aiUsageEntrySchema>;
+
+/** `run.aiUsage` — one Run's AI calls, newest first, cursor-paginated. */
+export const aiRunUsageInput = z.object({
+  runId: importRunShortcode,
+  cursor: z.string().min(1).optional(),
+  limit: z.number().int().min(1).max(100).default(25),
+});
+
+export const aiRunUsageOut = z.object({
+  /** Sum over every priced call in the run, not just this page. */
+  pricedSubtotal: z.number().nonnegative(),
+  unpricedCount: z.number().int().nonnegative(),
+  records: z.array(
+    aiUsageEntrySchema.pick({
+      id: true,
+      createdAt: true,
+      feature: true,
+      operation: true,
+      provider: true,
+      model: true,
+      attempt: true,
+      inputTokens: true,
+      outputTokens: true,
+      cacheReadTokens: true,
+      cacheWriteTokens: true,
+      durationMs: true,
+      status: true,
+      gatewayLogId: true,
+      estimatedCost: true,
+    }),
+  ),
+  nextCursor: z.string().nullable(),
+});
+export type AiRunUsage = z.infer<typeof aiRunUsageOut>;
 
 export const aiUsageSummaryInput = z.object({
   days: z.number().int().min(1).max(90).default(7),

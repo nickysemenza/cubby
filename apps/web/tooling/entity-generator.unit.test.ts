@@ -1539,11 +1539,24 @@ describe("typed entity compiler", () => {
         { ...base, route: { basePath: "alphas", list: null, detail: true } },
       ]),
     ).toThrow("no create+update contract");
+    const alphaDetail = {
+      query: { module: "~/entities/alpha", export: "alphaQuery" },
+    };
     expect(() =>
       compileEntityDeclarations([
-        { ...base, route: { basePath: "alphas", list: true, detail: null } },
+        {
+          ...base,
+          route: { basePath: "alphas", list: true, detail: alphaDetail },
+        },
       ]),
     ).toThrow("has no contract (nothing to list)");
+    // Every entity gets the generic detail page; only the allowlisted
+    // recipe and usda-food routes stay hand-written.
+    expect(() =>
+      compileEntityDeclarations([
+        { ...base, route: { basePath: "alphas", list: null, detail: null } },
+      ]),
+    ).toThrow("every entity gets the generic detail page");
     // A dialog-created entity needs a capture intent for the dialog to open.
     expect(() =>
       compileEntityDeclarations([
@@ -1553,7 +1566,7 @@ describe("typed entity compiler", () => {
             basePath: "alphas",
             create: "dialog",
             list: null,
-            detail: null,
+            detail: alphaDetail,
           },
         },
       ]),

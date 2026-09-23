@@ -1,4 +1,5 @@
 import type { ImageWithEntity } from "@cubby/schemas/image";
+import type { ImportRunOut } from "@cubby/schemas/import-run";
 import type { CookbookSummary } from "@cubby/schemas/recipe";
 
 import type {
@@ -8,10 +9,15 @@ import type {
 
 /**
  * The entities the generic detail page renders: every kernel detail entity
- * plus the two whose detail route reads its own query (`route.detail:
- * { query }`) — image and cookbook have no kernel `get`.
+ * plus those whose detail route reads its own query (`route.detail:
+ * { query }`) — image and cookbook have no kernel `get`, and a read-only
+ * Run has no create/update contract.
  */
-export type GenericDetailEntity = DetailEntity | "image" | "cookbook";
+export type GenericDetailEntity =
+  | DetailEntity
+  | "image"
+  | "cookbook"
+  | "importRun";
 
 /** The loaded record a generic detail page (and its slots) receives. */
 export type DetailRecordOf<E extends GenericDetailEntity> =
@@ -19,4 +25,6 @@ export type DetailRecordOf<E extends GenericDetailEntity> =
     ? EntityDetailByEntity[E]
     : E extends "image"
       ? ImageWithEntity
-      : CookbookSummary;
+      : E extends "importRun"
+        ? ImportRunOut
+        : CookbookSummary;
