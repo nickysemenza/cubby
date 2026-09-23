@@ -28,7 +28,7 @@ export interface DetailSlot<E extends GenericDetailEntity> {
  * agent transcript and evidence. AI-only runs (`ai_suggest`, `ai_action`,
  * `background`) and photo batches do not.
  */
-export const IMPORT_WORKFLOW_PURPOSES: ReadonlySet<ImportRunPurpose> = new Set([
+const IMPORT_WORKFLOW_PURPOSES: ReadonlySet<ImportRunPurpose> = new Set([
   "account_sync",
   "purchase_validation",
   "product_enrichment",
