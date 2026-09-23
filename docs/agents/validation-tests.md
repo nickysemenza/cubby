@@ -24,6 +24,19 @@ written by another checkout, so confirm generated output is current. Generated
 API changes require the owning generated-surface workflow and affected native
 checks.
 
+## Affected-only E2E for local iteration
+
+`pnpm --dir apps/web test:e2e:affected` runs only the specs the current diff
+plausibly touches, for a faster local loop than the full suite —
+`apps/web/tests/e2e/spec-areas.ts` maps each spec to the routes, feature
+dirs, and shared contract files it exercises, and `scripts/e2e-affected.ts`
+matches changed files (committed since `origin/main` plus the working tree)
+against it. A change to a shared seam (the entity kernel, the app shell,
+`e2e-helpers.ts`, etc.) or anything the manifest can't place selects every
+spec instead of guessing narrow. `--list` prints the selection without
+running it. This is local-only: CI keeps running the full suite, and this is
+not a merge gate.
+
 ## Preview tests (real-browser layout invariants)
 
 The `preview` Vitest project (`**/*.preview.test.tsx`, `pnpm --dir apps/web
