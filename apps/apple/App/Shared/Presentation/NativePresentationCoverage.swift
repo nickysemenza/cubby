@@ -116,7 +116,7 @@ enum NativePresentationCoverage {
         guard let id = EntityDetailSlotID(rawValue: id) else {
             return .unsupported("Unknown native detail slot.")
         }
-        switch id {
+        return switch id {
         case .ledgerPartyWardrobe, .mealNutrition:
             .implemented
         case .productLabels,

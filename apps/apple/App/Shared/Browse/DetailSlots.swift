@@ -11,11 +11,11 @@ enum DetailSlotRegistry {
         guard let slot = EntityDetailSlotID(rawValue: slot) else { return nil }
         switch (key, slot) {
         case (.meal, .mealNutrition):
-            AnyView(MealNutritionSlot(mealID: row.id))
+            return AnyView(MealNutritionSlot(mealID: row.id))
         case (.ledgerParty, .ledgerPartyWardrobe):
-            AnyView(WardrobeDetailSlot(ownerID: row.id, ownerName: row.title))
+            return AnyView(WardrobeDetailSlot(ownerID: row.id, ownerName: row.title))
         default:
-            nil
+            return nil
         }
     }
 
