@@ -1119,20 +1119,7 @@ export default defineEntity({
         module: "~/server/repo/financial-transaction.entity-adapter",
         export: "financialTransactionEntityAdapter",
       },
-      search: {
-        projection: {
-          module: "~/server/repo/search-document",
-          export: "refreshSearchDocument",
-        },
-        semanticText: {
-          module: "~/server/repo/search-document",
-          export: "getSearchDocumentEmbeddingText",
-        },
-        dependentRefresh: {
-          module: "~/server/services/mutation-side-effects",
-          export: "runMutationSideEffects",
-        },
-      },
+      search: "document",
     },
   },
 });

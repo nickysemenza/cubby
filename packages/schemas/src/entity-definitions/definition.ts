@@ -1318,6 +1318,21 @@ const metadataSchemas = () => {
     })
     .strict();
 
+  const documentSearchPorts = {
+    projection: {
+      module: "~/server/repo/search-document",
+      export: "refreshSearchDocument",
+    },
+    semanticText: {
+      module: "~/server/repo/search-document",
+      export: "getSearchDocumentEmbeddingText",
+    },
+    dependentRefresh: {
+      module: "~/server/services/mutation-side-effects",
+      export: "runMutationSideEffects",
+    },
+  };
+
   const entityExtensionsMetadataSchema = z
     .object({
       countFilter: nonEmptyString().nullable().optional().default(null),
@@ -1380,12 +1395,16 @@ const metadataSchemas = () => {
             export: "getEntityFilters",
           }),
           search: z
-            .object({
-              projection: sourceRefMetadataSchema.nullable(),
-              semanticText: sourceRefMetadataSchema.nullable(),
-              dependentRefresh: sourceRefMetadataSchema.nullable(),
-            })
-            .strict()
+            .union([
+              z.literal("document").transform(() => documentSearchPorts),
+              z
+                .object({
+                  projection: sourceRefMetadataSchema.nullable(),
+                  semanticText: sourceRefMetadataSchema.nullable(),
+                  dependentRefresh: sourceRefMetadataSchema.nullable(),
+                })
+                .strict(),
+            ])
             .optional()
             .default({
               projection: null,
