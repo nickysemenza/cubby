@@ -249,6 +249,19 @@ from a partial or stale run.
 | --- | ---: | --- | --- | --- | ---: |
 | [#1102](https://github.com/nickysemenza/cubby/pull/1102) / `ac4aad71` | not captured | validation 168s; auxiliary 54s; Rust 21s; web node 97s; web UI 67s; PostgreSQL 121s; Chromium 358s; WebKit 183s; Apple checks 647s; Apple package 308s | macOS pnpm-store hit (732 MiB; setup 72s); Rust FFI target hits | no | 82s |
 
+### 2026-09-23 E2E engine roles and three chromium shards
+
+Baseline: after [#1235](https://github.com/nickysemenza/cubby/pull/1235) moved
+phone-layout specs onto a chromium phone project (WebKit now runs only a small
+engine-specific smoke), three clean two-shard runs had a slowest chromium shard
+of 385/339/352s (p50 **352s**). The main ruleset now requires the aggregate
+`E2E tests (chromium)` job instead of per-shard names, so shard count no longer
+touches it. Walls are GitHub job metadata; samples are full exact-head reruns.
+
+| PR | Change | Samples (wall) | Result |
+| --- | --- | --- | --- |
+| [#1239](https://github.com/nickysemenza/cubby/pull/1239) | Three chromium shards (specs shard-independent since [#1228](https://github.com/nickysemenza/cubby/pull/1228)) | slowest shard 282/272/251/250/257s (p50 **257s**, −27%); WebKit smoke 100–133s | retained; one sample failed `unknown-expense-dates` (the dialog-focus flake also seen on two-shard main runs, not shard-dependent); that flow now reports the focus thief on failure |
+
 ### 2026-09-22 cache repairs, compiled-output caches, generator speed
 
 Baseline: six green PR runs on 2026-09-22 before these changes. Apple checks
