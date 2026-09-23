@@ -23,3 +23,29 @@ Run `pnpm wasm` after WASM changes. The shared `CARGO_TARGET_DIR` can be
 written by another checkout, so confirm generated output is current. Generated
 API changes require the owning generated-surface workflow and affected native
 checks.
+
+## Preview tests (real-browser layout invariants)
+
+The `preview` Vitest project (`**/*.preview.test.tsx`, `pnpm --dir apps/web
+test:preview`) renders components in a real headless Chromium tab via
+Playwright, at the widths the app actually ships — a phone (402x874) and a
+desktop (1440x900) — and asserts layout facts jsdom cannot see: bounding-box
+sizes, whether a rerender changed an element's height (a layout-shift
+regression), and which `min-width`/media-query breakpoint actually applies.
+The `ui` (jsdom) tier is right for everything else a rendered component needs
+— events, text content, ARIA roles, conditional rendering — since it starts
+far faster; reach for `preview` only when the behavior under test IS the
+layout (a fixed-footprint glyph across states, an inline review folding
+instead of growing the page, a headline that must not wrap). It is opt-in
+(not part of `pnpm test`) because a real browser launch is slower than the
+shared jsdom graph; select it with `--project=preview`, `--project preview`,
+`test:preview`, or a direct `.preview.test.tsx` file argument. It is not
+wired into a CI job yet — doing so cheaply would need a Playwright browser
+install step in the `Tests - web (ui)` lane, which every push would pay for;
+add it there (never as a new required check — see AGENTS.md on rulesets) once
+more than one component family needs it. Preview specs need Tailwind's real
+CSS output (`tooling/preview-test-setup.ts` imports `~/styles.css`) since a
+utility class only affects a real browser's layout once Tailwind has
+generated it — jsdom tests never needed this because jsdom has no layout
+engine to feed. A component that imports `@cubby/recipebridge` (directly or
+transitively) needs `pnpm wasm` run first, same as the `ui` tier.

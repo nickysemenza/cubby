@@ -128,12 +128,18 @@ describe("MealPortionsSection", () => {
     expect(screen.getByText("Pasta")).toBeVisible();
     expect(screen.getByText("Salad")).toBeVisible();
     // The eater name is its own <span> inside the row, so match on the row.
-    expect(screen.getByText("Member A").closest("li")).toHaveTextContent(
-      /Member A 1 serving/,
-    );
-    expect(screen.getByText("Member B").closest("li")).toHaveTextContent(
-      /Member B 1 bowl/,
-    );
+    expect(
+      screen
+        .getByText("Member A")
+        .closest("li")
+        ?.textContent?.replace(/\s+/g, " "),
+    ).toMatch(/Member A 1 serving/);
+    expect(
+      screen
+        .getByText("Member B")
+        .closest("li")
+        ?.textContent?.replace(/\s+/g, " "),
+    ).toMatch(/Member B 1 bowl/);
     expect(screen.getByText(/Current conversion unavailable/)).toBeVisible();
     expect(screen.queryByText("350 g")).not.toBeInTheDocument();
     expect(screen.queryByText("Planned")).not.toBeInTheDocument();

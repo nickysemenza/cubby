@@ -81,6 +81,9 @@ lcov.info
 # does not have to be repeated to recover the failure list.
 .vitest-failures.txt
 
+# Vitest browser-mode (`preview` project) failure screenshots/traces.
+.vitest/
+
 # Nx project graph and local task metadata
 .nx/
 

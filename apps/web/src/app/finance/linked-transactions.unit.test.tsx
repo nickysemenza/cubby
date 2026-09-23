@@ -105,7 +105,9 @@ describe("LinkedTransactions", () => {
     const statusCell = within(row!).getByText("Posted").closest("td");
     expect(statusCell).not.toBeNull();
     expect(statusCell).toHaveTextContent("Posted");
-    expect(statusCell).not.toHaveTextContent(/^posted$/);
+    expect(statusCell?.textContent?.replace(/\s+/g, " ").trim()).not.toMatch(
+      /^posted$/,
+    );
     expect(list).toHaveBeenCalledWith(
       expect.objectContaining({
         sort: [{ orderBy: "postedDate", direction: "desc" }],
