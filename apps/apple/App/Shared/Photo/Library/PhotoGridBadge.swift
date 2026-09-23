@@ -13,10 +13,17 @@ enum PhotoGridBadge {
         Set(directOwnerShortcodes.filter { !$0.isEmpty }).sorted()
     }
 
+    /// Only the entity-type prefix ("GDE" for "GDE-7AP4"): the full code crowded a ~100pt grid
+    /// tile, and the detail sheet lists (and links) every full owner code. The accessibility
+    /// description below still reads the full codes.
     static func text(for directOwnerShortcodes: [String]) -> String? {
         let owners = owners(for: directOwnerShortcodes)
-        guard let primary = owners.first else { return nil }
+        guard let primary = owners.first.map(prefix) else { return nil }
         return owners.count == 1 ? primary : "\(primary)+\(owners.count - 1)"
+    }
+
+    static func prefix(_ shortcode: String) -> String {
+        shortcode.split(separator: "-", maxSplits: 1).first.map(String.init) ?? shortcode
     }
 
     static func accessibilityDescription(for directOwnerShortcodes: [String]) -> String? {

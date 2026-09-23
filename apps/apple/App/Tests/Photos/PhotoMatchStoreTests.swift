@@ -20,7 +20,8 @@ struct PhotoMatchStoreTests {
                 storedCandidates: [candidate], strongDirectOwnerShortcodes: [owner],
                 possibleDirectOwnerShortcodes: [owner], hasKnownResult: true, isPending: false,
                 indexIsComplete: true, serverError: nil)
-            #expect(state.ownerBadgeText == owner + (confidence == .possible ? "?" : ""))
+            #expect(
+                state.ownerBadgeText == PhotoGridBadge.prefix(owner) + (confidence == .possible ? "?" : ""))
         }
     }
 
@@ -34,7 +35,7 @@ struct PhotoMatchStoreTests {
         let query = HashQuery(perceptualHash: .init(value: 0), aspectRatio: 1)
         await store.registerBatch(["cached-asset": query])
         let box = store.cellStateBox(for: "cached-asset")
-        #expect(box.state.ownerBadgeText == "PRD-2345")
+        #expect(box.state.ownerBadgeText == "PRD")
         let revision = store.revision
         await store.register(id: "cached-asset", query: query)
         #expect(store.revision == revision)
@@ -98,10 +99,10 @@ struct PhotoMatchStoreTests {
     }
 
     @Test func ownerBadgeUsesDeterministicPrimaryAndOverflowCount() {
-        #expect(PhotoGridBadge.text(for: ["MEAL-9", "PRJ-2", "TASK-2", "MEAL-9"]) == "MEAL-9+2")
-        #expect(PhotoGridBadge.text(for: ["TASK-2"]) == "TASK-2")
+        #expect(PhotoGridBadge.text(for: ["MEAL-9", "PRJ-2", "TASK-2", "MEAL-9"]) == "MEAL+2")
+        #expect(PhotoGridBadge.text(for: ["TASK-2"]) == "TASK")
         #expect(PhotoGridBadge.text(for: ["", ""]) == nil)
-        #expect(PhotoGridBadge.possibleText(for: ["MEAL-9", "PRJ-2", "MEAL-9"]) == "MEAL-9+1?")
+        #expect(PhotoGridBadge.possibleText(for: ["MEAL-9", "PRJ-2", "MEAL-9"]) == "MEAL+1?")
         #expect(PhotoGridBadge.accessibilityDescription(for: ["LOC-4K7M"]) == "Owned by LOC-4K7M")
     }
 
@@ -140,7 +141,7 @@ struct PhotoMatchStoreTests {
         #expect(state.represented)
         #expect(!state.possibleMatch)
         #expect(state.known)
-        #expect(state.badgeText == "PRJ-2")
+        #expect(state.badgeText == "PRJ")
         #expect(state.accessibilityStatus == "Owned by PRJ-2")
 
         let ownerless = PhotoGridCellState.derive(
@@ -158,7 +159,7 @@ struct PhotoMatchStoreTests {
             isPending: false, indexIsComplete: true, serverError: nil)
         #expect(!state.represented)
         #expect(state.possibleMatch)
-        #expect(state.ownerBadgeText == "MEAL-9+1?")
+        #expect(state.ownerBadgeText == "MEAL+1?")
         #expect(state.accessibilityStatus == "Possible Cubby match with MEAL-9, PRJ-2")
     }
 
@@ -209,7 +210,7 @@ struct PhotoMatchStoreTests {
             possibleDirectOwnerShortcodes: ["PRJ-2"], hasKnownResult: true,
             isPending: false, indexIsComplete: true, serverError: nil)
         #expect(state.matchState == .strong)
-        #expect(state.ownerBadgeText == "MEAL-9+1")
+        #expect(state.ownerBadgeText == "MEAL+1")
     }
 
     @Test func perIDBoxPublishesCheckingAndFailureWithoutTouchingOtherBoxes() async throws {
@@ -308,7 +309,7 @@ struct PhotoMatchStoreTests {
         let strongStore = PhotoMatchStore()
         let strongItem = try selection(hash: "0123456789abcdef")
         try await strongStore.check([strongItem], client: strongClient)
-        #expect(strongStore.ownerBadge(for: strongItem.id) == "TASK-2")
+        #expect(strongStore.ownerBadge(for: strongItem.id) == "TASK")
     }
 
     @Test func failedRefreshPreservesKnownNoMatchVerdict() async throws {
@@ -490,7 +491,7 @@ struct PhotoMatchStoreTests {
 
         #expect(store.cellStateBox(for: "touched") === touchedBox)
         #expect(touchedBox.state.represented)
-        #expect(touchedBox.state.badgeText == "PRJ-2")
+        #expect(touchedBox.state.badgeText == "PRJ")
         #expect(store.cellStateBox(for: "untouched") === untouchedBox)
         #expect(untouchedBox.state == untouchedState)
     }

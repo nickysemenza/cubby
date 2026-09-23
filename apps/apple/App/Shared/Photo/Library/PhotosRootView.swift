@@ -797,13 +797,20 @@ private struct PhotoLibraryPreview: View {
             }
             ForEach(Array(candidates.enumerated()), id: \.offset) { _, candidate in
                 let owners = Set(appModel.photoMatches.directOwnerShortcodes(for: candidate.id)).sorted()
-                if !owners.isEmpty {
-                    Text(owners.joined(separator: ", "))
-                        .font(.subheadline.monospaced())
-                        .textSelection(.enabled)
+                // The grid badge shows only each owner's type prefix; here every full code opens
+                // its record.
+                ForEach(owners, id: \.self) { owner in
+                    if let descriptor = EntityCatalog.descriptor(forShortcode: owner) {
+                        NavigationLink {
+                            EntityDetailView(key: descriptor.key, id: owner)
+                        } label: {
+                            Text(owner).font(.subheadline.monospaced())
+                        }
                         .accessibilityLabel(
-                            "\(candidate.confidence == .strong ? "Owned by" : "Possible owners") \(owners.joined(separator: ", "))"
-                        )
+                            "\(candidate.confidence == .strong ? "Owned by" : "Possibly owned by") \(owner)")
+                    } else {
+                        Text(owner).font(.subheadline.monospaced()).textSelection(.enabled)
+                    }
                 }
                 MatchCandidateView(candidate: candidate)
                 NavigationLink {
@@ -843,20 +850,16 @@ private struct PhotoCellChrome: View {
 
     var body: some View {
         // The badge keeps its full size (ownership and selection occupy different corners, so
-        // selecting cannot hide a match). A ~100pt tile leaves ~34pt beside the compact icon badge:
-        // room for the classify time, not the label, so the time joins the bottom row and the
-        // label sits just above it. An owner badge ("GDE-7AP4") leaves no room at all, so there
-        // both lines sit above the row.
-        let inRow = state.ownerBadgeText == nil
+        // selecting cannot hide a match). A ~100pt tile leaves room beside the compact badge for
+        // the classify time but not the label, so the time joins the bottom row and the label
+        // sits just above it.
         VStack(alignment: .leading, spacing: 3) {
-            if developerOverlays, state.classifyMs != nil {
-                let lines = inRow ? [state.topLabel] : [classifyTime, state.topLabel]
-                let text = lines.compactMap { $0 }.joined(separator: "\n")
-                if !text.isEmpty { DevOverlayText(text, overMedia: true) }
+            if developerOverlays, state.classifyMs != nil, let topLabel = state.topLabel {
+                DevOverlayText(topLabel, overMedia: true)
             }
             HStack(alignment: .center, spacing: 3) {
                 analysisDot
-                if inRow, developerOverlays, let classifyTime {
+                if developerOverlays, let classifyTime {
                     // Ahead of the spacer, which otherwise splits the free width with it.
                     DevOverlayText(classifyTime, overMedia: true).layoutPriority(1)
                 }
@@ -890,12 +893,16 @@ private struct PhotoCellChrome: View {
             indexIsComplete: true, analysis: .analysed(categories: []), classifyMs: 50,
             topLabel: "structure"),
         PhotoGridCellState(
-            matchState: .strong, ownerBadgeText: "GDE-7AP4", accessibilityStatus: "In Cubby",
+            matchState: .strong, ownerBadgeText: "GDE", accessibilityStatus: "In Cubby",
             indexIsComplete: true, analysis: .analysed(categories: ["plants"]), classifyMs: 222,
             topLabel: "plant"),
         PhotoGridCellState(
-            matchState: .possible, ownerBadgeText: "PRD-4K7M", accessibilityStatus: "Possible match",
+            matchState: .possible, ownerBadgeText: "PRD?", accessibilityStatus: "Possible match",
             indexIsComplete: true, analysis: .analysed(categories: ["food"]), classifyMs: 1527,
+            topLabel: "tableware"),
+        PhotoGridCellState(
+            matchState: .strong, ownerBadgeText: "MEAL+2", accessibilityStatus: "In Cubby",
+            indexIsComplete: true, analysis: .analysed(categories: []), classifyMs: 9999,
             topLabel: "tableware"),
     ]
     HStack(spacing: 3) {
