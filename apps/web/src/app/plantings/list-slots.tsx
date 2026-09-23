@@ -44,7 +44,8 @@ function scheduleLabel(row: ScheduleRow) {
           href={source.url}
           target="_blank"
           rel="noreferrer"
-          className="text-primary hover:underline focus-visible:underline"
+          title={source.name}
+          className="min-w-0 truncate text-primary hover:underline focus-visible:underline"
         >
           {source.name}
         </a>
@@ -56,7 +57,8 @@ function scheduleLabel(row: ScheduleRow) {
     <Link
       to="/plantings/$shortcode"
       params={{ shortcode }}
-      className="text-primary hover:underline focus-visible:underline"
+      title={row.name}
+      className="min-w-0 truncate text-primary hover:underline focus-visible:underline"
     >
       {row.name}
     </Link>
