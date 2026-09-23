@@ -1875,9 +1875,9 @@ export const photoGroupProposal = pgTable(
       jsonb("productCreate").$type<
         import("@cubby/schemas/photo-import-run").CommitPhotoGroupProductCreate
       >(),
-    productCreateCategoryId: uuid("productCreateCategoryId")
-      .$type<ProductCategoryId>()
-      .references(() => productCategory.id),
+    productCreateCategoryId: uuid(
+      "productCreateCategoryId",
+    ).$type<ProductCategoryId>(),
     inventoryLocationId: uuid("inventoryLocationId")
       .$type<LocationId>()
       .references(() => location.id),
@@ -1900,6 +1900,12 @@ export const photoGroupProposal = pgTable(
     ...baseTimestamps(),
   },
   (table) => [
+    // Named explicitly: Drizzle's default exceeds Postgres's 63-byte limit.
+    foreignKey({
+      name: "PhotoGroupProposal_productCreateCategoryId_fk",
+      columns: [table.productCreateCategoryId],
+      foreignColumns: [productCategory.id],
+    }),
     uniqueIndex("PhotoGroupProposal_run_group_key").on(
       table.runId,
       table.groupKey,

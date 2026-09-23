@@ -17668,12 +17668,12 @@
           "onDelete": "no action",
           "onUpdate": "no action"
         },
-        "PhotoGroupProposal_productCreateCategoryId_ProductCategory_id_fk": {
-          "name": "PhotoGroupProposal_productCreateCategoryId_ProductCategory_id_fk",
+        "PhotoGroupProposal_inventoryOwnerPartyId_LedgerParty_id_fk": {
+          "name": "PhotoGroupProposal_inventoryOwnerPartyId_LedgerParty_id_fk",
           "tableFrom": "PhotoGroupProposal",
-          "tableTo": "ProductCategory",
+          "tableTo": "LedgerParty",
           "columnsFrom": [
-            "productCreateCategoryId"
+            "inventoryOwnerPartyId"
           ],
           "columnsTo": [
             "id"
@@ -17681,12 +17681,12 @@
           "onDelete": "no action",
           "onUpdate": "no action"
         },
-        "PhotoGroupProposal_inventoryOwnerPartyId_LedgerParty_id_fk": {
-          "name": "PhotoGroupProposal_inventoryOwnerPartyId_LedgerParty_id_fk",
+        "PhotoGroupProposal_productCreateCategoryId_fk": {
+          "name": "PhotoGroupProposal_productCreateCategoryId_fk",
           "tableFrom": "PhotoGroupProposal",
-          "tableTo": "LedgerParty",
+          "tableTo": "ProductCategory",
           "columnsFrom": [
-            "inventoryOwnerPartyId"
+            "productCreateCategoryId"
           ],
           "columnsTo": [
             "id"
