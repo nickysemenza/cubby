@@ -80,7 +80,11 @@ describe("expectedHarvestFor", () => {
         sowedOn: null,
         transplantedOn: "2026-05-01",
       },
-      { start: "2026-06-30", end: "2026-07-25", basis: "crop estimate" },
+      {
+        start: "2026-06-29",
+        end: "2026-07-18",
+        basis: "Johnny's Selected Seeds",
+      },
     ],
     [
       "cultivar packet days win over the crop range",
@@ -100,7 +104,11 @@ describe("expectedHarvestFor", () => {
         sowedOn: "2026-03-01",
         transplantedOn: null,
       },
-      { start: "2026-04-30", end: "2026-05-15", basis: "crop estimate" },
+      {
+        start: "2026-04-26",
+        end: "2026-05-15",
+        basis: "Johnny's Selected Seeds",
+      },
     ],
     [
       // Late rather than early: the safe side for a guess.
@@ -111,7 +119,11 @@ describe("expectedHarvestFor", () => {
         sowedOn: null,
         transplantedOn: "2026-03-01",
       },
-      { start: "2026-04-30", end: "2026-05-15", basis: "crop estimate" },
+      {
+        start: "2026-04-26",
+        end: "2026-05-15",
+        basis: "Johnny's Selected Seeds",
+      },
     ],
   ])("%s", (_label, args, expected) => {
     expect(expectedHarvestFor(args)).toMatchObject(expected);
