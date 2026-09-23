@@ -31,9 +31,11 @@ revise or implement only when the user requests that work.
      required repair path and how completion will be verified.
    - Relationship metadata does not establish executable mutation or lifecycle
      policy. Trace the handler and its transactional enforcement.
-   - Parallel implementation lanes need disjoint edits or an explicit handoff
-     for shared files, an explicit model and supported effort from
-     `docs/agents/model-routing.md`, and one root owner for final validation.
+   - Main agent only is the right answer for a small plan. Each delegated lane
+     earns its place under "Delegate or not" in `docs/agents/model-routing.md`
+     and needs disjoint edits or an explicit handoff for shared files, an
+     explicit model and supported effort, and one root owner for final
+     validation.
 4. Report confirmed findings in the requested order, each with severity, exact
    file/line evidence, a concrete consequence, and the smallest correction.
    Separate unresolved questions from demonstrated blockers; omit refuted or
