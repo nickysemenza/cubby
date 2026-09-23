@@ -12,7 +12,6 @@ import {
   createImageColumn,
   createInventoryEntriesColumn,
   createSingleEntityInlineLinkColumn,
-  createTextColumn,
   createTimestampColumn,
 } from "~/app/_components/data-table/columnHelpers";
 import {
@@ -126,13 +125,6 @@ export const locationListOverride = defineListOverride<
                 },
               },
             ),
-          );
-          add(
-            createTextColumn(columnHelper, "aiDescription", {
-              header: "AI Description",
-              className: "min-w-0 w-56 truncate",
-              mobile: { slot: "meta", priority: 70 },
-            }),
           );
           add(
             createTimestampColumn(columnHelper, "lastBulkInventory", {
