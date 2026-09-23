@@ -56,6 +56,15 @@ final class PhotoLibraryStore: NSObject, PHPhotoLibraryChangeObserver {
     @ObservationIgnored private var clients: [UUID: (PhotoMatchStore, CubbyClient)] = [:]
     @ObservationIgnored private var generation = UUID()
     @ObservationIgnored private var observing = false
+    /// The server host saved match results are keyed by (`AppModel.host`), set by `AppModel` on
+    /// install and on every host change. `nil` keeps matching in memory only.
+    @ObservationIgnored var matchHost: String?
+    /// Set by an explicit refresh so the next reconcile ignores saved match results once.
+    @ObservationIgnored private var forceRematch = false
+    /// PhotoKit changes not yet applied — a debounce window's burst, or everything delivered while
+    /// no Photos tab was active. Applied in order: each `changeDetails(for:)` is relative to the
+    /// fetch result the previous change produced, so none may be dropped.
+    @ObservationIgnored private var pendingLibraryChanges: [PHChange] = []
     var hasFullAccess: Bool { authorization == .authorized }
 
     var scanStatus: String {
@@ -140,19 +149,45 @@ final class PhotoLibraryStore: NSObject, PHPhotoLibraryChangeObserver {
     func activate(_ id: UUID, matches: PhotoMatchStore, client: CubbyClient) async {
         clients[id] = (matches, client)
         matches.acquire(id)
-        await refresh(matches: matches, client: client)
+        if canResume {
+            await resume(matches: matches, client: client)
+        } else {
+            await refresh(matches: matches, client: client)
+        }
     }
 
+    /// Leaving the Photos tab stops background work but keeps the loaded library and stays
+    /// registered for PhotoKit changes (queued in `pendingLibraryChanges`), so returning resumes
+    /// instead of re-reading ~90k assets from PhotoKit.
     func deactivate(_ id: UUID) {
         clients.removeValue(forKey: id)?.0.release(id)
-        if clients.isEmpty {
-            stopWork()
-            if observing { PHPhotoLibrary.shared().unregisterChangeObserver(self); observing = false }
+        if clients.isEmpty { stopWork() }
+    }
+
+    /// A completed load for the same Photos access, kept current by the change observer while
+    /// the tab was away.
+    private var canResume: Bool {
+        fetchResult != nil && observing && hasFullAccess
+            && PHPhotoLibrary.authorizationStatus(for: .readWrite) == authorization
+    }
+
+    private func resume(matches: PhotoMatchStore, client: CubbyClient) async {
+        if !pendingLibraryChanges.isEmpty {
+            // Applies the deltas (or falls back to a full refresh) and re-arms the scan.
+            await applyLibraryChanges(matches: matches, client: client)
+            return
         }
+        let token = generation
+        // Cheap now that known results only take the index delta (`PhotoMatchStore.refresh`).
+        if isParticipating { await matches.refresh(client: client) }
+        guard generation == token, !Task.isCancelled, isParticipating, analysisStore != nil else { return }
+        let remaining = months.flatMap(\.assets).filter { !checked.contains($0.localIdentifier) }
+        startScan(remaining: remaining, matches: matches, token: token)
     }
 
     func reset() {
         stopWork()
+        pendingLibraryChanges = []
         for (id, pair) in clients { pair.0.release(id) }
         if observing { PHPhotoLibrary.shared().unregisterChangeObserver(self); observing = false }
         clients = [:]; checked = []
@@ -170,8 +205,13 @@ final class PhotoLibraryStore: NSObject, PHPhotoLibraryChangeObserver {
         await refresh(matches: matches, client: client)
     }
 
-    func refresh(matches: PhotoMatchStore, client: CubbyClient) async {
+    /// `forceRematch` (the header's refresh control) re-checks every photo against the whole index
+    /// instead of trusting saved results for this one load.
+    func refresh(matches: PhotoMatchStore, client: CubbyClient, forceRematch: Bool = false) async {
+        if forceRematch { self.forceRematch = true }
         stopWork()
+        // The fresh fetch below already reflects every change queued before it.
+        pendingLibraryChanges = []
         let token = generation
         defer { if generation == token { isLoadingLibrary = false } }
         authorization = PHPhotoLibrary.authorizationStatus(for: .readWrite)
@@ -291,11 +331,95 @@ final class PhotoLibraryStore: NSObject, PHPhotoLibraryChangeObserver {
         guard generation == token, !Task.isCancelled else { return }
         // One batch read for the whole library's dot status, rather than a fetch per cell; the
         // sweep republishes individual ids afterward as it classifies them.
-        if let snapshots = try? await analysisStore.snapshots(for: Array(index.assetsByID.keys)) {
+        if let snapshots = try? await analysisStore.snapshots(
+            for: Array(index.assetsByID.keys), includeFullAnalysis: false)
+        {
             matches.markAnalysis(snapshots)
         }
-        let remaining = months.flatMap(\.assets).filter { !checked.contains($0.localIdentifier) }
+        let unchecked = months.flatMap(\.assets).filter { !checked.contains($0.localIdentifier) }
+        let remaining = await seedSavedMatches(
+            unchecked, matches: matches, analysisStore: analysisStore, token: token)
+        guard generation == token, !Task.isCancelled else { return }
         startScan(remaining: remaining, matches: matches, token: token)
+    }
+
+    /// Installs saved match results for every unedited photo, brought up to date with only the
+    /// index entries that changed since they were saved (`PhotoMatchDelta`), and returns the
+    /// photos that still need a full match: new, edited, or never matched. Re-matching the whole
+    /// library against the whole index every launch was most of a warm launch's work.
+    private func seedSavedMatches(
+        _ unchecked: [PHAsset], matches: PhotoMatchStore, analysisStore: PhotoAnalysisStore, token: UUID
+    ) async -> [PHAsset] {
+        let force = forceRematch
+        forceRematch = false
+        guard let host = matchHost, matches.hasIndex, !force, !unchecked.isEmpty else { return unchecked }
+        let (entries, indexRevision) = matches.indexSnapshot
+        do {
+            let state = try await analysisStore.matchState(host: host)
+            let hashes = try await analysisStore.hashes(for: unchecked.map(\.localIdentifier))
+            let delta = try PhotoMatchDelta(previous: state.indexDigests, current: entries)
+            var queries: [String: HashQuery] = [:]
+            var stored: [String: [DedupCandidate]] = [:]
+            var cold: [PHAsset] = []
+            for asset in unchecked {
+                let id = asset.localIdentifier
+                if let saved = state.matches[id], saved.modificationDate == asset.modificationDate,
+                    saved.hashRevision == PerceptualHash64.algorithmRevision,
+                    let record = hashes[id], Self.isCurrent(record, for: asset)
+                {
+                    queries[id] = Self.hashQuery(for: asset, hash: record.perceptualHash)
+                    stored[id] = saved.candidates
+                } else {
+                    cold.append(asset)
+                }
+            }
+            let updated =
+                delta.isEmpty ? stored : try await PhotoMatchStore.apply(delta, to: stored, queries: queries)
+            // The index moved while applying (a repair batch): leave everything to the full scan.
+            guard generation == token, !Task.isCancelled, matches.isCurrentIndex(indexRevision) else {
+                return unchecked
+            }
+            if !delta.isEmpty {
+                // Only rows the delta changed, with the snapshot they now reflect, atomically. On a
+                // first run this writes just the snapshot, before the scan saves any rows.
+                let changedRows = updated.compactMap { id, candidates -> StoredPhotoMatch? in
+                    guard candidates != stored[id], let asset = index.asset(for: id) else { return nil }
+                    return Self.storedMatch(for: asset, candidates: candidates)
+                }
+                try await analysisStore.applyMatchDelta(
+                    host: host, matches: changedRows,
+                    indexDigests: Dictionary(uniqueKeysWithValues: entries.map { ($0.id, $0.matchDigest) }))
+                guard generation == token, !Task.isCancelled else { return unchecked }
+            }
+            matches.seedServerMatches(
+                updated.reduce(into: [:]) { seeded, element in
+                    if let query = queries[element.key] { seeded[element.key] = (query, element.value) }
+                })
+            checked.formUnion(updated.keys)
+            return cold
+        } catch {
+            Diagnostics.report(error, context: "photos.savedMatches.load")
+            return unchecked
+        }
+    }
+
+    private static func storedMatch(for asset: PHAsset, candidates: [DedupCandidate]) -> StoredPhotoMatch {
+        StoredPhotoMatch(
+            localIdentifier: asset.localIdentifier, modificationDate: asset.modificationDate,
+            hashRevision: PerceptualHash64.algorithmRevision, candidates: candidates)
+    }
+
+    /// Persists results the scan just published so the next launch can seed them.
+    private func saveMatches(_ published: [String: [DedupCandidate]]) async {
+        guard let host = matchHost, let analysisStore, !published.isEmpty else { return }
+        let rows = published.compactMap { id, candidates in
+            index.asset(for: id).map { Self.storedMatch(for: $0, candidates: candidates) }
+        }
+        do {
+            try await analysisStore.saveMatches(host: host, rows)
+        } catch {
+            Diagnostics.report(error, context: "photos.savedMatches.save")
+        }
     }
 
     /// The background hash scan, factored out of `reconcileAnalysis` so `applyLibraryChange`
@@ -333,7 +457,7 @@ final class PhotoLibraryStore: NSObject, PHPhotoLibraryChangeObserver {
             @MainActor func flushWarm() async -> Bool {
                 guard !warm.isEmpty else { return true }
                 matches.markChecked(warm.keys)
-                await matches.registerBatch(warm)
+                await saveMatches(await matches.registerBatch(warm))
                 guard generation == token, !Task.isCancelled else { return false }
                 checked.formUnion(warm.keys)
                 warmDone += warm.count
@@ -380,7 +504,7 @@ final class PhotoLibraryStore: NSObject, PHPhotoLibraryChangeObserver {
                     // reads "known: no match" as soon as it publishes, instead of the stale
                     // "not checked" it would show if `checked` only updated afterward.
                     matches.markChecked(pending.keys)
-                    await matches.registerBatch(pending)
+                    await saveMatches(await matches.registerBatch(pending))
                     guard generation == token else { return }
                     checked.formUnion(pending.keys)
                     pending = [:]
@@ -389,7 +513,7 @@ final class PhotoLibraryStore: NSObject, PHPhotoLibraryChangeObserver {
             }
             if !pending.isEmpty {
                 matches.markChecked(pending.keys)
-                await matches.registerBatch(pending)
+                await saveMatches(await matches.registerBatch(pending))
                 guard generation == token else { return }
                 checked.formUnion(pending.keys)
             }
@@ -490,51 +614,56 @@ final class PhotoLibraryStore: NSObject, PHPhotoLibraryChangeObserver {
     nonisolated func photoLibraryDidChange(_ changeInstance: PHChange) {
         Task { @MainActor [weak self] in
             guard let self else { return }
+            pendingLibraryChanges.append(changeInstance)
             libraryChangeTask?.cancel()
-            // Leave the scan running while iCloud sends bursts of library changes.
+            // Leave the scan running while iCloud sends bursts of library changes; with no
+            // active Photos tab the queue simply waits for `resume`.
             libraryChangeTask = Task { [weak self] in
                 do { try await Task.sleep(for: .milliseconds(750)) } catch { return }
                 guard let self, !Task.isCancelled, let (matches, client) = clients.values.first else {
                     return
                 }
                 libraryChangeTask = nil
-                await self.applyLibraryChange(changeInstance, matches: matches, client: client)
+                await self.applyLibraryChanges(matches: matches, client: client)
             }
         }
     }
 
-    /// Applies a PhotoKit change as a delta into `index` instead of a full `refresh()`, so an
-    /// iCloud sync burst on a 90k-photo library does not repeatedly reload everything. Falls back
-    /// to a full `refresh()` when PhotoKit reports no incremental diff is available (e.g. the
-    /// first change after a cold start, or a change too large for PhotoKit to diff), or when this
-    /// store has no prior `fetchResult` to diff against at all.
-    private func applyLibraryChange(
-        _ changeInstance: PHChange, matches: PhotoMatchStore, client: CubbyClient
-    ) async {
+    /// Applies queued PhotoKit changes as deltas into `index` instead of a full `refresh()`, so an
+    /// iCloud sync burst on a 90k-photo library does not repeatedly reload everything. A change
+    /// that does not touch the image fetch (an album edit) is a no-op; one PhotoKit cannot diff,
+    /// or a queue too long to be worth replaying, falls back to a full `refresh()`.
+    private func applyLibraryChanges(matches: PhotoMatchStore, client: CubbyClient) async {
+        let changes = pendingLibraryChanges
+        pendingLibraryChanges = []
         // Mid-load, `index` is still being filled from the load's own snapshot: a delta applied
         // now would be overwritten (removed assets re-appended by later batches), so restart.
-        guard !isLoadingLibrary, let currentFetchResult = fetchResult,
-            let details = changeInstance.changeDetails(for: currentFetchResult),
-            details.hasIncrementalChanges
-        else {
+        guard !isLoadingLibrary, var current = fetchResult, changes.count <= 200 else {
             await refresh(matches: matches, client: client)
             return
         }
         let token = generation
-        for asset in details.changedObjects {
-            thumbnails.removeObject(forKey: asset.localIdentifier as NSString)
-            checked.remove(asset.localIdentifier)
+        var applied = false
+        for change in changes {
+            guard let details = change.changeDetails(for: current) else { continue }
+            guard details.hasIncrementalChanges else {
+                await refresh(matches: matches, client: client)
+                return
+            }
+            for asset in details.changedObjects + details.removedObjects {
+                thumbnails.removeObject(forKey: asset.localIdentifier as NSString)
+                checked.remove(asset.localIdentifier)
+            }
+            let removedIDs = Set(details.removedObjects.map(\.localIdentifier))
+            selectedIDs.removeAll { removedIDs.contains($0) }
+            index.apply(
+                removed: details.removedObjects, inserted: details.insertedObjects,
+                changed: details.changedObjects)
+            current = details.fetchResultAfterChanges
+            applied = true
         }
-        for asset in details.removedObjects {
-            thumbnails.removeObject(forKey: asset.localIdentifier as NSString)
-            checked.remove(asset.localIdentifier)
-        }
-        let removedIDs = Set(details.removedObjects.map(\.localIdentifier))
-        selectedIDs.removeAll { removedIDs.contains($0) }
-        index.apply(
-            removed: details.removedObjects, inserted: details.insertedObjects,
-            changed: details.changedObjects)
-        fetchResult = details.fetchResultAfterChanges
+        fetchResult = current
+        guard applied else { return }
         count = index.count
         totalAssetCount = index.count
         publishMonths()

@@ -75,6 +75,52 @@ public struct PhotoAssetSnapshot: Sendable, Hashable {
     }
 }
 
+/// One photo's saved match result against a host's hash index. Valid only while the photo's
+/// `modificationDate` and fingerprint `hashRevision` still match; `candidates` reflect the index
+/// snapshot `PhotoMatchState.indexDigests` describes (see `PhotoMatchDelta`).
+public struct StoredPhotoMatch: Sendable, Hashable {
+    public let localIdentifier: String
+    public let modificationDate: Date?
+    public let hashRevision: Int
+    public let candidates: [DedupCandidate]
+
+    public init(
+        localIdentifier: String, modificationDate: Date?, hashRevision: Int, candidates: [DedupCandidate]
+    ) {
+        self.localIdentifier = localIdentifier
+        self.modificationDate = modificationDate
+        self.hashRevision = hashRevision
+        self.candidates = candidates
+    }
+}
+
+/// Everything saved about matching at one host, read in one transaction.
+public struct PhotoMatchState: Sendable {
+    public let matches: [String: StoredPhotoMatch]
+    /// The index the saved results reflect, as `ImageHashEntry.matchDigest` per entry. Empty
+    /// before the first save, which makes every current entry a change.
+    public let indexDigests: [ImageCode: UInt64]
+}
+
+public struct PhotoClassificationWrite: Sendable {
+    public let localIdentifier: String
+    public let categories: [String]
+    public let topLabels: [PhotoLabelScore]
+    public let classifyVersion: Int
+    public let classifyMs: Double?
+
+    public init(
+        localIdentifier: String, categories: [String], topLabels: [PhotoLabelScore], classifyVersion: Int,
+        classifyMs: Double?
+    ) {
+        self.localIdentifier = localIdentifier
+        self.categories = categories
+        self.topLabels = topLabels
+        self.classifyVersion = classifyVersion
+        self.classifyMs = classifyMs
+    }
+}
+
 /// Settings-facing snapshot of the on-disk analysis database: where it lives, how big it is, and
 /// what it holds. `url`/`bytesOnDisk` are nil/0 for an in-memory store (previews, tests).
 public struct PhotoAnalysisStorageSummary: Sendable, Equatable {
@@ -162,8 +208,20 @@ public actor PhotoAnalysisStore {
         localIdentifier: String, categories: [String], topLabels: [PhotoLabelScore],
         classifyVersion: Int, classifyMs: Double?
     ) throws {
+        try upsertClassifications([
+            PhotoClassificationWrite(
+                localIdentifier: localIdentifier, categories: categories, topLabels: topLabels,
+                classifyVersion: classifyVersion, classifyMs: classifyMs)
+        ])
+    }
+
+    /// One transaction for a sweep's buffered results rather than one actor hop and write per
+    /// classified photo.
+    public func upsertClassifications(_ writes: [PhotoClassificationWrite]) throws {
+        guard !writes.isEmpty else { return }
+        let classifiedAt = Date.now.timeIntervalSinceReferenceDate
         try database.write { db in
-            try db.execute(
+            let statement = try db.cachedStatement(
                 sql: """
                     INSERT INTO photo_analysis (
                       local_identifier, categories, top_labels, classify_version, classify_ms, classified_at
@@ -172,15 +230,17 @@ public actor PhotoAnalysisStore {
                       categories = excluded.categories, top_labels = excluded.top_labels,
                       classify_version = excluded.classify_version, classify_ms = excluded.classify_ms,
                       classified_at = excluded.classified_at
-                    """,
-                arguments: [
-                    "id": localIdentifier,
-                    "categories": try Self.encode(categories),
-                    "topLabels": try Self.encode(topLabels),
-                    "classifyVersion": classifyVersion,
-                    "classifyMs": classifyMs,
-                    "classifiedAt": Date.now.timeIntervalSinceReferenceDate,
+                    """)
+            for write in writes {
+                try statement.execute(arguments: [
+                    "id": write.localIdentifier,
+                    "categories": try Self.encode(write.categories),
+                    "topLabels": try Self.encode(write.topLabels),
+                    "classifyVersion": write.classifyVersion,
+                    "classifyMs": write.classifyMs,
+                    "classifiedAt": classifiedAt,
                 ])
+            }
         }
     }
 
@@ -354,15 +414,104 @@ public actor PhotoAnalysisStore {
         }
     }
 
+    /// Deletes cached rows (analysis and saved matches, every host) for photos no longer in the
+    /// library. Set-based through a temp table: the live set is ~the whole library, so the old
+    /// per-id `DELETE` loop ran tens of thousands of statements. Returns the analysis rows removed.
     @discardableResult
     public func pruneMissing(_ assetIDs: Set<String>) throws -> Int {
         try database.write { db in
-            let storedIDs = try String.fetchAll(db, sql: "SELECT local_identifier FROM photo_analysis")
-            let missing = storedIDs.filter { !assetIDs.contains($0) }
-            for id in missing {
-                try db.execute(sql: "DELETE FROM photo_analysis WHERE local_identifier = ?", arguments: [id])
+            try db.execute(sql: "CREATE TEMP TABLE IF NOT EXISTS live_asset (id TEXT PRIMARY KEY)")
+            try db.execute(sql: "DELETE FROM live_asset")
+            let insert = try db.cachedStatement(sql: "INSERT OR IGNORE INTO live_asset (id) VALUES (?)")
+            for id in assetIDs { try insert.execute(arguments: [id]) }
+            try db.execute(
+                sql: "DELETE FROM photo_analysis WHERE local_identifier NOT IN (SELECT id FROM live_asset)")
+            let removed = db.changesCount
+            try db.execute(
+                sql: "DELETE FROM photo_match WHERE local_identifier NOT IN (SELECT id FROM live_asset)")
+            try db.execute(sql: "DELETE FROM live_asset")
+            return removed
+        }
+    }
+
+    public func matchState(host: String) throws -> PhotoMatchState {
+        try database.read { db in
+            var matches: [String: StoredPhotoMatch] = [:]
+            let rows = try Row.fetchCursor(
+                db,
+                sql: """
+                    SELECT local_identifier, modification_date, hash_revision, candidates
+                    FROM photo_match WHERE host = ?
+                    """,
+                arguments: [host])
+            while let row = try rows.next() {
+                let id: String = row["local_identifier"]
+                let modificationDateValue: Double? = row["modification_date"]
+                let candidatesData: Data? = row["candidates"]
+                matches[id] = StoredPhotoMatch(
+                    localIdentifier: id,
+                    modificationDate: modificationDateValue.map(Date.init(timeIntervalSinceReferenceDate:)),
+                    hashRevision: row["hash_revision"],
+                    candidates: try candidatesData.map {
+                        try JSONDecoder().decode([DedupCandidate].self, from: $0)
+                    }
+                        ?? [])
             }
-            return missing.count
+            var indexDigests: [ImageCode: UInt64] = [:]
+            let digests = try Row.fetchCursor(
+                db, sql: "SELECT image_id, digest FROM photo_match_index WHERE host = ?", arguments: [host])
+            while let row = try digests.next() {
+                let id: String = row["image_id"]
+                let digest: Int64 = row["digest"]
+                indexDigests[ImageCode(id)] = UInt64(bitPattern: digest)
+            }
+            return PhotoMatchState(matches: matches, indexDigests: indexDigests)
+        }
+    }
+
+    /// Saves freshly computed results for photos matched against the index the saved snapshot
+    /// already describes (the scan's cold photos).
+    public func saveMatches(host: String, _ matches: [StoredPhotoMatch]) throws {
+        guard !matches.isEmpty else { return }
+        try database.write { db in try Self.upsertMatches(in: db, host: host, matches) }
+    }
+
+    /// Saves delta-updated results together with the index snapshot they now reflect, in one
+    /// transaction — the results and the snapshot must never be persisted out of step.
+    public func applyMatchDelta(
+        host: String, matches: [StoredPhotoMatch], indexDigests: [ImageCode: UInt64]
+    ) throws {
+        try database.write { db in
+            try Self.upsertMatches(in: db, host: host, matches)
+            try db.execute(sql: "DELETE FROM photo_match_index WHERE host = ?", arguments: [host])
+            let insert = try db.cachedStatement(
+                sql: "INSERT INTO photo_match_index (host, image_id, digest) VALUES (?, ?, ?)")
+            for (id, digest) in indexDigests {
+                try insert.execute(arguments: [host, id.rawValue, Int64(bitPattern: digest)])
+            }
+        }
+    }
+
+    private static func upsertMatches(in db: Database, host: String, _ matches: [StoredPhotoMatch]) throws {
+        let statement = try db.cachedStatement(
+            sql: """
+                INSERT INTO photo_match (
+                  host, local_identifier, modification_date, hash_revision, candidates, checked_at
+                ) VALUES (?, ?, ?, ?, ?, ?)
+                ON CONFLICT(host, local_identifier) DO UPDATE SET
+                  modification_date = excluded.modification_date,
+                  hash_revision = excluded.hash_revision,
+                  candidates = excluded.candidates,
+                  checked_at = excluded.checked_at
+                """)
+        let checkedAt = Date.now.timeIntervalSinceReferenceDate
+        for match in matches {
+            // NULL for the overwhelmingly common "no match", so 90k rows stay small.
+            let candidates = match.candidates.isEmpty ? nil : try encode(match.candidates)
+            try statement.execute(arguments: [
+                host, match.localIdentifier, match.modificationDate?.timeIntervalSinceReferenceDate,
+                match.hashRevision, candidates, checkedAt,
+            ])
         }
     }
 
@@ -376,13 +525,35 @@ public actor PhotoAnalysisStore {
         return hash
     }
 
+    /// Reads only the fingerprint columns — this runs over the whole library at launch, and going
+    /// through `snapshots(for:)` decoded every row's category/label JSON and copied its
+    /// `full_analysis` BLOB just to throw them away.
     public func hashes(for localIdentifiers: [String]) throws -> [String: PhotoHashRecord] {
-        try snapshots(for: localIdentifiers).reduce(into: [:]) { result, element in
-            let (id, snapshot) = element
-            guard let hash = snapshot.perceptualHash else { return }
-            result[id] = PhotoHashRecord(
-                perceptualHash: hash, modificationDate: snapshot.modificationDate,
-                hashRevision: snapshot.hashRevision)
+        guard !localIdentifiers.isEmpty else { return [:] }
+        return try database.read { db in
+            var results: [String: PhotoHashRecord] = [:]
+            for start in stride(from: 0, to: localIdentifiers.count, by: 900) {
+                let identifiers = Array(localIdentifiers[start..<min(start + 900, localIdentifiers.count)])
+                let placeholders = Array(repeating: "?", count: identifiers.count).joined(separator: ", ")
+                let rows = try Row.fetchCursor(
+                    db,
+                    sql: """
+                        SELECT local_identifier, modification_date, perceptual_hash, hash_revision
+                        FROM photo_analysis
+                        WHERE perceptual_hash IS NOT NULL AND local_identifier IN (\(placeholders))
+                        """,
+                    arguments: StatementArguments(identifiers))
+                while let row = try rows.next() {
+                    let hash: Int64 = row["perceptual_hash"]
+                    let modificationDateValue: Double? = row["modification_date"]
+                    results[row["local_identifier"]] = PhotoHashRecord(
+                        perceptualHash: PerceptualHash64(value: UInt64(bitPattern: hash)),
+                        modificationDate: modificationDateValue.map(
+                            Date.init(timeIntervalSinceReferenceDate:)),
+                        hashRevision: row["hash_revision"])
+                }
+            }
+            return results
         }
     }
 
@@ -390,8 +561,13 @@ public actor PhotoAnalysisStore {
         try snapshots(for: localIdentifiers).mapValues(\.status)
     }
 
-    public func snapshots(for localIdentifiers: [String]) throws -> [String: PhotoAssetSnapshot] {
+    /// `includeFullAnalysis: false` skips copying the `full_analysis` BLOB (the snapshot's
+    /// `fullAnalysis` is `nil`) — for whole-library status reads that never look at it.
+    public func snapshots(
+        for localIdentifiers: [String], includeFullAnalysis: Bool = true
+    ) throws -> [String: PhotoAssetSnapshot] {
         guard !localIdentifiers.isEmpty else { return [:] }
+        let select = includeFullAnalysis ? Self.selectSQL : Self.selectWithoutFullAnalysisSQL
         return try database.read { db in
             var results: [String: PhotoAssetSnapshot] = [:]
             for start in stride(from: 0, to: localIdentifiers.count, by: 900) {
@@ -400,7 +576,7 @@ public actor PhotoAnalysisStore {
                 let placeholders = Array(repeating: "?", count: identifiers.count).joined(separator: ", ")
                 let rows = try StoredRecord.fetchAll(
                     db,
-                    sql: Self.selectSQL + " WHERE local_identifier IN (\(placeholders))",
+                    sql: select + " WHERE local_identifier IN (\(placeholders))",
                     arguments: StatementArguments(identifiers))
                 for row in rows { results[row.localIdentifier] = row.snapshot }
             }
@@ -435,6 +611,13 @@ public actor PhotoAnalysisStore {
         FROM photo_analysis
         """
 
+    private static let selectWithoutFullAnalysisSQL = """
+        SELECT local_identifier, modification_date, perceptual_hash, hash_revision, categories,
+               top_labels, classify_version, classify_ms, classified_at, NULL AS full_analysis,
+               full_analysis_version
+        FROM photo_analysis
+        """
+
     private static var migrator: DatabaseMigrator {
         var migrator = DatabaseMigrator()
         migrator.registerMigration("v1_photo_analysis") { db in
@@ -463,6 +646,23 @@ public actor PhotoAnalysisStore {
                 table.column("cloud_identifier", .text)
                 table.column("sent_at", .double).notNull()
                 table.primaryKey(["host", "local_identifier", "image_id", "version"])
+            }
+        }
+        migrator.registerMigration("v3_photo_match") { db in
+            try db.create(table: "photo_match") { table in
+                table.column("host", .text).notNull()
+                table.column("local_identifier", .text).notNull()
+                table.column("modification_date", .double)
+                table.column("hash_revision", .integer).notNull()
+                table.column("candidates", .blob)
+                table.column("checked_at", .double).notNull()
+                table.primaryKey(["host", "local_identifier"])
+            }
+            try db.create(table: "photo_match_index") { table in
+                table.column("host", .text).notNull()
+                table.column("image_id", .text).notNull()
+                table.column("digest", .integer).notNull()
+                table.primaryKey(["host", "image_id"])
             }
         }
         return migrator

@@ -10,19 +10,34 @@ struct PhotoGridMatchIndicator: View {
                 Text(text).font(.caption2.weight(.semibold).monospaced())
                     .lineLimit(1).minimumScaleFactor(0.75)
             } else if state.matchState == .checking {
-                ProgressView().controlSize(.small)
+                ProgressView().controlSize(.mini)
             } else {
-                Image(systemName: symbol).font(.body.weight(.semibold))
+                Image(systemName: symbol).font(.caption.weight(.semibold))
             }
         }
-        .padding(.horizontal, 7)
-        .frame(minWidth: 28, minHeight: 28)
-        .foregroundStyle(.primary)
-        .background(.regularMaterial, in: Capsule())
-        .shadow(radius: 2, y: 1)
+        // A compact pill: at 28pt it dominated a ~100pt grid tile.
+        .padding(.horizontal, 5)
+        .frame(minWidth: 20, minHeight: 20)
+        .foregroundStyle(categoryTint == nil ? AnyShapeStyle(.primary) : AnyShapeStyle(.white))
+        .background {
+            if let categoryTint {
+                Capsule().fill(categoryTint)
+            } else {
+                Capsule().fill(.regularMaterial)
+            }
+        }
+        .shadow(radius: 1, y: 0.5)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(state.accessibilityStatus)
         .help(state.accessibilityStatus)
+    }
+
+    /// B4's category signal, carried by the pill itself (it replaced a separate 6pt dot): the
+    /// category's tint (by ramp index, never by key) once a hit lands, grey once analysed with no
+    /// hit, and the plain material pill while analysis is pending.
+    private var categoryTint: Color? {
+        guard case .analysed(let categories) = state.analysis else { return nil }
+        return PhotoCategoryTint.color(for: categories) ?? .gray
     }
 
     private var symbol: String {

@@ -13,10 +13,17 @@ enum PhotoGridBadge {
         Set(directOwnerShortcodes.filter { !$0.isEmpty }).sorted()
     }
 
+    /// Only the entity-type prefix ("GDE" for "GDE-7AP4"): the full code crowded a ~100pt grid
+    /// tile, and the detail sheet lists (and links) every full owner code. The accessibility
+    /// description below still reads the full codes.
     static func text(for directOwnerShortcodes: [String]) -> String? {
         let owners = owners(for: directOwnerShortcodes)
-        guard let primary = owners.first else { return nil }
+        guard let primary = owners.first.map(prefix) else { return nil }
         return owners.count == 1 ? primary : "\(primary)+\(owners.count - 1)"
+    }
+
+    static func prefix(_ shortcode: String) -> String {
+        shortcode.split(separator: "-", maxSplits: 1).first.map(String.init) ?? shortcode
     }
 
     static func accessibilityDescription(for directOwnerShortcodes: [String]) -> String? {
@@ -57,7 +64,7 @@ struct PhotoGridCellState: Equatable, Sendable {
     /// The server failure is retained for inspector context even when cached positive candidates
     /// still give the grid a useful strong/possible state.
     var serverError: String? = nil
-    /// On-device classification status (B3/B4): drives the grid cell's 6pt dot. Defaulted so
+    /// On-device classification status (B3/B4): drives the grid badge's category tint. Defaulted so
     /// existing call sites that predate the classification sweep still compile unchanged.
     var analysis: PhotoAnalysisStatus = .pending
     /// Developer overlays layer 1: how long the on-device classifier took, and its top label —
@@ -137,7 +144,7 @@ struct PhotoGridCellState: Equatable, Sendable {
     }
 }
 
-/// The grid dot's tint: the first `PhotoImportCatalog.categories` entry a photo's hits contain,
+/// The grid badge's category tint: the first `PhotoImportCatalog.categories` entry a photo's hits contain,
 /// colored by its *index* into the token ramp — never by category key, so no category name is a
 /// Swift literal here.
 enum PhotoCategoryTint {

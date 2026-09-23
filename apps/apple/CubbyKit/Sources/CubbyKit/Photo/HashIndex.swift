@@ -57,6 +57,29 @@ public struct ImageHashEntry: Sendable, Hashable, Codable {
             height: item.height,
             directOwnerShortcodes: item.directOwnerShortcodes)
     }
+
+    /// A process-stable FNV-1a digest of exactly the fields `HashIndex.candidates(for:)` reads, so
+    /// a persisted match result can tell which index entries changed since it was computed.
+    /// `Hasher` is seeded per process and cannot be stored; owners are excluded because they never
+    /// change a match.
+    public var matchDigest: UInt64 {
+        var digest: UInt64 = 0xcbf2_9ce4_8422_2325
+        func mix(_ value: UInt64) {
+            for shift in stride(from: 0, to: 64, by: 8) {
+                digest ^= (value >> UInt64(shift)) & 0xff
+                digest = digest &* 0x100_0000_01b3
+            }
+        }
+        // A presence marker before each optional keeps "missing" distinct from a zero value.
+        mix(perceptualHash == nil ? 0 : 1)
+        mix(perceptualHash?.value ?? 0)
+        mix(sourceFingerprint == nil ? 0 : 1)
+        mix(sourceFingerprint?.hash.value ?? 0)
+        mix(sourceFingerprint?.aspectRatio.bitPattern ?? 0)
+        mix(width.map { UInt64(bitPattern: Int64($0)) } ?? UInt64.max)
+        mix(height.map { UInt64(bitPattern: Int64($0)) } ?? UInt64.max)
+        return digest
+    }
 }
 
 /// A hash computed on-device for an image the server could not hash itself.
@@ -131,13 +154,17 @@ public struct PhotoMatchVerdict: Codable, Sendable, Hashable, Equatable {
         self.reason = reason
     }
 
+    /// Every distance above this is `.rejected` regardless of aspect ratio, which lets
+    /// `HashIndex.candidates(for:)` skip the verdict for the overwhelming majority of pairs.
+    public static let maxCandidateDistance = 6
+
     public static func evaluate(
         distance: Int, leftAspectRatio: Double?, rightAspectRatio: Double?
     ) -> Self {
         switch distance {
         case 0...2:
             return Self(confidence: .strong, reason: .exactDistance)
-        case 3...6:
+        case 3...maxCandidateDistance:
             guard let leftAspectRatio, let rightAspectRatio else {
                 return Self(confidence: .possible, reason: .missingAspectRatio)
             }
@@ -172,62 +199,25 @@ public struct HashIndex: Sendable {
     }
 
     public func candidates(for query: HashQuery) -> [DedupCandidate] {
-        let found = entries.flatMap { entry -> [DedupCandidate] in
-            var candidates: [DedupCandidate] = []
-            if let hash = entry.perceptualHash {
-                let verdict = PhotoMatchVerdict.evaluate(
-                    distance: query.perceptualHash.distance(to: hash),
-                    leftAspectRatio: query.aspectRatio,
-                    rightAspectRatio: Self.ratio(width: entry.width, height: entry.height))
-                if let confidence = verdict.candidateConfidence {
-                    candidates.append(
-                        DedupCandidate(
-                            id: entry.id, basis: .content, confidence: confidence,
-                            distance: query.perceptualHash.distance(to: hash)))
-                }
-            }
-            if let querySource = query.sourceFingerprint, let hash = entry.perceptualHash {
-                let verdict = PhotoMatchVerdict.evaluate(
-                    distance: querySource.hash.distance(to: hash),
-                    leftAspectRatio: querySource.aspectRatio,
-                    rightAspectRatio: Self.ratio(width: entry.width, height: entry.height))
-                if let confidence = verdict.candidateConfidence {
-                    candidates.append(
-                        DedupCandidate(
-                            id: entry.id, basis: .content, confidence: confidence,
-                            distance: querySource.hash.distance(to: hash)))
-                }
-            }
-            if let querySource = query.sourceFingerprint, let source = entry.sourceFingerprint {
-                let verdict = PhotoMatchVerdict.evaluate(
-                    distance: querySource.hash.distance(to: source.hash),
-                    leftAspectRatio: querySource.aspectRatio, rightAspectRatio: source.aspectRatio)
-                if let confidence = verdict.candidateConfidence {
-                    candidates.append(
-                        DedupCandidate(
-                            id: entry.id, basis: .source, confidence: confidence,
-                            distance: querySource.hash.distance(to: source.hash)))
-                }
-            }
-            if let source = entry.sourceFingerprint {
-                let verdict = PhotoMatchVerdict.evaluate(
-                    distance: query.perceptualHash.distance(to: source.hash),
-                    leftAspectRatio: query.aspectRatio, rightAspectRatio: source.aspectRatio)
-                if let confidence = verdict.candidateConfidence {
-                    candidates.append(
-                        DedupCandidate(
-                            id: entry.id, basis: .source, confidence: confidence,
-                            distance: query.perceptualHash.distance(to: source.hash)))
-                }
-            }
-            return candidates
-        }
+        // Called once per library photo against every index entry (~90k x ~6k pairs on a large
+        // library), so a pair beyond `maxCandidateDistance` is rejected before any verdict,
+        // ratio, or allocation. Pairs are considered in the original order, so ties keep the
+        // same first-seen winner.
         var best: [CandidateKey: DedupCandidate] = [:]
-        for candidate in found {
-            let key = CandidateKey(id: candidate.id, basis: candidate.basis)
+        func consider(
+            _ lhs: PerceptualHash64, _ lhsRatio: Double?, _ rhs: PerceptualHash64,
+            _ rhsRatio: @autoclosure () -> Double?, id: ImageCode, basis: DedupCandidate.Basis
+        ) {
+            let distance = lhs.distance(to: rhs)
+            guard distance <= PhotoMatchVerdict.maxCandidateDistance else { return }
+            let verdict = PhotoMatchVerdict.evaluate(
+                distance: distance, leftAspectRatio: lhsRatio, rightAspectRatio: rhsRatio())
+            guard let confidence = verdict.candidateConfidence else { return }
+            let candidate = DedupCandidate(id: id, basis: basis, confidence: confidence, distance: distance)
+            let key = CandidateKey(id: id, basis: basis)
             guard let current = best[key] else {
                 best[key] = candidate
-                continue
+                return
             }
             if candidate.confidence == .strong && current.confidence == .possible
                 || candidate.confidence == current.confidence && candidate.distance < current.distance
@@ -235,7 +225,37 @@ public struct HashIndex: Sendable {
                 best[key] = candidate
             }
         }
-        return best.values.sorted {
+        let querySource = query.sourceFingerprint
+        for entry in entries {
+            if let hash = entry.perceptualHash {
+                consider(
+                    query.perceptualHash, query.aspectRatio, hash,
+                    Self.ratio(width: entry.width, height: entry.height), id: entry.id, basis: .content)
+                if let querySource {
+                    consider(
+                        querySource.hash, querySource.aspectRatio, hash,
+                        Self.ratio(width: entry.width, height: entry.height), id: entry.id, basis: .content)
+                }
+            }
+            if let source = entry.sourceFingerprint {
+                if let querySource {
+                    consider(
+                        querySource.hash, querySource.aspectRatio, source.hash, source.aspectRatio,
+                        id: entry.id, basis: .source)
+                }
+                consider(
+                    query.perceptualHash, query.aspectRatio, source.hash, source.aspectRatio,
+                    id: entry.id, basis: .source)
+            }
+        }
+        return Self.ranked(best.values)
+    }
+
+    /// The one candidate order every matcher result uses — strong first, then closest, then a
+    /// stable id/basis tiebreak — shared with `PhotoMatchDelta` so a delta-updated result is
+    /// indistinguishable from a full match.
+    public static func ranked(_ candidates: some Sequence<DedupCandidate>) -> [DedupCandidate] {
+        candidates.sorted {
             if $0.confidence != $1.confidence { return $0.confidence == .strong }
             if $0.distance != $1.distance { return $0.distance < $1.distance }
             if $0.id != $1.id { return $0.id.rawValue < $1.id.rawValue }
