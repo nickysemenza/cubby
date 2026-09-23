@@ -4,7 +4,7 @@ import { taxonomyShortcode } from "tooling/product-category-fixtures";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { productCategory } from "~/server/db/schema";
+import { ledgerParty, productCategory } from "~/server/db/schema";
 import { getDb } from "~/server/repo/database-helpers";
 import {
   createLedgerParty,
@@ -162,13 +162,35 @@ describe("server list grouping", () => {
   });
 
   it("applies Ledger Party secondary sorts before its stable tie breaker", async () => {
-    for (const [name, kind] of [
-      ["Alpha", "guest"],
-      ["Beta", "guest"],
-      ["Gamma", "member"],
+    const older = await createLedgerParty(
+      ctx.db,
+      { name: "Alpha", kind: "guest", notes: null },
+      ctx.actor,
+    );
+    const newer = await createLedgerParty(
+      ctx.db,
+      { name: "Alpha", kind: "guest", notes: null },
+      ctx.actor,
+    );
+    for (const [id, date] of [
+      [older.entityId, "2020-01-01T00:00:00.000Z"],
+      [newer.entityId, "2021-01-01T00:00:00.000Z"],
     ] as const) {
-      await createLedgerParty(ctx.db, { name, kind, notes: null }, ctx.actor);
+      await getDb(ctx.db)
+        .update(ledgerParty)
+        .set({ createdAt: new Date(date) })
+        .where(eq(ledgerParty.id, id));
     }
+    await createLedgerParty(
+      ctx.db,
+      { name: "Beta", kind: "guest", notes: null },
+      ctx.actor,
+    );
+    await createLedgerParty(
+      ctx.db,
+      { name: "Gamma", kind: "member", notes: null },
+      ctx.actor,
+    );
 
     const result = await listLedgerParties(
       ctx.db,
@@ -176,13 +198,19 @@ describe("server list grouping", () => {
       [
         { orderBy: "kind", direction: "asc" },
         { orderBy: "name", direction: "desc" },
+        { orderBy: "createdAt", direction: "desc" },
       ],
       { pageIndex: 0, pageSize: 10 },
     );
     expect(result.data.map((row) => row.name)).toEqual([
       "Beta",
       "Alpha",
+      "Alpha",
       "Gamma",
+    ]);
+    expect(result.data.slice(1, 3).map((row) => row.id)).toEqual([
+      newer.output.id,
+      older.output.id,
     ]);
   });
 });
