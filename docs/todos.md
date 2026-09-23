@@ -27,6 +27,19 @@ history is the archive. Permanent product constraints live in the
 
 ## Easy fixes
 
+- **Name field-resolution sources on the server.** `FieldResolution.sourceEntity`
+  carries only `{ entityType, entityId }`, so every provenance caption and
+  field-explanation link (`EntityInlineLinkById` → `EntityReferenceLink`)
+  fetches the source's full detail just to read its `titleField` and cover,
+  and shows the bare shortcode until that lands. The builders already hold
+  the rows (`server/repo/task-project-inheritance.ts` loads project names,
+  `server/repo/expense/helpers.ts` has `purchaseRow`,
+  `server/repo/expense-inheritance.ts`, `server/repo/product-category.ts`):
+  add a nullable `name` to `fieldResolutionSourceSchema` and pass it through
+  as `EntityReferenceLink`'s `name`, keeping the fetch only as a fallback.
+  Also removes the per-row detail fetch the AI usage page now makes for
+  project/task/purchase entries.
+
 - **CalDAV feed dirty-mark can fail silently.** The dirty-mark in
   `server/calendar/client.ts` (annotated `SILENT:`, guarded by the
   `cubby/no-swallowed-catch` rule) runs after the response is committed, so a
@@ -644,6 +657,22 @@ history is the archive. Permanent product constraints live in the
   an intermediate list response.
 
 ### Needs a decision or investigation
+
+- **Detail ledger dates.** Task Overview shows `Due` and `Due end` as two
+  identical ISO rows (`2026-09-22` twice) for a single-day task, while the
+  header reads `Added Sep 18, 2026`. Decide whether a same-day range
+  collapses to one `Due` row (keeping `Due end` editable from the edit
+  sheet) and whether detail facts use the human date format; both are
+  manifest `display.format`/field decisions, not ledger CSS.
+
+- **Phone hit areas as pseudo-elements, app-wide.** Button's default
+  `mobileSize: "touch"` grows icon controls to 44px *layout* boxes, which
+  wraps dense rows on phones. The detail ledger now keeps the 44px target as
+  an `::after` (suggestion glyph, cohort filter link, field-explanation
+  trigger; the `checkbox.tsx` pattern). Decide whether `touch` itself should
+  become a pseudo-element target so other dense surfaces (phone cards,
+  relation section headers) get the same density without per-call-site
+  classes.
 
 - **Fixture-backed web preview route.** Web has no `#Preview` equivalent:
   seeing a component's empty, loading, error, or edge state means driving the
