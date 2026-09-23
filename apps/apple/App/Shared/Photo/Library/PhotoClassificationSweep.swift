@@ -142,8 +142,8 @@ final class PhotoClassificationSweep {
     /// winding down from cancellation; that previous run's completion handler checks this before
     /// touching `isRunning`/`runTask` so it cannot clobber the state of the run that superseded it.
     @ObservationIgnored private var runGeneration = UUID()
-    @ObservationIgnored private var uncoalescedAnalysedCount = 0
-    @ObservationIgnored private var lastAnalysedCountBump = Date.distantPast
+    @ObservationIgnored private var pendingRecords: [(PhotoSweepScheduler.Candidate, Outcome)] = []
+    @ObservationIgnored private var lastRecordFlush = Date.distantPast
     // `nonisolated(unsafe)`: `deinit` is not main-actor-isolated, and `NotificationCenter`'s
     // observer tokens are documented safe to pass to `removeObserver` from any thread, so reading
     // this array there (only to unregister, never mutated concurrently) is sound.
@@ -274,8 +274,7 @@ final class PhotoClassificationSweep {
             alreadyClassified: alreadyClassified)
         let candidatesByID = Dictionary(uniqueKeysWithValues: all.map { ($0.localIdentifier, $0) })
         analysedCount = all.count - ordered.count
-        uncoalescedAnalysedCount = 0
-        lastAnalysedCountBump = .now
+        lastRecordFlush = .now
         // However this run ends (candidates exhausted, cancelled by `reconcile()`, or simply
         // nothing to do), clear `runTask`/`isRunning` so the *next* `reconcile()` can start a new
         // run — leaving `runTask` set after completion was finding 1's bug: a sweep that started
@@ -288,7 +287,6 @@ final class PhotoClassificationSweep {
                 isRunning = false
                 runTask = nil
                 startedAt = nil
-                if uncoalescedAnalysedCount > 0 { analysedCount += uncoalescedAnalysedCount }
             }
         }
         guard !ordered.isEmpty else { return }
@@ -306,7 +304,8 @@ final class PhotoClassificationSweep {
             // unisolated read, unlike `shouldRunNow` (main-actor state this task-group body is
             // not guaranteed to run on).
             func enqueue() {
-                guard !Task.isCancelled, pendingCount < 2, let id = iterator.next(),
+                guard !Task.isCancelled, pendingCount < Self.concurrentClassifications,
+                    let id = iterator.next(),
                     let candidate = candidatesByID[id]
                 else { return }
                 pendingCount += 1
@@ -315,32 +314,54 @@ final class PhotoClassificationSweep {
                     return (candidate, outcome)
                 }
             }
-            enqueue(); enqueue()
+            for _ in 0..<Self.concurrentClassifications { enqueue() }
             while let (candidate, outcome) = await group.next() {
                 pendingCount -= 1
                 if let outcome { await record(candidate, outcome) }
                 enqueue()
             }
         }
+        // Whatever the run's end (drained, cancelled, superseded), results already classified
+        // are written rather than dropped with the buffer.
+        await flushRecords()
     }
 
+    /// Vision classification is the sweep's bottleneck; thermal state and Low Power Mode already
+    /// stop the sweep outright (`shouldRun`), so a little more parallelism is safe.
+    nonisolated static let concurrentClassifications = 4
+
+    /// Buffers a result and writes buffered results in one transaction every 50 photos or second,
+    /// whichever comes first, instead of one store actor hop and write per photo.
     private func record(_ candidate: PhotoSweepScheduler.Candidate, _ outcome: Outcome) async {
+        pendingRecords.append((candidate, outcome))
+        if pendingRecords.count >= 50 || Date().timeIntervalSince(lastRecordFlush) >= 1 {
+            await flushRecords()
+        }
+    }
+
+    private func flushRecords() async {
+        let records = pendingRecords
+        pendingRecords = []
+        lastRecordFlush = Date()
+        guard !records.isEmpty else { return }
         do {
-            try await analysisStore.upsertClassification(
-                localIdentifier: candidate.localIdentifier, categories: outcome.categories,
-                topLabels: outcome.topLabels, classifyVersion: Self.classifyVersion,
-                classifyMs: outcome.classifyMs)
-            // `analysedCount` (and so `statusText`) only publishes at most once per second or per
-            // 50 photos, whichever comes first — matching `PhotoMatchStore.classifiedRevision`'s
-            // cadence — rather than once per photo, which re-rendered the "Analysing… N of M"
-            // caption on every classification in a sweep over thousands of photos.
-            uncoalescedAnalysedCount += 1
-            let now = Date()
-            if uncoalescedAnalysedCount >= 50 || now.timeIntervalSince(lastAnalysedCountBump) >= 1 {
-                analysedCount += uncoalescedAnalysedCount
-                uncoalescedAnalysedCount = 0
-                lastAnalysedCountBump = now
-            }
+            try await analysisStore.upsertClassifications(
+                records.map { candidate, outcome in
+                    PhotoClassificationWrite(
+                        localIdentifier: candidate.localIdentifier, categories: outcome.categories,
+                        topLabels: outcome.topLabels, classifyVersion: Self.classifyVersion,
+                        classifyMs: outcome.classifyMs)
+                })
+        } catch {
+            // A store write failure leaves these photos pending; the next sweep pass retries them.
+            return
+        }
+        // Published only after the write succeeds, so the UI never counts a photo as analysed
+        // that the store does not have. `analysedCount` (and so `statusText`) publishes at most
+        // once per flush — i.e. at most once per second or per 50 photos — matching
+        // `PhotoMatchStore.classifiedRevision`'s cadence rather than once per photo.
+        analysedCount += records.count
+        for (candidate, outcome) in records {
             cursor = candidate.creationDate
             onClassified?(
                 candidate.localIdentifier,
@@ -350,8 +371,6 @@ final class PhotoClassificationSweep {
                     topLabels: outcome.topLabels, classifyVersion: Self.classifyVersion,
                     classifyMs: outcome.classifyMs, classifiedAt: Date(), fullAnalysis: nil,
                     fullAnalysisVersion: nil))
-        } catch {
-            // A store write failure leaves the photo pending; the next sweep pass retries it.
         }
     }
 

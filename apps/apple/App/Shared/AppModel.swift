@@ -2,6 +2,7 @@ import CubbyKit
 import Foundation
 import Nuke
 import Observation
+
 #if os(iOS)
     import UIKit
 #endif
@@ -94,6 +95,7 @@ final class AppModel {
             storedPhotoClassificationSweep = sweep
             backgroundActivity.register(sweep)
             storedLibraryMetadataSync = makeLibraryMetadataSync(analysisStore: analysisStore)
+            photoLibrary.matchHost = host
             photoLibrary.install(analysisStore: analysisStore)
             photoSubsystemTask = nil
         }
@@ -455,6 +457,7 @@ final class AppModel {
         storedLibraryMetadataSync?.cancel()
         photoMatches.reset()
         photoLibrary.reset()
+        photoLibrary.matchHost = host
         let credentials = CredentialProvider(host: host, store: store)
         self.credentials = credentials
         client = CubbyClient(

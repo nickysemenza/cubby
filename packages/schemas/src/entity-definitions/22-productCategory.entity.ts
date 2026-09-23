@@ -47,7 +47,10 @@ export default defineEntity({
         },
       ],
     },
-    list: { actions: ["delete"] },
+    list: {
+      views: ["table", { kind: "slot", id: "hierarchy", label: "Hierarchy" }],
+      actions: ["delete"],
+    },
   },
   model: {
     fields: [

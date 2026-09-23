@@ -222,7 +222,7 @@ private struct PhotoLibraryBrowser: View {
                         .padding(.vertical, 12)
                     }
                     .refreshControl(identifier: "photos.refresh") {
-                        await library.refresh(matches: matches, client: appModel.client)
+                        await library.refresh(matches: matches, client: appModel.client, forceRematch: true)
                     }
                     .onAppear {
                         // Scroll to the containing month first: `scrollTo` on an id nested two
@@ -674,7 +674,7 @@ private struct PhotoLibraryCell: View {
                         Image(systemName: "photo").foregroundStyle(.secondary)
                     }
                 }.clipped()
-                .overlay(alignment: .bottomTrailing) { cornerBadge }
+                .overlay { PhotoCellChrome(state: cellState, developerOverlays: developerOverlays) }
                 .overlay(alignment: .topTrailing) {
                     if let selection {
                         Text("\(selection)").font(.caption.bold()).padding(7)
@@ -682,7 +682,6 @@ private struct PhotoLibraryCell: View {
                             .accessibilityHidden(true)
                     }
                 }
-                .overlay(alignment: .bottomLeading) { analysisDot }
         }.buttonStyle(.plain)
             .overlay(alignment: .topLeading) { detailsButton }
             .help(cellState.accessibilityStatus)
@@ -698,38 +697,6 @@ private struct PhotoLibraryCell: View {
                 { /* Local-only grid requests can fail for cloud assets; selection retries with network access. */
                 }
             }
-    }
-
-    /// Ownership and selection occupy different corners so selecting cannot hide a match.
-    private var cornerBadge: some View {
-        PhotoGridMatchIndicator(state: cellState).padding(5)
-    }
-
-    /// B4's grid dot: absent while pending, `.secondary` once analysed with no category hit,
-    /// category-tinted (by ramp index, never by key) once a hit lands. Developer overlays layer 1
-    /// adds the classify time and top label underneath, purely as an overlay caption — it never
-    /// changes the tile's own layout.
-    @ViewBuilder private var analysisDot: some View {
-        VStack(alignment: .trailing, spacing: 2) {
-            switch cellState.analysis {
-            case .pending:
-                EmptyView()
-            case .analysed(let categories):
-                Circle().fill(PhotoCategoryTint.color(for: categories) ?? Color.secondary)
-                    .frame(width: 6, height: 6)
-            }
-            if developerOverlays, let classifyMs = cellState.classifyMs {
-                DevOverlayText(analysisOverlayCaption(classifyMs))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.6)
-            }
-        }
-        .padding(6)
-    }
-
-    private func analysisOverlayCaption(_ classifyMs: Double) -> String {
-        let label = cellState.topLabel.map { " · \($0)" } ?? ""
-        return "\(Int(classifyMs))ms\(label)"
     }
 
     private var detailsButton: some View {
@@ -830,13 +797,20 @@ private struct PhotoLibraryPreview: View {
             }
             ForEach(Array(candidates.enumerated()), id: \.offset) { _, candidate in
                 let owners = Set(appModel.photoMatches.directOwnerShortcodes(for: candidate.id)).sorted()
-                if !owners.isEmpty {
-                    Text(owners.joined(separator: ", "))
-                        .font(.subheadline.monospaced())
-                        .textSelection(.enabled)
+                // The grid badge shows only each owner's type prefix; here every full code opens
+                // its record.
+                ForEach(owners, id: \.self) { owner in
+                    if let descriptor = EntityCatalog.descriptor(forShortcode: owner) {
+                        NavigationLink {
+                            EntityDetailView(key: descriptor.key, id: owner)
+                        } label: {
+                            Text(owner).font(.subheadline.monospaced())
+                        }
                         .accessibilityLabel(
-                            "\(candidate.confidence == .strong ? "Owned by" : "Possible owners") \(owners.joined(separator: ", "))"
-                        )
+                            "\(candidate.confidence == .strong ? "Owned by" : "Possibly owned by") \(owner)")
+                    } else {
+                        Text(owner).font(.subheadline.monospaced()).textSelection(.enabled)
+                    }
                 }
                 MatchCandidateView(candidate: candidate)
                 NavigationLink {
@@ -865,4 +839,72 @@ private struct PhotoLibraryPreview: View {
 #Preview("Developer overlays on", traits: .modifier(SignedInPreview())) {
     NavigationStack { PhotosRootView() }
         .environment(\.developerOverlays, true)
+}
+
+/// A grid tile's bottom chrome over its image: the match badge (trailing, tinted by category) and
+/// — developer overlays only — the classify caption. Split out of
+/// `PhotoLibraryCell` so it previews over a fixture image without a `PHAsset`.
+private struct PhotoCellChrome: View {
+    let state: PhotoGridCellState
+    let developerOverlays: Bool
+
+    var body: some View {
+        // The badge keeps its full size (ownership and selection occupy different corners, so
+        // selecting cannot hide a match). A ~100pt tile leaves room beside the compact badge for
+        // the classify time but not the label, so the time joins the bottom row and the label
+        // sits just above it.
+        VStack(alignment: .leading, spacing: 3) {
+            if developerOverlays, state.classifyMs != nil, let topLabel = state.topLabel {
+                DevOverlayText(topLabel, overMedia: true)
+            }
+            HStack(alignment: .center, spacing: 3) {
+                if developerOverlays, let classifyTime {
+                    // Ahead of the spacer, which otherwise splits the free width with it.
+                    DevOverlayText(classifyTime, overMedia: true).layoutPriority(1)
+                }
+                Spacer(minLength: 0)
+                PhotoGridMatchIndicator(state: state).fixedSize().layoutPriority(2)
+            }
+        }
+        .padding(5)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+    }
+
+    private var classifyTime: String? { state.classifyMs.map { "\(Int($0))ms" } }
+
+}
+
+#Preview("Cell chrome — developer overlays") {
+    let states: [PhotoGridCellState] = [
+        PhotoGridCellState(
+            matchState: .unmatched, ownerBadgeText: nil, accessibilityStatus: "Not in Cubby",
+            indexIsComplete: true, analysis: .analysed(categories: []), classifyMs: 50,
+            topLabel: "structure"),
+        PhotoGridCellState(
+            matchState: .strong, ownerBadgeText: "GDE", accessibilityStatus: "In Cubby",
+            indexIsComplete: true, analysis: .analysed(categories: ["plants"]), classifyMs: 222,
+            topLabel: "plant"),
+        PhotoGridCellState(
+            matchState: .possible, ownerBadgeText: "PRD?", accessibilityStatus: "Possible match",
+            indexIsComplete: true, analysis: .analysed(categories: ["food"]), classifyMs: 1527,
+            topLabel: "tableware"),
+        PhotoGridCellState(
+            matchState: .strong, ownerBadgeText: "MEAL+2", accessibilityStatus: "In Cubby",
+            indexIsComplete: true, analysis: .analysed(categories: []), classifyMs: 9999,
+            topLabel: "tableware"),
+    ]
+    HStack(spacing: 3) {
+        ForEach(Array(states.enumerated()), id: \.offset) { index, state in
+            // A busy light-to-dark fixture: the caption must stay legible on either.
+            LinearGradient(
+                colors: index.isMultiple(of: 2) ? [.white, .orange] : [.green, .black],
+                startPoint: .top, endPoint: .bottom
+            )
+            .aspectRatio(1, contentMode: .fit)
+            .overlay { PhotoCellChrome(state: state, developerOverlays: true) }
+            // About a Mac grid tile's width.
+            .frame(width: 100)
+        }
+    }
+    .padding()
 }
