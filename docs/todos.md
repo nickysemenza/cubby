@@ -743,6 +743,12 @@ history is the archive. Permanent product constraints live in the
   the `runProjection` union (`apps/web/src/server/repo/activity.ts`) is a
   transport addition, giving cross-device history without a remodel.
 
+- **Live Activities for server runs started on this device.** Record the initiating
+  install separately from `ActivityRun.executors` (which identifies where work
+  ran), then send per-activity ActivityKit push updates for state changes so
+  the originating phone can show progress after Cubby is suspended. Keep the
+  native Live Activity's local-work feed separate from server run history.
+
 - **MCP staged-file storage.** Before sharing a local upload beyond its signed
   grant, define no-copy activation, replay behavior for a signed grant,
   activation fencing, delete-before-grant-expiry handling for a recreated

@@ -29,6 +29,7 @@ final class PhotoLibraryStore: NSObject, PHPhotoLibraryChangeObserver {
     /// there is no PhotoKit fetch in flight to ask (e.g. before the first `refresh`).
     private(set) var totalAssetCount: Int?
     private(set) var checked: Set<String> = []
+    private(set) var deferredCloudIDs: Set<String> = []
     private(set) var isScanning = false
     private(set) var isLoadingLibrary = false
     private(set) var loadingStartedAt: Date?
@@ -119,6 +120,11 @@ final class PhotoLibraryStore: NSObject, PHPhotoLibraryChangeObserver {
     /// even if that invariant is ever violated mid-refresh.
     var uncheckedCount: Int { max(0, count - checked.count) }
 
+    /// Only locally accessible, unchecked photos justify another iOS processing request.
+    var hasPendingMatching: Bool {
+        isParticipating && hasFullAccess && count > checked.count + deferredCloudIDs.count
+    }
+
     init(analysisStore: PhotoAnalysisStore? = nil) {
         self.analysisStore = analysisStore
         super.init()
@@ -147,8 +153,20 @@ final class PhotoLibraryStore: NSObject, PHPhotoLibraryChangeObserver {
     }
 
     func activate(_ id: UUID, matches: PhotoMatchStore, client: CubbyClient) async {
+        guard !Task.isCancelled else { return }
+        let wasEmpty = clients.isEmpty
         clients[id] = (matches, client)
         matches.acquire(id)
+        guard wasEmpty else {
+            if !isScanning && !isLoadingLibrary {
+                if fetchResult == nil {
+                    await refresh(matches: matches, client: client)
+                } else if hasPendingMatching {
+                    await resume(matches: matches, client: client)
+                }
+            }
+            return
+        }
         if canResume {
             await resume(matches: matches, client: client)
         } else {
@@ -162,6 +180,16 @@ final class PhotoLibraryStore: NSObject, PHPhotoLibraryChangeObserver {
     func deactivate(_ id: UUID) {
         clients.removeValue(forKey: id)?.0.release(id)
         if clients.isEmpty { stopWork() }
+    }
+
+    func waitForMatching() async {
+        await scanTask?.value
+    }
+
+    func interruptMatching() {
+        scanTask?.cancel()
+        scanTask = nil
+        isScanning = false
     }
 
     /// A completed load for the same Photos access, kept current by the change observer while
@@ -181,7 +209,9 @@ final class PhotoLibraryStore: NSObject, PHPhotoLibraryChangeObserver {
         // Cheap now that known results only take the index delta (`PhotoMatchStore.refresh`).
         if isParticipating { await matches.refresh(client: client) }
         guard generation == token, !Task.isCancelled, isParticipating, analysisStore != nil else { return }
-        let remaining = months.flatMap(\.assets).filter { !checked.contains($0.localIdentifier) }
+        let remaining = months.flatMap(\.assets).filter {
+            !checked.contains($0.localIdentifier) && !deferredCloudIDs.contains($0.localIdentifier)
+        }
         startScan(remaining: remaining, matches: matches, token: token)
     }
 
@@ -190,7 +220,7 @@ final class PhotoLibraryStore: NSObject, PHPhotoLibraryChangeObserver {
         pendingLibraryChanges = []
         for (id, pair) in clients { pair.0.release(id) }
         if observing { PHPhotoLibrary.shared().unregisterChangeObserver(self); observing = false }
-        clients = [:]; checked = []
+        clients = [:]; checked = []; deferredCloudIDs = []
         selectedIDs = []; scrollID = nil; months = []; index = PhotoMonthIndex()
         fetchResult = nil
         monthsRevision += 1
@@ -237,7 +267,7 @@ final class PhotoLibraryStore: NSObject, PHPhotoLibraryChangeObserver {
         guard hasFullAccess else {
             index = PhotoMonthIndex()
             months = []; monthsRevision += 1
-            count = 0; totalAssetCount = nil; checked = []; selectedIDs = []
+            count = 0; totalAssetCount = nil; checked = []; deferredCloudIDs = []; selectedIDs = []
             fetchResult = nil
             thumbnails.removeAllObjects()
             if observing { PHPhotoLibrary.shared().unregisterChangeObserver(self); observing = false }
@@ -262,6 +292,7 @@ final class PhotoLibraryStore: NSObject, PHPhotoLibraryChangeObserver {
                 {
                     thumbnails.removeObject(forKey: asset.localIdentifier as NSString)
                     checked.remove(asset.localIdentifier)
+                    deferredCloudIDs.remove(asset.localIdentifier)
                 }
             }
             index.append(batch.assets)
@@ -337,10 +368,27 @@ final class PhotoLibraryStore: NSObject, PHPhotoLibraryChangeObserver {
             matches.markAnalysis(snapshots)
         }
         let unchecked = months.flatMap(\.assets).filter { !checked.contains($0.localIdentifier) }
+        let retryDeferredCloud = forceRematch
         let remaining = await seedSavedMatches(
             unchecked, matches: matches, analysisStore: analysisStore, token: token)
         guard generation == token, !Task.isCancelled else { return }
-        startScan(remaining: remaining, matches: matches, token: token)
+        let deferred =
+            (try? await analysisStore.deferredCloudHashes(for: remaining.map(\.localIdentifier))) ?? [:]
+        if retryDeferredCloud {
+            try? await analysisStore.clearDeferredCloudHashes(Array(deferred.keys))
+            deferredCloudIDs = []
+        } else {
+            deferredCloudIDs = Set(
+                remaining.compactMap { asset in
+                    guard let saved = deferred[asset.localIdentifier], saved == asset.modificationDate else {
+                        return nil
+                    }
+                    return asset.localIdentifier
+                })
+        }
+        startScan(
+            remaining: remaining.filter { !deferredCloudIDs.contains($0.localIdentifier) },
+            matches: matches, token: token)
     }
 
     /// Installs saved match results for every unedited photo, brought up to date with only the
@@ -432,6 +480,11 @@ final class PhotoLibraryStore: NSObject, PHPhotoLibraryChangeObserver {
         // must be cancelled here, and `isScanning` is owned by `scanID` rather than `token` —
         // otherwise the superseded scan's `defer` clears it while the new scan is still running.
         scanTask?.cancel()
+        guard !remaining.isEmpty else {
+            scanTask = nil
+            isScanning = false
+            return
+        }
         let scanID = UUID()
         currentScanID = scanID
         scanTask = Task { [weak self] in
@@ -491,7 +544,11 @@ final class PhotoLibraryStore: NSObject, PHPhotoLibraryChangeObserver {
                 } catch {
                     guard generation == token else { return }
                     matches.markUnavailable(for: asset.localIdentifier, message: error.localizedDescription)
-                    if !PhotoLibraryFailure.isCloudUnavailable(error) {
+                    if PhotoLibraryFailure.isCloudUnavailable(error) {
+                        deferredCloudIDs.insert(asset.localIdentifier)
+                        try? await analysisStore.deferCloudHash(
+                            localIdentifier: asset.localIdentifier, modificationDate: asset.modificationDate)
+                    } else {
                         Diagnostics.report(error, context: "photos.match.prepare")
                     }
                 }
@@ -644,6 +701,7 @@ final class PhotoLibraryStore: NSObject, PHPhotoLibraryChangeObserver {
         }
         let token = generation
         var applied = false
+        var invalidatedIDs: [String] = []
         for change in changes {
             guard let details = change.changeDetails(for: current) else { continue }
             guard details.hasIncrementalChanges else {
@@ -653,6 +711,8 @@ final class PhotoLibraryStore: NSObject, PHPhotoLibraryChangeObserver {
             for asset in details.changedObjects + details.removedObjects {
                 thumbnails.removeObject(forKey: asset.localIdentifier as NSString)
                 checked.remove(asset.localIdentifier)
+                deferredCloudIDs.remove(asset.localIdentifier)
+                invalidatedIDs.append(asset.localIdentifier)
             }
             let removedIDs = Set(details.removedObjects.map(\.localIdentifier))
             selectedIDs.removeAll { removedIDs.contains($0) }
@@ -664,6 +724,8 @@ final class PhotoLibraryStore: NSObject, PHPhotoLibraryChangeObserver {
         }
         fetchResult = current
         guard applied else { return }
+        try? await analysisStore?.clearDeferredCloudHashes(invalidatedIDs)
+        guard generation == token, !Task.isCancelled else { return }
         count = index.count
         totalAssetCount = index.count
         publishMonths()
@@ -677,7 +739,9 @@ final class PhotoLibraryStore: NSObject, PHPhotoLibraryChangeObserver {
         // Re-arm the scan for whatever is still unchecked (the newly inserted/changed assets,
         // plus anything a prior scan hadn't reached yet) rather than only the delta itself — a
         // changed asset's `checked` entry was already cleared above.
-        let remaining = months.flatMap(\.assets).filter { !checked.contains($0.localIdentifier) }
+        let remaining = months.flatMap(\.assets).filter {
+            !checked.contains($0.localIdentifier) && !deferredCloudIDs.contains($0.localIdentifier)
+        }
         startScan(remaining: remaining, matches: matches, token: token)
     }
 
@@ -706,6 +770,7 @@ final class PhotoLibraryStore: NSObject, PHPhotoLibraryChangeObserver {
                 localIdentifier: id, modificationDate: asset.modificationDate, perceptualHash: hash)
         }
         guard !Task.isCancelled, generation == token else { throw CancellationError() }
+        deferredCloudIDs.remove(id)
         return Self.hashQuery(for: asset, hash: hash)
     }
 

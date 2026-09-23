@@ -73,10 +73,63 @@ final class AppModel {
     // activities never appear until something unrelated re-triggers that reader.
     private var storedLibraryMetadataSync: LibraryMetadataSync?
     @ObservationIgnored private var photoSubsystemTask: Task<Void, Never>?
+    @ObservationIgnored private let automaticPhotoSession = UUID()
+    @ObservationIgnored private var automaticPhotoSessionActive = false
+    @ObservationIgnored private var automaticPhotoMonitor: Task<Void, Never>?
+    @ObservationIgnored private var automaticPhotoStartTask: Task<Void, Never>?
+    private static let photoMatchingPendingKey = "cubby.photoMatchingPending"
 
     var photoAnalysisStore: PhotoAnalysisStore? { storedPhotoAnalysisStore }
     var photoClassificationSweep: PhotoClassificationSweep? { storedPhotoClassificationSweep }
     var libraryMetadataSync: LibraryMetadataSync? { storedLibraryMetadataSync }
+
+    func requestAutomaticPhotoMatching() {
+        guard phase == .signedIn, participation.automaticWork, automaticPhotoStartTask == nil else {
+            return
+        }
+        automaticPhotoStartTask = Task { [weak self] in
+            guard let self else { return }
+            await startAutomaticPhotoMatching()
+            automaticPhotoStartTask = nil
+        }
+    }
+
+    /// The app owns automatic matching; a Photos view is only another observer of the same
+    /// library. Keeping this session alive lets a scan continue when that view disappears.
+    func startAutomaticPhotoMatching() async {
+        guard phase == .signedIn, participation.automaticWork else { return }
+        await preparePhotoSubsystem()
+        guard phase == .signedIn, participation.automaticWork, !Task.isCancelled else { return }
+        automaticPhotoSessionActive = true
+        await photoLibrary.activate(automaticPhotoSession, matches: photoMatches, client: client)
+        updatePhotoMatchingPending()
+        automaticPhotoMonitor?.cancel()
+        automaticPhotoMonitor = Task { [weak self] in
+            guard let self else { return }
+            await photoLibrary.waitForMatching()
+            guard !Task.isCancelled else { return }
+            updatePhotoMatchingPending()
+        }
+    }
+
+    private func updatePhotoMatchingPending() {
+        let pending = photoLibrary.hasPendingMatching
+        UserDefaults.standard.set(pending, forKey: Self.photoMatchingPendingKey)
+        #if os(iOS)
+            if !pending { PhotoBackgroundProcessing.cancel() }
+        #endif
+    }
+
+    private func stopAutomaticPhotoMatching() {
+        automaticPhotoStartTask?.cancel()
+        automaticPhotoStartTask = nil
+        automaticPhotoMonitor?.cancel()
+        automaticPhotoMonitor = nil
+        if automaticPhotoSessionActive {
+            photoLibrary.deactivate(automaticPhotoSession)
+            automaticPhotoSessionActive = false
+        }
+    }
 
     /// Opens the persisted SQLite index in the background after local browsing has started.
     func preparePhotoSubsystem() async {
@@ -272,6 +325,10 @@ final class AppModel {
             #endif
             await syncDeviceParticipation()
             storedLibraryMetadataSync?.setSignedIn(true)
+            if participation.automaticWork && UserDefaults.standard.bool(forKey: Self.photoMatchingPendingKey)
+            {
+                Task { await startAutomaticPhotoMatching() }
+            }
         }
     }
 
@@ -322,9 +379,17 @@ final class AppModel {
         #endif
         await syncDeviceParticipation()
         storedLibraryMetadataSync?.setSignedIn(true)
+        if participation.automaticWork && UserDefaults.standard.bool(forKey: Self.photoMatchingPendingKey) {
+            Task { await startAutomaticPhotoMatching() }
+        }
     }
 
     func signOut() async {
+        stopAutomaticPhotoMatching()
+        UserDefaults.standard.set(false, forKey: Self.photoMatchingPendingKey)
+        #if os(iOS)
+            PhotoBackgroundProcessing.cancel()
+        #endif
         storedLibraryMetadataSync?.setSignedIn(false)
         do {
             try await companionImageWorker?.stopAndDiscardPendingResults()
@@ -360,6 +425,11 @@ final class AppModel {
         if let apiError = error as? CubbyAPIError {
             lastError = apiError.detail?.message ?? "HTTP \(apiError.status)"
             if apiError.isUnauthorized {
+                stopAutomaticPhotoMatching()
+                UserDefaults.standard.set(false, forKey: Self.photoMatchingPendingKey)
+                #if os(iOS)
+                    PhotoBackgroundProcessing.cancel()
+                #endif
                 storedLibraryMetadataSync?.setSignedIn(false)
                 photoMatches.reset()
                 photoLibrary.reset()
@@ -416,6 +486,17 @@ final class AppModel {
         participation = next
         participation.save(to: .standard)
         applyParticipationToGates()
+        if automaticWork {
+            if photoLibrary.count > 0 || UserDefaults.standard.bool(forKey: Self.photoMatchingPendingKey) {
+                Task { await startAutomaticPhotoMatching() }
+            }
+        } else {
+            stopAutomaticPhotoMatching()
+            UserDefaults.standard.set(false, forKey: Self.photoMatchingPendingKey)
+            #if os(iOS)
+                PhotoBackgroundProcessing.cancel()
+            #endif
+        }
         Task { await syncDeviceParticipation() }
     }
 
@@ -454,6 +535,7 @@ final class AppModel {
     }
 
     private func rebindClients() {
+        stopAutomaticPhotoMatching()
         storedLibraryMetadataSync?.cancel()
         photoMatches.reset()
         photoLibrary.reset()
@@ -476,6 +558,9 @@ final class AppModel {
             storedLibraryMetadataSync = makeLibraryMetadataSync(analysisStore: analysisStore)
         }
         applyParticipationToGates()
+        if phase == .signedIn && participation.automaticWork {
+            Task { await startAutomaticPhotoMatching() }
+        }
     }
 
     func setCompanionSceneActive(_ active: Bool) {

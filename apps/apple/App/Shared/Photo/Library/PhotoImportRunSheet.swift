@@ -27,9 +27,12 @@ final class PhotoImportRunFlow {
     let session: PhotoImportRunSession
     private var preparedPhotos: [PhotoImportRunPhoto] = []
     private var flowTask: Task<Void, Never>?
+    private let activityID = "photo-run-upload-\(UUID().uuidString)"
+    private var startedAt: Date?
 
-    init(client: CubbyClient) {
+    init(client: CubbyClient, activityCenter: BackgroundActivityCenter? = nil) {
         session = PhotoImportRunSession(uploader: PhotoImportRunUploader(client: client))
+        activityCenter?.register(self)
     }
 
     var isBusy: Bool {
@@ -81,6 +84,7 @@ final class PhotoImportRunFlow {
 
     private func begin(items: [PhotoSelectionItem], start: @escaping () -> Void) {
         guard flowTask == nil else { return }
+        startedAt = .now
         step = .preparing(completed: 0, total: items.count)
         prepareError = nil
         flowTask = Task { [self] in
@@ -112,6 +116,34 @@ final class PhotoImportRunFlow {
             start()
             flowTask = nil
         }
+    }
+}
+
+extension PhotoImportRunFlow: BackgroundActivitySource {
+    var currentActivities: [BackgroundActivity] {
+        let progress: Double?
+        let detail: String
+        switch step {
+        case .choosingRun:
+            return []
+        case .preparing(let completed, let total):
+            progress = total > 0 ? 0.2 * Double(completed) / Double(total) : nil
+            detail = "Preparing \(completed) of \(total)"
+        case .running:
+            guard session.isRunning else { return [] }
+            let state = session.progress
+            progress =
+                state.total > 0
+                ? 0.2 + 0.8 * Double(state.uploaded + state.analyzed) / Double(2 * state.total)
+                : nil
+            detail = "Uploaded \(state.uploaded), analysed \(state.analyzed) of \(state.total)"
+        }
+        return [
+            BackgroundActivity(
+                id: activityID, kind: .upload, title: "Adding photos to run", phase: .running,
+                progress: progress, detail: detail, startedAt: startedAt ?? .now,
+                link: .localActivity(activityID), isUserInitiated: true, isCancellable: false)
+        ]
     }
 }
 

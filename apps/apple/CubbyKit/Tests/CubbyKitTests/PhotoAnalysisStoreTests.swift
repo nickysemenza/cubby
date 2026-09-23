@@ -31,6 +31,26 @@ struct PhotoAnalysisStoreTests {
         #expect(batch["missing"] == nil)
     }
 
+    @Test func cloudDeferredHashSurvivesReopenAndClearsWhenHashArrives() async throws {
+        let file = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+            .appendingPathComponent("photo-analysis.sqlite")
+        try FileManager.default.createDirectory(
+            at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
+        let date = Date(timeIntervalSinceReferenceDate: 1_000)
+        let first = try PhotoAnalysisStore.make(fileURL: file)
+        try await first.deferCloudHash(localIdentifier: "cloud-a", modificationDate: date)
+        let reopened = try PhotoAnalysisStore.make(fileURL: file)
+        let deferred = try await reopened.deferredCloudHashes(for: ["cloud-a", "missing"])
+        #expect(deferred["cloud-a"] == date)
+        #expect(deferred["missing"] == nil)
+        try await reopened.upsertHash(
+            localIdentifier: "cloud-a", modificationDate: date,
+            perceptualHash: PerceptualHash64(value: 7))
+        #expect(try await reopened.deferredCloudHashes(for: ["cloud-a"]).isEmpty)
+        try FileManager.default.removeItem(at: file.deletingLastPathComponent())
+    }
+
     @Test func upsertClassificationDrivesCategoryAndCountQueries() async throws {
         let store = try makeStore()
         try await store.upsertClassification(
