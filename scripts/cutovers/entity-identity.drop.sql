@@ -13,14 +13,25 @@
 
 BEGIN;
 
--- Take every lock the drops need before any of them runs: acquiring them one
--- DROP at a time deadlocked against a live read holding one of the tables.
--- A busy table times out instead of queueing reads behind this; rerun it.
-SET LOCAL lock_timeout = '5s';
-LOCK TABLE "Image", "Product", "Purchase", "Cookbook", "Vendor",
-  "ProductImage", "LocationImage", "GardenEntryImage", "RecipeImage",
-  "MealImage", "TaskImage", "PurchaseImage", "ProjectImage"
-  IN ACCESS EXCLUSIVE MODE;
+-- Take every lock the drops need before any of them runs, without ever waiting:
+-- a waiting lock deadlocks against live reads, which take Product then Image.
+-- Each NOWAIT attempt is a subtransaction, so a partial acquisition is
+-- released before the retry, and locks from the attempt that succeeds persist.
+DO $$
+BEGIN
+  FOR attempt IN 1..100 LOOP
+    BEGIN
+      LOCK TABLE "Product", "Purchase", "Cookbook", "Vendor",
+        "ProductImage", "LocationImage", "GardenEntryImage", "RecipeImage",
+        "MealImage", "TaskImage", "PurchaseImage", "ProjectImage", "Image"
+        IN ACCESS EXCLUSIVE MODE NOWAIT;
+      RETURN;
+    EXCEPTION WHEN lock_not_available THEN
+      PERFORM pg_sleep(0.1);
+    END;
+  END LOOP;
+  RAISE EXCEPTION 'could not lock the legacy tables in 100 attempts; rerun';
+END $$;
 
 DO $$
 DECLARE
