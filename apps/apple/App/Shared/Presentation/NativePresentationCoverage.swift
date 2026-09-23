@@ -140,6 +140,7 @@ enum NativePresentationCoverage {
             "location.visualizations",
             "meal.calendar",
             "meal.nutrition",
+            "productCategory.hierarchy",
             "project.overview",
             "project.analytics",
             "project.gallery",

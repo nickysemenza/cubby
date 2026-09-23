@@ -2522,7 +2522,7 @@ public enum EntityCatalog {
       detailSections: [
         DetailSection(id: "overview", title: "Overview", placement: .supporting, collapsed: false, explanationField: nil, kind: .fields(["name", "aliases", "description", "parentId", "sortOrder", "feature", "path", "createdAt", "updatedAt"]))
       ],
-      listViews: [.table, .shelf],
+      listViews: [.table, .slot(id: "productCategory.hierarchy", label: "Hierarchy", searchKeys: []), .shelf],
       shelfSubtitle: [],
       listActions: ["delete"],
       timelineFields: [],

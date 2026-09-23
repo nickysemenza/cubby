@@ -4,6 +4,7 @@ import type { ListSlotId } from "@cubby/schemas/entity-manifest";
 import { expenseListSlots } from "~/app/expenses/list-slots";
 import { locationListSlots } from "~/app/locations/list-slots";
 import { mealListSlots } from "~/app/meals/list-slots";
+import { productCategoryListSlots } from "~/app/product-categories/list-slots";
 import { projectListSlots } from "~/app/projects/list-slots";
 import { taskListSlots } from "~/app/tasks/list-slots";
 import {
@@ -38,6 +39,7 @@ export const listSlotCoverage = {
   expense: implementedSlots(expenseListSlots),
   location: implementedSlots(locationListSlots),
   meal: implementedSlots(mealListSlots),
+  productCategory: implementedSlots(productCategoryListSlots),
   project: implementedSlots(projectListSlots),
   task: implementedSlots(taskListSlots),
 } satisfies {
