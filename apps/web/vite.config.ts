@@ -55,6 +55,16 @@ const resolveR2PublicUrl = (command: "build" | "serve", mode: string) =>
 
 const clientCodeSplittingGroups = [
   {
+    name: "initial-app",
+    test: (id: string) =>
+      /[\\/]src[\\/]/.test(id) &&
+      !/[\\/]server[\\/]|\.functions\.ts(?:\?|$)/.test(id),
+    tags: ["$initial" as const],
+    entriesAware: true,
+    entriesAwareMergeThreshold: 65536,
+    includeDependenciesRecursively: false,
+  },
+  {
     name: "icons",
     test: /[\\/]lucide-react[\\/]/,
   },
