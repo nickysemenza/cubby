@@ -367,9 +367,7 @@ export const productListOverride = defineListOverride<
                       const isbn = wasm.isbn_from_gtin(current);
                       if (isbn) {
                         return (
-                          <span className="font-mono tabular-nums">
-                            {isbn.isbn13}
-                          </span>
+                          <span className="tabular-nums">{isbn.isbn13}</span>
                         );
                       }
                       const shown = displayGtin(current);
@@ -490,9 +488,7 @@ export const productListOverride = defineListOverride<
                 const total =
                   info.table.options.meta?.serverTotals?.sums?.price;
                 return total ? (
-                  <span className="font-mono text-positive tabular-nums">
-                    {formatCurrency(total)}
-                  </span>
+                  <span className="tabular-nums">{formatCurrency(total)}</span>
                 ) : null;
               },
               cell: (info) => {
@@ -682,7 +678,7 @@ export const productListOverride = defineListOverride<
                   <Link
                     to="/expenses"
                     search={{ productId: info.row.original.id }}
-                    className="font-mono text-primary tabular-nums transition-colors hover:underline"
+                    className="text-primary tabular-nums transition-colors hover:underline"
                     onClick={(e) => e.stopPropagation()}
                   >
                     {count}

@@ -106,8 +106,8 @@ type ScoredListEntity = {
 }[ListEntity];
 
 /**
- * The one `dataQuality` column every scored entity shares: the status badge
- * with the 0–100 score beside it. Its id is also the sort field, so the
+ * The one `dataQuality` column every scored entity shares: one status pill
+ * that carries the 0–100 score. Its id is also the sort field, so the
  * column header sorts by score (asc = weakest row first — the worklist).
  */
 const dataQualityRenderer = <TRow extends ScoredRow>(
@@ -123,14 +123,12 @@ const dataQualityRenderer = <TRow extends ScoredRow>(
           className: "w-32",
           mobile: { slot: "meta", priority: 75 },
         },
-        cell: (info) => (
-          <span className="inline-flex items-center gap-1.5">
-            {renderOptionCell(info.getValue(), dataQualityOptions)}
-            <span className="text-xs text-muted-foreground tabular-nums">
-              {Math.round(info.row.original.dataQuality.score)}
-            </span>
-          </span>
-        ),
+        cell: (info) =>
+          renderOptionCell(
+            info.getValue(),
+            dataQualityOptions,
+            Math.round(info.row.original.dataQuality.score),
+          ),
       }),
     );
   });

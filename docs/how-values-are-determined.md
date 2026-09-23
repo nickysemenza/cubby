@@ -1072,7 +1072,7 @@ The original is preserved. A validated transparent derivative of the current ori
 - Resolver: Image representation
 - Source dependencies: Original image (`representations.original`); Validated transparent derivative (`representations.transparent`); Selected representation (`representations.preferredKind`); Use original preference (`useOriginal`)
 
-### Url (`url`)
+### URL (`url`)
 
 The public image URL is generated from this Image record's current object-storage key.
 

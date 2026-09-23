@@ -6,7 +6,6 @@ import { useCallback, useState } from "react";
 
 import type { FieldSuggestionSource } from "~/app/_components/ai/field-suggestion";
 import { FieldSuggestionApply } from "~/app/_components/ai/field-suggestion-apply";
-import { Row } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { cn } from "~/lib/utils";
 
@@ -16,6 +15,7 @@ import type { WithEntitySearchProps } from "../combobox/with-search-hook";
 import type { CellClipboardSpec } from "./cell-clipboard";
 import { CellEditTrigger } from "./cell-edit-trigger";
 import { CellEditorOverlay } from "./cell-editor-overlay";
+import { CELL_EDIT_GROUP_CLASS, CELL_EDIT_PENCIL_CLASS } from "./cell-frame";
 import {
   useCellEditState,
   useEditorCommit,
@@ -106,7 +106,7 @@ export function EditableEntityCell<TId extends string>({
 
   if (trigger === "pencil") {
     return (
-      <Row align="center" gap="xs" className="group/pencil min-w-0">
+      <span className={CELL_EDIT_GROUP_CLASS}>
         <span className="min-w-0 truncate">{renderValue(displayValue)}</span>
         <CellEditTrigger
           ref={edit.triggerRef}
@@ -114,12 +114,12 @@ export function EditableEntityCell<TId extends string>({
           clipboard={edit.clipboard}
           hidePencilIcon
           aria-label={`Edit ${label}`}
-          className="shrink-0 p-1 opacity-0 transition-opacity group-hover/pencil:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100"
+          className={CELL_EDIT_PENCIL_CLASS}
         >
           <Pencil className="size-3 text-muted-foreground" />
         </CellEditTrigger>
         {editor}
-      </Row>
+      </span>
     );
   }
 

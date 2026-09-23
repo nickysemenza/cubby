@@ -15,12 +15,15 @@ import {
   useRef,
 } from "react";
 
+import { isInspectableFieldProvenance } from "~/entities/field-provenance";
+
+import { CELL_RAIL_SLOT_PX } from "./cell-frame";
 import {
   materializeCubbyColumns,
   type CubbyColumnCollection,
   type CubbyColumnDef,
 } from "./table-features";
-import type { EntityColumnRole } from "./table-meta";
+import type { CubbyColumnMeta, EntityColumnRole } from "./table-meta";
 
 type MaterializedColumnDef<TData extends RowData> = CubbyColumnDef<
   TData,
@@ -52,14 +55,17 @@ type RoleBearingColumn = {
   columnDef: { meta?: { entityColumnRole?: EntityColumnRole } };
 };
 
-/** Either end's structural columns: never dragged, hidden, or re-pinned. */
-export function isLockedColumn(column: RoleBearingColumn) {
-  const role = column.columnDef.meta?.entityColumnRole;
+function isLockedRole(role: EntityColumnRole | undefined) {
   return (
     role != null &&
     (LOCKED_START_COLUMN_ROLES.includes(role) ||
       LOCKED_END_COLUMN_ROLES.includes(role))
   );
+}
+
+/** Either end's structural columns: never dragged, hidden, or re-pinned. */
+export function isLockedColumn(column: RoleBearingColumn) {
+  return isLockedRole(column.columnDef.meta?.entityColumnRole);
 }
 
 /**
@@ -108,87 +114,114 @@ type TableWidthColumn = {
   getIsPinned?: () => false | "start" | "end";
   columnDef: {
     header?: unknown;
+    maxSize?: number;
     meta?: {
       entityColumnRole?: EntityColumnRole;
       surplus?: boolean;
       numeric?: boolean;
+      cellData?: { kind: string };
     };
   };
 };
 
+/** Cell kinds whose content has a natural fixed width; slack never widens them. */
+const FIXED_WIDTH_KINDS = new Set([
+  "boolean",
+  "date",
+  "number",
+  "currency",
+  "amount",
+  "select",
+]);
+
 /**
- * Pick one readable, unpinned column to absorb desktop table surplus.
- *
- * Fixed table layout otherwise shares extra space across every sized column,
- * which makes quantities and timestamps balloon while record names still
- * truncate. Factories can nominate identity explicitly; the fallback makes
- * hand-authored entity tables safe without another per-route width roster.
+ * Columns that can use extra width: record identity and free text or
+ * relation labels that otherwise truncate. Quantities, dates, and status
+ * pills gain nothing from slack but distance from their neighbours.
  */
-export function tableSurplusColumnId(
-  columns: readonly TableWidthColumn[],
-): string | undefined {
-  const candidates = columns.filter(
-    (column) => !isLockedColumn(column) && !column.getIsPinned?.(),
-  );
-  const explicit = candidates.find((column) => column.columnDef.meta?.surplus);
-  if (explicit) return explicit.id;
-
-  const identity = candidates.find(
-    (column) => column.columnDef.meta?.entityColumnRole === "identity",
-  );
-  if (identity) return identity.id;
-
-  const conventional = candidates.find((column) =>
-    ["name", "title", "product", "filename"].includes(column.id),
-  );
-  if (conventional) return conventional.id;
-
-  return candidates.find(
-    (column) =>
-      !column.columnDef.meta?.numeric &&
-      isNonEmptyColumnHeader(column.columnDef.header),
-  )?.id;
+function isFlexibleColumn(column: TableWidthColumn) {
+  if (isLockedColumn(column) || column.getIsPinned?.()) return false;
+  const meta = column.columnDef.meta;
+  if (meta?.surplus || meta?.entityColumnRole === "identity") return true;
+  if (meta?.numeric) return false;
+  const kind = meta?.cellData?.kind;
+  if (kind !== undefined && FIXED_WIDTH_KINDS.has(kind)) return false;
+  return isNonEmptyColumnHeader(column.columnDef.header);
 }
+
+/** Trailing gutter width variable; it takes whatever the columns cannot use. */
+const SPACER_WIDTH_VARIABLE: ColumnWidthVariable = "--cubby-column-spacer";
+export const spacerWidthValue = `var(${SPACER_WIDTH_VARIABLE}, 0px)`;
 
 /**
  * Resolves the widths the browser should paint without mutating TanStack's own
- * column-sizing state. A user's deliberate resize remains the source of truth;
- * only available pane slack flows to the record-identity column for this
- * viewport.
+ * column-sizing state. A user's deliberate resize remains the source of truth
+ * (`userSized` never receives slack). Pane slack is shared across the flexible
+ * columns in proportion to their configured width, each capped at its
+ * `maxSize`; what no column can use goes to the trailing spacer.
+ *
+ * Regression: all slack used to go to one column past its maxSize, so a
+ * three-column table (Product Categories) painted a 1200px name beside
+ * crammed facts.
  */
 export function resolvedTableColumnWidths(
   columns: readonly TableWidthColumn[],
   availableWidth: number,
+  userSized: ReadonlySet<string> = new Set(),
 ) {
   const widths: Record<string, number> = {};
   for (const column of columns) {
     widths[column.id] = column.getSize();
   }
-  const surplusId = tableSurplusColumnId(columns);
-  if (!surplusId || availableWidth <= 0) return widths;
-
   const configuredWidth = Object.values(widths).reduce(
     (total, width) => total + width,
     0,
   );
-  if (availableWidth <= configuredWidth) return widths;
-
-  widths[surplusId] =
-    (widths[surplusId] ?? 0) + availableWidth - configuredWidth;
-  return widths;
+  let remaining = Math.floor(availableWidth - configuredWidth);
+  let pool = columns.filter(
+    (column) => isFlexibleColumn(column) && !userSized.has(column.id),
+  );
+  while (remaining > 0 && pool.length > 0) {
+    const totalWeight = pool.reduce((total, column) => {
+      return total + column.getSize();
+    }, 0);
+    let distributed = 0;
+    const open: TableWidthColumn[] = [];
+    for (const column of pool) {
+      const share = Math.floor((remaining * column.getSize()) / totalWeight);
+      const room =
+        (column.columnDef.maxSize ?? Number.POSITIVE_INFINITY) -
+        (widths[column.id] ?? 0);
+      const grant = Math.max(0, Math.min(share, room));
+      widths[column.id] = (widths[column.id] ?? 0) + grant;
+      distributed += grant;
+      if (grant === share) open.push(column);
+    }
+    remaining -= distributed;
+    // Nothing capped this round: the floor remainder is sub-pixel noise.
+    if (open.length === pool.length || distributed === 0) break;
+    pool = open;
+  }
+  return { widths, spacer: Math.max(0, remaining) };
 }
 
 export function columnWidthVariables(
   columns: readonly TableWidthColumn[],
   availableWidth = 0,
+  userSized?: ReadonlySet<string>,
 ): CSSProperties {
-  const widths = resolvedTableColumnWidths(columns, availableWidth);
+  const { widths, spacer } = resolvedTableColumnWidths(
+    columns,
+    availableWidth,
+    userSized,
+  );
   const variables: CSSProperties &
     Partial<Record<ColumnWidthVariable, string>> = {};
   for (const column of columns) {
     variables[columnWidthVariable(column.id)] =
       `${widths[column.id] ?? column.getSize()}px`;
   }
+  variables[SPACER_WIDTH_VARIABLE] = `${spacer}px`;
   return variables;
 }
 
@@ -235,29 +268,61 @@ function tailwindWidth(className: string, prefix: "w" | "min-w" | "max-w") {
   return scale ? Number(scale) * 4 : undefined;
 }
 
+/**
+ * Width for a column that declares none, from what its cells hold, so an
+ * undeclared manifest column no longer inherits TanStack's blind 150px.
+ */
+function defaultColumnSize(meta: CubbyColumnMeta | undefined) {
+  if (meta?.entityColumnRole === "identity") return 280;
+  const kind = meta?.cellData?.kind;
+  if (kind === "boolean") return 72;
+  if (kind === "date") return 120;
+  if (meta?.numeric || kind === "number" || kind === "currency") return 104;
+  if (kind === "amount") return 112;
+  if (kind === "select") return 136;
+  if (kind?.startsWith("entity:")) return 184;
+  return 176;
+}
+
+/**
+ * Width the cell rail needs for this column's always-visible affordances
+ * (explanation, relation workbench, suggestion mark). Added on top of the
+ * value's width so a decorated column can never crush its value.
+ */
+export function columnRailWidth(meta: CubbyColumnMeta | undefined) {
+  let slots = 0;
+  if (meta?.explanation) slots += 1;
+  if (
+    !meta?.provenanceWorkbenchHandled &&
+    isInspectableFieldProvenance(meta?.provenance)
+  ) {
+    slots += 1;
+  }
+  if (meta?.suggest) slots += 1;
+  return slots * CELL_RAIL_SLOT_PX;
+}
+
 function normalizedColumnSize<TData extends RowData>(
   definition: MaterializedColumnDef<TData>,
   className: string,
 ) {
-  const size = definition.size ?? tailwindWidth(className, "w");
-  const fixedImageSize =
-    definition.meta?.entityColumnRole === "image" ? (size ?? 64) : undefined;
-  const normalizedSize = fixedImageSize ?? size;
+  const declared = definition.size ?? tailwindWidth(className, "w");
+  const role = definition.meta?.entityColumnRole;
+  if (role === "image") {
+    const fixed = declared ?? 64;
+    return { size: fixed, minSize: fixed, maxSize: fixed };
+  }
+  const rail = isLockedRole(role) ? 0 : columnRailWidth(definition.meta);
+  const size = (declared ?? defaultColumnSize(definition.meta)) + rail;
   const minSize =
-    fixedImageSize ??
     definition.minSize ??
     tailwindWidth(className, "min-w") ??
-    (normalizedSize != null
-      ? Math.min(normalizedSize, MIN_COLUMN_WIDTH)
-      : undefined);
+    Math.min(size, MIN_COLUMN_WIDTH + rail);
   const maxSize =
-    fixedImageSize ??
     definition.maxSize ??
     tailwindWidth(className, "max-w") ??
-    (normalizedSize != null
-      ? Math.max(normalizedSize * 2, minSize ?? MIN_COLUMN_WIDTH)
-      : undefined);
-  return { size: normalizedSize, minSize, maxSize };
+    Math.max(size * 2, minSize);
+  return { size, minSize, maxSize };
 }
 
 /**
@@ -275,44 +340,23 @@ function normalizeColumnDefinitions<TData extends RowData>(
       };
     }
     const className = definition.meta?.className ?? "";
-    // Image is a structural identity strip, not a data column. Keep it exactly
-    // as wide as its declared thumbnail cell so a stray resize cannot leave an
-    // empty gutter between the dedicated image and the record name.
-    const {
-      size: normalizedSize,
-      minSize,
-      maxSize,
-    } = normalizedColumnSize(definition, className);
-    const fixedImageSize =
-      definition.meta?.entityColumnRole === "image"
-        ? normalizedSize
-        : undefined;
     const role = definition.meta?.entityColumnRole;
-    const locked =
-      role != null &&
-      (LOCKED_START_COLUMN_ROLES.includes(role) ||
-        LOCKED_END_COLUMN_ROLES.includes(role));
     const normalized = {
       ...definition,
+      ...normalizedColumnSize(definition, className),
     };
-    if (locked) {
+    if (isLockedRole(role)) {
       Object.assign(normalized, {
         enablePinning: false,
         enableHiding: false,
         enableCellSelection: false,
       });
     }
-    if (fixedImageSize != null) {
+    // Image is a structural identity strip, not a data column. Keep it exactly
+    // as wide as its declared thumbnail cell so a stray resize cannot leave an
+    // empty gutter between the dedicated image and the record name.
+    if (role === "image") {
       Object.assign(normalized, { enableResizing: false });
-    }
-    if (normalizedSize != null) {
-      Object.assign(normalized, { size: normalizedSize });
-    }
-    if (minSize != null) {
-      Object.assign(normalized, { minSize });
-    }
-    if (maxSize != null) {
-      Object.assign(normalized, { maxSize });
     }
     return normalized;
   });

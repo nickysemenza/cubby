@@ -8,7 +8,7 @@ import type { LocationType } from "@cubby/schemas/location";
 import { Pencil } from "lucide-react";
 import type { ReactNode } from "react";
 
-import { Row, Stack } from "~/components/layout";
+import { Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { NoneValue } from "~/components/ui/none-value";
 
@@ -22,6 +22,7 @@ import { EntityInlineLink } from "../EntityInlineLink";
 import { EntityInlineLinkList } from "../EntityInlineLinkList";
 import { tryFormatAmount } from "../inventory/format-amount";
 import { TruncatedList } from "../TruncatedList";
+import { CELL_EDIT_GROUP_CLASS, CELL_EDIT_PENCIL_CLASS } from "./cell-frame";
 import { EditableEntityCell } from "./editable-entity-cell";
 import {
   entityCellClipboard,
@@ -178,7 +179,7 @@ export function InventoryEntriesCell<
     <Button
       size="icon"
       variant="ghost"
-      className="size-5 shrink-0 opacity-40 transition-opacity group-hover/quickedit:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100"
+      className={CELL_EDIT_PENCIL_CLASS}
       aria-label="Quick edit"
       onClick={(e) => {
         e.stopPropagation();
@@ -257,10 +258,10 @@ export function InventoryEntriesCell<
 
     if (!quickEditButton) return list;
     return (
-      <Row align="center" gap="xs" className="group/quickedit min-w-0">
+      <span className={CELL_EDIT_GROUP_CLASS}>
         {list}
         {quickEditButton}
-      </Row>
+      </span>
     );
   }
 

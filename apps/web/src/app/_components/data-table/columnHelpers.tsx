@@ -21,7 +21,6 @@ import {
   ImageIcon,
   MoreHorizontal,
   Pin,
-  Sigma,
 } from "lucide-react";
 import type { ReactNode } from "react";
 import { z } from "zod";
@@ -458,7 +457,6 @@ export function createCreatedAtColumn<T extends BaseRow>(
       // Relative timestamps are short ("5 months ago"); without a cap the
       // fixed-layout table hands this column an equal share of leftover width.
       className: "w-32",
-      mono: true,
       mobile: { slot: "hidden" },
       // Copy-only: the display is relative ("5 months ago") but the copy
       // payload is the ISO date-time, which pastes usefully into a spreadsheet.
@@ -484,7 +482,6 @@ export function createUpdatedAtColumn<T extends BaseRow>(
     meta: attachCubbyColumnMeta({
       entityColumnRole: "fact",
       className: "w-32",
-      mono: true,
       mobile: { slot: "hidden" },
       cellData: timestampCellData<T>((row) => row.updatedAt),
     }),
@@ -923,9 +920,8 @@ export function createActionsColumnBase<T extends RowData>(
       return (
         <DropdownMenu>
           <DropdownMenuTrigger
-            // icon-sm (24px) + the cell's 4px vertical padding = the 28px
-            // compact row exactly; anything larger stretches every row and
-            // silently defeats the density ladder.
+            // icon-sm (28px) fits inside the 32px row; anything larger
+            // stretches every row and the virtualizer's fixed row height.
             render={<Button variant="ghost" size="icon-sm" />}
             onClick={(e) => e.stopPropagation()}
           >
@@ -1184,7 +1180,7 @@ export function createCurrencyColumn<
       // negative total (net credit) greens — matching the cell values above so
       // the footer never reads as the wrong sign.
       return (
-        <span className={cn("font-mono tabular-nums", toneClass(total))}>
+        <span className={cn("tabular-nums", toneClass(total))}>
           {formatCurrency(total, decimals)}
         </span>
       );
@@ -1675,12 +1671,17 @@ export function createSingleEntityInlineLinkColumn<
 export function renderOptionCell(
   value: string | null | undefined,
   options: readonly FilterableComboboxItem[],
+  /** A measure that qualifies the status (a score), inside the same pill. */
+  detail?: ReactNode,
 ): ReactNode {
   if (value == null || value === "") return <NoneValue />;
   const option = colorizeSelectOptions(options).find((o) => o.value === value);
   return (
     <EnumPill icon={option?.icon} color={option?.color ?? "var(--slate)"}>
       {option?.label ?? value}
+      {detail != null ? (
+        <span className="ml-1 tabular-nums opacity-70">{detail}</span>
+      ) : null}
     </EnumPill>
   );
 }
@@ -1708,7 +1709,9 @@ export function describeProductPricingSource(
  * `pricing.effectivePrice` — the override OR the Expense-derived fallback.
  * Both render as a plain number, so without a cue an override and a derived
  * price (and a cleared override that happens to land on the same digits as
- * the old one) are visually identical. The icon + tooltip here is that cue;
+ * the old one) are visually identical. The pin marks the exception (a manual
+ * override); the derived norm stays unmarked, and the tooltip names either
+ * source. This is that cue;
  * shared by the detail page and the list column so the two surfaces can't
  * disagree about what the cell means.
  */
@@ -1719,15 +1722,14 @@ export function renderProductPriceValue(
   >,
 ): ReactNode {
   if (pricing.effectivePrice === null) return <NoneValue />;
-  const Icon = pricing.source === "explicit" ? Pin : Sigma;
   return (
     <Tooltip>
       <TooltipTrigger
-        render={
-          <span className="inline-flex items-center gap-1 text-positive" />
-        }
+        render={<span className="inline-flex items-center gap-1" />}
       >
-        <Icon aria-hidden className="size-3 shrink-0 text-muted-foreground" />
+        {pricing.source === "explicit" ? (
+          <Pin aria-hidden className="size-3 shrink-0 text-muted-foreground" />
+        ) : null}
         {formatCurrency(pricing.effectivePrice)}
       </TooltipTrigger>
       <TooltipContent side="top">
@@ -2100,7 +2102,6 @@ export function createTimestampColumn<
     header: options?.header,
     meta: attachCubbyColumnMeta({
       className: options?.className,
-      mono: true,
       mobile: options?.mobile,
       // Copy-only ISO date-time (see createCreatedAtColumn).
       cellData: timestampCellData<T>(valueFor),
@@ -2241,7 +2242,6 @@ export function createPlainDateColumn<
     id: String(accessor),
     header: options?.header,
     className: options?.className ?? "w-28",
-    mono: true,
     mobile: options?.mobile,
     filterConfig: options?.filterConfig,
     cellData,

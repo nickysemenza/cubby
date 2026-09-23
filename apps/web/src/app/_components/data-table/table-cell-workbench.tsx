@@ -2,7 +2,6 @@ import { Network } from "lucide-react";
 import type { MouseEvent, ReactNode } from "react";
 import { useState } from "react";
 
-import { Row } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import {
   Popover,
@@ -13,6 +12,8 @@ import {
 } from "~/components/ui/popover";
 import { ResponsiveSheet } from "~/components/ui/responsive-sheet";
 import { useIsMobile } from "~/hooks/useMobile";
+
+import { CELL_RAIL_BUTTON_CLASS, CellFrame } from "./cell-frame";
 
 function stopRowInteraction(event: MouseEvent<HTMLButtonElement>) {
   event.stopPropagation();
@@ -46,21 +47,20 @@ function SummaryTrigger({
 }
 
 /**
- * Icon-only control beside the summary, styled like the inventory cell's
- * quick-edit pencil so the two read as one family of cell affordances. Spread
+ * Icon-only rail control beside the summary, sharing the cell rail's size and
+ * tone so every cell affordance reads as one family. Spread
  * onto a `Button` (also as a Base UI `render` element, which merges its own
  * handlers with `onClick`).
  */
 const iconTriggerProps = (title: string) => ({
   size: "icon" as const,
   variant: "ghost" as const,
-  className:
-    "size-5 shrink-0 opacity-40 transition-opacity group-hover/workbench:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100",
+  className: CELL_RAIL_BUTTON_CLASS,
   "aria-label": inspectLabel(title),
   onClick: stopRowInteraction,
 });
 
-const iconTriggerGlyph = <Network className="size-3 text-muted-foreground" />;
+const iconTriggerGlyph = <Network className="size-3" />;
 
 /**
  * A dense table-cell entry point for evidence that belongs to related rows.
@@ -104,18 +104,21 @@ export function TableCellWorkbench({
     return (
       <>
         {trigger === "icon" ? (
-          <Row align="center" gap="xs" className="group/workbench min-w-0">
-            <span className="min-w-0">{summary}</span>
-            <Button
-              {...iconTriggerProps(title)}
-              onClick={(event) => {
-                stopRowInteraction(event);
-                setOpen(true);
-              }}
-            >
-              {iconTriggerGlyph}
-            </Button>
-          </Row>
+          <CellFrame
+            trailing={
+              <Button
+                {...iconTriggerProps(title)}
+                onClick={(event) => {
+                  stopRowInteraction(event);
+                  setOpen(true);
+                }}
+              >
+                {iconTriggerGlyph}
+              </Button>
+            }
+          >
+            {summary}
+          </CellFrame>
         ) : (
           <SummaryTrigger
             title={title}
@@ -138,12 +141,15 @@ export function TableCellWorkbench({
 
   const popoverTrigger =
     trigger === "icon" ? (
-      <Row align="center" gap="xs" className="group/workbench min-w-0">
-        <span className="min-w-0">{summary}</span>
-        <PopoverTrigger render={<Button {...iconTriggerProps(title)} />}>
-          {iconTriggerGlyph}
-        </PopoverTrigger>
-      </Row>
+      <CellFrame
+        trailing={
+          <PopoverTrigger render={<Button {...iconTriggerProps(title)} />}>
+            {iconTriggerGlyph}
+          </PopoverTrigger>
+        }
+      >
+        {summary}
+      </CellFrame>
     ) : (
       <PopoverTrigger
         render={

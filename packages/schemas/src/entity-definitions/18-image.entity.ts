@@ -165,6 +165,7 @@ export default defineEntity({
       {
         key: "url",
         kind: "text",
+        label: "URL",
         display: { list: true, detail: true, listHidden: true },
         provenance: { kind: "derived", sources: [{ label: "Image storage" }] },
         explanation: {
@@ -268,8 +269,11 @@ export default defineEntity({
       {
         key: "detectedContentType",
         kind: "text",
+        label: "Detected type",
         nullable: true,
-        display: { list: true, detail: true },
+        // Hidden by default: it repeats Type except when sniffing disagrees
+        // with the stored content type, which the detail page shows.
+        display: { list: true, detail: true, listHidden: true },
         validation: {
           read: z.string().nullable(),
           create: null,

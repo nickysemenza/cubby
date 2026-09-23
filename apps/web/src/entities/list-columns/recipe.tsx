@@ -342,7 +342,7 @@ export const recipeListOverride = defineListOverride<
             cell: (info) => {
               const count = info.getValue();
               return count ? (
-                <span className="font-mono tabular-nums">{count}</span>
+                <span className="tabular-nums">{count}</span>
               ) : (
                 <NoneValue />
               );

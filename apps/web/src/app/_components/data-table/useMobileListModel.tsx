@@ -302,10 +302,7 @@ function collectMobileSlots<TItem extends RowData>(
     const provenanceValue = meta?.provenance ? (
       <span className="inline-flex max-w-full min-w-0 items-center gap-1">
         <span className="min-w-0 truncate">{resolutionValue}</span>
-        <FieldProvenance
-          provenance={meta.provenance}
-          className="inline-flex max-w-36 shrink text-[0.625rem]"
-        />
+        <FieldProvenance compact provenance={meta.provenance} />
       </span>
     ) : (
       resolutionValue

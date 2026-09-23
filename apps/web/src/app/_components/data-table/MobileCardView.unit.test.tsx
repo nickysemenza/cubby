@@ -164,7 +164,7 @@ describe("MobileCardView", () => {
     ).toBeInTheDocument();
   });
 
-  it("renders the trailing value in mono", () => {
+  it("renders the trailing value with tabular figures so amounts align", () => {
     const table = buildProductTable([
       {
         id: "prod-1",
@@ -177,7 +177,7 @@ describe("MobileCardView", () => {
 
     render(<MobileCardView table={table} />);
 
-    expect(screen.getByText("3")).toHaveClass("font-mono");
+    expect(screen.getByText("3")).toHaveClass("tabular-nums");
   });
 
   it("renders the row as a link to its details href", () => {

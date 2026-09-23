@@ -2,11 +2,12 @@ import { act, renderHook } from "@testing-library/react";
 import { useState } from "react";
 import { describe, expect, it } from "vitest";
 
+import { dateCellData } from "./cell-data";
 import {
   type CubbyDefaultTableLayout,
   isTableLayoutCustomized,
+  columnRailWidth,
   resolvedTableColumnWidths,
-  tableSurplusColumnId,
   useRevealTableColumnsOnce,
   useTableColumnLayout,
   withLockedEndLast,
@@ -15,6 +16,7 @@ import {
   createCubbyColumnCollection,
   createCubbyColumnHelper,
 } from "./table-features";
+import type { CubbyColumnMeta } from "./table-meta";
 
 interface Row {
   id: string;
@@ -32,74 +34,123 @@ const defaults: CubbyDefaultTableLayout = {
 };
 
 describe("desktop surplus allocation", () => {
-  const widthColumns = [
-    {
-      id: "name",
-      getSize: () => 256,
-      getIsPinned: () => false as const,
-      columnDef: { header: "Name", meta: { surplus: true } },
-    },
-    {
-      id: "cost",
-      getSize: () => 128,
-      getIsPinned: () => false as const,
-      columnDef: { header: "Cost", meta: { numeric: true } },
-    },
-    {
-      id: "actions",
-      getSize: () => 40,
-      getIsPinned: () => "end" as const,
-      columnDef: { header: "" },
-    },
-  ];
+  type WidthColumn = Parameters<typeof resolvedTableColumnWidths>[0][number];
+  const column = (
+    id: string,
+    size: number,
+    extra: {
+      pinned?: "start" | "end";
+      maxSize?: number;
+      meta?: WidthColumn["columnDef"]["meta"];
+    } = {},
+  ): WidthColumn => ({
+    id,
+    getSize: () => size,
+    getIsPinned: () => extra.pinned ?? false,
+    columnDef: { header: id, maxSize: extra.maxSize, meta: extra.meta },
+  });
+  const name = column("name", 256, {
+    maxSize: 512,
+    meta: { entityColumnRole: "identity" },
+  });
+  const parent = column("parent", 176, { maxSize: 352 });
+  const cost = column("cost", 104, { maxSize: 208, meta: { numeric: true } });
+  const status = column("status", 136, {
+    maxSize: 272,
+    meta: { cellData: { kind: "select" } },
+  });
+  const actions = column("actions", 40, {
+    pinned: "end",
+    meta: { entityColumnRole: "action" },
+  });
 
-  it("gives spare desktop width to the nominated record-identity column", () => {
-    expect(tableSurplusColumnId(widthColumns)).toBe("name");
-    expect(resolvedTableColumnWidths(widthColumns, 900)).toEqual({
-      name: 732,
-      cost: 128,
-      actions: 40,
+  // Regression: all slack went to one column past its maxSize, so a
+  // three-column list painted a 1200px name beside crammed facts.
+  it.each([
+    {
+      case: "splits slack across flexible columns by configured width",
+      columns: [name, parent, cost, actions],
+      available: 900,
+      userSized: [],
+      // 324px slack in a 256:176 ratio → +192 / +132.
+      widths: { name: 448, parent: 308, cost: 104, actions: 40 },
+      spacer: 0,
+    },
+    {
+      case: "caps each column at maxSize and leaves the rest to the spacer",
+      columns: [name, parent, status, actions],
+      available: 2000,
+      userSized: [],
+      widths: { name: 512, parent: 352, status: 136, actions: 40 },
+      spacer: 2000 - (512 + 352 + 136 + 40),
+    },
+    {
+      case: "never widens a column a person sized",
+      columns: [name, parent, actions],
+      available: 1000,
+      userSized: ["name"],
+      widths: { name: 256, parent: 352, actions: 40 },
+      spacer: 1000 - (256 + 352 + 40),
+    },
+    {
+      case: "keeps configured widths when the pane is narrower",
+      columns: [name, cost, actions],
+      available: 300,
+      userSized: [],
+      widths: { name: 256, cost: 104, actions: 40 },
+      spacer: 0,
+    },
+    {
+      case: "gives a pinned measurement column nothing",
+      columns: [column("verifiedAt", 128, { pinned: "end" })],
+      available: 400,
+      userSized: [],
+      widths: { verifiedAt: 128 },
+      spacer: 272,
+    },
+  ])("$case", ({ columns, available, userSized, widths, spacer }) => {
+    const resolved = resolvedTableColumnWidths(
+      columns,
+      available,
+      new Set(userSized),
+    );
+    expect(resolved.widths).toEqual(widths);
+    expect(resolved.spacer).toBe(spacer);
+  });
+});
+
+describe("column sizing defaults", () => {
+  // A decorated column reserves its rail so the ⓘ can never paint over the
+  // value ("$2.ⓘ99"); an undeclared column sizes by what it holds instead of
+  // TanStack's blind 150px.
+  it.each<{ meta: CubbyColumnMeta; size: number }>([
+    { meta: {}, size: 176 },
+    { meta: { numeric: true }, size: 104 },
+    { meta: { cellData: dateCellData(() => null) }, size: 120 },
+    {
+      meta: {
+        numeric: true,
+        explanation: { entity: "product", field: "price", label: "Price" },
+      },
+      size: 104 + 22,
+    },
+    { meta: { className: "w-20", suggest: true }, size: 80 + 22 },
+  ])("sizes column $# to $size", ({ meta, size }) => {
+    const columns = createCubbyColumnCollection<Row>((add) => {
+      add(helper.accessor("cost", { header: "Cost", meta }));
     });
+    const { result } = renderHook(() => useTableColumnLayout({ columns }));
+    expect(result.current.columns[0]).toMatchObject({ size });
   });
 
-  it("keeps configured widths and horizontal scrolling when the table is dense", () => {
-    expect(resolvedTableColumnWidths(widthColumns, 300)).toEqual({
-      name: 256,
-      cost: 128,
-      actions: 40,
-    });
-  });
-
-  it("falls back to a readable conventional column for hand-authored tables", () => {
+  it("reserves one rail slot per always-visible affordance", () => {
+    expect(columnRailWidth(undefined)).toBe(0);
     expect(
-      tableSurplusColumnId([
-        {
-          id: "select",
-          getSize: () => 40,
-          getIsPinned: () => "start" as const,
-          columnDef: { header: "Select" },
-        },
-        {
-          id: "product",
-          getSize: () => 256,
-          getIsPinned: () => false as const,
-          columnDef: { header: "Product" },
-        },
-      ]),
-    ).toBe("product");
-  });
-
-  it("never gives viewport surplus to a pinned measurement column", () => {
-    expect(
-      tableSurplusColumnId([
-        {
-          id: "verifiedAt",
-          getSize: () => 128,
-          getIsPinned: () => "end" as const,
-          columnDef: { header: "Verified" },
-        },
-      ]),
-    ).toBeUndefined();
+      columnRailWidth({
+        suggest: true,
+        explanation: { entity: "product", field: "price", label: "Price" },
+      }),
+    ).toBe(44);
   });
 });
 

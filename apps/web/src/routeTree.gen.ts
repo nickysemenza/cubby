@@ -64,8 +64,6 @@ import { Route as AuthenticatedImageSightingsIndexRouteImport } from './routes/_
 import { Route as AuthenticatedImageSightingsShortcodeRouteImport } from './routes/_authenticated/image-sightings.$shortcode'
 import { Route as AuthenticatedImagesIndexRouteImport } from './routes/_authenticated/images.index'
 import { Route as AuthenticatedImagesShortcodeRouteImport } from './routes/_authenticated/images.$shortcode'
-import { Route as AuthenticatedRunsIndexRouteImport } from './routes/_authenticated/runs.index'
-import { Route as AuthenticatedRunsShortcodeRouteImport } from './routes/_authenticated/runs.$shortcode'
 import { Route as AuthenticatedIngredientsIndexRouteImport } from './routes/_authenticated/ingredients.index'
 import { Route as AuthenticatedIngredientsShortcodeRouteImport } from './routes/_authenticated/ingredients.$shortcode'
 import { Route as AuthenticatedIngredientsEquivalencesRouteImport } from './routes/_authenticated/ingredients.equivalences'
@@ -104,6 +102,8 @@ import { Route as AuthenticatedRecipesCompareRouteImport } from './routes/_authe
 import { Route as AuthenticatedRecipesImportRouteImport } from './routes/_authenticated/recipes.import'
 import { Route as AuthenticatedRecipesNewRouteImport } from './routes/_authenticated/recipes.new'
 import { Route as AuthenticatedRecommendationsWorkbenchRouteImport } from './routes/_authenticated/recommendations.workbench'
+import { Route as AuthenticatedRunsIndexRouteImport } from './routes/_authenticated/runs.index'
+import { Route as AuthenticatedRunsShortcodeRouteImport } from './routes/_authenticated/runs.$shortcode'
 import { Route as AuthenticatedSearchIndexRouteImport } from './routes/_authenticated/search.index'
 import { Route as AuthenticatedSearchDebugRouteImport } from './routes/_authenticated/search.debug'
 import { Route as AuthenticatedStatementRowsIndexRouteImport } from './routes/_authenticated/statement-rows.index'
@@ -451,18 +451,6 @@ const AuthenticatedImagesShortcodeRoute =
     path: '/images/$shortcode',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
-const AuthenticatedRunsIndexRoute =
-  AuthenticatedRunsIndexRouteImport.update({
-    id: '/runs/',
-    path: '/runs/',
-    getParentRoute: () => AuthenticatedRoute,
-  } as any)
-const AuthenticatedRunsShortcodeRoute =
-  AuthenticatedRunsShortcodeRouteImport.update({
-    id: '/runs/$shortcode',
-    path: '/runs/$shortcode',
-    getParentRoute: () => AuthenticatedRoute,
-  } as any)
 const AuthenticatedIngredientsIndexRoute =
   AuthenticatedIngredientsIndexRouteImport.update({
     id: '/ingredients/',
@@ -687,6 +675,17 @@ const AuthenticatedRecommendationsWorkbenchRoute =
   AuthenticatedRecommendationsWorkbenchRouteImport.update({
     id: '/recommendations/workbench',
     path: '/recommendations/workbench',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedRunsIndexRoute = AuthenticatedRunsIndexRouteImport.update({
+  id: '/runs/',
+  path: '/runs/',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
+const AuthenticatedRunsShortcodeRoute =
+  AuthenticatedRunsShortcodeRouteImport.update({
+    id: '/runs/$shortcode',
+    path: '/runs/$shortcode',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
 const AuthenticatedSearchIndexRoute =
@@ -981,7 +980,6 @@ export interface FileRoutesByFullPath {
   '/garden-entries/$shortcode': typeof AuthenticatedGardenEntriesShortcodeRoute
   '/image-sightings/$shortcode': typeof AuthenticatedImageSightingsShortcodeRoute
   '/images/$shortcode': typeof AuthenticatedImagesShortcodeRoute
-  '/runs/$shortcode': typeof AuthenticatedRunsShortcodeRoute
   '/ingredients/$shortcode': typeof AuthenticatedIngredientsShortcodeRoute
   '/ingredients/equivalences': typeof AuthenticatedIngredientsEquivalencesRoute
   '/ingredients/workbench': typeof AuthenticatedIngredientsWorkbenchRoute
@@ -1008,6 +1006,7 @@ export interface FileRoutesByFullPath {
   '/recipes/import': typeof AuthenticatedRecipesImportRoute
   '/recipes/new': typeof AuthenticatedRecipesNewRoute
   '/recommendations/workbench': typeof AuthenticatedRecommendationsWorkbenchRoute
+  '/runs/$shortcode': typeof AuthenticatedRunsShortcodeRoute
   '/search/debug': typeof AuthenticatedSearchDebugRoute
   '/tasks/$shortcode': typeof AuthenticatedTasksShortcodeRoute
   '/usda/$id': typeof AuthenticatedUsdaIdRoute
@@ -1034,7 +1033,6 @@ export interface FileRoutesByFullPath {
   '/garden-entries/': typeof AuthenticatedGardenEntriesIndexRoute
   '/image-sightings/': typeof AuthenticatedImageSightingsIndexRoute
   '/images/': typeof AuthenticatedImagesIndexRoute
-  '/runs/': typeof AuthenticatedRunsIndexRoute
   '/ingredients/': typeof AuthenticatedIngredientsIndexRoute
   '/inventory/': typeof AuthenticatedInventoryIndexRoute
   '/ledger-parties/': typeof AuthenticatedLedgerPartiesIndexRoute
@@ -1047,6 +1045,7 @@ export interface FileRoutesByFullPath {
   '/projects/': typeof AuthenticatedProjectsIndexRoute
   '/purchases/': typeof AuthenticatedPurchasesIndexRoute
   '/recipes/': typeof AuthenticatedRecipesIndexRoute
+  '/runs/': typeof AuthenticatedRunsIndexRoute
   '/search/': typeof AuthenticatedSearchIndexRoute
   '/statement-rows/': typeof AuthenticatedStatementRowsIndexRoute
   '/tasks/': typeof AuthenticatedTasksIndexRoute
@@ -1120,7 +1119,6 @@ export interface FileRoutesByTo {
   '/garden-entries/$shortcode': typeof AuthenticatedGardenEntriesShortcodeRoute
   '/image-sightings/$shortcode': typeof AuthenticatedImageSightingsShortcodeRoute
   '/images/$shortcode': typeof AuthenticatedImagesShortcodeRoute
-  '/runs/$shortcode': typeof AuthenticatedRunsShortcodeRoute
   '/ingredients/$shortcode': typeof AuthenticatedIngredientsShortcodeRoute
   '/ingredients/equivalences': typeof AuthenticatedIngredientsEquivalencesRoute
   '/ingredients/workbench': typeof AuthenticatedIngredientsWorkbenchRoute
@@ -1147,6 +1145,7 @@ export interface FileRoutesByTo {
   '/recipes/import': typeof AuthenticatedRecipesImportRoute
   '/recipes/new': typeof AuthenticatedRecipesNewRoute
   '/recommendations/workbench': typeof AuthenticatedRecommendationsWorkbenchRoute
+  '/runs/$shortcode': typeof AuthenticatedRunsShortcodeRoute
   '/search/debug': typeof AuthenticatedSearchDebugRoute
   '/tasks/$shortcode': typeof AuthenticatedTasksShortcodeRoute
   '/usda/$id': typeof AuthenticatedUsdaIdRoute
@@ -1173,7 +1172,6 @@ export interface FileRoutesByTo {
   '/garden-entries': typeof AuthenticatedGardenEntriesIndexRoute
   '/image-sightings': typeof AuthenticatedImageSightingsIndexRoute
   '/images': typeof AuthenticatedImagesIndexRoute
-  '/runs': typeof AuthenticatedRunsIndexRoute
   '/ingredients': typeof AuthenticatedIngredientsIndexRoute
   '/inventory': typeof AuthenticatedInventoryIndexRoute
   '/ledger-parties': typeof AuthenticatedLedgerPartiesIndexRoute
@@ -1186,6 +1184,7 @@ export interface FileRoutesByTo {
   '/projects': typeof AuthenticatedProjectsIndexRoute
   '/purchases': typeof AuthenticatedPurchasesIndexRoute
   '/recipes': typeof AuthenticatedRecipesIndexRoute
+  '/runs': typeof AuthenticatedRunsIndexRoute
   '/search': typeof AuthenticatedSearchIndexRoute
   '/statement-rows': typeof AuthenticatedStatementRowsIndexRoute
   '/tasks': typeof AuthenticatedTasksIndexRoute
@@ -1262,7 +1261,6 @@ export interface FileRoutesById {
   '/_authenticated/garden-entries/$shortcode': typeof AuthenticatedGardenEntriesShortcodeRoute
   '/_authenticated/image-sightings/$shortcode': typeof AuthenticatedImageSightingsShortcodeRoute
   '/_authenticated/images/$shortcode': typeof AuthenticatedImagesShortcodeRoute
-  '/_authenticated/runs/$shortcode': typeof AuthenticatedRunsShortcodeRoute
   '/_authenticated/ingredients/$shortcode': typeof AuthenticatedIngredientsShortcodeRoute
   '/_authenticated/ingredients/equivalences': typeof AuthenticatedIngredientsEquivalencesRoute
   '/_authenticated/ingredients/workbench': typeof AuthenticatedIngredientsWorkbenchRoute
@@ -1289,6 +1287,7 @@ export interface FileRoutesById {
   '/_authenticated/recipes/import': typeof AuthenticatedRecipesImportRoute
   '/_authenticated/recipes/new': typeof AuthenticatedRecipesNewRoute
   '/_authenticated/recommendations/workbench': typeof AuthenticatedRecommendationsWorkbenchRoute
+  '/_authenticated/runs/$shortcode': typeof AuthenticatedRunsShortcodeRoute
   '/_authenticated/search/debug': typeof AuthenticatedSearchDebugRoute
   '/_authenticated/tasks/$shortcode': typeof AuthenticatedTasksShortcodeRoute
   '/_authenticated/usda/$id': typeof AuthenticatedUsdaIdRoute
@@ -1315,7 +1314,6 @@ export interface FileRoutesById {
   '/_authenticated/garden-entries/': typeof AuthenticatedGardenEntriesIndexRoute
   '/_authenticated/image-sightings/': typeof AuthenticatedImageSightingsIndexRoute
   '/_authenticated/images/': typeof AuthenticatedImagesIndexRoute
-  '/_authenticated/runs/': typeof AuthenticatedRunsIndexRoute
   '/_authenticated/ingredients/': typeof AuthenticatedIngredientsIndexRoute
   '/_authenticated/inventory/': typeof AuthenticatedInventoryIndexRoute
   '/_authenticated/ledger-parties/': typeof AuthenticatedLedgerPartiesIndexRoute
@@ -1328,6 +1326,7 @@ export interface FileRoutesById {
   '/_authenticated/projects/': typeof AuthenticatedProjectsIndexRoute
   '/_authenticated/purchases/': typeof AuthenticatedPurchasesIndexRoute
   '/_authenticated/recipes/': typeof AuthenticatedRecipesIndexRoute
+  '/_authenticated/runs/': typeof AuthenticatedRunsIndexRoute
   '/_authenticated/search/': typeof AuthenticatedSearchIndexRoute
   '/_authenticated/statement-rows/': typeof AuthenticatedStatementRowsIndexRoute
   '/_authenticated/tasks/': typeof AuthenticatedTasksIndexRoute
@@ -1404,7 +1403,6 @@ export interface FileRouteTypes {
     | '/garden-entries/$shortcode'
     | '/image-sightings/$shortcode'
     | '/images/$shortcode'
-    | '/runs/$shortcode'
     | '/ingredients/$shortcode'
     | '/ingredients/equivalences'
     | '/ingredients/workbench'
@@ -1431,6 +1429,7 @@ export interface FileRouteTypes {
     | '/recipes/import'
     | '/recipes/new'
     | '/recommendations/workbench'
+    | '/runs/$shortcode'
     | '/search/debug'
     | '/tasks/$shortcode'
     | '/usda/$id'
@@ -1457,7 +1456,6 @@ export interface FileRouteTypes {
     | '/garden-entries/'
     | '/image-sightings/'
     | '/images/'
-    | '/runs/'
     | '/ingredients/'
     | '/inventory/'
     | '/ledger-parties/'
@@ -1470,6 +1468,7 @@ export interface FileRouteTypes {
     | '/projects/'
     | '/purchases/'
     | '/recipes/'
+    | '/runs/'
     | '/search/'
     | '/statement-rows/'
     | '/tasks/'
@@ -1543,7 +1542,6 @@ export interface FileRouteTypes {
     | '/garden-entries/$shortcode'
     | '/image-sightings/$shortcode'
     | '/images/$shortcode'
-    | '/runs/$shortcode'
     | '/ingredients/$shortcode'
     | '/ingredients/equivalences'
     | '/ingredients/workbench'
@@ -1570,6 +1568,7 @@ export interface FileRouteTypes {
     | '/recipes/import'
     | '/recipes/new'
     | '/recommendations/workbench'
+    | '/runs/$shortcode'
     | '/search/debug'
     | '/tasks/$shortcode'
     | '/usda/$id'
@@ -1596,7 +1595,6 @@ export interface FileRouteTypes {
     | '/garden-entries'
     | '/image-sightings'
     | '/images'
-    | '/runs'
     | '/ingredients'
     | '/inventory'
     | '/ledger-parties'
@@ -1609,6 +1607,7 @@ export interface FileRouteTypes {
     | '/projects'
     | '/purchases'
     | '/recipes'
+    | '/runs'
     | '/search'
     | '/statement-rows'
     | '/tasks'
@@ -1684,7 +1683,6 @@ export interface FileRouteTypes {
     | '/_authenticated/garden-entries/$shortcode'
     | '/_authenticated/image-sightings/$shortcode'
     | '/_authenticated/images/$shortcode'
-    | '/_authenticated/runs/$shortcode'
     | '/_authenticated/ingredients/$shortcode'
     | '/_authenticated/ingredients/equivalences'
     | '/_authenticated/ingredients/workbench'
@@ -1711,6 +1709,7 @@ export interface FileRouteTypes {
     | '/_authenticated/recipes/import'
     | '/_authenticated/recipes/new'
     | '/_authenticated/recommendations/workbench'
+    | '/_authenticated/runs/$shortcode'
     | '/_authenticated/search/debug'
     | '/_authenticated/tasks/$shortcode'
     | '/_authenticated/usda/$id'
@@ -1737,7 +1736,6 @@ export interface FileRouteTypes {
     | '/_authenticated/garden-entries/'
     | '/_authenticated/image-sightings/'
     | '/_authenticated/images/'
-    | '/_authenticated/runs/'
     | '/_authenticated/ingredients/'
     | '/_authenticated/inventory/'
     | '/_authenticated/ledger-parties/'
@@ -1750,6 +1748,7 @@ export interface FileRouteTypes {
     | '/_authenticated/projects/'
     | '/_authenticated/purchases/'
     | '/_authenticated/recipes/'
+    | '/_authenticated/runs/'
     | '/_authenticated/search/'
     | '/_authenticated/statement-rows/'
     | '/_authenticated/tasks/'
@@ -2201,20 +2200,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedImagesShortcodeRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
-    '/_authenticated/runs/': {
-      id: '/_authenticated/runs/'
-      path: '/runs'
-      fullPath: '/runs/'
-      preLoaderRoute: typeof AuthenticatedRunsIndexRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
-    '/_authenticated/runs/$shortcode': {
-      id: '/_authenticated/runs/$shortcode'
-      path: '/runs/$shortcode'
-      fullPath: '/runs/$shortcode'
-      preLoaderRoute: typeof AuthenticatedRunsShortcodeRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
     '/_authenticated/ingredients/': {
       id: '/_authenticated/ingredients/'
       path: '/ingredients'
@@ -2479,6 +2464,20 @@ declare module '@tanstack/react-router' {
       path: '/recommendations/workbench'
       fullPath: '/recommendations/workbench'
       preLoaderRoute: typeof AuthenticatedRecommendationsWorkbenchRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/runs/': {
+      id: '/_authenticated/runs/'
+      path: '/runs'
+      fullPath: '/runs/'
+      preLoaderRoute: typeof AuthenticatedRunsIndexRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/runs/$shortcode': {
+      id: '/_authenticated/runs/$shortcode'
+      path: '/runs/$shortcode'
+      fullPath: '/runs/$shortcode'
+      preLoaderRoute: typeof AuthenticatedRunsShortcodeRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
     '/_authenticated/search/': {
@@ -2824,7 +2823,6 @@ interface AuthenticatedRouteChildren {
   AuthenticatedGardenEntriesShortcodeRoute: typeof AuthenticatedGardenEntriesShortcodeRoute
   AuthenticatedImageSightingsShortcodeRoute: typeof AuthenticatedImageSightingsShortcodeRoute
   AuthenticatedImagesShortcodeRoute: typeof AuthenticatedImagesShortcodeRoute
-  AuthenticatedRunsShortcodeRoute: typeof AuthenticatedRunsShortcodeRoute
   AuthenticatedIngredientsShortcodeRoute: typeof AuthenticatedIngredientsShortcodeRoute
   AuthenticatedIngredientsEquivalencesRoute: typeof AuthenticatedIngredientsEquivalencesRoute
   AuthenticatedIngredientsWorkbenchRoute: typeof AuthenticatedIngredientsWorkbenchRoute
@@ -2851,6 +2849,7 @@ interface AuthenticatedRouteChildren {
   AuthenticatedRecipesImportRoute: typeof AuthenticatedRecipesImportRoute
   AuthenticatedRecipesNewRoute: typeof AuthenticatedRecipesNewRoute
   AuthenticatedRecommendationsWorkbenchRoute: typeof AuthenticatedRecommendationsWorkbenchRoute
+  AuthenticatedRunsShortcodeRoute: typeof AuthenticatedRunsShortcodeRoute
   AuthenticatedSearchDebugRoute: typeof AuthenticatedSearchDebugRoute
   AuthenticatedTasksShortcodeRoute: typeof AuthenticatedTasksShortcodeRoute
   AuthenticatedUsdaIdRoute: typeof AuthenticatedUsdaIdRoute
@@ -2866,7 +2865,6 @@ interface AuthenticatedRouteChildren {
   AuthenticatedGardenEntriesIndexRoute: typeof AuthenticatedGardenEntriesIndexRoute
   AuthenticatedImageSightingsIndexRoute: typeof AuthenticatedImageSightingsIndexRoute
   AuthenticatedImagesIndexRoute: typeof AuthenticatedImagesIndexRoute
-  AuthenticatedRunsIndexRoute: typeof AuthenticatedRunsIndexRoute
   AuthenticatedIngredientsIndexRoute: typeof AuthenticatedIngredientsIndexRoute
   AuthenticatedInventoryIndexRoute: typeof AuthenticatedInventoryIndexRoute
   AuthenticatedLedgerPartiesIndexRoute: typeof AuthenticatedLedgerPartiesIndexRoute
@@ -2879,6 +2877,7 @@ interface AuthenticatedRouteChildren {
   AuthenticatedProjectsIndexRoute: typeof AuthenticatedProjectsIndexRoute
   AuthenticatedPurchasesIndexRoute: typeof AuthenticatedPurchasesIndexRoute
   AuthenticatedRecipesIndexRoute: typeof AuthenticatedRecipesIndexRoute
+  AuthenticatedRunsIndexRoute: typeof AuthenticatedRunsIndexRoute
   AuthenticatedSearchIndexRoute: typeof AuthenticatedSearchIndexRoute
   AuthenticatedStatementRowsIndexRoute: typeof AuthenticatedStatementRowsIndexRoute
   AuthenticatedTasksIndexRoute: typeof AuthenticatedTasksIndexRoute
@@ -2933,7 +2932,6 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedImageSightingsShortcodeRoute:
     AuthenticatedImageSightingsShortcodeRoute,
   AuthenticatedImagesShortcodeRoute: AuthenticatedImagesShortcodeRoute,
-  AuthenticatedRunsShortcodeRoute: AuthenticatedRunsShortcodeRoute,
   AuthenticatedIngredientsShortcodeRoute:
     AuthenticatedIngredientsShortcodeRoute,
   AuthenticatedIngredientsEquivalencesRoute:
@@ -2967,6 +2965,7 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedRecipesNewRoute: AuthenticatedRecipesNewRoute,
   AuthenticatedRecommendationsWorkbenchRoute:
     AuthenticatedRecommendationsWorkbenchRoute,
+  AuthenticatedRunsShortcodeRoute: AuthenticatedRunsShortcodeRoute,
   AuthenticatedSearchDebugRoute: AuthenticatedSearchDebugRoute,
   AuthenticatedTasksShortcodeRoute: AuthenticatedTasksShortcodeRoute,
   AuthenticatedUsdaIdRoute: AuthenticatedUsdaIdRoute,
@@ -2985,7 +2984,6 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedGardenEntriesIndexRoute: AuthenticatedGardenEntriesIndexRoute,
   AuthenticatedImageSightingsIndexRoute: AuthenticatedImageSightingsIndexRoute,
   AuthenticatedImagesIndexRoute: AuthenticatedImagesIndexRoute,
-  AuthenticatedRunsIndexRoute: AuthenticatedRunsIndexRoute,
   AuthenticatedIngredientsIndexRoute: AuthenticatedIngredientsIndexRoute,
   AuthenticatedInventoryIndexRoute: AuthenticatedInventoryIndexRoute,
   AuthenticatedLedgerPartiesIndexRoute: AuthenticatedLedgerPartiesIndexRoute,
@@ -3000,6 +2998,7 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedProjectsIndexRoute: AuthenticatedProjectsIndexRoute,
   AuthenticatedPurchasesIndexRoute: AuthenticatedPurchasesIndexRoute,
   AuthenticatedRecipesIndexRoute: AuthenticatedRecipesIndexRoute,
+  AuthenticatedRunsIndexRoute: AuthenticatedRunsIndexRoute,
   AuthenticatedSearchIndexRoute: AuthenticatedSearchIndexRoute,
   AuthenticatedStatementRowsIndexRoute: AuthenticatedStatementRowsIndexRoute,
   AuthenticatedTasksIndexRoute: AuthenticatedTasksIndexRoute,
@@ -3158,15 +3157,11 @@ export const routeTree = rootRouteImport
   ._addFileTypes<FileRouteTypes>()
 
 import type { getRouter } from './router.tsx'
-
 import type { startInstance } from './start.ts'
-
 declare module '@tanstack/react-start' {
   interface Register {
     ssr: true
-
     router: Awaited<ReturnType<typeof getRouter>>
-
     config: Awaited<ReturnType<typeof startInstance.getOptions>>
   }
 }

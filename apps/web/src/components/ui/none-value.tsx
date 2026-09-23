@@ -8,7 +8,7 @@ interface NoneValueProps {
 export const NoneValue: FC<NoneValueProps> = ({ className }) => {
   return (
     <span
-      className={cn("select-none text-2xs text-muted-foreground/30", className)}
+      className={cn("select-none text-muted-foreground/50", className)}
     >
       —
     </span>

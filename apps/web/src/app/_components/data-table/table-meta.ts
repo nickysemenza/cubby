@@ -82,6 +82,8 @@ export interface CubbyColumnMeta<TData = CellData> {
    * trailing empty gutter or spread across every measurement column.
    */
   surplus?: boolean;
+  /** The field renders an AI suggestion mark in the cell rail. */
+  suggest?: boolean;
   numeric?: boolean;
   mono?: boolean;
   filterConfig?: FilterConfig;
