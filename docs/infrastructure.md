@@ -57,7 +57,8 @@ Account ID: `9f10f078d35d86c78dedece2300a6b88`.
 - Workflow `cubby-search-index-repair`.
 - Queues `cubby-background` and `cubby-telemetry`, plus producer-only
   `cubby-purchase-agent`, with settings in the Wrangler files.
-- Hourly and daily cron triggers.
+- One daily cron trigger at 12:00 UTC; authenticated app openings enqueue
+  catch-up work with a household-wide one-hour cooldown.
 - Workers AI binding `AI` and AI Gateway `cubby`.
 - Vectorize binding `VECTORIZE` ->
   `cubby-openai-text-embedding-3-small-1536`, dimensions `1536`, cosine metric,
@@ -242,7 +243,7 @@ pnpm --dir apps/web exec wrangler hyperdrive get \
 ```
 
 Local `.env` and CI use `DATABASE_URL`. Deployed Worker code receives the
-database URLs from Hyperdrive and does not have a `DATABASE_URL` secret.
+database URLs from Hyperdrive and does not need a `DATABASE_URL` secret.
 
 ### R2 and media domain
 
@@ -296,7 +297,7 @@ pnpm --dir apps/web exec wrangler secret list --config wrangler.jsonc
 | `R2_SECRET_ACCESS_KEY` | `cubby` Worker secret | Main R2 S3 credential |
 | `GOOGLE_CLIENT_SECRET` | `cubby` Worker secret | Google OAuth confidential credential |
 | `GOOGLE_CLIENT_ID` | Checked-in Worker `vars` value | Public Google OAuth client identifier |
-| `AI_GATEWAY_API_KEY` | Optional Worker/local secret | REST fallback outside the production Workers AI binding |
+| `AI_GATEWAY_API_KEY` | Local secret only | REST fallback outside the production Workers AI binding |
 | `NOTION_API_KEY` | Optional Worker/local secret | Optional Notion integration |
 | `API_KEY` | `upc-lookup` Worker secret | Direct access to the UPC lookup Worker |
 

@@ -21,6 +21,8 @@ export const backgroundTaskKinds = [
   "image-processing.wakeup",
   "image-processing.result",
   "image-metadata.extract",
+  "maintenance.recover",
+  "maintenance.purchase-discovery",
 ] as const;
 
 export const backgroundTaskKindSchema = z.enum(backgroundTaskKinds);
@@ -100,6 +102,17 @@ export const imageMetadataExtractTaskSchema = z.object({
   imageId,
 });
 
+/** Catch-up scans read the durable source rows/cursors and tolerate replay. */
+export const maintenanceRecoverTaskSchema = z.object({
+  kind: z.literal("maintenance.recover"),
+  ...taskEnvelopeFields,
+});
+
+export const maintenancePurchaseDiscoveryTaskSchema = z.object({
+  kind: z.literal("maintenance.purchase-discovery"),
+  ...taskEnvelopeFields,
+});
+
 export const backgroundTaskSchema = z.discriminatedUnion("kind", [
   recipeTotalsRecomputeTaskSchema,
   entityEmbeddingRefreshTaskSchema,
@@ -108,6 +121,8 @@ export const backgroundTaskSchema = z.discriminatedUnion("kind", [
   imageProcessingWakeupTaskSchema,
   imageProcessingResultTaskSchema,
   imageMetadataExtractTaskSchema,
+  maintenanceRecoverTaskSchema,
+  maintenancePurchaseDiscoveryTaskSchema,
 ]);
 
 /** The parsed (branded) task a handler receives. */

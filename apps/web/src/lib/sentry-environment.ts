@@ -24,20 +24,20 @@ export function sentryEnvironment(
 
 /**
  * Worker-binding wrapper: E2E test mode always wins (shared local Worker
- * identity, see env.ts), then the deployed `SENTRY_ENVIRONMENT` var, then
- * "production". `APP_ORIGIN` stays the prod origin even under `wrangler dev`,
- * so it can't itself signal "development" — the var (set via `--var` for
- * `preview:cf`) is what distinguishes a local preview from prod.
+ * identity, see env.ts), then the preview-only `SENTRY_ENVIRONMENT` override,
+ * then `NODE_ENV`. `APP_ORIGIN` stays the prod origin even under `wrangler dev`,
+ * so it can't itself signal "development"; `preview:cf` supplies the override.
  */
 export function resolveWorkerSentryEnvironment(env: {
   APP_ORIGIN?: string;
   E2E_AUTH_TEST_MODE?: string;
   SENTRY_ENVIRONMENT?: string;
+  NODE_ENV?: string;
 }): string | undefined {
   return sentryEnvironment(
     env.APP_ORIGIN,
     env.E2E_AUTH_TEST_MODE === "true"
       ? "test"
-      : (env.SENTRY_ENVIRONMENT ?? "production"),
+      : (env.SENTRY_ENVIRONMENT ?? env.NODE_ENV ?? "production"),
   );
 }

@@ -60,9 +60,44 @@ const embedTask = (seed: string): BackgroundTaskMessageInput => ({
   },
 });
 
+const maintenanceTask = (
+  kind: "maintenance.recover" | "maintenance.purchase-discovery",
+): BackgroundTaskMessageInput => ({
+  version: 2,
+  queueType: "background",
+  task: { kind, requestedAt },
+});
+
 describe("handleBackgroundQueueBatch", () => {
   beforeEach(() => {
     handle.mockReset();
+  });
+
+  it("isolates a failed maintenance job and accepts duplicate delivery of the other", async () => {
+    handle.mockImplementation(async (_db, parsed) => {
+      if (parsed.kind === "maintenance.recover")
+        throw new Error("repair failed");
+      return "succeeded";
+    });
+    const capture = vi.fn();
+    const messages = [
+      delivered(maintenanceTask("maintenance.recover")),
+      delivered(maintenanceTask("maintenance.purchase-discovery")),
+      delivered(maintenanceTask("maintenance.purchase-discovery")),
+    ];
+    vi.spyOn(console, "error").mockImplementation(() => {});
+
+    const outcomes = await handleBackgroundQueueBatch(
+      db,
+      { queue: "cubby-background", messages },
+      { captureException: capture, handleTask: handle },
+    );
+
+    expect(outcomes).toEqual(["failed", "succeeded", "succeeded"]);
+    expect(messages[0]?.retry).toHaveBeenCalledOnce();
+    expect(messages[1]?.ack).toHaveBeenCalledOnce();
+    expect(messages[2]?.ack).toHaveBeenCalledOnce();
+    expect(capture).toHaveBeenCalledOnce();
   });
 
   it("acks succeeded and skipped tasks, retries only the one that threw", async () => {

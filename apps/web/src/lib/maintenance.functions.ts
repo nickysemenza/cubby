@@ -3,6 +3,7 @@ import { ripple } from "~/integrations/tanstack-query/cache-tags";
 import { defineOperationDomain } from "~/integrations/tanstack-query/operation-catalog";
 
 export const maintenance = defineOperationDomain(maintenanceContract, {
+  requestCatchUp: {},
   backfillImageProcessing: { invalidates: ripple.maintenance },
   imageProcessing: { tags: [["maintenance"], ["image"]] },
   configureImageProcessing: { invalidates: ripple.maintenance },

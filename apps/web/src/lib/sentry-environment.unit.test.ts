@@ -12,12 +12,23 @@ describe("resolveWorkerSentryEnvironment", () => {
     ).toBe("development");
   });
 
-  it("defaults to production when the var is absent", () => {
+  it("uses NODE_ENV when the preview override is absent", () => {
     expect(
       resolveWorkerSentryEnvironment({
         APP_ORIGIN: "https://cubby.nickysemenza.com",
+        NODE_ENV: "production",
       }),
     ).toBe("production");
+  });
+
+  it("lets the local Cloudflare preview override a production build", () => {
+    expect(
+      resolveWorkerSentryEnvironment({
+        APP_ORIGIN: "https://cubby.nickysemenza.com",
+        NODE_ENV: "production",
+        SENTRY_ENVIRONMENT: "development",
+      }),
+    ).toBe("development");
   });
 
   it("lets E2E test mode win over the var", () => {

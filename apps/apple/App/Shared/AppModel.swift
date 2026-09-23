@@ -62,6 +62,8 @@ final class AppModel {
     @ObservationIgnored private var companionImageWorkerGeneration = UUID()
     private(set) var companionImageActivity = CompanionImageWorkerActivity(phase: .stopped)
     @ObservationIgnored private var companionSceneActive = false
+    @ObservationIgnored private var catchUpRequestPending = false
+    @ObservationIgnored private var lastCatchUpRequestAt: Date?
     /// The SQLite cache opens away from the UI actor and attaches matching/classification once
     /// available. Local photo browsing never waits for it.
     @ObservationIgnored private var storedPhotoAnalysisStore: PhotoAnalysisStore?
@@ -332,6 +334,25 @@ final class AppModel {
         }
     }
 
+    /// Foreground entry is the wakeup; the server owns the household-wide hour gate.
+    func requestCatchUpIfNeeded() async {
+        guard phase == .signedIn, !catchUpRequestPending else { return }
+        if let lastCatchUpRequestAt, Date().timeIntervalSince(lastCatchUpRequestAt) < 5 * 60 {
+            return
+        }
+        catchUpRequestPending = true
+        defer { catchUpRequestPending = false }
+        let client = self.client
+        do {
+            try await client.requestCatchUp()
+            if self.client === client { lastCatchUpRequestAt = .now }
+        } catch is CancellationError {
+            return
+        } catch {
+            Diagnostics.report(error, context: "maintenance.requestCatchUp")
+        }
+    }
+
     func signIn(email: String, password: String) async {
         lastError = nil
         let flow = auth
@@ -536,6 +557,7 @@ final class AppModel {
 
     private func rebindClients() {
         stopAutomaticPhotoMatching()
+        lastCatchUpRequestAt = nil
         storedLibraryMetadataSync?.cancel()
         photoMatches.reset()
         photoLibrary.reset()

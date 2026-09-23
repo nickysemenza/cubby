@@ -125,6 +125,7 @@ extension OperationRoute {
         OperationRoute(operationID: "maintenance.configureImageProcessing", method: .post, path: "/api/v1/maintenance/configureImageProcessing", pathParameters: [], queryParameters: [], hasBody: true),
         OperationRoute(operationID: "maintenance.imageProcessing", method: .get, path: "/api/v1/maintenance/imageProcessing", pathParameters: [], queryParameters: [], hasBody: false),
         OperationRoute(operationID: "maintenance.repairImageDimensions", method: .post, path: "/api/v1/maintenance/repairImageDimensions", pathParameters: [], queryParameters: [], hasBody: true),
+        OperationRoute(operationID: "maintenance.requestCatchUp", method: .post, path: "/api/v1/maintenance/requestCatchUp", pathParameters: [], queryParameters: [], hasBody: true),
         OperationRoute(operationID: "maintenance.settleAwaitingWork", method: .post, path: "/api/v1/maintenance/settleAwaitingWork", pathParameters: [], queryParameters: [], hasBody: true),
         OperationRoute(operationID: "mcp.listTools", method: .get, path: "/api/v1/mcp/listTools", pathParameters: [], queryParameters: [], hasBody: false),
         OperationRoute(operationID: "mcp.usageActivity", method: .get, path: "/api/v1/mcp/usageActivity", pathParameters: [], queryParameters: ["clientId", "cursor", "direction", "entity", "limit", "outcome", "surface", "toolName", "userId", "window"], hasBody: false),

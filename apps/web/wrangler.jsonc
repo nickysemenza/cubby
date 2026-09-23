@@ -216,7 +216,7 @@
     ]
   },
   "triggers": {
-    "crons": ["*/5 * * * *", "0 * * * *", "0 12 * * *"]
+    "crons": ["0 12 * * *"]
   },
   "vars": {
     "NODE_ENV": "production",
@@ -224,9 +224,6 @@
     // temporarily allow creating an account, then flip back.
     "ALLOW_SIGNUP": "false",
     "E2E_AUTH_TEST_MODE": "false",
-    // Fallback Sentry environment for events without a request URL (queue/cron).
-    // `preview:cf` overrides this to "development" via `--var`.
-    "SENTRY_ENVIRONMENT": "production",
     "APP_ORIGIN": "https://cubby.nickysemenza.com",
     "R2_ENDPOINT": "https://9f10f078d35d86c78dedece2300a6b88.r2.cloudflarestorage.com",
     "R2_BUCKET_NAME": "foo",
@@ -242,7 +239,7 @@
   //   BETTER_AUTH_SECRET
   //   R2_ACCESS_KEY_ID
   //   R2_SECRET_ACCESS_KEY
-  //   AI_GATEWAY_API_KEY (optional)
   //   GOOGLE_CLIENT_SECRET (optional; required for Gmail discovery)
-  // Note: DATABASE_URL is provided by the Hyperdrive binding, not a secret.
+  // Note: production uses Hyperdrive instead of DATABASE_URL and the AI binding
+  // instead of AI_GATEWAY_API_KEY. The latter stays in local .env for Vite dev.
 }

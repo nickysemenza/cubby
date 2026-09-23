@@ -3,6 +3,7 @@ import { ChevronLeft, ChevronRight, Search, Wrench } from "lucide-react";
 import {
   type ReactNode,
   Suspense,
+  useEffect,
   useMemo,
   useState,
   useSyncExternalStore,
@@ -18,6 +19,7 @@ import {
   useAppViewportBounds,
   useVirtualKeyboard,
 } from "~/hooks/useVirtualKeyboard";
+import type { UnparsedError } from "~/lib/error-utils";
 import { cn } from "~/lib/utils";
 
 import {
@@ -45,6 +47,26 @@ import { WorkspaceNavigator } from "./workspace-navigator";
 
 const LOGO_SRC = import.meta.env.DEV ? "/favicon-dev.svg" : "/favicon.svg";
 const collapsedPreferenceSchema = z.boolean();
+let lastCatchUpRequestAt = 0;
+let catchUpRequestPending = false;
+
+function requestCatchUpWhenVisible() {
+  if (document.visibilityState !== "visible") return;
+  const now = Date.now();
+  if (catchUpRequestPending || now - lastCatchUpRequestAt < 5 * 60_000) return;
+  catchUpRequestPending = true;
+  void import("~/lib/maintenance.functions")
+    .then(({ maintenance }) => maintenance.requestCatchUp.call())
+    .then(() => {
+      lastCatchUpRequestAt = Date.now();
+    })
+    .catch((error: UnparsedError) =>
+      console.error("App-open catch-up request failed", error),
+    )
+    .finally(() => {
+      catchUpRequestPending = false;
+    });
+}
 
 const ShellControls = AuthenticatedShellControls;
 const ShellAccount = AuthenticatedShellAccount;
@@ -81,6 +103,16 @@ export function AuthenticatedAppShell({
   const viewportSurface = routeDescriptor.presentation === "immersive";
   const keyboardOpen = useVirtualKeyboard();
   const hydrated = useHydrated();
+
+  useEffect(() => {
+    requestCatchUpWhenVisible();
+    document.addEventListener("visibilitychange", requestCatchUpWhenVisible);
+    return () =>
+      document.removeEventListener(
+        "visibilitychange",
+        requestCatchUpWhenVisible,
+      );
+  }, []);
 
   return (
     <div

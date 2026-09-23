@@ -18915,6 +18915,172 @@ public enum Operations {
             }
         }
     }
+    /// - Remark: HTTP `POST /api/v1/maintenance/requestCatchUp`.
+    /// - Remark: Generated from `#/paths//api/v1/maintenance/requestCatchUp/post(maintenance.requestCatchUp)`.
+    public enum Maintenance_requestCatchUp {
+        public static let id: Swift.String = "maintenance.requestCatchUp"
+        public struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/api/v1/maintenance/requestCatchUp/POST/header`.
+            public struct Headers: Sendable, Hashable {
+                public var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Maintenance_requestCatchUp.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - accept:
+                public init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Maintenance_requestCatchUp.AcceptableContentType>] = .defaultValues()) {
+                    self.accept = accept
+                }
+            }
+            public var headers: Operations.Maintenance_requestCatchUp.Input.Headers
+            /// - Remark: Generated from `#/paths/api/v1/maintenance/requestCatchUp/POST/requestBody`.
+            @frozen public enum Body: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/maintenance/requestCatchUp/POST/requestBody/content/application\/json`.
+                case json(Components.Schemas.MaintenanceRequestCatchUpInput)
+            }
+            public var body: Operations.Maintenance_requestCatchUp.Input.Body?
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - headers:
+            ///   - body:
+            public init(
+                headers: Operations.Maintenance_requestCatchUp.Input.Headers = .init(),
+                body: Operations.Maintenance_requestCatchUp.Input.Body? = nil
+            ) {
+                self.headers = headers
+                self.body = body
+            }
+        }
+        @frozen public enum Output: Sendable, Hashable {
+            public struct Ok: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/maintenance/requestCatchUp/POST/responses/200/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/maintenance/requestCatchUp/POST/responses/200/content/application\/json`.
+                    case json(Components.Schemas.MaintenanceRequestCatchUpOutput)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.MaintenanceRequestCatchUpOutput {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.Maintenance_requestCatchUp.Output.Ok.Body
+                /// Creates a new `Ok`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.Maintenance_requestCatchUp.Output.Ok.Body) {
+                    self.body = body
+                }
+            }
+            /// 200
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/maintenance/requestCatchUp/post(maintenance.requestCatchUp)/responses/200`.
+            ///
+            /// HTTP response code: `200 ok`.
+            case ok(Operations.Maintenance_requestCatchUp.Output.Ok)
+            /// The associated value of the enum case if `self` is `.ok`.
+            ///
+            /// - Throws: An error if `self` is not `.ok`.
+            /// - SeeAlso: `.ok`.
+            public var ok: Operations.Maintenance_requestCatchUp.Output.Ok {
+                get throws {
+                    switch self {
+                    case let .ok(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            public struct Default: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/maintenance/requestCatchUp/POST/responses/default/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/maintenance/requestCatchUp/POST/responses/default/content/application\/json`.
+                    case json(Components.Schemas.ApiError)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.ApiError {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.Maintenance_requestCatchUp.Output.Default.Body
+                /// Creates a new `Default`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.Maintenance_requestCatchUp.Output.Default.Body) {
+                    self.body = body
+                }
+            }
+            /// Error
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/maintenance/requestCatchUp/post(maintenance.requestCatchUp)/responses/default`.
+            ///
+            /// HTTP response code: `default`.
+            case `default`(statusCode: Swift.Int, Operations.Maintenance_requestCatchUp.Output.Default)
+            /// The associated value of the enum case if `self` is `.`default``.
+            ///
+            /// - Throws: An error if `self` is not `.`default``.
+            /// - SeeAlso: `.`default``.
+            public var `default`: Operations.Maintenance_requestCatchUp.Output.Default {
+                get throws {
+                    switch self {
+                    case let .`default`(_, response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "default",
+                            response: self
+                        )
+                    }
+                }
+            }
+        }
+        @frozen public enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            public init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            public var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            public static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
     /// - Remark: HTTP `POST /api/v1/meal/getNutrition`.
     /// - Remark: Generated from `#/paths//api/v1/meal/getNutrition/post(meal.getNutrition)`.
     public enum Meal_getNutrition {
