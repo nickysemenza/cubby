@@ -8974,6 +8974,21 @@ extension Components {
             case alyssum = "alyssum"
             case nasturtium = "nasturtium"
             case marigold = "marigold"
+            case mint = "mint"
+            case thyme = "thyme"
+            case oregano = "oregano"
+            case mexicanOregano = "mexican-oregano"
+            case chives = "chives"
+            case garlicChives = "garlic-chives"
+            case rauRam = "rau-ram"
+            case hojaSanta = "hoja-santa"
+            case strawberry = "strawberry"
+            case passionFruit = "passion-fruit"
+            case citrus = "citrus"
+            case curryLeaf = "curry-leaf"
+            case sichuanPepper = "sichuan-pepper"
+            case plum = "plum"
+            case poppy = "poppy"
         }
         /// - Remark: Generated from `#/components/schemas/GardenEntryCreateInput`.
         public struct GardenEntryCreateInput: Codable, Hashable, Sendable {

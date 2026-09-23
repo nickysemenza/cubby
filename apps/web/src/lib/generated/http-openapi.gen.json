@@ -14280,7 +14280,22 @@
                   "celery-leaf",
                   "alyssum",
                   "nasturtium",
-                  "marigold"
+                  "marigold",
+                  "mint",
+                  "thyme",
+                  "oregano",
+                  "mexican-oregano",
+                  "chives",
+                  "garlic-chives",
+                  "rau-ram",
+                  "hoja-santa",
+                  "strawberry",
+                  "passion-fruit",
+                  "citrus",
+                  "curry-leaf",
+                  "sichuan-pepper",
+                  "plum",
+                  "poppy"
                 ]
               }
             },
@@ -42219,7 +42234,22 @@
           "celery-leaf",
           "alyssum",
           "nasturtium",
-          "marigold"
+          "marigold",
+          "mint",
+          "thyme",
+          "oregano",
+          "mexican-oregano",
+          "chives",
+          "garlic-chives",
+          "rau-ram",
+          "hoja-santa",
+          "strawberry",
+          "passion-fruit",
+          "citrus",
+          "curry-leaf",
+          "sichuan-pepper",
+          "plum",
+          "poppy"
         ]
       },
       "GardenEntryCreateInput": {

@@ -27,8 +27,10 @@ Location (bed/planter/area) ──< Planting >── Plant (cultivar/species; ga
   captures the plan's *intent*; sowing it is a later, separate edit the
   household makes (setting `sowedOn` and flipping `status`) — this skill
   never claims work already done.
-- One `Project` per season (`kind: "garden"`) holds every Task and planned
-  Planting for that season. Watering schedules, lessons learned, and
+- One `Project` per garden year (`kind: "garden"`) holds every Task and
+  planned Planting for that year. The year runs from the fall reset to the
+  end of summer (Sept 1–Aug 31 where winters are mild), so a fall sowing and
+  the summer crop that follows it share a Project. Watering schedules, lessons learned, and
   skip-lists that are prose, not a record, go in `Project.notes` wholesale —
   do not decompose narrative into fake records to house it.
 - A `Task` exists for every calendar row and every shopping-list line. A
@@ -76,8 +78,9 @@ Location (bed/planter/area) ──< Planting >── Plant (cultivar/species; ga
    carries `type: "bed"`) — the Product supplies identity and price, `type`
    states the form factor; the two are independent. Soil/condition notes
    from the plan go on `Location.notes`.
-4. Create one `Project` per season named for the plan (`kind: "garden"`).
-   Put watering schedules, lessons, and skip-lists in `notes`.
+4. Reuse the garden year's `Project` (`kind: "garden"`, dated Sept 1–Aug 31)
+   if one exists; otherwise create it. Put watering schedules, lessons, and
+   skip-lists in `notes`.
 5. Create a `Task` per calendar row and per shopping-list line, all under
    that Project (`projectId`). Due dates come from the plan's headings.
    Resolve `subjectProductId` with `resolve_products` when a matching

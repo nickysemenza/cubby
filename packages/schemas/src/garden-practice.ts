@@ -10,8 +10,11 @@ import { gardenGuideKeys, plantingGuides } from "./garden-guides";
  * never reads as a citation. A crop with no citable window lives here only.
  *
  * `maturity.source` is a `gardenPracticeSources` id or `"estimate"`; an
- * estimate always carries a `note` saying how it was derived. Cultivar
- * packet figures belong on the Plant, never here.
+ * estimate always carries a `note` saying how it was derived. Cited ranges
+ * are p10–p90 of the source's listings (min–max under ten listings) in the
+ * source's own days-to-maturity convention, which the note names. Perennials
+ * and trees bought as plants have no maturity. Cultivar packet figures
+ * belong on the Plant, never here.
  */
 
 /** Crops with practice but no citable source window yet. */
@@ -33,6 +36,21 @@ export const gardenPracticeOnlyKeys = [
   "alyssum",
   "nasturtium",
   "marigold",
+  "mint",
+  "thyme",
+  "oregano",
+  "mexican-oregano",
+  "chives",
+  "garlic-chives",
+  "rau-ram",
+  "hoja-santa",
+  "strawberry",
+  "passion-fruit",
+  "citrus",
+  "curry-leaf",
+  "sichuan-pepper",
+  "plum",
+  "poppy",
 ] as const;
 
 /** Every crop key a Plant may carry: source guide keys plus practice-only keys. */
@@ -74,7 +92,38 @@ export const gardenPracticeEntry = z.object({
 });
 export type GardenPracticeEntry = z.infer<typeof gardenPracticeEntry>;
 
-export const gardenPracticeSources: z.input<typeof gardenPracticeSource>[] = [];
+export const gardenPracticeSources: z.input<typeof gardenPracticeSource>[] = [
+  {
+    id: "johnnys",
+    name: "Johnny's Selected Seeds",
+    url: "https://www.johnnyseeds.com/growers-library/",
+    reviewedAt: "2026-09-23",
+  },
+  {
+    id: "adaptive",
+    name: "Adaptive Seeds",
+    url: "https://www.adaptiveseeds.com/product/herbs/epazote-oaxaca-red-organic/",
+    reviewedAt: "2026-09-23",
+  },
+  {
+    id: "trueleaf",
+    name: "True Leaf Market",
+    url: "https://trueleafmarket.com/products/yard-long-bean-dark-green",
+    reviewedAt: "2026-09-23",
+  },
+  {
+    id: "garden-organic",
+    name: "Garden Organic",
+    url: "https://www.gardenorganic.org.uk/expert-advice/how-to-grow/growing-guides/vegetables-herbs-guides/how-to-grow-fenugreek",
+    reviewedAt: "2026-09-23",
+  },
+  {
+    id: "uvm-saffron",
+    name: "UVM Saffron Center",
+    url: "https://www.uvm.edu/~saffron/pages/factsheets/SaffronplantingforhomegardenersSept2021.pdf",
+    reviewedAt: "2026-09-23",
+  },
+];
 
 export const gardenPractice = {
   artichoke: {
@@ -82,29 +131,29 @@ export const gardenPractice = {
     successionWeeks: null,
     maturity: {
       fromSow: null,
-      fromTransplant: [180, 240],
-      source: "estimate",
-      note: "typical catalog range, not verified against a source page; perennial; crown/transplant to first head, ~6–8mo; SF coastal favors it as near-perennial",
+      fromTransplant: [75, 85],
+      source: "johnnys",
+      note: "Johnny's range of 3 listings; KGI counts from transplant; annual culture after vernalization",
     },
   },
   basil: {
     starts: ["direct", "tray", "indoor", "bought"],
     successionWeeks: null,
     maturity: {
-      fromSow: [55, 65],
-      fromTransplant: [25, 35],
-      source: "estimate",
-      note: "typical catalog range, not verified against a source page; transplant = sow−28d nursery",
+      fromSow: [55, 74],
+      fromTransplant: null,
+      source: "johnnys",
+      note: "Johnny's p10–p90 of 35 listings; KGI states no convention; read as from sowing",
     },
   },
   "bean-fava": {
     starts: ["direct"],
     successionWeeks: null,
     maturity: {
-      fromSow: [75, 90],
+      fromSow: [75, 75],
       fromTransplant: null,
-      source: "estimate",
-      note: "typical catalog range, not verified against a source page; overwinters in SF coastal climate",
+      source: "johnnys",
+      note: "Johnny's range of 1 listing; KGI states no convention; read as from sowing",
     },
   },
   "bean-runner": {
@@ -121,70 +170,70 @@ export const gardenPractice = {
     starts: ["direct"],
     successionWeeks: 3,
     maturity: {
-      fromSow: [50, 60],
+      fromSow: [51, 60],
       fromTransplant: null,
-      source: "estimate",
-      note: "typical catalog range, not verified against a source page; classic succession crop",
+      source: "johnnys",
+      note: "Johnny's p10–p90 of 25 listings; KGI counts from direct seeding; bush and pole",
     },
   },
   beet: {
     starts: ["direct", "tray"],
     successionWeeks: 3,
     maturity: {
-      fromSow: [50, 60],
-      fromTransplant: null,
-      source: "estimate",
-      note: "typical catalog range, not verified against a source page",
+      fromSow: [46, 55],
+      fromTransplant: [25, 41],
+      source: "johnnys",
+      note: "Johnny's p10–p90 of 12 listings; KGI counts from direct seeding; transplants mature 14–21 days sooner",
     },
   },
   broccoli: {
     starts: ["tray", "indoor", "bought"],
     successionWeeks: null,
     maturity: {
-      fromSow: [60, 70],
-      fromTransplant: [50, 60],
-      source: "estimate",
-      note: "typical catalog range, not verified against a source page; fromSow = fromTransplant + ~10d nursery",
+      fromSow: [77, 86],
+      fromTransplant: [57, 66],
+      source: "johnnys",
+      note: "Johnny's p10–p90 of 11 listings; KGI counts from transplant; direct seeding adds 20 days",
     },
   },
   "brussels-sprout": {
     starts: ["tray", "indoor", "bought"],
     successionWeeks: null,
     maturity: {
-      fromSow: [90, 100],
-      fromTransplant: [80, 90],
-      source: "estimate",
-      note: "typical catalog range, not verified against a source page; long season; estimate transplant lead ~10d",
+      fromSow: null,
+      fromTransplant: [98, 118],
+      source: "johnnys",
+      note: "Johnny's range of 5 listings; KGI counts from transplant",
     },
   },
   cabbage: {
     starts: ["tray", "indoor", "bought"],
     successionWeeks: null,
     maturity: {
-      fromSow: [70, 90],
-      fromTransplant: [60, 80],
-      source: "estimate",
-      note: "typical catalog range, not verified against a source page",
+      fromSow: null,
+      fromTransplant: [65, 98],
+      source: "johnnys",
+      note: "Johnny's p10–p90 of 20 listings; KGI counts from transplant; spring transplant; 10–14 days less in warm weather",
     },
   },
   carrot: {
     starts: ["direct"],
     successionWeeks: 3,
     maturity: {
-      fromSow: [60, 75],
+      fromSow: [56, 75],
       fromTransplant: null,
-      source: "estimate",
-      note: "typical catalog range, not verified against a source page; taproot, direct-sow only",
+      source: "johnnys",
+      note: "Johnny's p10–p90 of 31 listings; KGI counts from direct seeding",
     },
   },
   cauliflower: {
     starts: ["tray", "indoor", "bought"],
     successionWeeks: null,
     maturity: {
-      fromSow: [65, 80],
-      fromTransplant: [55, 70],
-      source: "estimate",
-      note: "typical catalog range, not verified against a source page",
+      fromSow: null,
+      fromTransplant: [50, 80],
+      source: "johnnys",
+      note: "Johnny's p10–p90 of 27 listings; KGI counts from transplant; overwintering types excluded",
     },
   },
   celery: {
@@ -192,49 +241,49 @@ export const gardenPractice = {
     successionWeeks: null,
     maturity: {
       fromSow: null,
-      fromTransplant: [90, 120],
-      source: "estimate",
-      note: "typical catalog range, not verified against a source page; long, slow-germinating; almost always transplanted",
+      fromTransplant: [80, 100],
+      source: "johnnys",
+      note: "Johnny's range of 5 listings; KGI counts from transplant",
     },
   },
   chard: {
     starts: ["direct", "tray"],
     successionWeeks: 4,
     maturity: {
-      fromSow: [50, 60],
+      fromSow: [50, 65],
       fromTransplant: null,
-      source: "estimate",
-      note: "typical catalog range, not verified against a source page; cut-and-come-again",
+      source: "johnnys",
+      note: "Johnny's range of 9 listings; KGI counts from direct seeding; to bunching",
     },
   },
   collard: {
     starts: ["direct", "tray", "bought"],
     successionWeeks: null,
     maturity: {
-      fromSow: [60, 75],
-      fromTransplant: [50, 60],
-      source: "estimate",
-      note: "typical catalog range, not verified against a source page",
+      fromSow: [50, 55],
+      fromTransplant: [36, 41],
+      source: "johnnys",
+      note: "Johnny's range of 3 listings; KGI counts from direct seeding; transplants mature 14 days sooner",
     },
   },
   corn: {
     starts: ["direct"],
     successionWeeks: null,
     maturity: {
-      fromSow: [65, 90],
+      fromSow: [68, 110],
       fromTransplant: null,
-      source: "estimate",
-      note: "typical catalog range, not verified against a source page; direct-sow only; not succession in small home beds typically, but growers do stagger — treat as no fixed succession interval",
+      source: "johnnys",
+      note: "Johnny's p10–p90 of 35 listings; KGI counts from direct seeding",
     },
   },
   cucumber: {
     starts: ["direct", "tray", "indoor"],
     successionWeeks: 3,
     maturity: {
-      fromSow: [50, 65],
-      fromTransplant: [40, 55],
-      source: "estimate",
-      note: "typical catalog range, not verified against a source page; transplant = sow−10d",
+      fromSow: null,
+      fromTransplant: [29, 43],
+      source: "johnnys",
+      note: "Johnny's p10–p90 of 32 listings; KGI counts from transplant",
     },
   },
   eggplant: {
@@ -242,9 +291,9 @@ export const gardenPractice = {
     successionWeeks: null,
     maturity: {
       fromSow: null,
-      fromTransplant: [60, 75],
-      source: "estimate",
-      note: "typical catalog range, not verified against a source page; needs heat; SF coastal marginal, grow from transplant",
+      fromTransplant: [55, 65],
+      source: "johnnys",
+      note: "Johnny's p10–p90 of 20 listings; KGI counts from transplant",
     },
   },
   garlic: {
@@ -261,80 +310,80 @@ export const gardenPractice = {
     starts: ["direct", "tray", "bought"],
     successionWeeks: 4,
     maturity: {
-      fromSow: [55, 65],
-      fromTransplant: [30, 40],
-      source: "estimate",
-      note: "typical catalog range, not verified against a source page; transplant = sow−25d",
+      fromSow: [50, 65],
+      fromTransplant: [36, 51],
+      source: "johnnys",
+      note: "Johnny's p10–p90 of 14 listings; KGI counts from direct seeding; transplants mature 14 days sooner; full size; baby-only listings and Kalettes excluded",
     },
   },
   kohlrabi: {
     starts: ["direct", "tray"],
     successionWeeks: 3,
     maturity: {
-      fromSow: [45, 60],
-      fromTransplant: [35, 45],
-      source: "estimate",
-      note: "typical catalog range, not verified against a source page",
+      fromSow: [37, 48],
+      fromTransplant: [23, 34],
+      source: "johnnys",
+      note: "Johnny's range of 6 listings; KGI counts from direct seeding; transplants mature 14 days sooner; fresh-market types; storage Kossak (80) excluded",
     },
   },
   leek: {
     starts: ["tray", "indoor"],
     successionWeeks: null,
     maturity: {
-      fromSow: [90, 120],
-      fromTransplant: [75, 100],
-      source: "estimate",
-      note: "typical catalog range, not verified against a source page; long season; estimate transplant = sow−20d",
+      fromSow: [95, 150],
+      fromTransplant: [75, 120],
+      source: "johnnys",
+      note: "Johnny's range of 8 listings; KGI counts from transplant; direct seeding adds 20–30 days",
     },
   },
   lettuce: {
     starts: ["direct", "tray", "bought"],
     successionWeeks: 3,
     maturity: {
-      fromSow: [45, 55],
-      fromTransplant: [25, 35],
-      source: "estimate",
-      note: "typical catalog range, not verified against a source page; classic succession crop; transplant = sow−20d",
+      fromSow: null,
+      fromTransplant: [34, 57],
+      source: "johnnys",
+      note: "Johnny's p10–p90 of 109 listings; KGI counts from transplant; full size",
     },
   },
   mustard: {
     starts: ["direct", "tray"],
     successionWeeks: 3,
     maturity: {
-      fromSow: [30, 45],
+      fromSow: [37, 45],
       fromTransplant: null,
-      source: "estimate",
-      note: "typical catalog range, not verified against a source page; fast greens",
+      source: "johnnys",
+      note: "Johnny's p10–p90 of 10 listings; KGI counts from direct seeding; full size",
     },
   },
   onion: {
     starts: ["tray", "indoor", "bought"],
     successionWeeks: null,
     maturity: {
-      fromSow: null,
-      fromTransplant: [90, 120],
-      source: "estimate",
-      note: "typical catalog range, not verified against a source page; grown from sets/transplants; day-length dependent",
+      fromSow: [90, 115],
+      fromTransplant: [75, 105],
+      source: "johnnys",
+      note: "Johnny's p10–p90 of 24 listings; KGI counts from direct seeding; transplants mature 10–15 days sooner; spring-sown; fall-planted listings excluded",
     },
   },
   parsnip: {
     starts: ["direct"],
     successionWeeks: null,
     maturity: {
-      fromSow: [100, 120],
+      fromSow: [105, 120],
       fromTransplant: null,
-      source: "estimate",
-      note: "typical catalog range, not verified against a source page; slow, direct-sow only",
+      source: "johnnys",
+      note: "Johnny's range of 5 listings; KGI counts from direct seeding",
     },
   },
   pea: {
     starts: ["direct"],
     successionWeeks: 3,
     maturity: {
-      fromSow: [55, 70],
+      fromSow: [55, 64],
       fromTransplant: null,
-      source: "estimate",
-      note: "typical catalog range, not verified against a source page; cool season, staggered sowings common",
+      source: "johnnys",
+      note: "Johnny's p10–p90 of 16 listings; KGI counts from direct seeding",
     },
   },
   pepper: {
@@ -342,9 +391,9 @@ export const gardenPractice = {
     successionWeeks: null,
     maturity: {
       fromSow: null,
-      fromTransplant: [60, 80],
-      source: "estimate",
-      note: "typical catalog range, not verified against a source page; needs heat mat; SF coastal marginal",
+      fromTransplant: [55, 70],
+      source: "johnnys",
+      note: "Johnny's p10–p90 of 76 listings; KGI counts from transplant; to first full-size fruit",
     },
   },
   potato: {
@@ -352,19 +401,19 @@ export const gardenPractice = {
     successionWeeks: null,
     maturity: {
       fromSow: null,
-      fromTransplant: [70, 90],
-      source: "estimate",
-      note: 'typical catalog range, not verified against a source page; from seed potatoes; "fromTransplant" = planting to first new potatoes',
+      fromTransplant: [49, 56],
+      source: "johnnys",
+      note: "KGI: new potatoes 7–8 weeks after planting; storage potatoes run longer",
     },
   },
   radish: {
     starts: ["direct"],
     successionWeeks: 2,
     maturity: {
-      fromSow: [25, 35],
+      fromSow: [21, 55],
       fromTransplant: null,
-      source: "estimate",
-      note: "typical catalog range, not verified against a source page; fastest, classic short succession",
+      source: "johnnys",
+      note: "Johnny's p10–p90 of 23 listings; KGI counts from direct seeding; round through daikon",
     },
   },
   rhubarb: {
@@ -373,58 +422,58 @@ export const gardenPractice = {
     maturity: {
       fromSow: null,
       fromTransplant: [365, 730],
-      source: "estimate",
-      note: "typical catalog range, not verified against a source page; perennial crown; practical first harvest ~1–2 seasons after planting to let roots establish",
+      source: "johnnys",
+      note: "Johnny's Victoria: harvest the second year after planting",
     },
   },
   shallot: {
     starts: ["bought"],
     successionWeeks: null,
     maturity: {
-      fromSow: null,
-      fromTransplant: [90, 120],
-      source: "estimate",
-      note: "typical catalog range, not verified against a source page; grown from sets like onion",
+      fromSow: [105, 110],
+      fromTransplant: [90, 100],
+      source: "johnnys",
+      note: "Johnny's range of 4 listings; KGI counts from direct seeding; transplants mature 10–15 days sooner",
     },
   },
   spinach: {
     starts: ["direct", "tray"],
     successionWeeks: 3,
     maturity: {
-      fromSow: [40, 50],
+      fromSow: [25, 30],
       fromTransplant: null,
-      source: "estimate",
-      note: "typical catalog range, not verified against a source page",
+      source: "johnnys",
+      note: "Johnny's p10–p90 of 16 listings; KGI counts from direct seeding",
     },
   },
   "squash-summer": {
     starts: ["direct", "tray", "indoor"],
     successionWeeks: null,
     maturity: {
-      fromSow: [50, 60],
-      fromTransplant: [40, 50],
-      source: "estimate",
-      note: "typical catalog range, not verified against a source page; transplant = sow−10d",
+      fromSow: [45, 54],
+      fromTransplant: [31, 40],
+      source: "johnnys",
+      note: "Johnny's p10–p90 of 27 listings; KGI counts from direct seeding; transplants mature 14 days sooner",
     },
   },
   "squash-winter": {
     starts: ["direct", "tray", "indoor"],
     successionWeeks: null,
     maturity: {
-      fromSow: [85, 100],
-      fromTransplant: [75, 90],
-      source: "estimate",
-      note: "typical catalog range, not verified against a source page; transplant = sow−10d",
+      fromSow: [88, 105],
+      fromTransplant: [74, 91],
+      source: "johnnys",
+      note: "Johnny's p10–p90 of 37 listings; KGI counts from direct seeding; transplants mature 14 days sooner",
     },
   },
   sunflower: {
     starts: ["direct", "tray"],
     successionWeeks: null,
     maturity: {
-      fromSow: [65, 85],
+      fromSow: [50, 85],
       fromTransplant: null,
-      source: "estimate",
-      note: "typical catalog range, not verified against a source page; days to bloom",
+      source: "johnnys",
+      note: "Johnny's p10–p90 of 55 listings; KGI states no convention; read as from sowing; days to bloom",
     },
   },
   tomato: {
@@ -432,59 +481,59 @@ export const gardenPractice = {
     successionWeeks: null,
     maturity: {
       fromSow: null,
-      fromTransplant: [60, 85],
-      source: "estimate",
-      note: "typical catalog range, not verified against a source page; almost always transplanted; SF coastal favors early/short-season varieties",
+      fromTransplant: [59, 78],
+      source: "johnnys",
+      note: "Johnny's p10–p90 of 117 listings; KGI counts from transplant",
     },
   },
   turnip: {
     starts: ["direct"],
     successionWeeks: 3,
     maturity: {
-      fromSow: [40, 55],
+      fromSow: [38, 50],
       fromTransplant: null,
-      source: "estimate",
-      note: "typical catalog range, not verified against a source page",
+      source: "johnnys",
+      note: "Johnny's range of 3 listings; KGI counts from direct seeding",
     },
   },
   melon: {
     starts: ["tray", "indoor"],
     successionWeeks: null,
     maturity: {
-      fromSow: [75, 90],
-      fromTransplant: [65, 80],
-      source: "estimate",
-      note: "typical catalog range, not verified against a source page; needs heat; SF coastal marginal, transplant = sow−10d",
+      fromSow: [81, 88],
+      fromTransplant: [71, 78],
+      source: "johnnys",
+      note: "Johnny's p10–p90 of 21 listings; KGI counts from transplant; direct seeding adds 10 days",
     },
   },
   pumpkin: {
     starts: ["direct", "tray"],
     successionWeeks: null,
     maturity: {
-      fromSow: [90, 110],
-      fromTransplant: [80, 100],
-      source: "estimate",
-      note: "typical catalog range, not verified against a source page; transplant = sow−10d",
+      fromSow: [85, 110],
+      fromTransplant: [71, 96],
+      source: "johnnys",
+      note: "Johnny's p10–p90 of 51 listings; KGI counts from direct seeding; transplants mature 14 days sooner",
     },
   },
   rutabaga: {
     starts: ["direct"],
     successionWeeks: null,
     maturity: {
-      fromSow: [80, 95],
+      fromSow: [90, 95],
       fromTransplant: null,
-      source: "estimate",
-      note: "typical catalog range, not verified against a source page",
+      source: "johnnys",
+      note: "Johnny's range of 2 listings; KGI counts from direct seeding",
     },
   },
   watermelon: {
     starts: ["tray", "indoor"],
     successionWeeks: null,
     maturity: {
-      fromSow: [80, 90],
-      fromTransplant: [70, 80],
-      source: "estimate",
-      note: "typical catalog range, not verified against a source page; needs heat; SF coastal marginal, transplant = sow−10d",
+      fromSow: [80, 97],
+      fromTransplant: [70, 87],
+      source: "johnnys",
+      note: "Johnny's p10–p90 of 16 listings; KGI counts from transplant; direct seeding adds 10 days",
     },
   },
   "asian-greens": {
@@ -492,10 +541,10 @@ export const gardenPractice = {
     starts: ["direct", "tray"],
     successionWeeks: 3,
     maturity: {
-      fromSow: [40, 55],
-      fromTransplant: [25, 35],
-      source: "estimate",
-      note: "typical catalog range, not verified against a source page; fast cool-season greens; transplant = sow−15d",
+      fromSow: [35, 55],
+      fromTransplant: null,
+      source: "johnnys",
+      note: "Johnny's p10–p90 of 27 listings; KGI counts from direct seeding; full size; baby-only listings excluded",
     },
   },
   "broccoli-raab": {
@@ -503,10 +552,10 @@ export const gardenPractice = {
     starts: ["direct", "tray"],
     successionWeeks: 3,
     maturity: {
-      fromSow: [40, 50],
+      fromSow: [42, 42],
       fromTransplant: null,
-      source: "estimate",
-      note: "typical catalog range, not verified against a source page",
+      source: "johnnys",
+      note: "Johnny's range of 1 listing; KGI states no convention; read as from sowing; Spring Raab is the only raab listing",
     },
   },
   cilantro: {
@@ -514,10 +563,10 @@ export const gardenPractice = {
     starts: ["direct", "tray"],
     successionWeeks: 2,
     maturity: {
-      fromSow: [45, 55],
+      fromSow: [50, 55],
       fromTransplant: null,
-      source: "estimate",
-      note: "typical catalog range, not verified against a source page; bolts fast; frequent succession standard",
+      source: "johnnys",
+      note: "Johnny's range of 7 listings; KGI states no convention; read as from sowing; to leaf harvest",
     },
   },
   dill: {
@@ -525,10 +574,10 @@ export const gardenPractice = {
     starts: ["direct", "tray"],
     successionWeeks: 3,
     maturity: {
-      fromSow: [40, 55],
+      fromSow: [40, 60],
       fromTransplant: null,
-      source: "estimate",
-      note: "typical catalog range, not verified against a source page",
+      source: "johnnys",
+      note: "Johnny's range of 7 listings; KGI states no convention; read as from sowing; to leaf harvest",
     },
   },
   parsley: {
@@ -536,10 +585,10 @@ export const gardenPractice = {
     starts: ["direct", "tray", "indoor"],
     successionWeeks: null,
     maturity: {
-      fromSow: [70, 90],
-      fromTransplant: [50, 60],
-      source: "estimate",
-      note: "typical catalog range, not verified against a source page; slow germination; transplant = sow−25d",
+      fromSow: [75, 75],
+      fromTransplant: null,
+      source: "johnnys",
+      note: "Johnny's range of 9 listings; KGI states no convention; read as from sowing",
     },
   },
   sorrel: {
@@ -547,10 +596,10 @@ export const gardenPractice = {
     starts: ["direct", "tray"],
     successionWeeks: null,
     maturity: {
-      fromSow: [55, 65],
-      fromTransplant: null,
-      source: "estimate",
-      note: "typical catalog range, not verified against a source page; perennial-ish but grown as annual green",
+      fromSow: [55, 60],
+      fromTransplant: [41, 46],
+      source: "johnnys",
+      note: "Johnny's range of 2 listings; KGI counts from direct seeding; transplants mature 14 days sooner; full size",
     },
   },
   shiso: {
@@ -558,10 +607,10 @@ export const gardenPractice = {
     starts: ["tray", "indoor"],
     successionWeeks: null,
     maturity: {
-      fromSow: [70, 80],
-      fromTransplant: [45, 55],
-      source: "estimate",
-      note: "typical catalog range, not verified against a source page; transplant = sow−25d",
+      fromSow: [80, 85],
+      fromTransplant: null,
+      source: "johnnys",
+      note: "Johnny's range of 4 listings; KGI states no convention; read as from sowing",
     },
   },
   tomatillo: {
@@ -570,9 +619,9 @@ export const gardenPractice = {
     successionWeeks: null,
     maturity: {
       fromSow: null,
-      fromTransplant: [65, 80],
-      source: "estimate",
-      note: "typical catalog range, not verified against a source page; same culture as tomato",
+      fromTransplant: [60, 70],
+      source: "johnnys",
+      note: "Johnny's range of 3 listings; KGI counts from transplant",
     },
   },
   epazote: {
@@ -580,10 +629,10 @@ export const gardenPractice = {
     starts: ["direct", "tray"],
     successionWeeks: null,
     maturity: {
-      fromSow: [60, 80],
+      fromSow: [55, 70],
       fromTransplant: null,
-      source: "estimate",
-      note: "typical catalog range, not verified against a source page; estimate; sparse catalog data for this herb",
+      source: "adaptive",
+      note: "Adaptive Oaxaca Red lists 60–70 days; Fedco lists 55",
     },
   },
   fenugreek: {
@@ -591,10 +640,10 @@ export const gardenPractice = {
     starts: ["direct"],
     successionWeeks: null,
     maturity: {
-      fromSow: [40, 60],
+      fromSow: [28, 42],
       fromTransplant: null,
-      source: "estimate",
-      note: "typical catalog range, not verified against a source page; grown as microgreen/herb; estimate to first cutting",
+      source: "garden-organic",
+      note: "leaf harvest; Garden Organic gives four weeks average, six weeks depending on weather",
     },
   },
   scallion: {
@@ -603,9 +652,9 @@ export const gardenPractice = {
     successionWeeks: 3,
     maturity: {
       fromSow: [50, 65],
-      fromTransplant: [30, 45],
-      source: "estimate",
-      note: "typical catalog range, not verified against a source page; transplant = sow−20d",
+      fromTransplant: [35, 55],
+      source: "johnnys",
+      note: "Johnny's range of 6 listings; KGI counts from direct seeding; transplants mature 10–15 days sooner",
     },
   },
   "bean-yardlong": {
@@ -613,10 +662,10 @@ export const gardenPractice = {
     starts: ["direct"],
     successionWeeks: null,
     maturity: {
-      fromSow: [60, 80],
+      fromSow: [70, 89],
       fromTransplant: null,
-      source: "estimate",
-      note: "typical catalog range, not verified against a source page; heat-loving; SF coastal marginal",
+      source: "trueleaf",
+      note: "True Leaf yardlong listings: 70–79 days (five), 80–89 (Oriental)",
     },
   },
   saffron: {
@@ -625,9 +674,9 @@ export const gardenPractice = {
     successionWeeks: null,
     maturity: {
       fromSow: null,
-      fromTransplant: [365, 365],
-      source: "estimate",
-      note: "typical catalog range, not verified against a source page; corm-grown perennial (crocus); blooms ~6–8 weeks after fall planting but reliable harvest establishes over first full year — fromTransplant given as ~1 season to first meaningful bloom/harvest",
+      fromTransplant: [30, 45],
+      source: "uvm-saffron",
+      note: "corms sprout ~30 days after August–September planting and flower soon after",
     },
   },
   "celery-leaf": {
@@ -635,10 +684,10 @@ export const gardenPractice = {
     starts: ["tray", "indoor"],
     successionWeeks: null,
     maturity: {
-      fromSow: null,
-      fromTransplant: [70, 85],
-      source: "estimate",
-      note: "typical catalog range, not verified against a source page; smaller/faster than stalk celery; transplant only",
+      fromSow: [80, 85],
+      fromTransplant: null,
+      source: "johnnys",
+      note: "Johnny's range of 1 listing; KGI states no convention; read as from sowing",
     },
   },
   alyssum: {
@@ -646,10 +695,10 @@ export const gardenPractice = {
     starts: ["direct", "tray", "bought"],
     successionWeeks: null,
     maturity: {
-      fromSow: [40, 50],
-      fromTransplant: [25, 35],
-      source: "estimate",
-      note: "typical catalog range, not verified against a source page; flower; days to first bloom; transplant = sow−15d",
+      fromSow: [50, 60],
+      fromTransplant: null,
+      source: "johnnys",
+      note: "Johnny's range of 2 listings; KGI states no convention; read as from sowing; days to bloom",
     },
   },
   nasturtium: {
@@ -657,10 +706,10 @@ export const gardenPractice = {
     starts: ["direct", "bought"],
     successionWeeks: null,
     maturity: {
-      fromSow: [35, 50],
+      fromSow: [55, 65],
       fromTransplant: null,
-      source: "estimate",
-      note: "typical catalog range, not verified against a source page; flower; days to first bloom; direct-sow preferred, dislikes transplant",
+      source: "johnnys",
+      note: "Johnny's range of 7 listings; KGI states no convention; read as from sowing; days to bloom",
     },
   },
   marigold: {
@@ -668,10 +717,135 @@ export const gardenPractice = {
     starts: ["direct", "tray", "bought"],
     successionWeeks: null,
     maturity: {
-      fromSow: [45, 55],
-      fromTransplant: [30, 40],
-      source: "estimate",
-      note: "typical catalog range, not verified against a source page; flower; days to first bloom; transplant = sow−15d",
+      fromSow: [50, 90],
+      fromTransplant: null,
+      source: "johnnys",
+      note: "Johnny's p10–p90 of 16 listings; KGI states no convention; read as from sowing; days to bloom",
+    },
+  },
+  mint: {
+    name: "Mint",
+    starts: ["bought"],
+    successionWeeks: null,
+    maturity: {
+      fromSow: [70, 80],
+      fromTransplant: null,
+      source: "johnnys",
+      note: "Johnny's range of 1 listing; KGI states no convention; read as from sowing",
+    },
+  },
+  thyme: {
+    name: "Thyme",
+    starts: ["tray", "bought"],
+    successionWeeks: null,
+    maturity: {
+      fromSow: [90, 95],
+      fromTransplant: null,
+      source: "johnnys",
+      note: "Johnny's range of 3 listings; KGI states no convention; read as from sowing",
+    },
+  },
+  oregano: {
+    name: "Oregano",
+    starts: ["tray", "bought"],
+    successionWeeks: null,
+    maturity: {
+      fromSow: [80, 90],
+      fromTransplant: null,
+      source: "johnnys",
+      note: "Johnny's range of 1 listing; KGI states no convention; read as from sowing",
+    },
+  },
+  "mexican-oregano": {
+    name: "Mexican oregano",
+    starts: ["bought"],
+    successionWeeks: null,
+    maturity: null,
+  },
+  chives: {
+    name: "Chives",
+    starts: ["tray", "bought"],
+    successionWeeks: null,
+    maturity: {
+      fromSow: [75, 85],
+      fromTransplant: null,
+      source: "johnnys",
+      note: "Johnny's range of 6 listings; KGI states no convention; read as from sowing",
+    },
+  },
+  "garlic-chives": {
+    name: "Garlic chives",
+    starts: ["tray", "bought"],
+    successionWeeks: null,
+    maturity: {
+      fromSow: [80, 90],
+      fromTransplant: null,
+      source: "johnnys",
+      note: "Johnny's range of 2 listings; KGI states no convention; read as from sowing",
+    },
+  },
+  "rau-ram": {
+    name: "Vietnamese coriander",
+    starts: ["bought"],
+    successionWeeks: null,
+    maturity: null,
+  },
+  "hoja-santa": {
+    name: "Hoja santa",
+    starts: ["bought"],
+    successionWeeks: null,
+    maturity: null,
+  },
+  strawberry: {
+    name: "Strawberry",
+    starts: ["bought", "indoor"],
+    successionWeeks: null,
+    maturity: {
+      fromSow: [100, 120],
+      fromTransplant: null,
+      source: "johnnys",
+      note: "Johnny's range of 3 listings; KGI states no convention; read as from sowing; seed-grown day-neutral types, to fruit",
+    },
+  },
+  "passion-fruit": {
+    name: "Passion fruit",
+    starts: ["bought"],
+    successionWeeks: null,
+    maturity: null,
+  },
+  citrus: {
+    name: "Citrus",
+    starts: ["bought"],
+    successionWeeks: null,
+    maturity: null,
+  },
+  "curry-leaf": {
+    name: "Curry leaf",
+    starts: ["bought"],
+    successionWeeks: null,
+    maturity: null,
+  },
+  "sichuan-pepper": {
+    name: "Sichuan pepper",
+    starts: ["bought"],
+    successionWeeks: null,
+    maturity: null,
+  },
+  plum: {
+    name: "Plum",
+    starts: ["bought"],
+    successionWeeks: null,
+    maturity: null,
+  },
+  poppy: {
+    name: "Poppy",
+    starts: ["direct"],
+    successionWeeks: null,
+    maturity: {
+      fromSow: [55, 65],
+      fromTransplant: null,
+      source: "johnnys",
+      note: "Johnny's range of 2 listings; KGI states no convention; read as from sowing; corn and California poppy, days to bloom; Iceland poppies excluded",
     },
   },
 } satisfies Record<GardenCropKey, z.input<typeof gardenPracticeEntry>>;
