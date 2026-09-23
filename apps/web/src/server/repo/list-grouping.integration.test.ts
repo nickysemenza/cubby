@@ -1,3 +1,4 @@
+import type { ProductCategoryShortcode } from "@cubby/schemas/identifiers";
 import { eq } from "drizzle-orm";
 import { taxonomyShortcode } from "tooling/product-category-fixtures";
 import { withTestDb } from "tooling/test-setup";
@@ -21,6 +22,7 @@ import {
 
 const ctx = withTestDb();
 const groups = (result: {
+  count: number;
   groups?: { key: string; label: string; count: number }[];
 }) => result.groups;
 const groupedProducts = (
@@ -43,7 +45,10 @@ async function category(name: string, sortOrder: number) {
   );
 }
 
-async function product(name: string, categoryId: string | null) {
+async function product(
+  name: string,
+  categoryId: ProductCategoryShortcode | null,
+) {
   return createProductFixture(
     ctx.db,
     makeProductInput({ name, categoryId }),
