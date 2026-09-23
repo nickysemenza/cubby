@@ -112,6 +112,7 @@ const referencePickerEntities = new Set<PickerEntity>([
   "financialAccount",
   "purchase",
   "ledgerParty",
+  "plant",
   "planting",
 ]);
 

@@ -33,6 +33,7 @@ export type PickerSearchEntity =
   | "recipe"
   | "project"
   | "task"
+  | "plant"
   | "planting"
   | "vendor";
 
@@ -211,6 +212,7 @@ const FALLBACK_BLANK_FILTER_KEY = {
   recipe: "nameFilter",
   project: "search",
   task: "search",
+  plant: "search",
   planting: "searchQuery",
 } satisfies Record<Exclude<PickerSearchEntity, "vendor">, string>;
 

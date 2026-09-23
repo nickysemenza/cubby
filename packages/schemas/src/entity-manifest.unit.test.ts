@@ -148,6 +148,7 @@ describe("entity manifest", () => {
       "productCategory",
       "device",
       "imageSighting",
+      "plant",
     ]);
     expect(sorted(auditEntitySchema.options)).toEqual(
       sorted(auditableEntities),
@@ -176,6 +177,7 @@ describe("entity manifest", () => {
       "gardenEntry",
       "importRun",
       "imageSighting",
+      "plant",
     ]);
   });
 
@@ -272,6 +274,7 @@ describe("entity manifest", () => {
       "image",
       "planting",
       "gardenEntry",
+      "plant",
     ]);
     // The three financial entities stay lexically searchable but opt out of
     // embedding (search: { enabled: true, embedding: false }).
@@ -291,6 +294,7 @@ describe("entity manifest", () => {
       "image",
       "planting",
       "gardenEntry",
+      "plant",
     ]);
   });
 

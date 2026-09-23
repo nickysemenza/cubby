@@ -107,10 +107,7 @@ describe("manifest registries", () => {
 
   it("preserves explicit sentence-case labels for derived garden windows", () => {
     const labels = Object.fromEntries(
-      entityFieldModels.ingredient.fields.map((field) => [
-        field.key,
-        field.label,
-      ]),
+      entityFieldModels.plant.fields.map((field) => [field.key, field.label]),
     );
     expect(labels.guideSowWindow).toBe("Guide sow window");
     expect(labels.guideTransplantWindow).toBe("Guide transplant window");

@@ -22,7 +22,7 @@ export {
   findInventoryEmbeddingRefsForLocations,
   findInventoryEmbeddingRefsForProducts,
   findMealEmbeddingRefsForRecipes,
-  findPlantingEmbeddingRefsForIngredients,
+  findPlantingEmbeddingRefsForPlants,
   findPlantingEmbeddingRefsForLocations,
   findProductEmbeddingRefsForCategories,
   findRecipeEmbeddingRefsForIngredients,

@@ -243,6 +243,7 @@ const graphRelationshipsFor = (
   ),
 ];
 
+// oxlint-disable-next-line eslint/complexity -- One branch per entity whose label is not a plain name column.
 const labelSql = (entity: Entity, alias: string) => {
   const prefix = alias ? `${alias}.` : "";
   const column = (name: string) => sql.raw(`${prefix}"${name}"`);
@@ -289,14 +290,13 @@ const labelSql = (entity: Entity, alias: string) => {
     // `displayName` in `server/repo/financial-transaction.ts`.
     case "financialTransaction":
       return sql`COALESCE(${column("merchant")}::text, ${column("rawDescription")}::text, initcap(${column("kind")}::text), ${column("shortcode")})`;
-    // `"<ingredient name>[ · <variety>]"` — mirrors `displayName` in
-    // `server/repo/garden/index.ts`. `ingredientId` has no local name column,
-    // so the ingredient's name is a correlated subquery against `Ingredient`;
-    // `variety` is a plain column on `planting` itself.
+    // The plant's name; its crop label lives in static data, not SQL.
+    case "plant":
+      return sql`COALESCE(${column("name")}, ${column("shortcode")})`;
+    // The planting's plant name — a correlated subquery against `Plant`.
     case "planting":
       return sql`COALESCE(
-        (SELECT i."name" FROM "Ingredient" i WHERE i."id" = ${column("ingredientId")})
-          || COALESCE(' · ' || NULLIF(${column("variety")}, ''), ''),
+        (SELECT p."name" FROM "Plant" p WHERE p."id" = ${column("plantId")}),
         ${column("shortcode")}
       )`;
     // `"<Note|Harvest> · <YYYY-MM-DD> · <area name>"` — mirrors `displayName`

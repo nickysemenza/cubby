@@ -1,17 +1,22 @@
 # Garden
 
-> Planned change: a `Plant` entity at cultivar grain, verdicts and outcomes —
-> see [docs/plans/garden-plants-and-verdicts.md](plans/garden-plants-and-verdicts.md)
-> and ADR 0004. Everything below describes the model as it is today.
-
-Garden is `planting` and `gardenEntry`, two generic manifest entities with no
-bespoke UI, workflow module, or hand-registered MCP tools. `/plantings` is
-the list entry point; `/garden` is gone. See
+Garden is `plant`, `planting` and `gardenEntry`, three generic manifest entities with no
+bespoke UI, workflow module, or hand-registered MCP tools. `/plantings` and `/plants` are
+the list entry points; `/garden` is gone. See
 [terminology.md](terminology.md#garden) for the naming glossary.
 
-A **Planting** lives in at most one current `Location` (`locationId`, nullable)
+A **Plant** is a cultivar ("Sun Gold F1") or, without one, a species
+("Fenugreek"). Its `gardenGuideKey` is the crop; `verdict` (`yes | maybe |
+no`) is the household's decision, with the reason in `notes`; a crop-level
+"never here" is a species Plant with verdict `no`. `daysFromSowMin/Max` and
+`daysFromTransplantMin/Max` come from the packet or vendor listing only.
+`ingredientId` is informational. Its display name is `"<name> · <crop
+label>"`.
+
+A **Planting** names its `plantId` and lives in at most one current `Location` (`locationId`, nullable)
 and carries dates (`sowedOn`, `transplantedOn`, `finishedOn`), `status`
-(`planned | growing | finished`), `variety`, `quantity` (text),
+(`planned | growing | finished`), `outcome` (`succeeded | failed`, set at
+season review; any harvest is `succeeded`), `quantity` (text),
 `plannedWindow` (text), an optional `sourceProductId`, an optional `taskId`,
 and `notes`. There are no lifecycle verbs — Edit is the only hero action. A
 move is editing `locationId`; the audit log and timeline record the from/to
@@ -58,15 +63,21 @@ a non-growing location shows neither.
 ## Guides and the household microclimate
 
 Curated sow/transplant windows are data in
-`packages/schemas/src/garden-guides.ts`, keyed by source and crop. An
-Ingredient's `gardenGuideKey` (a plain `select` field) associates it with a
-guide. `guideSowWindow`/`guideTransplantWindow` are read-only projections on
-Ingredient and Planting, derived by
+`packages/schemas/src/garden-guides.ts`, keyed by source and crop. Household
+practice — `starts` (`direct | tray | indoor | bought`), `successionWeeks`,
+and crop-level `maturity` ranges marked with a cited source or `"estimate"`
+— is `packages/schemas/src/garden-practice.ts`, whose keys are a superset of
+the guide keys. A Plant's `gardenGuideKey` associates it with both.
+`guideSowWindow`/`guideTransplantWindow` are read-only projections on Plant
+and Planting; `routes` on Plant reads each start route against this month
+(seed routes against sow windows, `bought` against transplant windows); a
+Planting's `expectedHarvestStart/End` adds the Plant's packet days, else the
+crop maturity, to `transplantedOn`, else `sowedOn`. All are derived by
 `apps/web/src/server/garden-guides/windows.ts` for the household
 microclimate (`sunny`, falling back to `bay-area`) and rendered as a band on
 the planting timeline. When updating the guide data, preserve source dates
 and upstream attribution and run the focused guide test — do not infer tray
-dates or maturity forecasts from planting windows.
+dates from planting windows or add uncited windows to the guide file.
 
 ## Seasonal plans
 

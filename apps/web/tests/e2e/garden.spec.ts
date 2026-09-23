@@ -2,7 +2,7 @@ import { z } from "zod";
 
 import {
   seedImagePrerequisite,
-  seedIngredientPrerequisite,
+  seedPlantPrerequisite,
   seedLocationPrerequisite,
   seedPlantingPrerequisite,
 } from "./e2e-fixtures";
@@ -23,7 +23,7 @@ test("a planting's generic pages: create, edit status, log a journal entry, and 
   const growingBedName = `e2e growing bed ${suffix}`;
   const emptyShelfName = `e2e empty shelf ${suffix}`;
 
-  const crop = await seedIngredientPrerequisite(page, cropName);
+  const crop = await seedPlantPrerequisite(page, cropName);
   const growingBed = await seedLocationPrerequisite(page, growingBedName);
   const emptyShelf = await seedLocationPrerequisite(page, emptyShelfName);
   // `hideWhenEmpty` gates the create button along with the rest of the
@@ -32,7 +32,7 @@ test("a planting's generic pages: create, edit status, log a journal entry, and 
   // directly and use it to open the section, then create a second one
   // through the real generic dialog.
   const existingPlanting = await seedPlantingPrerequisite(page, {
-    ingredientId: crop.id,
+    plantId: crop.id,
     locationId: growingBed.id,
   });
 
@@ -66,7 +66,7 @@ test("a planting's generic pages: create, edit status, log a journal entry, and 
   await expect(dialog.getByText("New Planting")).toBeVisible();
   await selectComboboxItem(
     page,
-    dialog.getByRole("combobox", { name: "Crop", exact: true }),
+    dialog.getByRole("combobox", { name: "Plant", exact: true }),
     cropName,
   );
   await dialog.getByRole("button", { name: "Create", exact: true }).click();
@@ -81,7 +81,7 @@ test("a planting's generic pages: create, edit status, log a journal entry, and 
   await expect(plantingRows.first()).toBeVisible();
   await expect(plantingRows).toHaveCount(2);
   await expect(
-    page.locator(`a[href="/ingredients/${crop.id}"]`, { hasText: cropName }),
+    page.locator(`a[href="/plants/${crop.id}"]`, { hasText: cropName }),
   ).toHaveCount(2);
 
   // Edit `status` on the seeded planting through the generic edit dialog —
@@ -154,7 +154,7 @@ test("a bought seedling (transplantedOn only, no sowedOn) gets an inferred inter
   const suffix = Date.now();
   const cropName = `e2e seedling crop ${suffix}`;
   const bedName = `e2e seedling bed ${suffix}`;
-  const crop = await seedIngredientPrerequisite(page, cropName);
+  const crop = await seedPlantPrerequisite(page, cropName);
   const bed = await seedLocationPrerequisite(page, bedName);
   // `hideWhenEmpty` gates the section's own create button on its first row
   // (see the seeding note atop the first test in this file) — this throwaway
@@ -162,7 +162,7 @@ test("a bought seedling (transplantedOn only, no sowedOn) gets an inferred inter
   // computation drops it from the timeline entirely (no start, no markers)
   // and it never becomes a second row to disambiguate from.
   await seedPlantingPrerequisite(page, {
-    ingredientId: crop.id,
+    plantId: crop.id,
     locationId: bed.id,
   });
 
@@ -172,7 +172,7 @@ test("a bought seedling (transplantedOn only, no sowedOn) gets an inferred inter
   await expect(dialog.getByText("New Planting")).toBeVisible();
   await selectComboboxItem(
     page,
-    dialog.getByRole("combobox", { name: "Crop", exact: true }),
+    dialog.getByRole("combobox", { name: "Plant", exact: true }),
     cropName,
   );
   // No Sowed fill — only Transplanted, the nursery-bought-plant case decision
@@ -204,10 +204,10 @@ test("a planting's list row shows a thumbnail once a journal entry with a photo 
   const suffix = Date.now();
   const cropName = `e2e photo crop ${suffix}`;
   const bedName = `e2e photo bed ${suffix}`;
-  const crop = await seedIngredientPrerequisite(page, cropName);
+  const crop = await seedPlantPrerequisite(page, cropName);
   const bed = await seedLocationPrerequisite(page, bedName);
   const planting = await seedPlantingPrerequisite(page, {
-    ingredientId: crop.id,
+    plantId: crop.id,
     locationId: bed.id,
   });
 

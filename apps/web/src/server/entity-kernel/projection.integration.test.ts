@@ -13,9 +13,11 @@ import {
   executeEntity,
 } from "~/server/entity-kernel";
 import { getDb } from "~/server/repo/database-helpers";
-import { createIngredient } from "~/server/repo/ingredient";
 import { createLocation } from "~/server/repo/location";
-import { makeLocationInput } from "~/server/repo/repo.fixtures";
+import {
+  createPlantFixture,
+  makeLocationInput,
+} from "~/server/repo/repo.fixtures";
 import { getSearchDocumentEmbeddingText } from "~/server/repo/search-document";
 import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
 import { createTestRequestContext } from "~/server/testing/request-context";
@@ -121,8 +123,8 @@ describe("entity kernel search projections", () => {
   // No recording queue here: publishing with no bound queue runs the
   // embedding-refresh task inline (see `publishInBackground`), which is what
   // actually re-projects the fanned-out planting document below.
-  it("projects a planting by its crop name and re-projects it when the ingredient is renamed", async () => {
-    const cropIngredient = await createIngredient(
+  it("projects a planting by its plant name and re-projects it when the plant is renamed", async () => {
+    const cropPlant = await createPlantFixture(
       ctx.db,
       { name: "Projected garden basil" },
       TEST_ACTOR,
@@ -140,12 +142,12 @@ describe("entity kernel search projections", () => {
       action: "create",
       entity: "planting",
       data: {
-        ingredientId: cropIngredient.id,
+        plantId: cropPlant.id,
         locationId: bed.id,
         status: "growing",
         sourceProductId: null,
         taskId: null,
-        variety: null,
+        outcome: null,
         quantity: null,
         notes: null,
         plannedWindow: null,
@@ -168,8 +170,8 @@ describe("entity kernel search projections", () => {
 
     await executeEntity(context(), {
       action: "update",
-      entity: "ingredient",
-      id: parseShortcodeFor("ingredient", cropIngredient.id),
+      entity: "plant",
+      id: parseShortcodeFor("plant", cropPlant.id),
       data: { name: "Projected garden thai basil" },
     });
 

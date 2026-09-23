@@ -17,7 +17,6 @@ import {
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
 import { createPlanting } from "~/server/repo/garden";
 import { createUploadedImageRecord } from "~/server/repo/image";
-import { createIngredient } from "~/server/repo/ingredient";
 import { createInventoryEntry } from "~/server/repo/inventory";
 import { createLocation } from "~/server/repo/location";
 import {
@@ -30,6 +29,7 @@ import {
   listProductComponents,
 } from "~/server/repo/product-components";
 import {
+  createPlantFixture,
   makeLocationInput,
   makeProductInput,
 } from "~/server/repo/repo.fixtures";
@@ -61,7 +61,7 @@ describe("mergeProducts", () => {
     name: string,
     overrides: Omit<
       Partial<ProductRepoCreateInput>,
-      "ingredientId" | "growsIngredientId" | "categoryId"
+      "ingredientId" | "growsPlantId" | "categoryId"
     > & { categoryId?: ProductRepoCreateInput["categoryId"] } = {},
   ) => {
     const { categoryId = null, ...productOverrides } = overrides;
@@ -137,7 +137,7 @@ describe("mergeProducts", () => {
   });
 
   it("surfaces plantings that retain a merged source-product tombstone", async () => {
-    const crop = await createIngredient(
+    const crop = await createPlantFixture(
       ctx.db,
       { name: "Preview crop" },
       TEST_ACTOR,
@@ -147,7 +147,7 @@ describe("mergeProducts", () => {
     const planted = await createPlanting(
       ctx.db,
       {
-        ingredientId: crop.id,
+        plantId: crop.id,
         sourceProductId: loser.shortcode,
         status: "planned",
       },
@@ -180,7 +180,7 @@ describe("mergeProducts", () => {
   });
 
   it("rejects a carried Food classification when the survivor is a planting source", async () => {
-    const crop = await createIngredient(
+    const crop = await createPlantFixture(
       ctx.db,
       { name: "Merge category crop" },
       TEST_ACTOR,
@@ -192,7 +192,7 @@ describe("mergeProducts", () => {
     await createPlanting(
       ctx.db,
       {
-        ingredientId: crop.id,
+        plantId: crop.id,
         sourceProductId: keeper.shortcode,
         status: "planned",
       },

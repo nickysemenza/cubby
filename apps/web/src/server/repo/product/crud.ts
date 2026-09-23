@@ -10,6 +10,7 @@ import {
 import type {
   ImageShortcode,
   IngredientId,
+  PlantId,
   LocationId,
   ProductId,
   ProductCategoryId,
@@ -59,7 +60,7 @@ import {
   photoGroupProposal,
   expense,
   image,
-  ingredient,
+  plant,
   inventoryEntry,
   importRunTarget,
   location,
@@ -565,18 +566,15 @@ export const buildProductWhere = async (
   const requestedIngredientCodes = filters.ingredientIdFilter
     ? [filters.ingredientIdFilter].flat()
     : [];
-  const requestedGrowsIngredientCodes = filters.growsIngredientIdFilter
-    ? [filters.growsIngredientIdFilter].flat()
+  const requestedGrowsPlantCodes = filters.growsPlantIdFilter
+    ? [filters.growsPlantIdFilter].flat()
     : [];
-  const [
-    selectedLocationIds,
-    selectedIngredientIds,
-    selectedGrowsIngredientIds,
-  ] = await Promise.all([
-    resolveAllPresent(db, "location", requestedLocationCodes),
-    resolveAllPresent(db, "ingredient", requestedIngredientCodes),
-    resolveAllPresent(db, "ingredient", requestedGrowsIngredientCodes),
-  ]);
+  const [selectedLocationIds, selectedIngredientIds, selectedGrowsPlantIds] =
+    await Promise.all([
+      resolveAllPresent(db, "location", requestedLocationCodes),
+      resolveAllPresent(db, "ingredient", requestedIngredientCodes),
+      resolveAllPresent(db, "plant", requestedGrowsPlantCodes),
+    ]);
 
   // Cross-entity filters must stay uncorrelated id-set subqueries shared by all product list query paths.
   const productIdsWithLiveInventory = dbClient
@@ -770,11 +768,10 @@ export const buildProductWhere = async (
             filters.ingredientPresenceFilter,
           ),
         ),
-    requestedGrowsIngredientCodes.length > 0 &&
-    selectedGrowsIngredientIds.length === 0
+    requestedGrowsPlantCodes.length > 0 && selectedGrowsPlantIds.length === 0
       ? sql`false`
-      : selectedGrowsIngredientIds.length > 0
-        ? inArray(product.growsIngredientId, selectedGrowsIngredientIds)
+      : selectedGrowsPlantIds.length > 0
+        ? inArray(product.growsPlantId, selectedGrowsPlantIds)
         : undefined,
     requestedLocationCodes.length > 0 && selectedLocationIds.length === 0
       ? sql`false`
@@ -1643,11 +1640,11 @@ export const createProduct = async (
             })
           : [];
 
-      const growsIngredient = productData.growsIngredientId
-        ? await tx.query.ingredient.findFirst({
+      const growsPlant = productData.growsPlantId
+        ? await tx.query.plant.findFirst({
             where: and(
-              eq(ingredient.id, productData.growsIngredientId),
-              notDeleted(ingredient),
+              eq(plant.id, productData.growsPlantId),
+              notDeleted(plant),
             ),
             columns: { shortcode: true },
           })
@@ -1655,7 +1652,7 @@ export const createProduct = async (
 
       const created = {
         ...newProduct,
-        growsIngredient,
+        growsPlant,
         images,
         externalIds: createdExternalIds,
       };
@@ -1860,7 +1857,7 @@ export const updateProduct = async (
       // to set (they're all destructured out of `productData` above). Drizzle's
       // own `.set()` filters out `undefined`-valued entries (mapUpdateSet)
       // before checking for emptiness, so a caller-layer spread that always
-      // stamps `growsIngredientId: undefined` onto every update (see
+      // stamps `growsPlantId: undefined` onto every update (see
       // `updateProductWithFood`) still counts as "nothing to set" here — match
       // that same filter, or `.update(product).set({})` throws "No values to
       // set" rather than no-op-ing. Skip the column update entirely and reuse
@@ -2581,18 +2578,18 @@ export const deleteProducts = async (
 
 export type ProductRepoCreateInput = Omit<
   ProductCreateInput,
-  "ingredientId" | "growsIngredientId" | "categoryId"
+  "ingredientId" | "growsPlantId" | "categoryId"
 > & {
   ingredientId: IngredientId | null;
-  growsIngredientId?: IngredientId | null;
+  growsPlantId?: PlantId | null;
   categoryId?: ProductCategoryId | null;
 };
 
 export type ProductRepoUpdateData = Omit<
   ProductUpdateInput["data"],
-  "ingredientId" | "growsIngredientId" | "categoryId"
+  "ingredientId" | "growsPlantId" | "categoryId"
 > & {
   ingredientId?: IngredientId | null;
-  growsIngredientId?: IngredientId | null;
+  growsPlantId?: PlantId | null;
   categoryId?: ProductCategoryId | null;
 };

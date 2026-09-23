@@ -124,7 +124,7 @@ const product = {
   tags: [],
   upc: null,
   fdc_id: null,
-  growsIngredientId: null,
+  growsPlantId: null,
   model: null,
   notes: null,
   expectedQuantity: null,

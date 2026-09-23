@@ -21,13 +21,13 @@ import { getEntityGraph, readEntityGraph } from "./entity-graph";
 import { getEntityGraphExplore } from "./entity-graph-explore";
 import { createExpense } from "./expense";
 import { createGardenEntry, createPlanting } from "./garden";
-import { createIngredient } from "./ingredient";
 import { createPurchase } from "./purchase";
 import { attachPurchaseProducts } from "./purchase-products";
 import {
   createImageFixture,
   createInventoryFixture as createInventory,
   createLocationFixture as createLocation,
+  createPlantFixture,
   createProductFixture as createProduct,
   makeExpenseInput,
   makeLocationInput,
@@ -368,9 +368,9 @@ describe("entity graph repository", () => {
   // `task.plantings` is a compiler-derived inverse of `Planting.taskId`, so it
   // is a manifest relation now rather than a runtime `inverse:*` branch.
   it("reads task plantings through the derived inverse with counts and pages", async () => {
-    const crop = await createIngredient(
+    const crop = await createPlantFixture(
       ctx.db,
-      { name: "Task graph crop", aliases: [] },
+      { name: "Task graph crop" },
       ctx.actor,
     );
     const task = await createTask(
@@ -382,14 +382,13 @@ describe("entity graph repository", () => {
       ctx.actor,
     );
     const plantings = await Promise.all(
-      ["A", "B", "C"].map((variety) =>
+      ["A", "B", "C"].map(() =>
         createPlanting(
           ctx.db,
           {
-            ingredientId: crop.id,
+            plantId: crop.id,
             taskId: task.output.id,
             status: "planned",
-            variety,
           },
           ctx.actor,
         ),
@@ -595,8 +594,13 @@ describe("entity graph repository", () => {
     expect(responseBytes).toBeGreaterThan(0);
   });
 
-  it("labels a planting root as '<ingredient> · <variety>', falling back to the bare name", async () => {
-    const ingredient = await createIngredient(
+  it("labels a planting root by its plant's stored name (the crop label is static data, not SQL)", async () => {
+    const withGuideKeyPlant = await createPlantFixture(
+      ctx.db,
+      { name: "Graph label tomato", gardenGuideKey: "tomato" },
+      ctx.actor,
+    );
+    const withoutGuideKeyPlant = await createPlantFixture(
       ctx.db,
       { name: "Graph label tomato" },
       ctx.actor,
@@ -609,16 +613,19 @@ describe("entity graph repository", () => {
     const withVariety = await createPlanting(
       ctx.db,
       {
-        ingredientId: ingredient.id,
+        plantId: withGuideKeyPlant.id,
         locationId: bed.id,
         status: "growing",
-        variety: "Cherokee Purple",
       },
       ctx.actor,
     );
     const withoutVariety = await createPlanting(
       ctx.db,
-      { ingredientId: ingredient.id, locationId: bed.id, status: "growing" },
+      {
+        plantId: withoutGuideKeyPlant.id,
+        locationId: bed.id,
+        status: "growing",
+      },
       ctx.actor,
     );
     const graph = await getEntityGraph(ctx.db, {
@@ -630,7 +637,7 @@ describe("entity graph repository", () => {
     });
     expect(
       graph.nodes.find((node) => node.entityId === withVariety.id)?.label,
-    ).toBe("Graph label tomato · Cherokee Purple");
+    ).toBe("Graph label tomato");
     expect(
       graph.nodes.find((node) => node.entityId === withoutVariety.id)?.label,
     ).toBe("Graph label tomato");

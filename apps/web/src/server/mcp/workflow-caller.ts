@@ -22,6 +22,7 @@ import {
   getImageProcessingReadProjection,
   saveImageDescriptionCorrection,
 } from "~/server/repo/image-processing";
+import { resolveOrCreatePlants } from "~/server/repo/plant";
 import { patchProductExternalIds } from "~/server/repo/product";
 import { findProductExternalIdCollisions } from "~/server/repo/product/external-id-collisions";
 import { reclassifyPurchaseDocument } from "~/server/repo/purchase";
@@ -228,6 +229,12 @@ const callerDomains = {
       (context: CallerContext) =>
       (input: Parameters<typeof resolveOrCreateWorkflow>[1]) =>
         resolveOrCreateWorkflow(context.db, input),
+  },
+  plant: {
+    resolveOrCreate:
+      (context: CallerContext) =>
+      (input: Parameters<typeof resolveOrCreatePlants>[1]) =>
+        resolveOrCreatePlants(context.db, input, context.actorContext),
   },
   inventory: {
     moveEntries:

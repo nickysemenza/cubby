@@ -185,8 +185,8 @@ export const createProductWithFood = async (
   const ingredientEntityId = data.ingredientId
     ? await resolveOrThrow(db, "ingredient", data.ingredientId)
     : null;
-  const growsIngredientEntityId = data.growsIngredientId
-    ? await resolveOrThrow(db, "ingredient", data.growsIngredientId)
+  const growsPlantEntityId = data.growsPlantId
+    ? await resolveOrThrow(db, "plant", data.growsPlantId)
     : null;
   const product = await createProductRepo(
     db,
@@ -197,7 +197,7 @@ export const createProductWithFood = async (
           ? data.categoryId
           : await resolveOrThrow(db, "productCategory", data.categoryId),
       ingredientId: ingredientEntityId,
-      growsIngredientId: growsIngredientEntityId,
+      growsPlantId: growsPlantEntityId,
     },
     actor,
   );
@@ -234,10 +234,10 @@ export const updateProductWithFood = async (
     data.ingredientId == null
       ? data.ingredientId
       : await resolveOrThrow(db, "ingredient", data.ingredientId);
-  const growsIngredientEntityId =
-    data.growsIngredientId == null
-      ? data.growsIngredientId
-      : await resolveOrThrow(db, "ingredient", data.growsIngredientId);
+  const growsPlantEntityId =
+    data.growsPlantId == null
+      ? data.growsPlantId
+      : await resolveOrThrow(db, "plant", data.growsPlantId);
   const { detachedImageKeys } = await updateProductRepo(
     db,
     id,
@@ -248,7 +248,7 @@ export const updateProductWithFood = async (
           ? data.categoryId
           : await resolveOrThrow(db, "productCategory", data.categoryId),
       ingredientId: ingredientEntityId,
-      growsIngredientId: growsIngredientEntityId,
+      growsPlantId: growsPlantEntityId,
     },
     actor,
   );

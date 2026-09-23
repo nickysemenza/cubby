@@ -10,6 +10,8 @@ import {
   type ProductCategoryId,
   type ProductCategoryShortcode,
   type IngredientShortcode,
+  type PlantId,
+  type PlantShortcode,
   type RecipeId,
   parseEntityId,
   parseShortcodeFor,
@@ -19,6 +21,7 @@ import {
   type LocationCreateInput,
   locationCreateInput,
 } from "@cubby/schemas/location";
+import type { PlantCreateInput } from "@cubby/schemas/plant";
 import type { ProductCreateInput } from "@cubby/schemas/product";
 import type { ExpenseCreateInput } from "@cubby/schemas/project";
 import type { RecipeCreateInput } from "@cubby/schemas/recipe";
@@ -57,18 +60,15 @@ type RecipeIngredientInput = NonNullable<
 
 type ProductFixtureInput<
   Ingredient extends IngredientId | IngredientShortcode | null | undefined,
-  GrowsIngredient extends IngredientId | IngredientShortcode | null | undefined,
+  GrowsPlant extends PlantId | PlantShortcode | null | undefined,
   Category extends
     | ProductCategoryId
     | ProductCategoryShortcode
     | null
     | undefined,
-> = Omit<
-  ProductCreateInput,
-  "ingredientId" | "growsIngredientId" | "categoryId"
-> & {
+> = Omit<ProductCreateInput, "ingredientId" | "growsPlantId" | "categoryId"> & {
   ingredientId: Ingredient | null;
-  growsIngredientId: GrowsIngredient | null;
+  growsPlantId: GrowsPlant | null;
   categoryId: Category | null;
 };
 
@@ -80,11 +80,7 @@ type ProductFixtureInput<
 export const makeProductInput = <
   Ingredient extends IngredientId | IngredientShortcode | null | undefined =
     undefined,
-  GrowsIngredient extends
-    | IngredientId
-    | IngredientShortcode
-    | null
-    | undefined = undefined,
+  GrowsPlant extends PlantId | PlantShortcode | null | undefined = undefined,
   Category extends
     | ProductCategoryId
     | ProductCategoryShortcode
@@ -93,14 +89,14 @@ export const makeProductInput = <
 >(
   overrides: Omit<
     Partial<ProductCreateInput>,
-    "ingredientId" | "growsIngredientId" | "categoryId"
+    "ingredientId" | "growsPlantId" | "categoryId"
   > & {
     ingredientId?: Ingredient;
-    growsIngredientId?: GrowsIngredient;
+    growsPlantId?: GrowsPlant;
     categoryId?: Category;
   } = {},
-): ProductFixtureInput<Ingredient, GrowsIngredient, Category> => {
-  const { ingredientId, growsIngredientId, categoryId, ...rest } = overrides;
+): ProductFixtureInput<Ingredient, GrowsPlant, Category> => {
+  const { ingredientId, growsPlantId, categoryId, ...rest } = overrides;
   return {
     name: "Test Product",
     aliases: [],
@@ -111,7 +107,7 @@ export const makeProductInput = <
     fdc_id: null,
     expectedQuantity: null,
     ingredientId: ingredientId ?? null,
-    growsIngredientId: growsIngredientId ?? null,
+    growsPlantId: growsPlantId ?? null,
     categoryId: categoryId ?? null,
     unitMappings: [],
     externalIds: [],
@@ -159,13 +155,11 @@ const createProductWithResolvedIngredient = async (
   if (rawIngredientId && !resolvedIngredientId) {
     throw new Error(`fixture: ingredient ${rawIngredientId} not found`);
   }
-  const growsIngredientId = data.growsIngredientId
-    ? await resolveLiveShortcode(db, data.growsIngredientId, "ingredient")
+  const growsPlantId = data.growsPlantId
+    ? await resolveLiveShortcode(db, data.growsPlantId, "plant")
     : null;
-  if (data.growsIngredientId && !growsIngredientId) {
-    throw new Error(
-      `fixture: growing ingredient ${data.growsIngredientId} not found`,
-    );
+  if (data.growsPlantId && !growsPlantId) {
+    throw new Error(`fixture: growing plant ${data.growsPlantId} not found`);
   }
   return createProduct(
     db,
@@ -174,9 +168,7 @@ const createProductWithResolvedIngredient = async (
       categoryId: data.categoryId
         ? await resolveLiveShortcode(db, data.categoryId, "productCategory")
         : null,
-      growsIngredientId: growsIngredientId
-        ? parseEntityId("ingredient", growsIngredientId)
-        : null,
+      growsPlantId: growsPlantId ? parseEntityId("plant", growsPlantId) : null,
       ingredientId: resolvedIngredientId
         ? parseEntityId("ingredient", resolvedIngredientId)
         : null,
@@ -252,6 +244,36 @@ export const createIngredientFixture = retainEntityId(
 );
 
 export const createLocationFixture = retainEntityId("location", createLocation);
+
+/** A Plant with every optional field null; override what the test cares about. */
+export const createPlantFixture = async (
+  db: Database,
+  data: Partial<PlantCreateInput> & { name: string },
+  actor: ActorContext,
+) =>
+  // Dynamic: a static import pulls `repo/plant`'s removal/merge chain in
+  // ahead of `data-quality`, and module init then hits a half-built cycle.
+  (
+    await (
+      await import("./plant")
+    ).createPlant(
+      db,
+      {
+        gardenGuideKey: null,
+        verdict: null,
+        ingredientId: null,
+        latinName: null,
+        breeding: null,
+        daysFromSowMin: null,
+        daysFromSowMax: null,
+        daysFromTransplantMin: null,
+        daysFromTransplantMax: null,
+        notes: null,
+        ...data,
+      },
+      actor,
+    )
+  ).output;
 
 /** Resolves canonical public product/location ids before `createInventoryEntry`. */
 const createInventoryWithResolvedIds = async (

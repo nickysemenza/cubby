@@ -142,6 +142,9 @@ const mkRecipe = (db: Database) =>
 const mkIngredient = (db: Database) =>
   insertWithShortcode(db, "ingredient", { name: uniq("Ingredient") });
 
+const mkPlant = (db: Database) =>
+  insertWithShortcode(db, "plant", { name: uniq("Plant") });
+
 const mkMeal = (db: Database) =>
   insertWithShortcode(db, "meal", { date: "2026-01-01" });
 
@@ -172,11 +175,11 @@ const mkLocation = (db: Database) =>
 
 const mkPlanting = async (db: Database) => {
   const [crop, growingLocation] = await Promise.all([
-    mkIngredient(db),
+    mkPlant(db),
     mkLocation(db),
   ]);
   return insertWithShortcode(db, "planting", {
-    ingredientId: crop.id,
+    plantId: crop.id,
     locationId: growingLocation.id,
     status: "growing",
   });
@@ -472,6 +475,7 @@ const TARGET_FACTORIES = {
   image: mkImage,
   recipe: mkRecipe,
   ingredient: mkIngredient,
+  plant: mkPlant,
   meal: mkMeal,
   ledgerParty: mkLedgerParty,
   ledgerTransfer: mkLedgerTransfer,
@@ -930,35 +934,39 @@ const SOURCE_FACTORIES = {
       ingredientId: parseEntityId("ingredient", targetId),
     }),
 
-  "Product.growsIngredientId": (db, targetId) =>
+  "Product.growsPlantId": (db, targetId) =>
     insertWithShortcode(db, "product", {
       name: uniq("Garden source"),
       manufacturer: "Test Mfr",
-      growsIngredientId: parseEntityId("ingredient", targetId),
+      growsPlantId: parseEntityId("plant", targetId),
     }),
 
   "Planting.sourceProductId": async (db, targetId) => {
-    const crop = await mkIngredient(db);
     return insertWithShortcode(db, "planting", {
-      ingredientId: crop.id,
+      plantId: (await mkPlant(db)).id,
       sourceProductId: parseEntityId("product", targetId),
       status: "planned",
     });
   },
 
   "Planting.taskId": async (db, targetId) => {
-    const crop = await mkIngredient(db);
     return insertWithShortcode(db, "planting", {
-      ingredientId: crop.id,
+      plantId: (await mkPlant(db)).id,
       taskId: parseEntityId("task", targetId),
       status: "planned",
     });
   },
 
-  "Planting.ingredientId": async (db, targetId) => {
+  "Plant.ingredientId": (db, targetId) =>
+    insertWithShortcode(db, "plant", {
+      name: uniq("Plant"),
+      ingredientId: parseEntityId("ingredient", targetId),
+    }),
+
+  "Planting.plantId": async (db, targetId) => {
     const growingLocation = await mkLocation(db);
     return insertWithShortcode(db, "planting", {
-      ingredientId: parseEntityId("ingredient", targetId),
+      plantId: parseEntityId("plant", targetId),
       locationId: growingLocation.id,
       status: "growing",
     });
@@ -1125,9 +1133,8 @@ const SOURCE_FACTORIES = {
   },
 
   "Planting.locationId": async (db, targetId) => {
-    const crop = await mkIngredient(db);
     return insertWithShortcode(db, "planting", {
-      ingredientId: crop.id,
+      plantId: (await mkPlant(db)).id,
       locationId: parseEntityId("location", targetId),
       status: "growing",
     });
@@ -1701,11 +1708,11 @@ const derivedMustTargetLiveEdges = deriveMustTargetLiveEdges();
 describe("findReferentialLivenessViolations", () => {
   const ctx = withTestDb();
 
-  it("derives 140 must-target-live edges from INCOMING_EDGES × ENTITY_EDGE_SEMANTICS", () => {
+  it("derives 141 must-target-live edges from INCOMING_EDGES × ENTITY_EDGE_SEMANTICS", () => {
     // Mirrors EXPECTED_EDGE_COUNT in detectors-integrity.ts — an independent
     // spot check computed from the same two source-of-truth maps, not from the
     // detector's own (unexported) derivation.
-    expect(derivedMustTargetLiveEdges).toHaveLength(140);
+    expect(derivedMustTargetLiveEdges).toHaveLength(141);
   });
 
   it("the hand-written fixture map covers exactly the derived edges (a new edge fails here, not silently)", () => {

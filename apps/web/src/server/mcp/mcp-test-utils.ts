@@ -124,6 +124,7 @@ const unavailableCaller = {
     summary: unavailableCallerMethod,
   },
   usda: { getByAlternateID: unavailableCallerMethod },
+  plant: { resolveOrCreate: unavailableCallerMethod },
   imageProcessing: {
     schedule: unavailableCallerMethod,
     get: unavailableCallerMethod,
@@ -142,6 +143,7 @@ export function createCallerWithOverrides(
       ...caller.entityIntegrity,
     },
     expense: { ...unavailableCaller.expense, ...caller.expense },
+    plant: { ...unavailableCaller.plant, ...caller.plant },
     financialTransaction: {
       ...unavailableCaller.financialTransaction,
       ...caller.financialTransaction,

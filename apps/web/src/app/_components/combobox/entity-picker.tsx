@@ -29,6 +29,7 @@ const ENTITY_CODE = {
   recipe: "RCP",
   project: "PRJ",
   task: "TSK",
+  plant: "PLANT",
   planting: "PLT",
   vendor: "VEN",
   financialAccount: "FAC",

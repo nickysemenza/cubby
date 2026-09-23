@@ -1,5 +1,5 @@
 import {
-  seedIngredientPrerequisite,
+  seedPlantPrerequisite,
   seedPlantingPrerequisite,
   seedTaskPrerequisite,
 } from "./e2e-fixtures";
@@ -60,17 +60,17 @@ test("plantings list bulk-edits status finished plus a date in one write", async
   const suffix = Date.now();
   const cropName = `e2e bulk crop ${suffix}`;
   const otherCropName = `e2e unrelated crop ${suffix}`;
-  const crop = await seedIngredientPrerequisite(page, cropName);
-  const otherCrop = await seedIngredientPrerequisite(page, otherCropName);
+  const crop = await seedPlantPrerequisite(page, cropName);
+  const otherCrop = await seedPlantPrerequisite(page, otherCropName);
   const planting = await seedPlantingPrerequisite(page, {
-    ingredientId: crop.id,
+    plantId: crop.id,
   });
-  await seedPlantingPrerequisite(page, { ingredientId: otherCrop.id });
+  await seedPlantingPrerequisite(page, { plantId: otherCrop.id });
 
-  await gotoAuthenticatedPage(page, `/plantings?ingredientId=${crop.id}`);
+  await gotoAuthenticatedPage(page, `/plantings?plantId=${crop.id}`);
 
   await expect(
-    page.getByRole("button", { name: `Crop: ${cropName}`, exact: true }),
+    page.getByRole("button", { name: `Plant: ${cropName}`, exact: true }),
   ).toBeVisible();
   await expect(
     page.getByRole("row").filter({ hasText: otherCropName }),

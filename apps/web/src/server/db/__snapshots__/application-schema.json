@@ -7852,12 +7852,6 @@
           "notNull": true,
           "default": false
         },
-        "gardenGuideKey": {
-          "name": "gardenGuideKey",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
         "createdAt": {
           "name": "createdAt",
           "type": "timestamp",
@@ -12259,12 +12253,6 @@
           "primaryKey": false,
           "notNull": true
         },
-        "ingredientId": {
-          "name": "ingredientId",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
         "sourceProductId": {
           "name": "sourceProductId",
           "type": "uuid",
@@ -12289,12 +12277,6 @@
           "primaryKey": false,
           "notNull": true,
           "default": "'planned'"
-        },
-        "variety": {
-          "name": "variety",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
         },
         "quantity": {
           "name": "quantity",
@@ -12351,6 +12333,18 @@
           "type": "timestamp",
           "primaryKey": false,
           "notNull": false
+        },
+        "plantId": {
+          "name": "plantId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "outcome": {
+          "name": "outcome",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
         }
       },
       "indexes": {
@@ -12365,21 +12359,6 @@
             }
           ],
           "isUnique": true,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "Planting_ingredientId_idx": {
-          "name": "Planting_ingredientId_idx",
-          "columns": [
-            {
-              "expression": "ingredientId",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
           "concurrently": false,
           "method": "btree",
           "with": {}
@@ -12443,22 +12422,24 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
+        },
+        "Planting_plantId_idx": {
+          "name": "Planting_plantId_idx",
+          "columns": [
+            {
+              "expression": "plantId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
       "foreignKeys": {
-        "Planting_ingredientId_Ingredient_id_fk": {
-          "name": "Planting_ingredientId_Ingredient_id_fk",
-          "tableFrom": "Planting",
-          "tableTo": "Ingredient",
-          "columnsFrom": [
-            "ingredientId"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
         "Planting_sourceProductId_Product_id_fk": {
           "name": "Planting_sourceProductId_Product_id_fk",
           "tableFrom": "Planting",
@@ -12491,6 +12472,19 @@
           "tableTo": "Task",
           "columnsFrom": [
             "taskId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "Planting_plantId_Plant_id_fk": {
+          "name": "Planting_plantId_Plant_id_fk",
+          "tableFrom": "Planting",
+          "tableTo": "Plant",
+          "columnsFrom": [
+            "plantId"
           ],
           "columnsTo": [
             "id"
@@ -12591,12 +12585,6 @@
           "primaryKey": false,
           "notNull": false
         },
-        "growsIngredientId": {
-          "name": "growsIngredientId",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
         "categoryId": {
           "name": "categoryId",
           "type": "uuid",
@@ -12640,6 +12628,12 @@
           "primaryKey": false,
           "notNull": true,
           "default": "'[]'::jsonb"
+        },
+        "growsPlantId": {
+          "name": "growsPlantId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
         }
       },
       "indexes": {
@@ -12822,6 +12816,21 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
+        },
+        "Product_growsPlantId_idx": {
+          "name": "Product_growsPlantId_idx",
+          "columns": [
+            {
+              "expression": "growsPlantId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
       "foreignKeys": {
@@ -12838,12 +12847,12 @@
           "onDelete": "no action",
           "onUpdate": "no action"
         },
-        "Product_growsIngredientId_Ingredient_id_fk": {
-          "name": "Product_growsIngredientId_Ingredient_id_fk",
+        "Product_categoryId_ProductCategory_id_fk": {
+          "name": "Product_categoryId_ProductCategory_id_fk",
           "tableFrom": "Product",
-          "tableTo": "Ingredient",
+          "tableTo": "ProductCategory",
           "columnsFrom": [
-            "growsIngredientId"
+            "categoryId"
           ],
           "columnsTo": [
             "id"
@@ -12851,12 +12860,12 @@
           "onDelete": "no action",
           "onUpdate": "no action"
         },
-        "Product_categoryId_ProductCategory_id_fk": {
-          "name": "Product_categoryId_ProductCategory_id_fk",
+        "Product_growsPlantId_Plant_id_fk": {
+          "name": "Product_growsPlantId_Plant_id_fk",
           "tableFrom": "Product",
-          "tableTo": "ProductCategory",
+          "tableTo": "Plant",
           "columnsFrom": [
-            "categoryId"
+            "growsPlantId"
           ],
           "columnsTo": [
             "id"
@@ -18489,6 +18498,178 @@
           "value": "\"PhotoGroupProposal\".\"productKind\" IN ('existing', 'create')"
         }
       },
+      "isRLSEnabled": false
+    },
+    "public.Plant": {
+      "name": "Plant",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "shortcode": {
+          "name": "shortcode",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "gardenGuideKey": {
+          "name": "gardenGuideKey",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "verdict": {
+          "name": "verdict",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "ingredientId": {
+          "name": "ingredientId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "latinName": {
+          "name": "latinName",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "breeding": {
+          "name": "breeding",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "daysFromSowMin": {
+          "name": "daysFromSowMin",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "daysFromSowMax": {
+          "name": "daysFromSowMax",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "daysFromTransplantMin": {
+          "name": "daysFromTransplantMin",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "daysFromTransplantMax": {
+          "name": "daysFromTransplantMax",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "notes": {
+          "name": "notes",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updatedAt": {
+          "name": "updatedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "deletedAt": {
+          "name": "deletedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "Plant_shortcode_unique": {
+          "name": "Plant_shortcode_unique",
+          "columns": [
+            {
+              "expression": "shortcode",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "Plant_ingredientId_idx": {
+          "name": "Plant_ingredientId_idx",
+          "columns": [
+            {
+              "expression": "ingredientId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "Plant_gardenGuideKey_idx": {
+          "name": "Plant_gardenGuideKey_idx",
+          "columns": [
+            {
+              "expression": "gardenGuideKey",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "Plant_ingredientId_Ingredient_id_fk": {
+          "name": "Plant_ingredientId_Ingredient_id_fk",
+          "tableFrom": "Plant",
+          "tableTo": "Ingredient",
+          "columnsFrom": [
+            "ingredientId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
       "isRLSEnabled": false
     }
   },

@@ -22,6 +22,7 @@ public typealias LedgerParty = Components.Schemas.LedgerPartyOut
 public typealias LedgerTransfer = Components.Schemas.LedgerTransferOut
 public typealias Location = Components.Schemas.LocationOut
 public typealias Meal = Components.Schemas.MealOut
+public typealias Plant = Components.Schemas.PlantOut
 public typealias Planting = Components.Schemas.PlantingOut
 public typealias Product = Components.Schemas.ProductTopLevelOut
 public typealias ProductCategory = Components.Schemas.ProductCategoryOut
@@ -224,6 +225,7 @@ public typealias FoodInfo = Components.Schemas.FoodInfo
 public typealias FoodPortion = Components.Schemas.FoodPortion
 public typealias FoodSummary = Components.Schemas.FoodSummary
 public typealias FoodSummaryWithLinkedProducts = Components.Schemas.FoodSummaryWithLinkedProducts
+public typealias GardenCropKey = Components.Schemas.GardenCropKey
 public typealias GardenEntryCreateInput = Components.Schemas.GardenEntryCreateInput
 public typealias GardenEntryDetail = Components.Schemas.GardenEntryDetail
 public typealias GardenEntryKind = Components.Schemas.GardenEntryKind
@@ -244,6 +246,7 @@ public typealias GeneratedEntityMutationCreateResultLedgerParty = Components.Sch
 public typealias GeneratedEntityMutationCreateResultLedgerTransfer = Components.Schemas.GeneratedEntityMutationCreateResultLedgerTransfer
 public typealias GeneratedEntityMutationCreateResultLocation = Components.Schemas.GeneratedEntityMutationCreateResultLocation
 public typealias GeneratedEntityMutationCreateResultMeal = Components.Schemas.GeneratedEntityMutationCreateResultMeal
+public typealias GeneratedEntityMutationCreateResultPlant = Components.Schemas.GeneratedEntityMutationCreateResultPlant
 public typealias GeneratedEntityMutationCreateResultPlanting = Components.Schemas.GeneratedEntityMutationCreateResultPlanting
 public typealias GeneratedEntityMutationCreateResultProduct = Components.Schemas.GeneratedEntityMutationCreateResultProduct
 public typealias GeneratedEntityMutationCreateResultProductCategory = Components.Schemas.GeneratedEntityMutationCreateResultProductCategory
@@ -267,6 +270,7 @@ public typealias GeneratedEntityMutationUpdateResultLedgerParty = Components.Sch
 public typealias GeneratedEntityMutationUpdateResultLedgerTransfer = Components.Schemas.GeneratedEntityMutationUpdateResultLedgerTransfer
 public typealias GeneratedEntityMutationUpdateResultLocation = Components.Schemas.GeneratedEntityMutationUpdateResultLocation
 public typealias GeneratedEntityMutationUpdateResultMeal = Components.Schemas.GeneratedEntityMutationUpdateResultMeal
+public typealias GeneratedEntityMutationUpdateResultPlant = Components.Schemas.GeneratedEntityMutationUpdateResultPlant
 public typealias GeneratedEntityMutationUpdateResultPlanting = Components.Schemas.GeneratedEntityMutationUpdateResultPlanting
 public typealias GeneratedEntityMutationUpdateResultProduct = Components.Schemas.GeneratedEntityMutationUpdateResultProduct
 public typealias GeneratedEntityMutationUpdateResultProductCategory = Components.Schemas.GeneratedEntityMutationUpdateResultProductCategory
@@ -528,14 +532,24 @@ public typealias PhotoImportReconcileOutput = Components.Schemas.PhotoImportReco
 public typealias PhotoImportStageInput = Components.Schemas.PhotoImportStageInput
 public typealias PhotoImportStageOutput = Components.Schemas.PhotoImportStageOutput
 public typealias PlainDate = Components.Schemas.PlainDate
+public typealias PlantBreeding = Components.Schemas.PlantBreeding
+public typealias PlantCreateInput = Components.Schemas.PlantCreateInput
+public typealias PlantDetail = Components.Schemas.PlantDetail
 public typealias PlantingCreateInput = Components.Schemas.PlantingCreateInput
 public typealias PlantingDetail = Components.Schemas.PlantingDetail
 public typealias PlantingListItem = Components.Schemas.PlantingListItem
 public typealias PlantingListPage = Components.Schemas.PlantingListPage
 public typealias PlantingOut = Components.Schemas.PlantingOut
+public typealias PlantingOutcome = Components.Schemas.PlantingOutcome
 public typealias PlantingShortcode = Components.Schemas.PlantingShortcode
 public typealias PlantingStatus = Components.Schemas.PlantingStatus
 public typealias PlantingUpdateData = Components.Schemas.PlantingUpdateData
+public typealias PlantListItem = Components.Schemas.PlantListItem
+public typealias PlantListPage = Components.Schemas.PlantListPage
+public typealias PlantOut = Components.Schemas.PlantOut
+public typealias PlantShortcode = Components.Schemas.PlantShortcode
+public typealias PlantUpdateData = Components.Schemas.PlantUpdateData
+public typealias PlantVerdict = Components.Schemas.PlantVerdict
 public typealias PositiveAmount = Components.Schemas.PositiveAmount
 public typealias PositiveAmountInput = Components.Schemas.PositiveAmountInput
 public typealias PositiveMoney = Components.Schemas.PositiveMoney
@@ -824,9 +838,12 @@ extension Components.Schemas.MealOut: Identifiable {}
 extension Components.Schemas.MealRecipeOut: Identifiable {}
 extension Components.Schemas.MealRecipeSummary: Identifiable {}
 extension Components.Schemas.NutritionMeal: Identifiable {}
+extension Components.Schemas.PlantDetail: Identifiable {}
 extension Components.Schemas.PlantingDetail: Identifiable {}
 extension Components.Schemas.PlantingListItem: Identifiable {}
 extension Components.Schemas.PlantingOut: Identifiable {}
+extension Components.Schemas.PlantListItem: Identifiable {}
+extension Components.Schemas.PlantOut: Identifiable {}
 extension Components.Schemas.ProductCategoryDetail: Identifiable {}
 extension Components.Schemas.ProductCategoryListItem: Identifiable {}
 extension Components.Schemas.ProductCategoryOut: Identifiable {}

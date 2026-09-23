@@ -1,7 +1,7 @@
 /**
  * Ingredient soft-delete with dependency guards.
  * Refuses to delete ingredients retained by live recipes, products, meal food
- * entries, or garden history, inside one locked transaction.
+ * entries, inside one locked transaction; plant links are cleared.
  */
 
 import type { ActorContext } from "@cubby/schemas/context";
@@ -14,7 +14,7 @@ import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import {
   ingredient,
   mealFoodEntry,
-  planting,
+  plant,
   product,
   recipe,
   recipeSection,
@@ -27,7 +27,6 @@ import {
   unwrapDb,
   withTransaction,
 } from "~/server/repo/database-helpers";
-import { countByTarget } from "~/server/repo/impact";
 import { removeEntity } from "~/server/repo/removal";
 
 export const INGREDIENT_DELETE_EDGE_POLICY = {
@@ -49,17 +48,11 @@ export const INGREDIENT_DELETE_EDGE_POLICY = {
     description:
       "An ingredient linked to a product can't be deleted — unlink or delete the product first.",
   },
-  "Product.growsIngredientId": {
-    code: "block-live-garden-source-product",
-    effect: "block",
+  "Plant.ingredientId": {
+    code: "clearFk",
+    effect: "detach",
     description:
-      "An ingredient named by a live garden source product cannot be deleted.",
-  },
-  "Planting.ingredientId": {
-    code: "block-live-planting",
-    effect: "block",
-    description:
-      "An ingredient recorded by a planting cannot be deleted because garden history retains its crop.",
+      "A plant's ingredient link is informational; deleting the ingredient clears it.",
   },
 } as const satisfies IncomingEdgePolicy<"ingredient", OperationDisposition>;
 
@@ -185,27 +178,11 @@ export const deleteIngredients = async (
         `Cannot delete ${count} ingredient(s): ${names} are recorded in meal food entries.`,
     });
 
-    // INGREDIENT_DELETE_EDGE_POLICY declares both garden edges `block`;
-    // nothing generic enforces `block`, so the repository must. Any live
-    // planting blocks, finished or not — garden history retains its crop.
-    const [plantingsByCrop, growersByCrop] = await Promise.all([
-      countByTarget(tx, planting, planting.ingredientId, ids),
-      countByTarget(tx, product, product.growsIngredientId, ids),
-    ]);
-    await assertNoDependents({
-      offendingParentIds: ids.filter((id) => plantingsByCrop[id]),
-      fetchNames: fetchIngredientNames,
-      reason: "INGREDIENT_HAS_PLANTINGS",
-      message: (count, names) =>
-        `Cannot delete ${count} ingredient(s): ${names} are the crop of a planting.`,
-    });
-    await assertNoDependents({
-      offendingParentIds: ids.filter((id) => growersByCrop[id]),
-      fetchNames: fetchIngredientNames,
-      reason: "INGREDIENT_HAS_GARDEN_PRODUCTS",
-      message: (count, names) =>
-        `Cannot delete ${count} ingredient(s): ${names} are grown by a garden source product.`,
-    });
+    // "Plant.ingredientId" is `detach`: the link is informational only.
+    await tx
+      .update(plant)
+      .set({ ingredientId: null })
+      .where(inArray(plant.ingredientId, ids));
 
     // No `children`: an ingredient delete has no cascaded child rows.
     const { deleted } = await removeEntity(tx, {

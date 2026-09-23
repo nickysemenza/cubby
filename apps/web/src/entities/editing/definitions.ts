@@ -1041,6 +1041,10 @@ export const entityEditRegistry: EntityEditRegistry = {
       full: { buildData: locationBuildData },
     },
   })),
+  plant: buildDefinition("plant", (f) => ({
+    fields: f.fieldsFrom(["capture", "full"]),
+    create: { full: {}, capture: {} },
+  })),
   planting: buildDefinition("planting", (f) => ({
     fields: f.fieldsFrom(["capture", "full"]),
     // Plantings are contextual records: the generic create preview should
