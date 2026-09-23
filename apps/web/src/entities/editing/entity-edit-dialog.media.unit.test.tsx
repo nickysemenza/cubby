@@ -222,7 +222,13 @@ describe("static suggestion basis", () => {
   // renders (product `categoryId` ← `classificationEvidence`); the provider
   // can only watch form paths, so that value has to be fixed off the record.
   it("takes basis keys outside the intent roster off the record, and nothing when every key is rendered", () => {
-    const productFields = ["name", "manufacturer", "notes", "categoryId"];
+    const productFields = [
+      "name",
+      "manufacturer",
+      "model",
+      "notes",
+      "categoryId",
+    ];
     expect(
       staticSuggestionBasisFor("product", productFields, {
         id: "PRD-TEST",
