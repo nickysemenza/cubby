@@ -127,7 +127,7 @@ export const entityIdentityFk = (
  * (`RI_ConstraintTrigger_*`). The insert trigger must run before the payload's
  * own identity FK is checked, so its name must sort before `R`.
  */
-export const ENTITY_IDENTITY_FUNCTIONS = `CREATE OR REPLACE FUNCTION "entity_identity_on_insert"() RETURNS trigger
+const ENTITY_IDENTITY_FUNCTIONS = `CREATE OR REPLACE FUNCTION "entity_identity_on_insert"() RETURNS trigger
 LANGUAGE plpgsql AS $$
 BEGIN
   INSERT INTO "Entity" ("id", "kind", "shortcode", "createdAt", "deletedAt")

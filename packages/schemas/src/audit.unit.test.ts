@@ -40,6 +40,7 @@ const entry = (channel: string) => ({
   entryKey: `test:${channel}`,
   entityType: "product" as const,
   entityId: "PRD-2CRC",
+  canonicalEntityId: null,
   entityName: "Track Saw Rail",
   displayImage: null,
   action: "update" as const,

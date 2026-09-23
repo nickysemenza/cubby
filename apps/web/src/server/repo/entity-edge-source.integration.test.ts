@@ -115,15 +115,17 @@ describe("entity edge source", () => {
   });
 
   it("finds live entities of a checked kind with no connection", async () => {
-    const { item } = await seedStockedProduct("Edge table");
-    const lonely = await createProductFixture(
+    const { item, shelf } = await seedStockedProduct("Edge table");
+    const lonely = await createLocationFixture(
       ctx.db,
-      makeProductInput({ name: "Edge orphan" }),
+      makeLocationInput({ name: "Edge orphan shelf" }),
       TEST_ACTOR,
     );
     const orphans = await findOrphanEntities(ctx.db, { limit: 200 });
     const codes = orphans.items.map((entry) => entry.id);
     expect(codes).toContain(lonely.id);
+    expect(codes).not.toContain(shelf.id);
+    // Products are left to the dedicated orphaned-products detector.
     expect(codes).not.toContain(item.id);
     expect(orphans.count).toBeGreaterThanOrEqual(1);
   });

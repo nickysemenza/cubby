@@ -163,7 +163,7 @@ export const imageOrder = sectionOrder;
  * role, with the Image columns the caller needs. Read it back with
  * {@link singularAttachment}.
  */
-export function singularAttachmentImage<
+function singularAttachmentImage<
   const Columns extends Partial<Record<keyof typeof image.$inferSelect, true>>,
 >(role: "cover" | "logo", columns: Columns) {
   return {

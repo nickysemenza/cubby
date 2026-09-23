@@ -29,7 +29,7 @@ export type GraphExplorerOperations = Pick<
   typeof entityGraph,
   "explore" | "graph"
 > &
-  Partial<Pick<typeof entityGraph, "graphPaths">>;
+  Partial<Pick<typeof entityGraph, "graphPaths" | "connections">>;
 
 interface ExplorerSession {
   cached?: EntityGraphOutput;

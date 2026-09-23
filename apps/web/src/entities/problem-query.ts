@@ -32,6 +32,7 @@ export type DiagnosticKey =
   | "import-findings"
   | "duplicate-product-identities"
   | "orphaned-products"
+  | "unconnected-entities"
   | "partially-imported-cookbooks"
   | "tools-used-outside-ownership"
   | "entities-missing-embeddings"

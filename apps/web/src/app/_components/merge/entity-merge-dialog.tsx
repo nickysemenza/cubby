@@ -3,6 +3,10 @@ import { useQuery } from "@tanstack/react-query";
 import { Check } from "lucide-react";
 import { type ReactNode, useMemo, useState } from "react";
 
+import {
+  type ImpactPreviewOperations,
+  MergeImpactPreview,
+} from "~/app/_components/actions/entity-operation-impact-preview";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
@@ -76,6 +80,7 @@ export function EntityMergeDialog<T extends MergeRow>({
   rows,
   keeper,
   initialAliasIds,
+  impactPreviewOperations,
 }: {
   entity: BrowserRoutedEntity;
   open: boolean;
@@ -89,6 +94,8 @@ export function EntityMergeDialog<T extends MergeRow>({
   keeper?: T;
   /** Fixed mode: aliases already chosen by a canonical roster selection. */
   initialAliasIds?: string[];
+  /** Test-injectable seam for the per-loser impact preview's `connections` query. */
+  impactPreviewOperations?: ImpactPreviewOperations;
 }) {
   const definition = entities[entity];
   if (!("mergeable" in definition)) return null;
@@ -106,6 +113,7 @@ export function EntityMergeDialog<T extends MergeRow>({
         onOpenChange={onOpenChange}
         onConfirm={onConfirm}
         isPending={isPending}
+        impactPreviewOperations={impactPreviewOperations}
       />
     );
   }
@@ -118,6 +126,7 @@ export function EntityMergeDialog<T extends MergeRow>({
       onOpenChange={onOpenChange}
       onConfirm={onConfirm}
       isPending={isPending}
+      impactPreviewOperations={impactPreviewOperations}
     />
   );
 }
@@ -129,6 +138,7 @@ function RankedMergeDialog<T extends MergeRow>({
   onOpenChange,
   onConfirm,
   isPending,
+  impactPreviewOperations,
 }: {
   config: MergeableConfig;
   rows: T[];
@@ -136,6 +146,7 @@ function RankedMergeDialog<T extends MergeRow>({
   onOpenChange: (open: boolean) => void;
   onConfirm: (keepId: string, aliasIds: string[]) => void;
   isPending: boolean;
+  impactPreviewOperations?: ImpactPreviewOperations;
 }) {
   const [selectedKeepId, setSelectedKeepId] = useState<string | null>(null);
   const effectiveKeepId = rows.some((row) => row.id === selectedKeepId)
@@ -202,6 +213,12 @@ function RankedMergeDialog<T extends MergeRow>({
             <Description size="xs">{config.copy.caution}</Description>
           )}
         </Stack>
+        <MergeImpactPreview
+          losers={rows
+            .filter((row) => aliasIds.includes(row.id))
+            .map((row) => ({ id: row.id, label: config.rowLabel(row) }))}
+          operations={impactPreviewOperations}
+        />
         <MergeDialogFooter
           disabled={isPending || !effectiveKeepId || aliasIds.length === 0}
           isPending={isPending}
@@ -225,6 +242,7 @@ function FixedMergeDialog<T extends MergeRow>({
   onOpenChange,
   onConfirm,
   isPending,
+  impactPreviewOperations,
 }: {
   config: MergeableConfig;
   keeper: T;
@@ -233,6 +251,7 @@ function FixedMergeDialog<T extends MergeRow>({
   onOpenChange: (open: boolean) => void;
   onConfirm: (keepId: string, aliasIds: string[]) => void;
   isPending: boolean;
+  impactPreviewOperations?: ImpactPreviewOperations;
 }) {
   const [selected, setSelected] = useState<string[]>(initialAliasIds ?? []);
   const candidatePlan = config.candidateQuery?.(keeper);
@@ -316,6 +335,15 @@ function FixedMergeDialog<T extends MergeRow>({
         {config.copy.caution && (
           <Description size="xs">{config.copy.caution}</Description>
         )}
+        <MergeImpactPreview
+          losers={candidates
+            .filter((candidate) => selected.includes(candidate.id))
+            .map((candidate) => ({
+              id: candidate.id,
+              label: config.rowLabel(candidate),
+            }))}
+          operations={impactPreviewOperations}
+        />
         <MergeDialogFooter
           disabled={selected.length === 0 || isPending}
           isPending={isPending}

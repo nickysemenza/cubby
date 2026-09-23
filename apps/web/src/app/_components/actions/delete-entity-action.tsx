@@ -14,6 +14,10 @@ import {
 
 import { defineEntityAction } from "./entity-action-definition";
 import type { EntityActionHandles, EntityActionRow } from "./entity-actions";
+import {
+  DeleteImpactPreview,
+  type ImpactPreviewOperations,
+} from "./entity-operation-impact-preview";
 
 /** The delete dialog depends on this small command surface, not the form kernel. */
 export type DeleteEntityActionCommands = Pick<
@@ -46,6 +50,8 @@ export function useDeleteEntityAction(
      * row there doesn't navigate the household away from that page.
      */
     navigateOnSuccess?: boolean;
+    /** Test-injectable seam for the impact preview's `connections` query. */
+    impactPreviewOperations?: ImpactPreviewOperations;
   },
 ): EntityActionHandles {
   // SAFETY: this action definition is registered only for generated CRUD entities.
@@ -128,7 +134,12 @@ export function useDeleteEntityAction(
             void navigate({ to: entities[generatedEntity].routes.list });
         }}
         isPending={commands.isPending}
-      />
+      >
+        <DeleteImpactPreview
+          id={staged.id}
+          operations={options?.impactPreviewOperations}
+        />
+      </BulkActionDialog>
     ) : null,
   };
 }

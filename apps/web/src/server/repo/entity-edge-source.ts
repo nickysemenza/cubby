@@ -232,7 +232,7 @@ const branchSql = (spec: EntityEdgeSpec, filter: EdgeFilter): SQL => {
  * The live edge source: both endpoints must be live identities. `specs` and
  * `filter` narrow the arms; with neither, this is the whole graph.
  */
-export const entityEdgeSourceSql = (
+const entityEdgeSourceSql = (
   specs: readonly EntityEdgeSpec[] = ENTITY_EDGE_SPECS,
   filter: EdgeFilter = null,
 ): SQL => sql`SELECT edge.*, source_entity."shortcode" AS "sourceCode",
@@ -412,8 +412,9 @@ export async function getEntityConnections(
  * kinds (a Task, a Wish, a Project, a note-like Garden entry) stay out: an
  * unconnected one is normal, not a cleanup candidate.
  */
-export const ORPHAN_CHECK_KINDS = [
-  "product",
+// Products are excluded: `orphanedProducts` already reports them with a
+// one-click delete.
+const ORPHAN_CHECK_KINDS = [
   "location",
   "vendor",
   "ingredient",

@@ -2,6 +2,7 @@ import { z } from "zod";
 import { amount, baseKind } from "./codec";
 import { money, moneyNullable } from "./money";
 import { shortcodeEntities, type ShortcodeEntity } from "./entity-manifest";
+import { entityConnectionItem } from "./entity-connections";
 import { referentialLivenessViolationSchema } from "./entity-integrity";
 import { financialReconciliationFields } from "./financial-reconciliation";
 import {
@@ -743,6 +744,11 @@ const problemsFastFields = {
   duplicateInventory: z.array(duplicateUniqueProductSchema),
   duplicateProductIdentities: z.array(duplicateProductIdentitySchema),
   orphanedProducts: z.array(orphanedProductSchema),
+  // Same "nothing refers to this any more" shape as `orphanedProducts`, but
+  // over every `ORPHAN_CHECK_KINDS` entity rather than just Product — reads
+  // the generated EntityEdge source directly instead of the product-specific
+  // ownership scan.
+  unconnectedEntities: z.array(entityConnectionItem),
   partiallyImportedCookbooks: z.array(partiallyImportedCookbookSchema),
   soldButStillStocked: z.array(soldButStillStockedSchema),
   kitsCountedTwice: z.array(kitCountedTwiceSchema),
@@ -993,6 +999,12 @@ export const PROBLEM_CLASS = {
   // identifiers and name stand, and there is no restore path.
   duplicateProductIdentities: "defect",
   orphanedProducts: "defect",
+  // Unambiguously wrong and converges to zero: a live record of a checked kind
+  // (see `ORPHAN_CHECK_KINDS`) with no physical connection at all is nothing
+  // in the house refers to it, same reasoning as `orphanedProducts` but read
+  // from the generic EntityEdge source rather than a product-specific scan.
+  // No auto-fix: which side is stale is an operator call.
+  unconnectedEntities: "defect",
   partiallyImportedCookbooks: "defect",
   productsMissingPrice: "defect",
   // Unambiguously wrong and converges to zero: the item was sold, so the shelf

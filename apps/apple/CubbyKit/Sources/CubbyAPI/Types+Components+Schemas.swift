@@ -26178,6 +26178,8 @@ extension Components {
                 public var duplicateProductIdentities: Swift.Double
                 /// - Remark: Generated from `#/components/schemas/ProblemsCount/byType/orphanedProducts`.
                 public var orphanedProducts: Swift.Double
+                /// - Remark: Generated from `#/components/schemas/ProblemsCount/byType/unconnectedEntities`.
+                public var unconnectedEntities: Swift.Double
                 /// - Remark: Generated from `#/components/schemas/ProblemsCount/byType/partiallyImportedCookbooks`.
                 public var partiallyImportedCookbooks: Swift.Double
                 /// - Remark: Generated from `#/components/schemas/ProblemsCount/byType/soldButStillStocked`.
@@ -26283,6 +26285,7 @@ extension Components {
                 ///   - duplicateInventory:
                 ///   - duplicateProductIdentities:
                 ///   - orphanedProducts:
+                ///   - unconnectedEntities:
                 ///   - partiallyImportedCookbooks:
                 ///   - soldButStillStocked:
                 ///   - kitsCountedTwice:
@@ -26337,6 +26340,7 @@ extension Components {
                     duplicateInventory: Swift.Double,
                     duplicateProductIdentities: Swift.Double,
                     orphanedProducts: Swift.Double,
+                    unconnectedEntities: Swift.Double,
                     partiallyImportedCookbooks: Swift.Double,
                     soldButStillStocked: Swift.Double,
                     kitsCountedTwice: Swift.Double,
@@ -26391,6 +26395,7 @@ extension Components {
                     self.duplicateInventory = duplicateInventory
                     self.duplicateProductIdentities = duplicateProductIdentities
                     self.orphanedProducts = orphanedProducts
+                    self.unconnectedEntities = unconnectedEntities
                     self.partiallyImportedCookbooks = partiallyImportedCookbooks
                     self.soldButStillStocked = soldButStillStocked
                     self.kitsCountedTwice = kitsCountedTwice
@@ -26446,6 +26451,7 @@ extension Components {
                     case duplicateInventory
                     case duplicateProductIdentities
                     case orphanedProducts
+                    case unconnectedEntities
                     case partiallyImportedCookbooks
                     case soldButStillStocked
                     case kitsCountedTwice

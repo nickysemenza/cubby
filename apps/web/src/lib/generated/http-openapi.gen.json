@@ -59499,6 +59499,9 @@
               "orphanedProducts": {
                 "type": "number"
               },
+              "unconnectedEntities": {
+                "type": "number"
+              },
               "partiallyImportedCookbooks": {
                 "type": "number"
               },
@@ -59652,6 +59655,7 @@
               "duplicateInventory",
               "duplicateProductIdentities",
               "orphanedProducts",
+              "unconnectedEntities",
               "partiallyImportedCookbooks",
               "soldButStillStocked",
               "kitsCountedTwice",
@@ -59771,6 +59775,12 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/OrphanedProduct"
+            }
+          },
+          "unconnectedEntities": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EntityConnectionItem"
             }
           },
           "partiallyImportedCookbooks": {
@@ -59976,6 +59986,7 @@
           "duplicateInventory",
           "duplicateProductIdentities",
           "orphanedProducts",
+          "unconnectedEntities",
           "partiallyImportedCookbooks",
           "soldButStillStocked",
           "kitsCountedTwice",

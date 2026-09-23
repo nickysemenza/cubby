@@ -61,12 +61,7 @@ export {
   uuidArrayParam,
 } from "./query";
 // Relation loaders
-export {
-  imageOrder,
-  relations,
-  singularAttachment,
-  singularAttachmentImage,
-} from "./relations";
+export { imageOrder, relations, singularAttachment } from "./relations";
 export type {
   MappableImageRecord,
   RowWithOptionalAliases,
