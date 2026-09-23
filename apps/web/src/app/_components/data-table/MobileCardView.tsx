@@ -275,7 +275,7 @@ function RowTrailingValues({ entries }: { entries: TrailingValueEntry[] }) {
           key={key}
           className={cn(
             isPrimary
-              ? "font-mono text-sm text-foreground tabular-nums"
+              ? "text-sm text-foreground tabular-nums"
               : "text-xs text-muted-foreground",
             interactive &&
               cn(

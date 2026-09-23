@@ -238,9 +238,7 @@ export const wishListOverride = defineListOverride<
                 cell: (info) => {
                   const count = info.getValue();
                   if (count === null) return null;
-                  return (
-                    <span className="font-mono tabular-nums">{count}</span>
-                  );
+                  return <span className="tabular-nums">{count}</span>;
                 },
               },
             ),
@@ -281,7 +279,7 @@ export const wishListOverride = defineListOverride<
                   const sums = info.table.options.meta?.serverTotals?.sums;
                   if (!sums?.priceHigh) return null;
                   return (
-                    <span className="font-mono text-positive tabular-nums">
+                    <span className="tabular-nums">
                       {formatCurrencyRange(sums.priceLow ?? 0, sums.priceHigh)}
                     </span>
                   );
@@ -292,7 +290,7 @@ export const wishListOverride = defineListOverride<
                     return row.candidate.price === null ? (
                       <NoneValue />
                     ) : (
-                      <span className="font-mono tabular-nums">
+                      <span className="tabular-nums">
                         {formatCurrency(row.candidate.price)}
                       </span>
                     );
@@ -303,7 +301,7 @@ export const wishListOverride = defineListOverride<
                     row.wish.candidates.length - range.pricedCount;
                   return (
                     <span
-                      className="font-mono tabular-nums"
+                      className="tabular-nums"
                       title={
                         unpriced > 0
                           ? `${range.pricedCount} of ${row.wish.candidates.length} options priced`

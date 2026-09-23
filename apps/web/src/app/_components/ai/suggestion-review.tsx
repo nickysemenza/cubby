@@ -19,6 +19,7 @@ import { Description } from "~/components/ui/description";
 import { useIsMobile } from "~/hooks/useMobile";
 import { getAppErrorDetails } from "~/lib/error-utils";
 
+import { CellFrame } from "../data-table/cell-frame";
 import { stringLabelOf } from "./field-suggestion";
 import type { SuggestionOutcomeSurface } from "./suggestion-outcome-mark";
 import { SuggestionOutcomeMark } from "./suggestion-outcome-mark";
@@ -374,16 +375,20 @@ function CellReviewSlot({
 function MarkedValue({
   surface,
   children,
+  mark,
 }: {
   surface: SuggestionOutcomeSurface;
   children: ReactNode;
+  mark: ReactNode;
 }) {
-  if (surface !== "cell") return <>{children}</>;
-  return (
-    <span className="flex min-w-0 items-center gap-1 [&>*:first-child]:min-w-0 [&>*:first-child]:overflow-hidden">
-      {children}
-    </span>
-  );
+  if (surface !== "cell")
+    return (
+      <>
+        {children}
+        {mark}
+      </>
+    );
+  return <CellFrame trailing={mark}>{children}</CellFrame>;
 }
 
 /** The key includes the question, current value and answer: new evidence can be reviewed. */
@@ -416,7 +421,7 @@ export function SuggestionReview({
    * mark even when there's no actionable proposal (or none at all). */
   outcome?: FieldSuggestionOutcome | null;
   /** `"cell"` folds the whole proposal (headline + buttons) into the mark's
-   * popover so a dense table row stays 28px, as does `"inline"` on a phone;
+   * popover so a dense table row stays 32px, as does `"inline"` on a phone;
    * otherwise the proposal renders directly, on the value's own line. */
   surface?: SuggestionOutcomeSurface;
   autoFilled?: boolean;
@@ -440,22 +445,26 @@ export function SuggestionReview({
   const meetsBar = actionableSuggestion(suggestion, currentValue, alternative);
   if (!meetsBar || dismissed) {
     return (
-      <MarkedValue surface={surface}>
+      <MarkedValue
+        surface={surface}
+        mark={
+          <SuggestionOutcomeMark
+            outcome={outcome}
+            suggestion={suggestion}
+            currentValue={currentValue}
+            currentLabel={markCurrentLabel}
+            alternative={alternative}
+            autoFilled={autoFilled}
+            surface={surface}
+            actionable={meetsBar}
+            dismissed={dismissed}
+            prune={prune}
+            pending={pending}
+            error={error}
+          />
+        }
+      >
         {children}
-        <SuggestionOutcomeMark
-          outcome={outcome}
-          suggestion={suggestion}
-          currentValue={currentValue}
-          currentLabel={markCurrentLabel}
-          alternative={alternative}
-          autoFilled={autoFilled}
-          surface={surface}
-          actionable={meetsBar}
-          dismissed={dismissed}
-          prune={prune}
-          pending={pending}
-          error={error}
-        />
       </MarkedValue>
     );
   }
@@ -467,32 +476,36 @@ export function SuggestionReview({
   // neither engine's scroll anchoring held the tapped control in place.
   if (surface === "cell" || (surface === "inline" && isMobile)) {
     return (
-      <MarkedValue surface={surface}>
+      <MarkedValue
+        surface={surface}
+        mark={
+          <SuggestionOutcomeMark
+            outcome={outcome}
+            suggestion={suggestion}
+            currentValue={currentValue}
+            currentLabel={markCurrentLabel}
+            alternative={alternative}
+            autoFilled={autoFilled}
+            surface={surface}
+            actionable
+            prune={prune}
+            review={
+              <CellReviewSlot
+                isRemove={isRemove}
+                currentValue={currentValue}
+                currentLabel={currentLabel}
+                pending={pending}
+                saving={saving}
+                failure={failure}
+                apply={apply}
+                dismiss={dismiss}
+                applyLabel={resolvedApplyLabel}
+              />
+            }
+          />
+        }
+      >
         {children}
-        <SuggestionOutcomeMark
-          outcome={outcome}
-          suggestion={suggestion}
-          currentValue={currentValue}
-          currentLabel={markCurrentLabel}
-          alternative={alternative}
-          autoFilled={autoFilled}
-          surface={surface}
-          actionable
-          prune={prune}
-          review={
-            <CellReviewSlot
-              isRemove={isRemove}
-              currentValue={currentValue}
-              currentLabel={currentLabel}
-              pending={pending}
-              saving={saving}
-              failure={failure}
-              apply={apply}
-              dismiss={dismiss}
-              applyLabel={resolvedApplyLabel}
-            />
-          }
-        />
       </MarkedValue>
     );
   }

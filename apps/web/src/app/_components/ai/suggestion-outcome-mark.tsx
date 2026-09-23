@@ -272,16 +272,13 @@ function OutcomePopoverBody({
 
 /** One footprint for every glyph state (checking, failed, outcome), so a
  * settling query swaps icons in space already taken: phone touch target on
- * `inline`/`line`, 12px elsewhere, smaller in a table cell. */
+ * `inline`/`line`, 12px elsewhere, and the shared 20px rail slot in a table
+ * cell so it lines up with the cell's other affordances. */
 function glyphTriggerClass(surface: SuggestionOutcomeSurface) {
   return cn(
     "inline-flex shrink-0 items-center justify-center rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-ring",
-    surface !== "cell" && "min-h-11 min-w-11 md:min-h-0 md:min-w-0",
+    surface === "cell" ? "size-5" : "min-h-11 min-w-11 md:min-h-0 md:min-w-0",
   );
-}
-
-function glyphIconClass(surface: SuggestionOutcomeSurface) {
-  return surface === "cell" ? "size-2.5" : "size-3";
 }
 
 /** The glyph itself — sized down and untabbable in a non-actionable table
@@ -310,8 +307,12 @@ function MarkGlyph({
     >
       <Sparkle
         className={cn(
-          glyphIconClass(surface),
-          accented ? "text-primary" : "text-muted-foreground",
+          "size-3",
+          accented
+            ? "text-primary"
+            : surface === "cell"
+              ? "text-muted-foreground/50"
+              : "text-muted-foreground",
         )}
       />
     </PopoverTrigger>
@@ -351,14 +352,9 @@ function UnsettledMark({
         className={glyphTriggerClass(surface)}
       >
         {failed ? (
-          <CircleAlert
-            className={cn(glyphIconClass(surface), "text-destructive")}
-          />
+          <CircleAlert className="size-3 text-destructive" />
         ) : (
-          <ClassicV2
-            size={surface === "cell" ? 10 : 12}
-            className="text-muted-foreground"
-          />
+          <ClassicV2 size={12} className="text-muted-foreground" />
         )}
       </PopoverTrigger>
       <PopoverContent side="bottom" className="w-auto max-w-xs p-2 text-xs">
@@ -373,7 +369,7 @@ function UnsettledMark({
  * a small glyph whose hover/tap popover states the outcome. In a dense table
  * cell (`surface="cell"`) the entire actionable review — headline, current
  * value, alternatives, apply/dismiss — lives inside the popover via `review`
- * so the row itself never grows past 28px; `inline`/`line` surfaces render
+ * so the row itself never grows past 32px; `inline`/`line` surfaces render
  * the review directly in the flow and pass no `review` (the popover there
  * only adds the ranked alternatives a proposal doesn't have room for inline).
  */

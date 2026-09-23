@@ -132,8 +132,8 @@ data calm; graphite typography carries hierarchy; cobalt identifies
 interaction; five stable domain lines make the application navigable without
 coloring every row.
 
-Information density is asymmetric by design. Read-heavy desktop grids are
-ultra-dense, while forms, dashboards, detail content, and phone flows retain
+Information density is asymmetric by design. Desktop record grids are
+dense, while forms, dashboards, detail content, and phone flows retain
 normal breathing room and 44px interaction targets. Selection opens context
 without losing place: a docked inspector on wide desktop, a right sheet at
 intermediate widths, and the complete canonical detail route on phone.
@@ -146,7 +146,7 @@ theatrical.
 **Key Characteristics:**
 
 - Light-only Porcelain canvas, white working planes, graphite type, cool rules.
-- Dense 28px read-heavy grids; normal-density content everywhere else.
+- Dense 32px record grids; normal-density content everywhere else.
 - Cobalt interaction plus five expressive, stable domain lines.
 - Truthful direct relationships before derived evidence.
 - Compact wide-desktop inspection and native-feeling phone routes.
@@ -214,10 +214,13 @@ not a technical costume.
 - **Title** (600, `14/20px`): panels, dialogs, cards, and inspector sections.
 - **Body** (400, `14/20px`): explanations and continuous reading, ideally
   `65–75ch`.
-- **Control / Dense body** (500/400, `12/18px`): desktop controls and table
-  rows; ordinary page prose must not collapse to this density.
-- **Data** (400, `12/16px`): quantities, money, dates, shortcodes, and aligned
-  comparison values, with tabular numerals.
+- **Control / Dense body** (500/400, `12/18px`): desktop controls; table rows
+  use `13/20px`. Ordinary page prose must not collapse to this density.
+- **Data** (400, tabular numerals): quantities, money, and dates stay in Inter
+  with tabular figures so they align without widening; JetBrains Mono is for
+  codes, shortcodes, and identifiers whose glyph shape matters.
+- **Table header** (500, `12/16px`, sentence case, secondary graphite): one
+  line that truncates with an ellipsis; never mono, never uppercase.
 - **Label** (500, `10/14px`): compact metadata. Sentence case is the default;
   uppercase tracking is reserved for true codes or established data-register
   labels, never generic hierarchy. The detail breadcrumb (domain / plural /
@@ -225,8 +228,9 @@ not a technical costume.
 
 ### Named Rules
 
-**The Two Voices Rule.** Inter speaks; JetBrains Mono measures. Hierarchy comes
-from role and weight, not swapping typefaces.
+**The Two Voices Rule.** Inter speaks; JetBrains Mono identifies. Numbers use
+Inter's tabular figures; mono marks codes and identifiers. Hierarchy comes from
+role and weight, not swapping typefaces.
 
 ## Layout
 
@@ -238,10 +242,9 @@ projections and navigate to complete detail routes; desktop inspectors do not
 squeeze into the phone viewport.
 
 Repeated layout uses a 4/8/12/16/20/24px rhythm. Ordinary content uses 12–16px
-internal gaps and readable grouping. Read-heavy desktop tables target 28px rows
-and 32px headers with 8px horizontal cell padding; editable or multiline rows
-may rise to 32–40px. First visits default to dense only for explicitly
-registered read-heavy rosters; a stored user density preference always wins.
+internal gaps and readable grouping. Desktop tables use one density: 32px rows
+and 32px one-line headers with 8px horizontal cell padding on a white surface.
+Every value, including editable and empty ones, starts on that padding.
 
 Phone controls and links provide at least 44×44px targets. Fixed chrome respects
 safe-area and virtual-keyboard insets. Normal pages never overflow the viewport;
@@ -355,7 +358,22 @@ chip per declared filter, More, Clear, Actions, create.
 
 RTable owns dense record work: virtualization, pinned/resizable/reorderable
 columns, saved layouts, selection, clipboard, grouping, editing, and aggregate
-footers must survive styling changes. Wide desktop selection may open a 400px
+footers must survive styling changes.
+
+Every decorated cell uses one anatomy (`CellFrame`): a value slot that
+truncates with an ellipsis, then a right-anchored rail of 20px affordances in a
+fixed order — explanation, relation workbench, resolution badge, suggestion
+mark. Rail affordances stay visible; column sizing reserves their width, so an
+icon never paints over a value. Edit pencils are hover overlays on the value's
+trailing edge and never reserve width. Undeclared columns size by what they
+hold (numbers 104px, dates 120px, pills 136px, relations 184px, text 176px,
+identity 280px). Pane slack is shared across identity, text, and relation
+columns in proportion to their width, each capped at its maximum; the rest is
+an empty gutter before the end-pinned row actions, which always sit at the
+table's right edge. A column's source (provenance) is an icon beside its
+header label, with the phrase on hover. Record names are graphite and turn
+cobalt on hover. Signal exceptions, not norms: a manual price override carries
+a pin; a derived price is unmarked. Wide desktop selection may open a 400px
 modeless inspector with Overview, Relations, and Activity. Intermediate widths
 use a sheet. Phone rows open the canonical detail route.
 

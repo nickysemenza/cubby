@@ -49,10 +49,7 @@ export const UnitPriceLine: FC<{
 
   if (compact) {
     return (
-      <span
-        className="font-mono text-xs tabular-nums"
-        title="Derived unit price"
-      >
+      <span className="tabular-nums" title="Derived unit price">
         {natural}
       </span>
     );

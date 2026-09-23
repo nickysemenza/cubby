@@ -38,6 +38,7 @@ import {
 import type { CellClipboardSpec, CellPastePayload } from "./cell-clipboard";
 import { CellEditTrigger } from "./cell-edit-trigger";
 import { CellEditorOverlay } from "./cell-editor-overlay";
+import { CELL_EDIT_GROUP_CLASS, CELL_EDIT_PENCIL_CLASS } from "./cell-frame";
 import { CellSelectionContext } from "./cell-selection-context";
 
 export type { FilterableComboboxItem };
@@ -329,18 +330,15 @@ function EditableDisplay<TSaved>({
 }) {
   if (mode === "pencil") {
     return (
-      <span className="group/editable inline-flex min-w-0 items-center gap-1">
-        <span className="min-w-0">{children}</span>
+      <span className={CELL_EDIT_GROUP_CLASS}>
+        <span className="min-w-0 truncate">{children}</span>
         <CellEditTrigger
           ref={triggerRef}
           onStartEdit={onStartEdit}
           clipboard={clipboard}
           hidePencilIcon
           aria-label="Edit value"
-          // Fine pointers (mouse/trackpad) reveal the pencil only on
-          // hover/focus; touch has no hover, so coarse pointers keep a
-          // hairline-coloured pencil visible at rest.
-          className="shrink-0 p-1 transition-opacity group-hover/editable:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100 pointer-fine:opacity-0"
+          className={CELL_EDIT_PENCIL_CLASS}
         >
           <Pencil className="size-3 text-muted-foreground pointer-coarse:text-hairline" />
         </CellEditTrigger>
@@ -477,9 +475,7 @@ function EditableInputCellInternal<T>({
         clipboard={edit.clipboard}
       >
         {measured ? (
-          <span className="font-mono tabular-nums">
-            {renderValue(displayValue)}
-          </span>
+          <span className="tabular-nums">{renderValue(displayValue)}</span>
         ) : (
           renderValue(displayValue)
         )}
@@ -838,11 +834,10 @@ function EditableDateCellInternal({
         onStartEdit={edit.open}
         clipboard={edit.clipboard}
       >
-        {/* Dates are measurements: mono, matching the editor's own mono input
-            and the `meta.mono` that date COLUMNS already carry. Without it a
-            detail-page date renders in Inter while the same value renders mono
-            in every table. */}
-        <span className="font-mono">{renderValue(displayValue)}</span>
+        {/* Dates are measurements: tabular figures on every surface, so a
+            detail-page date and the same value in a table align the same way.
+            Mono is reserved for codes and identifiers. */}
+        <span className="tabular-nums">{renderValue(displayValue)}</span>
       </EditableDisplay>
       {edit.isEditing && (
         <CellEditorOverlay

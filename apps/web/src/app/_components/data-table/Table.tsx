@@ -150,7 +150,6 @@ export interface RTableProps<TItem extends RowData> {
    * separate from TanStack's row selection, which drives bulk actions.
    */
   currentRowId?: string;
-  /** First-visit density for this surface; stored user choice remains global. */
   /** Callback when a row is hovered (desktop) — used to prefetch row data */
   onRowHover?: (row: Row<TItem>) => void;
   /** Cancels an uncommitted row-preview intent. */
@@ -423,16 +422,18 @@ function PinnedTableFooter<TItem extends RowData>({
     },
     (_, index) => ({
       id: `footer-${index}`,
-      headers: [
+      leading: [
         ...(startGroups[index]?.headers ?? []),
         ...(centerGroups[index]?.headers ?? []),
-        ...(endGroups[index]?.headers ?? []),
       ],
+      trailing: endGroups[index]?.headers ?? [],
     }),
   );
   if (
     !footerGroups.some((group) =>
-      group.headers.some((header) => header.column.columnDef.footer),
+      [...group.leading, ...group.trailing].some(
+        (header) => header.column.columnDef.footer,
+      ),
     )
   )
     return null;
@@ -440,10 +441,13 @@ function PinnedTableFooter<TItem extends RowData>({
     <TableFooter className="border-t bg-card text-sm font-medium">
       {footerGroups.map((group) => (
         <TableRow key={group.id} className="hover:bg-muted/50">
-          {group.headers.map((header) => (
+          {group.leading.map((header) => (
             <PinnedFooterCell key={header.id} header={header} table={table} />
           ))}
           <TableCell data-spacer aria-hidden />
+          {group.trailing.map((header) => (
+            <PinnedFooterCell key={header.id} header={header} table={table} />
+          ))}
         </TableRow>
       ))}
     </TableFooter>
@@ -780,7 +784,7 @@ function DesktopTableView<TItem extends RowData>({
             ref={tableContainerRef}
             data-scroll-restoration-id={scrollRestorationId}
             aria-label={`${ariaLabel} keyboard navigation`}
-            className="min-h-0 flex-1 overflow-auto outline-none data-[cell-dragging]:select-none"
+            className="min-h-0 flex-1 overflow-auto bg-card outline-none data-[cell-dragging]:select-none"
             {...cellSelectionContainerProps}
           >
             <Table
@@ -1145,10 +1149,6 @@ function RTableInner<TItem extends RowData>(props: RTableProps<TItem>) {
   };
 
   return (
-    // max-w-[90rem]: self-cap at the 2xl page width. Most list pages are
-    // already capped by Page, but wide hosts (locations' tabbed
-    // page, sized for its gallery view) would otherwise stretch the table to
-    // the viewport and the width-slack spacer into an absurd gutter.
     <RecordSuggestionsProvider
       entity={entity}
       records={
@@ -1157,7 +1157,7 @@ function RTableInner<TItem extends RowData>(props: RTableProps<TItem>) {
       fieldKeys={table.getVisibleLeafColumns().map((column) => column.id)}
     >
       <EntityDisplayImagesProvider refs={entityMediaRefs}>
-        <Stack className="max-w-[90rem]">
+        <Stack>
           <DesktopTableView
             table={table}
             controller={controller}

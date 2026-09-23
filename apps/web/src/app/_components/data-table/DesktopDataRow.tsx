@@ -22,6 +22,7 @@ import {
 } from "~/entities/field-resolution";
 import { cn } from "~/lib/utils";
 
+import { CellFrame } from "./cell-frame";
 import { NON_SELECTABLE_COLUMN_IDS } from "./cell-selection-context";
 import { columnWidthValue } from "./column-layout";
 import { DebugDialog } from "./DebugDialog";
@@ -29,8 +30,10 @@ import { RelationFieldWorkbench } from "./relation-field-workbench";
 import type { CubbyRow as Row } from "./table-features";
 import { type CubbyColumnMeta, resolveColumnExplanation } from "./table-meta";
 
-const NUMERIC_CELL = "text-right font-mono tabular-nums";
-const MONO_CELL = "font-mono";
+// Quantities, money, and dates read in Inter with tabular figures; mono is
+// reserved for codes and identifiers (`meta.mono`), where glyph shape matters.
+const NUMERIC_CELL = "text-right tabular-nums";
+const MONO_CELL = "font-mono text-xs";
 const dataRowIdentitySchema = z.object({ id: z.string() });
 
 function relationWorkbenchContent(
@@ -91,15 +94,18 @@ function resolvedCellContent<TItem extends RowData>(
 ) {
   if (!fieldResolutionFor(cell.row.original, cell.column.id)) return content;
   return (
-    <span className="inline-flex w-full min-w-0 items-center gap-1">
-      <span className="min-w-0 flex-1 truncate">{content}</span>
-      <FieldResolutionBadge
-        record={cell.row.original}
-        field={cell.column.id}
-        interactive={false}
-        compact
-      />
-    </span>
+    <CellFrame
+      trailing={
+        <FieldResolutionBadge
+          record={cell.row.original}
+          field={cell.column.id}
+          interactive={false}
+          compact
+        />
+      }
+    >
+      {content}
+    </CellFrame>
   );
 }
 
@@ -133,16 +139,19 @@ function DesktopDataCell<TItem extends RowData>({
   const rowIdentity = dataRowIdentitySchema.safeParse(cell.row.original);
   const explained =
     explanation && rowIdentity.success ? (
-      <span className="inline-flex max-w-full min-w-0 items-center gap-1">
-        <span className="min-w-0">{resolvedContent}</span>
-        <FieldExplanation
-          entity={explanation.entity}
-          id={rowIdentity.data.id}
-          field={explanation.field}
-          label={explanation.label}
-          surface="list"
-        />
-      </span>
+      <CellFrame
+        trailing={
+          <FieldExplanation
+            entity={explanation.entity}
+            id={rowIdentity.data.id}
+            field={explanation.field}
+            label={explanation.label}
+            surface="list"
+          />
+        }
+      >
+        {resolvedContent}
+      </CellFrame>
     ) : (
       resolvedContent
     );
@@ -162,7 +171,9 @@ function DesktopDataCell<TItem extends RowData>({
         cell.column.columnDef.meta?.className,
         selected && "bg-primary/10",
         anchor && "ring-2 ring-ring ring-inset",
-        pinned && "sticky z-10 bg-background",
+        // Pinned cells need an opaque surface to cover scrolled content, and
+        // must still take the row's hover wash like their neighbours.
+        pinned && "sticky z-10 bg-card [tr:hover>&]:bg-muted",
         boundary,
       )}
       style={{ width, minWidth: width, maxWidth: width, ...inset }}
@@ -313,11 +324,17 @@ function DesktopDataRowInner<TItem extends RowData>({
       }
       style={height ? { height } : undefined}
     >
-      {[
-        ...row.getStartVisibleCells(),
-        ...row.getCenterVisibleCells(),
-        ...row.getEndVisibleCells(),
-      ].map((cell) => (
+      {[...row.getStartVisibleCells(), ...row.getCenterVisibleCells()].map(
+        (cell) => (
+          <DesktopDataCell
+            key={cell.id}
+            cell={cell}
+            cellClassName={cellClassName}
+          />
+        ),
+      )}
+      <TableCell data-spacer aria-hidden className={cellClassName} />
+      {row.getEndVisibleCells().map((cell) => (
         <DesktopDataCell
           key={cell.id}
           cell={cell}
@@ -338,7 +355,6 @@ function DesktopDataRowInner<TItem extends RowData>({
           />
         </TableCell>
       )}
-      <TableCell data-spacer aria-hidden className={cellClassName} />
     </TableRow>
   );
 }

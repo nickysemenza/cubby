@@ -99,7 +99,7 @@ describe("LinkedTransactions", () => {
       "href",
       "/financial-transactions/FTX-2345",
     );
-    expect(transactionLink).toHaveClass("font-semibold", "text-primary");
+    expect(transactionLink).toHaveClass("font-medium", "text-foreground");
     const row = transactionLink.closest("tr");
     expect(row).not.toBeNull();
     const statusCell = within(row!).getByText("Posted").closest("td");

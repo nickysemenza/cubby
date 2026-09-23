@@ -7,19 +7,24 @@ import type {
   EntityDetailRoute,
 } from "~/entities/entities";
 
-const tableLinkVariants = cva("transition-colors hover:underline", {
-  variants: {
-    variant: {
-      default: "font-medium text-muted-foreground hover:text-primary",
-      identity: "font-semibold text-primary",
-      mono: "font-mono text-primary",
-      muted: "font-medium text-muted-foreground hover:text-foreground",
+const tableLinkVariants = cva(
+  "rounded-[2px] underline-offset-2 transition-colors outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring",
+  {
+    variants: {
+      variant: {
+        default: "font-medium text-muted-foreground hover:text-primary",
+        // Graphite carries hierarchy; cobalt signals interaction. A column of
+        // bold cobalt names made every row shout.
+        identity: "font-medium text-foreground hover:text-primary",
+        mono: "font-mono text-primary",
+        muted: "font-medium text-muted-foreground hover:text-foreground",
+      },
+    },
+    defaultVariants: {
+      variant: "default",
     },
   },
-  defaultVariants: {
-    variant: "default",
-  },
-});
+);
 
 /** USDA lookup routes (not standard entity routes) */
 type USDALookupRoute =

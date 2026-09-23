@@ -85,7 +85,7 @@ function TableHead({ className, ...props }: React.ComponentProps<"th">) {
       // `scope={undefined}` rather than claiming to head a column.
       scope="col"
       className={cn(
-        "text-slate h-10 px-2 text-left align-middle font-mono text-2xs font-semibold tracking-wider uppercase whitespace-nowrap [&:has([role=checkbox])]:pr-0",
+        "h-10 px-2 text-left align-middle text-xs font-medium whitespace-nowrap text-muted-foreground [&:has([role=checkbox])]:pr-0",
         className,
       )}
       {...props}

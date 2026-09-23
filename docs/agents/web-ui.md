@@ -20,8 +20,9 @@ layout repeats or encodes a real decision. `gap` is for flex/grid siblings;
 `space-y` is for plain block stacks. Dense exceptions are rare `/* tight */`.
 
 Use `RTable` for interactive lists, Table primitives for static tables, and raw
-tables only for matrices/debug/external content. `useCubbyTableLayout` owns
-table order/pinning/visibility/sizing. Rendered entity names are linked and
+tables only for matrices/debug/external content. `useTableColumnLayout` owns
+table order/pinning/visibility/sizing. Decorated cells render through
+`CellFrame`; don't append icons beside a cell value by hand. Rendered entity names are linked and
 readable: use `EntityInlineLink`, a titled truncated link, or `createNameColumn`
 in RTable. Pages use the `Page` shell; detail bodies use `DetailSections`.
 

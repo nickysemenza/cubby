@@ -191,9 +191,7 @@ export const purchaseListOverride = defineListOverride<
                 const row = info.row.original;
                 return (
                   <Row align="center" justify="end" gap="xs">
-                    <span className="font-mono tabular-nums">
-                      {info.getValue()}
-                    </span>
+                    <span className="tabular-nums">{info.getValue()}</span>
                     {row.unpricedExpenseCount > 0 && (
                       <Badge variant="warning">
                         {row.unpricedExpenseCount} unpriced
@@ -257,9 +255,7 @@ export const purchaseListOverride = defineListOverride<
                 info.getValue() > 0 ? (
                   <Row align="center" justify="end" gap="xs">
                     <FileText className="size-3.5 text-muted-foreground" />
-                    <span className="font-mono tabular-nums">
-                      {info.getValue()}
-                    </span>
+                    <span className="tabular-nums">{info.getValue()}</span>
                   </Row>
                 ) : (
                   <NoneValue />
@@ -300,9 +296,7 @@ export const purchaseListOverride = defineListOverride<
                 },
                 cell: (info) =>
                   info.getValue() > 0 ? (
-                    <span className="font-mono tabular-nums">
-                      {info.getValue()}
-                    </span>
+                    <span className="tabular-nums">{info.getValue()}</span>
                   ) : (
                     <NoneValue />
                   ),

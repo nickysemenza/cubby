@@ -5,6 +5,6 @@
 // them drift from the painted rows.
 export const ROW_DENSITY = {
   rowHeight: 32,
-  cellClass: "h-8 px-2 py-0.5 text-sm" /* tight */,
+  cellClass: "h-8 px-2 py-0 text-[0.8125rem] leading-5",
   rowClass: "h-8",
 } as const;

@@ -130,7 +130,11 @@ export function CellEditTrigger<TSaved>({
         // `select-none` replaces what <button> gave for free: double-click is
         // the edit gesture in cell-selection mode, and on a selectable span it
         // would paint a native word selection under the editor.
-        "group inline-flex items-center gap-1 px-2 py-1 text-left select-none hover:bg-muted",
+        "group relative inline-flex max-w-full min-w-0 items-center gap-1 rounded-sm px-2 py-1 text-left select-none hover:bg-muted",
+        // In a table cell the value must start on the cell's own padding like
+        // every plain cell, so "—" and text line up across columns; the hover
+        // wash still bleeds into that padding.
+        "in-data-[slot=table-cell]:-mx-1.5 in-data-[slot=table-cell]:max-w-[calc(100%+0.75rem)] in-data-[slot=table-cell]:px-1.5 in-data-[slot=table-cell]:py-0.5",
         "focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
         "data-[clipboard-flash]:ring-2 data-[clipboard-flash]:ring-ring",
         className,
@@ -159,9 +163,20 @@ export function CellEditTrigger<TSaved>({
       {...rest}
       {...gate}
     >
-      {children}
-      {!hidePencilIcon && (
-        <Pencil className="ml-1 size-3 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100 pointer-coarse:opacity-100" />
+      {hidePencilIcon ? (
+        children
+      ) : (
+        <>
+          <span className="min-w-0 truncate">{children}</span>
+          {/* Overlays the value's trailing edge on hover rather than reserving
+              width it only uses on hover; touch keeps it in flow. */}
+          <span
+            aria-hidden
+            className="pointer-events-none absolute inset-y-0 right-0.5 my-auto flex size-5 items-center justify-center rounded-sm bg-muted opacity-0 shadow-[-6px_0_6px_var(--muted)] transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100 pointer-coarse:static pointer-coarse:bg-transparent pointer-coarse:opacity-100 pointer-coarse:shadow-none"
+          >
+            <Pencil className="size-3 text-muted-foreground" />
+          </span>
+        </>
       )}
     </button>
   );

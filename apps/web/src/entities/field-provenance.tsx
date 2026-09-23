@@ -1,6 +1,7 @@
 import type { Entity } from "@cubby/schemas/entity";
 import type { EntityFieldProvenance } from "@cubby/schemas/entity-fields";
 import { localRelationshipByKey } from "@cubby/schemas/entity-manifest";
+import { Link2 } from "lucide-react";
 import type React from "react";
 
 import { EntityIcon, entityLabel, entityPluralLabel } from "./entities";
@@ -94,17 +95,56 @@ export interface FieldProvenanceProps extends Omit<
   "children"
 > {
   provenance: EntityFieldProvenance | null | undefined;
+  /** Source icons only, phrase on hover/focus — for one-line table headers. */
+  compact?: boolean;
 }
 
 /** A quiet, non-interactive source line for dense field surfaces. */
 export function FieldProvenance({
   provenance,
+  compact = false,
   className,
   ...props
 }: FieldProvenanceProps) {
   if (!provenance) return null;
 
   const phrase = formatFieldProvenance(provenance);
+  const iconEntities = provenance.sources.flatMap((source) =>
+    source.entity ? [source.entity] : [],
+  );
+  if (compact) {
+    return (
+      <span
+        {...props}
+        tabIndex={props.tabIndex ?? 0}
+        role="note"
+        aria-label={phrase}
+        title={phrase}
+        data-field-provenance
+        className={[
+          "inline-flex shrink-0 items-center gap-0.5 rounded-sm text-muted-foreground/70 outline-none focus-visible:ring-2 focus-visible:ring-ring",
+          className,
+        ]
+          .filter(Boolean)
+          .join(" ")}
+      >
+        {iconEntities.length === 0 ? (
+          // A labelled source ("Image storage") has no entity mark; a generic
+          // source glyph keeps its phrase discoverable.
+          <Link2 aria-hidden="true" className="size-3" />
+        ) : (
+          iconEntities.map((entity) => (
+            <EntityIcon
+              key={entity}
+              entity={entity}
+              aria-hidden="true"
+              className="size-3"
+            />
+          ))
+        )}
+      </span>
+    );
+  }
   const focusableForDisclosure =
     provenance.sources.length > 1 || phrase.length > 32;
   return (

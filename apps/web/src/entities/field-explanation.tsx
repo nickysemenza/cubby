@@ -11,6 +11,7 @@ import { Info } from "lucide-react";
 import { useState } from "react";
 import { z } from "zod";
 
+import { CELL_RAIL_BUTTON_CLASS } from "~/app/_components/data-table/cell-frame";
 import { EntityInlineLinkById } from "~/app/_components/EntityInlineLinkById";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { inventory } from "~/app/inventory/inventory.functions";
@@ -192,11 +193,12 @@ export function FieldExplanation({
           <Button
             size="icon-xs"
             variant="ghost"
+            className={surface === "list" ? CELL_RAIL_BUTTON_CLASS : undefined}
             aria-label={`How ${label.toLowerCase()} is determined`}
           />
         }
       >
-        <Info className="size-3.5" />
+        <Info className={surface === "list" ? "size-3" : "size-3.5"} />
       </PopoverTrigger>
       <PopoverContent className="max-h-[min(32rem,80dvh)] w-80 overflow-y-auto">
         <Stack gap="sm">

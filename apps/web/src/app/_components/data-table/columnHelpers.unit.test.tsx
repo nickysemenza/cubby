@@ -955,18 +955,16 @@ describe("Product pricing cell (explicit vs derived legibility)", () => {
     );
   });
 
-  it("renders an explicit override and a derived price with different glyphs, not just the same bare number", () => {
+  it("marks an explicit override with a pin and leaves the derived norm unmarked, so the two never read as the same bare number", () => {
     const { unmount } = render(
       <div>{renderProductPriceValue(explicitPricing)}</div>,
     );
     expect(screen.getByText("$20.00")).toBeInTheDocument();
     expect(document.querySelector("svg.lucide-pin")).not.toBeNull();
-    expect(document.querySelector("svg.lucide-sigma")).toBeNull();
     unmount();
 
     render(<div>{renderProductPriceValue(derivedPricing)}</div>);
     expect(screen.getByText("$12.00")).toBeInTheDocument();
-    expect(document.querySelector("svg.lucide-sigma")).not.toBeNull();
     expect(document.querySelector("svg.lucide-pin")).toBeNull();
   });
 
@@ -984,7 +982,7 @@ describe("Product pricing cell (explicit vs derived legibility)", () => {
     );
   });
 
-  it("a derived-only product's cell shows the derived cue, and its editor opens blank — the raw stored override, not the displayed fallback", async () => {
+  it("a derived-only product's cell carries no override pin, and its editor opens blank — the raw stored override, not the displayed fallback", async () => {
     render(
       <EditableCell
         value={null}
@@ -995,7 +993,7 @@ describe("Product pricing cell (explicit vs derived legibility)", () => {
     );
 
     expect(screen.getByText("$12.00")).toBeInTheDocument();
-    expect(document.querySelector("svg.lucide-sigma")).not.toBeNull();
+    expect(document.querySelector("svg.lucide-pin")).toBeNull();
 
     fireEvent.click(screen.getByRole("button"));
     const input = await screen.findByRole("spinbutton");

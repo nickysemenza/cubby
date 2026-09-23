@@ -833,7 +833,7 @@ export function RecordFieldSuggestion({
   field: string;
   children: ReactNode;
   /** `"cell"` folds the review into the outcome mark's popover for a dense
-   * 28px table row; `"inline"` (detail facts, phone cards) renders it directly. */
+   * 32px table row; `"inline"` (detail facts, phone cards) renders it directly. */
   surface?: "inline" | "cell";
 }) {
   const context = useContext(RecordSuggestionsContext);

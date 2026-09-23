@@ -189,9 +189,7 @@ function renderFormattedScalar(
       const parsed =
         value.kind === "json" ? amountSchema.safeParse(value.raw) : null;
       return parsed?.success ? (
-        <span className="font-mono tabular-nums">
-          {tryFormatAmount(parsed.data)}
-        </span>
+        <span className="tabular-nums">{tryFormatAmount(parsed.data)}</span>
       ) : (
         renderScalarValue(value, surface)
       );
@@ -805,10 +803,18 @@ export function createEntityDisplayColumns<TRecord extends object>(
           return [field];
         });
   // oxlint-disable-next-line complexity -- one exhaustive manifest control dispatcher preserves column metadata and clipboard ownership together.
-  return createCubbyColumnCollection<TRecord>((add) => {
+  return createCubbyColumnCollection<TRecord>((addColumn) => {
     const usedOverrides = new Set<string>();
     for (const field of selected) {
       const columnId = field.display.columnId ?? field.key;
+      // A suggestable field renders the suggestion mark in the cell rail;
+      // column sizing reserves its slot from this flag.
+      const add: typeof addColumn = (column) =>
+        addColumn(
+          field.control?.suggest
+            ? { ...column, meta: { ...column.meta, suggest: true } }
+            : column,
+        );
       const isIdentityField = field.readKey === titleField;
       if (isIdentityField) {
         // The standard-column pipeline owns the one canonical identity lane.
@@ -1076,7 +1082,6 @@ export function createEntityDisplayColumns<TRecord extends object>(
               className: widthClassName(field.display.width),
               mobile: toMobileColumnMeta(field.display.mobile),
               cellData,
-              mono: true,
             }),
             cell: ({ row }) => (
               <EditableCell

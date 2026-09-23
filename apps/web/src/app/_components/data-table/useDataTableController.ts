@@ -179,12 +179,14 @@ export function useDataTableController<TItem extends RowData>({
 
   const styles = {
     table:
-      "border-separate border-spacing-0 text-sm leading-tight tabular-nums",
+      "border-separate border-spacing-0 text-[0.8125rem] leading-5 tabular-nums",
     header:
-      "h-8 border-border border-b bg-card px-2 py-1 font-medium text-2xs text-muted-foreground",
+      "h-8 overflow-hidden border-border border-b bg-card px-2 py-0 font-medium text-xs text-muted-foreground",
     cell: cn(
       dConfig.cellClass,
-      "overflow-hidden",
+      // text-ellipsis gives every plain-text cell a real "…" instead of a
+      // hard clip; decorated cells truncate inside CellFrame's value slot.
+      "overflow-hidden text-ellipsis",
       verticalAlign === "top" ? "align-top" : "align-middle",
     ),
     row: cn(dConfig.rowClass, "table-row-hover border-b border-border"),
@@ -201,11 +203,20 @@ export function useDataTableController<TItem extends RowData>({
     .getVisibleLeafColumns()
     .map((column) => `${column.id}:${column.getSize()}`)
     .join(",");
+  // Columns a person resized (or a saved view sized) keep exactly that width;
+  // pane slack only flows to the rest.
+  const userSizedKey = Object.keys(table.state.columnSizing ?? {})
+    .sort()
+    .join(",");
   const columnSizeVars = useMemo(
     () =>
-      columnWidthVariables(table.getVisibleLeafColumns(), tableContainerWidth),
+      columnWidthVariables(
+        table.getVisibleLeafColumns(),
+        tableContainerWidth,
+        new Set(userSizedKey ? userSizedKey.split(",") : []),
+      ),
     // oxlint-disable-next-line react/exhaustive-deps -- scalar signature stands in for TanStack's fresh column array
-    [columnSizesKey, tableContainerWidth],
+    [columnSizesKey, tableContainerWidth, userSizedKey],
   );
 
   // Columns the table actually renders. Use VISIBLE leaves: getAllColumns()

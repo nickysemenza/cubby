@@ -23,7 +23,11 @@ import { TableHead, TableRow } from "~/components/ui/table";
 import { FieldProvenance } from "~/entities/field-provenance";
 import { cn } from "~/lib/utils";
 
-import { columnWidthValue, isLockedColumn } from "./column-layout";
+import {
+  columnWidthValue,
+  isLockedColumn,
+  spacerWidthValue,
+} from "./column-layout";
 import { ColumnResizeHandle } from "./ColumnResizeHandle";
 import type { cubbyTableFeatures, CubbyTable as Table } from "./table-features";
 
@@ -40,7 +44,10 @@ const sortIcon = (
     return <ArrowUp className={styles.sortIcon} aria-hidden="true" />;
   return canSort ? (
     <ArrowUpDown
-      className={cn(styles.sortIcon, "opacity-40 group-hover:opacity-100")}
+      className={cn(
+        styles.sortIcon,
+        "opacity-0 group-hover:opacity-60 group-focus-visible:opacity-60",
+      )}
       aria-hidden="true"
     />
   ) : null;
@@ -107,25 +114,30 @@ function SortableHeader<TData extends RowData>({
   const provenance = header.column.columnDef.meta?.provenance;
   const headerLabel = sortableHeaderLabel(header);
 
+  // One line, always: the label truncates with an ellipsis and the column's
+  // source collapses to an icon whose phrase is the tooltip. The old second
+  // "From …" line made headers two rows tall and truncated to noise.
   const title = (
-    <span className="flex min-w-0 flex-1 flex-col items-start leading-tight">
-      <span className="inline-flex min-w-0 items-center gap-1">
+    <span
+      className={cn(
+        "flex min-w-0 flex-1 items-center gap-1",
+        // Numeric labels end flush with their right-aligned values; the sort
+        // arrow leads instead of pushing the label off that edge.
+        numeric && "flex-row-reverse",
+      )}
+    >
+      <span className="min-w-0 truncate" title={headerLabel}>
         {header.isPlaceholder
           ? null
           : flexRender(header.column.columnDef.header, header.getContext())}
-        {sortingArrows}
-        {sortDirection && table.state.sorting.length > 1 && (
-          <span className="text-3xs text-muted-foreground tabular-nums">
-            {header.column.getSortIndex() + 1}
-          </span>
-        )}
       </span>
-      {provenance ? (
-        <FieldProvenance
-          provenance={provenance}
-          className="max-w-full text-[0.625rem] font-normal tracking-normal normal-case"
-        />
-      ) : null}
+      <FieldProvenance compact provenance={provenance} />
+      {sortingArrows}
+      {sortDirection && table.state.sorting.length > 1 && (
+        <span className="text-3xs text-muted-foreground tabular-nums">
+          {header.column.getSortIndex() + 1}
+        </span>
+      )}
     </span>
   );
 
@@ -140,6 +152,9 @@ function SortableHeader<TData extends RowData>({
         styles.header,
         numeric && "text-right",
         header.column.columnDef.meta?.className,
+        // meta.className styles the column's cells (e.g. mono for codes);
+        // headers keep one typeface across the row.
+        "font-sans",
         sortDirection && "bg-muted/50",
         pinned && "sticky z-40 bg-card",
         pinBoundaryClass(header),
@@ -158,13 +173,15 @@ function SortableHeader<TData extends RowData>({
             : {}),
       }}
     >
-      <div className={cn("flex items-center gap-1", numeric && "justify-end")}>
+      <div className="flex min-w-0 items-center">
         {!locked && (
+          // Overlays the leading padding instead of taking layout width, so
+          // header labels start on the same x as their cells' values.
           <Button
             variant="ghost"
             size="icon-sm"
             aria-label={`Reorder ${header.column.id} column`}
-            className="h-6 w-5 shrink-0 cursor-grab touch-none px-0 text-muted-foreground opacity-0 transition-opacity group-focus-within/th:opacity-100 group-hover/th:opacity-100 active:cursor-grabbing pointer-coarse:opacity-100"
+            className="absolute inset-y-0 left-0 my-auto h-5 w-2 shrink-0 cursor-grab touch-none rounded-none px-0 text-muted-foreground opacity-0 transition-opacity group-focus-within/th:opacity-100 group-hover/th:opacity-100 active:cursor-grabbing pointer-coarse:opacity-100"
             {...attributes}
             {...listeners}
           >
@@ -177,7 +194,7 @@ function SortableHeader<TData extends RowData>({
             size="sm"
             aria-label={`Sort by ${headerLabel}`}
             className={cn(
-              "group h-auto min-h-6 min-w-0 flex-1 gap-1 px-1 py-1 text-2xs font-semibold tracking-wider uppercase select-none hover:bg-muted/60",
+              "group -mx-1 h-6 min-w-0 flex-1 gap-1 px-1 py-0 font-[inherit] text-[length:inherit] tracking-[inherit] select-none hover:bg-muted/60 hover:text-foreground",
               numeric ? "justify-end" : "justify-start",
             )}
             onClick={header.column.getToggleSortingHandler()}
@@ -185,14 +202,29 @@ function SortableHeader<TData extends RowData>({
             {title}
           </Button>
         ) : (
-          <span className="inline-flex min-w-0 flex-1 items-start gap-1 py-1">
+          <span className="inline-flex min-w-0 flex-1 items-center">
             {title}
           </span>
         )}
       </div>
       {header.column.getCanResize() && (
         <ColumnResizeHandle
-          onResizeStart={header.getResizeHandler()}
+          onResizeStart={(event) => {
+            // A flexible column paints wider than its configured size (it
+            // shares pane slack). Seed the painted width first so the drag
+            // starts from what the person sees instead of snapping narrower.
+            const painted = Math.round(
+              event.currentTarget.parentElement?.getBoundingClientRect()
+                .width ?? 0,
+            );
+            if (painted > 0 && painted !== header.column.getSize()) {
+              table.setColumnSizing((sizing) => ({
+                ...sizing,
+                [header.column.id]: painted,
+              }));
+            }
+            header.getResizeHandler()(event);
+          }}
           onReset={() => header.column.resetSize()}
         />
       )}
@@ -275,33 +307,41 @@ export default function TableHeaderLayout<TData extends RowData>({
         strategy={horizontalListSortingStrategy}
       >
         {Array.from({ length: depth }, (_, index) => {
-          const headers = [
+          const leading = [
             ...(start[index]?.headers ?? []),
             ...(center[index]?.headers ?? []),
-            ...(end[index]?.headers ?? []),
           ];
+          const trailing = end[index]?.headers ?? [];
+          const renderHeader = (header: (typeof leading)[number]) => (
+            <SortableHeader
+              key={header.id}
+              header={header}
+              table={table}
+              styles={styles}
+            />
+          );
           return (
             <TableRow
-              key={headers.map((header) => header.id).join(":")}
+              key={[...leading, ...trailing]
+                .map((header) => header.id)
+                .join(":")}
               className="border-b border-border/50"
             >
-              {headers.map((header) => (
-                <SortableHeader
-                  key={header.id}
-                  header={header}
-                  table={table}
-                  styles={styles}
-                />
-              ))}
-              {isDebugEnabled && (
-                <TableHead className={styles.header}>Debug</TableHead>
-              )}
+              {leading.map(renderHeader)}
+              {/* The spacer sits before the end-pinned columns so row actions
+                  stay at the table's right edge instead of floating mid-row
+                  ahead of an empty gutter. */}
               <TableHead
                 data-spacer
                 aria-hidden
                 scope={undefined}
-                className={cn(styles.header, "w-0")}
+                className={cn(styles.header, "px-0")}
+                style={{ width: spacerWidthValue }}
               />
+              {trailing.map(renderHeader)}
+              {isDebugEnabled && (
+                <TableHead className={styles.header}>Debug</TableHead>
+              )}
             </TableRow>
           );
         })}
