@@ -20,6 +20,7 @@ import { createAppError } from "~/server/errors/app-error";
 import type { AuditEntryInput } from "~/server/repo/audit-log";
 import { logAuditEntries } from "~/server/repo/audit-log";
 import { notDeleted } from "~/server/repo/database-helpers";
+import { recordMergeRedirects } from "~/server/repo/entity-identity";
 import type { RemovableEntity } from "~/server/repo/removal";
 import { cascadeRemoval } from "~/server/repo/removal";
 import { resolveAllOrThrow } from "~/server/repo/shortcode-resolver";
@@ -216,6 +217,14 @@ export const finalizeMerge = async <E extends RemovableEntity>(
           .set({ deletedAt: new Date() })
           .where(and(inArray(table.id, ids), notDeleted(table)))
           .returning({ id: table.id });
+
+  // Old loser codes keep resolving (to the survivor) for reads; mutations
+  // through them are refused. See ADR 0006.
+  await recordMergeRedirects(
+    tx,
+    keepId,
+    removedRows.map((row) => String(row.id)),
+  );
 
   // A merge with no actor context (`mergeIngredients`) still has to cascade, so
   // the entries go to a local buffer that is only flushed when there IS one.

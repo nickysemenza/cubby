@@ -170,6 +170,8 @@ export async function setup() {
         "public",
       ]);
       await apply();
+      // drizzle-kit push does not manage triggers (ADR 0006).
+      await schema.installEntityIdentityTriggers(db);
       console.log("Template database schema pushed");
     } catch (err) {
       console.error("Schema push failed:", err);

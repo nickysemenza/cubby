@@ -33,6 +33,7 @@ import {
   unwrapDb,
 } from "~/server/repo/database-helpers";
 import { mapImages } from "~/server/repo/database-helpers/transform";
+import { previousShortcodesFor } from "~/server/repo/entity-identity";
 import { displayableImageSql } from "~/server/repo/image-displayability";
 import { compileTraversal } from "~/server/repo/relatedness/traversal";
 import { resolveLiveShortcodes } from "~/server/repo/shortcode-resolver";
@@ -483,6 +484,8 @@ export async function withUniversalEntityMedia<
     PublicEntityRow & {
       displayImages: DisplayImageSummary[];
       attachments?: EntityAttachmentRead[];
+      redirectedFrom?: string | null;
+      previousShortcodes?: string[];
     }
   >
 > {
@@ -496,15 +499,15 @@ export async function withUniversalEntityMedia<
     const entityId = resolved.get(row.id);
     return entityId === undefined ? [] : [{ entityType, entityId }];
   });
-  const [lists, attachments] = await Promise.all([
+  const entityIds = refs.map((ref) => ref.entityId);
+  const [lists, attachments, previousShortcodes] = await Promise.all([
     resolveEntityDisplayImageLists(db, refs),
     detail
-      ? resolveEntityAttachments(
-          db,
-          entityType,
-          refs.map((ref) => ref.entityId),
-        )
+      ? resolveEntityAttachments(db, entityType, entityIds)
       : Promise.resolve(new Map<string, EntityAttachmentRead[]>()),
+    detail
+      ? previousShortcodesFor(db, entityIds)
+      : Promise.resolve(new Map<string, string[]>()),
   ]);
   return hydrateImageReadProjection(
     db,
@@ -518,6 +521,11 @@ export async function withUniversalEntityMedia<
         ...row,
         displayImages,
         attachments: entityId ? (attachments.get(entityId) ?? []) : [],
+        // The kernel's get sets this when it followed a merge redirect.
+        redirectedFrom: null,
+        previousShortcodes: entityId
+          ? (previousShortcodes.get(entityId) ?? [])
+          : [],
       };
       // Purchase documents and Product item/label galleries retain attachment
       // metadata in their specialized projections. Generic attachments still

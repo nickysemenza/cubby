@@ -19,6 +19,11 @@ import { deferPublications } from "~/server/background-tasks/publish";
 import { createAppError } from "~/server/errors/app-error";
 import { withTransactionDatabase } from "~/server/repo/database-helpers";
 import { withUniversalEntityMedia } from "~/server/repo/entity-display-image";
+import {
+  describeUnresolvableCode,
+  isShortcodeEntity,
+  resolveEntityIdentity,
+} from "~/server/repo/entity-identity";
 import { deleteStoredObjects } from "~/server/services/image-storage.service";
 import {
   isMutationSideEffectRef,
@@ -266,26 +271,65 @@ export const defineEntityOperations = <
       .call("id", async (_, { input }) =>
         parseSchema<S["id"], string>(binding.schemas.id, input.id),
       )
-      .call("item", async ({ context }, { id }) =>
-        binding.repository.get({ ...context, db: context.readDb }, id),
-      )
-      .call("media", async ({ context }, { item }) =>
-        item === null
-          ? null
-          : (
-              await withUniversalEntityMedia(
+      .call("found", async ({ context }, { input, id }) => {
+        const readContext = { ...context, db: context.readDb };
+        const item = await binding.repository.get(readContext, id);
+        if (item !== null)
+          return { item, redirectedFrom: null, missingMessage: null };
+        // A merged-away code reads as its survivor (ADR 0006). Mutations never
+        // follow this redirect; they refuse with the survivor's code instead.
+        const identity = await resolveEntityIdentity(context.readDb, input.id);
+        const canonical =
+          identity.state === "redirected" &&
+          identity.kind === binding.entity &&
+          identity.canonicalDeletedAt === null
+            ? await binding.repository.get(
+                readContext,
+                parseSchema<S["id"], string>(
+                  binding.schemas.id,
+                  identity.canonicalShortcode,
+                ),
+              )
+            : null;
+        if (canonical !== null && identity.state === "redirected")
+          return {
+            item: canonical,
+            redirectedFrom: identity.requested,
+            missingMessage: null,
+          };
+        return {
+          item: null,
+          redirectedFrom: null,
+          missingMessage: isShortcodeEntity(binding.entity)
+            ? await describeUnresolvableCode(
                 context.readDb,
                 binding.entity,
-                [item],
-                true,
+                input.id,
               )
-            )[0],
+            : null,
+        };
+      })
+      .call("media", async ({ context }, { found }) =>
+        found.item === null
+          ? null
+          : {
+              ...(
+                await withUniversalEntityMedia(
+                  context.readDb,
+                  binding.entity,
+                  [found.item],
+                  true,
+                )
+              )[0],
+              redirectedFrom: found.redirectedFrom,
+            },
       )
-      .output(({ input, media }) => {
+      .output(({ input, found, media }) => {
         if (media === null && input.missing !== "null")
           throw createAppError(
             ENTITY_NOT_FOUND_REASON[binding.entity],
-            `${ENTITY_LABEL[binding.entity]} ${input.id} not found`,
+            found.missingMessage ??
+              `${ENTITY_LABEL[binding.entity]} ${input.id} not found`,
           );
         return entityQueryResultSchema.parse({
           action: "get",

@@ -42,6 +42,7 @@ import {
 import { createAppError } from "~/server/errors/app-error";
 
 import { notDeleted, unwrapDb } from "./database-helpers";
+import { describeUnresolvableCode } from "./entity-identity";
 import { SHORTCODE_TABLE } from "./generated/shortcode-tables.gen";
 import type { ShortcodeTable } from "./shortcode-utils";
 
@@ -123,7 +124,8 @@ export async function resolveOrThrow<E extends ShortcodeEntity>(
   if (id === null) {
     throw createAppError(
       ENTITY_NOT_FOUND_REASON[entity],
-      `${ENTITY_LABEL[entity]} not found: ${code}`,
+      (await describeUnresolvableCode(db, entity, code)) ??
+        `${ENTITY_LABEL[entity]} not found: ${code}`,
     );
   }
   return id;
@@ -154,9 +156,15 @@ export async function resolveAllOrThrow<E extends ShortcodeEntity>(
   const resolved = await resolveLiveShortcodes(db, codes, entity);
   const missing = codes.filter((code) => !resolved.has(code));
   if (missing.length > 0) {
+    const explained = await Promise.all(
+      uniq(missing).map((code) => describeUnresolvableCode(db, entity, code)),
+    );
     throw createAppError(
       ENTITY_NOT_FOUND_REASON[entity],
-      `${ENTITY_LABEL[entity]} not found: ${uniq(missing).join(", ")}`,
+      [
+        `${ENTITY_LABEL[entity]} not found: ${uniq(missing).join(", ")}`,
+        ...explained.filter((line) => line !== null),
+      ].join(" "),
     );
   }
   return codes.map((code) => resolved.get(code)!);

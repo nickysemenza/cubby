@@ -1184,6 +1184,21 @@
           ],
           "onDelete": "no action",
           "onUpdate": "no action"
+        },
+        "Cookbook_entity_identity_fk": {
+          "name": "Cookbook_entity_identity_fk",
+          "tableFrom": "Cookbook",
+          "tableTo": "Entity",
+          "columnsFrom": [
+            "id",
+            "shortcode"
+          ],
+          "columnsTo": [
+            "id",
+            "shortcode"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -1378,6 +1393,21 @@
           ],
           "columnsTo": [
             "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "Device_entity_identity_fk": {
+          "name": "Device_entity_identity_fk",
+          "tableFrom": "Device",
+          "tableTo": "Entity",
+          "columnsFrom": [
+            "id",
+            "shortcode"
+          ],
+          "columnsTo": [
+            "id",
+            "shortcode"
           ],
           "onDelete": "no action",
           "onUpdate": "no action"
@@ -1873,6 +1903,21 @@
           ],
           "onDelete": "no action",
           "onUpdate": "no action"
+        },
+        "Expense_entity_identity_fk": {
+          "name": "Expense_entity_identity_fk",
+          "tableFrom": "Expense",
+          "tableTo": "Entity",
+          "columnsFrom": [
+            "id",
+            "shortcode"
+          ],
+          "columnsTo": [
+            "id",
+            "shortcode"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -2289,6 +2334,21 @@
           ],
           "onDelete": "no action",
           "onUpdate": "no action"
+        },
+        "FinancialAccount_entity_identity_fk": {
+          "name": "FinancialAccount_entity_identity_fk",
+          "tableFrom": "FinancialAccount",
+          "tableTo": "Entity",
+          "columnsFrom": [
+            "id",
+            "shortcode"
+          ],
+          "columnsTo": [
+            "id",
+            "shortcode"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -2593,6 +2653,21 @@
           ],
           "onDelete": "no action",
           "onUpdate": "no action"
+        },
+        "FinancialTransaction_entity_identity_fk": {
+          "name": "FinancialTransaction_entity_identity_fk",
+          "tableFrom": "FinancialTransaction",
+          "tableTo": "Entity",
+          "columnsFrom": [
+            "id",
+            "shortcode"
+          ],
+          "columnsTo": [
+            "id",
+            "shortcode"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -2879,6 +2954,21 @@
           ],
           "columnsTo": [
             "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "GardenEntry_entity_identity_fk": {
+          "name": "GardenEntry_entity_identity_fk",
+          "tableFrom": "GardenEntry",
+          "tableTo": "Entity",
+          "columnsFrom": [
+            "id",
+            "shortcode"
+          ],
+          "columnsTo": [
+            "id",
+            "shortcode"
           ],
           "onDelete": "no action",
           "onUpdate": "no action"
@@ -3514,6 +3604,21 @@
           ],
           "columnsTo": [
             "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "Image_entity_identity_fk": {
+          "name": "Image_entity_identity_fk",
+          "tableFrom": "Image",
+          "tableTo": "Entity",
+          "columnsFrom": [
+            "id",
+            "shortcode"
+          ],
+          "columnsTo": [
+            "id",
+            "shortcode"
           ],
           "onDelete": "no action",
           "onUpdate": "no action"
@@ -4965,6 +5070,21 @@
           ],
           "onDelete": "no action",
           "onUpdate": "no action"
+        },
+        "ImageSighting_entity_identity_fk": {
+          "name": "ImageSighting_entity_identity_fk",
+          "tableFrom": "ImageSighting",
+          "tableTo": "Entity",
+          "columnsFrom": [
+            "id",
+            "shortcode"
+          ],
+          "columnsTo": [
+            "id",
+            "shortcode"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -6263,6 +6383,21 @@
           ],
           "columnsTo": [
             "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "ImportRun_entity_identity_fk": {
+          "name": "ImportRun_entity_identity_fk",
+          "tableFrom": "ImportRun",
+          "tableTo": "Entity",
+          "columnsFrom": [
+            "id",
+            "shortcode"
+          ],
+          "columnsTo": [
+            "id",
+            "shortcode"
           ],
           "onDelete": "no action",
           "onUpdate": "no action"
@@ -8008,6 +8143,21 @@
           ],
           "onDelete": "no action",
           "onUpdate": "no action"
+        },
+        "Ingredient_entity_identity_fk": {
+          "name": "Ingredient_entity_identity_fk",
+          "tableFrom": "Ingredient",
+          "tableTo": "Entity",
+          "columnsFrom": [
+            "id",
+            "shortcode"
+          ],
+          "columnsTo": [
+            "id",
+            "shortcode"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -8261,6 +8411,21 @@
           ],
           "onDelete": "no action",
           "onUpdate": "no action"
+        },
+        "InventoryEntry_entity_identity_fk": {
+          "name": "InventoryEntry_entity_identity_fk",
+          "tableFrom": "InventoryEntry",
+          "tableTo": "Entity",
+          "columnsFrom": [
+            "id",
+            "shortcode"
+          ],
+          "columnsTo": [
+            "id",
+            "shortcode"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -8465,6 +8630,21 @@
           ],
           "columnsTo": [
             "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "LedgerParty_entity_identity_fk": {
+          "name": "LedgerParty_entity_identity_fk",
+          "tableFrom": "LedgerParty",
+          "tableTo": "Entity",
+          "columnsFrom": [
+            "id",
+            "shortcode"
+          ],
+          "columnsTo": [
+            "id",
+            "shortcode"
           ],
           "onDelete": "no action",
           "onUpdate": "no action"
@@ -8831,6 +9011,21 @@
           ],
           "onDelete": "no action",
           "onUpdate": "no action"
+        },
+        "LedgerTransfer_entity_identity_fk": {
+          "name": "LedgerTransfer_entity_identity_fk",
+          "tableFrom": "LedgerTransfer",
+          "tableTo": "Entity",
+          "columnsFrom": [
+            "id",
+            "shortcode"
+          ],
+          "columnsTo": [
+            "id",
+            "shortcode"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -9167,6 +9362,21 @@
           ],
           "columnsTo": [
             "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "Location_entity_identity_fk": {
+          "name": "Location_entity_identity_fk",
+          "tableFrom": "Location",
+          "tableTo": "Entity",
+          "columnsFrom": [
+            "id",
+            "shortcode"
+          ],
+          "columnsTo": [
+            "id",
+            "shortcode"
           ],
           "onDelete": "no action",
           "onUpdate": "no action"
@@ -9724,7 +9934,23 @@
           "with": {}
         }
       },
-      "foreignKeys": {},
+      "foreignKeys": {
+        "Meal_entity_identity_fk": {
+          "name": "Meal_entity_identity_fk",
+          "tableFrom": "Meal",
+          "tableTo": "Entity",
+          "columnsFrom": [
+            "id",
+            "shortcode"
+          ],
+          "columnsTo": [
+            "id",
+            "shortcode"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
@@ -12497,6 +12723,21 @@
           ],
           "onDelete": "no action",
           "onUpdate": "no action"
+        },
+        "Planting_entity_identity_fk": {
+          "name": "Planting_entity_identity_fk",
+          "tableFrom": "Planting",
+          "tableTo": "Entity",
+          "columnsFrom": [
+            "id",
+            "shortcode"
+          ],
+          "columnsTo": [
+            "id",
+            "shortcode"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -12878,6 +13119,21 @@
           ],
           "onDelete": "no action",
           "onUpdate": "no action"
+        },
+        "Product_entity_identity_fk": {
+          "name": "Product_entity_identity_fk",
+          "tableFrom": "Product",
+          "tableTo": "Entity",
+          "columnsFrom": [
+            "id",
+            "shortcode"
+          ],
+          "columnsTo": [
+            "id",
+            "shortcode"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -13057,6 +13313,21 @@
           ],
           "columnsTo": [
             "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "ProductCategory_entity_identity_fk": {
+          "name": "ProductCategory_entity_identity_fk",
+          "tableFrom": "ProductCategory",
+          "tableTo": "Entity",
+          "columnsFrom": [
+            "id",
+            "shortcode"
+          ],
+          "columnsTo": [
+            "id",
+            "shortcode"
           ],
           "onDelete": "no action",
           "onUpdate": "no action"
@@ -14183,6 +14454,21 @@
           ],
           "onDelete": "no action",
           "onUpdate": "no action"
+        },
+        "Project_entity_identity_fk": {
+          "name": "Project_entity_identity_fk",
+          "tableFrom": "Project",
+          "tableTo": "Entity",
+          "columnsFrom": [
+            "id",
+            "shortcode"
+          ],
+          "columnsTo": [
+            "id",
+            "shortcode"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -14875,6 +15161,21 @@
           ],
           "columnsTo": [
             "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "Purchase_entity_identity_fk": {
+          "name": "Purchase_entity_identity_fk",
+          "tableFrom": "Purchase",
+          "tableTo": "Entity",
+          "columnsFrom": [
+            "id",
+            "shortcode"
+          ],
+          "columnsTo": [
+            "id",
+            "shortcode"
           ],
           "onDelete": "no action",
           "onUpdate": "no action"
@@ -15618,6 +15919,21 @@
           ],
           "columnsTo": [
             "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "Recipe_entity_identity_fk": {
+          "name": "Recipe_entity_identity_fk",
+          "tableFrom": "Recipe",
+          "tableTo": "Entity",
+          "columnsFrom": [
+            "id",
+            "shortcode"
+          ],
+          "columnsTo": [
+            "id",
+            "shortcode"
           ],
           "onDelete": "no action",
           "onUpdate": "no action"
@@ -17189,6 +17505,21 @@
           ],
           "onDelete": "no action",
           "onUpdate": "no action"
+        },
+        "Task_entity_identity_fk": {
+          "name": "Task_entity_identity_fk",
+          "tableFrom": "Task",
+          "tableTo": "Entity",
+          "columnsFrom": [
+            "id",
+            "shortcode"
+          ],
+          "columnsTo": [
+            "id",
+            "shortcode"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -17766,6 +18097,21 @@
           ],
           "onDelete": "no action",
           "onUpdate": "no action"
+        },
+        "Vendor_entity_identity_fk": {
+          "name": "Vendor_entity_identity_fk",
+          "tableFrom": "Vendor",
+          "tableTo": "Entity",
+          "columnsFrom": [
+            "id",
+            "shortcode"
+          ],
+          "columnsTo": [
+            "id",
+            "shortcode"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -17974,6 +18320,21 @@
           ],
           "onDelete": "no action",
           "onUpdate": "no action"
+        },
+        "VendorAccount_entity_identity_fk": {
+          "name": "VendorAccount_entity_identity_fk",
+          "tableFrom": "VendorAccount",
+          "tableTo": "Entity",
+          "columnsFrom": [
+            "id",
+            "shortcode"
+          ],
+          "columnsTo": [
+            "id",
+            "shortcode"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -18145,7 +18506,23 @@
           "with": {}
         }
       },
-      "foreignKeys": {},
+      "foreignKeys": {
+        "Wish_entity_identity_fk": {
+          "name": "Wish_entity_identity_fk",
+          "tableFrom": "Wish",
+          "tableTo": "Entity",
+          "columnsFrom": [
+            "id",
+            "shortcode"
+          ],
+          "columnsTo": [
+            "id",
+            "shortcode"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
@@ -18670,12 +19047,152 @@
           ],
           "onDelete": "no action",
           "onUpdate": "no action"
+        },
+        "Plant_entity_identity_fk": {
+          "name": "Plant_entity_identity_fk",
+          "tableFrom": "Plant",
+          "tableTo": "Entity",
+          "columnsFrom": [
+            "id",
+            "shortcode"
+          ],
+          "columnsTo": [
+            "id",
+            "shortcode"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.Entity": {
+      "name": "Entity",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "kind": {
+          "name": "kind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "shortcode": {
+          "name": "shortcode",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "deletedAt": {
+          "name": "deletedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "mergedIntoId": {
+          "name": "mergedIntoId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "Entity_shortcode_unique": {
+          "name": "Entity_shortcode_unique",
+          "columns": [
+            {
+              "expression": "shortcode",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "Entity_mergedIntoId_idx": {
+          "name": "Entity_mergedIntoId_idx",
+          "columns": [
+            {
+              "expression": "mergedIntoId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "Entity_mergedIntoId_Entity_id_fk": {
+          "name": "Entity_mergedIntoId_Entity_id_fk",
+          "tableFrom": "Entity",
+          "tableTo": "Entity",
+          "columnsFrom": [
+            "mergedIntoId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "Entity_id_shortcode_key": {
+          "name": "Entity_id_shortcode_key",
+          "nullsNotDistinct": false,
+          "columns": [
+            "id",
+            "shortcode"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "Entity_kind_check": {
+          "name": "Entity_kind_check",
+          "value": "\"Entity\".\"kind\" IN ('product', 'recipe', 'ingredient', 'cookbook', 'location', 'inventory', 'meal', 'ledgerParty', 'ledgerTransfer', 'project', 'task', 'vendor', 'purchase', 'financialAccount', 'financialTransaction', 'wish', 'expense', 'image', 'planting', 'gardenEntry', 'vendorAccount', 'productCategory', 'importRun', 'device', 'imageSighting', 'plant')"
+        },
+        "Entity_shortcode_prefix_check": {
+          "name": "Entity_shortcode_prefix_check",
+          "value": "\"Entity\".\"shortcode\" IS NULL OR CASE \"Entity\".\"kind\" WHEN 'product' THEN \"Entity\".\"shortcode\" LIKE 'PRD-%' WHEN 'recipe' THEN \"Entity\".\"shortcode\" LIKE 'RCP-%' WHEN 'ingredient' THEN \"Entity\".\"shortcode\" LIKE 'ING-%' WHEN 'cookbook' THEN \"Entity\".\"shortcode\" LIKE 'CKB-%' WHEN 'location' THEN \"Entity\".\"shortcode\" LIKE 'LOC-%' WHEN 'inventory' THEN \"Entity\".\"shortcode\" LIKE 'INV-%' WHEN 'meal' THEN \"Entity\".\"shortcode\" LIKE 'MEL-%' WHEN 'ledgerParty' THEN \"Entity\".\"shortcode\" LIKE 'LPY-%' WHEN 'ledgerTransfer' THEN \"Entity\".\"shortcode\" LIKE 'LTR-%' WHEN 'project' THEN \"Entity\".\"shortcode\" LIKE 'PRJ-%' WHEN 'task' THEN \"Entity\".\"shortcode\" LIKE 'TSK-%' WHEN 'vendor' THEN \"Entity\".\"shortcode\" LIKE 'VEN-%' WHEN 'purchase' THEN \"Entity\".\"shortcode\" LIKE 'PUR-%' WHEN 'financialAccount' THEN \"Entity\".\"shortcode\" LIKE 'FAC-%' WHEN 'financialTransaction' THEN \"Entity\".\"shortcode\" LIKE 'FTX-%' WHEN 'wish' THEN \"Entity\".\"shortcode\" LIKE 'WSH-%' WHEN 'expense' THEN \"Entity\".\"shortcode\" LIKE 'EXP-%' WHEN 'image' THEN \"Entity\".\"shortcode\" LIKE 'IMG-%' WHEN 'planting' THEN \"Entity\".\"shortcode\" LIKE 'PLT-%' WHEN 'gardenEntry' THEN \"Entity\".\"shortcode\" LIKE 'GDE-%' WHEN 'vendorAccount' THEN \"Entity\".\"shortcode\" LIKE 'VACCT-%' WHEN 'productCategory' THEN \"Entity\".\"shortcode\" LIKE 'CAT-%' WHEN 'importRun' THEN \"Entity\".\"shortcode\" LIKE 'RUN-%' WHEN 'device' THEN \"Entity\".\"shortcode\" LIKE 'DEV-%' WHEN 'imageSighting' THEN \"Entity\".\"shortcode\" LIKE 'IMS-%' WHEN 'plant' THEN \"Entity\".\"shortcode\" LIKE 'PLANT-%' ELSE false END"
+        },
+        "Entity_merge_not_self_check": {
+          "name": "Entity_merge_not_self_check",
+          "value": "\"Entity\".\"mergedIntoId\" IS NULL OR \"Entity\".\"mergedIntoId\" <> \"Entity\".\"id\""
+        },
+        "Entity_merged_is_deleted_check": {
+          "name": "Entity_merged_is_deleted_check",
+          "value": "\"Entity\".\"mergedIntoId\" IS NULL OR \"Entity\".\"deletedAt\" IS NOT NULL"
+        },
+        "Entity_live_has_shortcode_check": {
+          "name": "Entity_live_has_shortcode_check",
+          "value": "\"Entity\".\"deletedAt\" IS NOT NULL OR \"Entity\".\"shortcode\" IS NOT NULL"
+        }
+      },
       "isRLSEnabled": false
     }
   },

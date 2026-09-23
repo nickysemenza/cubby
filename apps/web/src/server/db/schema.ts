@@ -82,6 +82,7 @@ import {
   user,
   verification,
 } from "./auth.schema";
+import { entityIdentityFk } from "./entity-identity-schema";
 import {
   generatedCookbookColumns,
   generatedDeviceColumns,
@@ -217,6 +218,7 @@ export const recipe = pgTable(
   }),
   (table) => [
     shortcodeUnique("Recipe", table.shortcode),
+    entityIdentityFk("Recipe", table),
     // Non-cookbook recipes keep a globally-unique name. EPUB-imported (Book) and
     // Notion-synced recipes are excluded here — they're keyed by (name, book) and
     // by Notion page id respectively — so the same title can appear across a
@@ -273,6 +275,7 @@ export const cookbook = pgTable(
   }),
   (table) => [
     shortcodeUnique("Cookbook", table.shortcode),
+    entityIdentityFk("Cookbook", table),
     uniqueIndex("Cookbook_name_key")
       .on(table.name)
       .where(sql`${table.deletedAt} IS NULL`),
@@ -317,6 +320,7 @@ export const ingredient = pgTable(
   generatedIngredientColumns({ recipe: (): AnyPgColumn => recipe.id }),
   (table) => [
     shortcodeUnique("Ingredient", table.shortcode),
+    entityIdentityFk("Ingredient", table),
     // Case-insensitive uniqueness must match the lower(name) matcher to prevent concurrent duplicate ingredients.
     uniqueIndex("Ingredient_name_key")
       .on(sql`lower(${table.name})`)
@@ -372,6 +376,7 @@ export const recipeSectionIngredient = pgTable(
 
 export const meal = pgTable("Meal", generatedMealColumns(), (table) => [
   shortcodeUnique("Meal", table.shortcode),
+  entityIdentityFk("Meal", table),
   index("Meal_date_active_idx")
     .on(table.date)
     .where(sql`${table.deletedAt} IS NULL`),
@@ -502,6 +507,10 @@ export const mealFoodEntry = pgTable(
   ],
 );
 
+export {
+  entityIdentity,
+  installEntityIdentityTriggers,
+} from "./entity-identity-schema";
 export { productCategory } from "./product-category-schema";
 
 export const product = pgTable(
@@ -513,6 +522,7 @@ export const product = pgTable(
   }),
   (table) => [
     shortcodeUnique("Product", table.shortcode),
+    entityIdentityFk("Product", table),
     index("Product_categoryId_idx").on(table.categoryId),
     uniqueIndex("Product_name_manufacturer_key")
       .on(table.name, table.manufacturer)
@@ -691,6 +701,7 @@ export const location = pgTable(
   }),
   (table) => [
     shortcodeUnique("Location", table.shortcode),
+    entityIdentityFk("Location", table),
     uniqueIndex("Location_name_key")
       .on(sql`lower(${table.name})`)
       .where(sql`${table.deletedAt} IS NULL`),
@@ -889,6 +900,7 @@ export const inventoryEntry = pgTable(
   }),
   (table) => [
     shortcodeUnique("InventoryEntry", table.shortcode),
+    entityIdentityFk("InventoryEntry", table),
     // Placement is part of the key so a spare on the shelf and one wired into
     // the wall can coexist in the same room — the normal state, not a duplicate.
     // Strictly more permissive than the old two-column form, so the CREATE can
@@ -926,6 +938,7 @@ export const ledgerParty = pgTable(
   },
   (table) => [
     shortcodeUnique("LedgerParty", table.shortcode),
+    entityIdentityFk("LedgerParty", table),
     index("LedgerParty_kind_idx").on(table.kind),
     uniqueIndex("LedgerParty_household_singleton_key")
       .on(table.kind)
@@ -951,6 +964,7 @@ export const image = pgTable(
   }),
   (table) => [
     shortcodeUnique("Image", table.shortcode),
+    entityIdentityFk("Image", table),
     check(
       "Image_perceptualHash_format_check",
       sql`${table.perceptualHash} IS NULL OR ${table.perceptualHash} ~ '^[0-9a-f]{16}$'`,
@@ -1032,6 +1046,7 @@ export const plant = pgTable(
   }),
   (table) => [
     shortcodeUnique("Plant", table.shortcode),
+    entityIdentityFk("Plant", table),
     index("Plant_ingredientId_idx").on(table.ingredientId),
     index("Plant_gardenGuideKey_idx").on(table.gardenGuideKey),
   ],
@@ -1047,6 +1062,7 @@ export const planting = pgTable(
   }),
   (table) => [
     shortcodeUnique("Planting", table.shortcode),
+    entityIdentityFk("Planting", table),
     index("Planting_plantId_idx").on(table.plantId),
     index("Planting_sourceProductId_idx").on(table.sourceProductId),
     index("Planting_locationId_idx").on(table.locationId),
@@ -1062,6 +1078,7 @@ export const gardenEntry = pgTable(
   }),
   (table) => [
     shortcodeUnique("GardenEntry", table.shortcode),
+    entityIdentityFk("GardenEntry", table),
     index("GardenEntry_locationId_idx").on(table.locationId),
     index("GardenEntry_observedOn_idx").on(table.observedOn),
   ],
@@ -1198,6 +1215,7 @@ export const project = pgTable(
   generatedProjectColumns({ project: (): AnyPgColumn => project.id }),
   (table) => [
     shortcodeUnique("Project", table.shortcode),
+    entityIdentityFk("Project", table),
     uniqueIndex("Project_notionPageId_key")
       .on(table.notionPageId)
       .where(sql`${table.deletedAt} IS NULL`),
@@ -1268,6 +1286,7 @@ export const projectToolUsage = pgTable(
 
 export const wish = pgTable("Wish", generatedWishColumns(), (table) => [
   shortcodeUnique("Wish", table.shortcode),
+  entityIdentityFk("Wish", table),
   index("Wish_createdAt_idx").on(table.createdAt),
   index("Wish_acquiredAt_idx").on(table.acquiredAt),
 ]);
@@ -1305,6 +1324,7 @@ export const task = pgTable(
   }),
   (table) => [
     shortcodeUnique("Task", table.shortcode),
+    entityIdentityFk("Task", table),
     uniqueIndex("Task_notionPageId_key")
       .on(table.notionPageId)
       .where(sql`${table.deletedAt} IS NULL`),
@@ -1354,6 +1374,7 @@ export const vendor = pgTable(
   generatedVendorColumns({ image: (): AnyPgColumn => image.id }),
   (table) => [
     shortcodeUnique("Vendor", table.shortcode),
+    entityIdentityFk("Vendor", table),
     uniqueIndex("Vendor_name_key")
       .on(table.name)
       .where(sql`${table.deletedAt} IS NULL`),
@@ -1377,6 +1398,7 @@ export const financialAccount = pgTable(
   }),
   (table) => [
     shortcodeUnique("FinancialAccount", table.shortcode),
+    entityIdentityFk("FinancialAccount", table),
     index("FinancialAccount_name_idx").on(table.name),
     index("FinancialAccount_provisional_idx").on(table.provisional),
     index("FinancialAccount_ledgerPartyId_idx").on(table.ledgerPartyId),
@@ -1403,6 +1425,7 @@ export const vendorAccount = pgTable(
   }),
   (table) => [
     shortcodeUnique("VendorAccount", table.shortcode),
+    entityIdentityFk("VendorAccount", table),
     uniqueIndex("VendorAccount_vendor_member_key")
       .on(table.vendorId, table.ledgerPartyId)
       .where(sql`${table.deletedAt} IS NULL`),
@@ -1428,6 +1451,7 @@ export const device = pgTable(
   }),
   (table) => [
     shortcodeUnique("Device", table.shortcode),
+    entityIdentityFk("Device", table),
     uniqueIndex("Device_installationId_key")
       .on(table.installationId)
       .where(sql`${table.deletedAt} IS NULL`),
@@ -1449,6 +1473,7 @@ export const imageSighting = pgTable(
   }),
   (table) => [
     shortcodeUnique("ImageSighting", table.shortcode),
+    entityIdentityFk("ImageSighting", table),
     uniqueIndex("ImageSighting_image_party_asset_key")
       .on(table.imageId, table.ledgerPartyId, table.assetKey)
       .where(sql`${table.deletedAt} IS NULL`),
@@ -1486,6 +1511,7 @@ export const purchase = pgTable(
   },
   (table) => [
     shortcodeUnique("Purchase", table.shortcode),
+    entityIdentityFk("Purchase", table),
     // One order = one purchase. PARTIAL on `orderId IS NOT NULL`, which is what
     // lets the many `(vendorId, null)` purchase events coexist. This index is
     // also what makes `findOrCreatePurchase` unambiguous
@@ -1609,6 +1635,7 @@ export const importRun = pgTable(
   },
   (table) => [
     shortcodeUnique("ImportRun", table.shortcode),
+    entityIdentityFk("ImportRun", table),
     index("ImportRun_party_started_idx").on(
       table.ledgerPartyId,
       table.startedAt.desc(),
@@ -2428,6 +2455,7 @@ export const financialTransaction = pgTable(
   }),
   (table) => [
     shortcodeUnique("FinancialTransaction", table.shortcode),
+    entityIdentityFk("FinancialTransaction", table),
     index("FinancialTransaction_accountId_idx").on(table.accountId),
     index("FinancialTransaction_ledgerTransferId_idx").on(
       table.ledgerTransferId,
@@ -2518,6 +2546,7 @@ export const ledgerTransfer = pgTable(
   }),
   (table) => [
     shortcodeUnique("LedgerTransfer", table.shortcode),
+    entityIdentityFk("LedgerTransfer", table),
     index("LedgerTransfer_fromPartyId_idx").on(table.fromPartyId),
     index("LedgerTransfer_toPartyId_idx").on(table.toPartyId),
     index("LedgerTransfer_date_idx").on(table.date),
@@ -2707,6 +2736,7 @@ export const expense = pgTable(
   }),
   (table) => [
     shortcodeUnique("Expense", table.shortcode),
+    entityIdentityFk("Expense", table),
     // Apply explicitly in production: drizzle-kit push does not diff CHECKs.
     check(
       "Expense_date_cost_check",

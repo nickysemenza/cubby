@@ -10,6 +10,7 @@ import { drizzle as drizzleNodePostgres } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 import * as schema from "../../src/server/db/schema";
 import { ensureDbExtensions } from "../../tooling/db-extensions";
+import { installEntityIdentityTriggers } from "../../src/server/db/entity-identity-schema";
 import { toPushSchemaDatabase } from "../../tooling/drizzle-kit-interop";
 
 export interface E2EDatabase {
@@ -33,6 +34,8 @@ async function pushE2ESchema(db: SchemaDatabase): Promise<void> {
     "public",
   ]);
   await apply();
+  // drizzle-kit push does not manage triggers (ADR 0006).
+  await installEntityIdentityTriggers(db);
 }
 
 async function seedHome(db: SchemaDatabase): Promise<void> {
