@@ -207,7 +207,7 @@ describe("durable entity identity", () => {
       `was merged into ${keeper.id}, which was deleted`,
     );
     await expect(getProduct(keeper.id)).rejects.toThrow(
-      `${keeper.id} was deleted`,
+      `${keeper.id} — it was deleted`,
     );
   });
 });

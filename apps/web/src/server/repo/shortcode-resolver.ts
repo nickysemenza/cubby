@@ -156,13 +156,17 @@ export async function resolveAllOrThrow<E extends ShortcodeEntity>(
   const resolved = await resolveLiveShortcodes(db, codes, entity);
   const missing = codes.filter((code) => !resolved.has(code));
   if (missing.length > 0) {
+    const codes = uniq(missing);
     const explained = await Promise.all(
-      uniq(missing).map((code) => describeUnresolvableCode(db, entity, code)),
+      codes.map((code) => describeUnresolvableCode(db, entity, code)),
     );
+    const unexplained = codes.filter((_, index) => explained[index] === null);
     throw createAppError(
       ENTITY_NOT_FOUND_REASON[entity],
       [
-        `${ENTITY_LABEL[entity]} not found: ${uniq(missing).join(", ")}`,
+        ...(unexplained.length > 0
+          ? [`${ENTITY_LABEL[entity]} not found: ${unexplained.join(", ")}`]
+          : []),
         ...explained.filter((line) => line !== null),
       ].join(" "),
     );

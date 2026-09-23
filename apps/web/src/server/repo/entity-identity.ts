@@ -137,14 +137,14 @@ export async function describeUnresolvableCode(
 ): Promise<string | null> {
   const resolved = await resolveEntityIdentity(db, code);
   if (resolved.state === "missing" || resolved.kind !== entity) return null;
-  const label = ENTITY_LABEL[entity];
+  const notFound = `${ENTITY_LABEL[entity]} not found: ${code}`;
   switch (resolved.state) {
     case "redirected":
       return resolved.canonicalDeletedAt === null
-        ? `${label} ${resolved.requested} was merged into ${resolved.canonicalShortcode}; use ${resolved.canonicalShortcode}.`
-        : `${label} ${resolved.requested} was merged into ${resolved.canonicalShortcode}, which was deleted on ${formatDate(resolved.canonicalDeletedAt)}.`;
+        ? `${notFound} — it was merged into ${resolved.canonicalShortcode}; use ${resolved.canonicalShortcode}.`
+        : `${notFound} — it was merged into ${resolved.canonicalShortcode}, which was deleted on ${formatDate(resolved.canonicalDeletedAt)}.`;
     case "deleted":
-      return `${label} ${resolved.shortcode} was deleted on ${formatDate(resolved.deletedAt)}.`;
+      return `${notFound} — it was deleted on ${formatDate(resolved.deletedAt)}.`;
     case "live":
       return null;
   }
