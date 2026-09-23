@@ -77,6 +77,20 @@ export const getPurchaseAgentQueue = ():
   return cfEnv?.PURCHASE_AGENT_QUEUE as PurchaseAgentQueueProducer | undefined;
 };
 
+/** Worker secrets are not part of the generated Wrangler Env type. */
+export const getGmailOAuthCredentials = () => {
+  if (!cfEnv) return undefined;
+  // SAFETY: Wrangler secrets are runtime Env fields absent from generated binding types.
+  const google = cfEnv as Env & {
+    GOOGLE_CLIENT_ID?: string;
+    GOOGLE_CLIENT_SECRET?: string;
+  };
+  return {
+    clientId: google.GOOGLE_CLIENT_ID,
+    clientSecret: google.GOOGLE_CLIENT_SECRET,
+  };
+};
+
 /** Origin-keyed durable calendar publishing state, absent in plain Vite. */
 export const getCalendarFeedNamespace = (): Env["CALENDAR_FEED"] | undefined =>
   cfEnv?.CALENDAR_FEED;

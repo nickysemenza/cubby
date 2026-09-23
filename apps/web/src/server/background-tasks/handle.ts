@@ -137,5 +137,17 @@ export async function handleBackgroundTask(
     }
     case "image-metadata.extract":
       return ports.extractImageMetadata(db, task.imageId);
+    case "maintenance.recover": {
+      const { recoverMissedWork } =
+        await import("~/server/services/catch-up.service");
+      await recoverMissedWork(db);
+      return "succeeded";
+    }
+    case "maintenance.purchase-discovery": {
+      const { discoverPurchases } =
+        await import("~/server/services/catch-up.service");
+      await discoverPurchases(db);
+      return "succeeded";
+    }
   }
 }

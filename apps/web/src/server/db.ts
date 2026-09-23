@@ -3,8 +3,6 @@ import { AsyncLocalStorage } from "node:async_hooks";
 import { drizzle as drizzleNodePostgres } from "drizzle-orm/node-postgres";
 import pg from "pg";
 
-import { env } from "~/env";
-
 import {
   acquireTracedConnection,
   type RequestDbRole,
@@ -123,10 +121,14 @@ const globalForDatabase: typeof globalThis & GlobalDatabaseRuntime = globalThis;
 
 let moduleRuntime: DatabaseRuntime | undefined;
 if (!isCFWorkers) {
+  const databaseUrl = process.env.E2E_DATABASE_URL || process.env.DATABASE_URL;
+  if (!databaseUrl) {
+    throw new Error("DATABASE_URL is required outside Cloudflare Workers");
+  }
   moduleRuntime =
     globalForDatabase[MODULE_DATABASE_RUNTIME] ??
-    createPoolRuntime(env.DATABASE_URL, 25, "strong");
-  if (env.NODE_ENV !== "production") {
+    createPoolRuntime(databaseUrl, 25, "strong");
+  if (process.env.NODE_ENV !== "production") {
     globalForDatabase[MODULE_DATABASE_RUNTIME] = moduleRuntime;
   }
 }

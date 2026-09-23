@@ -9,6 +9,7 @@ import {
   countAwaitingWork,
   settleAwaitingWork,
 } from "~/server/services/awaiting-work.service";
+import { requestCatchUp } from "~/server/services/catch-up.service";
 import { repairImageDimensions } from "~/server/services/image-dimension-repair.service";
 import { backfillImageMetadata } from "~/server/services/image-metadata-backfill.service";
 import { classifyImageProvenance } from "~/server/services/image-provenance-classify.service";
@@ -17,6 +18,7 @@ import { classifyImageProvenance } from "~/server/services/image-provenance-clas
 export const maintenanceHandlers = implementOperationDomain(
   maintenanceContract,
   {
+    requestCatchUp: (context) => requestCatchUp(context.db),
     backfillImageProcessing: (context, input) =>
       backfillImageProcessing(context.db, input),
     imageProcessing: (context) => imageProcessingMaintenanceSummary(context.db),

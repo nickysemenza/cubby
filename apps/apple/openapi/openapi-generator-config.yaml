@@ -80,6 +80,7 @@ filter:
     - location.bulkUpdateParent
     - location.ensureGlobalUnknown
     - location.makeTree
+    - maintenance.requestCatchUp
     - meal.getNutrition
     - photoImport.commit
     - photoImport.createRun

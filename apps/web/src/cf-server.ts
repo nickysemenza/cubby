@@ -427,117 +427,52 @@ const handler = {
     env: Env,
   ) {
     setCfEnv(env);
-    // Durable image rows repair queue loss and expired device leases independently
-    // of Gmail credentials. Pausing preserves queued work; cleanup remains safe.
-    if (controller.cron === "*/5 * * * *") {
-      await withRequestDbClient(env.HYPERDRIVE.connectionString, async () => {
-        const [
-          { db },
-          { repairImageProcessingWork },
-          { expireOfflineImportRuns, expireStaleImportRuns },
-        ] = await Promise.all([
-          import("./server/db"),
-          import("./server/repo/image-processing-maintenance"),
-          import("./server/purchase-import/run-service"),
-        ]);
-        await repairImageProcessingWork(db);
-        // Purchase runs have no execution engine of their own to time them
-        // out: a lost settle event or a stalled coordinator leaves the row
-        // `running` forever and blocks the account's next sync.
-        const [offline, stale] = await Promise.all([
-          expireOfflineImportRuns(db),
-          expireStaleImportRuns(db, env.PURCHASE_IMPORT),
-        ]);
-        if (offline.expired > 0 || stale.expired > 0)
-          console.log("[scheduled] Purchase runs expired", { offline, stale });
-        for (const failure of stale.failures)
-          Sentry.captureMessage(
-            `Stale purchase run could not be moved to review: ${failure.error}`,
-            "warning",
-          );
-      });
-      return;
-    }
-    if (controller.cron === "0 * * * *") {
-      // SAFETY: Worker secrets are runtime bindings intentionally absent from
-      // generated Wrangler types; both values are checked before use.
-      const google = env as Env & {
-        GOOGLE_CLIENT_ID?: string;
-        GOOGLE_CLIENT_SECRET?: string;
-      };
-      await withRequestDbClient(env.HYPERDRIVE.connectionString, async () => {
-        const [
-          { db },
-          { runGmailHourlySync },
-          { createBetterAuthGmailAccountStore },
-          { createGmailProviderFactory },
-          { listGmailSyncTargets },
-          { discoverImportHunts, dispatchImportHunts },
-          { processOrderMails },
-        ] = await Promise.all([
-          import("./server/db"),
-          import("./server/purchase-import/gmail/hourly"),
-          import("./server/purchase-import/gmail/persistence"),
-          import("./server/purchase-import/gmail/tokens"),
-          import("./server/purchase-import/gmail/targets"),
-          import("./server/purchase-import/hunts"),
-          import("./server/purchase-import/gmail/process"),
-        ]);
-        // Hunts come from statement charges, not mail: they run whether or
-        // not Gmail is configured.
-        const huntsCreated = await discoverImportHunts(db);
-        console.log("[scheduled] Purchase hunts created", { huntsCreated });
-        if (!google.GOOGLE_CLIENT_ID || !google.GOOGLE_CLIENT_SECRET) {
-          console.log(
-            "[scheduled] Gmail discovery skipped: Google OAuth is not configured",
-          );
-          const huntsDispatched = await dispatchImportHunts(
-            db,
-            env.PURCHASE_AGENT_QUEUE,
-          );
-          console.log("[scheduled] Purchase hunts dispatched", {
-            huntsDispatched,
-          });
-          return;
-        }
-        const store = createBetterAuthGmailAccountStore(db);
-        const summary = await runGmailHourlySync({
-          db,
-          listTargets: () => listGmailSyncTargets(db),
-          providerForUser: createGmailProviderFactory({
-            store,
-            clientId: google.GOOGLE_CLIENT_ID!,
-            clientSecret: google.GOOGLE_CLIENT_SECRET!,
-          }),
-          includeAttachmentData: true,
-          processMessages: processOrderMails,
-        });
-        console.log("[scheduled] Gmail purchase discovery", summary);
-        const huntsDispatched = await dispatchImportHunts(
-          db,
-          env.PURCHASE_AGENT_QUEUE,
-        );
-        console.log("[scheduled] Purchase hunts dispatched", {
-          huntsDispatched,
-        });
-        for (const failure of summary.failures) {
-          Sentry.captureMessage(
-            `Gmail purchase discovery failed for ${failure.ledgerPartyId}: ${failure.error}`,
-            "warning",
-          );
-        }
-      });
-      return;
-    }
-    // The free plan includes exactly one cron monitor, so only the daily job
-    // (the sole remaining fallthrough below) is monitored; the `*/5 * * * *`
-    // and `0 * * * *` branches above return early and are unmonitored.
+    if (controller.cron !== "0 12 * * *")
+      throw new Error(`Unexpected cron trigger: ${controller.cron}`);
     await Sentry.withMonitor(
       "daily-maintenance",
       async () => {
         await withTrace(
           "cf.scheduled",
           async () => {
+            try {
+              await withRequestDbClient(
+                env.HYPERDRIVE.connectionString,
+                async () => {
+                  const [
+                    { db },
+                    { claimCatchUp, discoverPurchases, recoverMissedWork },
+                  ] = await Promise.all([
+                    import("./server/db"),
+                    import("./server/services/catch-up.service"),
+                  ]);
+                  const claimedAt = new Date();
+                  if (await claimCatchUp(db, claimedAt)) {
+                    const jobs = await Promise.allSettled([
+                      withTrace(
+                        "cf.scheduled.job",
+                        () => recoverMissedWork(db),
+                        {
+                          "cubby.scheduled.job": "recover-missed-work",
+                        },
+                      ),
+                      withTrace(
+                        "cf.scheduled.job",
+                        () => discoverPurchases(db),
+                        {
+                          "cubby.scheduled.job": "purchase-discovery",
+                        },
+                      ),
+                    ]);
+                    for (const job of jobs)
+                      if (job.status === "rejected")
+                        Sentry.captureException(job.reason);
+                  }
+                },
+              );
+            } catch (error) {
+              Sentry.captureException(error);
+            }
             try {
               await withTrace(
                 "cf.scheduled.job",
@@ -558,46 +493,50 @@ const handler = {
             // and reports when they are non-zero, which is the evidence that a
             // wakeup was lost — the cue to look, not a sweep that would hide it.
             // (The vector-reconcile job below IS a repair — see its comment.)
-            await withRequestDbClient(
-              env.HYPERDRIVE.connectionString,
-              async () => {
-                const [{ db }, { countAwaitingWork }] = await Promise.all([
-                  import("./server/db"),
-                  import("./server/services/awaiting-work.service"),
-                ]);
-                await withTrace(
-                  "cf.scheduled.job",
-                  async (span) => {
-                    try {
-                      const awaiting = await countAwaitingWork(db);
-                      span.setAttributes({
-                        "cubby.awaiting.stale_recipe_totals":
-                          awaiting.staleRecipeTotals,
-                        "cubby.awaiting.unembedded_entities":
-                          awaiting.unembeddedEntities,
-                        "cubby.awaiting.pending_uploads":
-                          awaiting.pendingUploads,
-                      });
-                      console.log("[scheduled] awaiting work", awaiting);
-                      if (
-                        awaiting.staleRecipeTotals > 0 ||
-                        awaiting.unembeddedEntities > 0 ||
-                        awaiting.pendingUploads > 0
-                      ) {
-                        Sentry.captureMessage(
-                          `Derived work is waiting: ${awaiting.staleRecipeTotals} stale recipe totals, ${awaiting.unembeddedEntities} unembedded entities, ${awaiting.pendingUploads} pending uploads`,
-                          "warning",
-                        );
+            try {
+              await withRequestDbClient(
+                env.HYPERDRIVE.connectionString,
+                async () => {
+                  const [{ db }, { countAwaitingWork }] = await Promise.all([
+                    import("./server/db"),
+                    import("./server/services/awaiting-work.service"),
+                  ]);
+                  await withTrace(
+                    "cf.scheduled.job",
+                    async (span) => {
+                      try {
+                        const awaiting = await countAwaitingWork(db);
+                        span.setAttributes({
+                          "cubby.awaiting.stale_recipe_totals":
+                            awaiting.staleRecipeTotals,
+                          "cubby.awaiting.unembedded_entities":
+                            awaiting.unembeddedEntities,
+                          "cubby.awaiting.pending_uploads":
+                            awaiting.pendingUploads,
+                        });
+                        console.log("[scheduled] awaiting work", awaiting);
+                        if (
+                          awaiting.staleRecipeTotals > 0 ||
+                          awaiting.unembeddedEntities > 0 ||
+                          awaiting.pendingUploads > 0
+                        ) {
+                          Sentry.captureMessage(
+                            `Derived work is waiting: ${awaiting.staleRecipeTotals} stale recipe totals, ${awaiting.unembeddedEntities} unembedded entities, ${awaiting.pendingUploads} pending uploads`,
+                            "warning",
+                          );
+                        }
+                      } catch (error) {
+                        span.setError("Awaiting-work assertion failed");
+                        Sentry.captureException(error);
                       }
-                    } catch (error) {
-                      span.setError("Awaiting-work assertion failed");
-                      Sentry.captureException(error);
-                    }
-                  },
-                  { "cubby.scheduled.job": "awaiting-work-assertion" },
-                );
-              },
-            );
+                    },
+                    { "cubby.scheduled.job": "awaiting-work-assertion" },
+                  );
+                },
+              );
+            } catch (error) {
+              Sentry.captureException(error);
+            }
             // This job IS a repair, unlike the assert-only sibling above:
             // Vectorize cannot join the Postgres transaction that soft-deletes
             // `SearchDocument`/`EntityEmbedding` (`softDeleteEntitySearchArtifactsTx`),
@@ -664,7 +603,6 @@ const handler = {
             "cubby.workload": "scheduled",
             // The trigger's identity lives in attributes rather than the span name:
             // a hardcoded `cf.scheduled.problem-counts` would silently mislabel the
-            // second cron the day one is added, since this handler receives every
             // trigger on the worker.
             "cloudflare.cron": controller.cron,
           },
@@ -1093,7 +1031,7 @@ export default Sentry.withSentry(
     sendDefaultPii: false,
     release: `cubby@${__GIT_COMMIT__}`,
     // Covers queue/cron events without request URLs. Deployed previews retain
-    // production reporting (SENTRY_ENVIRONMENT var stays "production" there;
+    // production reporting (NODE_ENV stays "production" there;
     // only `preview:cf`'s local `wrangler dev` overrides it to "development")
     // because they access the production database.
     environment: resolveWorkerSentryEnvironment(env),

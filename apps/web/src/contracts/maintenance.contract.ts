@@ -22,6 +22,11 @@ import { defineContract, mutation, query } from "~/contracts/define";
  * run history: the counts are the truth, and they shrink as the queue lands.
  */
 export const maintenanceContract = defineContract("maintenance", {
+  requestCatchUp: mutation({
+    input: z.undefined(),
+    output: z.object({ status: z.enum(["queued", "recent"]) }),
+    native: "Request background maintenance when the Apple app opens",
+  }),
   backfillImageProcessing: mutation({
     input: imageProcessingBatchInput,
     output: imageProcessingBatchOutput,

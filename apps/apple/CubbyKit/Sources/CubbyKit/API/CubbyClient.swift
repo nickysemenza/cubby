@@ -830,6 +830,10 @@ public actor CubbyClient {
         try await perform { try await api.problems_getCounts().ok.body.json }
     }
 
+    public func requestCatchUp() async throws {
+        _ = try await perform { try await api.maintenance_requestCatchUp().ok.body.json }
+    }
+
     /// The meals planned for one household calendar day.
     public func meals(on date: Date) async throws -> [MealListItem] {
         let day = HouseholdDay.string(for: date)

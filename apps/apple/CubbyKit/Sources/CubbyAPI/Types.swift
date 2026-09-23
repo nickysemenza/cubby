@@ -298,6 +298,9 @@ public protocol APIProtocol: Sendable {
     /// - Remark: HTTP `PATCH /api/v1/locations/{id}`.
     /// - Remark: Generated from `#/paths//api/v1/locations/{id}/patch(resources.location.update)`.
     func resources_location_update(_ input: Operations.Resources_location_update.Input) async throws -> Operations.Resources_location_update.Output
+    /// - Remark: HTTP `POST /api/v1/maintenance/requestCatchUp`.
+    /// - Remark: Generated from `#/paths//api/v1/maintenance/requestCatchUp/post(maintenance.requestCatchUp)`.
+    func maintenance_requestCatchUp(_ input: Operations.Maintenance_requestCatchUp.Input) async throws -> Operations.Maintenance_requestCatchUp.Output
     /// - Remark: HTTP `POST /api/v1/meal/getNutrition`.
     /// - Remark: Generated from `#/paths//api/v1/meal/getNutrition/post(meal.getNutrition)`.
     func meal_getNutrition(_ input: Operations.Meal_getNutrition.Input) async throws -> Operations.Meal_getNutrition.Output
@@ -1513,6 +1516,17 @@ extension APIProtocol {
     ) async throws -> Operations.Resources_location_update.Output {
         try await resources_location_update(Operations.Resources_location_update.Input(
             path: path,
+            headers: headers,
+            body: body
+        ))
+    }
+    /// - Remark: HTTP `POST /api/v1/maintenance/requestCatchUp`.
+    /// - Remark: Generated from `#/paths//api/v1/maintenance/requestCatchUp/post(maintenance.requestCatchUp)`.
+    public func maintenance_requestCatchUp(
+        headers: Operations.Maintenance_requestCatchUp.Input.Headers = .init(),
+        body: Operations.Maintenance_requestCatchUp.Input.Body? = nil
+    ) async throws -> Operations.Maintenance_requestCatchUp.Output {
+        try await maintenance_requestCatchUp(Operations.Maintenance_requestCatchUp.Input(
             headers: headers,
             body: body
         ))

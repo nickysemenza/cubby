@@ -3,6 +3,7 @@ import SwiftUI
 
 struct RootView: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.scenePhase) private var scenePhase
     @State private var appliedStashedLaunchLink = false
     @AppStorage("developerOverlays") private var developerOverlays = false
 
@@ -36,6 +37,9 @@ struct RootView: View {
             .id(ObjectIdentifier(model.client))
             .task(id: model.host) {
                 await model.spotlight.refreshIfNeeded(client: model.client, host: model.host)
+            }
+            .task(id: scenePhase) {
+                if scenePhase == .active { await model.requestCatchUpIfNeeded() }
             }
             #if os(iOS)
                 .task { applyStashedLaunchLinkIfNeeded() }
