@@ -1041,13 +1041,11 @@ export default Sentry.withSentry(
     beforeSendTransaction: scrubSentryEvent,
     // Drop known-noise messages before send — free-plan quota hygiene.
     ignoreErrors: SENTRY_IGNORED_ERRORS,
-    // Mirror the client's prod 10% trace sampling (router.tsx). Head-based
-    // sampling decisions propagate client→server via the `sentry-trace` header,
-    // so matching the rate keeps front-to-back traces connected without the
-    // per-request overhead of full tracing — the same cost/signal call the
-    // client already made for this single-user app. Errors are captured
-    // regardless of the trace sample rate.
-    tracesSampleRate: 0.1,
+    // Cloudflare native tracing already exports server spans. A sampled
+    // browser `sentry-trace` header overrides `tracesSampleRate: 0` in Sentry,
+    // so use a sampler to decline even inherited performance traces. Error
+    // capture remains enabled.
+    tracesSampler: () => 0,
   }),
   handler,
 );
