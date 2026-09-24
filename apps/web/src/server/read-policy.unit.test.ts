@@ -50,6 +50,18 @@ describe("shared read policy", () => {
     }
   });
 
+  it("reads the bounded Home summaries without a freshness RPC", () => {
+    for (const operation of [
+      "expense.monthlySummary",
+      "location.valuationSummary",
+      "meal.getNutrition",
+      "meal.upcomingSummary",
+      "task.todayBriefing",
+    ] as const) {
+      expect(readPolicyFor(operation, "query")).toBe("strong");
+    }
+  });
+
   it("makes every mutation strong regardless of its operation family", () => {
     expect(readPolicyFor("entity.mutate", "mutation")).toBe("strong");
     expect(readPolicyFor("calendar.rotateFeed", "mutation")).toBe("strong");

@@ -5,9 +5,9 @@ import type { Database } from "~/server/db";
 export type ReadPolicy = "context" | "strong";
 
 /**
- * Queries that cannot tolerate even the short bounded-stale window.
- * Everything else uses the request-selected adapter; mutations and workflow
- * streams are made strong independently of this registry.
+ * Queries that require authoritative data or benefit from skipping the
+ * freshness RPC before a bounded database read. Everything else uses the
+ * request-selected adapter; mutations and workflow streams are strong.
  */
 export const STRONG_QUERY_OPERATIONS = [
   // AI and externally hydrated food reads own authoritative database helpers.
@@ -26,6 +26,13 @@ export const STRONG_QUERY_OPERATIONS = [
   "dashboard.counts",
   // Audit activity reads live and bypasses the freshness RPC before PostgreSQL.
   "auditLog.list",
+  // Home summaries are bounded, single-round-trip reads. Asking the freshness
+  // Durable Object first adds another network hop before these short queries.
+  "expense.monthlySummary",
+  "location.valuationSummary",
+  "meal.getNutrition",
+  "meal.upcomingSummary",
+  "task.todayBriefing",
   "calendar.inspectFeed",
   "oauth.countOrphanedClients",
   "oauth.listConnectedApps",
