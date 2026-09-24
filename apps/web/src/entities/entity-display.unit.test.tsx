@@ -27,6 +27,7 @@ import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import {
   createEntityDisplayColumns,
+  editableFieldOverrides,
   EntityBasicInfo,
   entitySectionFields,
   renderDetailFieldValue,
@@ -58,6 +59,27 @@ function renderRowCell<TRecord extends object, TValue extends CellData>(
 }
 
 describe("declared entity displays", () => {
+  it("links shortcodes in editable product notes beside a working edit control", async () => {
+    const overrides = editableFieldOverrides(
+      "product",
+      { id: "PRD-4K7M", notes: "Neck label: IMG-4S9Q" },
+      ["notes"],
+      vi.fn().mockResolvedValue(undefined),
+    );
+    const notes = overrides.notes;
+    if (!notes) throw new Error("Product notes override is missing");
+    const harness = createBrowserTestHarness();
+    render(<>{notes().value}</>, { wrapper: harness.wrapper });
+
+    const link = screen.getByRole("link", { name: "IMG-4S9Q" });
+    expect(link).toHaveAttribute("href", "/images/IMG-4S9Q");
+    expect(link.closest("button")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Edit value" }));
+    expect(await screen.findByRole("textbox")).toHaveValue(
+      "Neck label: IMG-4S9Q",
+    );
+    harness.dispose();
+  });
   it("formats purchase expense totals as money despite floating point residue", () => {
     const field = entityFieldModels.purchase.fields.find(
       (field) => field.key === "expenseTotal",

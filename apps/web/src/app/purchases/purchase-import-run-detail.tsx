@@ -25,6 +25,7 @@ import { z } from "zod";
 import { usePhotoRunReview } from "~/app/import-runs/photo-group-review";
 import { PhotoImportRunView } from "~/app/import-runs/photo-run-detail";
 import { importRunHref } from "~/app/purchases/purchase-import-links";
+import { ShortcodeProse } from "~/components/shortcode-prose";
 import { Badge, type BadgeVariant } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { StatusText } from "~/components/ui/status-text";
@@ -783,9 +784,11 @@ function RunProgress({ run }: { run: ImportRunDetail }) {
       <div>
         <h2 className="font-medium">Run progress</h2>
         <p className="text-sm text-muted-foreground">
-          {run.latestProgress
-            ? `${run.latestProgress.phase}${run.latestProgress.detail ? ` · ${run.latestProgress.detail}` : ""}`
-            : "No progress updates have been recorded."}
+          {run.latestProgress ? (
+            <ShortcodeProse>{`${run.latestProgress.phase}${run.latestProgress.detail ? ` · ${run.latestProgress.detail}` : ""}`}</ShortcodeProse>
+          ) : (
+            "No progress updates have been recorded."
+          )}
         </p>
         {run.progress.length ? (
           <p className="mt-1 text-xs text-muted-foreground">
@@ -843,9 +846,7 @@ function RunProgress({ run }: { run: ImportRunDetail }) {
                 {new Date(progress.createdAt).toISOString()}
               </time>
               <p className="text-sm">
-                {progress.phase}
-                {progress.currentItem ? ` · ${progress.currentItem}` : ""}
-                {progress.detail ? ` · ${progress.detail}` : ""}
+                <ShortcodeProse>{`${progress.phase}${progress.currentItem ? ` · ${progress.currentItem}` : ""}${progress.detail ? ` · ${progress.detail}` : ""}`}</ShortcodeProse>
               </p>
             </div>
           ))}
@@ -1092,7 +1093,7 @@ function FluePart({ part }: { part: FlueConversationPart }) {
             : "text-sm whitespace-pre-wrap"
         }
       >
-        {part.text}
+        <ShortcodeProse>{part.text}</ShortcodeProse>
       </p>
     );
   }
@@ -1691,7 +1692,9 @@ function ImportRunContent({ run }: { run: ImportRunDetail }) {
                     <Badge variant="outline">auto-applied</Badge>
                   ) : null}
                 </div>
-                <p>{finding.summary}</p>
+                <p>
+                  <ShortcodeProse>{finding.summary}</ShortcodeProse>
+                </p>
                 <p className="font-mono text-xs text-muted-foreground">
                   {formatMoment(finding.createdAt)}
                   {finding.probability == null

@@ -3,6 +3,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, type ReactNode } from "react";
 
 import { Stack } from "~/components/layout";
+import { ShortcodeProse } from "~/components/shortcode-prose";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Progress } from "~/components/ui/progress";
@@ -174,10 +175,14 @@ export function PhotoImportRunView({ run }: { run: ImportRunDetail }) {
         ) : null}
         {run.status === "running" && run.dispatch?.eventId ? (
           <StatusText tone="muted">
-            {run.latestProgress?.awaitingApproval
-              ? "Review each proposed item below. Products and Inventory are created when you approve a group."
-              : (run.latestProgress?.detail ??
-                "The agent is reading the uploaded photos and preparing item groups.")}
+            {run.latestProgress?.awaitingApproval ? (
+              "Review each proposed item below. Products and Inventory are created when you approve a group."
+            ) : (
+              <ShortcodeProse>
+                {run.latestProgress?.detail ??
+                  "The agent is reading the uploaded photos and preparing item groups."}
+              </ShortcodeProse>
+            )}
           </StatusText>
         ) : null}
       </PhotoRunProgress>

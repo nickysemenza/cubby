@@ -53,6 +53,7 @@ import {
   renderScalarValue,
   type ScalarDisplayValue,
 } from "~/components/common/scalar-value";
+import { ShortcodeProse } from "~/components/shortcode-prose";
 import { Checkbox } from "~/components/ui/checkbox";
 import { EntityFilterLink } from "~/components/ui/entity-filter-link";
 import { NoneValue } from "~/components/ui/none-value";
@@ -72,6 +73,32 @@ import { listRendererColumns } from "./list-field-renderers";
 
 type DisplayField = EntityFieldModel["fields"][number];
 type DisplaySurface = "list" | "detail";
+const proseFieldKeys = new Set([
+  "notes",
+  "description",
+  "aiDescription",
+  "summary",
+  "detail",
+  "reason",
+  "comment",
+  "message",
+]);
+const isProseField = (key: string, control: DisplayField["control"]) =>
+  control?.kind === "textarea" || proseFieldKeys.has(key);
+
+function renderProseValue(value: ScalarDisplayValue, surface: DisplaySurface) {
+  if (value.kind !== "text") return renderScalarValue(value, surface);
+  if (!value.label) return <NoneValue />;
+  return surface === "list" ? (
+    <span className="block truncate" title={value.label}>
+      <ShortcodeProse>{value.label}</ShortcodeProse>
+    </span>
+  ) : (
+    <span className="break-words whitespace-pre-wrap">
+      <ShortcodeProse>{value.label}</ShortcodeProse>
+    </span>
+  );
+}
 const explainedRecordSchema = z.object({ id: z.string() });
 const entityDisplayFields = (entity: Entity, surface: DisplaySurface) =>
   entityFieldModels[entity].fields.filter((field) => field.display[surface]);
@@ -344,6 +371,8 @@ export function renderDetailFieldValue<TRecord extends object>(
       </span>
     );
   }
+  if (isProseField(field.key, field.control) && field.display.format === null)
+    return renderProseValue(readScalarField(entity, record, field), "detail");
   return renderFormattedScalar(
     field.display.format,
     readScalarField(entity, record, field),
@@ -640,9 +669,11 @@ function renderEditableField<TRecord extends object>(
     case "text":
     case "textarea": {
       const text = value === null ? null : String(value);
+      const prose = isProseField(key, control);
       return (
         <EditableCell
           value={text}
+          trigger={prose ? "pencil-wrap" : "wrap"}
           config={
             control.kind === "textarea"
               ? { type: "text", multiline: true, rows: 4 }
@@ -656,6 +687,8 @@ function renderEditableField<TRecord extends object>(
               ) : (
                 <NoneValue />
               )
+            ) : v && prose ? (
+              <ShortcodeProse>{v}</ShortcodeProse>
             ) : (
               (v ?? <NoneValue />)
             )
@@ -1110,6 +1143,7 @@ export function createEntityDisplayColumns<TRecord extends object>(
         editable &&
         (control?.kind === "text" || control?.kind === "textarea")
       ) {
+        const prose = isProseField(field.key, control);
         const cellData = textCellData<TRecord>(
           "text",
           (row) => copyScalarField(entity, row, field),
@@ -1133,13 +1167,20 @@ export function createEntityDisplayColumns<TRecord extends object>(
             cell: ({ row }) => (
               <EditableCell
                 value={copyScalarField(entity, row.original, field)}
+                trigger={prose ? "pencil" : "wrap"}
                 onSave={(value) => save(row.original, value)}
                 clipboard={specFromCellData(cellData, row.original)}
                 config={{
                   type: "text",
                   multiline: control.kind === "textarea",
                 }}
-                renderValue={(value) => value ?? <NoneValue />}
+                renderValue={(value) =>
+                  value && prose ? (
+                    <ShortcodeProse>{value}</ShortcodeProse>
+                  ) : (
+                    (value ?? <NoneValue />)
+                  )
+                }
               />
             ),
           }),
@@ -1375,9 +1416,10 @@ export function createEntityDisplayColumns<TRecord extends object>(
             }),
             cell: ({ row }) => {
               const value = readScalarField(entity, row.original, field);
-              const rendered = renderFormattedScalar(format, value) ?? (
-                <NoneValue />
-              );
+              const rendered = (isProseField(field.key, field.control) &&
+              format === null
+                ? renderProseValue(value, "list")
+                : renderFormattedScalar(format, value)) ?? <NoneValue />;
               const recordId = explainedRecordSchema.safeParse(row.original);
               if (
                 countFilter === null ||

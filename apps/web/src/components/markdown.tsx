@@ -1,10 +1,12 @@
-import type { ComponentPropsWithoutRef } from "react";
+import { Children, type ComponentPropsWithoutRef, type ReactNode } from "react";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { z } from "zod";
 
 import { selfLinkLabel } from "~/lib/link-label";
 import { cn } from "~/lib/utils";
+
+import { ShortcodeProse } from "./shortcode-prose";
 
 /**
  * Markdown renderer for agent answers (and any short LLM-authored text).
@@ -31,9 +33,17 @@ function clean<T extends keyof React.JSX.IntrinsicElements>({
 const markdownAnchorClass =
   "text-primary underline underline-offset-2 hover:text-primary/80";
 
+const linkifyTextChildren = (children: ReactNode) =>
+  Children.map(children, (child) => {
+    const text = z.string().safeParse(child);
+    return text.success ? <ShortcodeProse>{text.data}</ShortcodeProse> : child;
+  });
+
 const components = {
   p: (props: ElementProps<"p">) => (
-    <p className="mb-2 leading-relaxed last:mb-0" {...clean(props)} />
+    <p className="mb-2 leading-relaxed last:mb-0" {...clean(props)}>
+      {linkifyTextChildren(props.children)}
+    </p>
   ),
   ul: (props: ElementProps<"ul">) => (
     <ul
@@ -48,13 +58,22 @@ const components = {
     />
   ),
   li: (props: ElementProps<"li">) => (
-    <li className="leading-relaxed" {...clean(props)} />
+    <li className="leading-relaxed" {...clean(props)}>
+      {linkifyTextChildren(props.children)}
+    </li>
   ),
   strong: (props: ElementProps<"strong">) => (
-    <strong className="font-semibold" {...clean(props)} />
+    <strong className="font-semibold" {...clean(props)}>
+      {linkifyTextChildren(props.children)}
+    </strong>
   ),
   em: (props: ElementProps<"em">) => (
-    <em className="italic" {...clean(props)} />
+    <em className="italic" {...clean(props)}>
+      {linkifyTextChildren(props.children)}
+    </em>
+  ),
+  del: (props: ElementProps<"del">) => (
+    <del {...clean(props)}>{linkifyTextChildren(props.children)}</del>
   ),
   a: (props: ElementProps<"a">) => {
     const { href, children } = props;
@@ -104,7 +123,7 @@ const components = {
     const { children, ...rest } = clean(props);
     return (
       <h1 className="mb-1 font-heading text-base font-semibold" {...rest}>
-        {children}
+        {linkifyTextChildren(children)}
       </h1>
     );
   },
@@ -112,7 +131,7 @@ const components = {
     const { children, ...rest } = clean(props);
     return (
       <h2 className="mb-1 font-heading text-base font-semibold" {...rest}>
-        {children}
+        {linkifyTextChildren(children)}
       </h2>
     );
   },
@@ -120,7 +139,7 @@ const components = {
     const { children, ...rest } = clean(props);
     return (
       <h3 className="mb-1 font-heading text-sm font-semibold" {...rest}>
-        {children}
+        {linkifyTextChildren(children)}
       </h3>
     );
   },
@@ -133,16 +152,22 @@ const components = {
     <th
       className="border-b border-border px-2 py-1 font-medium"
       {...clean(props)}
-    />
+    >
+      {linkifyTextChildren(props.children)}
+    </th>
   ),
   td: (props: ElementProps<"td">) => (
-    <td className="border-b border-border/50 px-2 py-1" {...clean(props)} />
+    <td className="border-b border-border/50 px-2 py-1" {...clean(props)}>
+      {linkifyTextChildren(props.children)}
+    </td>
   ),
   blockquote: (props: ElementProps<"blockquote">) => (
     <blockquote
       className="mb-2 border-l-2 border-border pl-2 text-muted-foreground last:mb-0"
       {...clean(props)}
-    />
+    >
+      {linkifyTextChildren(props.children)}
+    </blockquote>
   ),
 };
 
