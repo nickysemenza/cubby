@@ -387,9 +387,8 @@ reached `Web checks` and completed the workflow in **4:04** from creation.
 Desktop job walls were **3:32 + 3:38**, PostgreSQL **3:45**, Apple checks
 **3:35**, and Apple package tests **1:49**. The sum of non-skipped CI job
 walls was **23:45**. The two browser jobs and PostgreSQL each queued **2s**;
-the `Web checks` aggregate also queued **2s**. These are **two of five**
-natural PRs needed for a post-change median; the roughly three-minute
-target remains unproven.
+the `Web checks` aggregate also queued **2s**. These were the first two
+natural product samples; the five-run comparison follows below.
 
 [#1328](https://github.com/nickysemenza/cubby/pull/1328) removed idle
 pre-navigation steps and unconditional success screenshots in browser tests.
@@ -437,7 +436,39 @@ its [CI run](https://github.com/nickysemenza/cubby/actions/runs/35958536951)
 passed on attempt **2**: the first attempt's Node job failed and only failed
 jobs were rerun. Its creation-to-gate duration includes the retry delay and
 cannot be compared with single-attempt green runs, so it is excluded from the
-natural cohort. The comparable sample count remains **two of five**.
+natural cohort.
+
+Five routine product PRs have now passed all required checks on a first CI
+attempt at heads containing #1321. The table measures from CI run creation to
+the `Web checks` completion; job times are started-to-completed wall time.
+Queue is job-created-to-started for desktop shards 1/2 and PostgreSQL, then
+for the `Web checks` aggregate. #1338 and #1339 were still open when measured;
+replace their rows if either head changes.
+
+| PR / successful exact-head run                                                     | Web checks | Desktop 1 + 2 | PostgreSQL | Queue: desktop 1/2, PG; Web | Apple checks / package | Non-skipped CI job wall |
+| ---------------------------------------------------------------------------------- | ---------: | ------------: | ---------: | --------------------------: | ---------------------: | ----------------------: |
+| [#1320](https://github.com/nickysemenza/cubby/actions/runs/35951187116) `57a30d59` |   **4:43** |   2:51 + 3:46 |       3:48 |         ~2s / ~2s, ~2s; 38s |            5:13 / 3:34 |                   26:03 |
+| [#1327](https://github.com/nickysemenza/cubby/actions/runs/35954520331) `bb97bc2f` |   **4:04** |   3:32 + 3:38 |       3:45 |             2s / 2s, 2s; 2s |            3:35 / 1:49 |                   23:45 |
+| [#1337](https://github.com/nickysemenza/cubby/actions/runs/35960518665) `8ec3da9c` |   **4:08** |   3:51 + 3:37 |       3:48 |             3s / 2s, 2s; 2s |            2:33 / 2:20 |                   23:39 |
+| [#1338](https://github.com/nickysemenza/cubby/actions/runs/35966494182) `cd9c2a7a` |   **4:47** |   3:15 + 3:58 |       3:43 |             2s / 2s, 2s; 3s |            3:36 / 2:11 |                   23:43 |
+| [#1339](https://github.com/nickysemenza/cubby/actions/runs/35969279504) `3549daf7` |   **4:05** |   3:40 + 3:31 |       3:36 |             4s / 2s, 2s; 2s |            4:37 / 4:27 |                   26:55 |
+
+The five `Web checks` times have a **4:08 median**, **1:26 (25.7%)** below
+the original ten-run **5:34** median and **35s** below #1314's **4:43**
+controlled result. The #1321 same-base **3:53** result was **15s faster**
+than this observed median. Summed non-skipped job wall was **124:05** across
+the five runs, with a **23:45** per-run median. Browser and PostgreSQL runner
+queues were only **2–4s**; the extra **38s** aggregate wait in #1320 occurred
+after its dependencies completed. The roughly three-minute target remains
+**1:08** away at the observed median.
+
+The Apple check had an exact DerivedData cache hit in #1337. #1338 and #1339
+restored a prefix cache after native source changes; #1339 also changed the
+generated client, compiled its package sources, and took **5:00** from CI
+creation to its last required check (Apple). These cold native changes are
+separate from the `Web checks` comparison. The cohort shows no repeatable
+runner-queue or stable-input Apple cache miss to fix; desktop execution and
+PostgreSQL remain the measured warm critical path.
 
 In the HTTP/2 comparison, desktop runner queue time was **14–15s** in both
 runs. Total desktop runner time rose from **9:49** to **10:14**, so the unchanged
