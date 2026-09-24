@@ -9,7 +9,8 @@
  */
 
 import { isDisplayableImageFile } from "@cubby/schemas/image";
-import { Camera, SkipForward } from "lucide-react";
+import { CameraIcon as Camera } from "@phosphor-icons/react/dist/csr/Camera";
+import { SkipForwardIcon as SkipForward } from "@phosphor-icons/react/dist/csr/SkipForward";
 import { useRef } from "react";
 
 import { LocationIcon } from "~/app/_components/locations/location-icons";

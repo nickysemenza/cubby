@@ -1,9 +1,10 @@
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type { InventoryBulkOperationItem } from "@cubby/schemas/inventory";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { PlusIcon as Plus } from "@phosphor-icons/react/dist/csr/Plus";
+import { XIcon as X } from "@phosphor-icons/react/dist/csr/X";
 import { skipToken, useMutation, useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
-import { Plus, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useFieldArray, useForm } from "react-hook-form";
 import { toast } from "sonner";

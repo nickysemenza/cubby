@@ -1,4 +1,5 @@
-import { FileUp, Upload } from "lucide-react";
+import { FileArrowUpIcon as FileUp } from "@phosphor-icons/react/dist/csr/FileArrowUp";
+import { UploadIcon as Upload } from "@phosphor-icons/react/dist/csr/Upload";
 import { useCallback, useState } from "react";
 import { type Accept, type FileRejection, useDropzone } from "react-dropzone";
 

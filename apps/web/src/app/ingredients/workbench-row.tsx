@@ -1,8 +1,8 @@
 import type { Confidence } from "@cubby/schemas/ai";
 import type { EnrichmentRow } from "@cubby/schemas/ingredient";
 import type { FoodSummaryWithLinkedProducts } from "@cubby/schemas/usda";
+import { CheckIcon as Check } from "@phosphor-icons/react/dist/csr/Check";
 import { useQuery } from "@tanstack/react-query";
-import { Check } from "lucide-react";
 
 import { UsdaFoodSearchField } from "~/app/_components/combobox/with-usda-food-search";
 import { RecipeUsagesTable } from "~/app/_components/recipe/recipe-usages-table";

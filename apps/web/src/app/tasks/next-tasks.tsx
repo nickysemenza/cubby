@@ -4,8 +4,8 @@ import type {
   BlockedTaskOut,
   TaskFilters,
 } from "@cubby/schemas/project";
+import { ListChecksIcon as ListTodo } from "@phosphor-icons/react/dist/csr/ListChecks";
 import { useQuery } from "@tanstack/react-query";
-import { ListTodo } from "lucide-react";
 import { useMemo } from "react";
 import { match } from "ts-pattern";
 

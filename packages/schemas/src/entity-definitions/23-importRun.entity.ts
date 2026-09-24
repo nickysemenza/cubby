@@ -54,7 +54,7 @@ export default defineEntity({
         "Runs appear when a vendor account syncs, a purchase is validated or photos are uploaded for inventory.",
     },
     icons: {
-      lucide: "Bot",
+      phosphor: "Robot",
       sfSymbol: "arrow.triangle.2.circlepath",
       emoji: "🤖",
     },

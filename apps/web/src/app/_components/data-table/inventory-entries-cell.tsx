@@ -5,7 +5,7 @@ import {
   parseShortcodeFor,
 } from "@cubby/schemas/identifiers";
 import type { LocationType } from "@cubby/schemas/location";
-import { Pencil } from "lucide-react";
+import { PencilIcon as Pencil } from "@phosphor-icons/react/dist/csr/Pencil";
 import type { ReactNode } from "react";
 
 import { Stack } from "~/components/layout";

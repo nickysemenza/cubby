@@ -57,10 +57,6 @@ const resolveR2PublicUrl = (command: "build" | "serve", mode: string) =>
 
 const clientCodeSplittingGroups = [
   {
-    name: "icons",
-    test: /[\\/]lucide-react[\\/]/,
-  },
-  {
     name: "es-toolkit",
     test: /[\\/]es-toolkit[\\/]/,
     entriesAware: true,
@@ -220,16 +216,14 @@ export default defineConfig(async ({ command, mode }) => {
     resolve: { tsconfigPaths: true },
     // Consolidate the CLIENT build's request fan-out. Default Rolldown splitting
     // gives each route its own chunk (correct, keep) but also hoists every shared
-    // leaf module into its own chunk — so a single `import { Clock } from
-    // "lucide-react"` used by 2+ routes became a standalone ~1KB chunk. Lucide
-    // alone fanned out into ~68 of these, i.e. dozens of HTTP requests for a few
-    // KB. `experimentalMinChunkSize` does NOT fix this (it won't merge a chunk
+    // leaf module into its own chunk. Phosphor's per-icon imports stay on the
+    // default graph: grouping the whole library made a 612KB shared chunk,
+    // while the default split added only a handful of requests in the build.
+    // `experimentalMinChunkSize` does NOT fix this (it won't merge a chunk
     // shared across async boundaries), so we coalesce selected packages with
     // Rolldown's native code-splitting groups instead.
     //
     // Only these bounded groups are consolidated, and deliberately:
-    //   - Icons are tiny and ubiquitous. Grouping them trades one moderately
-    //     sized shared request for dozens of small leaf-module requests.
     //   - es-toolkit, date-fns, TanStack Router/Query, Floating UI, React runtime,
     //     hook-form, Radix UI, and small runtime utilities are bounded shared
     //     families; entry-aware groups keep route-specific subsets local.

@@ -1,5 +1,5 @@
+import { CaretDownIcon as ChevronDown } from "@phosphor-icons/react/dist/csr/CaretDown";
 import { Link } from "@tanstack/react-router";
-import { ChevronDown } from "lucide-react";
 
 import {
   DropdownMenu,
@@ -30,7 +30,10 @@ export const NavDropdown = ({ group }: { group: NavGroup }) => {
         data-status={isGroupActive ? "active" : undefined}
         title={label}
       >
-        <Icon className="size-3.5" />
+        <Icon
+          className="size-3.5"
+          weight={isGroupActive ? "bold" : "regular"}
+        />
         <span className="hidden lg:inline">{label}</span>
         <ChevronDown className="size-3" />
       </DropdownMenuTrigger>
@@ -45,7 +48,7 @@ export const NavDropdown = ({ group }: { group: NavGroup }) => {
               }
               className={cn("gap-2", item.to === activeTo && "bg-accent")}
             >
-              <ItemIcon />
+              <ItemIcon weight={item.to === activeTo ? "bold" : "regular"} />
               {item.label}
             </DropdownMenuItem>
           );

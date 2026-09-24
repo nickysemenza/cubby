@@ -7,10 +7,12 @@ import {
   mealTypeSchema,
   type MealType,
 } from "@cubby/schemas/meal-classification";
+import { CaretLeftIcon as ChevronLeft } from "@phosphor-icons/react/dist/csr/CaretLeft";
+import { CaretRightIcon as ChevronRight } from "@phosphor-icons/react/dist/csr/CaretRight";
+import { PlusIcon as Plus } from "@phosphor-icons/react/dist/csr/Plus";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { addDays, format, parseISO } from "date-fns";
-import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
 import { useState } from "react";
 
 import { StaticPicker } from "~/app/_components/combobox/static-picker";

@@ -2,9 +2,12 @@ import {
   formatCollectionLabel,
   normalizeCollectionSlug,
 } from "@cubby/shared/collection-tag";
+import { ArrowRightIcon as ArrowRight } from "@phosphor-icons/react/dist/csr/ArrowRight";
+import { GridNineIcon as Grid3X3 } from "@phosphor-icons/react/dist/csr/GridNine";
+import { PlusIcon as Plus } from "@phosphor-icons/react/dist/csr/Plus";
+import { SparkleIcon as Sparkles } from "@phosphor-icons/react/dist/csr/Sparkle";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
-import { ArrowRight, Grid3X3, Plus, Sparkles } from "lucide-react";
 import { useId, useState } from "react";
 
 import { Stack } from "~/components/layout";

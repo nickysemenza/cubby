@@ -1,6 +1,6 @@
 import type { ExpenseMonthlyAggregate } from "@cubby/schemas/project";
 import { ResponsiveBar } from "@nivo/bar";
-import { CalendarDays } from "lucide-react";
+import { CalendarDotsIcon as CalendarDays } from "@phosphor-icons/react/dist/csr/CalendarDots";
 import { useMemo } from "react";
 
 import { ChartEmpty } from "~/app/projects/charts/chart-empty";

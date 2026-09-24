@@ -1,6 +1,6 @@
 import type { Entity } from "@cubby/schemas/entity";
+import { ArrowUpRightIcon as ArrowUpRight } from "@phosphor-icons/react/dist/csr/ArrowUpRight";
 import { Link } from "@tanstack/react-router";
-import { ArrowUpRight } from "lucide-react";
 import { type ReactNode, useMemo } from "react";
 import { match } from "ts-pattern";
 

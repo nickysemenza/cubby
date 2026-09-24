@@ -1,4 +1,5 @@
-import { Copy, ExternalLink } from "lucide-react";
+import { ArrowSquareOutIcon as ExternalLink } from "@phosphor-icons/react/dist/csr/ArrowSquareOut";
+import { CopyIcon as Copy } from "@phosphor-icons/react/dist/csr/Copy";
 import { useState } from "react";
 import { toast } from "sonner";
 

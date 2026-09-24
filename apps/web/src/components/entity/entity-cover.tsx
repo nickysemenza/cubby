@@ -3,7 +3,7 @@ import {
   preferredImageUrl,
   type ImageRepresentations,
 } from "@cubby/schemas/image-summary";
-import { ImageOff } from "lucide-react";
+import { ImageBrokenIcon as ImageOff } from "@phosphor-icons/react/dist/csr/ImageBroken";
 import type { ReactNode } from "react";
 
 import { Image } from "~/components/ui/image";

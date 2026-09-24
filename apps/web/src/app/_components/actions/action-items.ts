@@ -3,14 +3,12 @@ import {
   browserRoutedEntities,
   type BrowserRoutedEntity,
 } from "@cubby/schemas/entity-manifest";
-import type { LucideIcon } from "lucide-react";
-import {
-  AlertTriangle,
-  ArrowRightLeft,
-  Plus,
-  ShoppingCart,
-  Sparkles,
-} from "lucide-react";
+import { ArrowsLeftRightIcon as ArrowRightLeft } from "@phosphor-icons/react/dist/csr/ArrowsLeftRight";
+import { PlusIcon as Plus } from "@phosphor-icons/react/dist/csr/Plus";
+import { ShoppingCartIcon as ShoppingCart } from "@phosphor-icons/react/dist/csr/ShoppingCart";
+import { SparkleIcon as Sparkles } from "@phosphor-icons/react/dist/csr/Sparkle";
+import { WarningIcon as AlertTriangle } from "@phosphor-icons/react/dist/csr/Warning";
+import type { Icon } from "@phosphor-icons/react/lib";
 
 import { entities, isBrowserRoutedEntity } from "~/entities/entities";
 
@@ -61,7 +59,7 @@ export interface ActionItem {
    * page), so their actions deep-link with `{ create: true }` instead.
    */
   search?: EntityCreateSearch;
-  icon: LucideIcon;
+  icon: Icon;
   keywords?: string[];
   surfaces: ActionSurface[];
 }
@@ -93,7 +91,7 @@ function entityCreate(
     name: `Add ${def.label}`,
     path: newRoute ?? routes.list,
     search: dialog ? { create: true } : undefined,
-    icon: def.lucideIcon,
+    icon: def.phosphorIcon,
     keywords: ["create", "new", def.label.toLocaleLowerCase()],
     surfaces,
   };

@@ -5,8 +5,8 @@ import {
 } from "@nivo/bar";
 import { ResponsiveLine } from "@nivo/line";
 import { ResponsivePie } from "@nivo/pie";
+import type { Icon } from "@phosphor-icons/react/lib";
 import { sumBy } from "es-toolkit";
-import type { LucideIcon } from "lucide-react";
 import type { ComponentProps, ReactNode } from "react";
 import { useMemo } from "react";
 
@@ -97,7 +97,7 @@ export interface RankedBarBreakdownProps<T extends BarDatum> {
   onClick?: (row: T) => void;
   /** Screen-reader summary for a chart whose SVG labels are not enough context. */
   summary?: string;
-  emptyIcon?: LucideIcon;
+  emptyIcon?: Icon;
   emptyTitle: string;
 }
 
@@ -233,7 +233,7 @@ export interface CategoryDonutProps {
   onSelect?: (id: string) => void;
   /** Extra content appended under the value/percentage line in the tooltip. */
   renderTooltipExtra?: (id: string) => ReactNode;
-  emptyIcon: LucideIcon;
+  emptyIcon: Icon;
   emptyTitle: string;
 }
 

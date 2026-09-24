@@ -4,8 +4,8 @@ import type {
   TaskStatus,
 } from "@cubby/schemas/project";
 import { taskStatusValues } from "@cubby/schemas/project";
+import { ListChecksIcon as ListChecks } from "@phosphor-icons/react/dist/csr/ListChecks";
 import { Link } from "@tanstack/react-router";
-import { ListChecks } from "lucide-react";
 import { useMemo } from "react";
 
 import { NoneValue } from "~/components/ui/none-value";

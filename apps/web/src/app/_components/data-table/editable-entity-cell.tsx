@@ -1,6 +1,7 @@
 "use client";
 
-import { Pencil, X } from "lucide-react";
+import { PencilIcon as Pencil } from "@phosphor-icons/react/dist/csr/Pencil";
+import { XIcon as X } from "@phosphor-icons/react/dist/csr/X";
 import type React from "react";
 import { useCallback, useState } from "react";
 
@@ -241,6 +242,7 @@ function EditableEntityEditor<TId extends string>({
           variant="ghost"
           onClick={onCancel}
           disabled={isPending}
+          aria-label="Cancel editing"
         >
           <X className="size-3.5" />
         </Button>

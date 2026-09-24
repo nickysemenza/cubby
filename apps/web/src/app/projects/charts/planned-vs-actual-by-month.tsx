@@ -1,5 +1,5 @@
 import type { ProjectPortfolioAnalyticsOut } from "@cubby/schemas/project";
-import { CalendarClock } from "lucide-react";
+import { CalendarCheckIcon as CalendarClock } from "@phosphor-icons/react/dist/csr/CalendarCheck";
 import { useMemo } from "react";
 
 import { monthLabel } from "../shared";

@@ -30,7 +30,7 @@ export default defineEntity({
         "Connect a member to a vendor login before running browser imports.",
       actionLabel: "Add vendor account",
     },
-    icons: { lucide: "KeyRound", sfSymbol: "person.badge.key", emoji: "🔑" },
+    icons: { phosphor: "Key", sfSymbol: "person.badge.key", emoji: "🔑" },
   },
   model: {
     fields: [

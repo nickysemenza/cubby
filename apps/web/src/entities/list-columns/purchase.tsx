@@ -1,6 +1,6 @@
 import type { PurchaseFilters, PurchaseOut } from "@cubby/schemas/purchase";
+import { FileTextIcon as FileText } from "@phosphor-icons/react/dist/csr/FileText";
 import { sumBy } from "es-toolkit";
-import { FileText } from "lucide-react";
 import { useMemo } from "react";
 
 import {

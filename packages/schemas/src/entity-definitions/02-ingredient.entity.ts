@@ -21,7 +21,7 @@ export default defineEntity({
         "Build a list of ingredients to connect your recipes with what's in stock.",
       actionLabel: "Add Ingredient",
     },
-    icons: { lucide: "Carrot", sfSymbol: "leaf", emoji: "🥕" },
+    icons: { phosphor: "Carrot", sfSymbol: "leaf", emoji: "🥕" },
     detail: {
       omitRelations: {
         eaters:

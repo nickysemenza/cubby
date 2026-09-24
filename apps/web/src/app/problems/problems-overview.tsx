@@ -1,7 +1,9 @@
 import type { AllProblems } from "@cubby/schemas/problems";
+import { CaretRightIcon as ChevronRight } from "@phosphor-icons/react/dist/csr/CaretRight";
+import { CheckCircleIcon as CheckCircle } from "@phosphor-icons/react/dist/csr/CheckCircle";
+import { WarningIcon as AlertTriangle } from "@phosphor-icons/react/dist/csr/Warning";
 import { useQuery } from "@tanstack/react-query";
 import { uniq } from "es-toolkit";
-import { AlertTriangle, CheckCircle, ChevronRight } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
 
 import { ErrorDisplay } from "~/components/feedback/error-display";

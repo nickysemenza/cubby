@@ -1,4 +1,7 @@
-import { ExternalLink, MoreVertical, Plus, Trash } from "lucide-react";
+import { ArrowSquareOutIcon as ExternalLink } from "@phosphor-icons/react/dist/csr/ArrowSquareOut";
+import { DotsThreeVerticalIcon as MoreVertical } from "@phosphor-icons/react/dist/csr/DotsThreeVertical";
+import { PlusIcon as Plus } from "@phosphor-icons/react/dist/csr/Plus";
+import { TrashIcon as Trash } from "@phosphor-icons/react/dist/csr/Trash";
 import type { FC, KeyboardEvent } from "react";
 import { useState } from "react";
 import { Controller, type UseFormReturn, useFieldArray } from "react-hook-form";

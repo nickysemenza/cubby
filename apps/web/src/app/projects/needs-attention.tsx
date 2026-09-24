@@ -2,17 +2,15 @@ import type {
   ProjectAttentionItem,
   ProjectAttentionType,
 } from "@cubby/schemas/project";
+import { CalendarCheckIcon as CalendarClock } from "@phosphor-icons/react/dist/csr/CalendarCheck";
+import { ClockIcon as Clock } from "@phosphor-icons/react/dist/csr/Clock";
+import { CurrencyDollarIcon as DollarSign } from "@phosphor-icons/react/dist/csr/CurrencyDollar";
+import { ProhibitIcon as Ban } from "@phosphor-icons/react/dist/csr/Prohibit";
+import { RulerIcon as Ruler } from "@phosphor-icons/react/dist/csr/Ruler";
+import { TagIcon as Tag } from "@phosphor-icons/react/dist/csr/Tag";
+import { WarningIcon as AlertTriangle } from "@phosphor-icons/react/dist/csr/Warning";
+import type { Icon } from "@phosphor-icons/react/lib";
 import { Link } from "@tanstack/react-router";
-import {
-  AlertTriangle,
-  Ban,
-  CalendarClock,
-  Clock,
-  DollarSign,
-  type LucideIcon,
-  Ruler,
-  Tag,
-} from "lucide-react";
 
 import { Row, Stack } from "~/components/layout";
 import { formatCurrency } from "~/lib/utils";
@@ -29,7 +27,7 @@ import { formatDate } from "./project-formatting";
  */
 const ATTENTION_GROUPS: Array<{
   type: ProjectAttentionType;
-  icon: LucideIcon;
+  icon: Icon;
   iconClassName: string;
   title: (count: number) => string;
 }> = [

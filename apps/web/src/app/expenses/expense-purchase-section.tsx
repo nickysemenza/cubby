@@ -1,9 +1,9 @@
 import type { ExpenseOut } from "@cubby/schemas/project";
+import { FunnelIcon as ListFilter } from "@phosphor-icons/react/dist/csr/Funnel";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { format } from "date-fns";
 import { sumBy } from "es-toolkit";
-import { ListFilter } from "lucide-react";
 import { useMemo, type FC } from "react";
 
 import {

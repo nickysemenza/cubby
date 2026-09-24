@@ -9,8 +9,13 @@ import { isGalleryEntity } from "@cubby/schemas/entity-manifest";
 import { entityAttachmentRead } from "@cubby/schemas/entity-read-media";
 import { entitySummary } from "@cubby/schemas/entity-summary";
 import { imageOut, partitionEntityFiles } from "@cubby/schemas/image";
+import { ClockIcon as Clock } from "@phosphor-icons/react/dist/csr/Clock";
+import { FileTextIcon as FileText } from "@phosphor-icons/react/dist/csr/FileText";
+import { ImageIcon } from "@phosphor-icons/react/dist/csr/Image";
+import { InfoIcon as Info } from "@phosphor-icons/react/dist/csr/Info";
+import { LinkIcon as Link2 } from "@phosphor-icons/react/dist/csr/Link";
+import { PuzzlePieceIcon as Puzzle } from "@phosphor-icons/react/dist/csr/PuzzlePiece";
 import { Link } from "@tanstack/react-router";
-import { Clock, FileText, ImageIcon, Info, Link2, Puzzle } from "lucide-react";
 import { Suspense, useMemo, useState } from "react";
 import { z } from "zod";
 

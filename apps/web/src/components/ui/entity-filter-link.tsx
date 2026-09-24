@@ -1,5 +1,5 @@
 import { Link, type LinkProps } from "@tanstack/react-router";
-import { ListFilter } from "lucide-react";
+import { FunnelIcon as ListFilter } from "@phosphor-icons/react/dist/csr/Funnel";
 import type { ReactNode } from "react";
 import {
   Tooltip,

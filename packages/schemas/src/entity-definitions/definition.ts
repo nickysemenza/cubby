@@ -806,8 +806,8 @@ const metadataSchemas = () => {
         .strict(),
       icons: z
         .object({
-          /** A `lucide-react` export name; the browser registry resolves it. */
-          lucide: nonEmptyString(),
+          /** A `@phosphor-icons/react` export name; the browser registry resolves it. */
+          phosphor: nonEmptyString(),
           /** An SF Symbol name for the native app. */
           sfSymbol: nonEmptyString(),
           /** Text fallback where an SF Symbol can't render: CLI output, notifications, share text. */

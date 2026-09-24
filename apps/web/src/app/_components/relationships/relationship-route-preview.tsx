@@ -5,8 +5,8 @@ import {
   type RelatedViewDefinition,
   relatedViewsFor,
 } from "@cubby/schemas/related-view";
+import { ArrowRightIcon as ArrowRight } from "@phosphor-icons/react/dist/csr/ArrowRight";
 import { skipToken, useQuery } from "@tanstack/react-query";
-import { ArrowRight } from "lucide-react";
 import { type ReactNode, useMemo } from "react";
 import { z } from "zod";
 

@@ -1,4 +1,4 @@
-import { Plus } from "lucide-react";
+import { PlusIcon as Plus } from "@phosphor-icons/react/dist/csr/Plus";
 import type { FC } from "react";
 import { type UseFormReturn, useFieldArray } from "react-hook-form";
 

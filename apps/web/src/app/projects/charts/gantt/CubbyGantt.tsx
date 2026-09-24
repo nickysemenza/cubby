@@ -1,5 +1,6 @@
 import { TZDate } from "@date-fns/tz";
-import { Link2, X } from "lucide-react";
+import { LinkIcon as Link2 } from "@phosphor-icons/react/dist/csr/Link";
+import { XIcon as X } from "@phosphor-icons/react/dist/csr/X";
 import { type ReactNode, useId, useMemo, useState } from "react";
 import { match } from "ts-pattern";
 

@@ -13,7 +13,8 @@ import {
 } from "@cubby/shared/collection-tag";
 import { redundantTokens } from "@cubby/shared/redundant-tokens";
 import { type NutrientKey, TIER1_NUTRIENTS } from "@cubby/usda-schemas";
-import { ChevronRight, Search } from "lucide-react";
+import { CaretRightIcon as ChevronRight } from "@phosphor-icons/react/dist/csr/CaretRight";
+import { MagnifyingGlassIcon as Search } from "@phosphor-icons/react/dist/csr/MagnifyingGlass";
 import { type MutableRefObject, useMemo, useRef, useState } from "react";
 import {
   type FieldValues,

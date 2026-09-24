@@ -66,7 +66,7 @@ export default defineEntity({
         "Plants appear here as cultivars are planted, bought, or judged worth growing.",
       actionLabel: "New Plant",
     },
-    icons: { lucide: "Leaf", sfSymbol: "leaf.circle", emoji: "🌿" },
+    icons: { phosphor: "Leaf", sfSymbol: "leaf.circle", emoji: "🌿" },
     detail: {
       sectionOverrides: [
         {

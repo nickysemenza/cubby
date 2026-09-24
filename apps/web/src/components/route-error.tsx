@@ -1,16 +1,14 @@
+import { ArrowClockwiseIcon as RefreshCw } from "@phosphor-icons/react/dist/csr/ArrowClockwise";
+import { CaretDownIcon as ChevronDown } from "@phosphor-icons/react/dist/csr/CaretDown";
+import { SignInIcon as LogIn } from "@phosphor-icons/react/dist/csr/SignIn";
+import { WarningCircleIcon as AlertCircle } from "@phosphor-icons/react/dist/csr/WarningCircle";
+import { WifiSlashIcon as WifiOff } from "@phosphor-icons/react/dist/csr/WifiSlash";
 import * as Sentry from "@sentry/tanstackstart-react";
 import {
   type ErrorComponentProps,
   Link,
   useRouter,
 } from "@tanstack/react-router";
-import {
-  AlertCircle,
-  ChevronDown,
-  LogIn,
-  RefreshCw,
-  WifiOff,
-} from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { ErrorDetails } from "~/components/feedback/error-details";

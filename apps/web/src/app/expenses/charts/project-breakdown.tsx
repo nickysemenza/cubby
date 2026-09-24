@@ -1,5 +1,5 @@
 import type { ExpenseProjectAggregate } from "@cubby/schemas/project";
-import { Building2 } from "lucide-react";
+import { BuildingsIcon as Building2 } from "@phosphor-icons/react/dist/csr/Buildings";
 import { useMemo } from "react";
 
 import { RankedBarBreakdown } from "~/app/_components/charts/kit";

@@ -1,7 +1,9 @@
 import type { EnrichmentRow } from "@cubby/schemas/ingredient";
 import type { UnitMapping } from "@cubby/schemas/unitmapping";
 import type { FoodSummaryWithLinkedProducts } from "@cubby/schemas/usda";
-import { Check, Plus, X } from "lucide-react";
+import { CheckIcon as Check } from "@phosphor-icons/react/dist/csr/Check";
+import { PlusIcon as Plus } from "@phosphor-icons/react/dist/csr/Plus";
+import { XIcon as X } from "@phosphor-icons/react/dist/csr/X";
 import {
   type ReactNode,
   type Ref,

@@ -1,5 +1,5 @@
+import { PlusIcon as Plus } from "@phosphor-icons/react/dist/csr/Plus";
 import { useNavigate, useSearch } from "@tanstack/react-router";
-import { Plus } from "lucide-react";
 import { lazy, type ReactNode, Suspense, useState } from "react";
 import { z } from "zod";
 

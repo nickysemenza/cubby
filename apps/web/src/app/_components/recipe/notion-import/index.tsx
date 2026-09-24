@@ -1,7 +1,10 @@
 import type { notionPreviewOut } from "@cubby/schemas/import-recipe";
+import { ArrowCounterClockwiseIcon as RotateCcw } from "@phosphor-icons/react/dist/csr/ArrowCounterClockwise";
+import { DownloadSimpleIcon as Import } from "@phosphor-icons/react/dist/csr/DownloadSimple";
+import { MagnifyingGlassIcon as Search } from "@phosphor-icons/react/dist/csr/MagnifyingGlass";
+import { WarningCircleIcon as AlertCircle } from "@phosphor-icons/react/dist/csr/WarningCircle";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { AlertCircle, Import, RotateCcw, Search } from "lucide-react";
 import { useCallback, useMemo, useRef, useState } from "react";
 import type { z } from "zod";
 

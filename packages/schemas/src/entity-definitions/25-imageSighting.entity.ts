@@ -32,7 +32,7 @@ export default defineEntity({
       description:
         "A sighting is recorded automatically when a photo import or library scan reports an Image on a member's device.",
     },
-    icons: { lucide: "Eye", sfSymbol: "eye", emoji: "👁️" },
+    icons: { phosphor: "Eye", sfSymbol: "eye", emoji: "👁️" },
   },
   model: {
     fields: [

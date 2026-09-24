@@ -1,6 +1,7 @@
 import { activityKind, activityRunId } from "@cubby/schemas/activity";
 import { auditEntitySchema } from "@cubby/schemas/audit";
 import { auditChannelSchema } from "@cubby/schemas/context";
+import { ArrowUpRightIcon as ArrowUpRight } from "@phosphor-icons/react/dist/csr/ArrowUpRight";
 import { useQuery } from "@tanstack/react-query";
 import {
   createFileRoute,
@@ -8,7 +9,6 @@ import {
   stripSearchParams,
   useNavigate,
 } from "@tanstack/react-router";
-import { ArrowUpRight } from "lucide-react";
 import { z } from "zod";
 
 import { listChromePage } from "~/app/_components/routing/entity-routes";

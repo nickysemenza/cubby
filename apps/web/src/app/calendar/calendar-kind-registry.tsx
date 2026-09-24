@@ -9,7 +9,7 @@ import {
   MEAL_TYPE_LABELS,
 } from "@cubby/schemas/meal-classification";
 import { TRADE_LABELS } from "@cubby/schemas/project";
-import type { LucideIcon } from "lucide-react";
+import type { Icon } from "@phosphor-icons/react/lib";
 
 import type { BadgeVariant } from "~/components/ui/badge";
 import {
@@ -76,7 +76,7 @@ type CalendarKindSpec<K extends CalendarItemKind> = {
   // list and never includes such a kind, so `calendarItemCreateRequest` is
   // never called with one in practice.
   create?: (date?: string) => EntityEditDialogRequest;
-  icon: (item: ItemOf<K>) => LucideIcon;
+  icon: (item: ItemOf<K>) => Icon;
   cover: (
     item: ItemOf<K>,
   ) => { entity: Entity; fit: "contain" | "cover"; url: string } | undefined;

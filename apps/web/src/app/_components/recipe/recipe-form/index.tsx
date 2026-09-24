@@ -1,14 +1,12 @@
 import type { ImportRecipe } from "@cubby/schemas/import-recipe";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { CaretDownIcon as ChevronDown } from "@phosphor-icons/react/dist/csr/CaretDown";
+import { CaretUpIcon as ChevronUp } from "@phosphor-icons/react/dist/csr/CaretUp";
+import { ImageIcon } from "@phosphor-icons/react/dist/csr/Image";
+import { PlusIcon as Plus } from "@phosphor-icons/react/dist/csr/Plus";
+import { TrashIcon as Trash } from "@phosphor-icons/react/dist/csr/Trash";
 import { useDebouncedValue } from "@tanstack/react-pacer";
 import { useMutation } from "@tanstack/react-query";
-import {
-  ChevronDown,
-  ChevronUp,
-  Image as ImageIcon,
-  Plus,
-  Trash,
-} from "lucide-react";
 import { type FC, useEffect, useId, useMemo, useRef, useState } from "react";
 import { Controller, useFieldArray, useForm, useWatch } from "react-hook-form";
 import { toast } from "sonner";

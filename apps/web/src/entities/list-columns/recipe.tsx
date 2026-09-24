@@ -1,7 +1,7 @@
 import { hasKnownEstimate } from "@cubby/schemas/nutrition";
 import type { RecipeListItem } from "@cubby/schemas/recipe";
+import { ArrowCounterClockwiseIcon as RotateCcw } from "@phosphor-icons/react/dist/csr/ArrowCounterClockwise";
 import { useQuery } from "@tanstack/react-query";
-import { RotateCcw } from "lucide-react";
 import { useMemo } from "react";
 
 import {

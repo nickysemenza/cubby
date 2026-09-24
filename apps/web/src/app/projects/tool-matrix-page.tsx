@@ -29,16 +29,14 @@ import {
   projectKindValues,
   projectStatusValues,
 } from "@cubby/schemas/project";
+import { CaretLeftIcon as ChevronLeft } from "@phosphor-icons/react/dist/csr/CaretLeft";
+import { CaretRightIcon as ChevronRight } from "@phosphor-icons/react/dist/csr/CaretRight";
+import { CheckIcon as Check } from "@phosphor-icons/react/dist/csr/Check";
+import { MagnifyingGlassIcon as Search } from "@phosphor-icons/react/dist/csr/MagnifyingGlass";
+import { ProhibitIcon as Slash } from "@phosphor-icons/react/dist/csr/Prohibit";
+import { WrenchIcon as Wrench } from "@phosphor-icons/react/dist/csr/Wrench";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
-import {
-  Check,
-  ChevronLeft,
-  ChevronRight,
-  Search,
-  Slash,
-  Wrench,
-} from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { match } from "ts-pattern";
 

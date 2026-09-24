@@ -1,7 +1,10 @@
 import { Menu as MenuPrimitive } from "@base-ui/react/menu";
 import type { Entity } from "@cubby/schemas/entity";
+import { BookmarkIcon as Bookmark } from "@phosphor-icons/react/dist/csr/Bookmark";
+import { CaretDownIcon as ChevronDown } from "@phosphor-icons/react/dist/csr/CaretDown";
+import { CaretRightIcon as ChevronRight } from "@phosphor-icons/react/dist/csr/CaretRight";
+import { GearSixIcon as Settings2 } from "@phosphor-icons/react/dist/csr/GearSix";
 import type { RowData } from "@tanstack/react-table";
-import { Bookmark, ChevronDown, ChevronRight, Settings2 } from "lucide-react";
 import { type ReactNode, useState } from "react";
 import { createPortal } from "react-dom";
 

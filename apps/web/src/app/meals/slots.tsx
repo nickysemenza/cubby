@@ -4,10 +4,11 @@ import type {
 } from "@cubby/schemas/identifiers";
 import type { MealRecipeOut } from "@cubby/schemas/meal";
 import { MEAL_KIND_LABELS } from "@cubby/schemas/meal-classification";
+import { PlusIcon as Plus } from "@phosphor-icons/react/dist/csr/Plus";
+import { TrashIcon as Trash2 } from "@phosphor-icons/react/dist/csr/Trash";
 import type { QueryKey } from "@tanstack/react-query";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 

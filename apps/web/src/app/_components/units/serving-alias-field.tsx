@@ -11,7 +11,7 @@ import {
   KEY_NUTRIENT_KEYS,
   type NutrientKey,
 } from "@cubby/usda-schemas";
-import { Plus } from "lucide-react";
+import { PlusIcon as Plus } from "@phosphor-icons/react/dist/csr/Plus";
 import { useId, useMemo, useState } from "react";
 
 import { Row } from "~/components/layout";

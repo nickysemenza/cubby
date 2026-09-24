@@ -1,6 +1,7 @@
 import type { FoodSummaryWithLinkedProducts } from "@cubby/schemas/usda";
 import { dataTypeLabel } from "@cubby/usda-schemas";
-import { Copy, Link2 } from "lucide-react";
+import { CopyIcon as Copy } from "@phosphor-icons/react/dist/csr/Copy";
+import { LinkIcon as Link2 } from "@phosphor-icons/react/dist/csr/Link";
 
 import { Row } from "~/components/layout";
 import { isUnspecifiedManufacturer } from "~/lib/manufacturer-utils";

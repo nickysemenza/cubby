@@ -4,8 +4,10 @@ import type {
   RecipeFlowPlan,
   RecipeFlowSource,
 } from "@cubby/schemas/recipe-flow";
+import { ArrowRightIcon as ArrowRight } from "@phosphor-icons/react/dist/csr/ArrowRight";
+import { GitMergeIcon as GitMerge } from "@phosphor-icons/react/dist/csr/GitMerge";
+import { WarningIcon as AlertTriangle } from "@phosphor-icons/react/dist/csr/Warning";
 import { Link } from "@tanstack/react-router";
-import { AlertTriangle, ArrowRight, GitMerge } from "lucide-react";
 import { useId, useMemo } from "react";
 
 import { Badge } from "~/components/ui/badge";

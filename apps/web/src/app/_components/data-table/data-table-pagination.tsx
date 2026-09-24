@@ -1,10 +1,8 @@
+import { CaretDoubleLeftIcon as ChevronsLeft } from "@phosphor-icons/react/dist/csr/CaretDoubleLeft";
+import { CaretDoubleRightIcon as ChevronsRight } from "@phosphor-icons/react/dist/csr/CaretDoubleRight";
+import { CaretLeftIcon as ChevronLeft } from "@phosphor-icons/react/dist/csr/CaretLeft";
+import { CaretRightIcon as ChevronRight } from "@phosphor-icons/react/dist/csr/CaretRight";
 import type { RowData } from "@tanstack/react-table";
-import {
-  ChevronLeft,
-  ChevronRight,
-  ChevronsLeft,
-  ChevronsRight,
-} from "lucide-react";
 
 import { Row } from "~/components/layout";
 import { Button } from "~/components/ui/button";

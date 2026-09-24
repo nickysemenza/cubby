@@ -4,6 +4,9 @@ import type {
   SmartCollectionMatch,
 } from "@cubby/schemas/collection";
 import { formatCollectionLabel } from "@cubby/shared/collection-tag";
+import { CubeFocusIcon as PackageSearch } from "@phosphor-icons/react/dist/csr/CubeFocus";
+import { MagnifyingGlassIcon as Search } from "@phosphor-icons/react/dist/csr/MagnifyingGlass";
+import { MapPinIcon as MapPin } from "@phosphor-icons/react/dist/csr/MapPin";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import {
@@ -11,7 +14,6 @@ import {
   type OnChangeFn,
   type PaginationState,
 } from "@tanstack/react-table";
-import { MapPin, PackageSearch, Search } from "lucide-react";
 import { useCallback, useEffect, useId, useMemo } from "react";
 
 import { useTableColumnLayout } from "~/app/_components/data-table/column-layout";

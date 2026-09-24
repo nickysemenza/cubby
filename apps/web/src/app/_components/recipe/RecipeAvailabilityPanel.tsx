@@ -1,8 +1,8 @@
 import type { IngredientAvailability } from "@cubby/schemas/availability";
 import type { RecipeShortcode } from "@cubby/schemas/identifiers";
+import { ChefHatIcon as ChefHat } from "@phosphor-icons/react/dist/csr/ChefHat";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { ChefHat } from "lucide-react";
 
 import {
   formatAmount,

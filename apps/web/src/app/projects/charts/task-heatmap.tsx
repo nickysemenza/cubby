@@ -1,6 +1,6 @@
 import type { TaskOut } from "@cubby/schemas/project";
+import { CalendarCheckIcon as CalendarClock } from "@phosphor-icons/react/dist/csr/CalendarCheck";
 import { Link } from "@tanstack/react-router";
-import { CalendarClock } from "lucide-react";
 import { useMemo } from "react";
 
 import {

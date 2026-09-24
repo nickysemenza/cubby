@@ -1,5 +1,5 @@
 import { cva, type VariantProps } from "class-variance-authority";
-import type { LucideIcon } from "lucide-react";
+import type { Icon } from "@phosphor-icons/react/lib";
 
 import { cn } from "~/lib/utils";
 
@@ -108,12 +108,12 @@ function EmptyActions({ className, ...props }: React.ComponentProps<"div">) {
   );
 }
 
-/** Convenience component for rendering a Lucide icon in EmptyMedia */
+/** Convenience component for rendering a Phosphor icon in EmptyMedia */
 function EmptyIcon({
   icon: Icon,
   className,
 }: {
-  icon: LucideIcon;
+  icon: Icon;
   className?: string;
 }) {
   return (

@@ -1,6 +1,8 @@
 import type { AuditJsonValue } from "@cubby/schemas/audit";
+import { CaretDownIcon as ChevronDown } from "@phosphor-icons/react/dist/csr/CaretDown";
+import { CaretRightIcon as ChevronRight } from "@phosphor-icons/react/dist/csr/CaretRight";
+import { RobotIcon as Bot } from "@phosphor-icons/react/dist/csr/Robot";
 import { sortBy } from "es-toolkit";
-import { Bot, ChevronDown, ChevronRight } from "lucide-react";
 import { useState } from "react";
 
 import { Row, Stack } from "~/components/layout";

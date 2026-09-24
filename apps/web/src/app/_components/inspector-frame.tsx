@@ -1,6 +1,7 @@
 import type { Entity } from "@cubby/schemas/entity";
+import { ArrowSquareOutIcon as ExternalLink } from "@phosphor-icons/react/dist/csr/ArrowSquareOut";
+import { XIcon as X } from "@phosphor-icons/react/dist/csr/X";
 import { Link } from "@tanstack/react-router";
-import { ExternalLink, X } from "lucide-react";
 import type { ReactNode } from "react";
 
 import { Button } from "~/components/ui/button";

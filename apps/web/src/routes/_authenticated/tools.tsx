@@ -1,6 +1,9 @@
 import type { ToolGalleryGroupBy } from "@cubby/schemas/project";
+import { GridFourIcon as Grid2X2 } from "@phosphor-icons/react/dist/csr/GridFour";
+import { GridNineIcon as Grid3X3 } from "@phosphor-icons/react/dist/csr/GridNine";
+import { LayoutIcon as PanelsTopLeft } from "@phosphor-icons/react/dist/csr/Layout";
+import { TableIcon as TableProperties } from "@phosphor-icons/react/dist/csr/Table";
 import { createFileRoute, stripSearchParams } from "@tanstack/react-router";
-import { Grid2X2, Grid3X3, PanelsTopLeft, TableProperties } from "lucide-react";
 import { useCallback, useState } from "react";
 
 import { ToolMatrixPage } from "~/app/projects/tool-matrix-page";

@@ -3,7 +3,7 @@
 import { mergeProps } from "@base-ui/react/merge-props";
 import { useRender } from "@base-ui/react/use-render";
 import { addDays, format } from "date-fns";
-import { PlusIcon } from "lucide-react";
+import { PlusIcon } from "@phosphor-icons/react/dist/csr/Plus";
 import {
   type CSSProperties,
   type Ref,

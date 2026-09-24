@@ -29,7 +29,7 @@ export default defineEntity({
       actionLabel: "Plan a Meal",
     },
     icons: {
-      lucide: "CalendarDays",
+      phosphor: "CalendarDots",
       sfSymbol: "fork.knife.circle",
       emoji: "🍽️",
     },

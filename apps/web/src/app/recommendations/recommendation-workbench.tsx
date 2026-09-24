@@ -4,9 +4,9 @@ import {
   parseShortcodeFor,
 } from "@cubby/schemas/identifiers";
 import type { RecommendationKind } from "@cubby/schemas/recommendations";
+import { XIcon as X } from "@phosphor-icons/react/dist/csr/X";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { X } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import {

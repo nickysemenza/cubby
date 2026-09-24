@@ -1,8 +1,9 @@
 import type { AuditEntityType } from "@cubby/schemas/audit";
 import type { AuditChannel } from "@cubby/schemas/context";
+import { PulseIcon as Activity } from "@phosphor-icons/react/dist/csr/Pulse";
+import { WarningCircleIcon as CircleAlert } from "@phosphor-icons/react/dist/csr/WarningCircle";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { uniqBy } from "es-toolkit";
-import { Activity, CircleAlert } from "lucide-react";
 import { useMemo } from "react";
 
 import { Row } from "~/components/layout";

@@ -7,10 +7,11 @@ import {
   mealKindSchema,
   mealTypeSchema,
 } from "@cubby/schemas/meal-classification";
+import { CalendarPlusIcon as CalendarPlus } from "@phosphor-icons/react/dist/csr/CalendarPlus";
+import { WarningIcon as TriangleAlert } from "@phosphor-icons/react/dist/csr/Warning";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { format, parseISO } from "date-fns";
-import { CalendarPlus, TriangleAlert } from "lucide-react";
 import { useId, useMemo, useState } from "react";
 import { toast } from "sonner";
 

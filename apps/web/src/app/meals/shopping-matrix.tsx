@@ -1,7 +1,7 @@
 import type { UnexpandedSubRecipe } from "@cubby/schemas/meal";
+import { WarningIcon as TriangleAlert } from "@phosphor-icons/react/dist/csr/Warning";
 import { Link } from "@tanstack/react-router";
 import { format, parseISO } from "date-fns";
-import { TriangleAlert } from "lucide-react";
 import { useMemo } from "react";
 
 import { Row } from "~/components/layout";

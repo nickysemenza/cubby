@@ -4,9 +4,9 @@ import type {
   inventoryListItemOut,
 } from "@cubby/schemas/inventory";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { ArrowRightIcon as ArrowRight } from "@phosphor-icons/react/dist/csr/ArrowRight";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
-import { ArrowRight } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";

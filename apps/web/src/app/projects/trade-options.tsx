@@ -1,26 +1,24 @@
 import { type Trade, tradeValues } from "@cubby/schemas/project";
-import {
-  Archive,
-  Car,
-  ClipboardList,
-  Droplets,
-  Fan,
-  Grid3x3,
-  Hammer,
-  type LucideIcon,
-  PaintRoller,
-  Palette,
-  RectangleHorizontal,
-  Refrigerator,
-  Ruler,
-  Shapes as OtherTradeIcon,
-  Square,
-  Trash2,
-  Trees,
-  Truck,
-  Wrench,
-  Zap,
-} from "lucide-react";
+import { ArchiveIcon as Archive } from "@phosphor-icons/react/dist/csr/Archive";
+import { CarIcon as Car } from "@phosphor-icons/react/dist/csr/Car";
+import { ClipboardTextIcon as ClipboardList } from "@phosphor-icons/react/dist/csr/ClipboardText";
+import { DropIcon as Droplets } from "@phosphor-icons/react/dist/csr/Drop";
+import { FanIcon as Fan } from "@phosphor-icons/react/dist/csr/Fan";
+import { GridNineIcon as Grid3x3 } from "@phosphor-icons/react/dist/csr/GridNine";
+import { HammerIcon as Hammer } from "@phosphor-icons/react/dist/csr/Hammer";
+import { LightningIcon as Zap } from "@phosphor-icons/react/dist/csr/Lightning";
+import { OvenIcon as Refrigerator } from "@phosphor-icons/react/dist/csr/Oven";
+import { PaintRollerIcon as PaintRoller } from "@phosphor-icons/react/dist/csr/PaintRoller";
+import { PaletteIcon as Palette } from "@phosphor-icons/react/dist/csr/Palette";
+import { RectangleIcon as RectangleHorizontal } from "@phosphor-icons/react/dist/csr/Rectangle";
+import { RulerIcon as Ruler } from "@phosphor-icons/react/dist/csr/Ruler";
+import { ShapesIcon as OtherTradeIcon } from "@phosphor-icons/react/dist/csr/Shapes";
+import { SquareIcon as Square } from "@phosphor-icons/react/dist/csr/Square";
+import { TrashIcon as Trash2 } from "@phosphor-icons/react/dist/csr/Trash";
+import { TreeIcon as Trees } from "@phosphor-icons/react/dist/csr/Tree";
+import { TruckIcon as Truck } from "@phosphor-icons/react/dist/csr/Truck";
+import { WrenchIcon as Wrench } from "@phosphor-icons/react/dist/csr/Wrench";
+import type { Icon } from "@phosphor-icons/react/lib";
 
 import { Badge } from "~/components/ui/badge";
 import type { FilterableComboboxItem } from "~/components/ui/combobox";
@@ -39,7 +37,7 @@ import { TRADE_LABELS } from "./project-formatting";
  */
 
 /**
- * Monochrome Lucide glyph per trade — a scannable leading mark for badges and
+ * Monochrome Phosphor glyph per trade — a scannable leading mark for badges and
  * select rows. Icons live here (client) rather than in `@cubby/schemas` so the
  * schema package stays presentation-free. Full-color emoji were deliberately
  * dropped in the Notion migration; these `currentColor` glyphs sit cleanly on
@@ -65,7 +63,7 @@ const TRADE_ICONS = {
   crafts: Palette,
   auto: Car,
   other: OtherTradeIcon,
-} satisfies Record<Trade, LucideIcon>;
+} satisfies Record<Trade, Icon>;
 
 /** Outline badge with the trade's leading glyph + label — the canonical trade chip. */
 export function TradeBadge({ trade }: { trade: Trade }) {

@@ -13,8 +13,8 @@
  */
 
 import type { ProjectOut, TaskOut } from "@cubby/schemas/project";
+import { CalendarXIcon as CalendarOff } from "@phosphor-icons/react/dist/csr/CalendarX";
 import { Link } from "@tanstack/react-router";
-import { CalendarOff } from "lucide-react";
 import {
   lazy,
   type ReactNode,

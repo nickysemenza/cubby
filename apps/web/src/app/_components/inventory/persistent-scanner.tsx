@@ -14,7 +14,7 @@
  * guide box below (the hook measures it — see useBarcodeScanner/scan-roi).
  */
 
-import { Flashlight, FlashlightOff } from "lucide-react";
+import { FlashlightIcon as Flashlight } from "@phosphor-icons/react/dist/csr/Flashlight";
 import {
   useCallback,
   useEffect,
@@ -261,11 +261,10 @@ export function PersistentScanner({
               torchEnabled ? "Turn off flashlight" : "Turn on flashlight"
             }
           >
-            {torchEnabled ? (
-              <Flashlight className="size-5" />
-            ) : (
-              <FlashlightOff className="size-5" />
-            )}
+            <Flashlight
+              className="size-5"
+              weight={torchEnabled ? "fill" : "regular"}
+            />
           </Button>
         )}
 

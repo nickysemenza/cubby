@@ -1,6 +1,7 @@
 import type { LocationShortcode } from "@cubby/schemas/identifiers";
+import { ColumnsIcon as Columns3 } from "@phosphor-icons/react/dist/csr/Columns";
+import { TreeViewIcon as ListTree } from "@phosphor-icons/react/dist/csr/TreeView";
 import { useMutation, useSuspenseQuery } from "@tanstack/react-query";
-import { Columns3, ListTree } from "lucide-react";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 
 import { collectTreeProductIds } from "~/app/_components/locations/location-gallery-data";

@@ -1,10 +1,10 @@
+import { GitMergeIcon as GitMerge } from "@phosphor-icons/react/dist/csr/GitMerge";
 import {
   createFileRoute,
   Link,
   redirect,
   stripSearchParams,
 } from "@tanstack/react-router";
-import { GitMerge } from "lucide-react";
 import { lazy, Suspense } from "react";
 import { z } from "zod";
 

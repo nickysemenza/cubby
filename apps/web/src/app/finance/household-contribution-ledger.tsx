@@ -1,12 +1,10 @@
 import type { HouseholdContributionLedgerOut } from "@cubby/schemas/household-contribution";
+import { ArrowsLeftRightIcon as ArrowRightLeft } from "@phosphor-icons/react/dist/csr/ArrowsLeftRight";
+import { CheckCircleIcon as CircleCheck } from "@phosphor-icons/react/dist/csr/CheckCircle";
+import { WarningIcon as AlertTriangle } from "@phosphor-icons/react/dist/csr/Warning";
+import { XCircleIcon as CircleX } from "@phosphor-icons/react/dist/csr/XCircle";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import {
-  AlertTriangle,
-  ArrowRightLeft,
-  CircleCheck,
-  CircleX,
-} from "lucide-react";
 import { useId, useMemo, useState } from "react";
 
 import { renderOptionCell } from "~/app/_components/data-table/columnHelpers";

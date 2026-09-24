@@ -4,8 +4,10 @@ import type {
   ProductMatchCandidate,
   ProductMatchSide,
 } from "@cubby/schemas/recommendations";
+import { GitMergeIcon as GitMerge } from "@phosphor-icons/react/dist/csr/GitMerge";
+import { WarningIcon as AlertTriangle } from "@phosphor-icons/react/dist/csr/Warning";
+import { XIcon as X } from "@phosphor-icons/react/dist/csr/X";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { AlertTriangle, GitMerge, X } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import {

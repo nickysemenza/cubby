@@ -1,5 +1,5 @@
+import { CopyIcon as Copy } from "@phosphor-icons/react/dist/csr/Copy";
 import { useInfiniteQuery } from "@tanstack/react-query";
-import { Copy } from "lucide-react";
 import { useEffect, useMemo } from "react";
 import { z } from "zod";
 

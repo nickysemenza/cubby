@@ -2,9 +2,12 @@ import {
   composeNotesMarkdown,
   type ImportRecipe,
 } from "@cubby/schemas/import-recipe";
+import { ArrowCounterClockwiseIcon as RotateCcw } from "@phosphor-icons/react/dist/csr/ArrowCounterClockwise";
+import { ArrowSquareOutIcon as ExternalLink } from "@phosphor-icons/react/dist/csr/ArrowSquareOut";
+import { CheckIcon as Check } from "@phosphor-icons/react/dist/csr/Check";
+import { WarningCircleIcon as AlertCircle } from "@phosphor-icons/react/dist/csr/WarningCircle";
 import { Link } from "@tanstack/react-router";
 import { uniq } from "es-toolkit";
-import { AlertCircle, Check, ExternalLink, RotateCcw } from "lucide-react";
 import { memo, useMemo } from "react";
 
 import { Row, Stack } from "~/components/layout";

@@ -1,7 +1,8 @@
 import type { IngredientShortcode } from "@cubby/schemas/identifiers";
 import type { FoodSummaryWithLinkedProducts } from "@cubby/schemas/usda";
+import { LinkIcon as Link2 } from "@phosphor-icons/react/dist/csr/Link";
+import { StackPlusIcon as PackagePlus } from "@phosphor-icons/react/dist/csr/StackPlus";
 import { useRouter } from "@tanstack/react-router";
-import { Link2, PackagePlus } from "lucide-react";
 import { useState } from "react";
 
 import { Row } from "~/components/layout";

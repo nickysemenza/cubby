@@ -137,7 +137,7 @@ const presentation = {
   domain: null,
   description: "Alpha records.",
   emptyState: { title: "No alphas", description: "Add one." },
-  icons: { lucide: "Box", sfSymbol: "cube", emoji: "🧊" },
+  icons: { phosphor: "Cube", sfSymbol: "cube", emoji: "🧊" },
 } as const;
 
 const base = {

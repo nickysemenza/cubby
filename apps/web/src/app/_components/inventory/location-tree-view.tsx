@@ -2,14 +2,12 @@ import type {
   InfLocation,
   InventoryItemForTree,
 } from "@cubby/schemas/location";
+import { ArrowsInLineVerticalIcon as ChevronsDownUp } from "@phosphor-icons/react/dist/csr/ArrowsInLineVertical";
+import { CaretRightIcon as ChevronRight } from "@phosphor-icons/react/dist/csr/CaretRight";
+import { CaretUpDownIcon as ChevronsUpDown } from "@phosphor-icons/react/dist/csr/CaretUpDown";
+import { MagnifyingGlassIcon as Search } from "@phosphor-icons/react/dist/csr/MagnifyingGlass";
+import { XIcon as X } from "@phosphor-icons/react/dist/csr/X";
 import { Link } from "@tanstack/react-router";
-import {
-  ChevronRight,
-  ChevronsDownUp,
-  ChevronsUpDown,
-  Search,
-  X,
-} from "lucide-react";
 import { useId, useMemo, useState } from "react";
 
 import { Row, Stack } from "~/components/layout";

@@ -1,24 +1,23 @@
 import type { BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
+import { BarcodeIcon as ScanBarcode } from "@phosphor-icons/react/dist/csr/Barcode";
+import { DatabaseIcon as Database } from "@phosphor-icons/react/dist/csr/Database";
+import { DotsThreeIcon as MoreHorizontal } from "@phosphor-icons/react/dist/csr/DotsThree";
+import { FileTextIcon as FileText } from "@phosphor-icons/react/dist/csr/FileText";
+import { GearIcon as Settings } from "@phosphor-icons/react/dist/csr/Gear";
+import { HouseIcon as Home } from "@phosphor-icons/react/dist/csr/House";
+import { MagnifyingGlassIcon as Search } from "@phosphor-icons/react/dist/csr/MagnifyingGlass";
+import { NetworkIcon as Network } from "@phosphor-icons/react/dist/csr/Network";
+import { PaletteIcon as Palette } from "@phosphor-icons/react/dist/csr/Palette";
+import { PlugIcon as Plug } from "@phosphor-icons/react/dist/csr/Plug";
+import { PulseIcon as Activity } from "@phosphor-icons/react/dist/csr/Pulse";
+import { QrCodeIcon as QrCode } from "@phosphor-icons/react/dist/csr/QrCode";
+import { RobotIcon as Bot } from "@phosphor-icons/react/dist/csr/Robot";
+import { SparkleIcon as Sparkles } from "@phosphor-icons/react/dist/csr/Sparkle";
+import { WarningIcon as AlertTriangle } from "@phosphor-icons/react/dist/csr/Warning";
+import { WrenchIcon as Wrench } from "@phosphor-icons/react/dist/csr/Wrench";
+import type { Icon } from "@phosphor-icons/react/lib";
 import { type LinkProps, useLocation } from "@tanstack/react-router";
 import { uniq } from "es-toolkit";
-import {
-  Activity,
-  AlertTriangle,
-  Bot,
-  Database,
-  FileText,
-  Home,
-  MoreHorizontal,
-  Network,
-  Palette,
-  Plug,
-  QrCode,
-  ScanBarcode,
-  Search,
-  Settings,
-  Sparkles,
-  Wrench,
-} from "lucide-react";
 import { useMemo } from "react";
 
 import { entities } from "~/entities/entities";
@@ -33,13 +32,13 @@ export type NavItem = {
   /** Static search params — only the scanner shortcut needs these today. */
   search?: Readonly<Record<string, string | undefined>>;
   label: string;
-  icon: React.ComponentType<{ className?: string }>;
+  icon: Icon;
 };
 
 /** A dropdown that nests leaves. Discriminated from {@link NavItem} by `children`. */
 export type NavGroup = {
   label: string;
-  icon: React.ComponentType<{ className?: string }>;
+  icon: Icon;
   children: NavItem[];
   /** The stable Porcelain Transit line for the five household domains. */
   domain?: WayfindingDomain;
@@ -78,7 +77,7 @@ const inventory: NavItem = {
   to: "/inventory",
   entity: "inventory",
   label: "Inventory",
-  icon: entities.inventory.lucideIcon,
+  icon: entities.inventory.phosphorIcon,
 };
 const scan: NavItem = {
   to: "/scan",

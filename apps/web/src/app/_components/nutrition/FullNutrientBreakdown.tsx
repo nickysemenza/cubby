@@ -1,5 +1,6 @@
 import type { NutritionInfo } from "@cubby/usda-schemas";
-import { ChevronRight, ListTree } from "lucide-react";
+import { CaretRightIcon as ChevronRight } from "@phosphor-icons/react/dist/csr/CaretRight";
+import { TreeViewIcon as ListTree } from "@phosphor-icons/react/dist/csr/TreeView";
 import { useState } from "react";
 
 import { Row } from "~/components/layout";

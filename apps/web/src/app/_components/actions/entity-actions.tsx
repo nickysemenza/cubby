@@ -1,6 +1,6 @@
 import type { Entity } from "@cubby/schemas/entity";
 import { shortcodeEntities } from "@cubby/schemas/entity-manifest";
-import { Ellipsis } from "lucide-react";
+import { DotsThreeIcon as Ellipsis } from "@phosphor-icons/react/dist/csr/DotsThree";
 import type { ReactNode } from "react";
 import { createContext, Fragment, useContext, useMemo, useRef } from "react";
 

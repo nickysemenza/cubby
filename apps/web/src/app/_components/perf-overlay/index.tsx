@@ -1,13 +1,11 @@
+import { ArrowCounterClockwiseIcon as RotateCcw } from "@phosphor-icons/react/dist/csr/ArrowCounterClockwise";
+import { ClipboardIcon as ClipboardCopy } from "@phosphor-icons/react/dist/csr/Clipboard";
+import { MinusIcon as Minus } from "@phosphor-icons/react/dist/csr/Minus";
+import { PauseIcon as Pause } from "@phosphor-icons/react/dist/csr/Pause";
+import { PlayIcon as Play } from "@phosphor-icons/react/dist/csr/Play";
+import { PulseIcon as Activity } from "@phosphor-icons/react/dist/csr/Pulse";
+import { SelectionIcon as SquareDashed } from "@phosphor-icons/react/dist/csr/Selection";
 import { useQueryClient } from "@tanstack/react-query";
-import {
-  Activity,
-  ClipboardCopy,
-  Minus,
-  Pause,
-  Play,
-  RotateCcw,
-  SquareDashed,
-} from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 

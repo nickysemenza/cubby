@@ -1,7 +1,12 @@
 import type { EntityImage } from "@cubby/schemas/entity";
 import { ALLOWED_IMAGE_TYPES } from "@cubby/schemas/image";
+import { CameraIcon as Camera } from "@phosphor-icons/react/dist/csr/Camera";
+import { CaretLeftIcon as ChevronLeft } from "@phosphor-icons/react/dist/csr/CaretLeft";
+import { CaretRightIcon as ChevronRight } from "@phosphor-icons/react/dist/csr/CaretRight";
+import { LinkIcon as Link } from "@phosphor-icons/react/dist/csr/Link";
+import { StarIcon as Star } from "@phosphor-icons/react/dist/csr/Star";
+import { XIcon as X } from "@phosphor-icons/react/dist/csr/X";
 import { useMutation } from "@tanstack/react-query";
-import { Camera, ChevronLeft, ChevronRight, Link, Star, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { z } from "zod";

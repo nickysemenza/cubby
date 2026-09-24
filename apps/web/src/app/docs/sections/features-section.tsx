@@ -1,4 +1,6 @@
-import { AlertTriangle, Apple, Scale } from "lucide-react";
+import { BowlFoodIcon as Apple } from "@phosphor-icons/react/dist/csr/BowlFood";
+import { ScalesIcon as Scale } from "@phosphor-icons/react/dist/csr/Scales";
+import { WarningIcon as AlertTriangle } from "@phosphor-icons/react/dist/csr/Warning";
 
 import { Grid, Row } from "~/components/layout";
 import {
@@ -22,7 +24,7 @@ export function FeaturesSection() {
         <Card>
           <CardHeader>
             <Row align="center" gap="sm">
-              <entities.recipe.lucideIcon className="size-5 text-muted-foreground" />
+              <entities.recipe.phosphorIcon className="size-5 text-muted-foreground" />
               <CardTitle>Recipes</CardTitle>
             </Row>
             <CardDescription>
@@ -35,7 +37,7 @@ export function FeaturesSection() {
         <Card>
           <CardHeader>
             <Row align="center" gap="sm">
-              <entities.product.lucideIcon className="size-5 text-muted-foreground" />
+              <entities.product.phosphorIcon className="size-5 text-muted-foreground" />
               <CardTitle>Products</CardTitle>
             </Row>
             <CardDescription>
@@ -49,7 +51,7 @@ export function FeaturesSection() {
         <Card>
           <CardHeader>
             <Row align="center" gap="sm">
-              <entities.inventory.lucideIcon className="size-5 text-muted-foreground" />
+              <entities.inventory.phosphorIcon className="size-5 text-muted-foreground" />
               <CardTitle>Inventory Management</CardTitle>
             </Row>
             <CardDescription>

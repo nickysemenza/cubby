@@ -1,4 +1,10 @@
 import type { RecipeOut } from "@cubby/schemas/recipe";
+import { BookOpenIcon as BookOpen } from "@phosphor-icons/react/dist/csr/BookOpen";
+import { GitBranchIcon as GitBranch } from "@phosphor-icons/react/dist/csr/GitBranch";
+import { GridNineIcon as Grid3x3 } from "@phosphor-icons/react/dist/csr/GridNine";
+import { ListChecksIcon as ListChecks } from "@phosphor-icons/react/dist/csr/ListChecks";
+import { PrinterIcon as Printer } from "@phosphor-icons/react/dist/csr/Printer";
+import { TreeViewIcon as ListTree } from "@phosphor-icons/react/dist/csr/TreeView";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import {
   createFileRoute,
@@ -6,14 +12,6 @@ import {
   stripSearchParams,
   useNavigate,
 } from "@tanstack/react-router";
-import {
-  BookOpen,
-  GitBranch,
-  Grid3x3,
-  ListChecks,
-  ListTree,
-  Printer,
-} from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
 
 import { useRecipeCostingData } from "~/app/_components/hooks/useRecipeCostingData";

@@ -1,9 +1,11 @@
 import type { TaskOut, TaskStatus } from "@cubby/schemas/project";
 import { taskStatusValues } from "@cubby/schemas/project";
 import { useDraggable } from "@dnd-kit/core";
+import { DotsSixVerticalIcon as GripVertical } from "@phosphor-icons/react/dist/csr/DotsSixVertical";
+import { DotsThreeVerticalIcon as EllipsisVertical } from "@phosphor-icons/react/dist/csr/DotsThreeVertical";
+import { ProhibitIcon as Ban } from "@phosphor-icons/react/dist/csr/Prohibit";
 import { useNavigate } from "@tanstack/react-router";
 import { format } from "date-fns";
-import { Ban, EllipsisVertical, GripVertical } from "lucide-react";
 
 import { VerbMenuItem } from "~/app/_components/actions/action-verb-ui";
 import { useEntityDisplayImage } from "~/app/_components/entity-media/entity-display-images";

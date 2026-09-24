@@ -1,6 +1,6 @@
 import type { InfLocation, LocationType } from "@cubby/schemas/location";
+import { SquaresFourIcon as LayoutDashboard } from "@phosphor-icons/react/dist/csr/SquaresFour";
 import { Link } from "@tanstack/react-router";
-import { LayoutDashboard } from "lucide-react";
 import * as React from "react";
 
 import {

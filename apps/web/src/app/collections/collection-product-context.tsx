@@ -2,9 +2,12 @@ import type {
   CollectionProductPlacementOut,
   CollectionProductPurchaseOut,
 } from "@cubby/schemas/collection";
+import { CheckIcon as Check } from "@phosphor-icons/react/dist/csr/Check";
+import { ClipboardIcon as ClipboardCopy } from "@phosphor-icons/react/dist/csr/Clipboard";
+import { MapPinIcon as MapPin } from "@phosphor-icons/react/dist/csr/MapPin";
+import { ReceiptIcon as ReceiptText } from "@phosphor-icons/react/dist/csr/Receipt";
 import { Link } from "@tanstack/react-router";
 import { format } from "date-fns";
-import { Check, ClipboardCopy, MapPin, ReceiptText } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { TradeBadge } from "~/app/projects/trade-options";

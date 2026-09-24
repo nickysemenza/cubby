@@ -1,4 +1,4 @@
-import { GitGraph } from "lucide-react";
+import { GraphIcon as GitGraph } from "@phosphor-icons/react/dist/csr/Graph";
 
 import { Row } from "~/components/layout";
 import type { BuildMetadata } from "~/lib/build-metadata";

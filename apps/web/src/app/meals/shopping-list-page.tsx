@@ -1,6 +1,7 @@
+import { ArrowCounterClockwiseIcon as RotateCcw } from "@phosphor-icons/react/dist/csr/ArrowCounterClockwise";
+import { CopyIcon as Copy } from "@phosphor-icons/react/dist/csr/Copy";
 import { Link } from "@tanstack/react-router";
 import { format, parseISO } from "date-fns";
-import { Copy, RotateCcw } from "lucide-react";
 import { useId } from "react";
 import { toast } from "sonner";
 import { match } from "ts-pattern";

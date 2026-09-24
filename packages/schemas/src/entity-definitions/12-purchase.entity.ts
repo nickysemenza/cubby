@@ -32,7 +32,7 @@ export default defineEntity({
         "A purchase is created automatically the first time an expense records a vendor. Add one directly to file its invoice ahead of time.",
       actionLabel: "New Purchase",
     },
-    icons: { lucide: "Receipt", sfSymbol: "cart", emoji: "🧾" },
+    icons: { phosphor: "Receipt", sfSymbol: "cart", emoji: "🧾" },
     detail: {
       omitRelations: {
         projects:

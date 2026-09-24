@@ -7,21 +7,19 @@ import {
   mealKindValues,
   mealTypeValues,
 } from "@cubby/schemas/meal-classification";
+import { BreadIcon as Croissant } from "@phosphor-icons/react/dist/csr/Bread";
+import { CircleDashedIcon as CircleDashed } from "@phosphor-icons/react/dist/csr/CircleDashed";
+import { CookieIcon as Cookie } from "@phosphor-icons/react/dist/csr/Cookie";
+import { CookingPotIcon as CookingPot } from "@phosphor-icons/react/dist/csr/CookingPot";
+import { CookingPotIcon as Refrigerator } from "@phosphor-icons/react/dist/csr/CookingPot";
+import { ForkKnifeIcon as UtensilsCrossed } from "@phosphor-icons/react/dist/csr/ForkKnife";
+import { IceCreamIcon as IceCreamCone } from "@phosphor-icons/react/dist/csr/IceCream";
+import { MoonIcon as Moon } from "@phosphor-icons/react/dist/csr/Moon";
+import { ShoppingBagIcon as ShoppingBag } from "@phosphor-icons/react/dist/csr/ShoppingBag";
+import { SunIcon as Sun } from "@phosphor-icons/react/dist/csr/Sun";
+import { SunHorizonIcon as Sunrise } from "@phosphor-icons/react/dist/csr/SunHorizon";
+import type { Icon } from "@phosphor-icons/react/lib";
 import { format } from "date-fns";
-import {
-  CircleDashed,
-  Cookie,
-  CookingPot,
-  Croissant,
-  IceCreamCone,
-  type LucideIcon,
-  Moon,
-  Refrigerator,
-  ShoppingBag,
-  Sun,
-  Sunrise,
-  UtensilsCrossed,
-} from "lucide-react";
 
 import { type BadgeVariant, badgeVariantColor } from "~/components/ui/badge";
 import type { FilterableComboboxItem } from "~/components/ui/combobox";
@@ -90,7 +88,7 @@ export function mealTypeTimeLabel(type: MealType | null): string | null {
  * Slot glyphs for tight surfaces — the calendar chip, where the label is
  * either already the title or has no room. Breakfast/lunch/dinner take the
  * time-of-day triad because they *are* the day's anchors; the three minor
- * slots take food glyphs. Monochrome Lucide on `currentColor`, never emoji
+ * slots take food glyphs. Monochrome Phosphor on `currentColor`, never emoji
  * (same rule as `TRADE_ICONS`).
  */
 const MEAL_TYPE_ICONS = {
@@ -100,10 +98,10 @@ const MEAL_TYPE_ICONS = {
   dinner: Moon,
   snack: Cookie,
   dessert: IceCreamCone,
-} satisfies Record<MealType, LucideIcon>;
+} satisfies Record<MealType, Icon>;
 
 /** What an unslotted meal shows — the generic glyph the calendar used for all meals. */
-const UNSLOTTED_MEAL_ICON: LucideIcon = CookingPot;
+const UNSLOTTED_MEAL_ICON: Icon = CookingPot;
 
 /**
  * Kind glyphs, and `cooked` is deliberately absent.
@@ -118,12 +116,12 @@ const MEAL_KIND_ICONS = {
   eating_out: UtensilsCrossed,
   takeout: ShoppingBag,
   other: CircleDashed,
-} satisfies Record<Exclude<MealKind, "cooked">, LucideIcon>;
+} satisfies Record<Exclude<MealKind, "cooked">, Icon>;
 
 /** The slot glyph, or the generic pot when unslotted. */
-export const mealTypeIcon = (mealType: MealType | null): LucideIcon =>
+export const mealTypeIcon = (mealType: MealType | null): Icon =>
   mealType ? MEAL_TYPE_ICONS[mealType] : UNSLOTTED_MEAL_ICON;
 
 /** The kind glyph, or null for `cooked` — see `MEAL_KIND_ICONS`. */
-export const mealKindIcon = (mealKind: MealKind): LucideIcon | null =>
+export const mealKindIcon = (mealKind: MealKind): Icon | null =>
   mealKind === "cooked" ? null : MEAL_KIND_ICONS[mealKind];

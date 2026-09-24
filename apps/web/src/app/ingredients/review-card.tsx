@@ -1,7 +1,7 @@
 import type { EnrichmentRow } from "@cubby/schemas/ingredient";
 import type { FoodSummaryWithLinkedProducts } from "@cubby/schemas/usda";
+import { MagnifyingGlassIcon as Search } from "@phosphor-icons/react/dist/csr/MagnifyingGlass";
 import { useQuery } from "@tanstack/react-query";
-import { Search } from "lucide-react";
 import { type Ref, useEffect, useMemo, useRef, useState } from "react";
 
 import { verbDef } from "~/app/_components/actions/action-verbs";

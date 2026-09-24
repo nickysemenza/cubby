@@ -1,5 +1,7 @@
 import type { InfLocation } from "@cubby/schemas/location";
-import { ArrowDownToLine, FolderInput, Search } from "lucide-react";
+import { ArrowLineDownIcon as ArrowDownToLine } from "@phosphor-icons/react/dist/csr/ArrowLineDown";
+import { FolderSimplePlusIcon as FolderInput } from "@phosphor-icons/react/dist/csr/FolderSimplePlus";
+import { MagnifyingGlassIcon as Search } from "@phosphor-icons/react/dist/csr/MagnifyingGlass";
 import { useState } from "react";
 
 import { Row, Stack } from "~/components/layout";

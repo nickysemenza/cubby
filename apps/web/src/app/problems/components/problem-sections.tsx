@@ -27,23 +27,21 @@ import type {
   ProjectAttentionType,
 } from "@cubby/schemas/project";
 import { getMiscDisplayName } from "@cubby/shared";
+import { BarcodeIcon as ScanBarcode } from "@phosphor-icons/react/dist/csr/Barcode";
+import { DownloadIcon as Download } from "@phosphor-icons/react/dist/csr/Download";
+import { FunnelIcon as ListFilter } from "@phosphor-icons/react/dist/csr/Funnel";
+import { ImageBrokenIcon as ImageOff } from "@phosphor-icons/react/dist/csr/ImageBroken";
+import { LinkBreakIcon as Link2Off } from "@phosphor-icons/react/dist/csr/LinkBreak";
+import { LinkBreakIcon as Unlink } from "@phosphor-icons/react/dist/csr/LinkBreak";
+import { NetworkIcon as Network } from "@phosphor-icons/react/dist/csr/Network";
+import { ScalesIcon as Scale } from "@phosphor-icons/react/dist/csr/Scales";
+import { SparkleIcon as Sparkles } from "@phosphor-icons/react/dist/csr/Sparkle";
+import { StorefrontIcon as Store } from "@phosphor-icons/react/dist/csr/Storefront";
+import { WarningIcon as AlertTriangle } from "@phosphor-icons/react/dist/csr/Warning";
+import { WrenchIcon as Wrench } from "@phosphor-icons/react/dist/csr/Wrench";
+import type { Icon } from "@phosphor-icons/react/lib";
 import { Link } from "@tanstack/react-router";
 import { groupBy } from "es-toolkit";
-import {
-  AlertTriangle,
-  Download,
-  ImageOff,
-  Link2Off,
-  ListFilter,
-  type LucideIcon,
-  Network,
-  Scale,
-  ScanBarcode,
-  Sparkles,
-  Store,
-  Unlink,
-  Wrench,
-} from "lucide-react";
 import type { ReactNode } from "react";
 
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
@@ -191,7 +189,7 @@ function section<T, K extends CoverageProblemKey = never>(config: {
   title?: string;
   description?: string;
   emptyMessage?: string;
-  icon?: LucideIcon;
+  icon?: Icon;
   entity?: Entity;
   renderItem: (item: T) => RenderedProblemItem;
   groupBy?: (items: T[]) => Record<string, T[]>;

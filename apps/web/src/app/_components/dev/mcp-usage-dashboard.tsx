@@ -6,9 +6,9 @@ import type {
   McpUsageWindow,
 } from "@cubby/schemas/telemetry";
 import { ResponsiveBar } from "@nivo/bar";
+import { WarningIcon as AlertTriangle } from "@phosphor-icons/react/dist/csr/Warning";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import type { OnChangeFn, SortingState } from "@tanstack/react-table";
-import { AlertTriangle } from "lucide-react";
 import { type ReactNode, useCallback, useMemo, useState } from "react";
 import { z } from "zod";
 

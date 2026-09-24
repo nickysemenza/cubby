@@ -1,7 +1,7 @@
 import type { WishFilters, WishListItemOut } from "@cubby/schemas/wish";
+import { ImageIcon } from "@phosphor-icons/react/dist/csr/Image";
 import { useQuery } from "@tanstack/react-query";
 import { uniq } from "es-toolkit";
-import { ImageIcon } from "lucide-react";
 import { useMemo } from "react";
 
 import { renderOptionCell } from "~/app/_components/data-table/columnHelpers";

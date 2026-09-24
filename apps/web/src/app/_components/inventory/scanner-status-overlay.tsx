@@ -1,4 +1,5 @@
-import { CameraOff, RotateCcw } from "lucide-react";
+import { ArrowCounterClockwiseIcon as RotateCcw } from "@phosphor-icons/react/dist/csr/ArrowCounterClockwise";
+import { CameraSlashIcon as CameraOff } from "@phosphor-icons/react/dist/csr/CameraSlash";
 
 import { Row } from "~/components/layout";
 import { Button } from "~/components/ui/button";

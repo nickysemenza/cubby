@@ -1,7 +1,8 @@
 import { Combobox as ComboboxPrimitive } from "@base-ui/react";
 import { parseShortcode } from "@cubby/shared";
+import { CheckIcon } from "@phosphor-icons/react/dist/csr/Check";
+import { XIcon } from "@phosphor-icons/react/dist/csr/X";
 import { useDebouncedValue } from "@tanstack/react-pacer";
-import { CheckIcon, XIcon } from "lucide-react";
 import * as React from "react";
 
 import { Spinner } from "~/components/ui/spinner";

@@ -1,15 +1,13 @@
 import type { RecipeOut } from "@cubby/schemas/recipe";
+import { ArrowSquareOutIcon as ExternalLink } from "@phosphor-icons/react/dist/csr/ArrowSquareOut";
+import { BookBookmarkIcon as BookMarked } from "@phosphor-icons/react/dist/csr/BookBookmark";
+import { ClockIcon as Clock } from "@phosphor-icons/react/dist/csr/Clock";
+import { GitForkIcon as GitFork } from "@phosphor-icons/react/dist/csr/GitFork";
+import { TimerIcon as Timer } from "@phosphor-icons/react/dist/csr/Timer";
+import { UsersIcon as Users } from "@phosphor-icons/react/dist/csr/Users";
+import { WrenchIcon as Wrench } from "@phosphor-icons/react/dist/csr/Wrench";
 import { Link } from "@tanstack/react-router";
 import { sumBy } from "es-toolkit";
-import {
-  BookMarked,
-  Clock,
-  ExternalLink,
-  GitFork,
-  Timer,
-  Users,
-  Wrench,
-} from "lucide-react";
 
 import { Row } from "~/components/layout";
 import { EntityFilterLink } from "~/components/ui/entity-filter-link";

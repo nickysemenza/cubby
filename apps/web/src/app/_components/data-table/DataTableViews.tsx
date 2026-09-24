@@ -1,6 +1,7 @@
 import type { Entity } from "@cubby/schemas/entity";
+import { BookmarkIcon as Bookmark } from "@phosphor-icons/react/dist/csr/Bookmark";
+import { CheckIcon as Check } from "@phosphor-icons/react/dist/csr/Check";
 import type { RowData } from "@tanstack/react-table";
-import { Bookmark, Check } from "lucide-react";
 
 import { Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";

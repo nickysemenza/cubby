@@ -8,8 +8,8 @@ import type {
   TaskOut,
   TaskStatus,
 } from "@cubby/schemas/project";
+import { FunnelIcon as ListFilter } from "@phosphor-icons/react/dist/csr/Funnel";
 import { Link } from "@tanstack/react-router";
-import { ListFilter } from "lucide-react";
 import { z } from "zod";
 
 import {

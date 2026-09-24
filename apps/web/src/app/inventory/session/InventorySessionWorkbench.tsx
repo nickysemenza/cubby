@@ -6,10 +6,12 @@ import type {
 import type { InventorySessionResolution } from "@cubby/schemas/inventory";
 import type { InfLocation } from "@cubby/schemas/location";
 import type { ProductQuantitySummariesOut } from "@cubby/schemas/product";
+import { ArrowCounterClockwiseIcon as RotateCcw } from "@phosphor-icons/react/dist/csr/ArrowCounterClockwise";
+import { CheckCircleIcon as CheckCircle2 } from "@phosphor-icons/react/dist/csr/CheckCircle";
+import { ListChecksIcon as ListChecks } from "@phosphor-icons/react/dist/csr/ListChecks";
 import { skipToken, useMutation, useQuery } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { formatDistanceToNow } from "date-fns";
-import { CheckCircle2, ListChecks, RotateCcw } from "lucide-react";
 import pluralize from "pluralize";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";

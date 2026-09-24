@@ -1,8 +1,11 @@
 import type { EntityRef } from "@cubby/schemas/entity";
 import type { EntityGraphNode } from "@cubby/schemas/entity-graph";
+import { ArrowLeftIcon as ArrowLeft } from "@phosphor-icons/react/dist/csr/ArrowLeft";
+import { ArrowRightIcon as ArrowRight } from "@phosphor-icons/react/dist/csr/ArrowRight";
+import { ListIcon as List } from "@phosphor-icons/react/dist/csr/List";
+import { NetworkIcon as Network } from "@phosphor-icons/react/dist/csr/Network";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useRouter } from "@tanstack/react-router";
-import { ArrowLeft, ArrowRight, List, Network } from "lucide-react";
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 
 import { ErrorDisplay } from "~/components/feedback/error-display";

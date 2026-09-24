@@ -1,4 +1,5 @@
-import { Search, X } from "lucide-react";
+import { MagnifyingGlassIcon as Search } from "@phosphor-icons/react/dist/csr/MagnifyingGlass";
+import { XIcon as X } from "@phosphor-icons/react/dist/csr/X";
 
 import { Row } from "~/components/layout";
 import { Input } from "~/components/ui/input";

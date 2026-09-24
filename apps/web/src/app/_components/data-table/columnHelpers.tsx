@@ -12,16 +12,14 @@ import {
 import { isDisplayableImageFile } from "@cubby/schemas/image";
 import { locationType, type LocationType } from "@cubby/schemas/location";
 import type { ProductPricingOut } from "@cubby/schemas/product";
+import { CaretRightIcon as ChevronRight } from "@phosphor-icons/react/dist/csr/CaretRight";
+import { DotsThreeIcon as MoreHorizontal } from "@phosphor-icons/react/dist/csr/DotsThree";
+import { EyeIcon as Eye } from "@phosphor-icons/react/dist/csr/Eye";
+import { ImageIcon } from "@phosphor-icons/react/dist/csr/Image";
+import { PushPinIcon as Pin } from "@phosphor-icons/react/dist/csr/PushPin";
 import { Link } from "@tanstack/react-router";
 import type { RowData } from "@tanstack/react-table";
 import { uniqBy } from "es-toolkit";
-import {
-  ChevronRight,
-  Eye,
-  ImageIcon,
-  MoreHorizontal,
-  Pin,
-} from "lucide-react";
 import type { ReactNode } from "react";
 import { z } from "zod";
 

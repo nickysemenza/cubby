@@ -11,18 +11,16 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
+import { ArrowCounterClockwiseIcon as RotateCcw } from "@phosphor-icons/react/dist/csr/ArrowCounterClockwise";
+import { ArrowDownIcon as ArrowDown } from "@phosphor-icons/react/dist/csr/ArrowDown";
+import { ArrowUpIcon as ArrowUp } from "@phosphor-icons/react/dist/csr/ArrowUp";
+import { DotsSixVerticalIcon as GripVertical } from "@phosphor-icons/react/dist/csr/DotsSixVertical";
+import { DotsThreeIcon as MoreHorizontal } from "@phosphor-icons/react/dist/csr/DotsThree";
+import { EyeSlashIcon as EyeOff } from "@phosphor-icons/react/dist/csr/EyeSlash";
+import { PushPinSlashIcon as PinOff } from "@phosphor-icons/react/dist/csr/PushPinSlash";
+import { SidebarIcon as PanelLeft } from "@phosphor-icons/react/dist/csr/Sidebar";
+import { SidebarSimpleIcon as PanelRight } from "@phosphor-icons/react/dist/csr/SidebarSimple";
 import type { RowData } from "@tanstack/react-table";
-import {
-  ArrowDown,
-  ArrowUp,
-  EyeOff,
-  GripVertical,
-  MoreHorizontal,
-  PanelLeft,
-  PanelRight,
-  PinOff,
-  RotateCcw,
-} from "lucide-react";
 import { useId } from "react";
 import { z } from "zod";
 

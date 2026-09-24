@@ -1,5 +1,5 @@
 import type { VendorOut } from "@cubby/schemas/vendor";
-import { ImageDown } from "lucide-react";
+import { ImageIcon as ImageDown } from "@phosphor-icons/react/dist/csr/Image";
 
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { vendor as vendorOperations } from "~/app/vendors/vendor.functions";

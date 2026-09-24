@@ -1,7 +1,9 @@
 import type { CookbookShortcode } from "@cubby/schemas/identifiers";
+import { ArrowClockwiseIcon as RefreshCw } from "@phosphor-icons/react/dist/csr/ArrowClockwise";
+import { PlusIcon as Plus } from "@phosphor-icons/react/dist/csr/Plus";
+import { WarningIcon as AlertTriangle } from "@phosphor-icons/react/dist/csr/Warning";
 import { useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
-import { AlertTriangle, Plus, RefreshCw } from "lucide-react";
 import { useState } from "react";
 
 import type { DetailSlotComponent } from "~/app/_components/entity-detail/detail-slots";

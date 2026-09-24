@@ -1,6 +1,7 @@
 import type { LocationShortcode } from "@cubby/schemas/identifiers";
 import type { InfLocation } from "@cubby/schemas/location";
-import { ChevronRight, Home } from "lucide-react";
+import { CaretRightIcon as ChevronRight } from "@phosphor-icons/react/dist/csr/CaretRight";
+import { HouseIcon as Home } from "@phosphor-icons/react/dist/csr/House";
 import { useEffect, useMemo, useRef } from "react";
 
 import { cn } from "~/lib/utils";

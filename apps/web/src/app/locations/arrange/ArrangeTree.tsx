@@ -3,7 +3,8 @@ import {
   parseShortcodeFor,
 } from "@cubby/schemas/identifiers";
 import type { InfLocation } from "@cubby/schemas/location";
-import { ChevronRight, CornerDownRight } from "lucide-react";
+import { ArrowBendDownRightIcon as CornerDownRight } from "@phosphor-icons/react/dist/csr/ArrowBendDownRight";
+import { CaretRightIcon as ChevronRight } from "@phosphor-icons/react/dist/csr/CaretRight";
 import { useRef } from "react";
 
 import { Row, Stack } from "~/components/layout";

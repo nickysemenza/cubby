@@ -1,6 +1,7 @@
 import type { Entity } from "@cubby/schemas/entity";
+import { ListIcon as List } from "@phosphor-icons/react/dist/csr/List";
+import { ListDashesIcon as LayoutList } from "@phosphor-icons/react/dist/csr/ListDashes";
 import type { RowData } from "@tanstack/react-table";
-import { LayoutList, List } from "lucide-react";
 import type { ReactNode } from "react";
 
 import { ErrorDisplay } from "~/components/feedback/error-display";

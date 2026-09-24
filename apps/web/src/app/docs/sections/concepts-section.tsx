@@ -27,7 +27,7 @@ export function ConceptsSection() {
         <Card>
           <CardHeader>
             <Row align="center" gap="sm">
-              <entities.ingredient.lucideIcon className="size-5 text-muted-foreground" />
+              <entities.ingredient.phosphorIcon className="size-5 text-muted-foreground" />
               <CardTitle>Ingredients</CardTitle>
             </Row>
             <CardDescription>
@@ -40,7 +40,7 @@ export function ConceptsSection() {
         <Card>
           <CardHeader>
             <Row align="center" gap="sm">
-              <entities.product.lucideIcon className="size-5 text-muted-foreground" />
+              <entities.product.phosphorIcon className="size-5 text-muted-foreground" />
               <CardTitle>Products</CardTitle>
             </Row>
             <CardDescription>
@@ -54,7 +54,7 @@ export function ConceptsSection() {
         <Card>
           <CardHeader>
             <Row align="center" gap="sm">
-              <entities.location.lucideIcon className="size-5 text-muted-foreground" />
+              <entities.location.phosphorIcon className="size-5 text-muted-foreground" />
               <CardTitle>Locations</CardTitle>
             </Row>
             <CardDescription>
@@ -68,7 +68,7 @@ export function ConceptsSection() {
         <Card>
           <CardHeader>
             <Row align="center" gap="sm">
-              <entities.recipe.lucideIcon className="size-5 text-muted-foreground" />
+              <entities.recipe.phosphorIcon className="size-5 text-muted-foreground" />
               <CardTitle>Recipes</CardTitle>
             </Row>
             <CardDescription>
@@ -81,7 +81,7 @@ export function ConceptsSection() {
         <Card>
           <CardHeader>
             <Row align="center" gap="sm">
-              <entities.inventory.lucideIcon className="size-5 text-muted-foreground" />
+              <entities.inventory.phosphorIcon className="size-5 text-muted-foreground" />
               <CardTitle>Inventory</CardTitle>
             </Row>
             <CardDescription>

@@ -1,4 +1,5 @@
-import { Keyboard, ScanBarcode } from "lucide-react";
+import { BarcodeIcon as ScanBarcode } from "@phosphor-icons/react/dist/csr/Barcode";
+import { KeyboardIcon as Keyboard } from "@phosphor-icons/react/dist/csr/Keyboard";
 import { useCallback, useId, useRef, useState } from "react";
 
 import {

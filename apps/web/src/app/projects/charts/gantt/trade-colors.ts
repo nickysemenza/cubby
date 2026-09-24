@@ -4,7 +4,7 @@
  * turning the chart into a rainbow that fights the five domain lines. The
  * trades instead fold into **six muted build-phase families** — enough colour
  * to group structure / MEP / surfaces / finish / site / planning, while the
- * exact trade is carried by its Lucide glyph (see `TRADE_ICONS` in shared.tsx)
+ * exact trade is carried by its Phosphor glyph (see `TRADE_ICONS` in shared.tsx)
  * and row label.
  *
  * Alias-free (no `~/`) so it can sit under the vitest `unit` project alongside

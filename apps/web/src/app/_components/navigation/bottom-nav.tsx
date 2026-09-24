@@ -1,5 +1,7 @@
+import { DotsThreeIcon as MoreHorizontal } from "@phosphor-icons/react/dist/csr/DotsThree";
+import { SignInIcon as LogIn } from "@phosphor-icons/react/dist/csr/SignIn";
+import type { Icon } from "@phosphor-icons/react/lib";
 import { Link, useLocation } from "@tanstack/react-router";
-import { LogIn, MoreHorizontal } from "lucide-react";
 import * as React from "react";
 
 import { Row } from "~/components/layout";
@@ -13,7 +15,7 @@ import { bottomNavItems, publicNavItems, useActiveTo } from "./nav-items";
 import { WorkspaceNavigator } from "./workspace-navigator";
 
 type BottomNavItemProps = {
-  icon?: React.ComponentType<{ className?: string }>;
+  icon?: Icon;
   label: string;
   active?: boolean;
   /**
@@ -70,7 +72,13 @@ function BottomNavItem({
       {...linkPreloadProps}
       {...rest}
     >
-      {Icon && <Icon className="size-5" aria-hidden="true" />}
+      {Icon && (
+        <Icon
+          className="size-5"
+          weight={active ? "fill" : "regular"}
+          aria-hidden="true"
+        />
+      )}
       <span className="text-2xs font-medium">{label}</span>
     </Comp>
   );

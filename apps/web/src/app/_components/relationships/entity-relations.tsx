@@ -8,9 +8,13 @@ import {
   type EntityGraphOutput,
 } from "@cubby/schemas/entity-graph";
 import { allEntities, entityManifest } from "@cubby/schemas/entity-manifest";
+import { ArrowClockwiseIcon as RotateCw } from "@phosphor-icons/react/dist/csr/ArrowClockwise";
+import { ArrowLeftIcon as ArrowLeft } from "@phosphor-icons/react/dist/csr/ArrowLeft";
+import { ArrowRightIcon as ArrowRight } from "@phosphor-icons/react/dist/csr/ArrowRight";
+import { ListIcon as List } from "@phosphor-icons/react/dist/csr/List";
+import { NetworkIcon as Network } from "@phosphor-icons/react/dist/csr/Network";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useRouter } from "@tanstack/react-router";
-import { ArrowLeft, ArrowRight, List, Network, RotateCw } from "lucide-react";
 import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 
 import { useInventoryPlacementAction } from "~/app/_components/inventory/inventory-placement-suggestion";

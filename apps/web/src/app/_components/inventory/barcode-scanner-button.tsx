@@ -7,7 +7,7 @@
  * app — reticle ROI, torch, beep, and same-code debounce included.
  */
 
-import { Camera } from "lucide-react";
+import { CameraIcon as Camera } from "@phosphor-icons/react/dist/csr/Camera";
 import { useState } from "react";
 
 import { Button } from "~/components/ui/button";

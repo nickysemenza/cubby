@@ -1,4 +1,4 @@
-import type { LucideIcon } from "lucide-react";
+import type { Icon } from "@phosphor-icons/react/lib";
 import * as React from "react";
 
 import { cn } from "~/lib/utils";
@@ -45,7 +45,7 @@ function CardTitle({
   children,
   ...props
 }: React.ComponentProps<"div"> & {
-  icon?: LucideIcon;
+  icon?: Icon;
   /**
    * Render as a real heading where the card is a named region of the page
    * rather than incidental chrome. A card title looks like a heading and is

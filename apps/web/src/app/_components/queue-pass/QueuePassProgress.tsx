@@ -1,5 +1,5 @@
+import { ArrowCounterClockwiseIcon as RotateCcw } from "@phosphor-icons/react/dist/csr/ArrowCounterClockwise";
 import { formatDistanceToNow } from "date-fns";
-import { RotateCcw } from "lucide-react";
 import type { ReactNode } from "react";
 
 import { Row, Stack } from "~/components/layout";

@@ -1,6 +1,6 @@
 import type { ProjectPortfolioAnalyticsOut } from "@cubby/schemas/project";
+import { ListChecksIcon as ListChecks } from "@phosphor-icons/react/dist/csr/ListChecks";
 import { useNavigate } from "@tanstack/react-router";
-import { ListChecks } from "lucide-react";
 import { useMemo } from "react";
 
 import { RankedBarBreakdown } from "~/app/_components/charts/kit";

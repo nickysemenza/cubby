@@ -1,5 +1,6 @@
+import { ClipboardTextIcon as ClipboardList } from "@phosphor-icons/react/dist/csr/ClipboardText";
+import { FloppyDiskIcon as Save } from "@phosphor-icons/react/dist/csr/FloppyDisk";
 import { createFileRoute } from "@tanstack/react-router";
-import { ClipboardList, Save } from "lucide-react";
 import { useId } from "react";
 
 import { Row, Stack } from "~/components/layout";

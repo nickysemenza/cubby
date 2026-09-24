@@ -3,14 +3,12 @@ import {
   projectStatusSchema,
   taskStatusSchema,
 } from "@cubby/schemas/project";
-import {
-  CheckCircle2,
-  Circle,
-  Clock,
-  ListTodo,
-  type LucideIcon,
-  ShieldAlert,
-} from "lucide-react";
+import { CheckCircleIcon as CheckCircle2 } from "@phosphor-icons/react/dist/csr/CheckCircle";
+import { CircleIcon as Circle } from "@phosphor-icons/react/dist/csr/Circle";
+import { ClockIcon as Clock } from "@phosphor-icons/react/dist/csr/Clock";
+import { ListChecksIcon as ListTodo } from "@phosphor-icons/react/dist/csr/ListChecks";
+import { ShieldWarningIcon as ShieldAlert } from "@phosphor-icons/react/dist/csr/ShieldWarning";
+import type { Icon } from "@phosphor-icons/react/lib";
 import { z } from "zod";
 
 interface StatusBadgeProps {
@@ -18,7 +16,7 @@ interface StatusBadgeProps {
   /** Tailwind classes for bg + text using theme tokens. */
   className: string;
   /** Optional icon for status displays. */
-  icon?: LucideIcon;
+  icon?: Icon;
 }
 
 const auditStatus = new Map<string, StatusBadgeProps>([

@@ -1,6 +1,8 @@
 import { preferredImageUrl } from "@cubby/schemas/image-summary";
+import { ArrowSquareOutIcon as ExternalLink } from "@phosphor-icons/react/dist/csr/ArrowSquareOut";
+import { CaretLeftIcon as ChevronLeft } from "@phosphor-icons/react/dist/csr/CaretLeft";
+import { CaretRightIcon as ChevronRight } from "@phosphor-icons/react/dist/csr/CaretRight";
 import { Link } from "@tanstack/react-router";
-import { ChevronLeft, ChevronRight, ExternalLink } from "lucide-react";
 
 import { Button, buttonVariants } from "~/components/ui/button";
 import {

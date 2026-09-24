@@ -23,7 +23,7 @@ export default defineEntity({
         "Create a root category, then add optional groups and types.",
       actionLabel: "Add product category",
     },
-    icons: { lucide: "Tags", sfSymbol: "tag", emoji: "🏷️" },
+    icons: { phosphor: "Tag", sfSymbol: "tag", emoji: "🏷️" },
     detail: {
       sectionOverrides: [
         {

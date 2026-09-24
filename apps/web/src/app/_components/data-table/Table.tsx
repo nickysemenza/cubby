@@ -1,7 +1,9 @@
 import type { Entity } from "@cubby/schemas/entity";
+import { CheckIcon as Check } from "@phosphor-icons/react/dist/csr/Check";
+import { ListIcon as List } from "@phosphor-icons/react/dist/csr/List";
+import { ListDashesIcon as LayoutList } from "@phosphor-icons/react/dist/csr/ListDashes";
 import type { CellSelectionState, RowData } from "@tanstack/react-table";
 import { flexRender } from "@tanstack/react-table";
-import { Check, LayoutList, List } from "lucide-react";
 import type { ReactNode } from "react";
 import { useMemo, useRef } from "react";
 

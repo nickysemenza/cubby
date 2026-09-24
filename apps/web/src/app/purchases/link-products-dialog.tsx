@@ -4,10 +4,10 @@ import {
 } from "@cubby/schemas/identifiers";
 import type { ProductPickerItemOut } from "@cubby/schemas/product";
 import type { PurchaseOut } from "@cubby/schemas/purchase";
+import { MagnifyingGlassIcon as Search } from "@phosphor-icons/react/dist/csr/MagnifyingGlass";
 import { useDebouncedValue } from "@tanstack/react-pacer";
 import { useQuery } from "@tanstack/react-query";
 import type { RowSelectionState, Updater } from "@tanstack/react-table";
-import { Search } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import {

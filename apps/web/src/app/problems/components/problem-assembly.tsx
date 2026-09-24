@@ -1,6 +1,7 @@
 import type { Entity } from "@cubby/schemas/entity";
 import type { ProblemsCoverage } from "@cubby/schemas/problems";
-import { ChevronDown, ListFilter } from "lucide-react";
+import { CaretDownIcon as ChevronDown } from "@phosphor-icons/react/dist/csr/CaretDown";
+import { FunnelIcon as ListFilter } from "@phosphor-icons/react/dist/csr/Funnel";
 import { Fragment } from "react";
 
 import { Button, buttonVariants } from "~/components/ui/button";

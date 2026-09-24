@@ -1,6 +1,7 @@
 import type { RecipeSource } from "@cubby/schemas/recipe-shared";
+import { ArrowSquareOutIcon as ExternalLink } from "@phosphor-icons/react/dist/csr/ArrowSquareOut";
+import { BookOpenIcon as BookOpen } from "@phosphor-icons/react/dist/csr/BookOpen";
 import { Link } from "@tanstack/react-router";
-import { BookOpen, ExternalLink } from "lucide-react";
 import type { MouseEvent } from "react";
 import { match, P } from "ts-pattern";
 

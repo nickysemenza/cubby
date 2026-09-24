@@ -1,6 +1,6 @@
 import type { LocationShortcode } from "@cubby/schemas/identifiers";
 import type { InfLocation } from "@cubby/schemas/location";
-import { FolderInput } from "lucide-react";
+import { FolderSimplePlusIcon as FolderInput } from "@phosphor-icons/react/dist/csr/FolderSimplePlus";
 import { useState } from "react";
 import { match } from "ts-pattern";
 

@@ -1,5 +1,7 @@
+import { CheckCircleIcon as CheckCircle2 } from "@phosphor-icons/react/dist/csr/CheckCircle";
+import { SparkleIcon as Sparkles } from "@phosphor-icons/react/dist/csr/Sparkle";
+import { WarningCircleIcon as CircleAlert } from "@phosphor-icons/react/dist/csr/WarningCircle";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { CheckCircle2, CircleAlert, Sparkles } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { importRunHref } from "~/app/purchases/purchase-import-links";

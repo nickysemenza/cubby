@@ -28,7 +28,9 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "~/components/ui/tooltip"
-import { ChevronLeftIcon, ChevronRightIcon, ChevronDownIcon } from "lucide-react"
+import { CaretLeftIcon as ChevronLeftIcon } from "@phosphor-icons/react/dist/csr/CaretLeft";
+import { CaretRightIcon as ChevronRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
+import { CaretDownIcon as ChevronDownIcon } from "@phosphor-icons/react/dist/csr/CaretDown";
 
 const GANTT_SCALES: GanttScale[] = ["day", "week", "month", "quarter", "year"]
 

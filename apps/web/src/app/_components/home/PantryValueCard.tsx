@@ -1,6 +1,6 @@
+import { WalletIcon as Wallet } from "@phosphor-icons/react/dist/csr/Wallet";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { Wallet } from "lucide-react";
 import { useId } from "react";
 
 import { location } from "~/app/locations/location.functions";

@@ -6,9 +6,14 @@ import type {
   SearchResultGroup,
 } from "@cubby/schemas/search";
 import { type ParsedShortcode, parseShortcode } from "@cubby/shared";
+import { CaretRightIcon as ChevronRight } from "@phosphor-icons/react/dist/csr/CaretRight";
+import { EqualsIcon as Equal } from "@phosphor-icons/react/dist/csr/Equals";
+import { GearIcon as Settings } from "@phosphor-icons/react/dist/csr/Gear";
+import { MagnifyingGlassIcon as Search } from "@phosphor-icons/react/dist/csr/MagnifyingGlass";
+import { MapPinIcon as MapPin } from "@phosphor-icons/react/dist/csr/MapPin";
+import { XIcon as X } from "@phosphor-icons/react/dist/csr/X";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
-import { ChevronRight, Equal, MapPin, Search, Settings, X } from "lucide-react";
 import * as React from "react";
 
 import { ErrorDisplay } from "~/components/feedback/error-display";

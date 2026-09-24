@@ -1,5 +1,8 @@
+import { CaretLeftIcon as ChevronLeft } from "@phosphor-icons/react/dist/csr/CaretLeft";
+import { CaretRightIcon as ChevronRight } from "@phosphor-icons/react/dist/csr/CaretRight";
+import { MagnifyingGlassIcon as Search } from "@phosphor-icons/react/dist/csr/MagnifyingGlass";
+import { WrenchIcon as Wrench } from "@phosphor-icons/react/dist/csr/Wrench";
 import { Link, useLocation, useRouter } from "@tanstack/react-router";
-import { ChevronLeft, ChevronRight, Search, Wrench } from "lucide-react";
 import {
   type ReactNode,
   Suspense,
@@ -511,7 +514,10 @@ function SidebarFullLeaf({ item, active }: { item: NavItem; active: boolean }) {
         active && "border-border bg-background font-medium text-foreground",
       )}
     >
-      <Icon className="size-3.5 shrink-0" />
+      <Icon
+        className="size-3.5 shrink-0"
+        weight={active ? "bold" : "regular"}
+      />
       <span className="min-w-0 truncate">{item.label}</span>
       {item.entity && <NavigationCountBadge entity={item.entity} />}
     </Link>

@@ -1,7 +1,7 @@
 import type { ExpenseMonthlyAggregate } from "@cubby/schemas/project";
+import { ChartBarIcon as ChartNoAxesColumnIncreasing } from "@phosphor-icons/react/dist/csr/ChartBar";
 import { useQuery } from "@tanstack/react-query";
 import { format, parseISO } from "date-fns";
-import { ChartNoAxesColumnIncreasing } from "lucide-react";
 import { useId, useMemo } from "react";
 
 import { expense } from "~/app/expenses/expense.functions";

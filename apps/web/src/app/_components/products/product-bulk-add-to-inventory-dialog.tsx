@@ -26,8 +26,8 @@ import {
 } from "@cubby/schemas/identifiers";
 import { positiveAmount } from "@cubby/schemas/inventory";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { XIcon as X } from "@phosphor-icons/react/dist/csr/X";
 import { useQuery } from "@tanstack/react-query";
-import { X } from "lucide-react";
 import { type FC, useEffect, useMemo } from "react";
 import { useFieldArray, useForm } from "react-hook-form";
 import { z } from "zod";

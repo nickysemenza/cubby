@@ -1,5 +1,5 @@
 import type { IngredientUsageRow } from "@cubby/schemas/ingredient-usage";
-import { Carrot } from "lucide-react";
+import { CarrotIcon as Carrot } from "@phosphor-icons/react/dist/csr/Carrot";
 
 import { RankedBarBreakdown } from "~/app/_components/charts/kit";
 

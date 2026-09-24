@@ -1,7 +1,9 @@
 import type { Entity } from "@cubby/schemas/entity";
 import { isAuditableEntity } from "@cubby/schemas/entity-manifest";
+import { CaretDownIcon as ChevronDown } from "@phosphor-icons/react/dist/csr/CaretDown";
+import { CaretRightIcon as ChevronRight } from "@phosphor-icons/react/dist/csr/CaretRight";
+import { ClockIcon as Clock } from "@phosphor-icons/react/dist/csr/Clock";
 import { useLocation, useNavigate } from "@tanstack/react-router";
-import { ChevronDown, ChevronRight, Clock } from "lucide-react";
 import {
   createContext,
   type FC,

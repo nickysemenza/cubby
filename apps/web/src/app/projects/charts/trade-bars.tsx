@@ -1,6 +1,6 @@
 import { isPrincipalExpense } from "@cubby/schemas/expense-line-kind";
 import type { ExpenseOut, Trade } from "@cubby/schemas/project";
-import { ShoppingBag } from "lucide-react";
+import { ShoppingBagIcon as ShoppingBag } from "@phosphor-icons/react/dist/csr/ShoppingBag";
 import { useMemo } from "react";
 
 import { HorizontalBarChart } from "~/app/_components/charts/kit";

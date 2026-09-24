@@ -3,9 +3,12 @@ import type {
   CookbookIngredientLine,
   CookbookRecipe,
 } from "@cubby/schemas/cookbook";
+import { CaretDownIcon as ChevronDown } from "@phosphor-icons/react/dist/csr/CaretDown";
+import { CaretRightIcon as ChevronRight } from "@phosphor-icons/react/dist/csr/CaretRight";
+import { DownloadSimpleIcon as Import } from "@phosphor-icons/react/dist/csr/DownloadSimple";
+import { XIcon as X } from "@phosphor-icons/react/dist/csr/X";
 import { useQueries } from "@tanstack/react-query";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { ChevronDown, ChevronRight, Import, X } from "lucide-react";
 import { useCallback, useId, useMemo, useRef } from "react";
 
 import { recipe } from "~/app/recipes/recipe.functions";

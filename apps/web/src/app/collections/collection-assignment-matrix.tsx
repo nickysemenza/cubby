@@ -11,9 +11,13 @@ import {
   formatCollectionLabel,
   normalizeCollectionSlug,
 } from "@cubby/shared/collection-tag";
+import { CaretLeftIcon as ChevronLeft } from "@phosphor-icons/react/dist/csr/CaretLeft";
+import { CaretRightIcon as ChevronRight } from "@phosphor-icons/react/dist/csr/CaretRight";
+import { CheckIcon as Check } from "@phosphor-icons/react/dist/csr/Check";
+import { MapPinIcon as MapPin } from "@phosphor-icons/react/dist/csr/MapPin";
+import { PlusIcon as Plus } from "@phosphor-icons/react/dist/csr/Plus";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { Check, ChevronLeft, ChevronRight, MapPin, Plus } from "lucide-react";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 

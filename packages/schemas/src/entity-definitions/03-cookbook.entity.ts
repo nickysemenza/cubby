@@ -26,7 +26,7 @@ export default defineEntity({
       description:
         "Drag an EPUB cookbook into the Recipes import page and Cubby will extract its recipes.",
     },
-    icons: { lucide: "BookOpen", sfSymbol: "book.closed", emoji: "📖" },
+    icons: { phosphor: "BookOpen", sfSymbol: "book.closed", emoji: "📖" },
     detail: {
       sectionOverrides: [
         {

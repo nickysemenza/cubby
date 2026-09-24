@@ -45,7 +45,7 @@ export default defineEntity({
       actionLabel: "New Expense",
     },
     icons: {
-      lucide: "ReceiptText",
+      phosphor: "Receipt",
       sfSymbol: "dollarsign.circle",
       emoji: "💸",
     },

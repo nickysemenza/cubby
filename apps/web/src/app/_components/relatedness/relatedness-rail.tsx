@@ -1,8 +1,8 @@
 import type { EntityRecommendationGroup } from "@cubby/schemas/entity-recommendations";
 import type { ProductShortcode } from "@cubby/schemas/identifiers";
+import { SparkleIcon as Sparkles } from "@phosphor-icons/react/dist/csr/Sparkle";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { Sparkles } from "lucide-react";
 import { useEffect, useMemo } from "react";
 
 import { Row, Stack } from "~/components/layout";

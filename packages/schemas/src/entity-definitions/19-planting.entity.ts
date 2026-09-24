@@ -29,7 +29,7 @@ export default defineEntity({
         "Record what is growing now or plan the next crop for one of your garden locations.",
       actionLabel: "New Planting",
     },
-    icons: { lucide: "Sprout", sfSymbol: "leaf", emoji: "🌱" },
+    icons: { phosphor: "Plant", sfSymbol: "leaf", emoji: "🌱" },
     detail: {
       variantOverride: "journal",
       hero: {

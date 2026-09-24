@@ -1,5 +1,5 @@
 import type { ImageOut } from "@cubby/schemas/image";
-import { ExternalLink } from "lucide-react";
+import { ArrowSquareOutIcon as ExternalLink } from "@phosphor-icons/react/dist/csr/ArrowSquareOut";
 import prettyBytes from "pretty-bytes";
 import { type FC, useEffect, useRef } from "react";
 

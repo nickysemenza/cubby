@@ -1,12 +1,10 @@
 import type { CalendarItemKind } from "@cubby/schemas/calendar";
-import {
-  CalendarRange,
-  CheckSquare,
-  CircleDollarSign,
-  CookingPot,
-  type LucideIcon,
-  Sprout,
-} from "lucide-react";
+import { CalendarBlankIcon as CalendarRange } from "@phosphor-icons/react/dist/csr/CalendarBlank";
+import { CheckSquareIcon as CheckSquare } from "@phosphor-icons/react/dist/csr/CheckSquare";
+import { CookingPotIcon as CookingPot } from "@phosphor-icons/react/dist/csr/CookingPot";
+import { CurrencyCircleDollarIcon as CircleDollarSign } from "@phosphor-icons/react/dist/csr/CurrencyCircleDollar";
+import { PlantIcon as Sprout } from "@phosphor-icons/react/dist/csr/Plant";
+import type { Icon } from "@phosphor-icons/react/lib";
 
 /**
  * The kind→glyph map, in a LEAF module.
@@ -22,4 +20,4 @@ export const KIND_ICONS = {
   expense: CircleDollarSign,
   project: CalendarRange,
   planting: Sprout,
-} satisfies Record<CalendarItemKind, LucideIcon>;
+} satisfies Record<CalendarItemKind, Icon>;

@@ -1,6 +1,10 @@
 import type { ImageUrlSummary } from "@cubby/schemas/image-summary";
+import { EyeIcon as Eye } from "@phosphor-icons/react/dist/csr/Eye";
+import { EyeSlashIcon as EyeOff } from "@phosphor-icons/react/dist/csr/EyeSlash";
+import { PlusIcon as Plus } from "@phosphor-icons/react/dist/csr/Plus";
+import { WarningIcon as AlertTriangle } from "@phosphor-icons/react/dist/csr/Warning";
+import { WarningCircleIcon as AlertCircle } from "@phosphor-icons/react/dist/csr/WarningCircle";
 import { uniq } from "es-toolkit";
-import { AlertCircle, AlertTriangle, Eye, EyeOff, Plus } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import { Row } from "~/components/layout";

@@ -1,12 +1,10 @@
 import type { FoodSummaryWithLinkedProducts } from "@cubby/schemas/usda";
-import {
-  Apple,
-  Info,
-  Link2,
-  Scale,
-  ScrollText,
-  UtensilsCrossed,
-} from "lucide-react";
+import { BowlFoodIcon as Apple } from "@phosphor-icons/react/dist/csr/BowlFood";
+import { ForkKnifeIcon as UtensilsCrossed } from "@phosphor-icons/react/dist/csr/ForkKnife";
+import { InfoIcon as Info } from "@phosphor-icons/react/dist/csr/Info";
+import { LinkIcon as Link2 } from "@phosphor-icons/react/dist/csr/Link";
+import { ScalesIcon as Scale } from "@phosphor-icons/react/dist/csr/Scales";
+import { ScrollIcon as ScrollText } from "@phosphor-icons/react/dist/csr/Scroll";
 import { useMemo } from "react";
 
 import { Stack } from "~/components/layout";

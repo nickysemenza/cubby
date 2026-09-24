@@ -6,17 +6,15 @@ import {
 } from "@cubby/schemas/entity-definitions/definition";
 import type { BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
 import { entitySummary } from "@cubby/schemas/entity-summary";
+import { CalendarCheckIcon as CalendarClock } from "@phosphor-icons/react/dist/csr/CalendarCheck";
+import { CheckIcon as Check } from "@phosphor-icons/react/dist/csr/Check";
+import { GridFourIcon as Grid2X2 } from "@phosphor-icons/react/dist/csr/GridFour";
+import { GridNineIcon as Grid3X3 } from "@phosphor-icons/react/dist/csr/GridNine";
+import { TableIcon as Table2 } from "@phosphor-icons/react/dist/csr/Table";
+import type { Icon } from "@phosphor-icons/react/lib";
 import type { UseSuspenseQueryOptions } from "@tanstack/react-query";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { Link, notFound, useParams } from "@tanstack/react-router";
-import {
-  CalendarClock,
-  Check,
-  Grid2X2,
-  Grid3X3,
-  type LucideIcon,
-  Table2,
-} from "lucide-react";
 import type { ComponentType, ReactNode } from "react";
 import { z } from "zod";
 
@@ -102,7 +100,7 @@ const VIEW_ICONS = {
   table: Table2,
   shelf: Grid2X2,
   timeline: CalendarClock,
-} satisfies Record<"table" | "shelf" | "timeline", LucideIcon>;
+} satisfies Record<"table" | "shelf" | "timeline", Icon>;
 
 /** The segmented view control, rendered only when the manifest declares more than one view. */
 function ListViewSwitcher({ entity }: { entity: BrowserRoutedEntity }) {

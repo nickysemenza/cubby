@@ -1,6 +1,6 @@
 "use client";
 
-import { Pencil } from "lucide-react";
+import { PencilIcon as Pencil } from "@phosphor-icons/react/dist/csr/Pencil";
 import * as React from "react";
 
 import { useHydrationGate } from "~/hooks/useHydrated";

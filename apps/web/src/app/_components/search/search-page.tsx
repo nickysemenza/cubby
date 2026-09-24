@@ -6,11 +6,13 @@ import type {
   SearchType,
 } from "@cubby/schemas/search";
 import { searchableEntities } from "@cubby/schemas/search";
+import { CaretRightIcon as ChevronRight } from "@phosphor-icons/react/dist/csr/CaretRight";
+import { MagnifyingGlassIcon as Search } from "@phosphor-icons/react/dist/csr/MagnifyingGlass";
+import { MapPinIcon as MapPin } from "@phosphor-icons/react/dist/csr/MapPin";
 import { useDebouncedValue } from "@tanstack/react-pacer";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { uniq } from "es-toolkit";
-import { ChevronRight, MapPin, Search } from "lucide-react";
 import {
   useCallback,
   useEffect,

@@ -1,7 +1,8 @@
 import type { EntityImage } from "@cubby/schemas/entity";
 import { PDF_CONTENT_TYPE } from "@cubby/schemas/image";
+import { FileTextIcon as FileText } from "@phosphor-icons/react/dist/csr/FileText";
+import { XIcon as X } from "@phosphor-icons/react/dist/csr/X";
 import { useMutation } from "@tanstack/react-query";
-import { FileText, X } from "lucide-react";
 import prettyBytes from "pretty-bytes";
 import { useCallback, useState } from "react";
 import { toast } from "sonner";

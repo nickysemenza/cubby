@@ -1,7 +1,7 @@
 import type { SearchHit } from "@cubby/schemas/search";
+import { MagnifyingGlassIcon as Search } from "@phosphor-icons/react/dist/csr/MagnifyingGlass";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { Search } from "lucide-react";
 import { useState } from "react";
 
 import { Row, Stack } from "~/components/layout";

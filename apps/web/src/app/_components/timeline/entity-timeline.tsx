@@ -8,17 +8,15 @@ import {
   type EntityTimelineOut,
   type EntityTimelineRow,
 } from "@cubby/schemas/entity-timeline";
+import { ArrowDownIcon as ArrowDown } from "@phosphor-icons/react/dist/csr/ArrowDown";
+import { ArrowUpIcon as ArrowUp } from "@phosphor-icons/react/dist/csr/ArrowUp";
+import { CalendarBlankIcon as CalendarRange } from "@phosphor-icons/react/dist/csr/CalendarBlank";
+import { CalendarCheckIcon as CalendarClock } from "@phosphor-icons/react/dist/csr/CalendarCheck";
+import { CaretLeftIcon as ChevronLeft } from "@phosphor-icons/react/dist/csr/CaretLeft";
+import { CaretRightIcon as ChevronRight } from "@phosphor-icons/react/dist/csr/CaretRight";
+import { ClockIcon as Clock3 } from "@phosphor-icons/react/dist/csr/Clock";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import {
-  ArrowDown,
-  ArrowUp,
-  CalendarClock,
-  CalendarRange,
-  ChevronLeft,
-  ChevronRight,
-  Clock3,
-} from "lucide-react";
 import { type ReactNode, useId, useMemo, useState } from "react";
 
 import { DatePickerInput } from "~/app/_components/date-picker-input";

@@ -8,10 +8,11 @@ import {
   type BrowserRoutedEntity,
 } from "@cubby/schemas/entity-manifest";
 import { entitySummary } from "@cubby/schemas/entity-summary";
+import { ArrowUpRightIcon as ArrowUpRight } from "@phosphor-icons/react/dist/csr/ArrowUpRight";
+import { PlusIcon as Plus } from "@phosphor-icons/react/dist/csr/Plus";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { flexRender, type RowData } from "@tanstack/react-table";
-import { ArrowUpRight, Plus } from "lucide-react";
 import {
   createContext,
   useCallback,

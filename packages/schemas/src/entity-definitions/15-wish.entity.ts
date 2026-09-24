@@ -21,7 +21,7 @@ export default defineEntity({
         "Keep an idea open-ended or compare a few Products before deciding.",
       actionLabel: "Add Wish",
     },
-    icons: { lucide: "Heart", sfSymbol: "star", emoji: "⭐" },
+    icons: { phosphor: "Heart", sfSymbol: "star", emoji: "⭐" },
     detail: {
       omitRelations: {
         candidates:

@@ -1,5 +1,6 @@
+import { CaretRightIcon as ChevronRight } from "@phosphor-icons/react/dist/csr/CaretRight";
+import type { Icon } from "@phosphor-icons/react/lib";
 import { Link } from "@tanstack/react-router";
-import { ChevronRight, type LucideIcon } from "lucide-react";
 import {
   Children,
   Fragment,
@@ -26,7 +27,7 @@ interface MobileCardProps {
   className?: string;
   detailsHref?: string;
   title?: string;
-  titleIcon?: LucideIcon;
+  titleIcon?: Icon;
   subtitle?: ReactNode;
   imageSlot?: ReactNode;
   reserveImageSlot?: boolean;
@@ -60,7 +61,7 @@ function PrimaryTitle({
   title: string | undefined;
   detailsHref?: string;
   onClick?: () => void;
-  titleIcon?: LucideIcon;
+  titleIcon?: Icon;
   iconClassName?: string;
 }) {
   const content = (

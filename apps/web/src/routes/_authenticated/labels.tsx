@@ -1,10 +1,12 @@
+import { ArrowLeftIcon as ArrowLeft } from "@phosphor-icons/react/dist/csr/ArrowLeft";
+import { DownloadIcon as Download } from "@phosphor-icons/react/dist/csr/Download";
+import { PrinterIcon as Printer } from "@phosphor-icons/react/dist/csr/Printer";
 import {
   createFileRoute,
   stripSearchParams,
   useRouter,
 } from "@tanstack/react-router";
 import { uniq } from "es-toolkit";
-import { ArrowLeft, Download, Printer } from "lucide-react";
 import { useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { z } from "zod";
