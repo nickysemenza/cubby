@@ -167,6 +167,8 @@ describe("EntityManifestGrid mega table: baseline rendering", () => {
     );
     expect(product).toHaveAttribute("aria-expanded", "true");
     expect(screen.getByText("Declaration overrides")).toBeInTheDocument();
+    expect(screen.getByText("Effective behavior")).toBeInTheDocument();
+    expect(screen.getByText("Storage table")).toBeInTheDocument();
     expect(
       screen.getByText("presentation.detail.sectionOverrides"),
     ).toBeInTheDocument();

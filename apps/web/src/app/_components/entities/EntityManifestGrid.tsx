@@ -7,6 +7,7 @@ import {
   entityManifest,
   photoCategories,
 } from "@cubby/schemas/entity-manifest";
+import { LEGACY_SHORTCODE_PREFIX } from "@cubby/shared";
 import { useQuery } from "@tanstack/react-query";
 import { ChevronDown } from "lucide-react";
 import { Fragment, type ReactNode } from "react";
@@ -21,7 +22,11 @@ import {
   TableHeader,
   TableRow,
 } from "~/components/ui/table";
-import { EntityIcon } from "~/entities/entities";
+import {
+  EntityIcon,
+  browserEntityDefinition,
+  isBrowserRoutedEntity,
+} from "~/entities/entities";
 import {
   type EntityInspectorHealth,
   entityInspectorHealth,
@@ -101,6 +106,14 @@ function metadataFor(entity: Entity): EntityInspectorMetadata {
   // satisfies `EntityInspectorMetadata`, just not through a type TS can see
   // when indexed by a union key.
   return entityInspectorMetadata[entity] as EntityInspectorMetadata;
+}
+
+function legacyPrefix(entity: Entity): string | null {
+  return (
+    Object.entries(LEGACY_SHORTCODE_PREFIX).find(
+      ([, target]) => target === entity,
+    )?.[0] ?? null
+  );
 }
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
@@ -225,6 +238,12 @@ function cardinalitySplit(entity: Entity) {
   return { one, many: relationships.length - one };
 }
 
+function idFilterCount(entity: Entity) {
+  return metadataFor(entity).filterDescriptors.filter(
+    (filter) => filter.kind === "id" || filter.kind === "idMulti",
+  ).length;
+}
+
 type RelationDetailStatus =
   | "declared"
   | "derived"
@@ -287,6 +306,20 @@ function relationDetailStatus(
     status: "omitted",
     reason: "not declared, not recorded as omitted",
   };
+}
+
+function manyDetailTally(entity: Entity) {
+  const relationships = extendedManifest(entity).relationships.filter(
+    (relation) => relation.cardinality === "many",
+  );
+  const tally = { declared: 0, derived: 0, omitted: 0 };
+  for (const relation of relationships) {
+    const { status } = relationDetailStatus(entity, relation);
+    if (status === "declared") tally.declared += 1;
+    else if (status === "derived") tally.derived += 1;
+    else tally.omitted += 1;
+  }
+  return tally;
 }
 
 /** `shortcodePrefix` without its trailing dash, already a stable 3-4 letter
@@ -524,12 +557,66 @@ function OverrideValue({ value }: { value: string }) {
   );
 }
 
+function EffectiveBehavior({ entity }: { entity: Entity }) {
+  const metadata = metadataFor(entity);
+  const tally = manyDetailTally(entity);
+  const route = isBrowserRoutedEntity(entity)
+    ? browserEntityDefinition(entity).routes
+    : null;
+  const facts: readonly [string, ReactNode][] = [
+    [
+      "Legacy code",
+      legacyPrefix(entity) ? `${legacyPrefix(entity)}XXXX` : dash,
+    ],
+    ["Storage table", entityManifest[entity].dbTable ?? dash],
+    [
+      "Filters",
+      `${metadata.filterDescriptors.length} total · ${idFilterCount(entity)} ID`,
+    ],
+    [
+      "Relation tables",
+      `${tally.declared} declared · ${tally.derived} derived · ${tally.omitted} omitted`,
+    ],
+    [
+      "Delete / merge",
+      `${metadata.lifecycle.delete?.mode ?? "none"} · ${metadata.lifecycle.merge ? "merge" : "no merge"}`,
+    ],
+    [
+      "MCP",
+      `${metadata.mcpOwner ?? "none"} · ${metadata.mcpOperations.join(", ") || "no operations"}`,
+    ],
+    ["Routes", route ? `${route.list} · ${route.detail}` : "workflow owned"],
+    [
+      "Detail",
+      `${metadata.detail.variant} · ${metadata.detail.sections.length} sections`,
+    ],
+    [
+      "Printed labels",
+      entity === "product" || entity === "location" ? "yes" : "no",
+    ],
+  ];
+  return (
+    <section>
+      <h3 className="mb-2 text-xs font-semibold">Effective behavior</h3>
+      <dl className="grid gap-x-5 gap-y-2 text-xs sm:grid-cols-2 lg:grid-cols-3">
+        {facts.map(([label, value]) => (
+          <div key={label} className="min-w-0">
+            <dt className="text-muted-foreground">{label}</dt>
+            <dd className="min-w-0 break-all">{value}</dd>
+          </div>
+        ))}
+      </dl>
+    </section>
+  );
+}
+
 function OverridesSubRow({ entity }: { entity: Entity }) {
   const overrides = metadataFor(entity).overrides;
   return (
     <TableRow className="bg-muted/20 hover:bg-muted/20">
       <TableCell colSpan={COLUMN_COUNT} className="px-4 py-3 whitespace-normal">
         <div id={`entity-details-${entity}`} className="max-w-5xl space-y-4">
+          <EffectiveBehavior entity={entity} />
           <div>
             <h3 className="text-xs font-semibold">Declaration overrides</h3>
             <p className="text-2xs text-muted-foreground">
