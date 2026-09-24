@@ -342,8 +342,8 @@ drops the database after the run. Set
 failure artifacts are under `artifacts/sim-e2e/`. The manual `CI` workflow
 dispatch option `simulator_e2e` runs the same command with native PostgreSQL
 17 and pgvector on a hosted macOS runner. This lane is not a required PR check.
-`pnpm test:e2e:sim:video` also records the scripted flow to `run.mp4` in that
-run's artifact directory for review in Codex. See the
+`pnpm test:e2e:sim:video` also saves `run.mp4` and a timestamped
+`contact-sheet.png` in that run's artifact directory for review in Codex. See the
 [fast native iteration guide](apps/apple/ITERATION.md) for which loop to use.
 
 `pnpm test:e2e:headless` uses the same disposable database, synthetic product,
