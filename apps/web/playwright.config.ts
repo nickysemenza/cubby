@@ -39,12 +39,44 @@ for (const [key, value] of Object.entries(e2eProcessEnvDefaults)) {
  * See https://playwright.dev/docs/test-configuration.
  */
 const isCI = !!process.env.CI;
+const desktopShard = process.env.CUBBY_E2E_DESKTOP_SHARD;
+if (desktopShard && desktopShard !== "1/2" && desktopShard !== "2/2") {
+  throw new Error(`Invalid desktop E2E shard: ${desktopShard}`);
+}
+
+// Keep the slower image/taxonomy and pantry flows on the lighter runner. The
+// other runner gets every spec not listed here, including new specs.
+const firstDesktopShardFiles = [
+  "unauth.pages.spec.ts",
+  "activity.spec.ts",
+  "browser-workflows.spec.ts",
+  "bulk-edit.spec.ts",
+  "calendar.spec.ts",
+  "connected-records.spec.ts",
+  "console-ledger-overhaul.spec.ts",
+  "cookbook-photos.spec.ts",
+  "create-recipe-full-flow.spec.ts",
+  "declared-record-lists.spec.ts",
+  "dnd-interactions.spec.ts",
+  "enrichment-workflow.spec.ts",
+  "entity-card-layout.spec.ts",
+  "entity-dependency-graph.spec.ts",
+  "entity-editor-lifecycle.spec.ts",
+  "garden.spec.ts",
+  "http-api.spec.ts",
+  "pantry-staples.spec.ts",
+  "wardrobe-preparation.spec.ts",
+];
+const firstDesktopShardPattern = new RegExp(
+  `(?:^|/)(?:${firstDesktopShardFiles.map((file) => file.replaceAll(".", "\\.")).join("|")})$`,
+);
+const unauthenticatedPattern = /(^|\/)unauth\.[^/]*\.spec\.ts$/;
 
 export default defineConfig({
   testDir: "./tests/e2e",
   /* Public-repository ubuntu-latest CI runners have 4 vCPU, shared by the
      browser, Worker, and database. CI runs one Playwright worker per runner
-     and shards desktop tests across two runners (--shard) instead of running
+     and assigns desktop specs to two runners instead of running
      multiple workers on one — two workers on a single runner flaked (see
      tooling/e2e-workers.ts). Preserve the local fast-failure budget while
      giving CI scenarios more wall-clock room. */
@@ -93,7 +125,8 @@ export default defineConfig({
   projects: [
     {
       name: "Unauthenticated tests",
-      testMatch: /(^|\/)unauth\.[^/]*\.spec\.ts$/,
+      testMatch: unauthenticatedPattern,
+      testIgnore: desktopShard === "2/2" ? firstDesktopShardPattern : undefined,
       metadata: { authenticated: false },
       use: {
         ...devices["Desktop Chrome"],
@@ -101,8 +134,12 @@ export default defineConfig({
     },
     {
       name: "Authenticated tests",
-      testMatch: /\.spec\.ts$/,
-      testIgnore: /(^|\/)unauth\.[^/]*\.spec\.ts$/,
+      testMatch:
+        desktopShard === "1/2" ? firstDesktopShardPattern : /\.spec\.ts$/,
+      testIgnore:
+        desktopShard === "2/2"
+          ? [unauthenticatedPattern, firstDesktopShardPattern]
+          : unauthenticatedPattern,
       metadata: { authenticated: true },
       use: {
         ...devices["Desktop Chrome"],

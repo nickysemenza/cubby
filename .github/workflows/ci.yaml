@@ -364,7 +364,9 @@ jobs:
           name: recipebridge-wasm
           path: packages/wasm
       - name: Run Playwright tests
-        run: pnpm --filter @cubby/web run ${{ matrix.test-script }} --shard=${{ matrix.shard }}
+        env:
+          CUBBY_E2E_DESKTOP_SHARD: ${{ matrix.shard }}
+        run: pnpm --filter @cubby/web run ${{ matrix.test-script }}
       - name: Save Playwright report
         if: failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
