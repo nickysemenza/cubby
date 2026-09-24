@@ -41,7 +41,7 @@ An economic participant in household contribution accounting, and the identity b
 _Avoid_: payer, account owner, beneficiary
 
 **Device**:
-One install of the native app, registered on its first companion connection and identified by a stable per-install identifier rather than a session or push token. Optionally owned by a Ledger Party member and linked to the physical phone or Mac as a Product. An automatic-work switch, set on the device itself, and a remote-pause override, set from the web, together decide whether the job dispatcher sends it companion work; either one is enough to make it a plain viewer.
+One registered native app instance on a phone or Mac, identified independently of a session or push token; a reinstall can retain the same identity. Optionally owned by a Ledger Party member and linked to the physical phone or Mac as a Product. An automatic-work switch, set on the device itself, and a remote-pause override, set from the web, together decide whether the job dispatcher sends it companion work; either one is enough to make it a plain viewer.
 _Avoid_: session, connection, install id
 
 **Image Sighting**:
