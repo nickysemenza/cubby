@@ -1,5 +1,6 @@
 import type { TaskStatus } from "@cubby/schemas/project";
 import { taskStatusValues } from "@cubby/schemas/project";
+import { TASK_STATUS_LABELS } from "@cubby/schemas/task-fields";
 import { addDays, endOfWeek, format, startOfWeek } from "date-fns";
 import { match } from "ts-pattern";
 
@@ -13,13 +14,7 @@ import { getStatusChartColor } from "~/lib/status-colors";
  * variant maps below without a circular import; shared.tsx re-exports it for
  * its existing consumers.
  */
-export const TASK_STATUS_LABELS = {
-  not_started: "Not started",
-  later: "Later",
-  in_progress: "In progress",
-  blocked: "Blocked",
-  done: "Done",
-} satisfies Record<TaskStatus, string>;
+export { TASK_STATUS_LABELS } from "@cubby/schemas/task-fields";
 
 /** Badge tone per status — Porcelain semantic tokens, not raw colors. */
 export const taskStatusBadgeVariant = {

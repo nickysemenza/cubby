@@ -9,6 +9,11 @@ public struct EntityRow: Identifiable, Sendable, Hashable {
     public let imageURL: URL?
     public let raw: JSONValue
 
+    public var redirectedFrom: String? { raw["redirectedFrom"]?.stringValue }
+    public var previousShortcodes: [String] {
+        raw["previousShortcodes"]?.arrayValue?.compactMap(\.stringValue) ?? []
+    }
+
     public init(id: String, title: String, subtitle: String?, imageURL: URL?, raw: JSONValue) {
         self.id = id
         self.title = title

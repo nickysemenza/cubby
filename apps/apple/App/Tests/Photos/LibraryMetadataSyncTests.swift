@@ -57,7 +57,9 @@ struct LibraryMetadataSyncTests {
             candidateProvider: { candidates },
             factsProvider: { localIdentifier in TestFacts(localIdentifier: localIdentifier) },
             deviceShortcodeProvider: { deviceShortcode },
-            send: send)
+            sendPage: { inputs in
+                for input in inputs { try await send(input) }
+            })
     }
 
     // MARK: - Gating
@@ -129,16 +131,23 @@ struct LibraryMetadataSyncTests {
         #expect(sent.withLock { $0 } == 0)
     }
 
-    // MARK: - Concurrency: at most 4 in flight
+    // MARK: - Bounded bulk pages
 
-    @Test func atMostFourSendsRunConcurrently() async throws {
+    @Test func bulkPagesAreBoundedAndSerialized() async throws {
         let store = try PhotoAnalysisStore.make(inMemory: true)
-        let candidates = (0..<12).map { candidate("asset-\($0)", imageID: "IMG-\($0)") }
+        let candidates = (0..<120).map { candidate("asset-\($0)", imageID: "IMG-\($0)") }
         let inFlight = Mutex<Int>(0)
         let maxObserved = Mutex<Int>(0)
-        let sync = makeSync(
-            analysisStore: store, candidates: candidates,
-            send: { _ in
+        let sizes = Mutex<[Int]>([])
+        let sync = LibraryMetadataSync(
+            analysisStore: store, host: "cubby.example", installationID: "installation-1",
+            isParticipating: true, isSignedIn: true,
+            thermal: StubThermalSource(state: .nominal), power: StubPowerSource(lowPower: false),
+            candidateProvider: { candidates },
+            factsProvider: { TestFacts(localIdentifier: $0) },
+            deviceShortcodeProvider: { "DEV-0001" },
+            sendPage: { page in
+                sizes.withLock { $0.append(page.count) }
                 let current = inFlight.withLock { count -> Int in
                     count += 1
                     return count
@@ -149,31 +158,69 @@ struct LibraryMetadataSyncTests {
             })
         sync.reconcile()
         for _ in 0..<200 where sync.isRunning { try await Task.sleep(for: .milliseconds(10)) }
-        #expect(maxObserved.withLock { $0 } <= 4)
-        #expect(maxObserved.withLock { $0 } > 1)
+        #expect(maxObserved.withLock { $0 } == 1)
+        #expect(sizes.withLock { $0 } == [50, 50, 20])
+    }
+
+    @Test func failedPageIsUnmarkedAndRetried() async throws {
+        let store = try PhotoAnalysisStore.make(inMemory: true)
+        let candidates = (0..<2).map { candidate("asset-\($0)", imageID: "IMG-\($0)") }
+        let attempts = Mutex<Int>(0)
+        let sync = LibraryMetadataSync(
+            analysisStore: store, host: "cubby.example", installationID: "installation-1",
+            isParticipating: true, isSignedIn: true,
+            thermal: StubThermalSource(state: .nominal), power: StubPowerSource(lowPower: false),
+            candidateProvider: { candidates },
+            factsProvider: { TestFacts(localIdentifier: $0) },
+            deviceShortcodeProvider: { "DEV-0001" },
+            sendPage: { page in
+                #expect(page.count == 2)
+                let attempt = attempts.withLock { value -> Int in
+                    value += 1; return value
+                }
+                if attempt == 1 { throw NSError(domain: "synthetic", code: 1) }
+            })
+        sync.reconcile()
+        for _ in 0..<200 where sync.isRunning { try await Task.sleep(for: .milliseconds(10)) }
+        #expect(
+            try await !store.librarySightingSent(
+                host: "cubby.example", localIdentifier: "asset-0", imageId: "IMG-0", version: 1,
+                modificationDate: Date(timeIntervalSince1970: 1_700_000_200)))
+        sync.reconcile()
+        for _ in 0..<200 where sync.isRunning { try await Task.sleep(for: .milliseconds(10)) }
+        #expect(attempts.withLock { $0 } == 2)
+        #expect(
+            try await store.librarySightingSent(
+                host: "cubby.example", localIdentifier: "asset-0", imageId: "IMG-0", version: 1,
+                modificationDate: Date(timeIntervalSince1970: 1_700_000_200)))
     }
 
     // MARK: - Cancellation mid-run
 
     @Test func cancelStopsBeforeEveryCandidateSends() async throws {
         let store = try PhotoAnalysisStore.make(inMemory: true)
-        let candidates = (0..<20).map { candidate("asset-\($0)", imageID: "IMG-\($0)") }
+        let candidates = (0..<120).map { candidate("asset-\($0)", imageID: "IMG-\($0)") }
         let sentCount = Mutex<Int>(0)
-        let sync = makeSync(
-            analysisStore: store, candidates: candidates,
-            send: { _ in
-                sentCount.withLock { $0 += 1 }
-                try? await Task.sleep(for: .milliseconds(20))
+        let sync = LibraryMetadataSync(
+            analysisStore: store, host: "cubby.example", installationID: "installation-1",
+            isParticipating: true, isSignedIn: true,
+            thermal: StubThermalSource(state: .nominal), power: StubPowerSource(lowPower: false),
+            candidateProvider: { candidates },
+            factsProvider: { TestFacts(localIdentifier: $0) },
+            deviceShortcodeProvider: { "DEV-0001" },
+            sendPage: { page in
+                sentCount.withLock { $0 += page.count }
+                try? await Task.sleep(for: .milliseconds(100))
             })
         sync.reconcile()
-        try? await Task.sleep(for: .milliseconds(15))
+        for _ in 0..<100 where sentCount.withLock({ $0 }) == 0 {
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        #expect(sentCount.withLock { $0 } == 50)
         sync.cancel()
         #expect(!sync.isRunning)
-        let countAtCancel = sentCount.withLock { $0 }
         try? await Task.sleep(for: .milliseconds(200))
-        // Cancellation stopped new work from starting; the count does not keep climbing to 20.
-        #expect(sentCount.withLock { $0 } < 20)
-        #expect(sentCount.withLock { $0 } >= countAtCancel)
+        #expect(sentCount.withLock { $0 } == 50)
     }
 
     // MARK: - Send-once + resend on modificationDate change
@@ -257,8 +304,8 @@ struct LibraryMetadataSyncTests {
             candidateProvider: { candidatesBox.withLock { $0 } },
             factsProvider: { localIdentifier in TestFacts(localIdentifier: localIdentifier) },
             deviceShortcodeProvider: { "DEV-0001" },
-            send: { input in
-                sentIdentifiers.withLock { $0.append(input.localIdentifier ?? "") }
+            sendPage: { inputs in
+                sentIdentifiers.withLock { $0.append(contentsOf: inputs.map { $0.localIdentifier ?? "" }) }
                 // Holds the first pass open long enough for the test to append a candidate and
                 // call `reconcile()` while `runTask` is still in flight.
                 try? await Task.sleep(for: .milliseconds(30))

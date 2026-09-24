@@ -66,6 +66,13 @@ export const projectStatusValues = [
 export const projectStatusSchema = z.enum(projectStatusValues);
 export type ProjectStatus = z.infer<typeof projectStatusSchema>;
 
+export const PROJECT_STATUS_LABELS = {
+  planning: "Planning",
+  not_started: "Not started",
+  in_progress: "In progress",
+  done: "Done",
+} as const satisfies Record<ProjectStatus, string>;
+
 export const projectKindValues = [
   "furniture",
   "workshop",

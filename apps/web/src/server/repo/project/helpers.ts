@@ -37,6 +37,7 @@ const resolveInheritedProjectSettings = (
   allRows: ReadonlyArray<{
     id: ProjectId;
     shortcode: string;
+    name: string;
     parentProjectId: ProjectId | null;
     locations: string[];
     locationsMode: "inherit" | "explicit";
@@ -179,7 +180,14 @@ const dbProjectToAPI = ({
     allRows,
   );
   const reference = (shortcode: string | null) =>
-    shortcode ? { entityType: "project" as const, entityId: shortcode } : null;
+    shortcode
+      ? {
+          entityType: "project" as const,
+          entityId: shortcode,
+          name:
+            allRows.find((item) => item.shortcode === shortcode)?.name ?? null,
+        }
+      : null;
   return {
     id: parseShortcodeFor("project", row.shortcode),
     name: row.name,

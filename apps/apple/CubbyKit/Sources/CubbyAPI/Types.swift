@@ -27,6 +27,9 @@ public protocol APIProtocol: Sendable {
     /// - Remark: HTTP `GET /api/v1/activity/submission`.
     /// - Remark: Generated from `#/paths//api/v1/activity/submission/get(activity.submission)`.
     func activity_submission(_ input: Operations.Activity_submission.Input) async throws -> Operations.Activity_submission.Output
+    /// - Remark: HTTP `GET /api/v1/calendar/range`.
+    /// - Remark: Generated from `#/paths//api/v1/calendar/range/get(calendar.range)`.
+    func calendar_range(_ input: Operations.Calendar_range.Input) async throws -> Operations.Calendar_range.Output
     /// - Remark: HTTP `POST /api/v1/collection/referenceDetail`.
     /// - Remark: Generated from `#/paths//api/v1/collection/referenceDetail/post(collection.referenceDetail)`.
     func collection_referenceDetail(_ input: Operations.Collection_referenceDetail.Input) async throws -> Operations.Collection_referenceDetail.Output
@@ -68,6 +71,9 @@ public protocol APIProtocol: Sendable {
     /// - Remark: HTTP `POST /api/v1/entity/graphPaths`.
     /// - Remark: Generated from `#/paths//api/v1/entity/graphPaths/post(entity.graphPaths)`.
     func entity_graphPaths(_ input: Operations.Entity_graphPaths.Input) async throws -> Operations.Entity_graphPaths.Output
+    /// - Remark: HTTP `POST /api/v1/expense/analytics`.
+    /// - Remark: Generated from `#/paths//api/v1/expense/analytics/post(expense.analytics)`.
+    func expense_analytics(_ input: Operations.Expense_analytics.Input) async throws -> Operations.Expense_analytics.Output
     /// Use page=1&pageSize=20&sort=name,-createdAt. Filters are individual query parameters: text is literal, numbers and booleans are plain, and a list repeats its key (tag=a&tag=b). Response pagination metadata remains zero-based. Resource methods depend on entity capabilities.
     ///
     /// - Remark: HTTP `GET /api/v1/expenses`.
@@ -147,6 +153,9 @@ public protocol APIProtocol: Sendable {
     /// - Remark: HTTP `GET /api/v1/image/analysis`.
     /// - Remark: Generated from `#/paths//api/v1/image/analysis/get(image.analysis)`.
     func image_analysis(_ input: Operations.Image_analysis.Input) async throws -> Operations.Image_analysis.Output
+    /// - Remark: HTTP `POST /api/v1/image/bulkSightings`.
+    /// - Remark: Generated from `#/paths//api/v1/image/bulkSightings/post(image.bulkSightings)`.
+    func image_bulkSightings(_ input: Operations.Image_bulkSightings.Input) async throws -> Operations.Image_bulkSightings.Output
     /// - Remark: HTTP `GET /api/v1/image/detail`.
     /// - Remark: Generated from `#/paths//api/v1/image/detail/get(image.detail)`.
     func image_detail(_ input: Operations.Image_detail.Input) async throws -> Operations.Image_detail.Output
@@ -407,6 +416,12 @@ public protocol APIProtocol: Sendable {
     /// - Remark: HTTP `GET /api/v1/products/timeline`.
     /// - Remark: Generated from `#/paths//api/v1/products/timeline/get(resources.product.timeline)`.
     func resources_product_timeline(_ input: Operations.Resources_product_timeline.Input) async throws -> Operations.Resources_product_timeline.Output
+    /// - Remark: HTTP `GET /api/v1/project/dashboardSummary`.
+    /// - Remark: Generated from `#/paths//api/v1/project/dashboardSummary/get(project.dashboardSummary)`.
+    func project_dashboardSummary(_ input: Operations.Project_dashboardSummary.Input) async throws -> Operations.Project_dashboardSummary.Output
+    /// - Remark: HTTP `GET /api/v1/project/portfolioAnalytics`.
+    /// - Remark: Generated from `#/paths//api/v1/project/portfolioAnalytics/get(project.portfolioAnalytics)`.
+    func project_portfolioAnalytics(_ input: Operations.Project_portfolioAnalytics.Input) async throws -> Operations.Project_portfolioAnalytics.Output
     /// Use page=1&pageSize=20&sort=name,-createdAt. Filters are individual query parameters: text is literal, numbers and booleans are plain, and a list repeats its key (tag=a&tag=b). Response pagination metadata remains zero-based. Resource methods depend on entity capabilities.
     ///
     /// - Remark: HTTP `GET /api/v1/projects`.
@@ -464,6 +479,12 @@ public protocol APIProtocol: Sendable {
     /// - Remark: HTTP `GET /api/v1/search/find`.
     /// - Remark: Generated from `#/paths//api/v1/search/find/get(search.find)`.
     func search_find(_ input: Operations.Search_find.Input) async throws -> Operations.Search_find.Output
+    /// - Remark: HTTP `POST /api/v1/task/board`.
+    /// - Remark: Generated from `#/paths//api/v1/task/board/post(task.board)`.
+    func task_board(_ input: Operations.Task_board.Input) async throws -> Operations.Task_board.Output
+    /// - Remark: HTTP `POST /api/v1/task/bulkReorder`.
+    /// - Remark: Generated from `#/paths//api/v1/task/bulkReorder/post(task.bulkReorder)`.
+    func task_bulkReorder(_ input: Operations.Task_bulkReorder.Input) async throws -> Operations.Task_bulkReorder.Output
     /// - Remark: HTTP `GET /api/v1/task/todayBriefing`.
     /// - Remark: Generated from `#/paths//api/v1/task/todayBriefing/get(task.todayBriefing)`.
     func task_todayBriefing(_ input: Operations.Task_todayBriefing.Input) async throws -> Operations.Task_todayBriefing.Output
@@ -584,6 +605,17 @@ extension APIProtocol {
         headers: Operations.Activity_submission.Input.Headers = .init()
     ) async throws -> Operations.Activity_submission.Output {
         try await activity_submission(Operations.Activity_submission.Input(
+            query: query,
+            headers: headers
+        ))
+    }
+    /// - Remark: HTTP `GET /api/v1/calendar/range`.
+    /// - Remark: Generated from `#/paths//api/v1/calendar/range/get(calendar.range)`.
+    public func calendar_range(
+        query: Operations.Calendar_range.Input.Query,
+        headers: Operations.Calendar_range.Input.Headers = .init()
+    ) async throws -> Operations.Calendar_range.Output {
+        try await calendar_range(Operations.Calendar_range.Input(
             query: query,
             headers: headers
         ))
@@ -719,6 +751,17 @@ extension APIProtocol {
         body: Operations.Entity_graphPaths.Input.Body? = nil
     ) async throws -> Operations.Entity_graphPaths.Output {
         try await entity_graphPaths(Operations.Entity_graphPaths.Input(
+            headers: headers,
+            body: body
+        ))
+    }
+    /// - Remark: HTTP `POST /api/v1/expense/analytics`.
+    /// - Remark: Generated from `#/paths//api/v1/expense/analytics/post(expense.analytics)`.
+    public func expense_analytics(
+        headers: Operations.Expense_analytics.Input.Headers = .init(),
+        body: Operations.Expense_analytics.Input.Body? = nil
+    ) async throws -> Operations.Expense_analytics.Output {
+        try await expense_analytics(Operations.Expense_analytics.Input(
             headers: headers,
             body: body
         ))
@@ -994,6 +1037,17 @@ extension APIProtocol {
         try await image_analysis(Operations.Image_analysis.Input(
             query: query,
             headers: headers
+        ))
+    }
+    /// - Remark: HTTP `POST /api/v1/image/bulkSightings`.
+    /// - Remark: Generated from `#/paths//api/v1/image/bulkSightings/post(image.bulkSightings)`.
+    public func image_bulkSightings(
+        headers: Operations.Image_bulkSightings.Input.Headers = .init(),
+        body: Operations.Image_bulkSightings.Input.Body? = nil
+    ) async throws -> Operations.Image_bulkSightings.Output {
+        try await image_bulkSightings(Operations.Image_bulkSightings.Input(
+            headers: headers,
+            body: body
         ))
     }
     /// - Remark: HTTP `GET /api/v1/image/detail`.
@@ -1900,6 +1954,28 @@ extension APIProtocol {
             headers: headers
         ))
     }
+    /// - Remark: HTTP `GET /api/v1/project/dashboardSummary`.
+    /// - Remark: Generated from `#/paths//api/v1/project/dashboardSummary/get(project.dashboardSummary)`.
+    public func project_dashboardSummary(
+        query: Operations.Project_dashboardSummary.Input.Query = .init(),
+        headers: Operations.Project_dashboardSummary.Input.Headers = .init()
+    ) async throws -> Operations.Project_dashboardSummary.Output {
+        try await project_dashboardSummary(Operations.Project_dashboardSummary.Input(
+            query: query,
+            headers: headers
+        ))
+    }
+    /// - Remark: HTTP `GET /api/v1/project/portfolioAnalytics`.
+    /// - Remark: Generated from `#/paths//api/v1/project/portfolioAnalytics/get(project.portfolioAnalytics)`.
+    public func project_portfolioAnalytics(
+        query: Operations.Project_portfolioAnalytics.Input.Query = .init(),
+        headers: Operations.Project_portfolioAnalytics.Input.Headers = .init()
+    ) async throws -> Operations.Project_portfolioAnalytics.Output {
+        try await project_portfolioAnalytics(Operations.Project_portfolioAnalytics.Input(
+            query: query,
+            headers: headers
+        ))
+    }
     /// Use page=1&pageSize=20&sort=name,-createdAt. Filters are individual query parameters: text is literal, numbers and booleans are plain, and a list repeats its key (tag=a&tag=b). Response pagination metadata remains zero-based. Resource methods depend on entity capabilities.
     ///
     /// - Remark: HTTP `GET /api/v1/projects`.
@@ -2091,6 +2167,28 @@ extension APIProtocol {
         try await search_find(Operations.Search_find.Input(
             query: query,
             headers: headers
+        ))
+    }
+    /// - Remark: HTTP `POST /api/v1/task/board`.
+    /// - Remark: Generated from `#/paths//api/v1/task/board/post(task.board)`.
+    public func task_board(
+        headers: Operations.Task_board.Input.Headers = .init(),
+        body: Operations.Task_board.Input.Body? = nil
+    ) async throws -> Operations.Task_board.Output {
+        try await task_board(Operations.Task_board.Input(
+            headers: headers,
+            body: body
+        ))
+    }
+    /// - Remark: HTTP `POST /api/v1/task/bulkReorder`.
+    /// - Remark: Generated from `#/paths//api/v1/task/bulkReorder/post(task.bulkReorder)`.
+    public func task_bulkReorder(
+        headers: Operations.Task_bulkReorder.Input.Headers = .init(),
+        body: Operations.Task_bulkReorder.Input.Body? = nil
+    ) async throws -> Operations.Task_bulkReorder.Output {
+        try await task_bulkReorder(Operations.Task_bulkReorder.Input(
+            headers: headers,
+            body: body
         ))
     }
     /// - Remark: HTTP `GET /api/v1/task/todayBriefing`.

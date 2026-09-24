@@ -1,4 +1,4 @@
-import type { CostType, ProjectStatus } from "@cubby/schemas/project";
+import type { CostType } from "@cubby/schemas/project";
 import { TRADE_LABELS } from "@cubby/schemas/project";
 import { capitalize } from "@cubby/shared";
 import { format } from "date-fns";
@@ -9,12 +9,7 @@ import { diffDays } from "./charts/gantt/gantt-date";
 
 export { capitalize } from "@cubby/shared";
 
-export const PROJECT_STATUS_LABELS = {
-  planning: "Planning",
-  not_started: "Not started",
-  in_progress: "In progress",
-  done: "Done",
-} satisfies Record<ProjectStatus, string>;
+export { PROJECT_STATUS_LABELS } from "@cubby/schemas/project-fields";
 
 export function normalizeCostTypeKey(
   costType: CostType | null,

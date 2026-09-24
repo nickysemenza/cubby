@@ -16,6 +16,7 @@ import { defineContract, mutation, query } from "~/contracts/define";
 
 export const calendarContract = defineContract("calendar", {
   range: query({
+    native: "Meal calendar",
     input: calendarRangeInput,
     output: calendarRangeOut,
   }),

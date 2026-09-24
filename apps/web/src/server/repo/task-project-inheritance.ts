@@ -172,6 +172,8 @@ const taskResolutionExtras = (alias: string) => {
       string | null
     >`(SELECT parent."shortcode" FROM "Task" parent
       WHERE parent."id" = ${parentId} AND parent."deletedAt" IS NULL)`,
+    parentName: sql<string | null>`(SELECT parent."name" FROM "Task" parent
+      WHERE parent."id" = ${parentId} AND parent."deletedAt" IS NULL)`,
   };
 };
 type ResolvedAssignment = {
@@ -183,6 +185,7 @@ type ResolvedAssignment = {
   fallbackTrade: Trade | null;
   parentTrade: Trade | null;
   parentShortcode: string | null;
+  parentName: string | null;
 };
 
 async function assignmentReferences(
@@ -256,6 +259,7 @@ function tradeResolution(
   extra: ResolvedAssignment,
   parent: FieldResolution["sourceEntity"],
   projectCode: string | null,
+  projectName: string | null,
 ): FieldResolution {
   return {
     mode: row.trade === null ? "inherit" : "explicit",
@@ -276,7 +280,11 @@ function tradeResolution(
         : extra.parentTrade
           ? parent
           : projectCode
-            ? { entityType: "project", entityId: projectCode }
+            ? {
+                entityType: "project",
+                entityId: projectCode,
+                name: projectName,
+              }
             : null,
     matchesFallback: row.trade !== null && row.trade === extra.fallbackTrade,
     canReset: row.trade !== null && extra.fallbackTrade !== null,
@@ -293,7 +301,11 @@ function assignmentResolutions(
   const productCode = (id: ProductId | null) =>
     id ? (refs.products.get(id)?.shortcode ?? null) : null;
   const parent = extra.parentShortcode
-    ? { entityType: "task" as const, entityId: extra.parentShortcode }
+    ? {
+        entityType: "task" as const,
+        entityId: extra.parentShortcode,
+        name: extra.parentName,
+      }
     : null;
   return {
     projectId: referenceResolution(
@@ -315,6 +327,9 @@ function assignmentResolutions(
       extra,
       parent,
       projectCode(extra.effectiveProjectId),
+      extra.effectiveProjectId
+        ? (refs.projects.get(extra.effectiveProjectId)?.name ?? null)
+        : null,
     ),
   };
 }
@@ -353,6 +368,7 @@ export async function hydrateTaskInheritanceRows<
       fallbackTrade: null,
       parentTrade: null,
       parentShortcode: null,
+      parentName: null,
     });
   }
   const byId = new Map(extras.map((row) => [row.id, row]));

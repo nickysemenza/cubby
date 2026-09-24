@@ -131,6 +131,23 @@ describe("entity picker value adapters", () => {
 });
 
 describe("buildLocationComboboxItem tree presentation", () => {
+  it("keeps the structured ancestry of a typed location search hit", () => {
+    const item = buildSearchHitComboboxItem(
+      locationSearchHit({
+        locationPath: [
+          { id: "LOC-1ABC", name: "Garage" },
+          { id: "LOC-2ABC", name: "Workbench" },
+        ],
+      }),
+      "location",
+    );
+    expect(item.name).toBe("Workshop drawer");
+    expect(item.detail).toBe("Garage › Workbench");
+    expect(item.presentation).toMatchObject({
+      group: { id: "LOC-1ABC", label: "Garage" },
+      depth: 2,
+    });
+  });
   it("groups under the root ancestor and sets depth to the path length", () => {
     const locationId = testShortcode("location", "LOC-9ABC");
     const rootId = testShortcode("location", "LOC-1ABC");

@@ -1,5 +1,6 @@
 import { entityRefKey } from "@cubby/schemas/entity";
 import type { LedgerPartyShortcode } from "@cubby/schemas/identifiers";
+import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
@@ -14,6 +15,7 @@ import {
   getImageSightingByID,
   listImageSightings,
   updateImageSighting,
+  upsertImageSightingPage,
 } from "~/server/repo/image-sighting";
 import {
   createLedgerParty,
@@ -169,6 +171,56 @@ describe("image-sighting", () => {
       { pageIndex: 0, pageSize: 50 },
     );
     expect(count).toBe(1);
+  });
+
+  it("rolls back a failed bulk page and replays the same page without duplicates", async () => {
+    const image = await createImageFixture(ctx.db, "bulk-retry");
+    const member = await makeMember("Synthetic member");
+    const reporter = await makeDevice("Synthetic device", member);
+    const item = (assetKey: string) => ({
+      imageId: image.shortcode,
+      ledgerPartyId: member,
+      deviceId: reporter,
+      assetKey,
+      sourceType: "userLibrary" as const,
+      mediaSubtypes: [],
+      hasAdjustments: false,
+      matchKind: "import" as const,
+      observedAt: new Date("2026-06-01T10:00:00Z"),
+    });
+    const page = [item("SYNTHETIC-A"), item("SYNTHETIC-B")];
+    await expect(
+      upsertImageSightingPage(
+        ctx.db,
+        [
+          page[0]!,
+          { ...page[1]!, deviceId: parseShortcodeFor("device", "DEV-9999") },
+        ],
+        ctx.actor,
+      ),
+    ).rejects.toThrow("DEV-9999");
+    const afterFailure = await listImageSightings(
+      ctx.db,
+      { imageId: [image.shortcode] },
+      [],
+      { pageIndex: 0, pageSize: 50 },
+    );
+    expect(afterFailure.count).toBe(0);
+    expect(await upsertImageSightingPage(ctx.db, page, ctx.actor)).toEqual({
+      processed: 2,
+      created: 2,
+    });
+    expect(await upsertImageSightingPage(ctx.db, page, ctx.actor)).toEqual({
+      processed: 2,
+      created: 0,
+    });
+    const afterRetry = await listImageSightings(
+      ctx.db,
+      { imageId: [image.shortcode] },
+      [],
+      { pageIndex: 0, pageSize: 50 },
+    );
+    expect(afterRetry.count).toBe(2);
   });
 
   it("one party reporting from two devices with the same synced assetKey upserts to a single row, and derives that party as the capturer", async () => {

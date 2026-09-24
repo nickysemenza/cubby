@@ -22,6 +22,7 @@ export const taskContract = defineContract("task", {
     output: schemas.taskTodayBriefingOut,
   }),
   board: query({
+    native: "Task board",
     input: schemas.taskFiltersSchema,
     output: schemas.taskBoardOut,
   }),
@@ -30,6 +31,7 @@ export const taskContract = defineContract("task", {
     output: schemas.taskTimelineOut,
   }),
   bulkReorder: mutation({
+    native: "Task board ordering",
     input: schemas.taskBulkReorderInput,
     output: schemas.taskBulkMutationOut,
   }),

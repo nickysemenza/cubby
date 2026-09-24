@@ -2124,6 +2124,593 @@ extension Components {
                 case amountText
             }
         }
+        /// - Remark: Generated from `#/components/schemas/CalendarDaySummary`.
+        public struct CalendarDaySummary: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/CalendarDaySummary/actualSpend`.
+            public var actualSpend: Components.Schemas.Money
+            /// - Remark: Generated from `#/components/schemas/CalendarDaySummary/plannedSpend`.
+            public var plannedSpend: Components.Schemas.Money
+            /// - Remark: Generated from `#/components/schemas/CalendarDaySummary/mealTotals`.
+            public var mealTotals: Components.Schemas.MealTotals
+            /// - Remark: Generated from `#/components/schemas/CalendarDaySummary/taskCount`.
+            public var taskCount: Swift.Int
+            /// - Remark: Generated from `#/components/schemas/CalendarDaySummary/expenseCount`.
+            public var expenseCount: Swift.Int
+            /// - Remark: Generated from `#/components/schemas/CalendarDaySummary/mealCount`.
+            public var mealCount: Swift.Int
+            /// - Remark: Generated from `#/components/schemas/CalendarDaySummary/projectCount`.
+            public var projectCount: Swift.Int
+            /// Creates a new `CalendarDaySummary`.
+            ///
+            /// - Parameters:
+            ///   - actualSpend:
+            ///   - plannedSpend:
+            ///   - mealTotals:
+            ///   - taskCount:
+            ///   - expenseCount:
+            ///   - mealCount:
+            ///   - projectCount:
+            public init(
+                actualSpend: Components.Schemas.Money,
+                plannedSpend: Components.Schemas.Money,
+                mealTotals: Components.Schemas.MealTotals,
+                taskCount: Swift.Int,
+                expenseCount: Swift.Int,
+                mealCount: Swift.Int,
+                projectCount: Swift.Int
+            ) {
+                self.actualSpend = actualSpend
+                self.plannedSpend = plannedSpend
+                self.mealTotals = mealTotals
+                self.taskCount = taskCount
+                self.expenseCount = expenseCount
+                self.mealCount = mealCount
+                self.projectCount = projectCount
+            }
+            public enum CodingKeys: String, CodingKey {
+                case actualSpend
+                case plannedSpend
+                case mealTotals
+                case taskCount
+                case expenseCount
+                case mealCount
+                case projectCount
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/CalendarExpenseItem`.
+        public struct CalendarExpenseItem: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/CalendarExpenseItem/kind`.
+            @frozen public enum KindPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                case expense = "expense"
+            }
+            /// - Remark: Generated from `#/components/schemas/CalendarExpenseItem/kind`.
+            public var kind: Components.Schemas.CalendarExpenseItem.KindPayload
+            /// - Remark: Generated from `#/components/schemas/CalendarExpenseItem/id`.
+            public var id: Components.Schemas.ExpenseShortcode
+            /// - Remark: Generated from `#/components/schemas/CalendarExpenseItem/title`.
+            public var title: Swift.String
+            /// - Remark: Generated from `#/components/schemas/CalendarExpenseItem/startDate`.
+            public var startDate: Components.Schemas.PlainDate
+            /// - Remark: Generated from `#/components/schemas/CalendarExpenseItem/endDateExclusive`.
+            public var endDateExclusive: Components.Schemas.PlainDate
+            /// - Remark: Generated from `#/components/schemas/CalendarExpenseItem/interaction`.
+            public var interaction: Components.Schemas.CalendarInteraction
+            /// - Remark: Generated from `#/components/schemas/CalendarExpenseItem/future`.
+            public var future: Swift.Bool
+            /// - Remark: Generated from `#/components/schemas/CalendarExpenseItem/cost`.
+            public var cost: Components.Schemas.Money?
+            /// - Remark: Generated from `#/components/schemas/CalendarExpenseItem/vendor`.
+            public var vendor: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/CalendarExpenseItem/trade`.
+            public var trade: Components.Schemas.Trade?
+            /// - Remark: Generated from `#/components/schemas/CalendarExpenseItem/projectName`.
+            public var projectName: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/CalendarExpenseItem/productName`.
+            public var productName: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/CalendarExpenseItem/coverImageUrl`.
+            public var coverImageUrl: Swift.String?
+            /// Creates a new `CalendarExpenseItem`.
+            ///
+            /// - Parameters:
+            ///   - kind:
+            ///   - id:
+            ///   - title:
+            ///   - startDate:
+            ///   - endDateExclusive:
+            ///   - interaction:
+            ///   - future:
+            ///   - cost:
+            ///   - vendor:
+            ///   - trade:
+            ///   - projectName:
+            ///   - productName:
+            ///   - coverImageUrl:
+            public init(
+                kind: Components.Schemas.CalendarExpenseItem.KindPayload,
+                id: Components.Schemas.ExpenseShortcode,
+                title: Swift.String,
+                startDate: Components.Schemas.PlainDate,
+                endDateExclusive: Components.Schemas.PlainDate,
+                interaction: Components.Schemas.CalendarInteraction,
+                future: Swift.Bool,
+                cost: Components.Schemas.Money? = nil,
+                vendor: Swift.String? = nil,
+                trade: Components.Schemas.Trade? = nil,
+                projectName: Swift.String? = nil,
+                productName: Swift.String? = nil,
+                coverImageUrl: Swift.String? = nil
+            ) {
+                self.kind = kind
+                self.id = id
+                self.title = title
+                self.startDate = startDate
+                self.endDateExclusive = endDateExclusive
+                self.interaction = interaction
+                self.future = future
+                self.cost = cost
+                self.vendor = vendor
+                self.trade = trade
+                self.projectName = projectName
+                self.productName = productName
+                self.coverImageUrl = coverImageUrl
+            }
+            public enum CodingKeys: String, CodingKey {
+                case kind
+                case id
+                case title
+                case startDate
+                case endDateExclusive
+                case interaction
+                case future
+                case cost
+                case vendor
+                case trade
+                case projectName
+                case productName
+                case coverImageUrl
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/CalendarInteraction`.
+        @frozen public enum CalendarInteraction: String, Codable, Hashable, Sendable, CaseIterable {
+            case move = "move"
+            case readOnly = "read-only"
+        }
+        /// - Remark: Generated from `#/components/schemas/CalendarItem`.
+        @frozen public enum CalendarItem: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/CalendarItem/CalendarExpenseItem`.
+            case expense(Components.Schemas.CalendarExpenseItem)
+            /// - Remark: Generated from `#/components/schemas/CalendarItem/CalendarMealItem`.
+            case meal(Components.Schemas.CalendarMealItem)
+            /// - Remark: Generated from `#/components/schemas/CalendarItem/CalendarPlantingItem`.
+            case planting(Components.Schemas.CalendarPlantingItem)
+            /// - Remark: Generated from `#/components/schemas/CalendarItem/CalendarProjectItem`.
+            case project(Components.Schemas.CalendarProjectItem)
+            /// - Remark: Generated from `#/components/schemas/CalendarItem/CalendarTaskItem`.
+            case task(Components.Schemas.CalendarTaskItem)
+            public enum CodingKeys: String, CodingKey {
+                case kind
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                let discriminator = try container.decode(
+                    Swift.String.self,
+                    forKey: .kind
+                )
+                switch discriminator {
+                case "expense":
+                    self = .expense(try .init(from: decoder))
+                case "meal":
+                    self = .meal(try .init(from: decoder))
+                case "planting":
+                    self = .planting(try .init(from: decoder))
+                case "project":
+                    self = .project(try .init(from: decoder))
+                case "task":
+                    self = .task(try .init(from: decoder))
+                default:
+                    throw Swift.DecodingError.unknownOneOfDiscriminator(
+                        discriminatorKey: CodingKeys.kind,
+                        discriminatorValue: discriminator,
+                        codingPath: decoder.codingPath
+                    )
+                }
+            }
+            public func encode(to encoder: any Swift.Encoder) throws {
+                switch self {
+                case let .expense(value):
+                    try value.encode(to: encoder)
+                case let .meal(value):
+                    try value.encode(to: encoder)
+                case let .planting(value):
+                    try value.encode(to: encoder)
+                case let .project(value):
+                    try value.encode(to: encoder)
+                case let .task(value):
+                    try value.encode(to: encoder)
+                }
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/CalendarMealItem`.
+        public struct CalendarMealItem: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/CalendarMealItem/kind`.
+            @frozen public enum KindPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                case meal = "meal"
+            }
+            /// - Remark: Generated from `#/components/schemas/CalendarMealItem/kind`.
+            public var kind: Components.Schemas.CalendarMealItem.KindPayload
+            /// - Remark: Generated from `#/components/schemas/CalendarMealItem/id`.
+            public var id: Components.Schemas.MealShortcode
+            /// - Remark: Generated from `#/components/schemas/CalendarMealItem/title`.
+            public var title: Swift.String
+            /// - Remark: Generated from `#/components/schemas/CalendarMealItem/name`.
+            public var name: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/CalendarMealItem/startDate`.
+            public var startDate: Components.Schemas.PlainDate
+            /// - Remark: Generated from `#/components/schemas/CalendarMealItem/endDateExclusive`.
+            public var endDateExclusive: Components.Schemas.PlainDate
+            /// - Remark: Generated from `#/components/schemas/CalendarMealItem/interaction`.
+            @frozen public enum InteractionPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                case move = "move"
+            }
+            /// - Remark: Generated from `#/components/schemas/CalendarMealItem/interaction`.
+            public var interaction: Components.Schemas.CalendarMealItem.InteractionPayload
+            /// - Remark: Generated from `#/components/schemas/CalendarMealItem/sortOrder`.
+            public var sortOrder: Swift.Int?
+            /// - Remark: Generated from `#/components/schemas/CalendarMealItem/mealType`.
+            public var mealType: Components.Schemas.MealType?
+            /// - Remark: Generated from `#/components/schemas/CalendarMealItem/mealKind`.
+            public var mealKind: Components.Schemas.MealKind
+            /// - Remark: Generated from `#/components/schemas/CalendarMealItem/recipeNames`.
+            public var recipeNames: [Swift.String]
+            /// - Remark: Generated from `#/components/schemas/CalendarMealItem/coverImageUrl`.
+            public var coverImageUrl: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/CalendarMealItem/mealTotals`.
+            public var mealTotals: Components.Schemas.MealTotals
+            /// Creates a new `CalendarMealItem`.
+            ///
+            /// - Parameters:
+            ///   - kind:
+            ///   - id:
+            ///   - title:
+            ///   - name:
+            ///   - startDate:
+            ///   - endDateExclusive:
+            ///   - interaction:
+            ///   - sortOrder:
+            ///   - mealType:
+            ///   - mealKind:
+            ///   - recipeNames:
+            ///   - coverImageUrl:
+            ///   - mealTotals:
+            public init(
+                kind: Components.Schemas.CalendarMealItem.KindPayload,
+                id: Components.Schemas.MealShortcode,
+                title: Swift.String,
+                name: Swift.String? = nil,
+                startDate: Components.Schemas.PlainDate,
+                endDateExclusive: Components.Schemas.PlainDate,
+                interaction: Components.Schemas.CalendarMealItem.InteractionPayload,
+                sortOrder: Swift.Int? = nil,
+                mealType: Components.Schemas.MealType? = nil,
+                mealKind: Components.Schemas.MealKind,
+                recipeNames: [Swift.String],
+                coverImageUrl: Swift.String? = nil,
+                mealTotals: Components.Schemas.MealTotals
+            ) {
+                self.kind = kind
+                self.id = id
+                self.title = title
+                self.name = name
+                self.startDate = startDate
+                self.endDateExclusive = endDateExclusive
+                self.interaction = interaction
+                self.sortOrder = sortOrder
+                self.mealType = mealType
+                self.mealKind = mealKind
+                self.recipeNames = recipeNames
+                self.coverImageUrl = coverImageUrl
+                self.mealTotals = mealTotals
+            }
+            public enum CodingKeys: String, CodingKey {
+                case kind
+                case id
+                case title
+                case name
+                case startDate
+                case endDateExclusive
+                case interaction
+                case sortOrder
+                case mealType
+                case mealKind
+                case recipeNames
+                case coverImageUrl
+                case mealTotals
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/CalendarPlantingItem`.
+        public struct CalendarPlantingItem: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/CalendarPlantingItem/kind`.
+            @frozen public enum KindPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                case planting = "planting"
+            }
+            /// - Remark: Generated from `#/components/schemas/CalendarPlantingItem/kind`.
+            public var kind: Components.Schemas.CalendarPlantingItem.KindPayload
+            /// - Remark: Generated from `#/components/schemas/CalendarPlantingItem/id`.
+            public var id: Components.Schemas.PlantingShortcode
+            /// - Remark: Generated from `#/components/schemas/CalendarPlantingItem/milestone`.
+            public var milestone: Components.Schemas.CalendarPlantingMilestone
+            /// - Remark: Generated from `#/components/schemas/CalendarPlantingItem/title`.
+            public var title: Swift.String
+            /// - Remark: Generated from `#/components/schemas/CalendarPlantingItem/locationName`.
+            public var locationName: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/CalendarPlantingItem/plannedWindow`.
+            public var plannedWindow: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/CalendarPlantingItem/startDate`.
+            public var startDate: Components.Schemas.PlainDate
+            /// - Remark: Generated from `#/components/schemas/CalendarPlantingItem/endDateExclusive`.
+            public var endDateExclusive: Components.Schemas.PlainDate
+            /// - Remark: Generated from `#/components/schemas/CalendarPlantingItem/interaction`.
+            @frozen public enum InteractionPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                case readOnly = "read-only"
+            }
+            /// - Remark: Generated from `#/components/schemas/CalendarPlantingItem/interaction`.
+            public var interaction: Components.Schemas.CalendarPlantingItem.InteractionPayload
+            /// Creates a new `CalendarPlantingItem`.
+            ///
+            /// - Parameters:
+            ///   - kind:
+            ///   - id:
+            ///   - milestone:
+            ///   - title:
+            ///   - locationName:
+            ///   - plannedWindow:
+            ///   - startDate:
+            ///   - endDateExclusive:
+            ///   - interaction:
+            public init(
+                kind: Components.Schemas.CalendarPlantingItem.KindPayload,
+                id: Components.Schemas.PlantingShortcode,
+                milestone: Components.Schemas.CalendarPlantingMilestone,
+                title: Swift.String,
+                locationName: Swift.String? = nil,
+                plannedWindow: Swift.String? = nil,
+                startDate: Components.Schemas.PlainDate,
+                endDateExclusive: Components.Schemas.PlainDate,
+                interaction: Components.Schemas.CalendarPlantingItem.InteractionPayload
+            ) {
+                self.kind = kind
+                self.id = id
+                self.milestone = milestone
+                self.title = title
+                self.locationName = locationName
+                self.plannedWindow = plannedWindow
+                self.startDate = startDate
+                self.endDateExclusive = endDateExclusive
+                self.interaction = interaction
+            }
+            public enum CodingKeys: String, CodingKey {
+                case kind
+                case id
+                case milestone
+                case title
+                case locationName
+                case plannedWindow
+                case startDate
+                case endDateExclusive
+                case interaction
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/CalendarPlantingMilestone`.
+        @frozen public enum CalendarPlantingMilestone: String, Codable, Hashable, Sendable, CaseIterable {
+            case sowed = "sowed"
+            case transplanted = "transplanted"
+            case finished = "finished"
+        }
+        /// - Remark: Generated from `#/components/schemas/CalendarProjectItem`.
+        public struct CalendarProjectItem: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/CalendarProjectItem/kind`.
+            @frozen public enum KindPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                case project = "project"
+            }
+            /// - Remark: Generated from `#/components/schemas/CalendarProjectItem/kind`.
+            public var kind: Components.Schemas.CalendarProjectItem.KindPayload
+            /// - Remark: Generated from `#/components/schemas/CalendarProjectItem/id`.
+            public var id: Components.Schemas.ProjectShortcode
+            /// - Remark: Generated from `#/components/schemas/CalendarProjectItem/title`.
+            public var title: Swift.String
+            /// - Remark: Generated from `#/components/schemas/CalendarProjectItem/startDate`.
+            public var startDate: Components.Schemas.PlainDate
+            /// - Remark: Generated from `#/components/schemas/CalendarProjectItem/endDateExclusive`.
+            public var endDateExclusive: Components.Schemas.PlainDate
+            /// - Remark: Generated from `#/components/schemas/CalendarProjectItem/interaction`.
+            @frozen public enum InteractionPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                case readOnly = "read-only"
+            }
+            /// - Remark: Generated from `#/components/schemas/CalendarProjectItem/interaction`.
+            public var interaction: Components.Schemas.CalendarProjectItem.InteractionPayload
+            /// - Remark: Generated from `#/components/schemas/CalendarProjectItem/status`.
+            public var status: Components.Schemas.ProjectStatus
+            /// - Remark: Generated from `#/components/schemas/CalendarProjectItem/projectKind`.
+            public var projectKind: Components.Schemas.ProjectKind?
+            /// Creates a new `CalendarProjectItem`.
+            ///
+            /// - Parameters:
+            ///   - kind:
+            ///   - id:
+            ///   - title:
+            ///   - startDate:
+            ///   - endDateExclusive:
+            ///   - interaction:
+            ///   - status:
+            ///   - projectKind:
+            public init(
+                kind: Components.Schemas.CalendarProjectItem.KindPayload,
+                id: Components.Schemas.ProjectShortcode,
+                title: Swift.String,
+                startDate: Components.Schemas.PlainDate,
+                endDateExclusive: Components.Schemas.PlainDate,
+                interaction: Components.Schemas.CalendarProjectItem.InteractionPayload,
+                status: Components.Schemas.ProjectStatus,
+                projectKind: Components.Schemas.ProjectKind? = nil
+            ) {
+                self.kind = kind
+                self.id = id
+                self.title = title
+                self.startDate = startDate
+                self.endDateExclusive = endDateExclusive
+                self.interaction = interaction
+                self.status = status
+                self.projectKind = projectKind
+            }
+            public enum CodingKeys: String, CodingKey {
+                case kind
+                case id
+                case title
+                case startDate
+                case endDateExclusive
+                case interaction
+                case status
+                case projectKind
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/CalendarRangeOut`.
+        public struct CalendarRangeOut: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/CalendarRangeOut/items`.
+            public var items: [Components.Schemas.CalendarItem]
+            /// - Remark: Generated from `#/components/schemas/CalendarRangeOut/days`.
+            public struct DaysPayload: Codable, Hashable, Sendable {
+                /// A container of undocumented properties.
+                public var additionalProperties: [String: Components.Schemas.CalendarDaySummary]
+                /// Creates a new `DaysPayload`.
+                ///
+                /// - Parameters:
+                ///   - additionalProperties: A container of undocumented properties.
+                public init(additionalProperties: [String: Components.Schemas.CalendarDaySummary] = .init()) {
+                    self.additionalProperties = additionalProperties
+                }
+                public init(from decoder: any Swift.Decoder) throws {
+                    additionalProperties = try decoder.decodeAdditionalProperties(knownKeys: [])
+                }
+                public func encode(to encoder: any Swift.Encoder) throws {
+                    try encoder.encodeAdditionalProperties(additionalProperties)
+                }
+            }
+            /// - Remark: Generated from `#/components/schemas/CalendarRangeOut/days`.
+            public var days: Components.Schemas.CalendarRangeOut.DaysPayload
+            /// Creates a new `CalendarRangeOut`.
+            ///
+            /// - Parameters:
+            ///   - items:
+            ///   - days:
+            public init(
+                items: [Components.Schemas.CalendarItem],
+                days: Components.Schemas.CalendarRangeOut.DaysPayload
+            ) {
+                self.items = items
+                self.days = days
+            }
+            public enum CodingKeys: String, CodingKey {
+                case items
+                case days
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/CalendarTaskItem`.
+        public struct CalendarTaskItem: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/CalendarTaskItem/kind`.
+            @frozen public enum KindPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                case task = "task"
+            }
+            /// - Remark: Generated from `#/components/schemas/CalendarTaskItem/kind`.
+            public var kind: Components.Schemas.CalendarTaskItem.KindPayload
+            /// - Remark: Generated from `#/components/schemas/CalendarTaskItem/id`.
+            public var id: Components.Schemas.TaskShortcode
+            /// - Remark: Generated from `#/components/schemas/CalendarTaskItem/title`.
+            public var title: Swift.String
+            /// - Remark: Generated from `#/components/schemas/CalendarTaskItem/startDate`.
+            public var startDate: Components.Schemas.PlainDate
+            /// - Remark: Generated from `#/components/schemas/CalendarTaskItem/endDateExclusive`.
+            public var endDateExclusive: Components.Schemas.PlainDate
+            /// - Remark: Generated from `#/components/schemas/CalendarTaskItem/interaction`.
+            @frozen public enum InteractionPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                case move = "move"
+            }
+            /// - Remark: Generated from `#/components/schemas/CalendarTaskItem/interaction`.
+            public var interaction: Components.Schemas.CalendarTaskItem.InteractionPayload
+            /// - Remark: Generated from `#/components/schemas/CalendarTaskItem/dueDate`.
+            public var dueDate: Components.Schemas.PlainDate?
+            /// - Remark: Generated from `#/components/schemas/CalendarTaskItem/dueEndDate`.
+            public var dueEndDate: Components.Schemas.PlainDate?
+            /// - Remark: Generated from `#/components/schemas/CalendarTaskItem/status`.
+            public var status: Components.Schemas.TaskStatus
+            /// - Remark: Generated from `#/components/schemas/CalendarTaskItem/trade`.
+            public var trade: Components.Schemas.Trade
+            /// - Remark: Generated from `#/components/schemas/CalendarTaskItem/projectName`.
+            public var projectName: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/CalendarTaskItem/subjectProductName`.
+            public var subjectProductName: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/CalendarTaskItem/coverImageUrl`.
+            public var coverImageUrl: Swift.String?
+            /// Creates a new `CalendarTaskItem`.
+            ///
+            /// - Parameters:
+            ///   - kind:
+            ///   - id:
+            ///   - title:
+            ///   - startDate:
+            ///   - endDateExclusive:
+            ///   - interaction:
+            ///   - dueDate:
+            ///   - dueEndDate:
+            ///   - status:
+            ///   - trade:
+            ///   - projectName:
+            ///   - subjectProductName:
+            ///   - coverImageUrl:
+            public init(
+                kind: Components.Schemas.CalendarTaskItem.KindPayload,
+                id: Components.Schemas.TaskShortcode,
+                title: Swift.String,
+                startDate: Components.Schemas.PlainDate,
+                endDateExclusive: Components.Schemas.PlainDate,
+                interaction: Components.Schemas.CalendarTaskItem.InteractionPayload,
+                dueDate: Components.Schemas.PlainDate? = nil,
+                dueEndDate: Components.Schemas.PlainDate? = nil,
+                status: Components.Schemas.TaskStatus,
+                trade: Components.Schemas.Trade,
+                projectName: Swift.String? = nil,
+                subjectProductName: Swift.String? = nil,
+                coverImageUrl: Swift.String? = nil
+            ) {
+                self.kind = kind
+                self.id = id
+                self.title = title
+                self.startDate = startDate
+                self.endDateExclusive = endDateExclusive
+                self.interaction = interaction
+                self.dueDate = dueDate
+                self.dueEndDate = dueEndDate
+                self.status = status
+                self.trade = trade
+                self.projectName = projectName
+                self.subjectProductName = subjectProductName
+                self.coverImageUrl = coverImageUrl
+            }
+            public enum CodingKeys: String, CodingKey {
+                case kind
+                case id
+                case title
+                case startDate
+                case endDateExclusive
+                case interaction
+                case dueDate
+                case dueEndDate
+                case status
+                case trade
+                case projectName
+                case subjectProductName
+                case coverImageUrl
+            }
+        }
         /// - Remark: Generated from `#/components/schemas/CollectionProductOut`.
         public struct CollectionProductOut: Codable, Hashable, Sendable {
             /// - Remark: Generated from `#/components/schemas/CollectionProductOut/id`.
@@ -3695,6 +4282,59 @@ extension Components {
                 case matchesInheritedOwner
             }
         }
+        /// - Remark: Generated from `#/components/schemas/EmbeddedProjectScope`.
+        public struct EmbeddedProjectScope: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/EmbeddedProjectScope/statuses`.
+            public var statuses: [Components.Schemas.ProjectStatus]?
+            /// - Remark: Generated from `#/components/schemas/EmbeddedProjectScope/kinds`.
+            public var kinds: [Components.Schemas.ProjectKind]?
+            /// - Remark: Generated from `#/components/schemas/EmbeddedProjectScope/locations`.
+            public var locations: [Swift.String]?
+            /// - Remark: Generated from `#/components/schemas/EmbeddedProjectScope/search`.
+            public var search: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/EmbeddedProjectScope/dateFrom`.
+            public var dateFrom: Components.Schemas.InputShared1D4812BA12A72EA6?
+            /// - Remark: Generated from `#/components/schemas/EmbeddedProjectScope/dateTo`.
+            public var dateTo: Components.Schemas.InputShared1D4812BA12A72EA6?
+            /// - Remark: Generated from `#/components/schemas/EmbeddedProjectScope/completionYear`.
+            public var completionYear: Swift.String?
+            /// Creates a new `EmbeddedProjectScope`.
+            ///
+            /// - Parameters:
+            ///   - statuses:
+            ///   - kinds:
+            ///   - locations:
+            ///   - search:
+            ///   - dateFrom:
+            ///   - dateTo:
+            ///   - completionYear:
+            public init(
+                statuses: [Components.Schemas.ProjectStatus]? = nil,
+                kinds: [Components.Schemas.ProjectKind]? = nil,
+                locations: [Swift.String]? = nil,
+                search: Swift.String? = nil,
+                dateFrom: Components.Schemas.InputShared1D4812BA12A72EA6? = nil,
+                dateTo: Components.Schemas.InputShared1D4812BA12A72EA6? = nil,
+                completionYear: Swift.String? = nil
+            ) {
+                self.statuses = statuses
+                self.kinds = kinds
+                self.locations = locations
+                self.search = search
+                self.dateFrom = dateFrom
+                self.dateTo = dateTo
+                self.completionYear = completionYear
+            }
+            public enum CodingKeys: String, CodingKey {
+                case statuses
+                case kinds
+                case locations
+                case search
+                case dateFrom
+                case dateTo
+                case completionYear
+            }
+        }
         /// - Remark: Generated from `#/components/schemas/EmbeddingReadiness`.
         @frozen public enum EmbeddingReadiness: String, Codable, Hashable, Sendable, CaseIterable {
             case ready = "ready"
@@ -5221,6 +5861,212 @@ extension Components {
                 case jobId
             }
         }
+        /// - Remark: Generated from `#/components/schemas/ExpenseAdjustmentsAggregate`.
+        public struct ExpenseAdjustmentsAggregate: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ExpenseAdjustmentsAggregate/actual`.
+            public var actual: Components.Schemas.Money
+            /// - Remark: Generated from `#/components/schemas/ExpenseAdjustmentsAggregate/committed`.
+            public var committed: Components.Schemas.Money
+            /// - Remark: Generated from `#/components/schemas/ExpenseAdjustmentsAggregate/credits`.
+            public var credits: Components.Schemas.Money
+            /// - Remark: Generated from `#/components/schemas/ExpenseAdjustmentsAggregate/net`.
+            public var net: Components.Schemas.Money
+            /// - Remark: Generated from `#/components/schemas/ExpenseAdjustmentsAggregate/count`.
+            public var count: Swift.Int
+            /// Creates a new `ExpenseAdjustmentsAggregate`.
+            ///
+            /// - Parameters:
+            ///   - actual:
+            ///   - committed:
+            ///   - credits:
+            ///   - net:
+            ///   - count:
+            public init(
+                actual: Components.Schemas.Money,
+                committed: Components.Schemas.Money,
+                credits: Components.Schemas.Money,
+                net: Components.Schemas.Money,
+                count: Swift.Int
+            ) {
+                self.actual = actual
+                self.committed = committed
+                self.credits = credits
+                self.net = net
+                self.count = count
+            }
+            public enum CodingKeys: String, CodingKey {
+                case actual
+                case committed
+                case credits
+                case net
+                case count
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/ExpenseAnalyticsOut`.
+        public struct ExpenseAnalyticsOut: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ExpenseAnalyticsOut/summary`.
+            public var summary: Components.Schemas.ExpenseAnalyticsSummary
+            /// - Remark: Generated from `#/components/schemas/ExpenseAnalyticsOut/adjustments`.
+            public var adjustments: Components.Schemas.ExpenseAdjustmentsAggregate
+            /// - Remark: Generated from `#/components/schemas/ExpenseAnalyticsOut/byCostType`.
+            public var byCostType: [Components.Schemas.ExpenseCostTypeAggregate]
+            /// - Remark: Generated from `#/components/schemas/ExpenseAnalyticsOut/byTrade`.
+            public var byTrade: [Components.Schemas.ExpenseTradeAggregate]
+            /// - Remark: Generated from `#/components/schemas/ExpenseAnalyticsOut/tradeCostMatrix`.
+            public var tradeCostMatrix: [Components.Schemas.ExpenseTradeCostAggregate]
+            /// - Remark: Generated from `#/components/schemas/ExpenseAnalyticsOut/monthly`.
+            public var monthly: [Components.Schemas.ExpenseMonthlyAggregate]
+            /// - Remark: Generated from `#/components/schemas/ExpenseAnalyticsOut/cumulative`.
+            public var cumulative: [Components.Schemas.ExpenseCumulativePoint]
+            /// - Remark: Generated from `#/components/schemas/ExpenseAnalyticsOut/byProject`.
+            public var byProject: [Components.Schemas.ExpenseProjectAggregate]
+            /// - Remark: Generated from `#/components/schemas/ExpenseAnalyticsOut/byVendor`.
+            public var byVendor: [Components.Schemas.ExpenseVendorAggregate]
+            /// Creates a new `ExpenseAnalyticsOut`.
+            ///
+            /// - Parameters:
+            ///   - summary:
+            ///   - adjustments:
+            ///   - byCostType:
+            ///   - byTrade:
+            ///   - tradeCostMatrix:
+            ///   - monthly:
+            ///   - cumulative:
+            ///   - byProject:
+            ///   - byVendor:
+            public init(
+                summary: Components.Schemas.ExpenseAnalyticsSummary,
+                adjustments: Components.Schemas.ExpenseAdjustmentsAggregate,
+                byCostType: [Components.Schemas.ExpenseCostTypeAggregate],
+                byTrade: [Components.Schemas.ExpenseTradeAggregate],
+                tradeCostMatrix: [Components.Schemas.ExpenseTradeCostAggregate],
+                monthly: [Components.Schemas.ExpenseMonthlyAggregate],
+                cumulative: [Components.Schemas.ExpenseCumulativePoint],
+                byProject: [Components.Schemas.ExpenseProjectAggregate],
+                byVendor: [Components.Schemas.ExpenseVendorAggregate]
+            ) {
+                self.summary = summary
+                self.adjustments = adjustments
+                self.byCostType = byCostType
+                self.byTrade = byTrade
+                self.tradeCostMatrix = tradeCostMatrix
+                self.monthly = monthly
+                self.cumulative = cumulative
+                self.byProject = byProject
+                self.byVendor = byVendor
+            }
+            public enum CodingKeys: String, CodingKey {
+                case summary
+                case adjustments
+                case byCostType
+                case byTrade
+                case tradeCostMatrix
+                case monthly
+                case cumulative
+                case byProject
+                case byVendor
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/ExpenseAnalyticsSummary`.
+        public struct ExpenseAnalyticsSummary: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ExpenseAnalyticsSummary/actual`.
+            public var actual: Components.Schemas.Money
+            /// - Remark: Generated from `#/components/schemas/ExpenseAnalyticsSummary/committed`.
+            public var committed: Components.Schemas.Money
+            /// - Remark: Generated from `#/components/schemas/ExpenseAnalyticsSummary/credits`.
+            public var credits: Components.Schemas.Money
+            /// - Remark: Generated from `#/components/schemas/ExpenseAnalyticsSummary/net`.
+            public var net: Components.Schemas.Money
+            /// - Remark: Generated from `#/components/schemas/ExpenseAnalyticsSummary/count`.
+            public var count: Swift.Int
+            /// - Remark: Generated from `#/components/schemas/ExpenseAnalyticsSummary/actualCount`.
+            public var actualCount: Swift.Int
+            /// - Remark: Generated from `#/components/schemas/ExpenseAnalyticsSummary/plannedCount`.
+            public var plannedCount: Swift.Int
+            /// Creates a new `ExpenseAnalyticsSummary`.
+            ///
+            /// - Parameters:
+            ///   - actual:
+            ///   - committed:
+            ///   - credits:
+            ///   - net:
+            ///   - count:
+            ///   - actualCount:
+            ///   - plannedCount:
+            public init(
+                actual: Components.Schemas.Money,
+                committed: Components.Schemas.Money,
+                credits: Components.Schemas.Money,
+                net: Components.Schemas.Money,
+                count: Swift.Int,
+                actualCount: Swift.Int,
+                plannedCount: Swift.Int
+            ) {
+                self.actual = actual
+                self.committed = committed
+                self.credits = credits
+                self.net = net
+                self.count = count
+                self.actualCount = actualCount
+                self.plannedCount = plannedCount
+            }
+            public enum CodingKeys: String, CodingKey {
+                case actual
+                case committed
+                case credits
+                case net
+                case count
+                case actualCount
+                case plannedCount
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/ExpenseCostTypeAggregate`.
+        public struct ExpenseCostTypeAggregate: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ExpenseCostTypeAggregate/costType`.
+            public var costType: Components.Schemas.CostType
+            /// - Remark: Generated from `#/components/schemas/ExpenseCostTypeAggregate/actual`.
+            public var actual: Components.Schemas.Money
+            /// - Remark: Generated from `#/components/schemas/ExpenseCostTypeAggregate/committed`.
+            public var committed: Components.Schemas.Money
+            /// - Remark: Generated from `#/components/schemas/ExpenseCostTypeAggregate/credits`.
+            public var credits: Components.Schemas.Money
+            /// - Remark: Generated from `#/components/schemas/ExpenseCostTypeAggregate/net`.
+            public var net: Components.Schemas.Money
+            /// - Remark: Generated from `#/components/schemas/ExpenseCostTypeAggregate/count`.
+            public var count: Swift.Int
+            /// Creates a new `ExpenseCostTypeAggregate`.
+            ///
+            /// - Parameters:
+            ///   - costType:
+            ///   - actual:
+            ///   - committed:
+            ///   - credits:
+            ///   - net:
+            ///   - count:
+            public init(
+                costType: Components.Schemas.CostType,
+                actual: Components.Schemas.Money,
+                committed: Components.Schemas.Money,
+                credits: Components.Schemas.Money,
+                net: Components.Schemas.Money,
+                count: Swift.Int
+            ) {
+                self.costType = costType
+                self.actual = actual
+                self.committed = committed
+                self.credits = credits
+                self.net = net
+                self.count = count
+            }
+            public enum CodingKeys: String, CodingKey {
+                case costType
+                case actual
+                case committed
+                case credits
+                case net
+                case count
+            }
+        }
         /// - Remark: Generated from `#/components/schemas/ExpenseCreateInput`.
         public struct ExpenseCreateInput: Codable, Hashable, Sendable {
             /// - Remark: Generated from `#/components/schemas/ExpenseCreateInput/name`.
@@ -5346,6 +6192,31 @@ extension Components {
                 case beneficiaries
                 case funders
                 case sourceClaims
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/ExpenseCumulativePoint`.
+        public struct ExpenseCumulativePoint: Codable, Hashable, Sendable {
+            /// "yyyy-MM"
+            ///
+            /// - Remark: Generated from `#/components/schemas/ExpenseCumulativePoint/month`.
+            public var month: Swift.String
+            /// - Remark: Generated from `#/components/schemas/ExpenseCumulativePoint/cumulativeNet`.
+            public var cumulativeNet: Components.Schemas.Money
+            /// Creates a new `ExpenseCumulativePoint`.
+            ///
+            /// - Parameters:
+            ///   - month: "yyyy-MM"
+            ///   - cumulativeNet:
+            public init(
+                month: Swift.String,
+                cumulativeNet: Components.Schemas.Money
+            ) {
+                self.month = month
+                self.cumulativeNet = cumulativeNet
+            }
+            public enum CodingKeys: String, CodingKey {
+                case month
+                case cumulativeNet
             }
         }
         /// - Remark: Generated from `#/components/schemas/ExpenseDetail`.
@@ -5577,6 +6448,973 @@ extension Components {
                 case attachments
                 case redirectedFrom
                 case previousShortcodes
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/ExpenseFilters`.
+        public struct ExpenseFilters: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ExpenseFilters/createdFrom`.
+            public var createdFrom: Components.Schemas.InputShared1D4812BA12A72EA6?
+            /// - Remark: Generated from `#/components/schemas/ExpenseFilters/createdTo`.
+            public var createdTo: Components.Schemas.InputShared1D4812BA12A72EA6?
+            /// - Remark: Generated from `#/components/schemas/ExpenseFilters/updatedFrom`.
+            public var updatedFrom: Components.Schemas.InputShared1D4812BA12A72EA6?
+            /// - Remark: Generated from `#/components/schemas/ExpenseFilters/updatedTo`.
+            public var updatedTo: Components.Schemas.InputShared1D4812BA12A72EA6?
+            /// - Remark: Generated from `#/components/schemas/ExpenseFilters/financialTransactionId`.
+            public struct FinancialTransactionIdPayload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/ExpenseFilters/financialTransactionId/value1`.
+                public var value1: Components.Schemas.FinancialTransactionShortcode?
+                /// - Remark: Generated from `#/components/schemas/ExpenseFilters/financialTransactionId/value2`.
+                public var value2: [Components.Schemas.FinancialTransactionShortcode]?
+                /// Creates a new `FinancialTransactionIdPayload`.
+                ///
+                /// - Parameters:
+                ///   - value1:
+                ///   - value2:
+                public init(
+                    value1: Components.Schemas.FinancialTransactionShortcode? = nil,
+                    value2: [Components.Schemas.FinancialTransactionShortcode]? = nil
+                ) {
+                    self.value1 = value1
+                    self.value2 = value2
+                }
+                public init(from decoder: any Swift.Decoder) throws {
+                    var errors: [any Swift.Error] = []
+                    do {
+                        self.value1 = try decoder.decodeFromSingleValueContainer()
+                    } catch {
+                        errors.append(error)
+                    }
+                    do {
+                        self.value2 = try decoder.decodeFromSingleValueContainer()
+                    } catch {
+                        errors.append(error)
+                    }
+                    try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                        [
+                            self.value1,
+                            self.value2
+                        ],
+                        type: Self.self,
+                        codingPath: decoder.codingPath,
+                        errors: errors
+                    )
+                }
+                public func encode(to encoder: any Swift.Encoder) throws {
+                    try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                        self.value1,
+                        self.value2
+                    ])
+                }
+            }
+            /// - Remark: Generated from `#/components/schemas/ExpenseFilters/financialTransactionId`.
+            public var financialTransactionId: Components.Schemas.ExpenseFilters.FinancialTransactionIdPayload?
+            /// - Remark: Generated from `#/components/schemas/ExpenseFilters/financialTransactionPresenceFilter`.
+            @frozen public enum FinancialTransactionPresenceFilterPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                case has = "has"
+                case none = "none"
+            }
+            /// - Remark: Generated from `#/components/schemas/ExpenseFilters/financialTransactionPresenceFilter`.
+            public var financialTransactionPresenceFilter: Components.Schemas.ExpenseFilters.FinancialTransactionPresenceFilterPayload?
+            /// - Remark: Generated from `#/components/schemas/ExpenseFilters/financialTransactionSearch`.
+            public var financialTransactionSearch: Swift.String?
+            /// Inclusive lower bound on expense date
+            ///
+            /// - Remark: Generated from `#/components/schemas/ExpenseFilters/dateFrom`.
+            public var dateFrom: Components.Schemas.PlainDate?
+            /// Inclusive upper bound on expense date
+            ///
+            /// - Remark: Generated from `#/components/schemas/ExpenseFilters/dateTo`.
+            public var dateTo: Components.Schemas.PlainDate?
+            /// - Remark: Generated from `#/components/schemas/ExpenseFilters/costType`.
+            public struct CostTypePayload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/ExpenseFilters/costType/value1`.
+                public var value1: Components.Schemas.CostType?
+                /// - Remark: Generated from `#/components/schemas/ExpenseFilters/costType/value2`.
+                public var value2: [Components.Schemas.CostType]?
+                /// Creates a new `CostTypePayload`.
+                ///
+                /// - Parameters:
+                ///   - value1:
+                ///   - value2:
+                public init(
+                    value1: Components.Schemas.CostType? = nil,
+                    value2: [Components.Schemas.CostType]? = nil
+                ) {
+                    self.value1 = value1
+                    self.value2 = value2
+                }
+                public init(from decoder: any Swift.Decoder) throws {
+                    var errors: [any Swift.Error] = []
+                    do {
+                        self.value1 = try decoder.decodeFromSingleValueContainer()
+                    } catch {
+                        errors.append(error)
+                    }
+                    do {
+                        self.value2 = try decoder.decodeFromSingleValueContainer()
+                    } catch {
+                        errors.append(error)
+                    }
+                    try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                        [
+                            self.value1,
+                            self.value2
+                        ],
+                        type: Self.self,
+                        codingPath: decoder.codingPath,
+                        errors: errors
+                    )
+                }
+                public func encode(to encoder: any Swift.Encoder) throws {
+                    try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                        self.value1,
+                        self.value2
+                    ])
+                }
+            }
+            /// - Remark: Generated from `#/components/schemas/ExpenseFilters/costType`.
+            public var costType: Components.Schemas.ExpenseFilters.CostTypePayload?
+            /// - Remark: Generated from `#/components/schemas/ExpenseFilters/lineKind`.
+            public struct LineKindPayload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/ExpenseFilters/lineKind/value1`.
+                public var value1: Components.Schemas.ExpenseLineKind?
+                /// - Remark: Generated from `#/components/schemas/ExpenseFilters/lineKind/value2`.
+                public var value2: [Components.Schemas.ExpenseLineKind]?
+                /// Creates a new `LineKindPayload`.
+                ///
+                /// - Parameters:
+                ///   - value1:
+                ///   - value2:
+                public init(
+                    value1: Components.Schemas.ExpenseLineKind? = nil,
+                    value2: [Components.Schemas.ExpenseLineKind]? = nil
+                ) {
+                    self.value1 = value1
+                    self.value2 = value2
+                }
+                public init(from decoder: any Swift.Decoder) throws {
+                    var errors: [any Swift.Error] = []
+                    do {
+                        self.value1 = try decoder.decodeFromSingleValueContainer()
+                    } catch {
+                        errors.append(error)
+                    }
+                    do {
+                        self.value2 = try decoder.decodeFromSingleValueContainer()
+                    } catch {
+                        errors.append(error)
+                    }
+                    try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                        [
+                            self.value1,
+                            self.value2
+                        ],
+                        type: Self.self,
+                        codingPath: decoder.codingPath,
+                        errors: errors
+                    )
+                }
+                public func encode(to encoder: any Swift.Encoder) throws {
+                    try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                        self.value1,
+                        self.value2
+                    ])
+                }
+            }
+            /// - Remark: Generated from `#/components/schemas/ExpenseFilters/lineKind`.
+            public var lineKind: Components.Schemas.ExpenseFilters.LineKindPayload?
+            /// - Remark: Generated from `#/components/schemas/ExpenseFilters/lineBasis`.
+            public struct LineBasisPayload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/ExpenseFilters/lineBasis/value1`.
+                public var value1: Components.Schemas.ExpenseLineBasis?
+                /// - Remark: Generated from `#/components/schemas/ExpenseFilters/lineBasis/value2`.
+                public var value2: [Components.Schemas.ExpenseLineBasis]?
+                /// Creates a new `LineBasisPayload`.
+                ///
+                /// - Parameters:
+                ///   - value1:
+                ///   - value2:
+                public init(
+                    value1: Components.Schemas.ExpenseLineBasis? = nil,
+                    value2: [Components.Schemas.ExpenseLineBasis]? = nil
+                ) {
+                    self.value1 = value1
+                    self.value2 = value2
+                }
+                public init(from decoder: any Swift.Decoder) throws {
+                    var errors: [any Swift.Error] = []
+                    do {
+                        self.value1 = try decoder.decodeFromSingleValueContainer()
+                    } catch {
+                        errors.append(error)
+                    }
+                    do {
+                        self.value2 = try decoder.decodeFromSingleValueContainer()
+                    } catch {
+                        errors.append(error)
+                    }
+                    try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                        [
+                            self.value1,
+                            self.value2
+                        ],
+                        type: Self.self,
+                        codingPath: decoder.codingPath,
+                        errors: errors
+                    )
+                }
+                public func encode(to encoder: any Swift.Encoder) throws {
+                    try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                        self.value1,
+                        self.value2
+                    ])
+                }
+            }
+            /// - Remark: Generated from `#/components/schemas/ExpenseFilters/lineBasis`.
+            public var lineBasis: Components.Schemas.ExpenseFilters.LineBasisPayload?
+            /// - Remark: Generated from `#/components/schemas/ExpenseFilters/trade`.
+            public struct TradePayload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/ExpenseFilters/trade/value1`.
+                public var value1: Components.Schemas.Trade?
+                /// - Remark: Generated from `#/components/schemas/ExpenseFilters/trade/value2`.
+                public var value2: [Components.Schemas.Trade]?
+                /// Creates a new `TradePayload`.
+                ///
+                /// - Parameters:
+                ///   - value1:
+                ///   - value2:
+                public init(
+                    value1: Components.Schemas.Trade? = nil,
+                    value2: [Components.Schemas.Trade]? = nil
+                ) {
+                    self.value1 = value1
+                    self.value2 = value2
+                }
+                public init(from decoder: any Swift.Decoder) throws {
+                    var errors: [any Swift.Error] = []
+                    do {
+                        self.value1 = try decoder.decodeFromSingleValueContainer()
+                    } catch {
+                        errors.append(error)
+                    }
+                    do {
+                        self.value2 = try decoder.decodeFromSingleValueContainer()
+                    } catch {
+                        errors.append(error)
+                    }
+                    try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                        [
+                            self.value1,
+                            self.value2
+                        ],
+                        type: Self.self,
+                        codingPath: decoder.codingPath,
+                        errors: errors
+                    )
+                }
+                public func encode(to encoder: any Swift.Encoder) throws {
+                    try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                        self.value1,
+                        self.value2
+                    ])
+                }
+            }
+            /// - Remark: Generated from `#/components/schemas/ExpenseFilters/trade`.
+            public var trade: Components.Schemas.ExpenseFilters.TradePayload?
+            /// - Remark: Generated from `#/components/schemas/ExpenseFilters/future`.
+            public var future: Swift.Bool?
+            /// Inclusive lower bound on expense cost, in dollars
+            ///
+            /// - Remark: Generated from `#/components/schemas/ExpenseFilters/costMin`.
+            public var costMin: Swift.Double?
+            /// Inclusive upper bound on expense cost, in dollars
+            ///
+            /// - Remark: Generated from `#/components/schemas/ExpenseFilters/costMax`.
+            public var costMax: Swift.Double?
+            /// Inclusive lower bound on recorded product quantity
+            ///
+            /// - Remark: Generated from `#/components/schemas/ExpenseFilters/productQuantityMin`.
+            public var productQuantityMin: Swift.Double?
+            /// Inclusive upper bound on recorded product quantity
+            ///
+            /// - Remark: Generated from `#/components/schemas/ExpenseFilters/productQuantityMax`.
+            public var productQuantityMax: Swift.Double?
+            /// Substring match on notes
+            ///
+            /// - Remark: Generated from `#/components/schemas/ExpenseFilters/notesSearch`.
+            public var notesSearch: Swift.String?
+            /// Substring match on url
+            ///
+            /// - Remark: Generated from `#/components/schemas/ExpenseFilters/urlSearch`.
+            public var urlSearch: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/ExpenseFilters/dataStatus`.
+            public struct DataStatusPayload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/ExpenseFilters/dataStatus/value1`.
+                @frozen public enum Value1Payload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case complete = "complete"
+                    case needsData = "needs_data"
+                    case defect = "defect"
+                }
+                /// - Remark: Generated from `#/components/schemas/ExpenseFilters/dataStatus/value1`.
+                public var value1: Components.Schemas.ExpenseFilters.DataStatusPayload.Value1Payload?
+                /// - Remark: Generated from `#/components/schemas/ExpenseFilters/dataStatus/Value2Payload`.
+                @frozen public enum Value2PayloadPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case complete = "complete"
+                    case needsData = "needs_data"
+                    case defect = "defect"
+                }
+                /// - Remark: Generated from `#/components/schemas/ExpenseFilters/dataStatus/value2`.
+                public typealias Value2Payload = [Components.Schemas.ExpenseFilters.DataStatusPayload.Value2PayloadPayload]
+                /// - Remark: Generated from `#/components/schemas/ExpenseFilters/dataStatus/value2`.
+                public var value2: Components.Schemas.ExpenseFilters.DataStatusPayload.Value2Payload?
+                /// Creates a new `DataStatusPayload`.
+                ///
+                /// - Parameters:
+                ///   - value1:
+                ///   - value2:
+                public init(
+                    value1: Components.Schemas.ExpenseFilters.DataStatusPayload.Value1Payload? = nil,
+                    value2: Components.Schemas.ExpenseFilters.DataStatusPayload.Value2Payload? = nil
+                ) {
+                    self.value1 = value1
+                    self.value2 = value2
+                }
+                public init(from decoder: any Swift.Decoder) throws {
+                    var errors: [any Swift.Error] = []
+                    do {
+                        self.value1 = try decoder.decodeFromSingleValueContainer()
+                    } catch {
+                        errors.append(error)
+                    }
+                    do {
+                        self.value2 = try decoder.decodeFromSingleValueContainer()
+                    } catch {
+                        errors.append(error)
+                    }
+                    try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                        [
+                            self.value1,
+                            self.value2
+                        ],
+                        type: Self.self,
+                        codingPath: decoder.codingPath,
+                        errors: errors
+                    )
+                }
+                public func encode(to encoder: any Swift.Encoder) throws {
+                    try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                        self.value1,
+                        self.value2
+                    ])
+                }
+            }
+            /// - Remark: Generated from `#/components/schemas/ExpenseFilters/dataStatus`.
+            public var dataStatus: Components.Schemas.ExpenseFilters.DataStatusPayload?
+            /// - Remark: Generated from `#/components/schemas/ExpenseFilters/dataGap`.
+            public struct DataGapPayload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/ExpenseFilters/dataGap/value1`.
+                @frozen public enum Value1Payload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case expenseCost = "expense_cost"
+                }
+                /// - Remark: Generated from `#/components/schemas/ExpenseFilters/dataGap/value1`.
+                public var value1: Components.Schemas.ExpenseFilters.DataGapPayload.Value1Payload?
+                /// - Remark: Generated from `#/components/schemas/ExpenseFilters/dataGap/Value2Payload`.
+                @frozen public enum Value2PayloadPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case expenseCost = "expense_cost"
+                }
+                /// - Remark: Generated from `#/components/schemas/ExpenseFilters/dataGap/value2`.
+                public typealias Value2Payload = [Components.Schemas.ExpenseFilters.DataGapPayload.Value2PayloadPayload]
+                /// - Remark: Generated from `#/components/schemas/ExpenseFilters/dataGap/value2`.
+                public var value2: Components.Schemas.ExpenseFilters.DataGapPayload.Value2Payload?
+                /// Creates a new `DataGapPayload`.
+                ///
+                /// - Parameters:
+                ///   - value1:
+                ///   - value2:
+                public init(
+                    value1: Components.Schemas.ExpenseFilters.DataGapPayload.Value1Payload? = nil,
+                    value2: Components.Schemas.ExpenseFilters.DataGapPayload.Value2Payload? = nil
+                ) {
+                    self.value1 = value1
+                    self.value2 = value2
+                }
+                public init(from decoder: any Swift.Decoder) throws {
+                    var errors: [any Swift.Error] = []
+                    do {
+                        self.value1 = try decoder.decodeFromSingleValueContainer()
+                    } catch {
+                        errors.append(error)
+                    }
+                    do {
+                        self.value2 = try decoder.decodeFromSingleValueContainer()
+                    } catch {
+                        errors.append(error)
+                    }
+                    try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                        [
+                            self.value1,
+                            self.value2
+                        ],
+                        type: Self.self,
+                        codingPath: decoder.codingPath,
+                        errors: errors
+                    )
+                }
+                public func encode(to encoder: any Swift.Encoder) throws {
+                    try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                        self.value1,
+                        self.value2
+                    ])
+                }
+            }
+            /// - Remark: Generated from `#/components/schemas/ExpenseFilters/dataGap`.
+            public var dataGap: Components.Schemas.ExpenseFilters.DataGapPayload?
+            /// - Remark: Generated from `#/components/schemas/ExpenseFilters/ledgerPartyId`.
+            public struct LedgerPartyIdPayload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/ExpenseFilters/ledgerPartyId/value1`.
+                public var value1: Components.Schemas.LedgerPartyShortcode?
+                /// - Remark: Generated from `#/components/schemas/ExpenseFilters/ledgerPartyId/value2`.
+                public var value2: [Components.Schemas.LedgerPartyShortcode]?
+                /// Creates a new `LedgerPartyIdPayload`.
+                ///
+                /// - Parameters:
+                ///   - value1:
+                ///   - value2:
+                public init(
+                    value1: Components.Schemas.LedgerPartyShortcode? = nil,
+                    value2: [Components.Schemas.LedgerPartyShortcode]? = nil
+                ) {
+                    self.value1 = value1
+                    self.value2 = value2
+                }
+                public init(from decoder: any Swift.Decoder) throws {
+                    var errors: [any Swift.Error] = []
+                    do {
+                        self.value1 = try decoder.decodeFromSingleValueContainer()
+                    } catch {
+                        errors.append(error)
+                    }
+                    do {
+                        self.value2 = try decoder.decodeFromSingleValueContainer()
+                    } catch {
+                        errors.append(error)
+                    }
+                    try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                        [
+                            self.value1,
+                            self.value2
+                        ],
+                        type: Self.self,
+                        codingPath: decoder.codingPath,
+                        errors: errors
+                    )
+                }
+                public func encode(to encoder: any Swift.Encoder) throws {
+                    try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                        self.value1,
+                        self.value2
+                    ])
+                }
+            }
+            /// - Remark: Generated from `#/components/schemas/ExpenseFilters/ledgerPartyId`.
+            public var ledgerPartyId: Components.Schemas.ExpenseFilters.LedgerPartyIdPayload?
+            /// - Remark: Generated from `#/components/schemas/ExpenseFilters/projectId`.
+            public struct ProjectIdPayload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/ExpenseFilters/projectId/value1`.
+                public var value1: Components.Schemas.InputSharedC3954917B6C67188?
+                /// - Remark: Generated from `#/components/schemas/ExpenseFilters/projectId/value2`.
+                public var value2: [Components.Schemas.InputSharedC3954917B6C67188]?
+                /// Creates a new `ProjectIdPayload`.
+                ///
+                /// - Parameters:
+                ///   - value1:
+                ///   - value2:
+                public init(
+                    value1: Components.Schemas.InputSharedC3954917B6C67188? = nil,
+                    value2: [Components.Schemas.InputSharedC3954917B6C67188]? = nil
+                ) {
+                    self.value1 = value1
+                    self.value2 = value2
+                }
+                public init(from decoder: any Swift.Decoder) throws {
+                    var errors: [any Swift.Error] = []
+                    do {
+                        self.value1 = try decoder.decodeFromSingleValueContainer()
+                    } catch {
+                        errors.append(error)
+                    }
+                    do {
+                        self.value2 = try decoder.decodeFromSingleValueContainer()
+                    } catch {
+                        errors.append(error)
+                    }
+                    try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                        [
+                            self.value1,
+                            self.value2
+                        ],
+                        type: Self.self,
+                        codingPath: decoder.codingPath,
+                        errors: errors
+                    )
+                }
+                public func encode(to encoder: any Swift.Encoder) throws {
+                    try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                        self.value1,
+                        self.value2
+                    ])
+                }
+            }
+            /// - Remark: Generated from `#/components/schemas/ExpenseFilters/projectId`.
+            public var projectId: Components.Schemas.ExpenseFilters.ProjectIdPayload?
+            /// - Remark: Generated from `#/components/schemas/ExpenseFilters/includeSubProjects`.
+            public var includeSubProjects: Swift.Bool?
+            /// - Remark: Generated from `#/components/schemas/ExpenseFilters/projectPresenceFilter`.
+            public var projectPresenceFilter: Components.Schemas.PresenceFilter?
+            /// product shortcode, e.g. PRD-4K7M
+            ///
+            /// - Remark: Generated from `#/components/schemas/ExpenseFilters/productId`.
+            public struct ProductIdPayload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/ExpenseFilters/productId/value1`.
+                public var value1: Components.Schemas.ProductShortcode?
+                /// - Remark: Generated from `#/components/schemas/ExpenseFilters/productId/value2`.
+                @frozen public enum Value2Payload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case __unresolvableEntityFilter = "__unresolvable_entity_filter__"
+                }
+                /// - Remark: Generated from `#/components/schemas/ExpenseFilters/productId/value2`.
+                public var value2: Components.Schemas.ExpenseFilters.ProductIdPayload.Value2Payload?
+                /// Creates a new `ProductIdPayload`.
+                ///
+                /// - Parameters:
+                ///   - value1:
+                ///   - value2:
+                public init(
+                    value1: Components.Schemas.ProductShortcode? = nil,
+                    value2: Components.Schemas.ExpenseFilters.ProductIdPayload.Value2Payload? = nil
+                ) {
+                    self.value1 = value1
+                    self.value2 = value2
+                }
+                public init(from decoder: any Swift.Decoder) throws {
+                    var errors: [any Swift.Error] = []
+                    do {
+                        self.value1 = try decoder.decodeFromSingleValueContainer()
+                    } catch {
+                        errors.append(error)
+                    }
+                    do {
+                        self.value2 = try decoder.decodeFromSingleValueContainer()
+                    } catch {
+                        errors.append(error)
+                    }
+                    try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                        [
+                            self.value1,
+                            self.value2
+                        ],
+                        type: Self.self,
+                        codingPath: decoder.codingPath,
+                        errors: errors
+                    )
+                }
+                public func encode(to encoder: any Swift.Encoder) throws {
+                    try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                        self.value1,
+                        self.value2
+                    ])
+                }
+            }
+            /// product shortcode, e.g. PRD-4K7M
+            ///
+            /// - Remark: Generated from `#/components/schemas/ExpenseFilters/productId`.
+            public var productId: Components.Schemas.ExpenseFilters.ProductIdPayload?
+            /// - Remark: Generated from `#/components/schemas/ExpenseFilters/productPresenceFilter`.
+            public var productPresenceFilter: Components.Schemas.PresenceFilter?
+            /// - Remark: Generated from `#/components/schemas/ExpenseFilters/vendorId`.
+            public struct VendorIdPayload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/ExpenseFilters/vendorId/value1`.
+                public var value1: Components.Schemas.InputShared9930F943187E610D?
+                /// - Remark: Generated from `#/components/schemas/ExpenseFilters/vendorId/value2`.
+                public var value2: [Components.Schemas.InputShared9930F943187E610D]?
+                /// Creates a new `VendorIdPayload`.
+                ///
+                /// - Parameters:
+                ///   - value1:
+                ///   - value2:
+                public init(
+                    value1: Components.Schemas.InputShared9930F943187E610D? = nil,
+                    value2: [Components.Schemas.InputShared9930F943187E610D]? = nil
+                ) {
+                    self.value1 = value1
+                    self.value2 = value2
+                }
+                public init(from decoder: any Swift.Decoder) throws {
+                    var errors: [any Swift.Error] = []
+                    do {
+                        self.value1 = try decoder.decodeFromSingleValueContainer()
+                    } catch {
+                        errors.append(error)
+                    }
+                    do {
+                        self.value2 = try decoder.decodeFromSingleValueContainer()
+                    } catch {
+                        errors.append(error)
+                    }
+                    try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                        [
+                            self.value1,
+                            self.value2
+                        ],
+                        type: Self.self,
+                        codingPath: decoder.codingPath,
+                        errors: errors
+                    )
+                }
+                public func encode(to encoder: any Swift.Encoder) throws {
+                    try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                        self.value1,
+                        self.value2
+                    ])
+                }
+            }
+            /// - Remark: Generated from `#/components/schemas/ExpenseFilters/vendorId`.
+            public var vendorId: Components.Schemas.ExpenseFilters.VendorIdPayload?
+            /// - Remark: Generated from `#/components/schemas/ExpenseFilters/vendorPresenceFilter`.
+            public var vendorPresenceFilter: Components.Schemas.PresenceFilter?
+            /// - Remark: Generated from `#/components/schemas/ExpenseFilters/search`.
+            public struct SearchPayload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/ExpenseFilters/search/value1`.
+                public var value1: Swift.String?
+                /// - Remark: Generated from `#/components/schemas/ExpenseFilters/search/value2`.
+                public var value2: [Swift.String]?
+                /// Creates a new `SearchPayload`.
+                ///
+                /// - Parameters:
+                ///   - value1:
+                ///   - value2:
+                public init(
+                    value1: Swift.String? = nil,
+                    value2: [Swift.String]? = nil
+                ) {
+                    self.value1 = value1
+                    self.value2 = value2
+                }
+                public init(from decoder: any Swift.Decoder) throws {
+                    var errors: [any Swift.Error] = []
+                    do {
+                        self.value1 = try decoder.decodeFromSingleValueContainer()
+                    } catch {
+                        errors.append(error)
+                    }
+                    do {
+                        self.value2 = try decoder.decodeFromSingleValueContainer()
+                    } catch {
+                        errors.append(error)
+                    }
+                    try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                        [
+                            self.value1,
+                            self.value2
+                        ],
+                        type: Self.self,
+                        codingPath: decoder.codingPath,
+                        errors: errors
+                    )
+                }
+                public func encode(to encoder: any Swift.Encoder) throws {
+                    try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                        self.value1,
+                        self.value2
+                    ])
+                }
+            }
+            /// - Remark: Generated from `#/components/schemas/ExpenseFilters/search`.
+            public var search: Components.Schemas.ExpenseFilters.SearchPayload?
+            /// - Remark: Generated from `#/components/schemas/ExpenseFilters/dateRelative`.
+            public var dateRelative: Components.Schemas.RelativeDateFilter?
+            /// - Remark: Generated from `#/components/schemas/ExpenseFilters/costPresenceFilter`.
+            public var costPresenceFilter: Components.Schemas.PresenceFilter?
+            /// - Remark: Generated from `#/components/schemas/ExpenseFilters/costSign`.
+            @frozen public enum CostSignPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                case negative = "negative"
+                case positive = "positive"
+            }
+            /// - Remark: Generated from `#/components/schemas/ExpenseFilters/costSign`.
+            public var costSign: Components.Schemas.ExpenseFilters.CostSignPayload?
+            /// - Remark: Generated from `#/components/schemas/ExpenseFilters/disposalPurchasePresenceFilter`.
+            public var disposalPurchasePresenceFilter: Components.Schemas.PresenceFilter?
+            /// - Remark: Generated from `#/components/schemas/ExpenseFilters/productQuantityPresenceFilter`.
+            public var productQuantityPresenceFilter: Components.Schemas.PresenceFilter?
+            /// - Remark: Generated from `#/components/schemas/ExpenseFilters/orderIdPresenceFilter`.
+            public var orderIdPresenceFilter: Components.Schemas.PresenceFilter?
+            /// - Remark: Generated from `#/components/schemas/ExpenseFilters/orderId`.
+            public struct OrderIdPayload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/ExpenseFilters/orderId/value1`.
+                public var value1: Swift.String?
+                /// - Remark: Generated from `#/components/schemas/ExpenseFilters/orderId/value2`.
+                public var value2: [Swift.String]?
+                /// Creates a new `OrderIdPayload`.
+                ///
+                /// - Parameters:
+                ///   - value1:
+                ///   - value2:
+                public init(
+                    value1: Swift.String? = nil,
+                    value2: [Swift.String]? = nil
+                ) {
+                    self.value1 = value1
+                    self.value2 = value2
+                }
+                public init(from decoder: any Swift.Decoder) throws {
+                    var errors: [any Swift.Error] = []
+                    do {
+                        self.value1 = try decoder.decodeFromSingleValueContainer()
+                    } catch {
+                        errors.append(error)
+                    }
+                    do {
+                        self.value2 = try decoder.decodeFromSingleValueContainer()
+                    } catch {
+                        errors.append(error)
+                    }
+                    try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                        [
+                            self.value1,
+                            self.value2
+                        ],
+                        type: Self.self,
+                        codingPath: decoder.codingPath,
+                        errors: errors
+                    )
+                }
+                public func encode(to encoder: any Swift.Encoder) throws {
+                    try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                        self.value1,
+                        self.value2
+                    ])
+                }
+            }
+            /// - Remark: Generated from `#/components/schemas/ExpenseFilters/orderId`.
+            public var orderId: Components.Schemas.ExpenseFilters.OrderIdPayload?
+            /// - Remark: Generated from `#/components/schemas/ExpenseFilters/purchaseId`.
+            public struct PurchaseIdPayload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/ExpenseFilters/purchaseId/value1`.
+                public var value1: Components.Schemas.InputSharedEAD43B3AAD800F7E?
+                /// - Remark: Generated from `#/components/schemas/ExpenseFilters/purchaseId/value2`.
+                public var value2: [Components.Schemas.InputSharedEAD43B3AAD800F7E]?
+                /// Creates a new `PurchaseIdPayload`.
+                ///
+                /// - Parameters:
+                ///   - value1:
+                ///   - value2:
+                public init(
+                    value1: Components.Schemas.InputSharedEAD43B3AAD800F7E? = nil,
+                    value2: [Components.Schemas.InputSharedEAD43B3AAD800F7E]? = nil
+                ) {
+                    self.value1 = value1
+                    self.value2 = value2
+                }
+                public init(from decoder: any Swift.Decoder) throws {
+                    var errors: [any Swift.Error] = []
+                    do {
+                        self.value1 = try decoder.decodeFromSingleValueContainer()
+                    } catch {
+                        errors.append(error)
+                    }
+                    do {
+                        self.value2 = try decoder.decodeFromSingleValueContainer()
+                    } catch {
+                        errors.append(error)
+                    }
+                    try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                        [
+                            self.value1,
+                            self.value2
+                        ],
+                        type: Self.self,
+                        codingPath: decoder.codingPath,
+                        errors: errors
+                    )
+                }
+                public func encode(to encoder: any Swift.Encoder) throws {
+                    try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                        self.value1,
+                        self.value2
+                    ])
+                }
+            }
+            /// - Remark: Generated from `#/components/schemas/ExpenseFilters/purchaseId`.
+            public var purchaseId: Components.Schemas.ExpenseFilters.PurchaseIdPayload?
+            /// - Remark: Generated from `#/components/schemas/ExpenseFilters/projectScope`.
+            public var projectScope: Components.Schemas.EmbeddedProjectScope?
+            /// Creates a new `ExpenseFilters`.
+            ///
+            /// - Parameters:
+            ///   - createdFrom:
+            ///   - createdTo:
+            ///   - updatedFrom:
+            ///   - updatedTo:
+            ///   - financialTransactionId:
+            ///   - financialTransactionPresenceFilter:
+            ///   - financialTransactionSearch:
+            ///   - dateFrom: Inclusive lower bound on expense date
+            ///   - dateTo: Inclusive upper bound on expense date
+            ///   - costType:
+            ///   - lineKind:
+            ///   - lineBasis:
+            ///   - trade:
+            ///   - future:
+            ///   - costMin: Inclusive lower bound on expense cost, in dollars
+            ///   - costMax: Inclusive upper bound on expense cost, in dollars
+            ///   - productQuantityMin: Inclusive lower bound on recorded product quantity
+            ///   - productQuantityMax: Inclusive upper bound on recorded product quantity
+            ///   - notesSearch: Substring match on notes
+            ///   - urlSearch: Substring match on url
+            ///   - dataStatus:
+            ///   - dataGap:
+            ///   - ledgerPartyId:
+            ///   - projectId:
+            ///   - includeSubProjects:
+            ///   - projectPresenceFilter:
+            ///   - productId: product shortcode, e.g. PRD-4K7M
+            ///   - productPresenceFilter:
+            ///   - vendorId:
+            ///   - vendorPresenceFilter:
+            ///   - search:
+            ///   - dateRelative:
+            ///   - costPresenceFilter:
+            ///   - costSign:
+            ///   - disposalPurchasePresenceFilter:
+            ///   - productQuantityPresenceFilter:
+            ///   - orderIdPresenceFilter:
+            ///   - orderId:
+            ///   - purchaseId:
+            ///   - projectScope:
+            public init(
+                createdFrom: Components.Schemas.InputShared1D4812BA12A72EA6? = nil,
+                createdTo: Components.Schemas.InputShared1D4812BA12A72EA6? = nil,
+                updatedFrom: Components.Schemas.InputShared1D4812BA12A72EA6? = nil,
+                updatedTo: Components.Schemas.InputShared1D4812BA12A72EA6? = nil,
+                financialTransactionId: Components.Schemas.ExpenseFilters.FinancialTransactionIdPayload? = nil,
+                financialTransactionPresenceFilter: Components.Schemas.ExpenseFilters.FinancialTransactionPresenceFilterPayload? = nil,
+                financialTransactionSearch: Swift.String? = nil,
+                dateFrom: Components.Schemas.PlainDate? = nil,
+                dateTo: Components.Schemas.PlainDate? = nil,
+                costType: Components.Schemas.ExpenseFilters.CostTypePayload? = nil,
+                lineKind: Components.Schemas.ExpenseFilters.LineKindPayload? = nil,
+                lineBasis: Components.Schemas.ExpenseFilters.LineBasisPayload? = nil,
+                trade: Components.Schemas.ExpenseFilters.TradePayload? = nil,
+                future: Swift.Bool? = nil,
+                costMin: Swift.Double? = nil,
+                costMax: Swift.Double? = nil,
+                productQuantityMin: Swift.Double? = nil,
+                productQuantityMax: Swift.Double? = nil,
+                notesSearch: Swift.String? = nil,
+                urlSearch: Swift.String? = nil,
+                dataStatus: Components.Schemas.ExpenseFilters.DataStatusPayload? = nil,
+                dataGap: Components.Schemas.ExpenseFilters.DataGapPayload? = nil,
+                ledgerPartyId: Components.Schemas.ExpenseFilters.LedgerPartyIdPayload? = nil,
+                projectId: Components.Schemas.ExpenseFilters.ProjectIdPayload? = nil,
+                includeSubProjects: Swift.Bool? = nil,
+                projectPresenceFilter: Components.Schemas.PresenceFilter? = nil,
+                productId: Components.Schemas.ExpenseFilters.ProductIdPayload? = nil,
+                productPresenceFilter: Components.Schemas.PresenceFilter? = nil,
+                vendorId: Components.Schemas.ExpenseFilters.VendorIdPayload? = nil,
+                vendorPresenceFilter: Components.Schemas.PresenceFilter? = nil,
+                search: Components.Schemas.ExpenseFilters.SearchPayload? = nil,
+                dateRelative: Components.Schemas.RelativeDateFilter? = nil,
+                costPresenceFilter: Components.Schemas.PresenceFilter? = nil,
+                costSign: Components.Schemas.ExpenseFilters.CostSignPayload? = nil,
+                disposalPurchasePresenceFilter: Components.Schemas.PresenceFilter? = nil,
+                productQuantityPresenceFilter: Components.Schemas.PresenceFilter? = nil,
+                orderIdPresenceFilter: Components.Schemas.PresenceFilter? = nil,
+                orderId: Components.Schemas.ExpenseFilters.OrderIdPayload? = nil,
+                purchaseId: Components.Schemas.ExpenseFilters.PurchaseIdPayload? = nil,
+                projectScope: Components.Schemas.EmbeddedProjectScope? = nil
+            ) {
+                self.createdFrom = createdFrom
+                self.createdTo = createdTo
+                self.updatedFrom = updatedFrom
+                self.updatedTo = updatedTo
+                self.financialTransactionId = financialTransactionId
+                self.financialTransactionPresenceFilter = financialTransactionPresenceFilter
+                self.financialTransactionSearch = financialTransactionSearch
+                self.dateFrom = dateFrom
+                self.dateTo = dateTo
+                self.costType = costType
+                self.lineKind = lineKind
+                self.lineBasis = lineBasis
+                self.trade = trade
+                self.future = future
+                self.costMin = costMin
+                self.costMax = costMax
+                self.productQuantityMin = productQuantityMin
+                self.productQuantityMax = productQuantityMax
+                self.notesSearch = notesSearch
+                self.urlSearch = urlSearch
+                self.dataStatus = dataStatus
+                self.dataGap = dataGap
+                self.ledgerPartyId = ledgerPartyId
+                self.projectId = projectId
+                self.includeSubProjects = includeSubProjects
+                self.projectPresenceFilter = projectPresenceFilter
+                self.productId = productId
+                self.productPresenceFilter = productPresenceFilter
+                self.vendorId = vendorId
+                self.vendorPresenceFilter = vendorPresenceFilter
+                self.search = search
+                self.dateRelative = dateRelative
+                self.costPresenceFilter = costPresenceFilter
+                self.costSign = costSign
+                self.disposalPurchasePresenceFilter = disposalPurchasePresenceFilter
+                self.productQuantityPresenceFilter = productQuantityPresenceFilter
+                self.orderIdPresenceFilter = orderIdPresenceFilter
+                self.orderId = orderId
+                self.purchaseId = purchaseId
+                self.projectScope = projectScope
+            }
+            public enum CodingKeys: String, CodingKey {
+                case createdFrom
+                case createdTo
+                case updatedFrom
+                case updatedTo
+                case financialTransactionId
+                case financialTransactionPresenceFilter
+                case financialTransactionSearch
+                case dateFrom
+                case dateTo
+                case costType
+                case lineKind
+                case lineBasis
+                case trade
+                case future
+                case costMin
+                case costMax
+                case productQuantityMin
+                case productQuantityMax
+                case notesSearch
+                case urlSearch
+                case dataStatus
+                case dataGap
+                case ledgerPartyId
+                case projectId
+                case includeSubProjects
+                case projectPresenceFilter
+                case productId
+                case productPresenceFilter
+                case vendorId
+                case vendorPresenceFilter
+                case search
+                case dateRelative
+                case costPresenceFilter
+                case costSign
+                case disposalPurchasePresenceFilter
+                case productQuantityPresenceFilter
+                case orderIdPresenceFilter
+                case orderId
+                case purchaseId
+                case projectScope
             }
         }
         /// - Remark: Generated from `#/components/schemas/ExpenseLineBasis`.
@@ -5830,6 +7668,55 @@ extension Components {
                 case meta
             }
         }
+        /// - Remark: Generated from `#/components/schemas/ExpenseMonthlyAggregate`.
+        public struct ExpenseMonthlyAggregate: Codable, Hashable, Sendable {
+            /// "yyyy-MM"
+            ///
+            /// - Remark: Generated from `#/components/schemas/ExpenseMonthlyAggregate/month`.
+            public var month: Swift.String
+            /// - Remark: Generated from `#/components/schemas/ExpenseMonthlyAggregate/actual`.
+            public var actual: Components.Schemas.Money
+            /// - Remark: Generated from `#/components/schemas/ExpenseMonthlyAggregate/committed`.
+            public var committed: Components.Schemas.Money
+            /// - Remark: Generated from `#/components/schemas/ExpenseMonthlyAggregate/credits`.
+            public var credits: Components.Schemas.Money
+            /// - Remark: Generated from `#/components/schemas/ExpenseMonthlyAggregate/net`.
+            public var net: Components.Schemas.Money
+            /// - Remark: Generated from `#/components/schemas/ExpenseMonthlyAggregate/count`.
+            public var count: Swift.Int
+            /// Creates a new `ExpenseMonthlyAggregate`.
+            ///
+            /// - Parameters:
+            ///   - month: "yyyy-MM"
+            ///   - actual:
+            ///   - committed:
+            ///   - credits:
+            ///   - net:
+            ///   - count:
+            public init(
+                month: Swift.String,
+                actual: Components.Schemas.Money,
+                committed: Components.Schemas.Money,
+                credits: Components.Schemas.Money,
+                net: Components.Schemas.Money,
+                count: Swift.Int
+            ) {
+                self.month = month
+                self.actual = actual
+                self.committed = committed
+                self.credits = credits
+                self.net = net
+                self.count = count
+            }
+            public enum CodingKeys: String, CodingKey {
+                case month
+                case actual
+                case committed
+                case credits
+                case net
+                case count
+            }
+        }
         /// - Remark: Generated from `#/components/schemas/ExpenseOut`.
         public struct ExpenseOut: Codable, Hashable, Sendable {
             /// - Remark: Generated from `#/components/schemas/ExpenseOut/fieldResolutions`.
@@ -6037,6 +7924,59 @@ extension Components {
                 case dataQuality
             }
         }
+        /// - Remark: Generated from `#/components/schemas/ExpenseProjectAggregate`.
+        public struct ExpenseProjectAggregate: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ExpenseProjectAggregate/projectId`.
+            public var projectId: Components.Schemas.ProjectShortcode
+            /// - Remark: Generated from `#/components/schemas/ExpenseProjectAggregate/projectName`.
+            public var projectName: Swift.String
+            /// - Remark: Generated from `#/components/schemas/ExpenseProjectAggregate/actual`.
+            public var actual: Components.Schemas.Money
+            /// - Remark: Generated from `#/components/schemas/ExpenseProjectAggregate/committed`.
+            public var committed: Components.Schemas.Money
+            /// - Remark: Generated from `#/components/schemas/ExpenseProjectAggregate/credits`.
+            public var credits: Components.Schemas.Money
+            /// - Remark: Generated from `#/components/schemas/ExpenseProjectAggregate/net`.
+            public var net: Components.Schemas.Money
+            /// - Remark: Generated from `#/components/schemas/ExpenseProjectAggregate/count`.
+            public var count: Swift.Int
+            /// Creates a new `ExpenseProjectAggregate`.
+            ///
+            /// - Parameters:
+            ///   - projectId:
+            ///   - projectName:
+            ///   - actual:
+            ///   - committed:
+            ///   - credits:
+            ///   - net:
+            ///   - count:
+            public init(
+                projectId: Components.Schemas.ProjectShortcode,
+                projectName: Swift.String,
+                actual: Components.Schemas.Money,
+                committed: Components.Schemas.Money,
+                credits: Components.Schemas.Money,
+                net: Components.Schemas.Money,
+                count: Swift.Int
+            ) {
+                self.projectId = projectId
+                self.projectName = projectName
+                self.actual = actual
+                self.committed = committed
+                self.credits = credits
+                self.net = net
+                self.count = count
+            }
+            public enum CodingKeys: String, CodingKey {
+                case projectId
+                case projectName
+                case actual
+                case committed
+                case credits
+                case net
+                case count
+            }
+        }
         /// - Remark: Generated from `#/components/schemas/ExpenseProjectProposal`.
         public struct ExpenseProjectProposal: Codable, Hashable, Sendable {
             /// - Remark: Generated from `#/components/schemas/ExpenseProjectProposal/kind`.
@@ -6110,6 +8050,106 @@ extension Components {
         ///
         /// - Remark: Generated from `#/components/schemas/ExpenseShortcode`.
         public typealias ExpenseShortcode = Swift.String
+        /// - Remark: Generated from `#/components/schemas/ExpenseTradeAggregate`.
+        public struct ExpenseTradeAggregate: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ExpenseTradeAggregate/trade`.
+            public var trade: Components.Schemas.Trade?
+            /// - Remark: Generated from `#/components/schemas/ExpenseTradeAggregate/actual`.
+            public var actual: Components.Schemas.Money
+            /// - Remark: Generated from `#/components/schemas/ExpenseTradeAggregate/committed`.
+            public var committed: Components.Schemas.Money
+            /// - Remark: Generated from `#/components/schemas/ExpenseTradeAggregate/credits`.
+            public var credits: Components.Schemas.Money
+            /// - Remark: Generated from `#/components/schemas/ExpenseTradeAggregate/net`.
+            public var net: Components.Schemas.Money
+            /// - Remark: Generated from `#/components/schemas/ExpenseTradeAggregate/count`.
+            public var count: Swift.Int
+            /// Creates a new `ExpenseTradeAggregate`.
+            ///
+            /// - Parameters:
+            ///   - trade:
+            ///   - actual:
+            ///   - committed:
+            ///   - credits:
+            ///   - net:
+            ///   - count:
+            public init(
+                trade: Components.Schemas.Trade? = nil,
+                actual: Components.Schemas.Money,
+                committed: Components.Schemas.Money,
+                credits: Components.Schemas.Money,
+                net: Components.Schemas.Money,
+                count: Swift.Int
+            ) {
+                self.trade = trade
+                self.actual = actual
+                self.committed = committed
+                self.credits = credits
+                self.net = net
+                self.count = count
+            }
+            public enum CodingKeys: String, CodingKey {
+                case trade
+                case actual
+                case committed
+                case credits
+                case net
+                case count
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/ExpenseTradeCostAggregate`.
+        public struct ExpenseTradeCostAggregate: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ExpenseTradeCostAggregate/trade`.
+            public var trade: Components.Schemas.Trade?
+            /// - Remark: Generated from `#/components/schemas/ExpenseTradeCostAggregate/costType`.
+            public var costType: Components.Schemas.CostType
+            /// - Remark: Generated from `#/components/schemas/ExpenseTradeCostAggregate/actual`.
+            public var actual: Components.Schemas.Money
+            /// - Remark: Generated from `#/components/schemas/ExpenseTradeCostAggregate/committed`.
+            public var committed: Components.Schemas.Money
+            /// - Remark: Generated from `#/components/schemas/ExpenseTradeCostAggregate/credits`.
+            public var credits: Components.Schemas.Money
+            /// - Remark: Generated from `#/components/schemas/ExpenseTradeCostAggregate/net`.
+            public var net: Components.Schemas.Money
+            /// - Remark: Generated from `#/components/schemas/ExpenseTradeCostAggregate/count`.
+            public var count: Swift.Int
+            /// Creates a new `ExpenseTradeCostAggregate`.
+            ///
+            /// - Parameters:
+            ///   - trade:
+            ///   - costType:
+            ///   - actual:
+            ///   - committed:
+            ///   - credits:
+            ///   - net:
+            ///   - count:
+            public init(
+                trade: Components.Schemas.Trade? = nil,
+                costType: Components.Schemas.CostType,
+                actual: Components.Schemas.Money,
+                committed: Components.Schemas.Money,
+                credits: Components.Schemas.Money,
+                net: Components.Schemas.Money,
+                count: Swift.Int
+            ) {
+                self.trade = trade
+                self.costType = costType
+                self.actual = actual
+                self.committed = committed
+                self.credits = credits
+                self.net = net
+                self.count = count
+            }
+            public enum CodingKeys: String, CodingKey {
+                case trade
+                case costType
+                case actual
+                case committed
+                case credits
+                case net
+                case count
+            }
+        }
         /// - Remark: Generated from `#/components/schemas/ExpenseUpdateData`.
         public struct ExpenseUpdateData: Codable, Hashable, Sendable {
             /// - Remark: Generated from `#/components/schemas/ExpenseUpdateData/name`.
@@ -6233,6 +8273,59 @@ extension Components {
                 case beneficiaries
                 case funders
                 case sourceClaims
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/ExpenseVendorAggregate`.
+        public struct ExpenseVendorAggregate: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ExpenseVendorAggregate/vendorId`.
+            public var vendorId: Components.Schemas.VendorShortcode
+            /// - Remark: Generated from `#/components/schemas/ExpenseVendorAggregate/vendorName`.
+            public var vendorName: Swift.String
+            /// - Remark: Generated from `#/components/schemas/ExpenseVendorAggregate/actual`.
+            public var actual: Components.Schemas.Money
+            /// - Remark: Generated from `#/components/schemas/ExpenseVendorAggregate/committed`.
+            public var committed: Components.Schemas.Money
+            /// - Remark: Generated from `#/components/schemas/ExpenseVendorAggregate/credits`.
+            public var credits: Components.Schemas.Money
+            /// - Remark: Generated from `#/components/schemas/ExpenseVendorAggregate/net`.
+            public var net: Components.Schemas.Money
+            /// - Remark: Generated from `#/components/schemas/ExpenseVendorAggregate/count`.
+            public var count: Swift.Int
+            /// Creates a new `ExpenseVendorAggregate`.
+            ///
+            /// - Parameters:
+            ///   - vendorId:
+            ///   - vendorName:
+            ///   - actual:
+            ///   - committed:
+            ///   - credits:
+            ///   - net:
+            ///   - count:
+            public init(
+                vendorId: Components.Schemas.VendorShortcode,
+                vendorName: Swift.String,
+                actual: Components.Schemas.Money,
+                committed: Components.Schemas.Money,
+                credits: Components.Schemas.Money,
+                net: Components.Schemas.Money,
+                count: Swift.Int
+            ) {
+                self.vendorId = vendorId
+                self.vendorName = vendorName
+                self.actual = actual
+                self.committed = committed
+                self.credits = credits
+                self.net = net
+                self.count = count
+            }
+            public enum CodingKeys: String, CodingKey {
+                case vendorId
+                case vendorName
+                case actual
+                case committed
+                case credits
+                case net
+                case count
             }
         }
         /// - Remark: Generated from `#/components/schemas/ExternalIdInput`.
@@ -6640,21 +8733,27 @@ extension Components {
             public var entityType: Components.Schemas.FieldResolutionSource.EntityTypePayload
             /// - Remark: Generated from `#/components/schemas/FieldResolutionSource/entityId`.
             public var entityId: Swift.String
+            /// - Remark: Generated from `#/components/schemas/FieldResolutionSource/name`.
+            public var name: Swift.String?
             /// Creates a new `FieldResolutionSource`.
             ///
             /// - Parameters:
             ///   - entityType:
             ///   - entityId:
+            ///   - name:
             public init(
                 entityType: Components.Schemas.FieldResolutionSource.EntityTypePayload,
-                entityId: Swift.String
+                entityId: Swift.String,
+                name: Swift.String? = nil
             ) {
                 self.entityType = entityType
                 self.entityId = entityId
+                self.name = name
             }
             public enum CodingKeys: String, CodingKey {
                 case entityType
                 case entityId
+                case name
             }
         }
         /// - Remark: Generated from `#/components/schemas/FinancialAccountCardNumber`.
@@ -14615,6 +16714,44 @@ extension Components {
         ///
         /// - Remark: Generated from `#/components/schemas/ImageShortcode`.
         public typealias ImageShortcode = CubbyAPISupport.ImageCode
+        /// - Remark: Generated from `#/components/schemas/ImageSightingBulkInput`.
+        public struct ImageSightingBulkInput: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ImageSightingBulkInput/items`.
+            public var items: [Components.Schemas.ImageSightingCreateInput]
+            /// Creates a new `ImageSightingBulkInput`.
+            ///
+            /// - Parameters:
+            ///   - items:
+            public init(items: [Components.Schemas.ImageSightingCreateInput]) {
+                self.items = items
+            }
+            public enum CodingKeys: String, CodingKey {
+                case items
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/ImageSightingBulkOut`.
+        public struct ImageSightingBulkOut: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ImageSightingBulkOut/processed`.
+            public var processed: Swift.Int
+            /// - Remark: Generated from `#/components/schemas/ImageSightingBulkOut/created`.
+            public var created: Swift.Int
+            /// Creates a new `ImageSightingBulkOut`.
+            ///
+            /// - Parameters:
+            ///   - processed:
+            ///   - created:
+            public init(
+                processed: Swift.Int,
+                created: Swift.Int
+            ) {
+                self.processed = processed
+                self.created = created
+            }
+            public enum CodingKeys: String, CodingKey {
+                case processed
+                case created
+            }
+        }
         /// - Remark: Generated from `#/components/schemas/ImageSightingCamera`.
         public struct ImageSightingCamera: Codable, Hashable, Sendable {
             /// - Remark: Generated from `#/components/schemas/ImageSightingCamera/make`.
@@ -17403,6 +19540,59 @@ extension Components {
                 case direction
             }
         }
+        /// product shortcode, e.g. PRD-4K7M
+        ///
+        /// - Remark: Generated from `#/components/schemas/InputShared6607ABA888BDFB0B`.
+        public struct InputShared6607ABA888BDFB0B: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/InputShared6607ABA888BDFB0B/value1`.
+            public var value1: Components.Schemas.ProductShortcode?
+            /// - Remark: Generated from `#/components/schemas/InputShared6607ABA888BDFB0B/value2`.
+            @frozen public enum Value2Payload: String, Codable, Hashable, Sendable, CaseIterable {
+                case __unresolvableEntityFilter = "__unresolvable_entity_filter__"
+            }
+            /// - Remark: Generated from `#/components/schemas/InputShared6607ABA888BDFB0B/value2`.
+            public var value2: Components.Schemas.InputShared6607ABA888BDFB0B.Value2Payload?
+            /// Creates a new `InputShared6607ABA888BDFB0B`.
+            ///
+            /// - Parameters:
+            ///   - value1:
+            ///   - value2:
+            public init(
+                value1: Components.Schemas.ProductShortcode? = nil,
+                value2: Components.Schemas.InputShared6607ABA888BDFB0B.Value2Payload? = nil
+            ) {
+                self.value1 = value1
+                self.value2 = value2
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                var errors: [any Swift.Error] = []
+                do {
+                    self.value1 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                do {
+                    self.value2 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                    [
+                        self.value1,
+                        self.value2
+                    ],
+                    type: Self.self,
+                    codingPath: decoder.codingPath,
+                    errors: errors
+                )
+            }
+            public func encode(to encoder: any Swift.Encoder) throws {
+                try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                    self.value1,
+                    self.value2
+                ])
+            }
+        }
         /// - Remark: Generated from `#/components/schemas/InputShared681004346C78D5F3`.
         public typealias InputShared681004346C78D5F3 = [Swift.String]
         /// importRun shortcode, e.g. RUN-4K7M
@@ -17474,6 +19664,59 @@ extension Components {
             public init(
                 value1: Components.Schemas.ImportRunTargetState? = nil,
                 value2: [Components.Schemas.ImportRunTargetState]? = nil
+            ) {
+                self.value1 = value1
+                self.value2 = value2
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                var errors: [any Swift.Error] = []
+                do {
+                    self.value1 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                do {
+                    self.value2 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                    [
+                        self.value1,
+                        self.value2
+                    ],
+                    type: Self.self,
+                    codingPath: decoder.codingPath,
+                    errors: errors
+                )
+            }
+            public func encode(to encoder: any Swift.Encoder) throws {
+                try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                    self.value1,
+                    self.value2
+                ])
+            }
+        }
+        /// vendor shortcode, e.g. VEN-4K7M
+        ///
+        /// - Remark: Generated from `#/components/schemas/InputShared9930F943187E610D`.
+        public struct InputShared9930F943187E610D: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/InputShared9930F943187E610D/value1`.
+            public var value1: Components.Schemas.VendorShortcode?
+            /// - Remark: Generated from `#/components/schemas/InputShared9930F943187E610D/value2`.
+            @frozen public enum Value2Payload: String, Codable, Hashable, Sendable, CaseIterable {
+                case __unresolvableEntityFilter = "__unresolvable_entity_filter__"
+            }
+            /// - Remark: Generated from `#/components/schemas/InputShared9930F943187E610D/value2`.
+            public var value2: Components.Schemas.InputShared9930F943187E610D.Value2Payload?
+            /// Creates a new `InputShared9930F943187E610D`.
+            ///
+            /// - Parameters:
+            ///   - value1:
+            ///   - value2:
+            public init(
+                value1: Components.Schemas.VendorShortcode? = nil,
+                value2: Components.Schemas.InputShared9930F943187E610D.Value2Payload? = nil
             ) {
                 self.value1 = value1
                 self.value2 = value2
@@ -17603,6 +19846,112 @@ extension Components {
         }
         /// - Remark: Generated from `#/components/schemas/InputSharedBB9821D38D192D1B`.
         public typealias InputSharedBB9821D38D192D1B = [Swift.String]
+        /// task shortcode, e.g. TSK-4K7M
+        ///
+        /// - Remark: Generated from `#/components/schemas/InputSharedC265965DDAF8D654`.
+        public struct InputSharedC265965DDAF8D654: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/InputSharedC265965DDAF8D654/value1`.
+            public var value1: Components.Schemas.TaskShortcode?
+            /// - Remark: Generated from `#/components/schemas/InputSharedC265965DDAF8D654/value2`.
+            @frozen public enum Value2Payload: String, Codable, Hashable, Sendable, CaseIterable {
+                case __unresolvableEntityFilter = "__unresolvable_entity_filter__"
+            }
+            /// - Remark: Generated from `#/components/schemas/InputSharedC265965DDAF8D654/value2`.
+            public var value2: Components.Schemas.InputSharedC265965DDAF8D654.Value2Payload?
+            /// Creates a new `InputSharedC265965DDAF8D654`.
+            ///
+            /// - Parameters:
+            ///   - value1:
+            ///   - value2:
+            public init(
+                value1: Components.Schemas.TaskShortcode? = nil,
+                value2: Components.Schemas.InputSharedC265965DDAF8D654.Value2Payload? = nil
+            ) {
+                self.value1 = value1
+                self.value2 = value2
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                var errors: [any Swift.Error] = []
+                do {
+                    self.value1 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                do {
+                    self.value2 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                    [
+                        self.value1,
+                        self.value2
+                    ],
+                    type: Self.self,
+                    codingPath: decoder.codingPath,
+                    errors: errors
+                )
+            }
+            public func encode(to encoder: any Swift.Encoder) throws {
+                try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                    self.value1,
+                    self.value2
+                ])
+            }
+        }
+        /// project shortcode, e.g. PRJ-4K7M
+        ///
+        /// - Remark: Generated from `#/components/schemas/InputSharedC3954917B6C67188`.
+        public struct InputSharedC3954917B6C67188: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/InputSharedC3954917B6C67188/value1`.
+            public var value1: Components.Schemas.ProjectShortcode?
+            /// - Remark: Generated from `#/components/schemas/InputSharedC3954917B6C67188/value2`.
+            @frozen public enum Value2Payload: String, Codable, Hashable, Sendable, CaseIterable {
+                case __unresolvableEntityFilter = "__unresolvable_entity_filter__"
+            }
+            /// - Remark: Generated from `#/components/schemas/InputSharedC3954917B6C67188/value2`.
+            public var value2: Components.Schemas.InputSharedC3954917B6C67188.Value2Payload?
+            /// Creates a new `InputSharedC3954917B6C67188`.
+            ///
+            /// - Parameters:
+            ///   - value1:
+            ///   - value2:
+            public init(
+                value1: Components.Schemas.ProjectShortcode? = nil,
+                value2: Components.Schemas.InputSharedC3954917B6C67188.Value2Payload? = nil
+            ) {
+                self.value1 = value1
+                self.value2 = value2
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                var errors: [any Swift.Error] = []
+                do {
+                    self.value1 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                do {
+                    self.value2 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                    [
+                        self.value1,
+                        self.value2
+                    ],
+                    type: Self.self,
+                    codingPath: decoder.codingPath,
+                    errors: errors
+                )
+            }
+            public func encode(to encoder: any Swift.Encoder) throws {
+                try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                    self.value1,
+                    self.value2
+                ])
+            }
+        }
         /// - Remark: Generated from `#/components/schemas/InputSharedC6057253F6EDD371`.
         public struct InputSharedC6057253F6EDD371: Codable, Hashable, Sendable {
             /// - Remark: Generated from `#/components/schemas/InputSharedC6057253F6EDD371/value1`.
@@ -17617,6 +19966,59 @@ extension Components {
             public init(
                 value1: Components.Schemas.InputShared3F96AF0DB8D0AB42? = nil,
                 value2: [Components.Schemas.InputShared3F96AF0DB8D0AB42]? = nil
+            ) {
+                self.value1 = value1
+                self.value2 = value2
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                var errors: [any Swift.Error] = []
+                do {
+                    self.value1 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                do {
+                    self.value2 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                    [
+                        self.value1,
+                        self.value2
+                    ],
+                    type: Self.self,
+                    codingPath: decoder.codingPath,
+                    errors: errors
+                )
+            }
+            public func encode(to encoder: any Swift.Encoder) throws {
+                try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                    self.value1,
+                    self.value2
+                ])
+            }
+        }
+        /// purchase shortcode, e.g. PUR-4K7M
+        ///
+        /// - Remark: Generated from `#/components/schemas/InputSharedEAD43B3AAD800F7E`.
+        public struct InputSharedEAD43B3AAD800F7E: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/InputSharedEAD43B3AAD800F7E/value1`.
+            public var value1: Components.Schemas.PurchaseShortcode?
+            /// - Remark: Generated from `#/components/schemas/InputSharedEAD43B3AAD800F7E/value2`.
+            @frozen public enum Value2Payload: String, Codable, Hashable, Sendable, CaseIterable {
+                case __unresolvableEntityFilter = "__unresolvable_entity_filter__"
+            }
+            /// - Remark: Generated from `#/components/schemas/InputSharedEAD43B3AAD800F7E/value2`.
+            public var value2: Components.Schemas.InputSharedEAD43B3AAD800F7E.Value2Payload?
+            /// Creates a new `InputSharedEAD43B3AAD800F7E`.
+            ///
+            /// - Parameters:
+            ///   - value1:
+            ///   - value2:
+            public init(
+                value1: Components.Schemas.PurchaseShortcode? = nil,
+                value2: Components.Schemas.InputSharedEAD43B3AAD800F7E.Value2Payload? = nil
             ) {
                 self.value1 = value1
                 self.value2 = value2
@@ -26433,6 +28835,11 @@ extension Components {
         }
         /// - Remark: Generated from `#/components/schemas/PositiveMoney`.
         public typealias PositiveMoney = Swift.Double
+        /// - Remark: Generated from `#/components/schemas/PresenceFilter`.
+        @frozen public enum PresenceFilter: String, Codable, Hashable, Sendable, CaseIterable {
+            case has = "has"
+            case none = "none"
+        }
         /// - Remark: Generated from `#/components/schemas/ProblemsCount`.
         public struct ProblemsCount: Codable, Hashable, Sendable {
             /// - Remark: Generated from `#/components/schemas/ProblemsCount/total`.
@@ -29440,6 +31847,918 @@ extension Components {
         }
         /// - Remark: Generated from `#/components/schemas/ProjectAllocations`.
         public typealias ProjectAllocations = [Components.Schemas.ProjectAllocation]
+        /// - Remark: Generated from `#/components/schemas/ProjectAttentionItem`.
+        @frozen public enum ProjectAttentionItem: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ProjectAttentionItem/ProjectAttentionItemBlockedWork`.
+            case blockedWork(Components.Schemas.ProjectAttentionItemBlockedWork)
+            /// - Remark: Generated from `#/components/schemas/ProjectAttentionItem/ProjectAttentionItemDateWindowDrift`.
+            case dateWindowDrift(Components.Schemas.ProjectAttentionItemDateWindowDrift)
+            /// - Remark: Generated from `#/components/schemas/ProjectAttentionItem/ProjectAttentionItemMissingBudget`.
+            case missingBudget(Components.Schemas.ProjectAttentionItemMissingBudget)
+            /// - Remark: Generated from `#/components/schemas/ProjectAttentionItem/ProjectAttentionItemOverdueTask`.
+            case overdueTask(Components.Schemas.ProjectAttentionItemOverdueTask)
+            /// - Remark: Generated from `#/components/schemas/ProjectAttentionItem/ProjectAttentionItemPastDuePlannedExpense`.
+            case pastDuePlannedExpense(Components.Schemas.ProjectAttentionItemPastDuePlannedExpense)
+            /// - Remark: Generated from `#/components/schemas/ProjectAttentionItem/ProjectAttentionItemStalledProject`.
+            case stalledProject(Components.Schemas.ProjectAttentionItemStalledProject)
+            /// - Remark: Generated from `#/components/schemas/ProjectAttentionItem/ProjectAttentionItemUnclassifiedExpense`.
+            case unclassifiedExpense(Components.Schemas.ProjectAttentionItemUnclassifiedExpense)
+            public enum CodingKeys: String, CodingKey {
+                case _type = "type"
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                let discriminator = try container.decode(
+                    Swift.String.self,
+                    forKey: ._type
+                )
+                switch discriminator {
+                case "blocked_work":
+                    self = .blockedWork(try .init(from: decoder))
+                case "date_window_drift":
+                    self = .dateWindowDrift(try .init(from: decoder))
+                case "missing_budget":
+                    self = .missingBudget(try .init(from: decoder))
+                case "overdue_task":
+                    self = .overdueTask(try .init(from: decoder))
+                case "past_due_planned_expense":
+                    self = .pastDuePlannedExpense(try .init(from: decoder))
+                case "stalled_project":
+                    self = .stalledProject(try .init(from: decoder))
+                case "unclassified_expense":
+                    self = .unclassifiedExpense(try .init(from: decoder))
+                default:
+                    throw Swift.DecodingError.unknownOneOfDiscriminator(
+                        discriminatorKey: CodingKeys._type,
+                        discriminatorValue: discriminator,
+                        codingPath: decoder.codingPath
+                    )
+                }
+            }
+            public func encode(to encoder: any Swift.Encoder) throws {
+                switch self {
+                case let .blockedWork(value):
+                    try value.encode(to: encoder)
+                case let .dateWindowDrift(value):
+                    try value.encode(to: encoder)
+                case let .missingBudget(value):
+                    try value.encode(to: encoder)
+                case let .overdueTask(value):
+                    try value.encode(to: encoder)
+                case let .pastDuePlannedExpense(value):
+                    try value.encode(to: encoder)
+                case let .stalledProject(value):
+                    try value.encode(to: encoder)
+                case let .unclassifiedExpense(value):
+                    try value.encode(to: encoder)
+                }
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/ProjectAttentionItemBlockedWork`.
+        public struct ProjectAttentionItemBlockedWork: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ProjectAttentionItemBlockedWork/key`.
+            public var key: Swift.String
+            /// - Remark: Generated from `#/components/schemas/ProjectAttentionItemBlockedWork/severity`.
+            @frozen public enum SeverityPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                case info = "info"
+                case warning = "warning"
+                case critical = "critical"
+            }
+            /// - Remark: Generated from `#/components/schemas/ProjectAttentionItemBlockedWork/severity`.
+            public var severity: Components.Schemas.ProjectAttentionItemBlockedWork.SeverityPayload
+            /// - Remark: Generated from `#/components/schemas/ProjectAttentionItemBlockedWork/name`.
+            public var name: Swift.String
+            /// - Remark: Generated from `#/components/schemas/ProjectAttentionItemBlockedWork/description`.
+            public var description: Swift.String
+            /// - Remark: Generated from `#/components/schemas/ProjectAttentionItemBlockedWork/entityType`.
+            @frozen public enum EntityTypePayload: String, Codable, Hashable, Sendable, CaseIterable {
+                case project = "project"
+                case task = "task"
+                case expense = "expense"
+            }
+            /// - Remark: Generated from `#/components/schemas/ProjectAttentionItemBlockedWork/entityType`.
+            public var entityType: Components.Schemas.ProjectAttentionItemBlockedWork.EntityTypePayload
+            /// - Remark: Generated from `#/components/schemas/ProjectAttentionItemBlockedWork/entityId`.
+            public var entityId: Swift.String
+            /// - Remark: Generated from `#/components/schemas/ProjectAttentionItemBlockedWork/date`.
+            public var date: Components.Schemas.PlainDate?
+            /// - Remark: Generated from `#/components/schemas/ProjectAttentionItemBlockedWork/amount`.
+            public var amount: Swift.Double?
+            /// Direct link to the corrective view
+            ///
+            /// - Remark: Generated from `#/components/schemas/ProjectAttentionItemBlockedWork/href`.
+            public var href: Swift.String
+            /// - Remark: Generated from `#/components/schemas/ProjectAttentionItemBlockedWork/type`.
+            @frozen public enum _TypePayload: String, Codable, Hashable, Sendable, CaseIterable {
+                case blockedWork = "blocked_work"
+            }
+            /// - Remark: Generated from `#/components/schemas/ProjectAttentionItemBlockedWork/type`.
+            public var _type: Components.Schemas.ProjectAttentionItemBlockedWork._TypePayload
+            /// - Remark: Generated from `#/components/schemas/ProjectAttentionItemBlockedWork/facts`.
+            public struct FactsPayload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/ProjectAttentionItemBlockedWork/facts/blockedTasks`.
+                public var blockedTasks: Swift.Int
+                /// Creates a new `FactsPayload`.
+                ///
+                /// - Parameters:
+                ///   - blockedTasks:
+                public init(blockedTasks: Swift.Int) {
+                    self.blockedTasks = blockedTasks
+                }
+                public enum CodingKeys: String, CodingKey {
+                    case blockedTasks
+                }
+            }
+            /// - Remark: Generated from `#/components/schemas/ProjectAttentionItemBlockedWork/facts`.
+            public var facts: Components.Schemas.ProjectAttentionItemBlockedWork.FactsPayload
+            /// Creates a new `ProjectAttentionItemBlockedWork`.
+            ///
+            /// - Parameters:
+            ///   - key:
+            ///   - severity:
+            ///   - name:
+            ///   - description:
+            ///   - entityType:
+            ///   - entityId:
+            ///   - date:
+            ///   - amount:
+            ///   - href: Direct link to the corrective view
+            ///   - _type:
+            ///   - facts:
+            public init(
+                key: Swift.String,
+                severity: Components.Schemas.ProjectAttentionItemBlockedWork.SeverityPayload,
+                name: Swift.String,
+                description: Swift.String,
+                entityType: Components.Schemas.ProjectAttentionItemBlockedWork.EntityTypePayload,
+                entityId: Swift.String,
+                date: Components.Schemas.PlainDate? = nil,
+                amount: Swift.Double? = nil,
+                href: Swift.String,
+                _type: Components.Schemas.ProjectAttentionItemBlockedWork._TypePayload,
+                facts: Components.Schemas.ProjectAttentionItemBlockedWork.FactsPayload
+            ) {
+                self.key = key
+                self.severity = severity
+                self.name = name
+                self.description = description
+                self.entityType = entityType
+                self.entityId = entityId
+                self.date = date
+                self.amount = amount
+                self.href = href
+                self._type = _type
+                self.facts = facts
+            }
+            public enum CodingKeys: String, CodingKey {
+                case key
+                case severity
+                case name
+                case description
+                case entityType
+                case entityId
+                case date
+                case amount
+                case href
+                case _type = "type"
+                case facts
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/ProjectAttentionItemDateWindowDrift`.
+        public struct ProjectAttentionItemDateWindowDrift: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ProjectAttentionItemDateWindowDrift/key`.
+            public var key: Swift.String
+            /// - Remark: Generated from `#/components/schemas/ProjectAttentionItemDateWindowDrift/severity`.
+            @frozen public enum SeverityPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                case info = "info"
+                case warning = "warning"
+                case critical = "critical"
+            }
+            /// - Remark: Generated from `#/components/schemas/ProjectAttentionItemDateWindowDrift/severity`.
+            public var severity: Components.Schemas.ProjectAttentionItemDateWindowDrift.SeverityPayload
+            /// - Remark: Generated from `#/components/schemas/ProjectAttentionItemDateWindowDrift/name`.
+            public var name: Swift.String
+            /// - Remark: Generated from `#/components/schemas/ProjectAttentionItemDateWindowDrift/description`.
+            public var description: Swift.String
+            /// - Remark: Generated from `#/components/schemas/ProjectAttentionItemDateWindowDrift/entityType`.
+            @frozen public enum EntityTypePayload: String, Codable, Hashable, Sendable, CaseIterable {
+                case project = "project"
+                case task = "task"
+                case expense = "expense"
+            }
+            /// - Remark: Generated from `#/components/schemas/ProjectAttentionItemDateWindowDrift/entityType`.
+            public var entityType: Components.Schemas.ProjectAttentionItemDateWindowDrift.EntityTypePayload
+            /// - Remark: Generated from `#/components/schemas/ProjectAttentionItemDateWindowDrift/entityId`.
+            public var entityId: Swift.String
+            /// - Remark: Generated from `#/components/schemas/ProjectAttentionItemDateWindowDrift/date`.
+            public var date: Components.Schemas.PlainDate?
+            /// - Remark: Generated from `#/components/schemas/ProjectAttentionItemDateWindowDrift/amount`.
+            public var amount: Swift.Double?
+            /// Direct link to the corrective view
+            ///
+            /// - Remark: Generated from `#/components/schemas/ProjectAttentionItemDateWindowDrift/href`.
+            public var href: Swift.String
+            /// - Remark: Generated from `#/components/schemas/ProjectAttentionItemDateWindowDrift/type`.
+            @frozen public enum _TypePayload: String, Codable, Hashable, Sendable, CaseIterable {
+                case dateWindowDrift = "date_window_drift"
+            }
+            /// - Remark: Generated from `#/components/schemas/ProjectAttentionItemDateWindowDrift/type`.
+            public var _type: Components.Schemas.ProjectAttentionItemDateWindowDrift._TypePayload
+            /// - Remark: Generated from `#/components/schemas/ProjectAttentionItemDateWindowDrift/facts`.
+            public struct FactsPayload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/ProjectAttentionItemDateWindowDrift/facts/side`.
+                @frozen public enum SidePayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case start = "start"
+                    case end = "end"
+                }
+                /// - Remark: Generated from `#/components/schemas/ProjectAttentionItemDateWindowDrift/facts/side`.
+                public var side: Components.Schemas.ProjectAttentionItemDateWindowDrift.FactsPayload.SidePayload
+                /// - Remark: Generated from `#/components/schemas/ProjectAttentionItemDateWindowDrift/facts/override`.
+                public var override: Components.Schemas.PlainDate
+                /// - Remark: Generated from `#/components/schemas/ProjectAttentionItemDateWindowDrift/facts/derived`.
+                public var derived: Components.Schemas.PlainDate
+                /// - Remark: Generated from `#/components/schemas/ProjectAttentionItemDateWindowDrift/facts/daysHidden`.
+                public var daysHidden: Swift.Int
+                /// Creates a new `FactsPayload`.
+                ///
+                /// - Parameters:
+                ///   - side:
+                ///   - override:
+                ///   - derived:
+                ///   - daysHidden:
+                public init(
+                    side: Components.Schemas.ProjectAttentionItemDateWindowDrift.FactsPayload.SidePayload,
+                    override: Components.Schemas.PlainDate,
+                    derived: Components.Schemas.PlainDate,
+                    daysHidden: Swift.Int
+                ) {
+                    self.side = side
+                    self.override = override
+                    self.derived = derived
+                    self.daysHidden = daysHidden
+                }
+                public enum CodingKeys: String, CodingKey {
+                    case side
+                    case override
+                    case derived
+                    case daysHidden
+                }
+            }
+            /// - Remark: Generated from `#/components/schemas/ProjectAttentionItemDateWindowDrift/facts`.
+            public var facts: Components.Schemas.ProjectAttentionItemDateWindowDrift.FactsPayload
+            /// Creates a new `ProjectAttentionItemDateWindowDrift`.
+            ///
+            /// - Parameters:
+            ///   - key:
+            ///   - severity:
+            ///   - name:
+            ///   - description:
+            ///   - entityType:
+            ///   - entityId:
+            ///   - date:
+            ///   - amount:
+            ///   - href: Direct link to the corrective view
+            ///   - _type:
+            ///   - facts:
+            public init(
+                key: Swift.String,
+                severity: Components.Schemas.ProjectAttentionItemDateWindowDrift.SeverityPayload,
+                name: Swift.String,
+                description: Swift.String,
+                entityType: Components.Schemas.ProjectAttentionItemDateWindowDrift.EntityTypePayload,
+                entityId: Swift.String,
+                date: Components.Schemas.PlainDate? = nil,
+                amount: Swift.Double? = nil,
+                href: Swift.String,
+                _type: Components.Schemas.ProjectAttentionItemDateWindowDrift._TypePayload,
+                facts: Components.Schemas.ProjectAttentionItemDateWindowDrift.FactsPayload
+            ) {
+                self.key = key
+                self.severity = severity
+                self.name = name
+                self.description = description
+                self.entityType = entityType
+                self.entityId = entityId
+                self.date = date
+                self.amount = amount
+                self.href = href
+                self._type = _type
+                self.facts = facts
+            }
+            public enum CodingKeys: String, CodingKey {
+                case key
+                case severity
+                case name
+                case description
+                case entityType
+                case entityId
+                case date
+                case amount
+                case href
+                case _type = "type"
+                case facts
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/ProjectAttentionItemMissingBudget`.
+        public struct ProjectAttentionItemMissingBudget: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ProjectAttentionItemMissingBudget/key`.
+            public var key: Swift.String
+            /// - Remark: Generated from `#/components/schemas/ProjectAttentionItemMissingBudget/severity`.
+            @frozen public enum SeverityPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                case info = "info"
+                case warning = "warning"
+                case critical = "critical"
+            }
+            /// - Remark: Generated from `#/components/schemas/ProjectAttentionItemMissingBudget/severity`.
+            public var severity: Components.Schemas.ProjectAttentionItemMissingBudget.SeverityPayload
+            /// - Remark: Generated from `#/components/schemas/ProjectAttentionItemMissingBudget/name`.
+            public var name: Swift.String
+            /// - Remark: Generated from `#/components/schemas/ProjectAttentionItemMissingBudget/description`.
+            public var description: Swift.String
+            /// - Remark: Generated from `#/components/schemas/ProjectAttentionItemMissingBudget/entityType`.
+            @frozen public enum EntityTypePayload: String, Codable, Hashable, Sendable, CaseIterable {
+                case project = "project"
+                case task = "task"
+                case expense = "expense"
+            }
+            /// - Remark: Generated from `#/components/schemas/ProjectAttentionItemMissingBudget/entityType`.
+            public var entityType: Components.Schemas.ProjectAttentionItemMissingBudget.EntityTypePayload
+            /// - Remark: Generated from `#/components/schemas/ProjectAttentionItemMissingBudget/entityId`.
+            public var entityId: Swift.String
+            /// - Remark: Generated from `#/components/schemas/ProjectAttentionItemMissingBudget/date`.
+            public var date: Components.Schemas.PlainDate?
+            /// - Remark: Generated from `#/components/schemas/ProjectAttentionItemMissingBudget/amount`.
+            public var amount: Swift.Double?
+            /// Direct link to the corrective view
+            ///
+            /// - Remark: Generated from `#/components/schemas/ProjectAttentionItemMissingBudget/href`.
+            public var href: Swift.String
+            /// - Remark: Generated from `#/components/schemas/ProjectAttentionItemMissingBudget/type`.
+            @frozen public enum _TypePayload: String, Codable, Hashable, Sendable, CaseIterable {
+                case missingBudget = "missing_budget"
+            }
+            /// - Remark: Generated from `#/components/schemas/ProjectAttentionItemMissingBudget/type`.
+            public var _type: Components.Schemas.ProjectAttentionItemMissingBudget._TypePayload
+            /// - Remark: Generated from `#/components/schemas/ProjectAttentionItemMissingBudget/facts`.
+            public struct FactsPayload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/ProjectAttentionItemMissingBudget/facts/spend`.
+                public var spend: Components.Schemas.Money
+                /// - Remark: Generated from `#/components/schemas/ProjectAttentionItemMissingBudget/facts/actualSpend`.
+                public var actualSpend: Components.Schemas.Money
+                /// - Remark: Generated from `#/components/schemas/ProjectAttentionItemMissingBudget/facts/committedSpend`.
+                public var committedSpend: Components.Schemas.Money
+                /// Creates a new `FactsPayload`.
+                ///
+                /// - Parameters:
+                ///   - spend:
+                ///   - actualSpend:
+                ///   - committedSpend:
+                public init(
+                    spend: Components.Schemas.Money,
+                    actualSpend: Components.Schemas.Money,
+                    committedSpend: Components.Schemas.Money
+                ) {
+                    self.spend = spend
+                    self.actualSpend = actualSpend
+                    self.committedSpend = committedSpend
+                }
+                public enum CodingKeys: String, CodingKey {
+                    case spend
+                    case actualSpend
+                    case committedSpend
+                }
+            }
+            /// - Remark: Generated from `#/components/schemas/ProjectAttentionItemMissingBudget/facts`.
+            public var facts: Components.Schemas.ProjectAttentionItemMissingBudget.FactsPayload
+            /// Creates a new `ProjectAttentionItemMissingBudget`.
+            ///
+            /// - Parameters:
+            ///   - key:
+            ///   - severity:
+            ///   - name:
+            ///   - description:
+            ///   - entityType:
+            ///   - entityId:
+            ///   - date:
+            ///   - amount:
+            ///   - href: Direct link to the corrective view
+            ///   - _type:
+            ///   - facts:
+            public init(
+                key: Swift.String,
+                severity: Components.Schemas.ProjectAttentionItemMissingBudget.SeverityPayload,
+                name: Swift.String,
+                description: Swift.String,
+                entityType: Components.Schemas.ProjectAttentionItemMissingBudget.EntityTypePayload,
+                entityId: Swift.String,
+                date: Components.Schemas.PlainDate? = nil,
+                amount: Swift.Double? = nil,
+                href: Swift.String,
+                _type: Components.Schemas.ProjectAttentionItemMissingBudget._TypePayload,
+                facts: Components.Schemas.ProjectAttentionItemMissingBudget.FactsPayload
+            ) {
+                self.key = key
+                self.severity = severity
+                self.name = name
+                self.description = description
+                self.entityType = entityType
+                self.entityId = entityId
+                self.date = date
+                self.amount = amount
+                self.href = href
+                self._type = _type
+                self.facts = facts
+            }
+            public enum CodingKeys: String, CodingKey {
+                case key
+                case severity
+                case name
+                case description
+                case entityType
+                case entityId
+                case date
+                case amount
+                case href
+                case _type = "type"
+                case facts
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/ProjectAttentionItemOverdueTask`.
+        public struct ProjectAttentionItemOverdueTask: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ProjectAttentionItemOverdueTask/key`.
+            public var key: Swift.String
+            /// - Remark: Generated from `#/components/schemas/ProjectAttentionItemOverdueTask/severity`.
+            @frozen public enum SeverityPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                case info = "info"
+                case warning = "warning"
+                case critical = "critical"
+            }
+            /// - Remark: Generated from `#/components/schemas/ProjectAttentionItemOverdueTask/severity`.
+            public var severity: Components.Schemas.ProjectAttentionItemOverdueTask.SeverityPayload
+            /// - Remark: Generated from `#/components/schemas/ProjectAttentionItemOverdueTask/name`.
+            public var name: Swift.String
+            /// - Remark: Generated from `#/components/schemas/ProjectAttentionItemOverdueTask/description`.
+            public var description: Swift.String
+            /// - Remark: Generated from `#/components/schemas/ProjectAttentionItemOverdueTask/entityType`.
+            @frozen public enum EntityTypePayload: String, Codable, Hashable, Sendable, CaseIterable {
+                case project = "project"
+                case task = "task"
+                case expense = "expense"
+            }
+            /// - Remark: Generated from `#/components/schemas/ProjectAttentionItemOverdueTask/entityType`.
+            public var entityType: Components.Schemas.ProjectAttentionItemOverdueTask.EntityTypePayload
+            /// - Remark: Generated from `#/components/schemas/ProjectAttentionItemOverdueTask/entityId`.
+            public var entityId: Swift.String
+            /// - Remark: Generated from `#/components/schemas/ProjectAttentionItemOverdueTask/date`.
+            public var date: Components.Schemas.PlainDate?
+            /// - Remark: Generated from `#/components/schemas/ProjectAttentionItemOverdueTask/amount`.
+            public var amount: Swift.Double?
+            /// Direct link to the corrective view
+            ///
+            /// - Remark: Generated from `#/components/schemas/ProjectAttentionItemOverdueTask/href`.
+            public var href: Swift.String
+            /// - Remark: Generated from `#/components/schemas/ProjectAttentionItemOverdueTask/type`.
+            @frozen public enum _TypePayload: String, Codable, Hashable, Sendable, CaseIterable {
+                case overdueTask = "overdue_task"
+            }
+            /// - Remark: Generated from `#/components/schemas/ProjectAttentionItemOverdueTask/type`.
+            public var _type: Components.Schemas.ProjectAttentionItemOverdueTask._TypePayload
+            /// - Remark: Generated from `#/components/schemas/ProjectAttentionItemOverdueTask/facts`.
+            public struct FactsPayload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/ProjectAttentionItemOverdueTask/facts/due`.
+                public var due: Components.Schemas.PlainDate
+                /// - Remark: Generated from `#/components/schemas/ProjectAttentionItemOverdueTask/facts/daysOverdue`.
+                public var daysOverdue: Swift.Int
+                /// Creates a new `FactsPayload`.
+                ///
+                /// - Parameters:
+                ///   - due:
+                ///   - daysOverdue:
+                public init(
+                    due: Components.Schemas.PlainDate,
+                    daysOverdue: Swift.Int
+                ) {
+                    self.due = due
+                    self.daysOverdue = daysOverdue
+                }
+                public enum CodingKeys: String, CodingKey {
+                    case due
+                    case daysOverdue
+                }
+            }
+            /// - Remark: Generated from `#/components/schemas/ProjectAttentionItemOverdueTask/facts`.
+            public var facts: Components.Schemas.ProjectAttentionItemOverdueTask.FactsPayload
+            /// Creates a new `ProjectAttentionItemOverdueTask`.
+            ///
+            /// - Parameters:
+            ///   - key:
+            ///   - severity:
+            ///   - name:
+            ///   - description:
+            ///   - entityType:
+            ///   - entityId:
+            ///   - date:
+            ///   - amount:
+            ///   - href: Direct link to the corrective view
+            ///   - _type:
+            ///   - facts:
+            public init(
+                key: Swift.String,
+                severity: Components.Schemas.ProjectAttentionItemOverdueTask.SeverityPayload,
+                name: Swift.String,
+                description: Swift.String,
+                entityType: Components.Schemas.ProjectAttentionItemOverdueTask.EntityTypePayload,
+                entityId: Swift.String,
+                date: Components.Schemas.PlainDate? = nil,
+                amount: Swift.Double? = nil,
+                href: Swift.String,
+                _type: Components.Schemas.ProjectAttentionItemOverdueTask._TypePayload,
+                facts: Components.Schemas.ProjectAttentionItemOverdueTask.FactsPayload
+            ) {
+                self.key = key
+                self.severity = severity
+                self.name = name
+                self.description = description
+                self.entityType = entityType
+                self.entityId = entityId
+                self.date = date
+                self.amount = amount
+                self.href = href
+                self._type = _type
+                self.facts = facts
+            }
+            public enum CodingKeys: String, CodingKey {
+                case key
+                case severity
+                case name
+                case description
+                case entityType
+                case entityId
+                case date
+                case amount
+                case href
+                case _type = "type"
+                case facts
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/ProjectAttentionItemPastDuePlannedExpense`.
+        public struct ProjectAttentionItemPastDuePlannedExpense: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ProjectAttentionItemPastDuePlannedExpense/key`.
+            public var key: Swift.String
+            /// - Remark: Generated from `#/components/schemas/ProjectAttentionItemPastDuePlannedExpense/severity`.
+            @frozen public enum SeverityPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                case info = "info"
+                case warning = "warning"
+                case critical = "critical"
+            }
+            /// - Remark: Generated from `#/components/schemas/ProjectAttentionItemPastDuePlannedExpense/severity`.
+            public var severity: Components.Schemas.ProjectAttentionItemPastDuePlannedExpense.SeverityPayload
+            /// - Remark: Generated from `#/components/schemas/ProjectAttentionItemPastDuePlannedExpense/name`.
+            public var name: Swift.String
+            /// - Remark: Generated from `#/components/schemas/ProjectAttentionItemPastDuePlannedExpense/description`.
+            public var description: Swift.String
+            /// - Remark: Generated from `#/components/schemas/ProjectAttentionItemPastDuePlannedExpense/entityType`.
+            @frozen public enum EntityTypePayload: String, Codable, Hashable, Sendable, CaseIterable {
+                case project = "project"
+                case task = "task"
+                case expense = "expense"
+            }
+            /// - Remark: Generated from `#/components/schemas/ProjectAttentionItemPastDuePlannedExpense/entityType`.
+            public var entityType: Components.Schemas.ProjectAttentionItemPastDuePlannedExpense.EntityTypePayload
+            /// - Remark: Generated from `#/components/schemas/ProjectAttentionItemPastDuePlannedExpense/entityId`.
+            public var entityId: Swift.String
+            /// - Remark: Generated from `#/components/schemas/ProjectAttentionItemPastDuePlannedExpense/date`.
+            public var date: Components.Schemas.PlainDate?
+            /// - Remark: Generated from `#/components/schemas/ProjectAttentionItemPastDuePlannedExpense/amount`.
+            public var amount: Swift.Double?
+            /// Direct link to the corrective view
+            ///
+            /// - Remark: Generated from `#/components/schemas/ProjectAttentionItemPastDuePlannedExpense/href`.
+            public var href: Swift.String
+            /// - Remark: Generated from `#/components/schemas/ProjectAttentionItemPastDuePlannedExpense/type`.
+            @frozen public enum _TypePayload: String, Codable, Hashable, Sendable, CaseIterable {
+                case pastDuePlannedExpense = "past_due_planned_expense"
+            }
+            /// - Remark: Generated from `#/components/schemas/ProjectAttentionItemPastDuePlannedExpense/type`.
+            public var _type: Components.Schemas.ProjectAttentionItemPastDuePlannedExpense._TypePayload
+            /// - Remark: Generated from `#/components/schemas/ProjectAttentionItemPastDuePlannedExpense/facts`.
+            public struct FactsPayload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/ProjectAttentionItemPastDuePlannedExpense/facts/plannedFor`.
+                public var plannedFor: Components.Schemas.PlainDate
+                /// - Remark: Generated from `#/components/schemas/ProjectAttentionItemPastDuePlannedExpense/facts/daysPastDue`.
+                public var daysPastDue: Swift.Int
+                /// - Remark: Generated from `#/components/schemas/ProjectAttentionItemPastDuePlannedExpense/facts/cost`.
+                public var cost: Components.Schemas.Money?
+                /// Creates a new `FactsPayload`.
+                ///
+                /// - Parameters:
+                ///   - plannedFor:
+                ///   - daysPastDue:
+                ///   - cost:
+                public init(
+                    plannedFor: Components.Schemas.PlainDate,
+                    daysPastDue: Swift.Int,
+                    cost: Components.Schemas.Money? = nil
+                ) {
+                    self.plannedFor = plannedFor
+                    self.daysPastDue = daysPastDue
+                    self.cost = cost
+                }
+                public enum CodingKeys: String, CodingKey {
+                    case plannedFor
+                    case daysPastDue
+                    case cost
+                }
+            }
+            /// - Remark: Generated from `#/components/schemas/ProjectAttentionItemPastDuePlannedExpense/facts`.
+            public var facts: Components.Schemas.ProjectAttentionItemPastDuePlannedExpense.FactsPayload
+            /// Creates a new `ProjectAttentionItemPastDuePlannedExpense`.
+            ///
+            /// - Parameters:
+            ///   - key:
+            ///   - severity:
+            ///   - name:
+            ///   - description:
+            ///   - entityType:
+            ///   - entityId:
+            ///   - date:
+            ///   - amount:
+            ///   - href: Direct link to the corrective view
+            ///   - _type:
+            ///   - facts:
+            public init(
+                key: Swift.String,
+                severity: Components.Schemas.ProjectAttentionItemPastDuePlannedExpense.SeverityPayload,
+                name: Swift.String,
+                description: Swift.String,
+                entityType: Components.Schemas.ProjectAttentionItemPastDuePlannedExpense.EntityTypePayload,
+                entityId: Swift.String,
+                date: Components.Schemas.PlainDate? = nil,
+                amount: Swift.Double? = nil,
+                href: Swift.String,
+                _type: Components.Schemas.ProjectAttentionItemPastDuePlannedExpense._TypePayload,
+                facts: Components.Schemas.ProjectAttentionItemPastDuePlannedExpense.FactsPayload
+            ) {
+                self.key = key
+                self.severity = severity
+                self.name = name
+                self.description = description
+                self.entityType = entityType
+                self.entityId = entityId
+                self.date = date
+                self.amount = amount
+                self.href = href
+                self._type = _type
+                self.facts = facts
+            }
+            public enum CodingKeys: String, CodingKey {
+                case key
+                case severity
+                case name
+                case description
+                case entityType
+                case entityId
+                case date
+                case amount
+                case href
+                case _type = "type"
+                case facts
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/ProjectAttentionItemStalledProject`.
+        public struct ProjectAttentionItemStalledProject: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ProjectAttentionItemStalledProject/key`.
+            public var key: Swift.String
+            /// - Remark: Generated from `#/components/schemas/ProjectAttentionItemStalledProject/severity`.
+            @frozen public enum SeverityPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                case info = "info"
+                case warning = "warning"
+                case critical = "critical"
+            }
+            /// - Remark: Generated from `#/components/schemas/ProjectAttentionItemStalledProject/severity`.
+            public var severity: Components.Schemas.ProjectAttentionItemStalledProject.SeverityPayload
+            /// - Remark: Generated from `#/components/schemas/ProjectAttentionItemStalledProject/name`.
+            public var name: Swift.String
+            /// - Remark: Generated from `#/components/schemas/ProjectAttentionItemStalledProject/description`.
+            public var description: Swift.String
+            /// - Remark: Generated from `#/components/schemas/ProjectAttentionItemStalledProject/entityType`.
+            @frozen public enum EntityTypePayload: String, Codable, Hashable, Sendable, CaseIterable {
+                case project = "project"
+                case task = "task"
+                case expense = "expense"
+            }
+            /// - Remark: Generated from `#/components/schemas/ProjectAttentionItemStalledProject/entityType`.
+            public var entityType: Components.Schemas.ProjectAttentionItemStalledProject.EntityTypePayload
+            /// - Remark: Generated from `#/components/schemas/ProjectAttentionItemStalledProject/entityId`.
+            public var entityId: Swift.String
+            /// - Remark: Generated from `#/components/schemas/ProjectAttentionItemStalledProject/date`.
+            public var date: Components.Schemas.PlainDate?
+            /// - Remark: Generated from `#/components/schemas/ProjectAttentionItemStalledProject/amount`.
+            public var amount: Swift.Double?
+            /// Direct link to the corrective view
+            ///
+            /// - Remark: Generated from `#/components/schemas/ProjectAttentionItemStalledProject/href`.
+            public var href: Swift.String
+            /// - Remark: Generated from `#/components/schemas/ProjectAttentionItemStalledProject/type`.
+            @frozen public enum _TypePayload: String, Codable, Hashable, Sendable, CaseIterable {
+                case stalledProject = "stalled_project"
+            }
+            /// - Remark: Generated from `#/components/schemas/ProjectAttentionItemStalledProject/type`.
+            public var _type: Components.Schemas.ProjectAttentionItemStalledProject._TypePayload
+            /// - Remark: Generated from `#/components/schemas/ProjectAttentionItemStalledProject/facts`.
+            public struct FactsPayload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/ProjectAttentionItemStalledProject/facts/lastActivity`.
+                public var lastActivity: Components.Schemas.PlainDate
+                /// - Remark: Generated from `#/components/schemas/ProjectAttentionItemStalledProject/facts/daysSinceActivity`.
+                public var daysSinceActivity: Swift.Int
+                /// - Remark: Generated from `#/components/schemas/ProjectAttentionItemStalledProject/facts/thresholdDays`.
+                public var thresholdDays: Swift.Int
+                /// Creates a new `FactsPayload`.
+                ///
+                /// - Parameters:
+                ///   - lastActivity:
+                ///   - daysSinceActivity:
+                ///   - thresholdDays:
+                public init(
+                    lastActivity: Components.Schemas.PlainDate,
+                    daysSinceActivity: Swift.Int,
+                    thresholdDays: Swift.Int
+                ) {
+                    self.lastActivity = lastActivity
+                    self.daysSinceActivity = daysSinceActivity
+                    self.thresholdDays = thresholdDays
+                }
+                public enum CodingKeys: String, CodingKey {
+                    case lastActivity
+                    case daysSinceActivity
+                    case thresholdDays
+                }
+            }
+            /// - Remark: Generated from `#/components/schemas/ProjectAttentionItemStalledProject/facts`.
+            public var facts: Components.Schemas.ProjectAttentionItemStalledProject.FactsPayload
+            /// Creates a new `ProjectAttentionItemStalledProject`.
+            ///
+            /// - Parameters:
+            ///   - key:
+            ///   - severity:
+            ///   - name:
+            ///   - description:
+            ///   - entityType:
+            ///   - entityId:
+            ///   - date:
+            ///   - amount:
+            ///   - href: Direct link to the corrective view
+            ///   - _type:
+            ///   - facts:
+            public init(
+                key: Swift.String,
+                severity: Components.Schemas.ProjectAttentionItemStalledProject.SeverityPayload,
+                name: Swift.String,
+                description: Swift.String,
+                entityType: Components.Schemas.ProjectAttentionItemStalledProject.EntityTypePayload,
+                entityId: Swift.String,
+                date: Components.Schemas.PlainDate? = nil,
+                amount: Swift.Double? = nil,
+                href: Swift.String,
+                _type: Components.Schemas.ProjectAttentionItemStalledProject._TypePayload,
+                facts: Components.Schemas.ProjectAttentionItemStalledProject.FactsPayload
+            ) {
+                self.key = key
+                self.severity = severity
+                self.name = name
+                self.description = description
+                self.entityType = entityType
+                self.entityId = entityId
+                self.date = date
+                self.amount = amount
+                self.href = href
+                self._type = _type
+                self.facts = facts
+            }
+            public enum CodingKeys: String, CodingKey {
+                case key
+                case severity
+                case name
+                case description
+                case entityType
+                case entityId
+                case date
+                case amount
+                case href
+                case _type = "type"
+                case facts
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/ProjectAttentionItemUnclassifiedExpense`.
+        public struct ProjectAttentionItemUnclassifiedExpense: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ProjectAttentionItemUnclassifiedExpense/key`.
+            public var key: Swift.String
+            /// - Remark: Generated from `#/components/schemas/ProjectAttentionItemUnclassifiedExpense/severity`.
+            @frozen public enum SeverityPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                case info = "info"
+                case warning = "warning"
+                case critical = "critical"
+            }
+            /// - Remark: Generated from `#/components/schemas/ProjectAttentionItemUnclassifiedExpense/severity`.
+            public var severity: Components.Schemas.ProjectAttentionItemUnclassifiedExpense.SeverityPayload
+            /// - Remark: Generated from `#/components/schemas/ProjectAttentionItemUnclassifiedExpense/name`.
+            public var name: Swift.String
+            /// - Remark: Generated from `#/components/schemas/ProjectAttentionItemUnclassifiedExpense/description`.
+            public var description: Swift.String
+            /// - Remark: Generated from `#/components/schemas/ProjectAttentionItemUnclassifiedExpense/entityType`.
+            @frozen public enum EntityTypePayload: String, Codable, Hashable, Sendable, CaseIterable {
+                case project = "project"
+                case task = "task"
+                case expense = "expense"
+            }
+            /// - Remark: Generated from `#/components/schemas/ProjectAttentionItemUnclassifiedExpense/entityType`.
+            public var entityType: Components.Schemas.ProjectAttentionItemUnclassifiedExpense.EntityTypePayload
+            /// - Remark: Generated from `#/components/schemas/ProjectAttentionItemUnclassifiedExpense/entityId`.
+            public var entityId: Swift.String
+            /// - Remark: Generated from `#/components/schemas/ProjectAttentionItemUnclassifiedExpense/date`.
+            public var date: Components.Schemas.PlainDate?
+            /// - Remark: Generated from `#/components/schemas/ProjectAttentionItemUnclassifiedExpense/amount`.
+            public var amount: Swift.Double?
+            /// Direct link to the corrective view
+            ///
+            /// - Remark: Generated from `#/components/schemas/ProjectAttentionItemUnclassifiedExpense/href`.
+            public var href: Swift.String
+            /// - Remark: Generated from `#/components/schemas/ProjectAttentionItemUnclassifiedExpense/type`.
+            @frozen public enum _TypePayload: String, Codable, Hashable, Sendable, CaseIterable {
+                case unclassifiedExpense = "unclassified_expense"
+            }
+            /// - Remark: Generated from `#/components/schemas/ProjectAttentionItemUnclassifiedExpense/type`.
+            public var _type: Components.Schemas.ProjectAttentionItemUnclassifiedExpense._TypePayload
+            /// - Remark: Generated from `#/components/schemas/ProjectAttentionItemUnclassifiedExpense/facts`.
+            public struct FactsPayload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/ProjectAttentionItemUnclassifiedExpense/facts/date`.
+                public var date: Components.Schemas.PlainDate?
+                /// Creates a new `FactsPayload`.
+                ///
+                /// - Parameters:
+                ///   - date:
+                public init(date: Components.Schemas.PlainDate? = nil) {
+                    self.date = date
+                }
+                public enum CodingKeys: String, CodingKey {
+                    case date
+                }
+            }
+            /// - Remark: Generated from `#/components/schemas/ProjectAttentionItemUnclassifiedExpense/facts`.
+            public var facts: Components.Schemas.ProjectAttentionItemUnclassifiedExpense.FactsPayload
+            /// Creates a new `ProjectAttentionItemUnclassifiedExpense`.
+            ///
+            /// - Parameters:
+            ///   - key:
+            ///   - severity:
+            ///   - name:
+            ///   - description:
+            ///   - entityType:
+            ///   - entityId:
+            ///   - date:
+            ///   - amount:
+            ///   - href: Direct link to the corrective view
+            ///   - _type:
+            ///   - facts:
+            public init(
+                key: Swift.String,
+                severity: Components.Schemas.ProjectAttentionItemUnclassifiedExpense.SeverityPayload,
+                name: Swift.String,
+                description: Swift.String,
+                entityType: Components.Schemas.ProjectAttentionItemUnclassifiedExpense.EntityTypePayload,
+                entityId: Swift.String,
+                date: Components.Schemas.PlainDate? = nil,
+                amount: Swift.Double? = nil,
+                href: Swift.String,
+                _type: Components.Schemas.ProjectAttentionItemUnclassifiedExpense._TypePayload,
+                facts: Components.Schemas.ProjectAttentionItemUnclassifiedExpense.FactsPayload
+            ) {
+                self.key = key
+                self.severity = severity
+                self.name = name
+                self.description = description
+                self.entityType = entityType
+                self.entityId = entityId
+                self.date = date
+                self.amount = amount
+                self.href = href
+                self._type = _type
+                self.facts = facts
+            }
+            public enum CodingKeys: String, CodingKey {
+                case key
+                case severity
+                case name
+                case description
+                case entityType
+                case entityId
+                case date
+                case amount
+                case href
+                case _type = "type"
+                case facts
+            }
+        }
         /// - Remark: Generated from `#/components/schemas/ProjectCreateInput`.
         public struct ProjectCreateInput: Codable, Hashable, Sendable {
             /// - Remark: Generated from `#/components/schemas/ProjectCreateInput/name`.
@@ -29542,6 +32861,199 @@ extension Components {
                 case notes
                 case googleDriveFolderUrl
                 case notionPageUrl
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/ProjectDashboardSummaryOut`.
+        public struct ProjectDashboardSummaryOut: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ProjectDashboardSummaryOut/summary`.
+            public struct SummaryPayload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/ProjectDashboardSummaryOut/summary/activeProjectCount`.
+                public var activeProjectCount: Swift.Int
+                /// - Remark: Generated from `#/components/schemas/ProjectDashboardSummaryOut/summary/openTaskCount`.
+                public var openTaskCount: Swift.Int
+                /// - Remark: Generated from `#/components/schemas/ProjectDashboardSummaryOut/summary/actualSpend`.
+                public var actualSpend: Components.Schemas.Money
+                /// - Remark: Generated from `#/components/schemas/ProjectDashboardSummaryOut/summary/committedSpend`.
+                public var committedSpend: Components.Schemas.Money
+                /// - Remark: Generated from `#/components/schemas/ProjectDashboardSummaryOut/summary/estimateTotal`.
+                public var estimateTotal: Components.Schemas.Money?
+                /// - Remark: Generated from `#/components/schemas/ProjectDashboardSummaryOut/summary/estimateCoverage`.
+                public struct EstimateCoveragePayload: Codable, Hashable, Sendable {
+                    /// - Remark: Generated from `#/components/schemas/ProjectDashboardSummaryOut/summary/estimateCoverage/projectsWithEstimate`.
+                    public var projectsWithEstimate: Swift.Int
+                    /// - Remark: Generated from `#/components/schemas/ProjectDashboardSummaryOut/summary/estimateCoverage/projectsInScope`.
+                    public var projectsInScope: Swift.Int
+                    /// Creates a new `EstimateCoveragePayload`.
+                    ///
+                    /// - Parameters:
+                    ///   - projectsWithEstimate:
+                    ///   - projectsInScope:
+                    public init(
+                        projectsWithEstimate: Swift.Int,
+                        projectsInScope: Swift.Int
+                    ) {
+                        self.projectsWithEstimate = projectsWithEstimate
+                        self.projectsInScope = projectsInScope
+                    }
+                    public enum CodingKeys: String, CodingKey {
+                        case projectsWithEstimate
+                        case projectsInScope
+                    }
+                }
+                /// - Remark: Generated from `#/components/schemas/ProjectDashboardSummaryOut/summary/estimateCoverage`.
+                public var estimateCoverage: Components.Schemas.ProjectDashboardSummaryOut.SummaryPayload.EstimateCoveragePayload
+                /// - Remark: Generated from `#/components/schemas/ProjectDashboardSummaryOut/summary/forwardCommittedSpend`.
+                public struct ForwardCommittedSpendPayload: Codable, Hashable, Sendable {
+                    /// - Remark: Generated from `#/components/schemas/ProjectDashboardSummaryOut/summary/forwardCommittedSpend/in30Days`.
+                    public var in30Days: Swift.Double
+                    /// - Remark: Generated from `#/components/schemas/ProjectDashboardSummaryOut/summary/forwardCommittedSpend/in60Days`.
+                    public var in60Days: Swift.Double
+                    /// - Remark: Generated from `#/components/schemas/ProjectDashboardSummaryOut/summary/forwardCommittedSpend/in90Days`.
+                    public var in90Days: Swift.Double
+                    /// Creates a new `ForwardCommittedSpendPayload`.
+                    ///
+                    /// - Parameters:
+                    ///   - in30Days:
+                    ///   - in60Days:
+                    ///   - in90Days:
+                    public init(
+                        in30Days: Swift.Double,
+                        in60Days: Swift.Double,
+                        in90Days: Swift.Double
+                    ) {
+                        self.in30Days = in30Days
+                        self.in60Days = in60Days
+                        self.in90Days = in90Days
+                    }
+                    public enum CodingKeys: String, CodingKey {
+                        case in30Days
+                        case in60Days
+                        case in90Days
+                    }
+                }
+                /// - Remark: Generated from `#/components/schemas/ProjectDashboardSummaryOut/summary/forwardCommittedSpend`.
+                public var forwardCommittedSpend: Components.Schemas.ProjectDashboardSummaryOut.SummaryPayload.ForwardCommittedSpendPayload
+                /// Creates a new `SummaryPayload`.
+                ///
+                /// - Parameters:
+                ///   - activeProjectCount:
+                ///   - openTaskCount:
+                ///   - actualSpend:
+                ///   - committedSpend:
+                ///   - estimateTotal:
+                ///   - estimateCoverage:
+                ///   - forwardCommittedSpend:
+                public init(
+                    activeProjectCount: Swift.Int,
+                    openTaskCount: Swift.Int,
+                    actualSpend: Components.Schemas.Money,
+                    committedSpend: Components.Schemas.Money,
+                    estimateTotal: Components.Schemas.Money? = nil,
+                    estimateCoverage: Components.Schemas.ProjectDashboardSummaryOut.SummaryPayload.EstimateCoveragePayload,
+                    forwardCommittedSpend: Components.Schemas.ProjectDashboardSummaryOut.SummaryPayload.ForwardCommittedSpendPayload
+                ) {
+                    self.activeProjectCount = activeProjectCount
+                    self.openTaskCount = openTaskCount
+                    self.actualSpend = actualSpend
+                    self.committedSpend = committedSpend
+                    self.estimateTotal = estimateTotal
+                    self.estimateCoverage = estimateCoverage
+                    self.forwardCommittedSpend = forwardCommittedSpend
+                }
+                public enum CodingKeys: String, CodingKey {
+                    case activeProjectCount
+                    case openTaskCount
+                    case actualSpend
+                    case committedSpend
+                    case estimateTotal
+                    case estimateCoverage
+                    case forwardCommittedSpend
+                }
+            }
+            /// - Remark: Generated from `#/components/schemas/ProjectDashboardSummaryOut/summary`.
+            public var summary: Components.Schemas.ProjectDashboardSummaryOut.SummaryPayload
+            /// - Remark: Generated from `#/components/schemas/ProjectDashboardSummaryOut/projects`.
+            public var projects: [Components.Schemas.ProjectOut]
+            /// - Remark: Generated from `#/components/schemas/ProjectDashboardSummaryOut/taskStatusByProject`.
+            public var taskStatusByProject: [Components.Schemas.ProjectTaskStatusBreakdown]
+            /// - Remark: Generated from `#/components/schemas/ProjectDashboardSummaryOut/nextTasks`.
+            public var nextTasks: [Components.Schemas.TaskOut]
+            /// - Remark: Generated from `#/components/schemas/ProjectDashboardSummaryOut/attention`.
+            public var attention: [Components.Schemas.ProjectAttentionItem]
+            /// - Remark: Generated from `#/components/schemas/ProjectDashboardSummaryOut/filterOptions`.
+            public var filterOptions: Components.Schemas.ProjectFilterOptionsOut
+            /// - Remark: Generated from `#/components/schemas/ProjectDashboardSummaryOut/hiddenByDate`.
+            public struct HiddenByDatePayload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/ProjectDashboardSummaryOut/hiddenByDate/projects`.
+                public var projects: Swift.Int
+                /// - Remark: Generated from `#/components/schemas/ProjectDashboardSummaryOut/hiddenByDate/tasks`.
+                public var tasks: Swift.Int
+                /// - Remark: Generated from `#/components/schemas/ProjectDashboardSummaryOut/hiddenByDate/expenses`.
+                public var expenses: Swift.Int
+                /// Creates a new `HiddenByDatePayload`.
+                ///
+                /// - Parameters:
+                ///   - projects:
+                ///   - tasks:
+                ///   - expenses:
+                public init(
+                    projects: Swift.Int,
+                    tasks: Swift.Int,
+                    expenses: Swift.Int
+                ) {
+                    self.projects = projects
+                    self.tasks = tasks
+                    self.expenses = expenses
+                }
+                public enum CodingKeys: String, CodingKey {
+                    case projects
+                    case tasks
+                    case expenses
+                }
+            }
+            /// - Remark: Generated from `#/components/schemas/ProjectDashboardSummaryOut/hiddenByDate`.
+            public var hiddenByDate: Components.Schemas.ProjectDashboardSummaryOut.HiddenByDatePayload
+            /// - Remark: Generated from `#/components/schemas/ProjectDashboardSummaryOut/completedCount`.
+            public var completedCount: Swift.Int
+            /// Creates a new `ProjectDashboardSummaryOut`.
+            ///
+            /// - Parameters:
+            ///   - summary:
+            ///   - projects:
+            ///   - taskStatusByProject:
+            ///   - nextTasks:
+            ///   - attention:
+            ///   - filterOptions:
+            ///   - hiddenByDate:
+            ///   - completedCount:
+            public init(
+                summary: Components.Schemas.ProjectDashboardSummaryOut.SummaryPayload,
+                projects: [Components.Schemas.ProjectOut],
+                taskStatusByProject: [Components.Schemas.ProjectTaskStatusBreakdown],
+                nextTasks: [Components.Schemas.TaskOut],
+                attention: [Components.Schemas.ProjectAttentionItem],
+                filterOptions: Components.Schemas.ProjectFilterOptionsOut,
+                hiddenByDate: Components.Schemas.ProjectDashboardSummaryOut.HiddenByDatePayload,
+                completedCount: Swift.Int
+            ) {
+                self.summary = summary
+                self.projects = projects
+                self.taskStatusByProject = taskStatusByProject
+                self.nextTasks = nextTasks
+                self.attention = attention
+                self.filterOptions = filterOptions
+                self.hiddenByDate = hiddenByDate
+                self.completedCount = completedCount
+            }
+            public enum CodingKeys: String, CodingKey {
+                case summary
+                case projects
+                case taskStatusByProject
+                case nextTasks
+                case attention
+                case filterOptions
+                case hiddenByDate
+                case completedCount
             }
         }
         /// - Remark: Generated from `#/components/schemas/ProjectDetail`.
@@ -29735,6 +33247,41 @@ extension Components {
                 case attachments
                 case redirectedFrom
                 case previousShortcodes
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/ProjectFilterOptionsOut`.
+        public struct ProjectFilterOptionsOut: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ProjectFilterOptionsOut/kinds`.
+            public var kinds: [Components.Schemas.ProjectKind]
+            /// - Remark: Generated from `#/components/schemas/ProjectFilterOptionsOut/locations`.
+            public var locations: [Swift.String]
+            /// - Remark: Generated from `#/components/schemas/ProjectFilterOptionsOut/completionYears`.
+            public var completionYears: [Swift.String]
+            /// - Remark: Generated from `#/components/schemas/ProjectFilterOptionsOut/years`.
+            public var years: [Swift.String]
+            /// Creates a new `ProjectFilterOptionsOut`.
+            ///
+            /// - Parameters:
+            ///   - kinds:
+            ///   - locations:
+            ///   - completionYears:
+            ///   - years:
+            public init(
+                kinds: [Components.Schemas.ProjectKind],
+                locations: [Swift.String],
+                completionYears: [Swift.String],
+                years: [Swift.String]
+            ) {
+                self.kinds = kinds
+                self.locations = locations
+                self.completionYears = completionYears
+                self.years = years
+            }
+            public enum CodingKeys: String, CodingKey {
+                case kinds
+                case locations
+                case completionYears
+                case years
             }
         }
         /// - Remark: Generated from `#/components/schemas/ProjectKind`.
@@ -30294,6 +33841,201 @@ extension Components {
                 case subtree
             }
         }
+        /// - Remark: Generated from `#/components/schemas/ProjectPortfolioAnalyticsOut`.
+        public struct ProjectPortfolioAnalyticsOut: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ProjectPortfolioAnalyticsOut/CostVsEstimatePayload`.
+            public struct CostVsEstimatePayloadPayload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/ProjectPortfolioAnalyticsOut/CostVsEstimatePayload/projectId`.
+                public var projectId: Components.Schemas.ProjectShortcode
+                /// - Remark: Generated from `#/components/schemas/ProjectPortfolioAnalyticsOut/CostVsEstimatePayload/projectName`.
+                public var projectName: Swift.String
+                /// - Remark: Generated from `#/components/schemas/ProjectPortfolioAnalyticsOut/CostVsEstimatePayload/actual`.
+                public var actual: Components.Schemas.Money
+                /// - Remark: Generated from `#/components/schemas/ProjectPortfolioAnalyticsOut/CostVsEstimatePayload/committed`.
+                public var committed: Components.Schemas.Money
+                /// - Remark: Generated from `#/components/schemas/ProjectPortfolioAnalyticsOut/CostVsEstimatePayload/estimate`.
+                public var estimate: Components.Schemas.Money?
+                /// - Remark: Generated from `#/components/schemas/ProjectPortfolioAnalyticsOut/CostVsEstimatePayload/isScopeRoot`.
+                public var isScopeRoot: Swift.Bool
+                /// Creates a new `CostVsEstimatePayloadPayload`.
+                ///
+                /// - Parameters:
+                ///   - projectId:
+                ///   - projectName:
+                ///   - actual:
+                ///   - committed:
+                ///   - estimate:
+                ///   - isScopeRoot:
+                public init(
+                    projectId: Components.Schemas.ProjectShortcode,
+                    projectName: Swift.String,
+                    actual: Components.Schemas.Money,
+                    committed: Components.Schemas.Money,
+                    estimate: Components.Schemas.Money? = nil,
+                    isScopeRoot: Swift.Bool
+                ) {
+                    self.projectId = projectId
+                    self.projectName = projectName
+                    self.actual = actual
+                    self.committed = committed
+                    self.estimate = estimate
+                    self.isScopeRoot = isScopeRoot
+                }
+                public enum CodingKeys: String, CodingKey {
+                    case projectId
+                    case projectName
+                    case actual
+                    case committed
+                    case estimate
+                    case isScopeRoot
+                }
+            }
+            /// - Remark: Generated from `#/components/schemas/ProjectPortfolioAnalyticsOut/costVsEstimate`.
+            public typealias CostVsEstimatePayload = [Components.Schemas.ProjectPortfolioAnalyticsOut.CostVsEstimatePayloadPayload]
+            /// - Remark: Generated from `#/components/schemas/ProjectPortfolioAnalyticsOut/costVsEstimate`.
+            public var costVsEstimate: Components.Schemas.ProjectPortfolioAnalyticsOut.CostVsEstimatePayload
+            /// - Remark: Generated from `#/components/schemas/ProjectPortfolioAnalyticsOut/SpendingByProjectPayload`.
+            public struct SpendingByProjectPayloadPayload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/ProjectPortfolioAnalyticsOut/SpendingByProjectPayload/projectId`.
+                public var projectId: Components.Schemas.ProjectShortcode
+                /// - Remark: Generated from `#/components/schemas/ProjectPortfolioAnalyticsOut/SpendingByProjectPayload/projectName`.
+                public var projectName: Swift.String
+                /// - Remark: Generated from `#/components/schemas/ProjectPortfolioAnalyticsOut/SpendingByProjectPayload/spend`.
+                public var spend: Components.Schemas.Money
+                /// Creates a new `SpendingByProjectPayloadPayload`.
+                ///
+                /// - Parameters:
+                ///   - projectId:
+                ///   - projectName:
+                ///   - spend:
+                public init(
+                    projectId: Components.Schemas.ProjectShortcode,
+                    projectName: Swift.String,
+                    spend: Components.Schemas.Money
+                ) {
+                    self.projectId = projectId
+                    self.projectName = projectName
+                    self.spend = spend
+                }
+                public enum CodingKeys: String, CodingKey {
+                    case projectId
+                    case projectName
+                    case spend
+                }
+            }
+            /// - Remark: Generated from `#/components/schemas/ProjectPortfolioAnalyticsOut/spendingByProject`.
+            public typealias SpendingByProjectPayload = [Components.Schemas.ProjectPortfolioAnalyticsOut.SpendingByProjectPayloadPayload]
+            /// - Remark: Generated from `#/components/schemas/ProjectPortfolioAnalyticsOut/spendingByProject`.
+            public var spendingByProject: Components.Schemas.ProjectPortfolioAnalyticsOut.SpendingByProjectPayload
+            /// - Remark: Generated from `#/components/schemas/ProjectPortfolioAnalyticsOut/monthlySpend`.
+            public var monthlySpend: [Components.Schemas.ExpenseMonthlyAggregate]
+            /// - Remark: Generated from `#/components/schemas/ProjectPortfolioAnalyticsOut/PlannedVsActualPayload`.
+            public struct PlannedVsActualPayloadPayload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/ProjectPortfolioAnalyticsOut/PlannedVsActualPayload/month`.
+                public var month: Swift.String
+                /// - Remark: Generated from `#/components/schemas/ProjectPortfolioAnalyticsOut/PlannedVsActualPayload/planned`.
+                public var planned: Components.Schemas.Money
+                /// - Remark: Generated from `#/components/schemas/ProjectPortfolioAnalyticsOut/PlannedVsActualPayload/actual`.
+                public var actual: Components.Schemas.Money
+                /// Creates a new `PlannedVsActualPayloadPayload`.
+                ///
+                /// - Parameters:
+                ///   - month:
+                ///   - planned:
+                ///   - actual:
+                public init(
+                    month: Swift.String,
+                    planned: Components.Schemas.Money,
+                    actual: Components.Schemas.Money
+                ) {
+                    self.month = month
+                    self.planned = planned
+                    self.actual = actual
+                }
+                public enum CodingKeys: String, CodingKey {
+                    case month
+                    case planned
+                    case actual
+                }
+            }
+            /// - Remark: Generated from `#/components/schemas/ProjectPortfolioAnalyticsOut/plannedVsActual`.
+            public typealias PlannedVsActualPayload = [Components.Schemas.ProjectPortfolioAnalyticsOut.PlannedVsActualPayloadPayload]
+            /// - Remark: Generated from `#/components/schemas/ProjectPortfolioAnalyticsOut/plannedVsActual`.
+            public var plannedVsActual: Components.Schemas.ProjectPortfolioAnalyticsOut.PlannedVsActualPayload
+            /// - Remark: Generated from `#/components/schemas/ProjectPortfolioAnalyticsOut/tradeActivity`.
+            public var tradeActivity: [Components.Schemas.ExpenseTradeAggregate]
+            /// - Remark: Generated from `#/components/schemas/ProjectPortfolioAnalyticsOut/adjustments`.
+            public var adjustments: Components.Schemas.ExpenseAdjustmentsAggregate
+            /// - Remark: Generated from `#/components/schemas/ProjectPortfolioAnalyticsOut/TaskHeatmapPayload`.
+            public struct TaskHeatmapPayloadPayload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/ProjectPortfolioAnalyticsOut/TaskHeatmapPayload/projectId`.
+                public var projectId: Components.Schemas.ProjectShortcode
+                /// - Remark: Generated from `#/components/schemas/ProjectPortfolioAnalyticsOut/TaskHeatmapPayload/projectName`.
+                public var projectName: Swift.String
+                /// - Remark: Generated from `#/components/schemas/ProjectPortfolioAnalyticsOut/TaskHeatmapPayload/openTaskCount`.
+                public var openTaskCount: Swift.Int
+                /// Creates a new `TaskHeatmapPayloadPayload`.
+                ///
+                /// - Parameters:
+                ///   - projectId:
+                ///   - projectName:
+                ///   - openTaskCount:
+                public init(
+                    projectId: Components.Schemas.ProjectShortcode,
+                    projectName: Swift.String,
+                    openTaskCount: Swift.Int
+                ) {
+                    self.projectId = projectId
+                    self.projectName = projectName
+                    self.openTaskCount = openTaskCount
+                }
+                public enum CodingKeys: String, CodingKey {
+                    case projectId
+                    case projectName
+                    case openTaskCount
+                }
+            }
+            /// - Remark: Generated from `#/components/schemas/ProjectPortfolioAnalyticsOut/taskHeatmap`.
+            public typealias TaskHeatmapPayload = [Components.Schemas.ProjectPortfolioAnalyticsOut.TaskHeatmapPayloadPayload]
+            /// - Remark: Generated from `#/components/schemas/ProjectPortfolioAnalyticsOut/taskHeatmap`.
+            public var taskHeatmap: Components.Schemas.ProjectPortfolioAnalyticsOut.TaskHeatmapPayload
+            /// Creates a new `ProjectPortfolioAnalyticsOut`.
+            ///
+            /// - Parameters:
+            ///   - costVsEstimate:
+            ///   - spendingByProject:
+            ///   - monthlySpend:
+            ///   - plannedVsActual:
+            ///   - tradeActivity:
+            ///   - adjustments:
+            ///   - taskHeatmap:
+            public init(
+                costVsEstimate: Components.Schemas.ProjectPortfolioAnalyticsOut.CostVsEstimatePayload,
+                spendingByProject: Components.Schemas.ProjectPortfolioAnalyticsOut.SpendingByProjectPayload,
+                monthlySpend: [Components.Schemas.ExpenseMonthlyAggregate],
+                plannedVsActual: Components.Schemas.ProjectPortfolioAnalyticsOut.PlannedVsActualPayload,
+                tradeActivity: [Components.Schemas.ExpenseTradeAggregate],
+                adjustments: Components.Schemas.ExpenseAdjustmentsAggregate,
+                taskHeatmap: Components.Schemas.ProjectPortfolioAnalyticsOut.TaskHeatmapPayload
+            ) {
+                self.costVsEstimate = costVsEstimate
+                self.spendingByProject = spendingByProject
+                self.monthlySpend = monthlySpend
+                self.plannedVsActual = plannedVsActual
+                self.tradeActivity = tradeActivity
+                self.adjustments = adjustments
+                self.taskHeatmap = taskHeatmap
+            }
+            public enum CodingKeys: String, CodingKey {
+                case costVsEstimate
+                case spendingByProject
+                case monthlySpend
+                case plannedVsActual
+                case tradeActivity
+                case adjustments
+                case taskHeatmap
+            }
+        }
         /// project shortcode, e.g. PRJ-4K7M
         ///
         /// - Remark: Generated from `#/components/schemas/ProjectShortcode`.
@@ -30304,6 +34046,53 @@ extension Components {
             case notStarted = "not_started"
             case inProgress = "in_progress"
             case done = "done"
+        }
+        /// - Remark: Generated from `#/components/schemas/ProjectTaskStatusBreakdown`.
+        public struct ProjectTaskStatusBreakdown: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ProjectTaskStatusBreakdown/projectId`.
+            public var projectId: Components.Schemas.ProjectShortcode
+            /// - Remark: Generated from `#/components/schemas/ProjectTaskStatusBreakdown/notStarted`.
+            public var notStarted: Swift.Int
+            /// - Remark: Generated from `#/components/schemas/ProjectTaskStatusBreakdown/later`.
+            public var later: Swift.Int
+            /// - Remark: Generated from `#/components/schemas/ProjectTaskStatusBreakdown/inProgress`.
+            public var inProgress: Swift.Int
+            /// - Remark: Generated from `#/components/schemas/ProjectTaskStatusBreakdown/blocked`.
+            public var blocked: Swift.Int
+            /// - Remark: Generated from `#/components/schemas/ProjectTaskStatusBreakdown/done`.
+            public var done: Swift.Int
+            /// Creates a new `ProjectTaskStatusBreakdown`.
+            ///
+            /// - Parameters:
+            ///   - projectId:
+            ///   - notStarted:
+            ///   - later:
+            ///   - inProgress:
+            ///   - blocked:
+            ///   - done:
+            public init(
+                projectId: Components.Schemas.ProjectShortcode,
+                notStarted: Swift.Int,
+                later: Swift.Int,
+                inProgress: Swift.Int,
+                blocked: Swift.Int,
+                done: Swift.Int
+            ) {
+                self.projectId = projectId
+                self.notStarted = notStarted
+                self.later = later
+                self.inProgress = inProgress
+                self.blocked = blocked
+                self.done = done
+            }
+            public enum CodingKeys: String, CodingKey {
+                case projectId
+                case notStarted
+                case later
+                case inProgress
+                case blocked
+                case done
+            }
         }
         /// - Remark: Generated from `#/components/schemas/ProjectUpdateData`.
         public struct ProjectUpdateData: Codable, Hashable, Sendable {
@@ -32955,6 +36744,11 @@ extension Components {
                 case weight
             }
         }
+        /// - Remark: Generated from `#/components/schemas/RelativeDateFilter`.
+        @frozen public enum RelativeDateFilter: String, Codable, Hashable, Sendable, CaseIterable {
+            case beforeToday = "beforeToday"
+            case onOrBeforeToday = "onOrBeforeToday"
+        }
         /// - Remark: Generated from `#/components/schemas/ResolveScanStraysInput`.
         public struct ResolveScanStraysInput: Codable, Hashable, Sendable {
             /// - Remark: Generated from `#/components/schemas/ResolveScanStraysInput/targetLocationId`.
@@ -33390,6 +37184,33 @@ extension Components {
             public var typeHint: Swift.String?
             /// - Remark: Generated from `#/components/schemas/SearchHit/imageUrl`.
             public var imageUrl: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/SearchHit/LocationPathPayload`.
+            public struct LocationPathPayloadPayload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/SearchHit/LocationPathPayload/id`.
+                public var id: Swift.String
+                /// - Remark: Generated from `#/components/schemas/SearchHit/LocationPathPayload/name`.
+                public var name: Swift.String
+                /// Creates a new `LocationPathPayloadPayload`.
+                ///
+                /// - Parameters:
+                ///   - id:
+                ///   - name:
+                public init(
+                    id: Swift.String,
+                    name: Swift.String
+                ) {
+                    self.id = id
+                    self.name = name
+                }
+                public enum CodingKeys: String, CodingKey {
+                    case id
+                    case name
+                }
+            }
+            /// - Remark: Generated from `#/components/schemas/SearchHit/locationPath`.
+            public typealias LocationPathPayload = [Components.Schemas.SearchHit.LocationPathPayloadPayload]
+            /// - Remark: Generated from `#/components/schemas/SearchHit/locationPath`.
+            public var locationPath: Components.Schemas.SearchHit.LocationPathPayload?
             /// - Remark: Generated from `#/components/schemas/SearchHit/matchKind`.
             public var matchKind: Components.Schemas.SearchMatchKind
             /// - Remark: Generated from `#/components/schemas/SearchHit/matchField`.
@@ -33407,6 +37228,7 @@ extension Components {
             ///   - subtitle:
             ///   - typeHint:
             ///   - imageUrl:
+            ///   - locationPath:
             ///   - matchKind:
             ///   - matchField:
             ///   - matchReason:
@@ -33418,6 +37240,7 @@ extension Components {
                 subtitle: Swift.String? = nil,
                 typeHint: Swift.String? = nil,
                 imageUrl: Swift.String? = nil,
+                locationPath: Components.Schemas.SearchHit.LocationPathPayload? = nil,
                 matchKind: Components.Schemas.SearchMatchKind,
                 matchField: Components.Schemas.SearchMatchField,
                 matchReason: Swift.String,
@@ -33429,6 +37252,7 @@ extension Components {
                 self.subtitle = subtitle
                 self.typeHint = typeHint
                 self.imageUrl = imageUrl
+                self.locationPath = locationPath
                 self.matchKind = matchKind
                 self.matchField = matchField
                 self.matchReason = matchReason
@@ -33441,6 +37265,7 @@ extension Components {
                 case subtitle
                 case typeHint
                 case imageUrl
+                case locationPath
                 case matchKind
                 case matchField
                 case matchReason
@@ -34004,6 +37829,164 @@ extension Components {
                 case queued
             }
         }
+        /// - Remark: Generated from `#/components/schemas/TaskBoardMovePatch`.
+        public struct TaskBoardMovePatch: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/TaskBoardMovePatch/status`.
+            public var status: Components.Schemas.TaskStatus?
+            /// - Remark: Generated from `#/components/schemas/TaskBoardMovePatch/projectId`.
+            public var projectId: Components.Schemas.ProjectShortcode?
+            /// - Remark: Generated from `#/components/schemas/TaskBoardMovePatch/trade`.
+            public var trade: Components.Schemas.Trade?
+            /// Creates a new `TaskBoardMovePatch`.
+            ///
+            /// - Parameters:
+            ///   - status:
+            ///   - projectId:
+            ///   - trade:
+            public init(
+                status: Components.Schemas.TaskStatus? = nil,
+                projectId: Components.Schemas.ProjectShortcode? = nil,
+                trade: Components.Schemas.Trade? = nil
+            ) {
+                self.status = status
+                self.projectId = projectId
+                self.trade = trade
+            }
+            public enum CodingKeys: String, CodingKey {
+                case status
+                case projectId
+                case trade
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/TaskBoardOut`.
+        public struct TaskBoardOut: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/TaskBoardOut/active`.
+            public var active: [Components.Schemas.TaskOut]
+            /// - Remark: Generated from `#/components/schemas/TaskBoardOut/recentDone`.
+            public var recentDone: [Components.Schemas.TaskOut]
+            /// - Remark: Generated from `#/components/schemas/TaskBoardOut/doneCount`.
+            public var doneCount: Swift.Int
+            /// Creates a new `TaskBoardOut`.
+            ///
+            /// - Parameters:
+            ///   - active:
+            ///   - recentDone:
+            ///   - doneCount:
+            public init(
+                active: [Components.Schemas.TaskOut],
+                recentDone: [Components.Schemas.TaskOut],
+                doneCount: Swift.Int
+            ) {
+                self.active = active
+                self.recentDone = recentDone
+                self.doneCount = doneCount
+            }
+            public enum CodingKeys: String, CodingKey {
+                case active
+                case recentDone
+                case doneCount
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/TaskBulkMutationOut`.
+        public struct TaskBulkMutationOut: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/TaskBulkMutationOut/items`.
+            public var items: [Components.Schemas.TaskOut]
+            /// - Remark: Generated from `#/components/schemas/TaskBulkMutationOut/sideEffects`.
+            public var sideEffects: Components.Schemas.MutationSideEffects
+            /// Creates a new `TaskBulkMutationOut`.
+            ///
+            /// - Parameters:
+            ///   - items:
+            ///   - sideEffects:
+            public init(
+                items: [Components.Schemas.TaskOut],
+                sideEffects: Components.Schemas.MutationSideEffects
+            ) {
+                self.items = items
+                self.sideEffects = sideEffects
+            }
+            public enum CodingKeys: String, CodingKey {
+                case items
+                case sideEffects
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/TaskBulkReorderInput`.
+        public struct TaskBulkReorderInput: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/TaskBulkReorderInput/RanksPayload`.
+            public struct RanksPayloadPayload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/TaskBulkReorderInput/RanksPayload/id`.
+                public var id: Components.Schemas.TaskShortcode
+                /// - Remark: Generated from `#/components/schemas/TaskBulkReorderInput/RanksPayload/sortOrder`.
+                public var sortOrder: Swift.Double
+                /// Creates a new `RanksPayloadPayload`.
+                ///
+                /// - Parameters:
+                ///   - id:
+                ///   - sortOrder:
+                public init(
+                    id: Components.Schemas.TaskShortcode,
+                    sortOrder: Swift.Double
+                ) {
+                    self.id = id
+                    self.sortOrder = sortOrder
+                }
+                public enum CodingKeys: String, CodingKey {
+                    case id
+                    case sortOrder
+                }
+            }
+            /// - Remark: Generated from `#/components/schemas/TaskBulkReorderInput/ranks`.
+            public typealias RanksPayload = [Components.Schemas.TaskBulkReorderInput.RanksPayloadPayload]
+            /// - Remark: Generated from `#/components/schemas/TaskBulkReorderInput/ranks`.
+            public var ranks: Components.Schemas.TaskBulkReorderInput.RanksPayload
+            /// - Remark: Generated from `#/components/schemas/TaskBulkReorderInput/move`.
+            public struct MovePayload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/TaskBulkReorderInput/move/id`.
+                public var id: Components.Schemas.TaskShortcode
+                /// - Remark: Generated from `#/components/schemas/TaskBulkReorderInput/move/patch`.
+                public var patch: Components.Schemas.TaskBoardMovePatch
+                /// Creates a new `MovePayload`.
+                ///
+                /// - Parameters:
+                ///   - id:
+                ///   - patch:
+                public init(
+                    id: Components.Schemas.TaskShortcode,
+                    patch: Components.Schemas.TaskBoardMovePatch
+                ) {
+                    self.id = id
+                    self.patch = patch
+                }
+                public enum CodingKeys: String, CodingKey {
+                    case id
+                    case patch
+                }
+            }
+            /// - Remark: Generated from `#/components/schemas/TaskBulkReorderInput/move`.
+            public var move: Components.Schemas.TaskBulkReorderInput.MovePayload?
+            /// Creates a new `TaskBulkReorderInput`.
+            ///
+            /// - Parameters:
+            ///   - ranks:
+            ///   - move:
+            public init(
+                ranks: Components.Schemas.TaskBulkReorderInput.RanksPayload,
+                move: Components.Schemas.TaskBulkReorderInput.MovePayload? = nil
+            ) {
+                self.ranks = ranks
+                self.move = move
+            }
+            public enum CodingKeys: String, CodingKey {
+                case ranks
+                case move
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/TaskCompletion`.
+        @frozen public enum TaskCompletion: String, Codable, Hashable, Sendable, CaseIterable {
+            case all = "all"
+            case open = "open"
+            case done = "done"
+        }
         /// - Remark: Generated from `#/components/schemas/TaskCreateInput`.
         public struct TaskCreateInput: Codable, Hashable, Sendable {
             /// - Remark: Generated from `#/components/schemas/TaskCreateInput/name`.
@@ -34266,6 +38249,592 @@ extension Components {
                 case attachments
                 case redirectedFrom
                 case previousShortcodes
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/TaskFilters`.
+        public struct TaskFilters: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/TaskFilters/createdFrom`.
+            public var createdFrom: Components.Schemas.InputShared1D4812BA12A72EA6?
+            /// - Remark: Generated from `#/components/schemas/TaskFilters/createdTo`.
+            public var createdTo: Components.Schemas.InputShared1D4812BA12A72EA6?
+            /// - Remark: Generated from `#/components/schemas/TaskFilters/updatedFrom`.
+            public var updatedFrom: Components.Schemas.InputShared1D4812BA12A72EA6?
+            /// - Remark: Generated from `#/components/schemas/TaskFilters/updatedTo`.
+            public var updatedTo: Components.Schemas.InputShared1D4812BA12A72EA6?
+            /// - Remark: Generated from `#/components/schemas/TaskFilters/blockedByTaskId`.
+            public struct BlockedByTaskIdPayload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/TaskFilters/blockedByTaskId/value1`.
+                public var value1: Components.Schemas.TaskShortcode?
+                /// - Remark: Generated from `#/components/schemas/TaskFilters/blockedByTaskId/value2`.
+                public var value2: [Components.Schemas.TaskShortcode]?
+                /// Creates a new `BlockedByTaskIdPayload`.
+                ///
+                /// - Parameters:
+                ///   - value1:
+                ///   - value2:
+                public init(
+                    value1: Components.Schemas.TaskShortcode? = nil,
+                    value2: [Components.Schemas.TaskShortcode]? = nil
+                ) {
+                    self.value1 = value1
+                    self.value2 = value2
+                }
+                public init(from decoder: any Swift.Decoder) throws {
+                    var errors: [any Swift.Error] = []
+                    do {
+                        self.value1 = try decoder.decodeFromSingleValueContainer()
+                    } catch {
+                        errors.append(error)
+                    }
+                    do {
+                        self.value2 = try decoder.decodeFromSingleValueContainer()
+                    } catch {
+                        errors.append(error)
+                    }
+                    try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                        [
+                            self.value1,
+                            self.value2
+                        ],
+                        type: Self.self,
+                        codingPath: decoder.codingPath,
+                        errors: errors
+                    )
+                }
+                public func encode(to encoder: any Swift.Encoder) throws {
+                    try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                        self.value1,
+                        self.value2
+                    ])
+                }
+            }
+            /// - Remark: Generated from `#/components/schemas/TaskFilters/blockedByTaskId`.
+            public var blockedByTaskId: Components.Schemas.TaskFilters.BlockedByTaskIdPayload?
+            /// - Remark: Generated from `#/components/schemas/TaskFilters/blockedByTaskPresenceFilter`.
+            @frozen public enum BlockedByTaskPresenceFilterPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                case has = "has"
+                case none = "none"
+            }
+            /// - Remark: Generated from `#/components/schemas/TaskFilters/blockedByTaskPresenceFilter`.
+            public var blockedByTaskPresenceFilter: Components.Schemas.TaskFilters.BlockedByTaskPresenceFilterPayload?
+            /// - Remark: Generated from `#/components/schemas/TaskFilters/blockedByTaskSearch`.
+            public var blockedByTaskSearch: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/TaskFilters/parentTaskId`.
+            public struct ParentTaskIdPayload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/TaskFilters/parentTaskId/value1`.
+                public var value1: Components.Schemas.InputSharedC265965DDAF8D654?
+                /// - Remark: Generated from `#/components/schemas/TaskFilters/parentTaskId/value2`.
+                public var value2: [Components.Schemas.InputSharedC265965DDAF8D654]?
+                /// Creates a new `ParentTaskIdPayload`.
+                ///
+                /// - Parameters:
+                ///   - value1:
+                ///   - value2:
+                public init(
+                    value1: Components.Schemas.InputSharedC265965DDAF8D654? = nil,
+                    value2: [Components.Schemas.InputSharedC265965DDAF8D654]? = nil
+                ) {
+                    self.value1 = value1
+                    self.value2 = value2
+                }
+                public init(from decoder: any Swift.Decoder) throws {
+                    var errors: [any Swift.Error] = []
+                    do {
+                        self.value1 = try decoder.decodeFromSingleValueContainer()
+                    } catch {
+                        errors.append(error)
+                    }
+                    do {
+                        self.value2 = try decoder.decodeFromSingleValueContainer()
+                    } catch {
+                        errors.append(error)
+                    }
+                    try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                        [
+                            self.value1,
+                            self.value2
+                        ],
+                        type: Self.self,
+                        codingPath: decoder.codingPath,
+                        errors: errors
+                    )
+                }
+                public func encode(to encoder: any Swift.Encoder) throws {
+                    try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                        self.value1,
+                        self.value2
+                    ])
+                }
+            }
+            /// - Remark: Generated from `#/components/schemas/TaskFilters/parentTaskId`.
+            public var parentTaskId: Components.Schemas.TaskFilters.ParentTaskIdPayload?
+            /// - Remark: Generated from `#/components/schemas/TaskFilters/parentTaskPresenceFilter`.
+            public var parentTaskPresenceFilter: Components.Schemas.PresenceFilter?
+            /// - Remark: Generated from `#/components/schemas/TaskFilters/parentTaskSearch`.
+            public var parentTaskSearch: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/TaskFilters/search`.
+            public var search: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/TaskFilters/status`.
+            public struct StatusPayload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/TaskFilters/status/value1`.
+                public var value1: Components.Schemas.TaskStatus?
+                /// - Remark: Generated from `#/components/schemas/TaskFilters/status/value2`.
+                public var value2: [Components.Schemas.TaskStatus]?
+                /// Creates a new `StatusPayload`.
+                ///
+                /// - Parameters:
+                ///   - value1:
+                ///   - value2:
+                public init(
+                    value1: Components.Schemas.TaskStatus? = nil,
+                    value2: [Components.Schemas.TaskStatus]? = nil
+                ) {
+                    self.value1 = value1
+                    self.value2 = value2
+                }
+                public init(from decoder: any Swift.Decoder) throws {
+                    var errors: [any Swift.Error] = []
+                    do {
+                        self.value1 = try decoder.decodeFromSingleValueContainer()
+                    } catch {
+                        errors.append(error)
+                    }
+                    do {
+                        self.value2 = try decoder.decodeFromSingleValueContainer()
+                    } catch {
+                        errors.append(error)
+                    }
+                    try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                        [
+                            self.value1,
+                            self.value2
+                        ],
+                        type: Self.self,
+                        codingPath: decoder.codingPath,
+                        errors: errors
+                    )
+                }
+                public func encode(to encoder: any Swift.Encoder) throws {
+                    try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                        self.value1,
+                        self.value2
+                    ])
+                }
+            }
+            /// - Remark: Generated from `#/components/schemas/TaskFilters/status`.
+            public var status: Components.Schemas.TaskFilters.StatusPayload?
+            /// - Remark: Generated from `#/components/schemas/TaskFilters/trade`.
+            public struct TradePayload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/TaskFilters/trade/value1`.
+                public var value1: Components.Schemas.Trade?
+                /// - Remark: Generated from `#/components/schemas/TaskFilters/trade/value2`.
+                public var value2: [Components.Schemas.Trade]?
+                /// Creates a new `TradePayload`.
+                ///
+                /// - Parameters:
+                ///   - value1:
+                ///   - value2:
+                public init(
+                    value1: Components.Schemas.Trade? = nil,
+                    value2: [Components.Schemas.Trade]? = nil
+                ) {
+                    self.value1 = value1
+                    self.value2 = value2
+                }
+                public init(from decoder: any Swift.Decoder) throws {
+                    var errors: [any Swift.Error] = []
+                    do {
+                        self.value1 = try decoder.decodeFromSingleValueContainer()
+                    } catch {
+                        errors.append(error)
+                    }
+                    do {
+                        self.value2 = try decoder.decodeFromSingleValueContainer()
+                    } catch {
+                        errors.append(error)
+                    }
+                    try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                        [
+                            self.value1,
+                            self.value2
+                        ],
+                        type: Self.self,
+                        codingPath: decoder.codingPath,
+                        errors: errors
+                    )
+                }
+                public func encode(to encoder: any Swift.Encoder) throws {
+                    try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                        self.value1,
+                        self.value2
+                    ])
+                }
+            }
+            /// - Remark: Generated from `#/components/schemas/TaskFilters/trade`.
+            public var trade: Components.Schemas.TaskFilters.TradePayload?
+            /// - Remark: Generated from `#/components/schemas/TaskFilters/dataStatus`.
+            public struct DataStatusPayload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/TaskFilters/dataStatus/value1`.
+                @frozen public enum Value1Payload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case complete = "complete"
+                    case needsData = "needs_data"
+                    case defect = "defect"
+                }
+                /// - Remark: Generated from `#/components/schemas/TaskFilters/dataStatus/value1`.
+                public var value1: Components.Schemas.TaskFilters.DataStatusPayload.Value1Payload?
+                /// - Remark: Generated from `#/components/schemas/TaskFilters/dataStatus/Value2Payload`.
+                @frozen public enum Value2PayloadPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case complete = "complete"
+                    case needsData = "needs_data"
+                    case defect = "defect"
+                }
+                /// - Remark: Generated from `#/components/schemas/TaskFilters/dataStatus/value2`.
+                public typealias Value2Payload = [Components.Schemas.TaskFilters.DataStatusPayload.Value2PayloadPayload]
+                /// - Remark: Generated from `#/components/schemas/TaskFilters/dataStatus/value2`.
+                public var value2: Components.Schemas.TaskFilters.DataStatusPayload.Value2Payload?
+                /// Creates a new `DataStatusPayload`.
+                ///
+                /// - Parameters:
+                ///   - value1:
+                ///   - value2:
+                public init(
+                    value1: Components.Schemas.TaskFilters.DataStatusPayload.Value1Payload? = nil,
+                    value2: Components.Schemas.TaskFilters.DataStatusPayload.Value2Payload? = nil
+                ) {
+                    self.value1 = value1
+                    self.value2 = value2
+                }
+                public init(from decoder: any Swift.Decoder) throws {
+                    var errors: [any Swift.Error] = []
+                    do {
+                        self.value1 = try decoder.decodeFromSingleValueContainer()
+                    } catch {
+                        errors.append(error)
+                    }
+                    do {
+                        self.value2 = try decoder.decodeFromSingleValueContainer()
+                    } catch {
+                        errors.append(error)
+                    }
+                    try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                        [
+                            self.value1,
+                            self.value2
+                        ],
+                        type: Self.self,
+                        codingPath: decoder.codingPath,
+                        errors: errors
+                    )
+                }
+                public func encode(to encoder: any Swift.Encoder) throws {
+                    try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                        self.value1,
+                        self.value2
+                    ])
+                }
+            }
+            /// - Remark: Generated from `#/components/schemas/TaskFilters/dataStatus`.
+            public var dataStatus: Components.Schemas.TaskFilters.DataStatusPayload?
+            /// - Remark: Generated from `#/components/schemas/TaskFilters/dataGap`.
+            public struct DataGapPayload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/TaskFilters/dataGap/value1`.
+                @frozen public enum Value1Payload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case taskDueDate = "task_due_date"
+                    case taskTrade = "task_trade"
+                }
+                /// - Remark: Generated from `#/components/schemas/TaskFilters/dataGap/value1`.
+                public var value1: Components.Schemas.TaskFilters.DataGapPayload.Value1Payload?
+                /// - Remark: Generated from `#/components/schemas/TaskFilters/dataGap/Value2Payload`.
+                @frozen public enum Value2PayloadPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case taskDueDate = "task_due_date"
+                    case taskTrade = "task_trade"
+                }
+                /// - Remark: Generated from `#/components/schemas/TaskFilters/dataGap/value2`.
+                public typealias Value2Payload = [Components.Schemas.TaskFilters.DataGapPayload.Value2PayloadPayload]
+                /// - Remark: Generated from `#/components/schemas/TaskFilters/dataGap/value2`.
+                public var value2: Components.Schemas.TaskFilters.DataGapPayload.Value2Payload?
+                /// Creates a new `DataGapPayload`.
+                ///
+                /// - Parameters:
+                ///   - value1:
+                ///   - value2:
+                public init(
+                    value1: Components.Schemas.TaskFilters.DataGapPayload.Value1Payload? = nil,
+                    value2: Components.Schemas.TaskFilters.DataGapPayload.Value2Payload? = nil
+                ) {
+                    self.value1 = value1
+                    self.value2 = value2
+                }
+                public init(from decoder: any Swift.Decoder) throws {
+                    var errors: [any Swift.Error] = []
+                    do {
+                        self.value1 = try decoder.decodeFromSingleValueContainer()
+                    } catch {
+                        errors.append(error)
+                    }
+                    do {
+                        self.value2 = try decoder.decodeFromSingleValueContainer()
+                    } catch {
+                        errors.append(error)
+                    }
+                    try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                        [
+                            self.value1,
+                            self.value2
+                        ],
+                        type: Self.self,
+                        codingPath: decoder.codingPath,
+                        errors: errors
+                    )
+                }
+                public func encode(to encoder: any Swift.Encoder) throws {
+                    try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                        self.value1,
+                        self.value2
+                    ])
+                }
+            }
+            /// - Remark: Generated from `#/components/schemas/TaskFilters/dataGap`.
+            public var dataGap: Components.Schemas.TaskFilters.DataGapPayload?
+            /// - Remark: Generated from `#/components/schemas/TaskFilters/projectId`.
+            public struct ProjectIdPayload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/TaskFilters/projectId/value1`.
+                public var value1: Components.Schemas.InputSharedC3954917B6C67188?
+                /// - Remark: Generated from `#/components/schemas/TaskFilters/projectId/value2`.
+                public var value2: [Components.Schemas.InputSharedC3954917B6C67188]?
+                /// Creates a new `ProjectIdPayload`.
+                ///
+                /// - Parameters:
+                ///   - value1:
+                ///   - value2:
+                public init(
+                    value1: Components.Schemas.InputSharedC3954917B6C67188? = nil,
+                    value2: [Components.Schemas.InputSharedC3954917B6C67188]? = nil
+                ) {
+                    self.value1 = value1
+                    self.value2 = value2
+                }
+                public init(from decoder: any Swift.Decoder) throws {
+                    var errors: [any Swift.Error] = []
+                    do {
+                        self.value1 = try decoder.decodeFromSingleValueContainer()
+                    } catch {
+                        errors.append(error)
+                    }
+                    do {
+                        self.value2 = try decoder.decodeFromSingleValueContainer()
+                    } catch {
+                        errors.append(error)
+                    }
+                    try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                        [
+                            self.value1,
+                            self.value2
+                        ],
+                        type: Self.self,
+                        codingPath: decoder.codingPath,
+                        errors: errors
+                    )
+                }
+                public func encode(to encoder: any Swift.Encoder) throws {
+                    try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                        self.value1,
+                        self.value2
+                    ])
+                }
+            }
+            /// - Remark: Generated from `#/components/schemas/TaskFilters/projectId`.
+            public var projectId: Components.Schemas.TaskFilters.ProjectIdPayload?
+            /// - Remark: Generated from `#/components/schemas/TaskFilters/subjectProductId`.
+            public struct SubjectProductIdPayload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/TaskFilters/subjectProductId/value1`.
+                public var value1: Components.Schemas.InputShared6607ABA888BDFB0B?
+                /// - Remark: Generated from `#/components/schemas/TaskFilters/subjectProductId/value2`.
+                public var value2: [Components.Schemas.InputShared6607ABA888BDFB0B]?
+                /// Creates a new `SubjectProductIdPayload`.
+                ///
+                /// - Parameters:
+                ///   - value1:
+                ///   - value2:
+                public init(
+                    value1: Components.Schemas.InputShared6607ABA888BDFB0B? = nil,
+                    value2: [Components.Schemas.InputShared6607ABA888BDFB0B]? = nil
+                ) {
+                    self.value1 = value1
+                    self.value2 = value2
+                }
+                public init(from decoder: any Swift.Decoder) throws {
+                    var errors: [any Swift.Error] = []
+                    do {
+                        self.value1 = try decoder.decodeFromSingleValueContainer()
+                    } catch {
+                        errors.append(error)
+                    }
+                    do {
+                        self.value2 = try decoder.decodeFromSingleValueContainer()
+                    } catch {
+                        errors.append(error)
+                    }
+                    try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                        [
+                            self.value1,
+                            self.value2
+                        ],
+                        type: Self.self,
+                        codingPath: decoder.codingPath,
+                        errors: errors
+                    )
+                }
+                public func encode(to encoder: any Swift.Encoder) throws {
+                    try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                        self.value1,
+                        self.value2
+                    ])
+                }
+            }
+            /// - Remark: Generated from `#/components/schemas/TaskFilters/subjectProductId`.
+            public var subjectProductId: Components.Schemas.TaskFilters.SubjectProductIdPayload?
+            /// - Remark: Generated from `#/components/schemas/TaskFilters/topLevelOnly`.
+            public var topLevelOnly: Swift.Bool?
+            /// - Remark: Generated from `#/components/schemas/TaskFilters/includeSubProjects`.
+            public var includeSubProjects: Swift.Bool?
+            /// Inclusive lower bound on due date
+            ///
+            /// - Remark: Generated from `#/components/schemas/TaskFilters/dueFrom`.
+            public var dueFrom: Components.Schemas.PlainDate?
+            /// Inclusive upper bound on due date
+            ///
+            /// - Remark: Generated from `#/components/schemas/TaskFilters/dueTo`.
+            public var dueTo: Components.Schemas.PlainDate?
+            /// - Remark: Generated from `#/components/schemas/TaskFilters/duePresenceFilter`.
+            public var duePresenceFilter: Components.Schemas.PresenceFilter?
+            /// - Remark: Generated from `#/components/schemas/TaskFilters/dueRelative`.
+            public var dueRelative: Components.Schemas.RelativeDateFilter?
+            /// Undefined = "all" (today's default, unchanged)
+            ///
+            /// - Remark: Generated from `#/components/schemas/TaskFilters/completion`.
+            public var completion: Components.Schemas.TaskCompletion?
+            /// - Remark: Generated from `#/components/schemas/TaskFilters/projectPresenceFilter`.
+            public var projectPresenceFilter: Components.Schemas.PresenceFilter?
+            /// - Remark: Generated from `#/components/schemas/TaskFilters/subjectProductPresenceFilter`.
+            public var subjectProductPresenceFilter: Components.Schemas.PresenceFilter?
+            /// - Remark: Generated from `#/components/schemas/TaskFilters/projectScope`.
+            public var projectScope: Components.Schemas.EmbeddedProjectScope?
+            /// Creates a new `TaskFilters`.
+            ///
+            /// - Parameters:
+            ///   - createdFrom:
+            ///   - createdTo:
+            ///   - updatedFrom:
+            ///   - updatedTo:
+            ///   - blockedByTaskId:
+            ///   - blockedByTaskPresenceFilter:
+            ///   - blockedByTaskSearch:
+            ///   - parentTaskId:
+            ///   - parentTaskPresenceFilter:
+            ///   - parentTaskSearch:
+            ///   - search:
+            ///   - status:
+            ///   - trade:
+            ///   - dataStatus:
+            ///   - dataGap:
+            ///   - projectId:
+            ///   - subjectProductId:
+            ///   - topLevelOnly:
+            ///   - includeSubProjects:
+            ///   - dueFrom: Inclusive lower bound on due date
+            ///   - dueTo: Inclusive upper bound on due date
+            ///   - duePresenceFilter:
+            ///   - dueRelative:
+            ///   - completion: Undefined = "all" (today's default, unchanged)
+            ///   - projectPresenceFilter:
+            ///   - subjectProductPresenceFilter:
+            ///   - projectScope:
+            public init(
+                createdFrom: Components.Schemas.InputShared1D4812BA12A72EA6? = nil,
+                createdTo: Components.Schemas.InputShared1D4812BA12A72EA6? = nil,
+                updatedFrom: Components.Schemas.InputShared1D4812BA12A72EA6? = nil,
+                updatedTo: Components.Schemas.InputShared1D4812BA12A72EA6? = nil,
+                blockedByTaskId: Components.Schemas.TaskFilters.BlockedByTaskIdPayload? = nil,
+                blockedByTaskPresenceFilter: Components.Schemas.TaskFilters.BlockedByTaskPresenceFilterPayload? = nil,
+                blockedByTaskSearch: Swift.String? = nil,
+                parentTaskId: Components.Schemas.TaskFilters.ParentTaskIdPayload? = nil,
+                parentTaskPresenceFilter: Components.Schemas.PresenceFilter? = nil,
+                parentTaskSearch: Swift.String? = nil,
+                search: Swift.String? = nil,
+                status: Components.Schemas.TaskFilters.StatusPayload? = nil,
+                trade: Components.Schemas.TaskFilters.TradePayload? = nil,
+                dataStatus: Components.Schemas.TaskFilters.DataStatusPayload? = nil,
+                dataGap: Components.Schemas.TaskFilters.DataGapPayload? = nil,
+                projectId: Components.Schemas.TaskFilters.ProjectIdPayload? = nil,
+                subjectProductId: Components.Schemas.TaskFilters.SubjectProductIdPayload? = nil,
+                topLevelOnly: Swift.Bool? = nil,
+                includeSubProjects: Swift.Bool? = nil,
+                dueFrom: Components.Schemas.PlainDate? = nil,
+                dueTo: Components.Schemas.PlainDate? = nil,
+                duePresenceFilter: Components.Schemas.PresenceFilter? = nil,
+                dueRelative: Components.Schemas.RelativeDateFilter? = nil,
+                completion: Components.Schemas.TaskCompletion? = nil,
+                projectPresenceFilter: Components.Schemas.PresenceFilter? = nil,
+                subjectProductPresenceFilter: Components.Schemas.PresenceFilter? = nil,
+                projectScope: Components.Schemas.EmbeddedProjectScope? = nil
+            ) {
+                self.createdFrom = createdFrom
+                self.createdTo = createdTo
+                self.updatedFrom = updatedFrom
+                self.updatedTo = updatedTo
+                self.blockedByTaskId = blockedByTaskId
+                self.blockedByTaskPresenceFilter = blockedByTaskPresenceFilter
+                self.blockedByTaskSearch = blockedByTaskSearch
+                self.parentTaskId = parentTaskId
+                self.parentTaskPresenceFilter = parentTaskPresenceFilter
+                self.parentTaskSearch = parentTaskSearch
+                self.search = search
+                self.status = status
+                self.trade = trade
+                self.dataStatus = dataStatus
+                self.dataGap = dataGap
+                self.projectId = projectId
+                self.subjectProductId = subjectProductId
+                self.topLevelOnly = topLevelOnly
+                self.includeSubProjects = includeSubProjects
+                self.dueFrom = dueFrom
+                self.dueTo = dueTo
+                self.duePresenceFilter = duePresenceFilter
+                self.dueRelative = dueRelative
+                self.completion = completion
+                self.projectPresenceFilter = projectPresenceFilter
+                self.subjectProductPresenceFilter = subjectProductPresenceFilter
+                self.projectScope = projectScope
+            }
+            public enum CodingKeys: String, CodingKey {
+                case createdFrom
+                case createdTo
+                case updatedFrom
+                case updatedTo
+                case blockedByTaskId
+                case blockedByTaskPresenceFilter
+                case blockedByTaskSearch
+                case parentTaskId
+                case parentTaskPresenceFilter
+                case parentTaskSearch
+                case search
+                case status
+                case trade
+                case dataStatus
+                case dataGap
+                case projectId
+                case subjectProductId
+                case topLevelOnly
+                case includeSubProjects
+                case dueFrom
+                case dueTo
+                case duePresenceFilter
+                case dueRelative
+                case completion
+                case projectPresenceFilter
+                case subjectProductPresenceFilter
+                case projectScope
             }
         }
         /// - Remark: Generated from `#/components/schemas/TaskListItem`.

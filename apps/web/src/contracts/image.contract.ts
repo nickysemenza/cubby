@@ -13,6 +13,10 @@ import {
   imageAttachExistingInput,
   imageAttachExistingOutput,
 } from "@cubby/schemas/image";
+import {
+  imageSightingBulkInput,
+  imageSightingBulkOut,
+} from "@cubby/schemas/image-sighting";
 import { z } from "zod";
 
 import { defineContract, mutation, query } from "~/contracts/define";
@@ -22,6 +26,11 @@ import {
 } from "~/contracts/photo-import.contract";
 
 export const imageContract = defineContract("image", {
+  bulkSightings: mutation({
+    native: "Bounded, replay-safe library sighting pages",
+    input: imageSightingBulkInput,
+    output: imageSightingBulkOut,
+  }),
   list: query({
     native: "Native photo browse",
     input: imageBrowserListInput,

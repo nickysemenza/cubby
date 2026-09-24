@@ -2,6 +2,7 @@ import {
   FILTER_KINDS,
   parseEntityDeclarationMetadata,
 } from "../../../packages/schemas/src/entity-definitions/definition.ts";
+import { z } from "zod";
 import { photoCategories } from "../../../packages/schemas/src/photo-categories.ts";
 import type {
   EntityDeclarationMetadata,
@@ -338,6 +339,29 @@ const compileFieldModel = (
   const fields = model.fields.map((field, index): EntityField => {
     const fieldContext = `${context}.fields[${index}]`;
     const key = field.key;
+    if (field.kind === "enum" && field.control?.kind === "select") {
+      const options = field.control.options ?? [];
+      let read: unknown = field.validation.read;
+      while (
+        read instanceof z.ZodOptional ||
+        read instanceof z.ZodNullable ||
+        read instanceof z.ZodDefault
+      )
+        read = read.unwrap();
+      if (!(read instanceof z.ZodEnum))
+        throw new EntityDeclarationError(
+          `${fieldContext}.validation.read must be an enum for a select control.`,
+        );
+      const expected = [...read.options].sort();
+      const actual = options.map((option) => option.value).sort();
+      if (
+        expected.length !== actual.length ||
+        expected.some((value, position) => value !== actual[position])
+      )
+        throw new EntityDeclarationError(
+          `${fieldContext}.control.options must label exactly ${expected.join(", ")}.`,
+        );
+    }
     if (field.control !== null && !field.control.section.trim())
       throw new EntityDeclarationError(
         `${fieldContext}.control.section must be nonempty.`,

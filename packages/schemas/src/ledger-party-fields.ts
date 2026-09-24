@@ -6,6 +6,12 @@ export const ledgerPartyKindValues = ["member", "guest", "household"] as const;
 export const ledgerPartyKind = z.enum(ledgerPartyKindValues);
 export type LedgerPartyKind = z.infer<typeof ledgerPartyKind>;
 
+export const LEDGER_PARTY_KIND_LABELS = {
+  member: "Member",
+  guest: "Guest",
+  household: "Household",
+} as const satisfies Record<LedgerPartyKind, string>;
+
 export const ledgerAttributionInput = z.strictObject({
   partyId: ledgerPartyShortcode.nullable(),
   weight: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),

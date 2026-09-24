@@ -85,6 +85,7 @@ public final class RecountSession {
     }
 
     private let service: any RecountService
+    private let persistenceNamespace: String?
     private let drain: ScanDrain<Event>
     private var duplicates: Set<ProductCode> = []
     private var snapshotToken: String?
@@ -102,8 +103,9 @@ public final class RecountSession {
     /// Products the server just added to or confirmed in this bin, verified on the next apply.
     private var pendingVerify: Set<ProductCode> = []
 
-    public init(service: any RecountService) {
+    public init(service: any RecountService, persistenceNamespace: String? = nil) {
         self.service = service
+        self.persistenceNamespace = persistenceNamespace
         drain = ScanDrain(debounceInterval: ScanSession.debounceInterval) { read in
             await Self.perform(read, service: service)
         }
@@ -140,6 +142,51 @@ public final class RecountSession {
         }
         phase = .bin
         await loadBin()
+        saveProgress()
+    }
+
+    /// Resumes from local decisions against a fresh tree and bin snapshot. Snapshot tokens are
+    /// deliberately never persisted: a newly fetched token guards the eventual commit.
+    @discardableResult
+    public func resumePending(scope requestedScope: LocationCode? = nil) async -> Bool {
+        guard let tree else { return false }
+        let pending = progressRecords()
+        let candidate =
+            requestedScope.flatMap { pending[$0.rawValue] }
+            ?? (requestedScope == nil ? pending.values.max(by: { $0.updatedAt < $1.updatedAt }) : nil)
+        guard let candidate, let node = tree[LocationCode(candidate.scope)] else { return false }
+        scope = node
+        bins = candidate.binIDs.compactMap { tree[LocationCode($0)] }
+        completed = Set(candidate.completed.map { LocationCode($0) })
+        skipped = Set(candidate.skipped.map { LocationCode($0) })
+        summary = candidate.summary
+        guard !bins.isEmpty else { return false }
+        let activeID =
+            candidate.binIDs.indices.contains(candidate.binIndex)
+            ? candidate.binIDs[candidate.binIndex] : nil
+        binIndex = bins.firstIndex(where: { $0.id.rawValue == activeID }) ?? 0
+        if bins.allSatisfy({ completed.contains($0.id) || skipped.contains($0.id) }) {
+            phase = .complete
+            return true
+        }
+        if completed.contains(bins[binIndex].id) || skipped.contains(bins[binIndex].id) {
+            guard
+                let next = bins.indices.first(where: {
+                    !completed.contains(bins[$0].id) && !skipped.contains(bins[$0].id)
+                })
+            else { return false }
+            binIndex = next
+        }
+        phase = .bin
+        await loadBin()
+        for (rawID, decision) in candidate.staged {
+            guard let rowIndex = rows.firstIndex(where: { $0.id.rawValue == rawID }),
+                let resolution = decision.resolution(tree: tree)
+            else { continue }
+            rows[rowIndex].resolution = resolution
+        }
+        saveProgress()
+        return true
     }
 
     /// Walks only the bins that were skipped, in their original order.
@@ -154,9 +201,11 @@ public final class RecountSession {
         }
         phase = .bin
         await loadBin()
+        saveProgress()
     }
 
     public func restart() {
+        clearProgress()
         phase = tree == nil ? .loading : .choosingScope
         scope = nil
         bins = []
@@ -193,6 +242,7 @@ public final class RecountSession {
             }
             lastLocalMatch = (trimmed, date)
             if rows[index].resolution == nil { rows[index].resolution = .verify }
+            saveProgress()
             push(Self.chip(label: rows[index].row.product.name, status: .confirmed))
             report()
             return
@@ -207,12 +257,14 @@ public final class RecountSession {
     public func stage(_ resolution: RecountResolution, for id: InventoryEntryCode) {
         guard let index = rows.firstIndex(where: { $0.id == id }) else { return }
         rows[index].resolution = resolution
+        saveProgress()
         report()
     }
 
     public func clearResolution(for id: InventoryEntryCode) {
         guard let index = rows.firstIndex(where: { $0.id == id }) else { return }
         rows[index].resolution = nil
+        saveProgress()
         report()
     }
 
@@ -299,6 +351,7 @@ public final class RecountSession {
         }
         completed.insert(bin.id)
         summary.binsDone += 1
+        saveProgress()
         await advance()
     }
 
@@ -306,6 +359,7 @@ public final class RecountSession {
         guard let bin = currentBin, !busy else { return }
         skipped.insert(bin.id)
         summary.binsSkipped += 1
+        saveProgress()
         await advance()
     }
 
@@ -392,11 +446,13 @@ public final class RecountSession {
         }
         guard let next else {
             phase = .complete
+            if skipped.isEmpty { clearProgress() } else { saveProgress() }
             report()
             return
         }
         binIndex = next
         await loadBin()
+        saveProgress()
     }
 
     private func clearBinState() {
@@ -473,6 +529,102 @@ public final class RecountSession {
     private func patch(_ id: UUID, _ change: (inout ScanSession.Chip) -> Void) {
         guard let index = chips.firstIndex(where: { $0.id == id }) else { return }
         change(&chips[index])
+    }
+
+    private struct SavedDecision: Codable {
+        enum Kind: String, Codable { case verify, adjust, remove, relocate }
+        let kind: Kind
+        var value: Double? = nil
+        var unit: String? = nil
+        var upperValue: Double? = nil
+        var target: String? = nil
+        var targetName: String? = nil
+
+        init(_ resolution: RecountResolution) {
+            switch resolution {
+            case .verify: kind = .verify
+            case .remove: kind = .remove
+            case .adjust(let amount):
+                kind = .adjust
+                value = amount.value
+                unit = amount.unit
+                upperValue = amount.upperValue
+            case .relocate(let location, let name):
+                kind = .relocate
+                target = location.rawValue
+                targetName = name
+            }
+        }
+
+        func resolution(tree: LocationTree) -> RecountResolution? {
+            switch kind {
+            case .verify: .verify
+            case .remove: .remove
+            case .adjust:
+                if let value, let unit, value > 0 {
+                    .adjust(Amount(value: value, unit: unit, upperValue: upperValue))
+                } else {
+                    nil
+                }
+            case .relocate:
+                if let target, let node = tree[LocationCode(target)] {
+                    .relocate(node.id, name: node.name)
+                } else {
+                    nil
+                }
+            }
+        }
+    }
+
+    private struct SavedProgress: Codable {
+        let scope: String
+        let binIDs: [String]
+        let binIndex: Int
+        let completed: [String]
+        let skipped: [String]
+        let summary: RecountSummary
+        let staged: [String: SavedDecision]
+        let updatedAt: Date
+    }
+
+    private var progressKey: String? {
+        persistenceNamespace.map { "cubby.recount.v1.\($0)" }
+    }
+
+    private func progressRecords() -> [String: SavedProgress] {
+        guard let progressKey, let data = UserDefaults.standard.data(forKey: progressKey) else {
+            return [:]
+        }
+        return (try? JSONDecoder().decode([String: SavedProgress].self, from: data)) ?? [:]
+    }
+
+    private func saveProgress() {
+        guard let progressKey, let scope else { return }
+        var records = progressRecords()
+        records[scope.id.rawValue] = SavedProgress(
+            scope: scope.id.rawValue,
+            binIDs: bins.map(\.id.rawValue),
+            binIndex: binIndex,
+            completed: completed.map(\.rawValue),
+            skipped: skipped.map(\.rawValue),
+            summary: summary,
+            staged: Dictionary(
+                uniqueKeysWithValues: rows.compactMap { state in
+                    state.resolution.map { (state.id.rawValue, SavedDecision($0)) }
+                }),
+            updatedAt: .now)
+        if let data = try? JSONEncoder().encode(records) {
+            UserDefaults.standard.set(data, forKey: progressKey)
+        }
+    }
+
+    private func clearProgress() {
+        guard let progressKey, let scope else { return }
+        var records = progressRecords()
+        records.removeValue(forKey: scope.id.rawValue)
+        if let data = try? JSONEncoder().encode(records) {
+            UserDefaults.standard.set(data, forKey: progressKey)
+        }
     }
 
     private static func chip(label: String, status: ScanSession.ChipStatus) -> ScanSession.Chip {

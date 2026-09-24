@@ -96,7 +96,7 @@ public final class GenericEntityDetailModel {
             guard generation == requestGeneration else { return }
             if let result {
                 row = result
-                loadedID = id
+                loadedID = result.id
                 phase = .loaded
                 fetchedAt = Date()
             } else {

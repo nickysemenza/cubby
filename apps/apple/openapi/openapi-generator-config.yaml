@@ -43,6 +43,7 @@ filter:
     - activity.events
     - activity.list
     - activity.submission
+    - calendar.range
     - collection.referenceDetail
     - cookbook.detail
     - cookbook.list
@@ -52,8 +53,10 @@ filter:
     - entity.explore
     - entity.graph
     - entity.graphPaths
+    - expense.analytics
     - fieldExplanation.explain
     - image.analysis
+    - image.bulkSightings
     - image.detail
     - image.hashIndex
     - image.list
@@ -91,6 +94,8 @@ filter:
     - problems.getCounts
     - product.findOrCreateByCode
     - product.findOrCreateByUPC
+    - project.dashboardSummary
+    - project.portfolioAnalytics
     - purchaseImport.initiateRunEvidenceUpload
     - purchaseImport.listReceiptHunts
     - purchaseImport.submitReceiptEvidence
@@ -193,6 +198,8 @@ filter:
     - resources.wish.list
     - resources.wish.update
     - search.find
+    - task.board
+    - task.bulkReorder
     - task.todayBriefing
     - upc.lookup
     - usda-food.detail

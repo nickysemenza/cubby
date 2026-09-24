@@ -1,4 +1,5 @@
 import { defineEntity } from "./definition.js";
+import { selectControlOptions } from "./select-control-options.js";
 import { plainDate } from "@cubby/schemas/base-entity";
 import { projectShortcode } from "../identifier-fields.js";
 import { positiveMoneyNullable } from "@cubby/schemas/money";
@@ -142,7 +143,10 @@ export default defineEntity({
       {
         key: "status",
         kind: "enum",
-        control: { kind: "select" },
+        control: {
+          kind: "select",
+          options: selectControlOptions.projectStatus,
+        },
         display: {
           list: true,
           detail: true,
@@ -157,7 +161,11 @@ export default defineEntity({
         key: "kind",
         kind: "enum",
         nullable: true,
-        control: { kind: "select", suggest: { basis: ["name", "notes"] } },
+        control: {
+          kind: "select",
+          options: selectControlOptions.projectKind,
+          suggest: { basis: ["name", "notes"] },
+        },
         display: {
           list: true,
           detail: true,
@@ -223,6 +231,7 @@ export default defineEntity({
         nullable: true,
         control: {
           kind: "select",
+          options: selectControlOptions.trade,
           // Project has no vendor field, unlike `expense.trade`/
           // `purchase.defaultTrade` — `name`/`notes`/`kind` are the only
           // signal available.

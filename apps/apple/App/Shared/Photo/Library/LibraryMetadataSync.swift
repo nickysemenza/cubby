@@ -52,7 +52,7 @@ final class LibraryMetadataSync {
     /// exist yet the first time a run starts (`DeviceRegistration.sync` races this on sign-in), so
     /// a run with no shortcode yet simply does nothing rather than failing every candidate.
     @ObservationIgnored private let deviceShortcodeProvider: @MainActor () async -> DeviceShortcode?
-    @ObservationIgnored private let send: @MainActor (ImageSightingCreateInput) async throws -> Void
+    @ObservationIgnored private let sendPage: @MainActor ([ImageSightingCreateInput]) async throws -> Void
 
     @ObservationIgnored private var isSignedIn: Bool
     @ObservationIgnored private var isSceneActive = true
@@ -87,7 +87,7 @@ final class LibraryMetadataSync {
         factsProvider: @escaping @MainActor (String) -> (any LibraryAssetFacts)?,
         cloudIdentifierProvider: @escaping @MainActor (String) async -> String? = { _ in nil },
         deviceShortcodeProvider: @escaping @MainActor () async -> DeviceShortcode?,
-        send: @escaping @MainActor (ImageSightingCreateInput) async throws -> Void
+        sendPage: @escaping @MainActor ([ImageSightingCreateInput]) async throws -> Void
     ) {
         self.analysisStore = analysisStore
         self.host = host
@@ -100,7 +100,7 @@ final class LibraryMetadataSync {
         self.factsProvider = factsProvider
         self.cloudIdentifierProvider = cloudIdentifierProvider
         self.deviceShortcodeProvider = deviceShortcodeProvider
-        self.send = send
+        self.sendPage = sendPage
         observeSystemConditions()
     }
 
@@ -217,7 +217,7 @@ final class LibraryMetadataSync {
 
     /// One planning-and-send pass: re-reads the candidate source fresh (so a candidate appended
     /// mid-run, e.g. after a replan, is included), pre-filters out anything already recorded for
-    /// its current `modificationDate`, then sends the rest at up to 4 in flight. Counters reset at
+    /// its current `modificationDate`, then sends the rest in bounded transactional pages. Counters reset at
     /// the top so neither a fresh run nor a replanned pass briefly shows the previous pass's totals.
     private func pass(token: UUID) async {
         sentCount = 0
@@ -248,51 +248,48 @@ final class LibraryMetadataSync {
         guard let deviceShortcode = await deviceShortcodeProvider(), runGeneration == token,
             !Task.isCancelled
         else { return }
-        var iterator = pending.makeIterator()
-        await withTaskGroup(of: Bool.self) { group in
-            var inFlightCount = 0
-            func enqueue() {
-                guard !Task.isCancelled, inFlightCount < 4, let candidate = iterator.next() else { return }
-                inFlightCount += 1
-                group.addTask { [weak self] in
-                    await self?.sendSighting(for: candidate, deviceShortcode: deviceShortcode) ?? false
+        let pageSize = 50
+        for offset in stride(from: 0, to: pending.count, by: pageSize) {
+            guard !Task.isCancelled, runGeneration == token else { return }
+            let candidates = pending[offset..<min(offset + pageSize, pending.count)]
+            var prepared:
+                [(
+                    candidate: Candidate, facts: any LibraryAssetFacts,
+                    cloudIdentifier: String?, input: ImageSightingCreateInput
+                )] = []
+            for candidate in candidates {
+                guard !Task.isCancelled, runGeneration == token else { return }
+                guard let facts = factsProvider(candidate.localIdentifier) else {
+                    processedCount += 1
+                    continue
                 }
+                let cloudIdentifier = await cloudIdentifierProvider(candidate.localIdentifier)
+                let metadata = LibrarySightingBuilder.metadata(
+                    from: facts, cloudIdentifier: cloudIdentifier)
+                let input = LibrarySightingBuilder.createInput(
+                    imageId: candidate.imageID, deviceId: deviceShortcode, metadata: metadata,
+                    installationID: installationID, hashDistance: candidate.hashDistance,
+                    aspectGate: candidate.aspectGate)
+                prepared.append((candidate, facts, cloudIdentifier, input))
             }
-            for _ in 0..<4 { enqueue() }
-            while inFlightCount > 0 {
-                guard let sent = await group.next() else { break }
-                inFlightCount -= 1
-                processedCount += 1
-                if sent { sentCount += 1 }
-                guard !Task.isCancelled, runGeneration == token else { break }
-                enqueue()
+            guard !prepared.isEmpty else { continue }
+            do {
+                try await sendPage(prepared.map(\.input))
+                guard !Task.isCancelled, runGeneration == token else { return }
+                for row in prepared {
+                    try? await analysisStore.markLibrarySightingSent(
+                        host: host, localIdentifier: row.candidate.localIdentifier,
+                        imageId: row.candidate.imageID.rawValue,
+                        version: Self.version, modificationDate: row.facts.modificationDate,
+                        cloudIdentifier: row.cloudIdentifier)
+                }
+                sentCount += prepared.count
+            } catch {
+                Diagnostics.report(error, context: "photos.librarySightingSync.sendPage")
             }
+            processedCount += prepared.count
+            await Task.yield()
         }
-    }
-
-    /// One candidate's full send: resolve its cloud identifier, build the sighting, write it, and
-    /// mark it sent. `pass(token:)` has already excluded already-sent candidates, so there is no
-    /// send-once check here — a send failure is reported and simply leaves the row unmarked so the
-    /// next pass retries it.
-    private func sendSighting(for candidate: Candidate, deviceShortcode: DeviceShortcode) async -> Bool {
-        guard let facts = factsProvider(candidate.localIdentifier) else { return false }
-        let cloudIdentifier = await cloudIdentifierProvider(candidate.localIdentifier)
-        let metadata = LibrarySightingBuilder.metadata(from: facts, cloudIdentifier: cloudIdentifier)
-        let input = LibrarySightingBuilder.createInput(
-            imageId: candidate.imageID, deviceId: deviceShortcode, metadata: metadata,
-            installationID: installationID, hashDistance: candidate.hashDistance,
-            aspectGate: candidate.aspectGate)
-        do {
-            try await self.send(input)
-        } catch {
-            Diagnostics.report(error, context: "photos.librarySightingSync.send")
-            return false
-        }
-        try? await analysisStore.markLibrarySightingSent(
-            host: host, localIdentifier: candidate.localIdentifier, imageId: candidate.imageID.rawValue,
-            version: Self.version, modificationDate: facts.modificationDate,
-            cloudIdentifier: cloudIdentifier)
-        return true
     }
 }
 
@@ -329,9 +326,8 @@ extension LibraryMetadataSync: BackgroundActivitySource {
 extension LibraryMetadataSync {
     /// The production wiring: candidates come from `PhotoMatchStore`'s strong matches, facts and
     /// the cloud-identifier lookup from PhotoKit through `PhotoLibraryStore`, and writes go
-    /// through the generic generated client — `resources.imageSighting.create`'s server adapter
-    /// upserts, so a repeated send (a resend after a `modificationDate` change this device also
-    /// missed marking) is safe.
+    /// through the bounded bulk operation. A failed page stays unmarked locally and can be
+    /// replayed through the server's existing image/owner/asset-key upsert rule.
     convenience init(
         analysisStore: PhotoAnalysisStore, library: PhotoLibraryStore, matches: PhotoMatchStore,
         client: CubbyClient, host: String, installationID: String, isParticipating: Bool = true,
@@ -372,17 +368,14 @@ extension LibraryMetadataSync {
                 let page = try? await client.list(descriptor, page: 1, pageSize: 1, filters: filters)
                 return page?.items.first?.id
             },
-            send: { [weak client] input in
-                guard let client else { return }
-                guard case .object(let body) = try JSONValue(encoding: input) else {
-                    throw LibraryMetadataSyncError.encodingFailed
-                }
-                _ = try await client.create(EntityCatalog[.imageSighting], body: body)
+            sendPage: { [weak client] inputs in
+                guard let client else { throw LibraryMetadataSyncError.clientUnavailable }
+                try await client.bulkImageSightings(inputs)
             })
     }
 }
 
 enum LibraryMetadataSyncError: LocalizedError {
-    case encodingFailed
-    var errorDescription: String? { "Could not encode this sighting for Cubby." }
+    case clientUnavailable
+    var errorDescription: String? { "The Cubby client is no longer available." }
 }

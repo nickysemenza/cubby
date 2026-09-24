@@ -10,6 +10,7 @@ import { Link } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
+import { treePickerItems } from "~/app/_components/combobox/tree-items";
 import { WithEntitySearch } from "~/app/_components/combobox/with-search-hook";
 import {
   createBooleanColumn,
@@ -252,9 +253,16 @@ function useProductFilterOptions() {
   );
   return useFilterOptions({
     tags: tagOptions,
-    productCategories: categories.map((category) => ({
-      value: category.id,
-      label: category.path.map((node) => node.name).join(" / "),
+    productCategories: treePickerItems(categories, {
+      idOf: (category) => category.id,
+      parentIdOf: (category) => category.path.at(-2)?.id ?? null,
+      labelOf: (category) => category.name,
+    }).map((item) => ({
+      value: item.id,
+      label: item.name,
+      group: item.presentation?.group,
+      depth: item.presentation?.depth,
+      rowLabel: item.presentation?.rowLabel,
     })),
     productCategoryFamilies: categories.flatMap((category) =>
       category.feature

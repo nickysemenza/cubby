@@ -1,3 +1,4 @@
+import CryptoKit
 import CubbyKit
 import SwiftUI
 
@@ -10,6 +11,17 @@ struct AuditRootView: View {
     @Environment(AppModel.self) private var model
     @State private var session: RecountSession?
 
+    private var persistenceNamespace: String {
+        let credentialKey: String
+        switch model.credential {
+        case .some(.bearer(let token)), .some(.apiKey(let token)): credentialKey = token
+        case nil: credentialKey = "signed-out"
+        }
+        let digest = SHA256.hash(data: Data(credentialKey.utf8))
+            .map { String(format: "%02x", $0) }.joined()
+        return "\(model.host).\(digest)"
+    }
+
     var body: some View {
         Group {
             if let session {
@@ -20,10 +32,13 @@ struct AuditRootView: View {
         }
         .porcelainScreen()
         .navigationTitle("Walk the shelf")
-        .task(id: model.host) {
-            let session = RecountSession(service: model.client)
+        .task(id: "\(persistenceNamespace).\(locationID?.rawValue ?? "all")") {
+            let session = RecountSession(
+                service: model.client,
+                persistenceNamespace: persistenceNamespace)
             self.session = session
             await session.loadTree()
+            if await session.resumePending(scope: locationID) { return }
             if let locationID {
                 await session.start(scope: locationID)
             }

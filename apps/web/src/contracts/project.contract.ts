@@ -5,6 +5,7 @@ import { defineContract, mutation, query } from "~/contracts/define";
 
 export const projectContract = defineContract("project", {
   dashboardSummary: query({
+    native: "Project analytics summary",
     input: schemas.projectDashboardFiltersSchema,
     output: schemas.projectDashboardSummaryOut,
   }),
@@ -17,6 +18,7 @@ export const projectContract = defineContract("project", {
     output: schemas.projectDependencyGraphSchema,
   }),
   portfolioAnalytics: query({
+    native: "Project analytics",
     input: schemas.projectDashboardFiltersSchema,
     output: schemas.projectPortfolioAnalyticsOut,
   }),

@@ -1,4 +1,5 @@
 import { defineEntity } from "./definition.js";
+import { selectControlOptions } from "./select-control-options.js";
 import { imageShortcode, mealShortcode } from "../identifier-fields.js";
 import {
   mealKindSchema,
@@ -125,6 +126,7 @@ export default defineEntity({
         control: {
           kind: "select",
           placeholder: "Which meal of the day?",
+          options: selectControlOptions.mealType,
           suggest: { basis: ["name"] },
         },
         display: {
@@ -152,7 +154,11 @@ export default defineEntity({
       {
         key: "mealKind",
         kind: "enum",
-        control: { kind: "select", suggest: { basis: ["name"] } },
+        control: {
+          kind: "select",
+          options: selectControlOptions.mealKind,
+          suggest: { basis: ["name"] },
+        },
         display: {
           list: true,
           detail: true,

@@ -164,6 +164,29 @@ struct RecountSessionTests {
         return (session, service)
     }
 
+    @Test func relaunchRestoresSkippedBinsAndValidStagedDecisionsFromFreshRows() async throws {
+        let (_, service) = try await makeSession()
+        let namespace = UUID().uuidString
+        let first = RecountSession(service: service, persistenceNamespace: namespace)
+        await first.loadTree()
+        await first.start(scope: shelf)
+        await first.skipBin()
+        first.stage(.remove, for: InventoryEntryCode("INV-4567"))
+
+        let resumed = RecountSession(service: service, persistenceNamespace: namespace)
+        await resumed.loadTree()
+        #expect(await resumed.resumePending(scope: shelf))
+        #expect(resumed.currentBin?.id == bin2)
+        #expect(resumed.skipped == Set([bin1]))
+        #expect(resumed.rows.first?.resolution == .remove)
+        #expect(service.calls.filter { $0 == .rows(bin2) }.count >= 2)
+
+        resumed.restart()
+        let empty = RecountSession(service: service, persistenceNamespace: namespace)
+        await empty.loadTree()
+        #expect(!(await empty.resumePending(scope: shelf)))
+    }
+
     @Test func startsOnTheFirstStockedBinWithItsRows() async throws {
         let (session, service) = try await makeSession()
         #expect(session.phase == .bin)

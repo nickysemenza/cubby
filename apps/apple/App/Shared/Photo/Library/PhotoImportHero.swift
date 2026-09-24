@@ -242,12 +242,19 @@ private struct PhotoImportProgressiveImage: View {
             failed = false
             do {
                 let file = try await item.materialize()
-                let decoded = try await Task.detached(priority: .userInitiated) {
-                    if fullResolution {
-                        return try file.decodeFullResolution()
+                let decoded: CGImage
+                if fullResolution {
+                    decoded = try await FullResolutionDecodeQueue.shared.decode(file)
+                } else {
+                    let task = Task.detached(priority: .userInitiated) {
+                        try file.thumbnail(maxPixelSize: maxPixelSize)
                     }
-                    return try file.thumbnail(maxPixelSize: maxPixelSize)
-                }.value
+                    decoded = try await withTaskCancellationHandler {
+                        try await task.value
+                    } onCancel: {
+                        task.cancel()
+                    }
+                }
                 guard !Task.isCancelled else { return }
                 image = decoded
             } catch is CancellationError {
@@ -286,6 +293,33 @@ private struct PhotoImportProgressiveImage: View {
             }
         }
         .id(item.id)
+    }
+}
+
+/// Full-size decodes can each retain hundreds of megabytes. A canceled swipe waits for the
+/// current synchronous decode to finish, then drops its queued work before starting another.
+private actor FullResolutionDecodeQueue {
+    static let shared = FullResolutionDecodeQueue()
+    private var current: (id: UUID, task: Task<CGImage, Error>)?
+
+    func decode(_ file: PhotoFile) async throws -> CGImage {
+        while let active = current {
+            _ = try? await active.task.value
+            try Task.checkCancellation()
+            if current?.id == active.id { await Task.yield() }
+        }
+        let id = UUID()
+        let job = Task.detached(priority: .userInitiated) {
+            try Task.checkCancellation()
+            return try file.decodeFullResolution()
+        }
+        current = (id, job)
+        defer { if current?.id == id { current = nil } }
+        return try await withTaskCancellationHandler {
+            try await job.value
+        } onCancel: {
+            job.cancel()
+        }
     }
 }
 

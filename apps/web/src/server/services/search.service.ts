@@ -1,4 +1,5 @@
 import { entityRefKey } from "@cubby/schemas/entity";
+import { parseEntityId } from "@cubby/schemas/identifiers";
 import {
   type RelatedSearchOut,
   type SearchableEntity,
@@ -14,6 +15,7 @@ import { getErrorMessage } from "~/lib/error-utils";
 import type { Database } from "~/server/db";
 import { resolveEntityDisplayImages } from "~/server/repo/entity-display-image";
 import { findSemanticEntityCandidates } from "~/server/repo/entity-embedding-search";
+import { loadLocationAncestors } from "~/server/repo/location/tree";
 import { executeSearchDocumentSql } from "~/server/repo/search-document";
 import { buildPrefixTsQuery, searchTerms } from "~/server/repo/search-lexical";
 import { SEMANTIC_MIN_QUERY_LENGTH } from "~/server/semantic/constants";
@@ -28,9 +30,11 @@ import {
 } from "~/server/semantic/vector-store";
 import { TraceNames, withTrace } from "~/server/tracing";
 
-const candidateSchema = searchHitSchema.omit({ imageUrl: true }).extend({
-  entityId: z.uuid(),
-});
+const candidateSchema = searchHitSchema
+  .omit({ imageUrl: true, locationPath: true })
+  .extend({
+    entityId: z.uuid(),
+  });
 export type InternalSearchCandidate = z.output<typeof candidateSchema>;
 export type InternalSearchHit = SearchHit & { entityId: string };
 type ServiceSearchQueryInput = Omit<SearchQueryInput, "limit"> & {
@@ -84,9 +88,21 @@ const withThumbnails = async (
   candidates: InternalSearchCandidate[],
 ): Promise<SearchHit[]> => {
   const images = await hydrateThumbnails(db, candidates);
+  const paths = await loadLocationAncestors(
+    db,
+    candidates
+      .filter((candidate) => candidate.entityType === "location")
+      .map((candidate) => parseEntityId("location", candidate.entityId)),
+  );
   return candidates.map(({ entityId, ...candidate }) => ({
     ...candidate,
     imageUrl: images.get(entityRefKey(candidate.entityType, entityId)) ?? null,
+    ...(candidate.entityType === "location" && {
+      locationPath:
+        paths
+          .get(parseEntityId("location", entityId))
+          ?.map(({ id, name }) => ({ id, name })) ?? [],
+    }),
   }));
 };
 

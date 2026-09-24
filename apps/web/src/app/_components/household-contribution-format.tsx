@@ -3,6 +3,7 @@ import type {
   HouseholdContributionGapOut,
 } from "@cubby/schemas/household-contribution";
 import type { LedgerPartyKind } from "@cubby/schemas/ledger-party";
+import { LEDGER_PARTY_KIND_LABELS } from "@cubby/schemas/ledger-party-fields";
 import { Link } from "@tanstack/react-router";
 
 import { TableCell } from "~/components/ui/table";
@@ -10,7 +11,7 @@ import { entityDetailLink } from "~/entities/entities";
 import { formatCurrency } from "~/lib/utils";
 
 export const ledgerPartyLabel = (kind: LedgerPartyKind) =>
-  kind === "household" ? "Household" : kind === "member" ? "Member" : "Guest";
+  LEDGER_PARTY_KIND_LABELS[kind];
 
 export const contributionGapLabels = {
   missing_beneficiaries: "No beneficiaries recorded",

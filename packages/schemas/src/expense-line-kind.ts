@@ -13,6 +13,16 @@ export const expenseLineKindValues = [
 export const expenseLineKindSchema = z.enum(expenseLineKindValues);
 export type ExpenseLineKind = z.infer<typeof expenseLineKindSchema>;
 
+export const EXPENSE_LINE_KIND_LABELS = {
+  principal: "Item or service",
+  tax: "Tax",
+  shipping: "Shipping or delivery",
+  discount: "Discount",
+  fee: "Fee",
+  tip: "Tip",
+  other_adjustment: "Other adjustment",
+} as const satisfies Record<ExpenseLineKind, string>;
+
 /**
  * Whether an Expense row is a line item or a slice of an un-itemized total.
  *
@@ -41,6 +51,11 @@ export const expenseLineBasisValues = ["item_line", "allocation"] as const;
 
 export const expenseLineBasisSchema = z.enum(expenseLineBasisValues);
 export type ExpenseLineBasis = z.infer<typeof expenseLineBasisSchema>;
+
+export const EXPENSE_LINE_BASIS_LABELS = {
+  item_line: "Line item",
+  allocation: "Share of a lump sum",
+} as const satisfies Record<ExpenseLineBasis, string>;
 
 export const isPrincipalExpense = (expense: {
   lineKind: ExpenseLineKind;

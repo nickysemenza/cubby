@@ -109,7 +109,7 @@ function MultiselectEditor({
         className="h-8"
       />
       <div className="max-h-64 overflow-y-auto">
-        {filtered.map((option) => {
+        {filtered.map((option, index) => {
           const checked = draft.has(option.value);
           const toggle = () =>
             setDraft((previous) => {
@@ -119,39 +119,45 @@ function MultiselectEditor({
               return nextSet;
             });
           return (
-            // Not a `<label>`: wrapping a checkbox control in one makes it
-            // derive its accessible name from that label's content, which —
-            // since the label also CONTAINS the checkbox — is a
-            // self-referential aria-labelledby loop that
-            // dom-accessibility-api resolves to an empty name. A real button
-            // keeps the row keyboard-operable, with its own text as the
-            // accessible label; the checked-state glyph is a plain `aria-hidden`
-            // icon rather than an interactive `Checkbox`, so there's no nested
-            // control competing for the click.
-            <button
-              key={option.value}
-              type="button"
-              className="flex min-h-8 w-full items-center gap-2 rounded-sm px-1 text-left text-xs hover:bg-muted"
-              onClick={toggle}
-            >
-              <span
-                aria-hidden
-                className={cn(
-                  "flex size-4 shrink-0 items-center justify-center rounded-sm border transition-colors duration-150",
-                  checked
-                    ? "border-primary bg-primary text-primary-foreground"
-                    : "border-checkbox-border bg-card",
+            <div key={option.value}>
+              {option.group &&
+                (index === 0 ||
+                  filtered[index - 1]?.group?.id !== option.group.id) && (
+                  <div className="px-2 pt-2 pb-1 text-2xs font-semibold text-muted-foreground">
+                    {option.group.label}
+                  </div>
                 )}
+              {/* The button has a full-path accessible name while the row displays its leaf label. */}
+              <button
+                type="button"
+                className="flex min-h-8 w-full items-center gap-2 rounded-sm px-1 text-left text-xs hover:bg-muted"
+                onClick={toggle}
+                style={{
+                  paddingInlineStart: `${4 + (option.depth ?? 0) * 16}px`,
+                }}
+                aria-label={option.label}
               >
-                {checked && <CheckIcon className="size-3" />}
-              </span>
-              <span className="min-w-0 flex-1 truncate">{option.label}</span>
-              {option.hint && (
-                <span className="shrink-0 font-mono text-2xs text-muted-foreground tabular-nums">
-                  {option.hint}
+                <span
+                  aria-hidden
+                  className={cn(
+                    "flex size-4 shrink-0 items-center justify-center rounded-sm border transition-colors duration-150",
+                    checked
+                      ? "border-primary bg-primary text-primary-foreground"
+                      : "border-checkbox-border bg-card",
+                  )}
+                >
+                  {checked && <CheckIcon className="size-3" />}
                 </span>
-              )}
-            </button>
+                <span className="min-w-0 flex-1 truncate">
+                  {option.rowLabel ?? option.label}
+                </span>
+                {option.hint && (
+                  <span className="shrink-0 font-mono text-2xs text-muted-foreground tabular-nums">
+                    {option.hint}
+                  </span>
+                )}
+              </button>
+            </div>
           );
         })}
       </div>

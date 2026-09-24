@@ -340,8 +340,11 @@ private struct PhotoLibraryBrowser: View {
             // populated, or library-changed) month list needs `reconcile()` re-run so a sweep
             // that started with zero candidates (Photos tab opened before the library loaded)
             // actually starts once photos exist, and a finished sweep re-arms for new photos.
-            guard !picker, let sweep else { return }
-            sweep.reconcile()
+            updateVisibleMonths()
+            sweep?.reconcile()
+        }
+        .onChange(of: analysisStore != nil) { _, ready in
+            if ready { updateVisibleMonths() }
         }
         .onChange(of: matches.revision) { _, _ in
             // A fresh batch of strong matches (`PhotoMatchStore.candidates`) is exactly what
@@ -444,8 +447,10 @@ private struct PhotoLibraryBrowser: View {
     }
 
     private func updateVisibleMonths() {
-        guard !picker, let sweep else { return }
-        sweep.updateVisibleMonths(monthCaching.visibleMonthIDs)
+        guard !picker else { return }
+        let visible = monthCaching.visibleMonthIDs
+        sweep?.updateVisibleMonths(visible)
+        Task { await library.loadAnalysisBadges(visible: visible, matches: matches) }
     }
 
     /// Batch-loads `selectedCategory`'s matching ids plus the whole library's unanalysed count,

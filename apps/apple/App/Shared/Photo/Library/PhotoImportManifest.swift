@@ -95,8 +95,11 @@ final class PhotoImportManifest {
 
     func startAnalysis(client: CubbyClient, matches: PhotoMatchStore) {
         analysisTask?.cancel()
+        let generation = UUID()
+        analysisGeneration = generation
+        analysisState = .idle
         analysisTask = Task { [weak self] in
-            await self?.analyze(client: client, matches: matches)
+            await self?.analyze(client: client, matches: matches, generation: generation)
         }
     }
 
@@ -489,10 +492,8 @@ final class PhotoImportManifest {
         apply(decisions: decisions, candidates: candidates, generation: analysisGeneration)
     }
 
-    func analyze(client: CubbyClient, matches: PhotoMatchStore) async {
-        guard !analysisState.isRunning else { return }
-        let generation = UUID()
-        analysisGeneration = generation
+    private func analyze(client: CubbyClient, matches: PhotoMatchStore, generation: UUID) async {
+        guard analysisGeneration == generation, !Task.isCancelled else { return }
         analysisLog = []
         nextAnalysisLogID = 0
         appendAnalysisLog(
@@ -502,6 +503,7 @@ final class PhotoImportManifest {
         analysisState = .running("Preparing selected photos…")
         do {
             try await prepareIfNeeded()
+            guard analysisGeneration == generation, !Task.isCancelled else { throw CancellationError() }
             for item in items {
                 guard let analysis = prepared[item.id]?.1 else { continue }
                 appendAnalysisLog(
@@ -528,8 +530,10 @@ final class PhotoImportManifest {
                     preparedQueries: preparedHashQueries,
                     refreshIndex: false
                 ) { [weak self] status in
-                    self?.analysisState = .running(status)
+                    guard let self, self.analysisGeneration == generation else { return }
+                    self.analysisState = .running(status)
                 }
+                guard analysisGeneration == generation, !Task.isCancelled else { throw CancellationError() }
                 for item in items {
                     let candidates = Self.uniqueCandidates(matches.storedCandidates(for: item.id))
                     if !candidates.isEmpty {

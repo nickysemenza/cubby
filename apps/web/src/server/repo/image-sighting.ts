@@ -442,6 +442,56 @@ export async function createImageSighting(
   return { output: await imageSightingCrud.getByID(db, id), entityId: id };
 }
 
+/** All-or-nothing page: a failed response can be resent because the same image, owner and asset
+ * key resolves to the existing live row. The transaction includes capture derivation and audit. */
+export async function upsertImageSightingPage(
+  db: Database,
+  items: ImageSightingCreateInput[],
+  actor: ActorContext,
+): Promise<{ processed: number; created: number }> {
+  return withTransaction(db, async (tx) => {
+    const images = await resolveAllOrThrow(
+      tx,
+      "image",
+      items.map((item) => item.imageId),
+    );
+    const devices = await resolveAllOrThrow(
+      tx,
+      "device",
+      items.map((item) => item.deviceId),
+    );
+    const explicitOwners = items.flatMap((item) =>
+      item.ledgerPartyId ? [item.ledgerPartyId] : [],
+    );
+    const ownerIDs = await resolveAllOrThrow(tx, "ledgerParty", explicitOwners);
+    const owners = new Map(
+      explicitOwners.map((code, index) => [code, ownerIDs[index]!]),
+    );
+    const actingOwner = items.some((item) => !item.ledgerPartyId)
+      ? await resolveSightingOwnerParty(tx, actor.userId)
+      : null;
+    let created = 0;
+    for (const [index, item] of items.entries()) {
+      const owner = item.ledgerPartyId
+        ? owners.get(item.ledgerPartyId)
+        : actingOwner;
+      if (!owner) throw new Error("Sighting owner could not be resolved");
+      const outcome = await upsertImageSightingInTransaction(
+        tx,
+        {
+          ...item,
+          imageId: images[index]!,
+          deviceId: devices[index]!,
+          ledgerPartyId: owner,
+        },
+        actor,
+      );
+      if (outcome.created) created += 1;
+    }
+    return { processed: items.length, created };
+  });
+}
+
 export async function updateImageSighting(
   db: Database,
   shortcode: ImageSightingShortcode,

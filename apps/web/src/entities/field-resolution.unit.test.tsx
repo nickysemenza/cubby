@@ -17,7 +17,7 @@ const base: FieldResolution = {
   value: "plumbing",
   fallbackValue: "plumbing",
   source: "purchase default",
-  sourceEntity: { entityType: "purchase", entityId: sourceId },
+  sourceEntity: { entityType: "purchase", entityId: sourceId, name: null },
   matchesFallback: false,
   canReset: false,
 };

@@ -20,6 +20,15 @@ export const imageSightingCreateInput = z.object(
 );
 export type ImageSightingCreateInput = z.infer<typeof imageSightingCreateInput>;
 
+/** One transactional retry unit for device-library metadata backfill. */
+export const imageSightingBulkInput = z.object({
+  items: z.array(imageSightingCreateInput).min(1).max(100),
+});
+export const imageSightingBulkOut = z.object({
+  processed: z.number().int().nonnegative(),
+  created: z.number().int().nonnegative(),
+});
+
 export const imageSightingUpdateData = z.object(
   generatedImageSightingFieldSchemas.update,
 );
