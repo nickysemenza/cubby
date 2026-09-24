@@ -12,7 +12,7 @@ import {
 import path from "node:path";
 import { createInterface } from "node:readline";
 import { fileURLToPath } from "node:url";
-import { request } from "@playwright/test";
+import { chromium, expect, request } from "@playwright/test";
 import { drizzle } from "drizzle-orm/node-postgres";
 import dotenv from "dotenv";
 import { Pool } from "pg";
@@ -201,6 +201,117 @@ async function assertNativePhotoImport(
     return result.rows.map((row) => row.id);
   } finally {
     await checkPool.end();
+  }
+}
+
+async function exercisePhotoProcessingJobs(imageIDs: string[]): Promise<void> {
+  const pool = new Pool({ connectionString: databaseURL });
+  try {
+    const [scenario, processing, dispatch, schemas] = await Promise.all([
+      import("./scenarios/context"),
+      import("~/server/repo/image-processing"),
+      import("~/server/image-processing/dispatch"),
+      import("@cubby/schemas/image-processing"),
+    ]);
+    const db = scenario.buildScenarioDatabase(pool);
+    const result = await pool.query<{
+      imageId: string;
+      jobId: string;
+      kind: "describe_image" | "subject_lift";
+    }>(
+      `SELECT i.shortcode AS "imageId", j.id AS "jobId", j.kind
+       FROM "ImageProcessingJob" j
+       JOIN "Image" i ON i.id = j."imageId"
+       WHERE i.shortcode = ANY($1::text[])`,
+      [imageIDs],
+    );
+    for (const [index, imageID] of imageIDs.entries()) {
+      const job = result.rows.find(
+        (row) => row.imageId === imageID && row.kind === "describe_image",
+      );
+      if (!job) throw new Error(`Missing description job for ${imageID}`);
+      const lease = await processing.claimImageProcessingJob(db, {
+        jobId: job.jobId,
+        kinds: ["describe_image"],
+        leaseMs: 60_000,
+      });
+      if (!lease) {
+        const state = await pool.query(
+          `SELECT j.state, j."nextAttemptAt", now() AS now, i.status,
+                  j."sourceContentHash" = i.sha256 AS "sourceMatches"
+           FROM "ImageProcessingJob" j JOIN "Image" i ON i.id = j."imageId"
+           WHERE j.id = $1`,
+          [job.jobId],
+        );
+        throw new Error(
+          `Could not claim description job ${job.jobId}: ${JSON.stringify({
+            job: state.rows[0],
+          })}`,
+        );
+      }
+      const completed = await processing.completeImageProcessingJob(db, {
+        result: {
+          jobId: job.jobId,
+          attemptId: lease.attemptId,
+          completedAt: new Date().toISOString(),
+          outcome: {
+            kind: "describe_image",
+            status: "completed",
+            description: {
+              description:
+                [
+                  "Synthetic gray crew shirt",
+                  "Synthetic clothing label",
+                  "Synthetic brown boots",
+                ][index] ?? "Synthetic wardrobe item",
+              claims: [],
+              cutoutEligibility: index === 1 ? "ineligible" : "eligible",
+            },
+            runtime: { platform: "cloud", model: "synthetic-test" },
+          },
+        },
+        cloudAnalysis: {
+          provider: "synthetic-test",
+          model: "synthetic-test",
+          promptRevision: schemas.IMAGE_DESCRIPTION_PROMPT_REVISION,
+          resultSchemaRevision:
+            schemas.IMAGE_DESCRIPTION_RESULT_SCHEMA_REVISION,
+          inputFingerprint: `synthetic-${imageID}`,
+        },
+      });
+      if (!completed.adopted)
+        throw new Error(`Description result was not adopted for ${imageID}`);
+    }
+    for (const row of result.rows.filter((job) => job.kind === "subject_lift"))
+      await dispatch.dispatchImageProcessingWakeup(db, row.jobId);
+    const states = await pool.query<{
+      imageId: string;
+      kind: string;
+      state: string;
+    }>(
+      `SELECT i.shortcode AS "imageId", j.kind, j.state
+       FROM "ImageProcessingJob" j
+       JOIN "Image" i ON i.id = j."imageId"
+       WHERE i.shortcode = ANY($1::text[])`,
+      [imageIDs],
+    );
+    for (const [index, imageID] of imageIDs.entries()) {
+      const state = (kind: string) =>
+        states.rows.find((row) => row.imageId === imageID && row.kind === kind)
+          ?.state;
+      if (state("describe_image") !== "ready")
+        throw new Error(`Description job not ready for ${imageID}`);
+      const expectedLiftState = index === 1 ? "skipped" : "waiting_for_device";
+      if (state("subject_lift") !== expectedLiftState)
+        throw new Error(
+          `Cutout job state for ${imageID}: ${state("subject_lift")}`,
+        );
+    }
+    console.log(
+      `[${lane}] Synthetic descriptions adopted; cutouts skipped or waiting for a device as expected`,
+    );
+  } finally {
+    await pool.end();
   }
 }
 
@@ -551,8 +662,17 @@ async function runHeadlessPhotoScenario(
 ): Promise<void> {
   const pool = new Pool({ connectionString: databaseURL });
   try {
-    const { seedSimulatorPhotoActor } = await import("./scenarios/simulator");
+    const [{ seedSimulatorPhotoActor }, scenario, maintenance] =
+      await Promise.all([
+        import("./scenarios/simulator"),
+        import("./scenarios/context"),
+        import("~/server/repo/image-processing-maintenance"),
+      ]);
     await seedSimulatorPhotoActor(pool, userId);
+    await maintenance.updateImageProcessingSettings(
+      scenario.buildScenarioDatabase(pool),
+      { enabled: true, paused: false },
+    );
   } finally {
     await pool.end();
   }
@@ -594,40 +714,128 @@ async function runHeadlessPhotoScenario(
     });
     if (!login.ok())
       throw new Error(`Review sign-in failed: ${await login.text()}`);
-    const endpoint = `/api/import/runs/${runID}/photo-groups`;
-    const proposed = await context.post(endpoint, {
-      data: {
-        action: "save",
-        groups: [
-          {
-            groupKey: "synthetic-shirt",
-            images: [
-              { id: imageIDs[0], purpose: "item" },
-              { id: imageIDs[1], purpose: "label" },
-            ],
-            product: {
-              kind: "create",
-              create: { name: "Synthetic Gray Crew Shirt" },
-            },
-          },
-          {
-            groupKey: "synthetic-boots",
-            images: [{ id: imageIDs[2], purpose: "item" }],
-            product: {
-              kind: "create",
-              create: { name: "Synthetic Brown Boots" },
-            },
-          },
+    const groups = [
+      {
+        groupKey: "synthetic-shirt",
+        images: [
+          { id: imageIDs[0], purpose: "item" },
+          { id: imageIDs[1], purpose: "label" },
         ],
+        product: {
+          kind: "create",
+          create: { name: "Synthetic Gray Crew Shirt" },
+        },
       },
-    });
-    if (!proposed.ok())
-      throw new Error(`Photo proposal failed: ${await proposed.text()}`);
-    const approved = await context.post(endpoint, {
-      data: { action: "approve" },
-    });
-    if (!approved.ok())
-      throw new Error(`Photo approval failed: ${await approved.text()}`);
+      {
+        groupKey: "synthetic-boots",
+        images: [{ id: imageIDs[2], purpose: "item" }],
+        product: {
+          kind: "create",
+          create: { name: "Synthetic Brown Boots" },
+        },
+      },
+    ];
+    const proposalPool = new Pool({ connectionString: databaseURL });
+    try {
+      const [
+        { callMcpTool },
+        { McpServer },
+        { registerPhotoImportTools },
+        scenario,
+        testing,
+      ] = await Promise.all([
+        import("~/server/mcp/mcp-test-utils"),
+        import("@modelcontextprotocol/sdk/server/mcp.js"),
+        import("~/server/mcp/tools/photo-import.tools"),
+        import("./scenarios/context"),
+        import("@cubby/schemas/testing"),
+      ]);
+      const db = scenario.buildScenarioDatabase(proposalPool);
+      const kernel = scenario.buildKernelContext(
+        db,
+        testing.testUserId(userId),
+      );
+      const server = new McpServer({
+        name: "photo-import-sim",
+        version: "1.0",
+      });
+      registerPhotoImportTools(server);
+      const proposed = await callMcpTool(
+        server,
+        "propose_photo_groups",
+        { runId: runID, groups },
+        {},
+        { entityKernel: kernel },
+      );
+      if (proposed.isError)
+        throw new Error(
+          `MCP photo proposal failed: ${JSON.stringify(proposed.content)}`,
+        );
+      const beforeApproval = await proposalPool.query<{ count: string }>(
+        `SELECT count(*)::text AS count FROM "Product"
+         WHERE name IN ('Synthetic Gray Crew Shirt', 'Synthetic Brown Boots')
+           AND "deletedAt" IS NULL`,
+      );
+      if (beforeApproval.rows[0]?.count !== "0")
+        throw new Error("MCP proposals created Products before review");
+    } finally {
+      await proposalPool.end();
+    }
+    const browser = await chromium.launch();
+    try {
+      const state = await context.storageState();
+      state.cookies = state.cookies.filter(
+        (cookie) => !cookie.name.endsWith("session_data"),
+      );
+      const browserContext = await browser.newContext({
+        storageState: state,
+        viewport: { width: 1280, height: 900 },
+        recordVideo: { dir: artifacts, size: { width: 1280, height: 900 } },
+      });
+      const page = await browserContext.newPage();
+      try {
+        await page.goto(`${url.origin}/runs/${runID}`);
+        await expect(
+          page.getByRole("heading", { name: "Proposed items" }),
+        ).toBeVisible();
+        for (const [name, expectedPhotos] of [
+          ["Synthetic Gray Crew Shirt", 2],
+          ["Synthetic Brown Boots", 1],
+        ] as const) {
+          const card = page.locator('[data-slot="card"]').filter({
+            has: page.getByRole("heading", { name }),
+          });
+          await expect
+            .poll(() =>
+              card
+                .locator("img")
+                .evaluateAll(
+                  (images) =>
+                    images.filter(
+                      (image) =>
+                        image instanceof HTMLImageElement &&
+                        image.complete &&
+                        image.naturalWidth > 0,
+                    ).length,
+                ),
+            )
+            .toBe(expectedPhotos);
+        }
+        await expect(
+          page.getByRole("button", { name: "Approve all (2)" }),
+        ).toBeEnabled();
+        await page.getByRole("button", { name: "Approve all (2)" }).click();
+        await expect(
+          page.getByText("Completed", { exact: true }).first(),
+        ).toBeVisible();
+      } finally {
+        await browserContext.close();
+        const videoPath = await page.video()?.path();
+        if (videoPath) console.log(`[${lane}] Web review video: ${videoPath}`);
+      }
+    } finally {
+      await browser.close();
+    }
     const pool = new Pool({ connectionString: databaseURL });
     try {
       const result = await pool.query<{ status: string; completed: string }>(
@@ -675,6 +883,7 @@ async function runHeadlessPhotoScenario(
     } finally {
       await pool.end();
     }
+    await exercisePhotoProcessingJobs(imageIDs);
     console.log(`[${lane}] Proposal submission and reviewer approval verified`);
   } finally {
     await context.dispose();
