@@ -15,6 +15,7 @@ import {
   useState,
   useSyncExternalStore,
 } from "react";
+import { z } from "zod";
 
 import { PhotoImportRunView } from "~/app/import-runs/photo-run-detail";
 import { importRunHref } from "~/app/purchases/purchase-import-links";
@@ -649,7 +650,7 @@ function FlueTranscript({
     return <StatusText>No agent messages have been recorded yet.</StatusText>;
   return (
     <div
-      className="max-h-80 overflow-auto border-t border-border pt-2"
+      className="max-h-[70vh] overflow-auto border-t border-border pt-2"
       aria-label="Agent conversation transcript"
     >
       {messages.map((message) => (
@@ -754,12 +755,29 @@ function FluePart({ part }: { part: FlueConversationPart }) {
   );
 }
 
+function formattedToolValue(value: unknown): string {
+  const parsedValue = z.json().safeParse(value);
+  if (!parsedValue.success) return "No output";
+  const serialized = z.string().safeParse(parsedValue.data);
+  if (!serialized.success)
+    return JSON.stringify(parsedValue.data, null, 2) ?? "null";
+  const source = serialized.data.startsWith("Structured content:\n")
+    ? serialized.data.slice("Structured content:\n".length)
+    : serialized.data;
+  try {
+    const parsed = z.json().parse(JSON.parse(source));
+    return JSON.stringify(parsed, null, 2) ?? "null";
+  } catch {
+    return serialized.data;
+  }
+}
+
 function ToolValue({ label, value }: { label: string; value: unknown }) {
   return (
     <div>
       <p className="text-muted-foreground">{label}</p>
-      <pre className="max-h-40 overflow-auto bg-background p-2 font-mono text-xs break-words whitespace-pre-wrap">
-        {JSON.stringify(value, null, 2) ?? "null"}
+      <pre className="max-h-80 overflow-auto bg-background p-2 font-mono text-xs break-words whitespace-pre-wrap">
+        {formattedToolValue(value)}
       </pre>
     </div>
   );
@@ -771,8 +789,9 @@ function RunTimeline({ run }: { run: ImportRunDetail }) {
       <div>
         <h2 className="font-medium">Durable transcript</h2>
         <p className="text-sm text-muted-foreground">
-          System and Mac events are retained as structured operation evidence;
-          sensitive page content and credentials are excluded.
+          Oldest first. System and Mac events are retained as structured
+          operation evidence; sensitive page content and credentials are
+          excluded.
         </p>
       </div>
       {run.operations.length > 0 ? (

@@ -1,4 +1,4 @@
-import { importRunPurpose } from "@cubby/schemas/purchase-import";
+import { flueImportRunPurpose } from "@cubby/schemas/import-run-agent";
 import { createFileRoute } from "@tanstack/react-router";
 
 import {
@@ -220,7 +220,7 @@ export const Route = createFileRoute("/api/import/runs/$publicId")({
                 await queue.send({
                   version: 1,
                   runId: control.dispatchRunId,
-                  purpose: importRunPurpose.parse(control.dispatchPurpose),
+                  purpose: flueImportRunPurpose.parse(control.dispatchPurpose),
                   coordinatorModel: "gpt-6-sol",
                   eventId: control.dispatchEventId,
                   type: "start_or_resume",

@@ -147,7 +147,7 @@ describe("purchase agent OAuth callback", () => {
       expect.objectContaining({
         coordinatorModel: "gpt-6-sol",
         eventId: "persisted-event",
-        type: "retry",
+        type: "start_or_resume",
       }),
     );
     expect(ports.recordDispatch).toHaveBeenCalledWith(database, {

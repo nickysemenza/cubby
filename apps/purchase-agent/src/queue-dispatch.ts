@@ -1,8 +1,8 @@
+import { importRunAgentIdentity } from "@cubby/schemas/import-run-agent";
 import type { AgentDispatchRequest } from "@flue/runtime";
 
 import {
   purchaseAgentEventIdempotencyKey,
-  purchaseImportAgentIdentity,
   type PurchaseAgentEvent,
 } from "./contracts";
 
@@ -10,23 +10,13 @@ export type PurchaseAgentDispatch = (
   request: AgentDispatchRequest,
 ) => Promise<void>;
 
-type PurchaseAgentSignalAttributes = {
-  eventId: string;
-  purpose?:
-    | "account_sync"
-    | "purchase_validation"
-    | "product_enrichment"
-    | "photo_inventory";
-};
-
 export async function dispatchPurchaseAgentEvent(
   event: PurchaseAgentEvent,
   send: PurchaseAgentDispatch,
 ): Promise<void> {
   const { runId: _privateRunId, ...observableEvent } = event;
-  const attributes: PurchaseAgentSignalAttributes = { eventId: event.eventId };
   await send({
-    id: purchaseImportAgentIdentity(event.runId, event.purpose),
+    id: importRunAgentIdentity(event.runId, event.purpose ?? "account_sync"),
     initialData: {
       runId: event.runId,
       coordinatorModel: event.coordinatorModel,
@@ -40,7 +30,7 @@ export async function dispatchPurchaseAgentEvent(
       // part of the authenticated user-visible transcript and therefore uses
       // only the public handle.
       body: JSON.stringify(observableEvent),
-      attributes,
+      attributes: { eventId: event.eventId },
     },
   });
 }

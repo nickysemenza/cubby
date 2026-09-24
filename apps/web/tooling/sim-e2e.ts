@@ -1097,7 +1097,9 @@ async function main(): Promise<void> {
     }
     const seedPool = new Pool({ connectionString: databaseURL });
     try {
-      const { seedSimulatorScenario } = await import("./scenarios/simulator");
+      const { seedSimulatorPhotoActor, seedSimulatorScenario } =
+        await import("./scenarios/simulator");
+      await seedSimulatorPhotoActor(seedPool, userId);
       productId = await seedSimulatorScenario(seedPool, userId);
     } finally {
       await seedPool.end();

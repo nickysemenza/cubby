@@ -162,8 +162,10 @@ describe("PhotoImportRunView", () => {
     const progress = screen
       .getByText("Progress")
       .closest('[data-slot="card"]') as HTMLElement;
-    expect(within(progress).getByText("2")).toBeInTheDocument();
-    expect(within(progress).getByText("1")).toBeInTheDocument();
+    expect(
+      within(progress).getByRole("progressbar", { name: "Photos reviewed" }),
+    ).toHaveAttribute("aria-valuenow", "2");
+    expect(progress).toHaveTextContent("2 of 3 photos settled");
 
     // Every run photo is a row linking to its image, with the cutout beside
     // the original once the device has produced one.

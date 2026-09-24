@@ -15,7 +15,6 @@ import {
 } from "@cubby/schemas/photo-import-run";
 import { ArrowsMergeIcon } from "@phosphor-icons/react/dist/csr/ArrowsMerge";
 import { CheckIcon } from "@phosphor-icons/react/dist/csr/Check";
-import { CopyIcon } from "@phosphor-icons/react/dist/csr/Copy";
 import { DotsThreeIcon } from "@phosphor-icons/react/dist/csr/DotsThree";
 import { TrashIcon } from "@phosphor-icons/react/dist/csr/Trash";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -51,7 +50,6 @@ import {
   TableHeader,
   TableRow,
 } from "~/components/ui/table";
-import { copyText } from "~/lib/clipboard";
 import { readJsonOrThrow } from "~/lib/http-error";
 import {
   IMPORT_RUN_TARGET_STATE_LABEL,
@@ -457,6 +455,36 @@ function ProductPanel({
   const product = proposal.product;
   return (
     <Stack gap="sm" className="min-w-0">
+      <Row gap="sm" align="end" wrap className="min-w-0">
+        <div className="min-w-0 flex-1">
+          <ProductPicker
+            disabled={busy}
+            placeholder={
+              product.kind === "existing"
+                ? "Choose a different product"
+                : "Search existing products before creating another"
+            }
+            onPick={attachExisting}
+          />
+        </div>
+        {product.kind === "existing" ? (
+          <Button
+            size="sm"
+            variant="ghost"
+            disabled={busy}
+            onClick={() =>
+              saveProduct({
+                kind: "create",
+                create: {
+                  name: product.existing?.name ?? proposal.groupKey,
+                },
+              })
+            }
+          >
+            Create new instead
+          </Button>
+        ) : null}
+      </Row>
       {product.kind === "existing" ? (
         product.existing ? (
           <Row gap="sm" align="center" className="min-w-0">
@@ -596,40 +624,6 @@ function ProductPanel({
           ))}
         </Stack>
       ) : null}
-
-      <Row gap="sm" align="end" wrap className="min-w-0">
-        <div className="min-w-0 flex-1">
-          <ProductPicker
-            disabled={busy}
-            placeholder={
-              product.kind === "existing"
-                ? "Choose a different product"
-                : "Or attach to an existing product"
-            }
-            onPick={attachExisting}
-          />
-        </div>
-        {product.kind === "existing" ? (
-          <Button
-            size="sm"
-            variant="ghost"
-            disabled={busy}
-            onClick={() =>
-              saveProduct({
-                kind: "create",
-                create: {
-                  name:
-                    product.kind === "existing" && product.existing
-                      ? product.existing.name
-                      : proposal.groupKey,
-                },
-              })
-            }
-          >
-            Create new instead
-          </Button>
-        ) : null}
-      </Row>
 
       <InventoryFields proposal={proposal} save={saveGroup} busy={busy} />
 
@@ -974,9 +968,11 @@ function ProcessingBadge({
 function PhotoTable({
   images,
   groupByImage,
+  labelImages,
 }: {
   images: readonly PhotoRunImage[];
   groupByImage: ReadonlyMap<string, string>;
+  labelImages: ReadonlySet<string>;
 }) {
   return (
     <Card>
@@ -1053,11 +1049,17 @@ function PhotoTable({
                     </TableCell>
                     <TableCell>
                       <Stack gap="tight">
-                        <ProcessingBadge
-                          label="Cutout"
-                          state={photo.cutout}
-                          reason={photo.cutoutReason}
-                        />
+                        {labelImages.has(photo.id) && !photo.cutoutUrl ? (
+                          <span className="text-2xs text-muted-foreground">
+                            Cutout: not needed for label photo
+                          </span>
+                        ) : (
+                          <ProcessingBadge
+                            label="Cutout"
+                            state={photo.cutout}
+                            reason={photo.cutoutReason}
+                          />
+                        )}
                         <ProcessingBadge
                           label="Describe"
                           state={photo.describe}
@@ -1133,9 +1135,13 @@ export function PhotoGroupReview({
     (proposal) => proposal.state !== "proposed",
   );
   const groupByImage = new Map<string, string>();
+  const labelImages = new Set<string>();
   for (const proposal of review.proposals)
-    for (const entry of [...proposal.images, ...proposal.skip])
+    for (const entry of [...proposal.images, ...proposal.skip]) {
       groupByImage.set(entry.id, proposal.groupKey);
+      if ("purpose" in entry && entry.purpose === "label")
+        labelImages.add(entry.id);
+    }
   const busy = action.isPending;
   const hasStaleGroups = proposed.some((proposal) =>
     isStaleGroup(proposal, imagesById),
@@ -1176,25 +1182,9 @@ export function PhotoGroupReview({
                 {images.length ? (
                   <>
                     <p className="text-xs text-muted-foreground">
-                      Ask your agent to group the photos in this run. Proposed
-                      items will appear here for you to review before any
-                      products are created.
+                      The agent is preparing item groups. They will appear here
+                      for review before products are created.
                     </p>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={async () => {
-                        if (
-                          await copyText(
-                            `Propose product groups for photo import run ${runId}. Stop before approving; I will review the groups in Cubby.`,
-                          )
-                        )
-                          toast.success("Agent instruction copied");
-                      }}
-                    >
-                      <CopyIcon />
-                      Copy agent instruction
-                    </Button>
                   </>
                 ) : null}
               </Stack>
@@ -1277,7 +1267,11 @@ export function PhotoGroupReview({
       ) : null}
 
       {images.length ? (
-        <PhotoTable images={images} groupByImage={groupByImage} />
+        <PhotoTable
+          images={images}
+          groupByImage={groupByImage}
+          labelImages={labelImages}
+        />
       ) : (
         <Card>
           <CardContent>

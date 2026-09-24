@@ -7,7 +7,7 @@ description: Import household belongings or wardrobe photos into Cubby from a ph
 
 A household member uploads photos through the Cubby iOS/macOS app (the
 `PhotoImportRunUploader` path) into a `photo_inventory` `ImportRun`
-(`RUN-…`) — agents never upload bytes, only read and commit an existing run.
+(`RUN-…`) — agents read the run and propose groups for human approval.
 `ledgerPartyId` names the one member whose belongings the run is; a run never
 mixes household members' items, so every group's owner defaults to that same
 party. Free-text `notes` gives context such as a location by time window
@@ -54,12 +54,15 @@ for a visual/embedding candidate, and `entity list product { filters: {
 dataGap: "product_unpurchased" } }` scoped to this owner/category for a
 Product a prior photo batch or a purchase already created but never received
 inventory for. An exact identifier read off a label or box (SKU/UPC/model)
-that matches one of those candidates claims it directly (`existingId`). A
-same-category candidate with no identifier to confirm it is not enough to
-claim: create the photo's own Product and call `propose_product_match` so a
-human can confirm the pair in the recommendations workbench. Never create a
-Product merely because a match looks plausible without identifier proof, and
-never claim a descriptive-only candidate directly.
+that matches a candidate supports `existingId`. A strong combination of
+visible brand, garment features, color, and variant evidence may also support
+proposing that existing Product for human approval; explain any unreadable size
+or color in the proposal evidence so the reviewer can switch Products. If
+multiple exact variants remain plausible, ask the reviewer to resolve that
+uncertainty before approval. Create a Product only after the existing catalog
+has been checked and no candidate fits the physical item. The
+recommendations workbench is for reconciling Products already created; it is
+not the purchase-linking step.
 
 For apparel specifically, load
 [the Apparel taxonomy](references/apparel.md) before naming or classifying —

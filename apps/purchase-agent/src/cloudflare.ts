@@ -1,40 +1,18 @@
+import {
+  flueImportRunPurpose,
+  importRunAgentIdentity,
+} from "@cubby/schemas/import-run-agent";
 import { withSpan, type WorkerSpan } from "@cubby/worker-tracing";
 import { dispatch } from "@flue/runtime";
 import type { CloudflareContext } from "@flue/runtime/cloudflare";
 import * as Sentry from "@sentry/cloudflare";
 import { z } from "zod";
 
-import {
-  parsePurchaseAgentEvent,
-  type PurchaseAgentEvent,
-  type PurchaseAgentEventCandidate,
-} from "./contracts";
+import { parsePurchaseAgentEvent, type PurchaseAgentEvent } from "./contracts";
 import { PurchaseImportRun } from "./purchase-import-run";
 import { dispatchPurchaseAgentEvent } from "./queue-dispatch";
 import { purchaseAgentSentryOptions } from "./sentry-bridge";
 import { purchaseImportService } from "./service";
-
-const queueBody: z.ZodType<PurchaseAgentEventCandidate> = z.union([
-  z.string(),
-  z.object({
-    version: z.literal(1).optional(),
-    runId: z.string().optional(),
-    coordinatorModel: z.string().optional(),
-    purpose: z
-      .enum([
-        "account_sync",
-        "purchase_validation",
-        "product_enrichment",
-        "photo_inventory",
-      ])
-      .optional(),
-    eventId: z.string().optional(),
-    type: z.string().optional(),
-    connectionId: z.string().optional(),
-    commandId: z.string().optional(),
-    retryOf: z.string().optional(),
-  }),
-]);
 
 type QueueService = ReturnType<typeof purchaseImportService>;
 
@@ -69,9 +47,23 @@ async function deliverEvent(
   ) {
     return "fenced";
   }
-  await dispatchPurchaseAgentEvent(event, async (request) => {
-    await dispatch(PurchaseImportRun, request);
-  });
+  const scope = z
+    .object({
+      public: z.object({
+        purpose: flueImportRunPurpose,
+        agentId: z.string(),
+      }),
+    })
+    .parse(await service.loadRunScope({ runId: event.runId })).public;
+  if (scope.agentId !== importRunAgentIdentity(event.runId, scope.purpose)) {
+    throw new Error("Import run agent identity does not match its purpose");
+  }
+  await dispatchPurchaseAgentEvent(
+    { ...event, purpose: scope.purpose },
+    async (request) => {
+      await dispatch(PurchaseImportRun, request);
+    },
+  );
   if (
     event.type === "start_or_resume" &&
     !(await service.acknowledgeCoordinator({
@@ -98,7 +90,7 @@ async function consumeMessage(
   span.setAttribute("queue.attempts", attempts);
   let event: PurchaseAgentEvent | undefined;
   try {
-    event = parsePurchaseAgentEvent(queueBody.parse(message.body));
+    event = parsePurchaseAgentEvent(message.body);
     span.setAttributes({
       "run.id": event.runId,
       "event.type": event.type,

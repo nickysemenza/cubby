@@ -1,65 +1,57 @@
-import type { ImportRunTargetState } from "@cubby/schemas/purchase-import";
+import type { PhotoRunReview } from "@cubby/schemas/photo-import-run";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
-import { Row, Stack } from "~/components/layout";
-import { Badge } from "~/components/ui/badge";
+import { Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
+import { Progress } from "~/components/ui/progress";
 import { StatusText } from "~/components/ui/status-text";
 import { ripple } from "~/integrations/tanstack-query/cache-tags";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 import { throwHttpError } from "~/lib/http-error";
-import {
-  IMPORT_RUN_TARGET_STATE_LABEL,
-  IMPORT_RUN_TARGET_STATE_ORDER,
-  IMPORT_RUN_TARGET_STATE_VARIANT,
-  isImportRunTargetState,
-} from "~/lib/import-run-target-state";
 import type { ImportRunDetail } from "~/lib/purchase-import-run-detail";
 
 import { PhotoGroupReview, usePhotoRunReview } from "./photo-group-review";
 
-function StateBadge({ state }: { state: string }) {
-  const known = isImportRunTargetState(state) ? state : null;
-  return (
-    <Badge variant={known ? IMPORT_RUN_TARGET_STATE_VARIANT[known] : "outline"}>
-      {known ? IMPORT_RUN_TARGET_STATE_LABEL[known] : state}
-    </Badge>
-  );
-}
-
-function PhotoRunProgress({ run }: { run: ImportRunDetail }) {
-  const tallies = new Map<ImportRunTargetState, number>();
-  for (const target of run.targets) {
-    if (target.targetType !== "image") continue;
-    if (!isImportRunTargetState(target.state)) continue;
-    tallies.set(target.state, (tallies.get(target.state) ?? 0) + 1);
-  }
-  const present = IMPORT_RUN_TARGET_STATE_ORDER.filter((state) =>
-    tallies.get(state),
-  );
+function PhotoRunProgress({
+  run,
+  review,
+}: {
+  run: ImportRunDetail;
+  review?: PhotoRunReview;
+}) {
+  const photos = run.targets.filter((target) => target.targetType === "image");
+  const settled = photos.filter(
+    (target) => target.state === "completed" || target.state === "skipped",
+  ).length;
+  const readyGroups =
+    review?.review.proposals.filter((proposal) => proposal.state === "proposed")
+      .length ?? 0;
+  const stage =
+    photos.length === 0
+      ? "Waiting for photos to upload"
+      : run.status === "completed"
+        ? "Review complete"
+        : readyGroups > 0
+          ? `${readyGroups} item ${readyGroups === 1 ? "group" : "groups"} ready for your review`
+          : run.dispatch?.eventId
+            ? "Agent is preparing item groups"
+            : "Photos uploaded; ready to group";
   return (
     <Card>
       <CardHeader>
         <CardTitle as="h2">Progress</CardTitle>
       </CardHeader>
-      <CardContent>
-        {present.length ? (
-          <Row wrap gap="md">
-            {present.map((state) => (
-              <Stack key={state} gap="tight" className="min-w-20">
-                <span className="font-mono text-lg tabular-nums">
-                  {tallies.get(state)}
-                </span>
-                <StateBadge state={state} />
-              </Stack>
-            ))}
-          </Row>
-        ) : (
-          <StatusText tone="muted">
-            No photos have been targeted yet.
-          </StatusText>
-        )}
+      <CardContent className="grid gap-2">
+        <p className="text-sm font-medium">{stage}</p>
+        <Progress
+          value={settled}
+          max={Math.max(photos.length, 1)}
+          aria-label="Photos reviewed"
+        />
+        <p className="font-mono text-xs text-muted-foreground tabular-nums">
+          {settled} of {photos.length} photos settled
+        </p>
       </CardContent>
     </Card>
   );
@@ -90,7 +82,7 @@ export function PhotoImportRunView({ run }: { run: ImportRunDetail }) {
   const hasProposals = Boolean(review.data?.review.proposals.length);
   return (
     <Stack gap="lg">
-      <PhotoRunProgress run={run} />
+      <PhotoRunProgress run={run} review={review.data} />
       {run.status === "running" && !run.dispatch?.eventId && !hasProposals ? (
         <Card>
           <CardHeader>

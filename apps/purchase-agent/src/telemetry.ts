@@ -1,3 +1,4 @@
+import { importRunIdFromAgentIdentity } from "@cubby/schemas/import-run-agent";
 import { observe, type FlueEvent } from "@flue/runtime";
 
 import {
@@ -6,14 +7,7 @@ import {
   type PurchaseImportService,
 } from "./service";
 
-const INSTANCE_PREFIX = "import-run:";
 const attempts = new Map<string, number>();
-
-function runIdFor(event: FlueEvent): string | undefined {
-  return event.instanceId?.startsWith(INSTANCE_PREFIX)
-    ? event.instanceId.slice(INSTANCE_PREFIX.length)
-    : undefined;
-}
 
 function attemptKey(event: FlueEvent): string | undefined {
   return event.instanceId && event.submissionId
@@ -48,9 +42,9 @@ export function usageEventForTurn(
   };
 }
 
-export function installPurchaseImportTelemetry(): void {
+export function installImportRunTelemetry(): void {
   observe(async (event, context) => {
-    const runId = runIdFor(event);
+    const runId = importRunIdFromAgentIdentity(event.instanceId);
     if (!runId) return;
     const service = purchaseImportService(context.env);
     const key = attemptKey(event);

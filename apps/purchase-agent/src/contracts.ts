@@ -1,81 +1,31 @@
+import {
+  purchaseAgentEvent,
+  type PurchaseAgentEvent,
+} from "@cubby/schemas/purchase-import";
 import { z } from "zod";
 
-const importRunPurpose = z.enum([
-  "account_sync",
-  "purchase_validation",
-  "product_enrichment",
-  "photo_inventory",
+export type { PurchaseAgentEvent };
+
+const eventCandidate = z
+  .object({
+    version: z.literal(1).optional(),
+    coordinatorModel: z.string().optional(),
+  })
+  .passthrough();
+const queuedEventCandidate = z.union([
+  z.string().transform((encoded) => eventCandidate.parse(JSON.parse(encoded))),
+  eventCandidate,
 ]);
 
-const nonEmptyId = z.string().trim().min(1).max(256);
-
-const purchaseAgentEventBaseSchema = z.object({
-  version: z.literal(1).default(1),
-  runId: z.uuid(),
-  coordinatorModel: z
-    .string()
-    .transform(() => "gpt-6-sol" as const)
-    .optional(),
-  purpose: importRunPurpose.optional(),
-  eventId: nonEmptyId,
-});
-
-const purchaseAgentEventSchema = z.discriminatedUnion("type", [
-  purchaseAgentEventBaseSchema.extend({ type: z.literal("start_or_resume") }),
-  purchaseAgentEventBaseSchema.extend({
-    type: z.literal("browser_connected"),
-    connectionId: nonEmptyId.optional(),
-  }),
-  purchaseAgentEventBaseSchema.extend({
-    type: z.literal("browser_result"),
-    commandId: nonEmptyId,
-  }),
-  purchaseAgentEventBaseSchema.extend({
-    type: z.literal("retry"),
-    retryOf: nonEmptyId,
-  }),
-]);
-
-export type PurchaseAgentEvent = z.infer<typeof purchaseAgentEventSchema>;
-
-type PurchaseAgentEventCandidateObject = {
-  version?: 1;
-  runId?: string;
-  coordinatorModel?: string;
-  purpose?: z.infer<typeof importRunPurpose>;
-  eventId?: string;
-  type?: string;
-  connectionId?: string;
-  commandId?: string;
-  retryOf?: string;
-};
-
-export type PurchaseAgentEventCandidate =
-  | string
-  | PurchaseAgentEventCandidateObject;
-
-const purchaseAgentEventCandidateSchema = z
-  .union([
-    purchaseAgentEventSchema,
-    z.string().transform((value) => {
-      const decoded: unknown = JSON.parse(value);
-      return decoded;
-    }),
-  ])
-  .pipe(purchaseAgentEventSchema);
-
-export function parsePurchaseAgentEvent(
-  input: PurchaseAgentEventCandidate,
-): PurchaseAgentEvent {
-  return purchaseAgentEventCandidateSchema.parse(input);
-}
-
-/** Flue instance ids are stable per ImportRun, never per queue delivery. */
-export function purchaseImportAgentIdentity(
-  runId: string,
-  purpose?: z.infer<typeof importRunPurpose>,
-): string {
-  return `${purpose === "photo_inventory" ? "photo-inventory" : "import-run"}:${z.uuid().parse(runId)}`;
+/** Accept historical queue bodies while using the producer's event contract. */
+export function parsePurchaseAgentEvent(input: unknown): PurchaseAgentEvent {
+  const candidate = queuedEventCandidate.parse(input);
+  return purchaseAgentEvent.parse({
+    ...candidate,
+    version: candidate.version ?? 1,
+    coordinatorModel:
+      candidate.coordinatorModel === undefined ? undefined : "gpt-6-sol",
+  });
 }
 
 /** Queue redelivery converges on exactly one Flue submission. */

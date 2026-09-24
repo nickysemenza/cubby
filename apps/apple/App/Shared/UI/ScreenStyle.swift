@@ -128,7 +128,7 @@ private struct KeyboardDismissBar: ViewModifier {
 
 /// Presentation role is a property of a task, independent of how its fields are laid out.
 enum NativeSheetPurpose {
-    case adjustment, picker, editor, photo, photoReview, preview
+    case adjustment, picker, editor, photo, photoImport, photoReview, preview
 }
 
 extension View {
@@ -158,6 +158,9 @@ private struct NativeSheetPresentation: ViewModifier {
             case .picker, .editor:
                 content.presentationSizing(.form)
                     .frame(minWidth: 360, idealWidth: 560, minHeight: 360, idealHeight: 620)
+            case .photoImport:
+                content.presentationSizing(.form)
+                    .frame(minWidth: 420, idealWidth: 580, minHeight: 320, idealHeight: 520)
             case .photoReview:
                 content.presentationSizing(.page)
                     .frame(
@@ -185,6 +188,16 @@ private struct NativeSheetPresentation: ViewModifier {
                     .onChange(of: textSize) { if textSize.isAccessibilitySize { detent = .large } }
             case .picker, .editor:
                 content.presentationSizing(.form).presentationDetents([.large])
+            case .photoImport:
+                content.presentationSizing(.form)
+                    .presentationBackground(PorcelainTokens.canvas)
+                    .presentationDetents(
+                        textSize.isAccessibilitySize ? [.large] : [.medium, .large],
+                        selection: $detent
+                    )
+                    .presentationDragIndicator(.visible)
+                    .onAppear { detent = textSize.isAccessibilitySize ? .large : .medium }
+                    .onChange(of: textSize) { if textSize.isAccessibilitySize { detent = .large } }
             case .photo, .photoReview, .preview:
                 content.presentationSizing(.page).presentationDetents([.large])
             }

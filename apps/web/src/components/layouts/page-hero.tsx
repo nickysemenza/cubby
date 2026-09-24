@@ -9,6 +9,7 @@ import { z } from "zod";
 import {
   domainForEntity,
   domainWayfinding,
+  type WayfindingDomain,
 } from "~/app/_components/navigation/domain-wayfinding";
 import { getEntityNavGroup } from "~/app/_components/navigation/nav-items";
 import { ImageGallery } from "~/components/media/image-gallery";
@@ -180,16 +181,20 @@ export function getOnFileSince(
 function DetailBreadcrumb({
   entity,
   heroNo,
+  wayfinding,
 }: {
   entity: Entity;
   heroNo?: string;
+  wayfinding?: DetailWayfinding;
 }) {
   if (!isBrowserRoutedEntity(entity)) return null;
   const def = entities[entity];
-  const domain = domainForEntity(entity);
-  const leadingLabel = domain
-    ? domainWayfinding(domain).label
-    : getEntityNavGroup(entity)?.label;
+  const domain = wayfinding ? wayfinding.domain : domainForEntity(entity);
+  const leadingLabel =
+    wayfinding?.label ??
+    (domain
+      ? domainWayfinding(domain).label
+      : getEntityNavGroup(entity)?.label);
 
   return (
     <Eyebrow
@@ -389,9 +394,15 @@ function PageHero({
   );
 }
 
+export interface DetailWayfinding {
+  label: string;
+  domain: WayfindingDomain | null;
+}
+
 interface DetailPlateProps {
   /** Entity drives the spine color and the pluralLabel eyebrow. */
   entity: Entity;
+  wayfinding?: DetailWayfinding;
   /** The big plate title (entity name). */
   name: ReactNode;
   /** Raw entity used for the added-date metadata. */
@@ -424,6 +435,7 @@ interface DetailPlateProps {
  */
 function DetailPlate({
   entity,
+  wayfinding,
   name,
   rawData,
   heroNo,
@@ -437,7 +449,7 @@ function DetailPlate({
   const onFileSince = getOnFileSince(
     parsedRawData.success ? parsedRawData.data : undefined,
   );
-  const domain = domainForEntity(entity);
+  const domain = wayfinding ? wayfinding.domain : domainForEntity(entity);
   const domainAccent = domain
     ? `var(${domainWayfinding(domain).accentToken})`
     : undefined;
@@ -468,7 +480,11 @@ function DetailPlate({
             className="grid grid-cols-[minmax(0,1fr)_auto] items-end gap-x-3 gap-y-1" /* tight */
           >
             <div className="col-span-2 min-w-0 sm:col-span-1">
-              <DetailBreadcrumb entity={entity} heroNo={heroNo} />
+              <DetailBreadcrumb
+                entity={entity}
+                heroNo={heroNo}
+                wayfinding={wayfinding}
+              />
               <h1 className="font-heading text-xl leading-6 font-bold tracking-tight break-words sm:text-3xl sm:leading-9">
                 {name}
               </h1>
@@ -540,6 +556,7 @@ interface PageHeaderProps {
   title: ReactNode;
   eyebrow?: ReactNode;
   entity?: Entity;
+  wayfinding?: DetailWayfinding;
   actions?: ReactNode;
   heroActions?: DetailHeroActions;
   className?: string;
@@ -569,6 +586,7 @@ export function PageHeader({
   title,
   eyebrow,
   entity,
+  wayfinding,
   actions,
   heroActions,
   className,
@@ -592,6 +610,7 @@ export function PageHeader({
     return (
       <DetailPlate
         entity={entity}
+        wayfinding={wayfinding}
         name={title}
         rawData={rawData}
         heroNo={heroNo}

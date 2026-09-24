@@ -592,6 +592,12 @@ struct ActivityDetailView: View {
 
     private func runSection(detail: ActivityDetailOutput) -> some View {
         Section("Run") {
+            if detail.run.kind == .photoInventory {
+                Link(destination: appModel.webURL(for: detail.run.id)) {
+                    Label("Review photos and proposed items", systemImage: "photo.on.rectangle")
+                }
+                .font(.headline)
+            }
             LabeledContent("Work", value: detail.run.kind.title)
             LabeledContent("Subject", value: detail.run.subjectName)
             LabeledContent("State", value: detail.run.state)

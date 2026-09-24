@@ -1,9 +1,12 @@
+import {
+  importRunAgentIdentity,
+  importRunIdFromAgentIdentity,
+} from "@cubby/schemas/import-run-agent";
 import { describe, expect, it } from "vitest";
 
 import {
   parsePurchaseAgentEvent,
   purchaseAgentEventIdempotencyKey,
-  purchaseImportAgentIdentity,
 } from "./contracts";
 
 const runId = "f47ac10b-58cc-4372-a567-0e02b2c3d479";
@@ -38,7 +41,7 @@ describe("PurchaseAgentEvent", () => {
     });
     expect(() =>
       parsePurchaseAgentEvent({ type: "browser_command", runId }),
-    ).toThrow("Invalid input");
+    ).toThrow("Invalid discriminator value");
     expect(() =>
       parsePurchaseAgentEvent({
         type: "browser_result",
@@ -56,9 +59,28 @@ describe("PurchaseAgentEvent", () => {
       retryOf: "operation-4",
     });
 
-    expect(purchaseImportAgentIdentity(runId)).toBe(`import-run:${runId}`);
+    expect(importRunAgentIdentity(runId, "account_sync")).toBe(
+      `import-run:${runId}`,
+    );
     expect(purchaseAgentEventIdempotencyKey(event)).toBe(
       `purchase-agent:${runId}:retry:retry-after-transient-failure`,
     );
+  });
+
+  it("keeps both durable prefixes and resolves photo observations", () => {
+    expect(importRunAgentIdentity(runId, "purchase_validation")).toBe(
+      `import-run:${runId}`,
+    );
+    expect(importRunAgentIdentity(runId, "product_enrichment")).toBe(
+      `import-run:${runId}`,
+    );
+    expect(importRunAgentIdentity(runId, "photo_inventory")).toBe(
+      `photo-inventory:${runId}`,
+    );
+    expect(importRunIdFromAgentIdentity(`photo-inventory:${runId}`)).toBe(
+      runId,
+    );
+    expect(importRunIdFromAgentIdentity(`import-run:${runId}`)).toBe(runId);
+    expect(importRunIdFromAgentIdentity(`unrelated:${runId}`)).toBeUndefined();
   });
 });

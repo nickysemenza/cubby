@@ -169,7 +169,7 @@ struct PhotoImportRunSheet: View {
                 #endif
                 .toolbar { toolbar }
         }
-        .nativeSheet(.photo)
+        .nativeSheet(.photoImport)
         .interactiveDismissDisabled(flow.isBusy)
         .task { await flow.loadOpenRuns(client: appModel.client) }
         .sheet(isPresented: $pickingOwner) {
@@ -206,7 +206,7 @@ struct PhotoImportRunSheet: View {
                 Button {
                     pickingOwner = true
                 } label: {
-                    LabeledContent("Owner", value: flow.selectedOwnerName ?? "Choose a member")
+                    LabeledContent("Owner", value: flow.selectedOwnerName ?? "You (signed-in member)")
                 }
                 .accessibilityIdentifier("photos.importRun.owner")
                 TextField("Notes", text: $flow.notes, axis: .vertical)
@@ -214,13 +214,12 @@ struct PhotoImportRunSheet: View {
                     flow.startNewRun(items: items, client: appModel.client)
                 }
                 .buttonStyle(.borderedProminent)
-                .disabled(flow.selectedOwnerID == nil)
                 .accessibilityIdentifier("photos.importRun.startNew")
             } header: {
                 Text("New run")
             } footer: {
                 Text(
-                    "\(items.count) photo\(items.count == 1 ? "" : "s") will upload to a run. An agent can then propose product groups for you to review and approve in Cubby."
+                    "\(items.count) photo\(items.count == 1 ? "" : "s") will upload. The agent will propose item groups for you to review before anything is created."
                 )
             }
             if flow.loadingRuns {
@@ -279,11 +278,16 @@ private struct RunningView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: PorcelainTokens.Space.md) {
+            Text(stageTitle)
+                .font(.headline)
             ProgressView(
                 value: Double(session.progress.uploaded), total: Double(max(session.progress.total, 1))
             )
             Text("Uploaded \(session.progress.uploaded) of \(session.progress.total)")
                 .font(.porcelainBody)
+            ProgressView(
+                value: Double(session.progress.analyzed), total: Double(max(session.progress.total, 1))
+            )
             Text("Analyzed \(session.progress.analyzed) of \(session.progress.total)")
                 .font(.porcelainLabel)
                 .foregroundStyle(PorcelainTokens.graphiteSecondary)
@@ -297,6 +301,18 @@ private struct RunningView: View {
             statusAction
         }
         .padding()
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+
+    private var stageTitle: String {
+        switch session.phase {
+        case .complete: "Photos uploaded"
+        case .cancelled: "Upload paused"
+        case .failed: "Upload needs attention"
+        case .idle, .running:
+            session.progress.uploaded == session.progress.total
+                ? "Analyzing photos" : "Uploading photos"
+        }
     }
 
     @ViewBuilder private var statusAction: some View {
@@ -308,18 +324,17 @@ private struct RunningView: View {
                 Label("Photos uploaded", systemImage: "checkmark.circle.fill")
                     .foregroundStyle(PorcelainTokens.positive)
                 Text(
-                    "Ask your agent to propose groups for this run. Review the groups on the web before products are created."
+                    "The agent will propose item groups. Review them on the web before products are created."
                 )
                 .font(.porcelainBody)
-                Link("Review run on web", destination: appModel.webURL(for: runID))
-                Button("Copy agent instruction") {
-                    Clipboard.copy(
-                        "Propose product groups for photo import run \(runID). Stop before approving; I will review the groups in Cubby."
-                    )
+                Link(destination: appModel.webURL(for: runID)) {
+                    Label("Open import run", systemImage: "arrow.up.right")
+                        .frame(maxWidth: .infinity)
                 }
-                .accessibilityIdentifier("photos.importRun.copyAgentInstruction")
+                .buttonStyle(.borderedProminent)
+                .controlSize(.large)
                 Button("Done") { onDone(runID) }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(.bordered)
                     .accessibilityIdentifier("photos.importRun.done")
             }
         case .cancelled:
