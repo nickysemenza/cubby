@@ -1,0 +1,2 @@
+#!/usr/bin/env bash
+source "$(dirname "$0")/../apps/web/.env" && PGSSLROOTCERT=system exec /opt/homebrew/opt/libpq/bin/psql "$DATABASE_URL" "$@"
