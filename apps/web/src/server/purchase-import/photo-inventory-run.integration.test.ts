@@ -4,18 +4,23 @@ import {
   importRunShortcode,
   parseShortcodeFor,
 } from "@cubby/schemas/identifiers";
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { imageProcessingJob } from "~/server/db/image-processing-schema";
 import { aiUsage, image, importRun, importRunTarget } from "~/server/db/schema";
+import { entityKernelContextSchema } from "~/server/entity-kernel";
+import { callMcpTool } from "~/server/mcp/mcp-test-utils";
+import { registerPhotoImportTools } from "~/server/mcp/tools/photo-import.tools";
 import { getDb } from "~/server/repo/database-helpers";
 import { updateImageProcessingSettings } from "~/server/repo/image-processing-maintenance";
 import { getImportRunByShortcode } from "~/server/repo/import-run";
 import { createImageFixture } from "~/server/repo/repo.fixtures";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import { productionPhotoImportCommitPorts } from "~/server/services/photo-import-commit.service";
+import { createTestRequestContext } from "~/server/testing/request-context";
 
 import {
   controlImportRun,
@@ -52,6 +57,31 @@ describe("photo import finalize", () => {
     });
     return { ...run, publicId: importRunShortcode.parse(run.publicId) };
   };
+
+  it("gives the agent a bounded run and owner read through MCP", async () => {
+    const run = await startRun();
+    const server = new McpServer({ name: "photo-test", version: "1.0.0" });
+    registerPhotoImportTools(server);
+    const entityKernel = entityKernelContextSchema.parse(
+      createTestRequestContext(ctx.db, {
+        auth: { userId: ctx.actor.userId },
+      }),
+    );
+    const response = await callMcpTool(
+      server,
+      "get_photo_run_context",
+      { runId: run.publicId },
+      {},
+      { entityKernel },
+    );
+
+    expect(response.isError).not.toBe(true);
+    expect(response.structuredContent).toMatchObject({
+      runId: run.publicId,
+      images: [],
+      ledgerPartyId: expect.stringMatching(/^LPY-/),
+    });
+  });
 
   /** Bytes/hash never touch real R2 — the same seam the commit integration
    * test uses to keep `verifyStagedImages`'s PENDING branch offline. */

@@ -49,7 +49,7 @@ export function PurchaseImportRun({ id }: AgentProps) {
   // The coordinator is intentionally fixed. Other registered provider models
   // exist for Flue internals and future bounded operations, not dynamic routing.
   useModel("openai/gpt-6-sol", { thinkingLevel: "high" });
-  useMcpConnection(cubbyMcpConnection(runId, serviceForCurrentRun));
+  useMcpConnection(cubbyMcpConnection(runId, serviceForCurrentRun, purpose));
   const workflow = workflowForImportRun(purpose, runId);
   useSkill(workflow.skill);
   useSkill(productEnrichmentSkill);
@@ -86,16 +86,22 @@ export function PurchaseImportRun({ id }: AgentProps) {
 
   const tools = purchaseImportTools(runId, serviceForCurrentRun);
   useTool(tools[0]);
-  useTool(tools[1]);
-  useTool(tools[2]);
-  useTool(tools[3]);
-  useTool(tools[4]);
-  useTool(tools[5]);
   useTool(tools[6]);
-  useTool(tools[7]);
-  useTool(tools[8]);
-  useTool(tools[9]);
   useTool(tools[10]);
+  // Flue explicitly supports conditional useTool mounts per render; this is
+  // not a React component, and purpose is fixed for this durable run.
+  // oxlint-disable react-hooks/rules-of-hooks
+  if (purpose !== "photo_inventory") {
+    useTool(tools[1]);
+    useTool(tools[2]);
+    useTool(tools[3]);
+    useTool(tools[4]);
+    useTool(tools[5]);
+    useTool(tools[7]);
+    useTool(tools[8]);
+    useTool(tools[9]);
+  }
+  // oxlint-enable react-hooks/rules-of-hooks
 
   return workflow.instructions;
 }
