@@ -426,6 +426,16 @@ export const SPEC_AREAS: readonly SpecAreaEntry[] = [
     globs: [`${WEB}/src/server/entity-kernel/**`],
   },
   {
+    file: "statement-import.spec.ts",
+    globs: [
+      `${WEB}/src/routes/_authenticated/statement-rows.import.tsx`,
+      `${WEB}/src/app/finance/statement-csv.ts`,
+      `${WEB}/src/server/repo/statement-row.ts`,
+      `${WEB}/src/server/repo/financial-transaction.ts`,
+      `${WEB}/src/server/workflows/statement-row.server.ts`,
+    ],
+  },
+  {
     file: "tools-flow.spec.ts",
     globs: [
       `${WEB}/src/routes/_authenticated/projects.tools.tsx`,

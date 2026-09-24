@@ -1987,18 +1987,24 @@ const DECLARED_SECTIONS = [
   }),
   section({
     id: "incomplete-statement-imports",
-    label: "Incomplete statement imports",
+    label: "Statement import coverage",
     select: (p) => p.incompleteStatementImports,
     problemKeys: ["incompleteStatementImports"],
     entity: "financialAccount",
     renderItem: (item) => ({
       key: item.fingerprint,
       title: item.label,
-      // The shortfall, which was buried in `details` while the subtitle carried
-      // a raw content hash nobody can read or act on.
-      subtitle: `${item.rowCountStored} of ${item.rowCountDeclared} rows stored — ${
+      subtitle: `${item.rowCountStored} of ${item.rowCountDeclared} rows attached — ${
         item.rowCountDeclared - item.rowCountStored
-      } missing`,
+      } need a coverage check`,
+      details: [
+        <p key="overlap" className="text-sm text-muted-foreground">
+          Rows already present in another import are not attached here. Reopen
+          the source CSV to check coverage and resume any interrupted import.
+        </p>,
+      ],
+      route: { href: "/statement-rows/import" },
+      editLabel: "Open statement importer",
       badges: [
         <Badge key="source" variant="outline">
           {item.source}

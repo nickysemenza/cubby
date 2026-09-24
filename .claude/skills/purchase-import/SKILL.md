@@ -26,12 +26,16 @@ through Cubby's prepare/commit writer rather than generic entity mutation.
    establishes lifecycle context; open the retailer order detail or a receipt
    for itemized variants. If a retailer requests login, pause the browser run
    and let the member sign in to the Cubby-managed browser tab before resuming.
-2. Parse a Monarch CSV in the MCP client, keeping the raw file out of prompts
-   and the repository. Submit normalized batches to
-   `preview_financial_statement_import`; create only approved
-   `ready_to_create` FinancialTransactions and preserve the stable source refs.
-   Repeated exports must replay, not create a second charge. Statement rows
-   remain evidence until an account and transaction have been resolved.
+2. For a statement CSV, use `/statement-rows/import` or parse the export in the
+   MCP client. Known provider columns (Monarch, Mint, Copilot, Apple Card) use
+   deterministic adapters; other CSVs need a reviewed column, account, source,
+   and amount-direction mapping. Keep the raw file out of prompts and the
+   repository. Save normalized nonzero StatementRows in bounded batches with a
+   stable file fingerprint; count zero-value rows separately. Submit transaction
+   candidates to `preview_financial_statement_import` and create only approved
+   `ready_to_create` FinancialTransactions with an explicit kind. Repeated
+   exports replay without another charge. A source row remains evidence until
+   its account and transaction have been resolved.
 3. Take own-item and label photos directly on iPhone/Mac or upload a
    `photo_inventory` run. The [photo-inventory-import
    skill](../photo-inventory-import/SKILL.md) proposes groups for review and
@@ -44,8 +48,10 @@ through Cubby's prepare/commit writer rather than generic entity mutation.
    the changes that approval would make.
 
 Flue coordinates durable steps, browser handoffs, progress, and review stops.
-Jev can rank a bounded set of ambiguous candidates using evidence, but its
-choice is not a settlement write or a license to infer an absent transaction.
+Frontier AI can propose a mapping for an unfamiliar layout; a person verifies
+the columns and sign before saving. Jev can rank a bounded set of ambiguous
+account, transaction, or Purchase candidates using evidence. A choice is a
+proposal for review, not a settlement write or an inferred transaction.
 The [human journey](../../../docs/product-identity-journey.md) describes the
 same outcome without prescribing an agent runtime.
 
