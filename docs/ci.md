@@ -128,7 +128,7 @@ can affect them. A manual run selects all lanes. `Web checks` is the stable
 required aggregate: it checks the web, PostgreSQL, and browser matrix results
 whenever web validation is selected. The browser lanes test the exact bundle
 produced by the node test lane and retain the discovery and no-skip guard;
-desktop Chromium runs as two Playwright shards (one worker each). Phone-web and
+desktop Chromium runs as two Playwright shards (two workers each). Phone-web and
 WebKit browser coverage was removed from PR CI and the Playwright suite; native
 checks remain separate. There is no coverage mode. `test-postgres` and `test-e2e` each
 declare their own `postgres`/`integresql` `services:` block — GitHub Actions
@@ -334,6 +334,20 @@ waiting for and restoring the web artifact, nearly replacing the prior **28s**
 coupled-build step. Its test step also varied from **168s** to **140s**, so the
 faster PostgreSQL job does not establish an artifact-reuse gain. Desktop shard 2
 was the critical path; the experiment was closed under the overall-gate rule.
+
+[#1321](https://github.com/nickysemenza/cubby/pull/1321) increased each of the
+same two desktop shards to two Playwright workers, keeping built-in sharding and
+all **61 tests**. The successful same-base
+[main control](https://github.com/nickysemenza/cubby/actions/runs/35948994166)
+and [exact-head PR run](https://github.com/nickysemenza/cubby/actions/runs/35950414370)
+reached `Web checks` in **4:36 → 3:53** from workflow creation. Desktop job
+walls fell from **3:48 + 4:13** to **3:11 + 3:38**, saving **1:12** of desktop
+runner time; their queue times fell from about **14–15s** to **11s**. Both
+desktop shards, PostgreSQL, and Apple checks passed. Summed CI job walls were
+**24:20 → 21:01**, though the main run also had two Apple cache-warming jobs,
+so the desktop runner saving is the comparable resource result. An earlier two-worker
+attempt flaked before the browser-cache and reduced-motion changes, so later
+natural product PRs must establish the new median and flake rate.
 
 In the HTTP/2 comparison, desktop runner queue time was **14–15s** in both
 runs. Total desktop runner time rose from **9:49** to **10:14**, so the unchanged
