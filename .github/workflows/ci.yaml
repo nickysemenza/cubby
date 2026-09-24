@@ -255,9 +255,8 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # Benchmark two workers per standard runner after browser caching and
-          # reduced motion improved the former one-worker suite. Keep Playwright's
-          # built-in sharding; the stable aggregate owns the required status.
+          # Benchmark three workers on each standard runner, retaining
+          # Playwright's built-in sharding and the stable aggregate status.
           - lane: "desktop 1/2"
             slug: desktop-1
             browser: chromium
@@ -365,7 +364,7 @@ jobs:
           name: recipebridge-wasm
           path: packages/wasm
       - name: Run Playwright tests
-        run: pnpm --filter @cubby/web run ${{ matrix.test-script }} --shard=${{ matrix.shard }} --workers=2
+        run: pnpm --filter @cubby/web run ${{ matrix.test-script }} --shard=${{ matrix.shard }} --workers=3
       - name: Save Playwright report
         if: failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
