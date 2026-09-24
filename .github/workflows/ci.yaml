@@ -243,7 +243,7 @@ jobs:
       - name: Run PostgreSQL integration tests
         env:
           CUBBY_TEST_INTEGRATION: "1"
-        run: pnpm --dir apps/web exec vitest run --project integration
+        run: pnpm --dir apps/web exec vitest run --project integration --maxWorkers=3
 
   test-e2e:
     name: E2E tests (${{ matrix.lane }})
