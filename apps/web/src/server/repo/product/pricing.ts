@@ -333,9 +333,7 @@ export const effectiveProductPriceSql = (productAlias = '"product"') =>
  * filtered unpriced products in one kit walk. A correlated effective-price
  * scalar otherwise repeats the recursive walk once per catalog product.
  */
-export const productPriceSumSql = (
-  whereClause: SQL | undefined,
-): SQL<number> => {
+const productPriceSumSql = (whereClause: SQL | undefined): SQL<number> => {
   const condition = whereClause ?? sql`TRUE`;
   return sql<number>`${kitAncestorCteSql(sql`
     SELECT "Product"."id", "Product"."id", 1::numeric, 1::numeric, 0

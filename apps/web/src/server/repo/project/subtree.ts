@@ -10,7 +10,7 @@
  * single query, single-user scale — build the parent→children map once,
  * compute the page's descendant id set in TS, then fetch OWN rollups (the one
  * relatively expensive aggregate) only for the page ids + their descendants
- * via the existing batched `projectRollups`. Never one query per project.
+ * via the shared batched project aggregates. Never one query per project.
  *
  * That whole sequence is {@link loadProjectSubtreeRollups} — call it rather
  * than re-assembling the four steps by hand (it was copy-pasted across five
@@ -148,8 +148,8 @@ export function collectDescendantIds(
  * Pure and memoized (each id's subtree computed once regardless of how many
  * ancestors read it), depth-capped like `collectDescendantIds`. `ownRollups`
  * only needs to cover the ids the caller actually fetched (typically a
- * page's projects + their descendants, via `projectRollups`) — ids outside
- * that set fall back to a zero rollup, which is harmless since callers only
+ * page's projects + their descendants) — ids outside that set fall back to a
+ * zero rollup, which is harmless since callers only
  * read the map entries for ids whose full descendant set was included in the
  * `ownRollups` fetch.
  */

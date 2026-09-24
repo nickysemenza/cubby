@@ -91,7 +91,7 @@ export const EMPTY_PROJECT_OWN_ROLLUP: ProjectOwnRollup = {
 /**
  * A project's OWN dated content bounds — min/max over its live tasks and
  * expenses, before any parent/child folding. See analytics.ts's
- * `projectRollups` and subtree.ts's `aggregateSubtreeDates`.
+ * `projectRollupsAndContentDates` and subtree.ts's `aggregateSubtreeDates`.
  */
 export type ProjectContentDates = {
   contentStart: string | null;

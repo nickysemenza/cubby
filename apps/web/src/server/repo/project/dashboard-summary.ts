@@ -102,7 +102,7 @@ export async function projectDashboardSummary(
 ): Promise<ProjectDashboardSummaryOut> {
   // ONE whole-tree load for the entire request. `computeAttentionItems` is
   // global by construction (see attention.ts) and used to re-derive exactly
-  // this — same tree query, same batched `projectRollups` — so it is handed
+  // this — same tree query, same batched project aggregates — so it is handed
   // the bundle rather than loading its own. Whole-tree rather than
   // page-scoped is free here for the same reason: attention already needed
   // every id, and a superset never changes a page row's subtree numbers.

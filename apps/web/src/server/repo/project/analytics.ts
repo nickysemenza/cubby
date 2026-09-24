@@ -45,7 +45,6 @@ type ProjectExpenseStatsRow = {
 
 const projectExpenseStats = async (
   db: Database,
-  projectIds?: ProjectId[],
 ): Promise<ProjectExpenseStatsRow[]> =>
   getDb(db)
     .execute<ProjectExpenseStatsRow>(sql`
@@ -58,7 +57,6 @@ const projectExpenseStats = async (
         min(e."date") AS "contentStart", max(e."date") AS "contentEnd"
       FROM (${expenseProjectAllocationSql()}) allocation
       JOIN "Expense" e ON e."id" = allocation."expenseId"
-      ${projectIds ? sql`WHERE allocation."projectId" = ANY(${uuidArrayParam(projectIds)})` : sql``}
       GROUP BY allocation."projectId"
     `)
     .then((result) => result.rows);
@@ -149,7 +147,10 @@ const mergeProjectContentDates = (
   return out;
 };
 
-/** Share one allocation pass when a subtree reader needs money and dates. */
+/**
+ * Share one allocation pass when a subtree reader needs money and dates.
+ * `spent` includes future expenses, matching the project's own rollup contract.
+ */
 export async function projectRollupsAndContentDates(
   db: Database,
   rollupIds: ProjectId[],
@@ -168,28 +169,6 @@ export async function projectRollupsAndContentDates(
     ownRollups: mergeProjectOwnRollups(rollupIds, expenseRows, taskRows),
     contentDates: mergeProjectContentDates(taskDateRows, expenseRows),
   };
-}
-
-/**
- * SUM/COUNT rollups over live expenses and tasks, per project — this
- * project's OWN aggregate only (never recursive; see repo/project/subtree.ts
- * for the subtree total built on top of this).
- *
- * `spent` sums ALL live expenses including `future` (not-yet-made) ones —
- * this matches the retired Notion rollup's semantics (a planned spend still
- * counts toward the running total against the estimate). See
- * packages/schemas/src/project.ts's `projectRollup` doc comment.
- */
-export async function projectRollups(
-  db: Database,
-  projectIds: ProjectId[],
-): Promise<Map<ProjectId, ProjectOwnRollup>> {
-  if (projectIds.length === 0) return new Map();
-  const [expenseRows, taskRows] = await Promise.all([
-    projectExpenseStats(db, projectIds),
-    projectTaskRollupRows(db, projectIds),
-  ]);
-  return mergeProjectOwnRollups(projectIds, expenseRows, taskRows);
 }
 
 /**

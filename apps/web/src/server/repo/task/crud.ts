@@ -187,8 +187,8 @@ export async function taskDependencyIds(
 
 /**
  * Live subtask counts (total + done) for a set of parent task ids — one
- * grouped query, batched exactly like `taskDependencyIds`/`projectRollups`'
- * task rollup (never one query per parent). Counts ALL live subtasks
+ * grouped query, batched like dependency and project rollups (never one query
+ * per parent). Counts ALL live subtasks
  * including done ones, so callers whose row source already excludes done
  * tasks (e.g. actionable.ts's open-task fetch) still get the right totals.
  */
