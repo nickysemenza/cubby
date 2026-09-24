@@ -313,6 +313,18 @@ from creation versus **5:20** for #1308. Desktop job walls were
 **4:15 + 4:38**, down from **4:19 + 5:02**. This is one further sample; the
 five-run post-change median is still pending.
 
+[#1314](https://github.com/nickysemenza/cubby/pull/1314) set Playwright's
+desktop context to reduced motion, avoiding animation waits while keeping the
+same assertions and two Chromium shards. In a same-base successful
+[control](https://github.com/nickysemenza/cubby/actions/runs/35945134742)
+and [exact-head PR run](https://github.com/nickysemenza/cubby/actions/runs/35945966690),
+`Web checks` reached green in **5:06 → 4:43** from workflow creation. The
+desktop job walls fell from **4:28 + 4:01** to **3:15 + 3:49**, saving **1:25**
+of runner time. The PostgreSQL job varied from **3:38** to **4:20** and became
+the critical path in the PR run; its setup and test steps both varied despite
+no PostgreSQL change. Both desktop shards and PostgreSQL passed. This is one
+controlled comparison, not a five-run post-change median.
+
 In the HTTP/2 comparison, desktop runner queue time was **14–15s** in both
 runs. Total desktop runner time rose from **9:49** to **10:14**, so the unchanged
 `Web checks` time did not hide a runner-minute saving.
