@@ -103,12 +103,12 @@ export default defineEntity({
         key: "defaultProjectId",
         kind: "identifier",
         nullable: true,
-        label: "Default project",
+        labelOverride: "Default project",
         reference: { entity: "project" },
         control: {
           kind: "specialized",
           renderer: "entity-select",
-          section: "details",
+          sectionOverride: "details",
           suggest: { basis: ["displayLabel", "vendorId", "notes"] },
         },
         display: { detail: true },
@@ -122,10 +122,10 @@ export default defineEntity({
         key: "defaultTrade",
         kind: "enum",
         nullable: true,
-        label: "Default trade",
+        labelOverride: "Default trade",
         control: {
           kind: "select",
-          section: "details",
+          sectionOverride: "details",
           // Purchase has no "name" field — `displayLabel` is its closest
           // equivalent (the operator-facing text for the purchase).
           suggest: { basis: ["displayLabel", "vendorId", "notes"] },
@@ -140,7 +140,7 @@ export default defineEntity({
       {
         key: "vendorId",
         kind: "identifier",
-        label: "Vendor",
+        labelOverride: "Vendor",
         reference: { entity: "vendor" },
         control: {
           kind: "specialized",
@@ -150,8 +150,8 @@ export default defineEntity({
         display: {
           list: true,
           detail: true,
-          detailOrder: 0,
-          columnId: "vendor",
+          detailOrderOverride: 0,
+          columnIdOverride: "vendor",
         },
         validation: {
           read: vendorShortcode,
@@ -163,13 +163,13 @@ export default defineEntity({
         key: "orderId",
         kind: "text",
         nullable: true,
-        label: "Order #",
+        labelOverride: "Order #",
         control: {
           kind: "text",
-          section: "identity",
+          sectionOverride: "identity",
           placeholder: "Vendor order / receipt #",
         },
-        display: { list: true, detail: true, detailOrder: 1 },
+        display: { list: true, detail: true, detailOrderOverride: 1 },
         validation: {
           read: z.string().nullable(),
           create: z.string().nullable().default(null),
@@ -180,12 +180,12 @@ export default defineEntity({
         key: "vendorAccountId",
         kind: "identifier",
         nullable: true,
-        label: "Vendor account",
+        labelOverride: "Vendor account",
         reference: { entity: "vendorAccount" },
         control: {
           kind: "specialized",
           renderer: "entity-select",
-          section: "identity",
+          sectionOverride: "identity",
         },
         display: { detail: true },
         validation: {
@@ -198,13 +198,13 @@ export default defineEntity({
         key: "displayLabel",
         kind: "text",
         nullable: true,
-        label: "Display label",
+        labelOverride: "Display label",
         control: {
           kind: "text",
-          section: "identity",
+          sectionOverride: "identity",
           placeholder: "e.g. pocket hole jig + bits",
         },
-        display: { list: true, detail: true, detailOrder: 2 },
+        display: { list: true, detail: true, detailOrderOverride: 2 },
         validation: {
           read: z.string().nullable(),
           create: z.string().nullable().optional(),
@@ -214,11 +214,15 @@ export default defineEntity({
       {
         key: "date",
         kind: "date",
-        control: { kind: "date", section: "schedule", initial: "today" },
+        control: {
+          kind: "date",
+          sectionOverride: "schedule",
+          initial: "today",
+        },
         display: {
           list: true,
           detail: true,
-          detailOrder: 3,
+          detailOrderOverride: 3,
           format: "plainDate",
           mobile: { slot: "meta", priority: 30 },
         },
@@ -232,7 +236,7 @@ export default defineEntity({
         key: "statedTotal",
         kind: "number",
         nullable: true,
-        label: "Stated total",
+        labelOverride: "Stated total",
         control: {
           kind: "number",
           renderer: "money",
@@ -241,7 +245,7 @@ export default defineEntity({
         display: {
           list: true,
           detail: true,
-          detailOrder: 4,
+          detailOrderOverride: 4,
           format: "currency",
           mobile: { slot: "trailing", priority: 1 },
         },
@@ -259,7 +263,7 @@ export default defineEntity({
           kind: "textarea",
           placeholder: "Anything worth remembering",
         },
-        display: { list: true, detail: true, detailOrder: 5 },
+        display: { list: true, detail: true, detailOrderOverride: 5 },
         validation: {
           read: z.string().nullable(),
           create: z.string().nullable().default(null),
@@ -269,8 +273,8 @@ export default defineEntity({
       {
         key: "pendingImageIds",
         kind: "identifier",
-        label: "Pending Image IDs",
-        readKey: null,
+        labelOverride: "Pending Image IDs",
+        readKeyOverride: null,
         reference: { entity: "image", multiple: true },
         control: { kind: "specialized", renderer: "entity-multi-select" },
         validation: {
@@ -282,8 +286,8 @@ export default defineEntity({
       {
         key: "removeImageIds",
         kind: "identifier",
-        label: "Remove Image IDs",
-        readKey: null,
+        labelOverride: "Remove Image IDs",
+        readKeyOverride: null,
         reference: { entity: "image", multiple: true },
         control: { kind: "specialized", renderer: "entity-multi-select" },
         validation: {
@@ -295,7 +299,7 @@ export default defineEntity({
       {
         key: "imageOrder",
         kind: "text",
-        readKey: null,
+        readKeyOverride: null,
         control: { kind: "specialized", renderer: "image-order" },
         provenance: {
           kind: "relation",
@@ -414,7 +418,7 @@ export default defineEntity({
       {
         key: "reconciliation",
         kind: "json",
-        display: { list: true, columnId: "reconciliation" },
+        display: { list: true, columnIdOverride: "reconciliation" },
         provenance: {
           kind: "derived",
           sources: [{ entity: "expense", relation: "expenses" }],
@@ -440,7 +444,7 @@ export default defineEntity({
         // Settlement evidence only; never participates in spend rollups.
         key: "financialReconciliation",
         kind: "json",
-        display: { list: true, columnId: "financialSettlement" },
+        display: { list: true, columnIdOverride: "financialSettlement" },
         provenance: {
           kind: "derived",
           sources: [
@@ -518,7 +522,7 @@ export default defineEntity({
       {
         key: "transactionCount",
         kind: "number",
-        readKey: null,
+        readKeyOverride: null,
         provenance: {
           kind: "derived",
           sources: [
@@ -570,13 +574,18 @@ export default defineEntity({
           update: null,
         },
       },
-      { key: "shortcode", kind: "text", readKey: null },
-      { key: "deletedAt", kind: "timestamp", nullable: true, readKey: null },
+      { key: "shortcode", kind: "text", readKeyOverride: null },
+      {
+        key: "deletedAt",
+        kind: "timestamp",
+        nullable: true,
+        readKeyOverride: null,
+      },
     ],
     storage: [
       {
         key: "id",
-        default: "generated",
+        defaultOverride: "generated",
         specialized: "primary-key:PurchaseId",
       },
       { key: "shortcode", specialized: "shortcode" },
@@ -589,8 +598,8 @@ export default defineEntity({
       "date",
       { key: "statedTotal", specialized: "double-precision" },
       "notes",
-      { key: "createdAt", default: "now" },
-      { key: "updatedAt", default: "now", specialized: "updated-at" },
+      { key: "createdAt", defaultOverride: "now" },
+      { key: "updatedAt", defaultOverride: "now", specialized: "updated-at" },
       "deletedAt",
     ],
     create: [
@@ -1134,7 +1143,7 @@ export default defineEntity({
       },
     },
   ],
-  search: { enabled: true, embedding: false },
+  search: { enabled: true, embeddingOverride: false },
   capabilities: {
     auditable: true,
     // Equal weights: a purchase is a paperwork checklist, not a ranking.

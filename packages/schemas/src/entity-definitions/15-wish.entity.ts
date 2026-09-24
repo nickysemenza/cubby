@@ -74,8 +74,8 @@ export default defineEntity({
       {
         key: "candidateProductIds",
         kind: "identifier",
-        label: "Candidate Product IDs",
-        readKey: null,
+        labelOverride: "Candidate Product IDs",
+        readKeyOverride: null,
         reference: { entity: "product", multiple: true },
         control: { kind: "specialized", renderer: "entity-multi-select" },
         validation: {
@@ -87,8 +87,8 @@ export default defineEntity({
       {
         key: "acquired",
         kind: "boolean",
-        readKey: null,
-        control: { kind: "checkbox", section: "details" },
+        readKeyOverride: null,
+        control: { kind: "checkbox", sectionOverride: "details" },
         provenance: {
           kind: "relation",
           sources: [{ entity: "product", relation: "candidates" }],
@@ -114,7 +114,7 @@ export default defineEntity({
         nullable: true,
         // `acquired` is the persisted column id the status cell and the
         // boolean filter spec hang on.
-        display: { list: true, detail: true, columnId: "acquired" },
+        display: { list: true, detail: true, columnIdOverride: "acquired" },
         validation: {
           read: z.date().nullable(),
           create: null,
@@ -212,17 +212,26 @@ export default defineEntity({
           update: null,
         },
       },
-      { key: "shortcode", kind: "text", readKey: null },
-      { key: "deletedAt", kind: "timestamp", nullable: true, readKey: null },
+      { key: "shortcode", kind: "text", readKeyOverride: null },
+      {
+        key: "deletedAt",
+        kind: "timestamp",
+        nullable: true,
+        readKeyOverride: null,
+      },
     ],
     storage: [
-      { key: "id", default: "generated", specialized: "primary-key:WishId" },
+      {
+        key: "id",
+        defaultOverride: "generated",
+        specialized: "primary-key:WishId",
+      },
       { key: "shortcode", specialized: "shortcode" },
       "name",
       "notes",
       "acquiredAt",
-      { key: "createdAt", default: "now" },
-      { key: "updatedAt", default: "now", specialized: "updated-at" },
+      { key: "createdAt", defaultOverride: "now" },
+      { key: "updatedAt", defaultOverride: "now", specialized: "updated-at" },
       "deletedAt",
     ],
     create: ["name", "notes", "candidateProductIds"],

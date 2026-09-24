@@ -17,7 +17,7 @@ export default defineEntity({
   names: { singular: "USDA Food", plural: "USDA Foods" },
   route: {
     basePath: "usda",
-    detailParam: "id",
+    detailParamOverride: "id",
     listOverride: null,
     detailOverride: null,
   },
@@ -63,7 +63,7 @@ export default defineEntity({
       {
         key: "fdc_id",
         kind: "identifier",
-        label: "FDC ID",
+        labelOverride: "FDC ID",
         display: { list: true, detail: true },
         provenance: {
           kind: "derived",
@@ -90,7 +90,7 @@ export default defineEntity({
         // `description` sort) can read it without knowing the JSON shape.
         key: "description",
         kind: "text",
-        label: "Description",
+        labelOverride: "Description",
         validation: {
           read: z.string(),
           create: null,
@@ -101,7 +101,7 @@ export default defineEntity({
         key: "brandedFoodInfo",
         kind: "json",
         nullable: true,
-        label: "Branded food information",
+        labelOverride: "Branded food information",
         display: { detail: true },
         provenance: {
           kind: "derived",
@@ -128,7 +128,7 @@ export default defineEntity({
       {
         key: "foodInfo",
         kind: "json",
-        label: "Food information",
+        labelOverride: "Food information",
         display: { list: true, detail: true },
         provenance: {
           kind: "derived",
@@ -153,7 +153,7 @@ export default defineEntity({
         key: "legacyFoodInfo",
         kind: "json",
         nullable: true,
-        label: "Legacy food information",
+        labelOverride: "Legacy food information",
         display: { detail: true },
         provenance: {
           kind: "derived",
@@ -180,7 +180,7 @@ export default defineEntity({
       {
         key: "nutritionInfo",
         kind: "json",
-        label: "Nutrition",
+        labelOverride: "Nutrition",
         display: { detail: true },
         provenance: {
           kind: "derived",
@@ -204,7 +204,7 @@ export default defineEntity({
       {
         key: "portionInfoRaw",
         kind: "json",
-        label: "Portions",
+        labelOverride: "Portions",
         display: { detail: true },
         provenance: {
           kind: "derived",
@@ -228,7 +228,7 @@ export default defineEntity({
       {
         key: "inferredUnitMappings",
         kind: "json",
-        label: "Inferred unit mappings",
+        labelOverride: "Inferred unit mappings",
         display: { detail: true },
         provenance: {
           kind: "derived",
@@ -252,7 +252,7 @@ export default defineEntity({
       {
         key: "linkedProducts",
         kind: "json",
-        label: "Linked products",
+        labelOverride: "Linked products",
         reference: { entity: "product", multiple: true },
         display: { list: true, detail: true },
         explanation: {

@@ -164,7 +164,7 @@ export default defineEntity({
       {
         key: "url",
         kind: "text",
-        label: "URL",
+        labelOverride: "URL",
         display: { list: true, detail: true, listHidden: true },
         provenance: { kind: "derived", sources: [{ label: "Image storage" }] },
         explanation: {
@@ -203,7 +203,7 @@ export default defineEntity({
       {
         key: "contentType",
         kind: "text",
-        label: "Type",
+        labelOverride: "Type",
         display: {
           list: true,
           detail: true,
@@ -257,18 +257,18 @@ export default defineEntity({
         key: "perceptualHash",
         kind: "text",
         nullable: true,
-        readKey: null,
+        readKeyOverride: null,
       },
       {
         key: "sourceFingerprint",
         kind: "json",
         nullable: true,
-        readKey: null,
+        readKeyOverride: null,
       },
       {
         key: "detectedContentType",
         kind: "text",
-        label: "Detected type",
+        labelOverride: "Detected type",
         nullable: true,
         // Hidden by default: it repeats Type except when sniffing disagrees
         // with the stored content type, which the detail page shows.
@@ -315,7 +315,7 @@ export default defineEntity({
       {
         key: "source",
         kind: "enum",
-        label: "Source",
+        labelOverride: "Source",
         display: { list: true, detail: true },
         validation: {
           read: z.enum(imageSourceValues),
@@ -327,7 +327,7 @@ export default defineEntity({
         key: "sourcePageUrl",
         kind: "text",
         nullable: true,
-        label: "Source page",
+        labelOverride: "Source page",
         display: { detail: true },
         validation: {
           read: z.url().nullable(),
@@ -339,7 +339,7 @@ export default defineEntity({
         key: "sourceAssetUrl",
         kind: "text",
         nullable: true,
-        label: "Source asset",
+        labelOverride: "Source asset",
         display: { detail: true },
         validation: {
           read: z.url().nullable(),
@@ -351,7 +351,7 @@ export default defineEntity({
         key: "sourceName",
         kind: "text",
         nullable: true,
-        label: "Source name",
+        labelOverride: "Source name",
         display: { detail: true },
         validation: {
           read: z.string().nullable(),
@@ -362,7 +362,7 @@ export default defineEntity({
       {
         key: "useOriginal",
         kind: "boolean",
-        label: "Use original",
+        labelOverride: "Use original",
         display: { list: true, detail: true },
         validation: {
           read: z.boolean(),
@@ -385,7 +385,7 @@ export default defineEntity({
         key: "capturedAt",
         kind: "timestamp",
         nullable: true,
-        label: "Captured at",
+        labelOverride: "Captured at",
         display: { list: true, detail: true, format: "timestamp" },
         validation: {
           read: z.date().nullable(),
@@ -397,7 +397,7 @@ export default defineEntity({
         key: "capturedAtOffsetMinutes",
         kind: "number",
         nullable: true,
-        label: "Captured at offset (minutes)",
+        labelOverride: "Captured at offset (minutes)",
         display: { detail: true },
         validation: {
           read: z.number().int().nullable(),
@@ -409,7 +409,7 @@ export default defineEntity({
         key: "captureLocation",
         kind: "json",
         nullable: true,
-        label: "Capture location",
+        labelOverride: "Capture location",
         // Detail-only by design (no `list: true`) — GPS coordinates never
         // belong in a list column.
         display: {
@@ -426,7 +426,7 @@ export default defineEntity({
         key: "capturePlaceName",
         kind: "text",
         nullable: true,
-        label: "Capture place",
+        labelOverride: "Capture place",
         display: { detail: true },
         validation: {
           read: z.string().nullable(),
@@ -438,7 +438,7 @@ export default defineEntity({
         key: "captureDeviceLabel",
         kind: "text",
         nullable: true,
-        label: "Capture device",
+        labelOverride: "Capture device",
         display: { detail: true },
         validation: {
           read: z.string().nullable(),
@@ -450,10 +450,14 @@ export default defineEntity({
         key: "capturedByPartyId",
         kind: "identifier",
         nullable: true,
-        label: "Captured by",
+        labelOverride: "Captured by",
         reference: { entity: "ledgerParty" },
         control: { kind: "specialized", renderer: "entity-select" },
-        display: { list: true, detail: true, columnId: "capturedByName" },
+        display: {
+          list: true,
+          detail: true,
+          columnIdOverride: "capturedByName",
+        },
         explanation: {
           ruleId: "image.capturedBy",
           description:
@@ -489,7 +493,7 @@ export default defineEntity({
       {
         key: "captureAttribution",
         kind: "enum",
-        label: "Capture attribution",
+        labelOverride: "Capture attribution",
         display: { list: true, detail: true, width: "sm" },
         validation: {
           read: imageCaptureAttribution,
@@ -501,7 +505,7 @@ export default defineEntity({
         key: "provenanceEvidence",
         kind: "json",
         nullable: true,
-        label: "Provenance evidence",
+        labelOverride: "Provenance evidence",
         display: {
           detail: true,
           renderer: { detail: "image-provenance-evidence" },
@@ -516,13 +520,13 @@ export default defineEntity({
         key: "metadataRevision",
         kind: "number",
         nullable: true,
-        readKey: null,
+        readKeyOverride: null,
       },
       {
         key: "embeddedMetadata",
         kind: "json",
         nullable: true,
-        readKey: null,
+        readKeyOverride: null,
       },
       {
         key: "createdAt",
@@ -544,11 +548,20 @@ export default defineEntity({
           update: null,
         },
       },
-      { key: "shortcode", kind: "text", readKey: null },
-      { key: "deletedAt", kind: "timestamp", nullable: true, readKey: null },
+      { key: "shortcode", kind: "text", readKeyOverride: null },
+      {
+        key: "deletedAt",
+        kind: "timestamp",
+        nullable: true,
+        readKeyOverride: null,
+      },
     ],
     storage: [
-      { key: "id", default: "generated", specialized: "primary-key:ImageId" },
+      {
+        key: "id",
+        defaultOverride: "generated",
+        specialized: "primary-key:ImageId",
+      },
       { key: "shortcode", specialized: "shortcode" },
       "key",
       "filename",
@@ -556,7 +569,7 @@ export default defineEntity({
       "contentType",
       {
         key: "status",
-        default: "literal",
+        defaultOverride: "literal",
         defaultValue: "'PENDING'",
         specialized: "enum:ImageStatus",
       },
@@ -571,13 +584,13 @@ export default defineEntity({
       {
         key: "source",
         specialized: "enum:source",
-        default: "literal",
+        defaultOverride: "literal",
         defaultValue: "unknown",
       },
       "sourcePageUrl",
       "sourceAssetUrl",
       "sourceName",
-      { key: "useOriginal", default: "literal", defaultValue: false },
+      { key: "useOriginal", defaultOverride: "literal", defaultValue: false },
       "verifiedAt",
       "capturedAt",
       "capturedAtOffsetMinutes",
@@ -588,7 +601,7 @@ export default defineEntity({
       {
         key: "captureAttribution",
         specialized: "enum:captureAttribution",
-        default: "literal",
+        defaultOverride: "literal",
         defaultValue: "none",
       },
       {
@@ -597,8 +610,8 @@ export default defineEntity({
       },
       "metadataRevision",
       { key: "embeddedMetadata", specialized: "json:embeddedMetadata" },
-      { key: "createdAt", default: "now" },
-      { key: "updatedAt", default: "now", specialized: "updated-at" },
+      { key: "createdAt", defaultOverride: "now" },
+      { key: "updatedAt", defaultOverride: "now", specialized: "updated-at" },
       "deletedAt",
     ],
     create: [],

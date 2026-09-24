@@ -48,10 +48,10 @@ export default defineEntity({
       {
         key: "vendorId",
         kind: "identifier",
-        label: "Vendor",
+        labelOverride: "Vendor",
         reference: { entity: "vendor" },
         control: { kind: "specialized", renderer: "entity-select" },
-        display: { list: true, detail: true, columnId: "vendorName" },
+        display: { list: true, detail: true, columnIdOverride: "vendorName" },
         validation: {
           read: vendorShortcode,
           create: vendorShortcode,
@@ -61,10 +61,14 @@ export default defineEntity({
       {
         key: "ledgerPartyId",
         kind: "identifier",
-        label: "Member",
+        labelOverride: "Member",
         reference: { entity: "ledgerParty" },
         control: { kind: "specialized", renderer: "entity-select" },
-        display: { list: true, detail: true, columnId: "ledgerPartyName" },
+        display: {
+          list: true,
+          detail: true,
+          columnIdOverride: "ledgerPartyName",
+        },
         validation: {
           read: ledgerPartyShortcode,
           create: ledgerPartyShortcode,
@@ -74,7 +78,7 @@ export default defineEntity({
       {
         key: "inventoryOwnerDefaultEnabled",
         kind: "boolean",
-        label: "Use as inventory owner default",
+        labelOverride: "Use as inventory owner default",
         control: { kind: "checkbox" },
         display: { detail: true },
         validation: {
@@ -181,13 +185,18 @@ export default defineEntity({
         display: { detail: true },
         validation: { read: z.date(), create: null, update: null },
       },
-      { key: "shortcode", kind: "text", readKey: null },
-      { key: "deletedAt", kind: "timestamp", nullable: true, readKey: null },
+      { key: "shortcode", kind: "text", readKeyOverride: null },
+      {
+        key: "deletedAt",
+        kind: "timestamp",
+        nullable: true,
+        readKeyOverride: null,
+      },
     ],
     storage: [
       {
         key: "id",
-        default: "generated",
+        defaultOverride: "generated",
         specialized: "primary-key:VendorAccountId",
       },
       { key: "shortcode", specialized: "shortcode" },
@@ -196,32 +205,32 @@ export default defineEntity({
       { key: "ledgerPartyId", reference: "ledgerParty" },
       {
         key: "inventoryOwnerDefaultEnabled",
-        default: "literal",
+        defaultOverride: "literal",
         defaultValue: false,
       },
       {
         key: "status",
-        default: "literal",
+        defaultOverride: "literal",
         defaultValue: "active",
         specialized: "enum:status",
       },
       {
         key: "browser",
-        default: "literal",
+        defaultOverride: "literal",
         defaultValue: "chrome",
         specialized: "enum:browser",
       },
       {
         key: "cursor",
-        default: "literal",
+        defaultOverride: "literal",
         defaultValue:
           '\'{"newestOrderAt":null,"orderIdsOnNewestDate":[],"backfillBeforeOrderAt":null,"earliestAvailableOrderAt":null}\'::jsonb',
         specialized: "json:cursor",
       },
       "lastRunAt",
       "lastSuccessAt",
-      { key: "createdAt", default: "now" },
-      { key: "updatedAt", default: "now", specialized: "updated-at" },
+      { key: "createdAt", defaultOverride: "now" },
+      { key: "updatedAt", defaultOverride: "now", specialized: "updated-at" },
       "deletedAt",
     ],
     create: [

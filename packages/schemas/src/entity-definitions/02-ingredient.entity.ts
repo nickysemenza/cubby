@@ -83,7 +83,7 @@ export default defineEntity({
       {
         key: "name",
         kind: "text",
-        control: { kind: "text", section: "identity" },
+        control: { kind: "text", sectionOverride: "identity" },
         display: { list: true, detail: true },
         validation: {
           read: z
@@ -127,7 +127,7 @@ export default defineEntity({
       {
         key: "naKinds",
         kind: "text-array",
-        label: "Enrichment exclusions",
+        labelOverride: "Enrichment exclusions",
         control: { kind: "specialized", renderer: "tag-list" },
         validation: {
           read: z.array(baseKind),
@@ -138,7 +138,7 @@ export default defineEntity({
       {
         key: "usuallyOnHand",
         kind: "boolean",
-        label: "Usually on hand",
+        labelOverride: "Usually on hand",
         description:
           "Assume I have enough for recipe planning. Recorded inventory stays separate.",
         control: { kind: "checkbox" },
@@ -178,40 +178,45 @@ export default defineEntity({
           update: null,
         },
       },
-      { key: "shortcode", kind: "text", readKey: null },
-      { key: "deletedAt", kind: "timestamp", nullable: true, readKey: null },
+      { key: "shortcode", kind: "text", readKeyOverride: null },
+      {
+        key: "deletedAt",
+        kind: "timestamp",
+        nullable: true,
+        readKeyOverride: null,
+      },
       {
         key: "recipeId",
         kind: "identifier",
         nullable: true,
-        label: "Recipe ID",
-        readKey: null,
+        labelOverride: "Recipe ID",
+        readKeyOverride: null,
         reference: { entity: "recipe" },
       },
     ],
     storage: [
       {
         key: "id",
-        default: "generated",
+        defaultOverride: "generated",
         specialized: "primary-key:IngredientId",
       },
       { key: "shortcode", specialized: "shortcode" },
       "name",
       {
         key: "aliases",
-        default: "literal",
+        defaultOverride: "literal",
         defaultValue: "'{}'::text[]",
         specialized: "text-array",
       },
       {
         key: "naKinds",
-        default: "literal",
+        defaultOverride: "literal",
         defaultValue: "'{}'::text[]",
         specialized: "text-array",
       },
-      { key: "usuallyOnHand", default: "literal", defaultValue: false },
-      { key: "createdAt", default: "now" },
-      { key: "updatedAt", default: "now", specialized: "updated-at" },
+      { key: "usuallyOnHand", defaultOverride: "literal", defaultValue: false },
+      { key: "createdAt", defaultOverride: "now" },
+      { key: "updatedAt", defaultOverride: "now", specialized: "updated-at" },
       "deletedAt",
       { key: "recipeId", reference: "recipe" },
     ],

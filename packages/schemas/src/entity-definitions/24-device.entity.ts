@@ -58,7 +58,7 @@ export default defineEntity({
       {
         key: "installationId",
         kind: "text",
-        label: "Installation ID",
+        labelOverride: "Installation ID",
         control: { kind: "text", placeholder: "Installation identifier" },
         display: { detail: true },
         validation: {
@@ -99,7 +99,7 @@ export default defineEntity({
         key: "appVersion",
         kind: "text",
         nullable: true,
-        label: "App version",
+        labelOverride: "App version",
         display: { detail: true },
         validation: {
           read: z.string().nullable(),
@@ -111,7 +111,7 @@ export default defineEntity({
         key: "osVersion",
         kind: "text",
         nullable: true,
-        label: "OS version",
+        labelOverride: "OS version",
         display: { detail: true },
         validation: {
           read: z.string().nullable(),
@@ -123,7 +123,7 @@ export default defineEntity({
         key: "lastSeenAt",
         kind: "timestamp",
         nullable: true,
-        label: "Last seen",
+        labelOverride: "Last seen",
         display: { list: true, detail: true, format: "timestamp" },
         validation: {
           read: z.date().nullable(),
@@ -134,7 +134,7 @@ export default defineEntity({
       {
         key: "automaticWork",
         kind: "boolean",
-        label: "Automatic work",
+        labelOverride: "Automatic work",
         control: { kind: "checkbox" },
         display: { list: true, detail: true },
         validation: {
@@ -146,7 +146,7 @@ export default defineEntity({
       {
         key: "remotePaused",
         kind: "boolean",
-        label: "Remotely paused",
+        labelOverride: "Remotely paused",
         control: { kind: "checkbox" },
         display: { list: true, detail: true },
         validation: {
@@ -159,10 +159,14 @@ export default defineEntity({
         key: "ledgerPartyId",
         kind: "identifier",
         nullable: true,
-        label: "Owner",
+        labelOverride: "Owner",
         reference: { entity: "ledgerParty" },
         control: { kind: "specialized", renderer: "entity-select" },
-        display: { list: true, detail: true, columnId: "ledgerPartyName" },
+        display: {
+          list: true,
+          detail: true,
+          columnIdOverride: "ledgerPartyName",
+        },
         validation: {
           read: ledgerPartyShortcode.nullable(),
           create: ledgerPartyShortcode.nullable().optional(),
@@ -173,10 +177,10 @@ export default defineEntity({
         key: "productId",
         kind: "identifier",
         nullable: true,
-        label: "Hardware",
+        labelOverride: "Hardware",
         reference: { entity: "product" },
         control: { kind: "specialized", renderer: "entity-select" },
-        display: { detail: true, columnId: "productName" },
+        display: { detail: true, columnIdOverride: "productName" },
         validation: {
           read: productShortcode.nullable(),
           create: productShortcode.nullable().optional(),
@@ -233,13 +237,18 @@ export default defineEntity({
         display: { detail: true },
         validation: { read: z.date(), create: null, update: null },
       },
-      { key: "shortcode", kind: "text", readKey: null },
-      { key: "deletedAt", kind: "timestamp", nullable: true, readKey: null },
+      { key: "shortcode", kind: "text", readKeyOverride: null },
+      {
+        key: "deletedAt",
+        kind: "timestamp",
+        nullable: true,
+        readKeyOverride: null,
+      },
     ],
     storage: [
       {
         key: "id",
-        default: "generated",
+        defaultOverride: "generated",
         specialized: "primary-key:DeviceId",
       },
       { key: "shortcode", specialized: "shortcode" },
@@ -249,12 +258,12 @@ export default defineEntity({
       "appVersion",
       "osVersion",
       "lastSeenAt",
-      { key: "automaticWork", default: "literal", defaultValue: true },
-      { key: "remotePaused", default: "literal", defaultValue: false },
+      { key: "automaticWork", defaultOverride: "literal", defaultValue: true },
+      { key: "remotePaused", defaultOverride: "literal", defaultValue: false },
       { key: "ledgerPartyId", reference: "ledgerParty" },
       { key: "productId", reference: "product" },
-      { key: "createdAt", default: "now" },
-      { key: "updatedAt", default: "now", specialized: "updated-at" },
+      { key: "createdAt", defaultOverride: "now" },
+      { key: "updatedAt", defaultOverride: "now", specialized: "updated-at" },
       "deletedAt",
     ],
     create: [

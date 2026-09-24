@@ -193,7 +193,7 @@ export default defineEntity({
         display: {
           list: true,
           detail: true,
-          detailOrder: 1,
+          detailOrderOverride: 1,
           width: "sm",
           mobile: { slot: "subtitle", priority: 15 },
         },
@@ -208,7 +208,7 @@ export default defineEntity({
         kind: "text",
         nullable: true,
         control: { kind: "textarea" },
-        display: { detail: true, detailOrder: 5 },
+        display: { detail: true, detailOrderOverride: 5 },
         validation: {
           read: z.string().nullable(),
           create: z.string().trim().min(1).nullable().optional(),
@@ -219,11 +219,11 @@ export default defineEntity({
         key: "productId",
         kind: "identifier",
         nullable: true,
-        label: "Is a",
-        readKey: "product",
+        labelOverride: "Is a",
+        readKeyOverride: "product",
         reference: { entity: "product" },
         control: { kind: "specialized", renderer: "entity-select" },
-        display: { detail: true, detailOrder: 2 },
+        display: { detail: true, detailOrderOverride: 2 },
         validation: {
           read: null,
           create: productShortcode.nullable().optional(),
@@ -234,11 +234,11 @@ export default defineEntity({
         key: "parentId",
         kind: "identifier",
         nullable: true,
-        label: "Parent Location",
-        readKey: null,
+        labelOverride: "Parent Location",
+        readKeyOverride: null,
         reference: { entity: "location" },
         control: { kind: "specialized", renderer: "entity-select" },
-        display: { detail: true, detailOrder: 3 },
+        display: { detail: true, detailOrderOverride: 3 },
         validation: {
           read: null,
           create: locationShortcode.nullable().optional(),
@@ -252,8 +252,8 @@ export default defineEntity({
         // meal's `pendingImageIds`.
         key: "pendingImageIds",
         kind: "identifier",
-        label: "Pending Image IDs",
-        readKey: null,
+        labelOverride: "Pending Image IDs",
+        readKeyOverride: null,
         reference: { entity: "image", multiple: true },
         validation: {
           read: null,
@@ -264,8 +264,8 @@ export default defineEntity({
       {
         key: "removeImageIds",
         kind: "identifier",
-        label: "Remove Image IDs",
-        readKey: null,
+        labelOverride: "Remove Image IDs",
+        readKeyOverride: null,
         reference: { entity: "image", multiple: true },
         validation: {
           read: null,
@@ -276,7 +276,7 @@ export default defineEntity({
       {
         key: "imageOrder",
         kind: "text",
-        readKey: null,
+        readKeyOverride: null,
         control: { kind: "specialized", renderer: "image-order" },
         provenance: {
           kind: "relation",
@@ -291,8 +291,8 @@ export default defineEntity({
       {
         key: "id",
         kind: "identifier",
-        label: "Shortcode",
-        display: { detail: true, detailOrder: 0 },
+        labelOverride: "Shortcode",
+        display: { detail: true, detailOrderOverride: 0 },
         validation: {
           read: locationShortcode,
           create: null,
@@ -325,8 +325,8 @@ export default defineEntity({
         key: "lastBulkInventory",
         kind: "timestamp",
         nullable: true,
-        label: "Last recount",
-        display: { list: true, detail: true, detailOrder: 4 },
+        labelOverride: "Last recount",
+        display: { list: true, detail: true, detailOrderOverride: 4 },
         validation: {
           read: z.date().nullable(),
           create: null,
@@ -335,7 +335,7 @@ export default defineEntity({
       },
       {
         key: "aiDescription",
-        label: "AI Description",
+        labelOverride: "AI Description",
         kind: "text",
         nullable: true,
         // Rendered (and regenerated) by the `ai-description` detail slot.
@@ -354,7 +354,7 @@ export default defineEntity({
       {
         key: "images",
         kind: "json",
-        display: { list: true, detail: false, columnId: "image" },
+        display: { list: true, detail: false, columnIdOverride: "image" },
         provenance: {
           kind: "derived",
           sources: [{ entity: "image", relation: "images" }],
@@ -382,7 +382,7 @@ export default defineEntity({
         key: "valuation",
         kind: "json",
         nullable: true,
-        display: { list: true, detail: false, columnId: "valuation" },
+        display: { list: true, detail: false, columnIdOverride: "valuation" },
         provenance: { kind: "derived", sources: [{ entity: "location" }] },
         explanation: {
           ruleId: "location.direct-valuation",
@@ -437,31 +437,36 @@ export default defineEntity({
           update: null,
         },
       },
-      { key: "shortcode", kind: "text", readKey: null },
-      { key: "deletedAt", kind: "timestamp", nullable: true, readKey: null },
+      { key: "shortcode", kind: "text", readKeyOverride: null },
+      {
+        key: "deletedAt",
+        kind: "timestamp",
+        nullable: true,
+        readKeyOverride: null,
+      },
     ],
     storage: [
       {
         key: "id",
-        default: "generated",
+        defaultOverride: "generated",
         specialized: "primary-key:LocationId",
       },
       { key: "shortcode", specialized: "shortcode" },
       "name",
       {
         key: "aliases",
-        default: "literal",
+        defaultOverride: "literal",
         defaultValue: "'{}'::text[]",
         specialized: "text-array",
       },
       {
         key: "tags",
-        default: "literal",
+        defaultOverride: "literal",
         defaultValue: "'{}'::text[]",
         specialized: "text-array",
       },
-      { key: "createdAt", default: "now" },
-      { key: "updatedAt", default: "now", specialized: "updated-at" },
+      { key: "createdAt", defaultOverride: "now" },
+      { key: "updatedAt", defaultOverride: "now", specialized: "updated-at" },
       "deletedAt",
       "lastBulkInventory",
       { key: "parentId", reference: "location" },

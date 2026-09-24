@@ -99,10 +99,15 @@ export default defineEntity({
       {
         key: "accountId",
         kind: "identifier",
-        label: "Account",
+        labelOverride: "Account",
         reference: { entity: "financialAccount" },
         control: { kind: "specialized", renderer: "entity-select" },
-        display: { list: true, detail: true, detailOrder: 60, listOrder: 10 },
+        display: {
+          list: true,
+          detail: true,
+          detailOrderOverride: 60,
+          listOrderOverride: 10,
+        },
         validation: {
           read: financialAccountShortcode,
           create: financialAccountShortcode,
@@ -113,12 +118,12 @@ export default defineEntity({
         key: "purchaseId",
         kind: "identifier",
         nullable: true,
-        label: "Purchase",
+        labelOverride: "Purchase",
         reference: { entity: "purchase" },
         control: { kind: "specialized", renderer: "entity-select" },
         // Detail shows `allocations` instead: this mirror is NULL exactly
         // when a charge settles more than one purchase.
-        display: { list: true, detail: false, listOrder: 50 },
+        display: { list: true, detail: false, listOrderOverride: 50 },
         validation: {
           read: purchaseShortcode.nullable(),
           create: purchaseShortcode.nullable().default(null),
@@ -145,9 +150,9 @@ export default defineEntity({
         display: {
           list: true,
           detail: true,
-          detailOrder: 40,
+          detailOrderOverride: 40,
           width: "sm",
-          listOrder: 20,
+          listOrderOverride: 20,
         },
         validation: {
           read: z.enum(generatedFinancialTransactionKindValues),
@@ -170,10 +175,10 @@ export default defineEntity({
         display: {
           list: true,
           detail: true,
-          detailOrder: 50,
+          detailOrderOverride: 50,
           width: "xs",
           mobile: { slot: "meta", priority: 20 },
-          listOrder: 30,
+          listOrderOverride: 30,
         },
         validation: {
           read: z.enum(generatedFinancialTransactionStatusValues),
@@ -188,11 +193,11 @@ export default defineEntity({
         display: {
           list: true,
           detail: true,
-          detailOrder: 30,
+          detailOrderOverride: 30,
           width: "sm",
           format: "currency",
           mobile: { slot: "trailing", priority: 1 },
-          listOrder: 40,
+          listOrderOverride: 40,
         },
         validation: {
           read: financialTransactionNonZeroAmount,
@@ -204,13 +209,13 @@ export default defineEntity({
         key: "transactionDate",
         kind: "date",
         nullable: true,
-        control: { section: "schedule", kind: "date" },
+        control: { sectionOverride: "schedule", kind: "date" },
         display: {
           list: true,
           width: "sm",
           format: "plainDate",
           mobile: { slot: "meta", priority: 25 },
-          listOrder: 60,
+          listOrderOverride: 60,
         },
         validation: {
           read: plainDate.nullable(),
@@ -222,16 +227,16 @@ export default defineEntity({
         key: "postedDate",
         kind: "date",
         nullable: true,
-        label: "Posted",
-        control: { section: "schedule", kind: "date" },
+        labelOverride: "Posted",
+        control: { sectionOverride: "schedule", kind: "date" },
         display: {
           list: true,
           detail: true,
-          detailOrder: 80,
+          detailOrderOverride: 80,
           width: "sm",
           format: "plainDate",
           mobile: { slot: "meta", priority: 30 },
-          listOrder: 70,
+          listOrderOverride: 70,
         },
         validation: {
           read: plainDate.nullable(),
@@ -243,13 +248,13 @@ export default defineEntity({
         key: "merchant",
         kind: "text",
         nullable: true,
-        control: { section: "identity", kind: "text" },
+        control: { sectionOverride: "identity", kind: "text" },
         display: {
           list: true,
           detail: true,
-          detailOrder: 10,
+          detailOrderOverride: 10,
           width: "md",
-          listOrder: 80,
+          listOrderOverride: 80,
           listHidden: true,
         },
         validation: {
@@ -262,9 +267,9 @@ export default defineEntity({
         key: "rawDescription",
         kind: "text",
         nullable: true,
-        label: "Statement description",
-        control: { section: "details", kind: "textarea" },
-        display: { list: true, listOrder: 110, listHidden: true },
+        labelOverride: "Statement description",
+        control: { sectionOverride: "details", kind: "textarea" },
+        display: { list: true, listOrderOverride: 110, listHidden: true },
         validation: {
           read: z.string().nullable(),
           create: z.string().nullable().default(null),
@@ -275,9 +280,9 @@ export default defineEntity({
         key: "sourceCategory",
         kind: "text",
         nullable: true,
-        label: "Source category",
-        control: { section: "details", kind: "text" },
-        display: { list: true, listOrder: 120, listHidden: true },
+        labelOverride: "Source category",
+        control: { sectionOverride: "details", kind: "text" },
+        display: { list: true, listOrderOverride: 120, listHidden: true },
         validation: {
           read: z.string().nullable(),
           create: z.string().nullable().default(null),
@@ -293,15 +298,15 @@ export default defineEntity({
         // no override `label` of its own in financial-transaction-detail.tsx)
         // changes from "References" to "Source" as an accepted consequence
         // — same as accountId's "Account ID" -> "Account" ripple.
-        label: "Source",
+        labelOverride: "Source",
         control: { kind: "specialized", renderer: "source-refs" },
         display: {
           list: true,
           detail: true,
           renderer: { detail: "financial-transaction-source-refs" },
-          detailOrder: 90,
-          columnId: "source",
-          listOrder: 100,
+          detailOrderOverride: 90,
+          columnIdOverride: "source",
+          listOrderOverride: 100,
           listHidden: true,
         },
         validation: {
@@ -314,8 +319,8 @@ export default defineEntity({
         key: "notes",
         kind: "text",
         nullable: true,
-        control: { section: "notes", kind: "textarea" },
-        display: { list: true, listOrder: 130, listHidden: true },
+        control: { sectionOverride: "notes", kind: "textarea" },
+        display: { list: true, listOrderOverride: 130, listHidden: true },
         validation: {
           read: z.string().nullable(),
           create: z.string().nullable().default(null),
@@ -328,7 +333,7 @@ export default defineEntity({
         control: { kind: "specialized", renderer: "tag-list" },
         display: {
           detail: true,
-          detailOrder: 70,
+          detailOrderOverride: 70,
           renderer: { detail: "financial-transaction-allocations" },
         },
         provenance: {
@@ -363,7 +368,7 @@ export default defineEntity({
         key: "ledgerTransferId",
         kind: "identifier",
         nullable: true,
-        label: "Ledger Transfer ID",
+        labelOverride: "Ledger Transfer ID",
         reference: { entity: "ledgerTransfer" },
         validation: {
           read: ledgerTransferShortcode.nullable(),
@@ -385,14 +390,14 @@ export default defineEntity({
         key: "vendorInference",
         kind: "json",
         nullable: true,
-        label: "Possible vendor",
+        labelOverride: "Possible vendor",
         display: {
           list: true,
           detail: true,
           renderer: { detail: "financial-transaction-vendor-inference" },
-          detailOrder: 20,
-          columnId: "possibleVendor",
-          listOrder: 90,
+          detailOrderOverride: 20,
+          columnIdOverride: "possibleVendor",
+          listOrderOverride: 90,
           listHidden: true,
         },
         provenance: {
@@ -450,13 +455,18 @@ export default defineEntity({
           update: null,
         },
       },
-      { key: "shortcode", kind: "text", readKey: null },
-      { key: "deletedAt", kind: "timestamp", nullable: true, readKey: null },
+      { key: "shortcode", kind: "text", readKeyOverride: null },
+      {
+        key: "deletedAt",
+        kind: "timestamp",
+        nullable: true,
+        readKeyOverride: null,
+      },
     ],
     storage: [
       {
         key: "id",
-        default: "generated",
+        defaultOverride: "generated",
         specialized: "primary-key:FinancialTransactionId",
       },
       { key: "shortcode", specialized: "shortcode" },
@@ -472,13 +482,13 @@ export default defineEntity({
       "sourceCategory",
       {
         key: "sourceRefs",
-        default: "literal",
+        defaultOverride: "literal",
         defaultValue: "'[]'::jsonb",
         specialized: "json:sourceRefs",
       },
       "notes",
-      { key: "createdAt", default: "now" },
-      { key: "updatedAt", default: "now", specialized: "updated-at" },
+      { key: "createdAt", defaultOverride: "now" },
+      { key: "updatedAt", defaultOverride: "now", specialized: "updated-at" },
       "deletedAt",
     ],
     create: [
@@ -1031,7 +1041,7 @@ export default defineEntity({
       },
     },
   ],
-  search: { enabled: true, embedding: false },
+  search: { enabled: true, embeddingOverride: false },
   capabilities: {
     auditable: true,
     images: {

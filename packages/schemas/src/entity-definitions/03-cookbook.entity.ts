@@ -71,11 +71,11 @@ export default defineEntity({
   },
   model: {
     fields: [
-      { key: "id", kind: "identifier", readKey: null },
+      { key: "id", kind: "identifier", readKeyOverride: null },
       {
         key: "shortcode",
         kind: "text",
-        readKey: "id",
+        readKeyOverride: "id",
         validation: {
           read: cookbookShortcode,
           create: null,
@@ -85,7 +85,7 @@ export default defineEntity({
       {
         key: "name",
         kind: "text",
-        readKey: "book",
+        readKeyOverride: "book",
         display: { list: true, detail: true },
         validation: {
           read: z.string(),
@@ -113,25 +113,30 @@ export default defineEntity({
           update: null,
         },
       },
-      { key: "sourceLabel", kind: "text", readKey: null },
-      { key: "rawJson", kind: "json", readKey: null },
-      { key: "report", kind: "json", nullable: true, readKey: null },
+      { key: "sourceLabel", kind: "text", readKeyOverride: null },
+      { key: "rawJson", kind: "json", readKeyOverride: null },
+      { key: "report", kind: "json", nullable: true, readKeyOverride: null },
       {
         key: "productId",
         kind: "identifier",
         nullable: true,
-        label: "Product ID",
-        readKey: null,
+        labelOverride: "Product ID",
+        readKeyOverride: null,
         reference: { entity: "product" },
       },
-      { key: "importedAt", kind: "timestamp", readKey: null },
-      { key: "createdAt", kind: "timestamp", readKey: null },
-      { key: "updatedAt", kind: "timestamp", readKey: null },
-      { key: "deletedAt", kind: "timestamp", nullable: true, readKey: null },
+      { key: "importedAt", kind: "timestamp", readKeyOverride: null },
+      { key: "createdAt", kind: "timestamp", readKeyOverride: null },
+      { key: "updatedAt", kind: "timestamp", readKeyOverride: null },
+      {
+        key: "deletedAt",
+        kind: "timestamp",
+        nullable: true,
+        readKeyOverride: null,
+      },
       {
         key: "recipeCount",
         kind: "number",
-        label: "Recipes",
+        labelOverride: "Recipes",
         display: { list: true, detail: true },
         provenance: {
           kind: "derived",
@@ -153,7 +158,7 @@ export default defineEntity({
         key: "coverUrl",
         kind: "text",
         nullable: true,
-        label: "Cover",
+        labelOverride: "Cover",
         display: { list: true, detail: true },
         provenance: {
           kind: "derived",
@@ -177,7 +182,7 @@ export default defineEntity({
       {
         key: "sourceRecipeCount",
         kind: "number",
-        label: "Source recipes",
+        labelOverride: "Source recipes",
         display: { detail: true },
         provenance: {
           kind: "derived",
@@ -198,7 +203,7 @@ export default defineEntity({
       {
         key: "needsReextract",
         kind: "boolean",
-        label: "Needs re-extraction",
+        labelOverride: "Needs re-extraction",
         display: { detail: true },
         provenance: {
           kind: "derived",
@@ -223,7 +228,7 @@ export default defineEntity({
         key: "product",
         kind: "json",
         nullable: true,
-        label: "Physical copy",
+        labelOverride: "Physical copy",
         reference: { entity: "product" },
         display: { list: true, detail: true },
         validation: {
@@ -236,20 +241,20 @@ export default defineEntity({
     storage: [
       {
         key: "id",
-        default: "generated",
+        defaultOverride: "generated",
         specialized: "primary-key:CookbookId",
       },
       { key: "shortcode", specialized: "shortcode" },
       "name",
       {
         key: "author",
-        default: "literal",
+        defaultOverride: "literal",
         defaultValue: "'{}'::text[]",
         specialized: "text-array",
       },
       {
         key: "subjects",
-        default: "literal",
+        defaultOverride: "literal",
         defaultValue: "'{}'::text[]",
         specialized: "text-array",
       },
@@ -258,11 +263,11 @@ export default defineEntity({
       { key: "report", specialized: "json:report" },
       // Stored at upsert (recipe items in the tree), so browse and problem
       // detection never walk the JSON.
-      { key: "sourceRecipeCount", default: "literal", defaultValue: 0 },
+      { key: "sourceRecipeCount", defaultOverride: "literal", defaultValue: 0 },
       { key: "productId", reference: "product" },
-      { key: "importedAt", default: "now" },
-      { key: "createdAt", default: "now" },
-      { key: "updatedAt", default: "now", specialized: "updated-at" },
+      { key: "importedAt", defaultOverride: "now" },
+      { key: "createdAt", defaultOverride: "now" },
+      { key: "updatedAt", defaultOverride: "now", specialized: "updated-at" },
       "deletedAt",
     ],
     create: [],

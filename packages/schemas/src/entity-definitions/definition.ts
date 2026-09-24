@@ -216,7 +216,7 @@ const metadataSchemas = () => {
         .nullable()
         .optional()
         .default(null),
-      section: nonEmptyString().optional().default("main"),
+      sectionOverride: nonEmptyString().optional().default("main"),
       /** A short field the generic editor pairs with the next consecutive
        * `"half"` field on one row (`SideBySideFields`), instead of the
        * default full-width control. */
@@ -252,7 +252,28 @@ const metadataSchemas = () => {
         .optional()
         .default(null),
     })
-    .strict();
+    .strict()
+    .transform(
+      ({
+        kind,
+        renderer,
+        options,
+        sectionOverride,
+        width,
+        placeholder,
+        initial,
+        suggest,
+      }) => ({
+        kind,
+        renderer,
+        options,
+        section: sectionOverride,
+        width,
+        placeholder,
+        initial,
+        suggest,
+      }),
+    );
 
   const entityFieldDisplayMetadataSchema = z
     .object({
@@ -261,9 +282,9 @@ const metadataSchemas = () => {
         .boolean({ error: "must be a boolean" })
         .optional()
         .default(false),
-      columnId: nonEmptyString().nullable().optional().default(null),
+      columnIdOverride: nonEmptyString().nullable().optional().default(null),
       standard: z.enum(["name", "image"]).nullable().optional().default(null),
-      detailOrder: z
+      detailOrderOverride: z
         .number()
         .int()
         .nonnegative()
@@ -275,7 +296,7 @@ const metadataSchemas = () => {
        * also drives form field order, so it cannot be re-sequenced). Ordered
        * columns come first, ascending; the rest keep model order.
        */
-      listOrder: z
+      listOrderOverride: z
         .number()
         .int()
         .nonnegative()
@@ -337,7 +358,34 @@ const metadataSchemas = () => {
         .optional()
         .default(false),
     })
-    .strict();
+    .strict()
+    .transform(
+      ({
+        list,
+        detail,
+        columnIdOverride,
+        standard,
+        detailOrderOverride,
+        listOrderOverride,
+        width,
+        format,
+        renderer,
+        mobile,
+        listHidden,
+      }) => ({
+        list,
+        detail,
+        columnId: columnIdOverride,
+        standard,
+        detailOrder: detailOrderOverride,
+        listOrder: listOrderOverride,
+        width,
+        format,
+        renderer,
+        mobile,
+        listHidden,
+      }),
+    );
 
   const entityFieldProvenanceSourceMetadataSchema = z.union([
     z
@@ -364,9 +412,9 @@ const metadataSchemas = () => {
         .boolean({ error: "must be a boolean" })
         .optional()
         .default(false),
-      label: nonEmptyString().optional(),
+      labelOverride: nonEmptyString().optional(),
       description: nonEmptyString().nullable().optional().default(null),
-      readKey: nonEmptyString().nullable().optional(),
+      readKeyOverride: nonEmptyString().nullable().optional(),
       reference: entityFieldReferenceMetadataSchema
         .nullable()
         .optional()
@@ -441,24 +489,73 @@ const metadataSchemas = () => {
       display: entityFieldDisplayMetadataSchema.prefault({}),
       validation: entityFieldValidationMetadataSchema.prefault({}),
     })
-    .strict();
+    .strict()
+    .transform(
+      ({
+        key,
+        kind,
+        nullable,
+        labelOverride,
+        description,
+        readKeyOverride,
+        ...field
+      }) => ({
+        key,
+        kind,
+        nullable,
+        label: labelOverride,
+        description,
+        readKey: readKeyOverride,
+        ...field,
+      }),
+    );
 
   const entityStorageMetadataSchema = z.union([
-    nonEmptyString(),
+    nonEmptyString().transform((key) => ({
+      key,
+      column: undefined,
+      kind: undefined,
+      nullable: undefined,
+      default: undefined,
+      defaultValue: undefined,
+      reference: undefined,
+      specialized: undefined,
+    })),
     z
       .object({
         key: nonEmptyString(),
-        column: nonEmptyString().optional(),
-        kind: z.enum(entityFieldKinds).optional(),
-        nullable: z.boolean({ error: "must be a boolean" }).optional(),
-        default: z.enum(entityStorageDefaultKinds).optional(),
+        columnOverride: nonEmptyString().optional(),
+        kindOverride: z.enum(entityFieldKinds).optional(),
+        nullableOverride: z.boolean({ error: "must be a boolean" }).optional(),
+        defaultOverride: z.enum(entityStorageDefaultKinds).optional(),
         defaultValue: z
           .union([z.string(), z.number(), z.boolean(), z.null()])
           .optional(),
         reference: nonEmptyString().nullable().optional(),
         specialized: nonEmptyString().nullable().optional(),
       })
-      .strict(),
+      .strict()
+      .transform(
+        ({
+          key,
+          columnOverride,
+          kindOverride,
+          nullableOverride,
+          defaultOverride,
+          defaultValue,
+          reference,
+          specialized,
+        }) => ({
+          key,
+          column: columnOverride,
+          kind: kindOverride,
+          nullable: nullableOverride,
+          default: defaultOverride,
+          defaultValue,
+          reference,
+          specialized,
+        }),
+      ),
   ]);
 
   const entityFieldModelSortMetadataSchema = z
@@ -526,7 +623,7 @@ const metadataSchemas = () => {
   const entityRouteMetadataSchema = z
     .object({
       basePath: nonEmptyString(),
-      detailParam: nonEmptyString().optional(),
+      detailParamOverride: nonEmptyString().optional(),
       /** Replaces the capture-dialog default; null opts out. */
       createOverride: z.enum(["dialog", "page"]).nullable().optional(),
       /** A routed entity gets the generated list unless explicitly replaced. */
@@ -544,13 +641,13 @@ const metadataSchemas = () => {
     .transform(
       ({
         basePath,
-        detailParam,
+        detailParamOverride,
         createOverride,
         listOverride,
         detailOverride,
       }) => ({
         basePath,
-        detailParam,
+        detailParam: detailParamOverride,
         create: createOverride,
         list: listOverride === undefined ? true : listOverride,
         detail: detailOverride === undefined ? true : detailOverride,
@@ -1547,9 +1644,15 @@ const metadataSchemas = () => {
            * entities set `false` to stay lexically searchable without a
            * vector (see `entity-manifest.ts` `embeddableEntities`).
            */
-          embedding: z.boolean({ error: "must be a boolean" }).optional(),
+          embeddingOverride: z
+            .boolean({ error: "must be a boolean" })
+            .optional(),
         })
-        .strict(),
+        .strict()
+        .transform(({ enabled, embeddingOverride }) => ({
+          enabled,
+          embedding: embeddingOverride,
+        })),
       capabilities: entityCapabilitiesMetadataSchema,
       extensions: entityExtensionsMetadataSchema,
     })
@@ -1634,6 +1737,7 @@ export function parseEntityFieldModelMetadata(
   const field = issue.path.at(-1);
   if (
     field === "nullable" ||
+    field === "nullableOverride" ||
     field === "multiple" ||
     field === "list" ||
     field === "detail"
@@ -1642,11 +1746,11 @@ export function parseEntityFieldModelMetadata(
   if (field === "read" || field === "create" || field === "update")
     throw new Error(`${path} must be a Zod schema.`);
   if (
-    field === "label" ||
+    field === "labelOverride" ||
     field === "key" ||
     field === "entity" ||
-    field === "columnId" ||
-    field === "section"
+    field === "columnIdOverride" ||
+    field === "sectionOverride"
   )
     throw new Error(`${path} must be a non-empty string.`);
   throw new Error(`${path} ${issue.message}.`);
@@ -1682,7 +1786,7 @@ type ReadableDeclaration = {
   model: {
     fields: readonly {
       key: string;
-      readKey?: string | null;
+      readKeyOverride?: string | null;
       validation?: { read: z.ZodType | null };
     }[];
     output: readonly string[];
@@ -1691,7 +1795,7 @@ type ReadableDeclaration = {
 type ReadFieldSchemas<D extends ReadableDeclaration> = {
   [
     F in D["model"]["fields"][number] as F["key"] extends D["model"]["output"][number]
-      ? F extends { readKey: infer R extends string }
+      ? F extends { readKeyOverride: infer R extends string }
         ? R
         : F["key"]
       : never
@@ -1773,7 +1877,7 @@ export function readFieldSchemas<const D extends ReadableDeclaration>(
     const field = definition.model.fields.find((field) => field.key === key);
     if (!field?.validation?.read)
       throw new Error(`Missing declared read schema for ${key}`);
-    return [field.readKey ?? key, field.validation.read];
+    return [field.readKeyOverride ?? key, field.validation.read];
   });
   // SAFETY: the explicit output roster selects exact declared keys; missing schemas fail above.
   return Object.fromEntries(entries) as ReadFieldSchemas<D>;

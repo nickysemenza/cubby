@@ -68,7 +68,7 @@ export default defineEntity({
       {
         key: "fromPartyId",
         kind: "identifier",
-        label: "From",
+        labelOverride: "From",
         reference: { entity: "ledgerParty" },
         control: { kind: "specialized", renderer: "entity-select" },
         display: { list: true, detail: true },
@@ -81,7 +81,7 @@ export default defineEntity({
       {
         key: "toPartyId",
         kind: "identifier",
-        label: "To",
+        labelOverride: "To",
         reference: { entity: "ledgerParty" },
         control: { kind: "specialized", renderer: "entity-select" },
         display: { list: true, detail: true },
@@ -166,10 +166,14 @@ export default defineEntity({
       {
         key: "evidenceTransactionIds",
         kind: "identifier",
-        label: "Evidence",
+        labelOverride: "Evidence",
         reference: { entity: "financialTransaction", multiple: true },
         control: { kind: "specialized", renderer: "entity-multi-select" },
-        display: { list: true, detail: true, columnId: "evidenceCount" },
+        display: {
+          list: true,
+          detail: true,
+          columnIdOverride: "evidenceCount",
+        },
         validation: {
           read: z.array(financialTransactionShortcode),
           create: ledgerTransferEvidenceTransactionIds.nullable().default([]),
@@ -233,13 +237,18 @@ export default defineEntity({
           update: null,
         },
       },
-      { key: "shortcode", kind: "text", readKey: null },
-      { key: "deletedAt", kind: "timestamp", nullable: true, readKey: null },
+      { key: "shortcode", kind: "text", readKeyOverride: null },
+      {
+        key: "deletedAt",
+        kind: "timestamp",
+        nullable: true,
+        readKeyOverride: null,
+      },
     ],
     storage: [
       {
         key: "id",
-        default: "generated",
+        defaultOverride: "generated",
         specialized: "primary-key:LedgerTransferId",
       },
       { key: "shortcode", specialized: "shortcode" },
@@ -248,8 +257,8 @@ export default defineEntity({
       { key: "amount", specialized: "double-precision" },
       "date",
       "notes",
-      { key: "createdAt", default: "now" },
-      { key: "updatedAt", default: "now", specialized: "updated-at" },
+      { key: "createdAt", defaultOverride: "now" },
+      { key: "updatedAt", defaultOverride: "now", specialized: "updated-at" },
       "deletedAt",
     ],
     create: [
