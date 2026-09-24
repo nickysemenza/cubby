@@ -314,7 +314,7 @@ export default defineConfig({
             setupFiles: ["./tooling/integration-teardown.ts"],
             name: "integration",
             include: ["src/**/*.integration.test.ts"],
-            pool: "forks",
+            pool: "threads",
             // The former per-file family resolver made 8 lumpy import-index
             // files carry 76 real contract files with an isolated fork each.
             // `isolate: false` shares one fork's module graph across a whole
