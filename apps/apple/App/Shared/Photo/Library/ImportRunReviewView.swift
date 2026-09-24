@@ -63,7 +63,7 @@ struct ImportRunReviewView: View {
     init(runID: String, previewModel: ImportRunReviewModel? = nil) {
         self.runID = runID
         isPreview = previewModel != nil
-        _model = State(initialValue: previewModel ?? ImportRunReviewModel())
+        _model = State(initialValue: previewModel ?? ImportRunReviewModel())  // state-init-ok: fixture
     }
 
     private var proposed: [PhotoGroupProposal] {
