@@ -299,6 +299,14 @@ JavaScript assets, the same as before the group. The group was dropped before
 hosted benchmarking because it did not meaningfully reduce the request count.
 The diagnostic instrumentation was also removed.
 
+A broader `$initial` app-module group reduced emitted JavaScript assets from
+**568** to **470**, **450**, or **471** in three local builds, but every
+[hosted variant](https://github.com/nickysemenza/cubby/pull/1296) failed to
+hydrate unrelated desktop routes on both shards. A Playwright trace from the
+first run reported `TypeError: n is not a function` in a TanStack router chunk;
+dependency-recursive grouping and strict execution order did not restore the
+browser suite. The grouping was rejected despite its request-count reduction.
+
 The warm [#1287](https://github.com/nickysemenza/cubby/pull/1287) Apple app
 check hit both the SPM and DerivedData caches. Its iOS check step took **85s**
 and the whole Apple job **2:58**. The available step timings did not isolate
