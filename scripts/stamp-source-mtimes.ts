@@ -14,7 +14,8 @@
 // not depend on how GitHub's PR merge commit rewrote history. Never run it in
 // a working checkout — it deliberately sets mtimes in the past.
 import { execFileSync } from "node:child_process";
-import { utimesSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { readFileSync, utimesSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -55,6 +56,17 @@ for (const entry of entries) {
   if (mode !== "100644" && mode !== "100755") continue;
   const seconds = blobMtime(sha);
   utimesSync(join(ROOT, path), seconds, seconds);
+  stamped += 1;
+}
+
+// xcodegen recreates this ignored project on every hosted checkout. Give its
+// build graph the same content-based mtime as tracked sources, otherwise a
+// fresh project timestamp can invalidate an exact DerivedData cache hit.
+if (paths.includes("apps/apple")) {
+  const project = join(ROOT, "apps/apple/Cubby.xcodeproj/project.pbxproj");
+  const hash = createHash("sha256").update(readFileSync(project)).digest("hex");
+  const seconds = blobMtime(hash);
+  utimesSync(project, seconds, seconds);
   stamped += 1;
 }
 console.log(`stamp-source-mtimes: ${stamped} files under ${paths.join(" ")}`);
