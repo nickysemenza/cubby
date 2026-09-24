@@ -1,5 +1,4 @@
 import type { DurableObjectState } from "@cloudflare/workers-types";
-import { auditLogListOut, type AuditLogListOut } from "@cubby/schemas/audit";
 import {
   dashboardLocalCounts,
   type DashboardLocalCounts,
@@ -133,23 +132,6 @@ export class DatabaseFreshnessDurableObject extends DurableObject<Env> {
       );
     } catch (error) {
       console.error("dashboard.snapshot.refresh.failed", error);
-      return null;
-    }
-  }
-
-  async getRecentAudit(): Promise<AuditLogListOut | null> {
-    try {
-      return await this.getReadSnapshot(
-        "recent-audit",
-        auditLogListOut,
-        async () =>
-          this.withStrongDatabase(async (db) => {
-            const { getAuditLog } = await import("~/server/repo/audit-log");
-            return getAuditLog(db, { limit: 5 });
-          }),
-      );
-    } catch (error) {
-      console.error("recent-audit.snapshot.refresh.failed", error);
       return null;
     }
   }

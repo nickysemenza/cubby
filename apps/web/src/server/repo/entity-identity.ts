@@ -132,12 +132,20 @@ export async function identityShortcodes(
   db: Database | DrizzleTransaction,
   ids: readonly string[],
 ): Promise<
-  Map<string, { shortcode: string | null; canonicalShortcode: string | null }>
+  Map<
+    string,
+    {
+      kind: ShortcodeEntity;
+      shortcode: string | null;
+      canonicalShortcode: string | null;
+    }
+  >
 > {
   if (ids.length === 0) return new Map();
   const rows = await unwrapDb(db)
     .select({
       id: entityIdentity.id,
+      kind: entityIdentity.kind,
       shortcode: entityIdentity.shortcode,
       canonicalShortcode: canonical.shortcode,
     })
@@ -147,7 +155,11 @@ export async function identityShortcodes(
   return new Map(
     rows.map((row) => [
       row.id,
-      { shortcode: row.shortcode, canonicalShortcode: row.canonicalShortcode },
+      {
+        kind: row.kind,
+        shortcode: row.shortcode,
+        canonicalShortcode: row.canonicalShortcode,
+      },
     ]),
   );
 }

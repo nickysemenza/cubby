@@ -1,4 +1,3 @@
-import { auditLogListOut, type AuditLogListOut } from "@cubby/schemas/audit";
 import {
   dashboardLocalCounts,
   type DashboardLocalCounts,
@@ -21,7 +20,6 @@ export interface ProblemCountsSnapshotPort {
 
 export interface ReadSnapshotPort {
   getDashboardCounts(): Promise<DashboardLocalCounts | null>;
-  getRecentAudit(): Promise<AuditLogListOut | null>;
 }
 
 const getPort = () =>
@@ -100,20 +98,6 @@ export async function readDashboardCountsSnapshot(
     return snapshot ? dashboardLocalCounts.parse(snapshot) : null;
   } catch (error) {
     console.error("Dashboard-count snapshot unavailable", error);
-    return null;
-  }
-}
-
-export async function readRecentAuditSnapshot(
-  port?: Pick<ReadSnapshotPort, "getRecentAudit">,
-): Promise<AuditLogListOut | null> {
-  const target = port ?? getPort();
-  if (!target) return null;
-  try {
-    const snapshot = await target.getRecentAudit();
-    return snapshot ? auditLogListOut.parse(snapshot) : null;
-  } catch (error) {
-    console.error("Recent-audit snapshot unavailable", error);
     return null;
   }
 }

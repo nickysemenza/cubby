@@ -21,9 +21,10 @@ export const STRONG_QUERY_OPERATIONS = [
   "calendar.getCredential",
   "calendar.getFeed",
   "maintenance.awaitingWork",
-  // These home snapshots own their write revision; a failed snapshot
+  // The dashboard's local snapshot owns its write revision; a failed snapshot
   // falls back to a strong query without paying a separate freshness RPC.
   "dashboard.counts",
+  // Audit activity reads live and bypasses the freshness RPC before PostgreSQL.
   "auditLog.list",
   "calendar.inspectFeed",
   "oauth.countOrphanedClients",

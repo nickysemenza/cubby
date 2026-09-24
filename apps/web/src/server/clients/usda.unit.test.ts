@@ -93,6 +93,51 @@ describe("USDAClient getFood cache", () => {
   });
 });
 
+describe("USDAClient counts cache", () => {
+  it("reuses successful counts across requests for 24 hours", async () => {
+    const counts = {
+      usda_food: 42,
+      usda_branded_food: 20,
+      usda_nutrient: 10,
+      usda_food_nutrient: 50,
+      usda_measure_unit: 3,
+      usda_food_portion: 4,
+      usda_sr_legacy_food: 22,
+    };
+    const responses = new Map<string, Response>();
+    const cache = {
+      match: async (key: RequestInfo | URL) =>
+        responses.get(String(key))?.clone(),
+      put: async (key: RequestInfo | URL, response: Response) => {
+        responses.set(String(key), response.clone());
+      },
+    };
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response(JSON.stringify(counts), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+
+    expect(
+      await new USDAClient("http://localhost:8787", fetcher, {
+        cache,
+      }).getCounts(),
+    ).toEqual(counts);
+    expect(
+      await new USDAClient("http://localhost:8787", fetcher, {
+        cache,
+      }).getCounts(),
+    ).toEqual(counts);
+    expect(fetcher).toHaveBeenCalledOnce();
+    expect(
+      responses
+        .get("http://localhost:8787/counts")
+        ?.headers.get("Cache-Control"),
+    ).toBe("public, max-age=86400");
+  });
+});
+
 describe("USDAClient.findFoodsBatch request-scoped memo", () => {
   // A FoodSummary-shaped body keyed so we can assert the right record comes back.
   const batchBody = (results: JSONType[]) =>

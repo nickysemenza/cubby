@@ -78,12 +78,14 @@ export class USDAClient {
         tracestate: () => getTraceHeaders().tracestate ?? "",
       },
       api: async (args) => {
-        // Use CF Cache API for individual food lookups (GET /api/foods/:id)
+        // The food lookup and dataset counts are stable enough for an edge hit.
         const cache = this.cache;
         const isGetFood =
           args.method === "GET" && args.path.includes("/api/foods/");
+        const isCounts = args.method === "GET" && args.path.endsWith("/counts");
+        const isCacheableGet = isGetFood || isCounts;
 
-        if (cache && isGetFood) {
+        if (cache && isCacheableGet) {
           const cached = await cache.match(args.path);
           if (cached) {
             return {
@@ -106,8 +108,13 @@ export class USDAClient {
             signal: AbortSignal.timeout(USDA_FETCH_TIMEOUT_MS),
           });
 
-          // Cache successful getFood responses for 24 hours
-          if (cache && isGetFood && response.ok) {
+          // Cache successful food and count responses for 24 hours.
+          if (
+            cache &&
+            isCacheableGet &&
+            response.ok &&
+            (!isCounts || response.status === 200)
+          ) {
             try {
               const body = await response.clone().text();
               await cache.put(

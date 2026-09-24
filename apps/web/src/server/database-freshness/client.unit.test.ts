@@ -3,7 +3,6 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   readDashboardCountsSnapshot,
   readDatabaseFreshness,
-  readRecentAuditSnapshot,
   recordDatabaseWrite,
 } from "./client";
 import { databaseFreshness } from "./state";
@@ -32,17 +31,10 @@ describe("freshness RPC failure policy", () => {
     expect(await read).toBeNull();
   });
 
-  it("falls back to direct reads when either read snapshot fails", async () => {
+  it("falls back to direct reads when the dashboard snapshot fails", async () => {
     expect(
       await readDashboardCountsSnapshot({
         getDashboardCounts: async () => {
-          throw new Error("offline");
-        },
-      }),
-    ).toBeNull();
-    expect(
-      await readRecentAuditSnapshot({
-        getRecentAudit: async () => {
           throw new Error("offline");
         },
       }),
