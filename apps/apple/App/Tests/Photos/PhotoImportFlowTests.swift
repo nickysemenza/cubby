@@ -417,6 +417,22 @@ struct PhotoImportFlowTests {
         #expect(manifest.groups.isEmpty)
     }
 
+    @Test func directProductPhotoReviewNamesTheDraftAndPutsProductsWithinReach() throws {
+        let item = try selection(filename: "synthetic-shirt.jpg")
+        let manifest = makeManifest(items: [item])
+        let option = try #require(PhotoImportManifest.createSelfOption(for: .product))
+
+        #expect(manifest.sourceTypeOptions.first?.source == .product)
+        manifest.selectedIDs = [item.id]
+        manifest.stageCreate(
+            option: option, source: nil,
+            body: ["name": .string("Synthetic Gray Crew Shirt")])
+
+        #expect(manifest.groups.first?.title == "Synthetic Gray Crew Shirt")
+        #expect(manifest.groups.first?.evidence == "New Product")
+        #expect(manifest.commitButtonTitle == "Add 1 photo + Product")
+    }
+
     @Test func aSharedVisionSuggestionTakesSelectedPhotosStraightToTheirSourceType() {
         let selected = Set(["photo-1", "photo-2"])
 
