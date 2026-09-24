@@ -1,0 +1,14 @@
+context platform=ios timeout=120000
+
+open com.nickysemenza.cubby
+wait "role=Button label=More" 60000
+open cubby://entity/${PRODUCT_ID}
+wait "id=detail.product.edit" 30000
+wait text "${PRODUCT_NAME}" 30000
+click "id=detail.product.edit"
+wait "label=Name editable=true" 30000
+fill 300 300 ""
+fill 300 300 "${UPDATED_NAME}"
+press 350 100
+wait "id=detail.product.edit" 30000
+wait text "${UPDATED_NAME}" 30000

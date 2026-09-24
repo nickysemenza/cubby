@@ -1,14 +1,32 @@
 import { appendFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import pg from "pg";
 
-const [adminURL, databaseName, ownerText, logPath] = process.argv.slice(2);
+const [adminURL, databaseName, ownerText, logPath, sessionName, stateDir] =
+  process.argv.slice(2);
 const ownerPID = Number(ownerText);
+const repoRoot = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "../../..",
+);
+const expectedStateDir = path.join(
+  repoRoot,
+  "artifacts/sim-dev",
+  databaseName ?? "",
+  "agent-device-state",
+);
 if (
   adminURL !== "postgresql://postgres:password@localhost:55432/postgres" ||
   !/^cubby_sim_[0-9a-f]{16}$/.test(databaseName ?? "") ||
   !Number.isSafeInteger(ownerPID) ||
   ownerPID <= 0 ||
-  !logPath
+  !logPath ||
+  (sessionName !== undefined &&
+    (sessionName !== `cubby-sim-${databaseName}` ||
+      stateDir !== expectedStateDir)) ||
+  (sessionName === undefined && stateDir !== undefined)
 ) {
   process.exit(2);
 }
@@ -24,6 +42,25 @@ const timer = setInterval(async () => {
       return;
     } catch (error) {
       if (error?.code !== "ESRCH") return;
+    }
+
+    if (sessionName) {
+      const closed = spawnSync(
+        path.join(repoRoot, "node_modules/.bin/agent-device"),
+        [
+          "close",
+          "--platform",
+          "ios",
+          "--session",
+          sessionName,
+          "--state-dir",
+          stateDir,
+        ],
+        { cwd: repoRoot, timeout: 15_000, encoding: "utf8" },
+      );
+      log(
+        `Session cleanup ${sessionName}: ${closed.status === 0 ? "closed" : closed.stderr?.trim() || closed.error || "unavailable"}`,
+      );
     }
 
     const pool = new pg.Pool({ connectionString: adminURL });

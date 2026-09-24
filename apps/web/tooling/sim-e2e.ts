@@ -25,11 +25,12 @@ const webRoot = path.resolve(
 );
 const repoRoot = path.resolve(webRoot, "../..");
 const kitRoot = path.join(repoRoot, "apps/apple/CubbyKit");
+const appleRoot = path.join(repoRoot, "apps/apple");
 const headless = process.argv.slice(2).includes("--headless");
 const watch = process.argv.slice(2).includes("--watch");
 const video = process.argv.slice(2).includes("--video");
 if (
-  (watch && !headless) ||
+  (watch && video) ||
   (video && headless) ||
   process.argv
     .slice(2)
@@ -37,8 +38,8 @@ if (
       (argument) => !["--headless", "--watch", "--video"].includes(argument),
     )
 )
-  throw new Error("Usage: sim-e2e.ts [--video | --headless [--watch]]");
-const lane = headless ? "headless-e2e" : "sim-e2e";
+  throw new Error("Usage: sim-e2e.ts [--video | --headless] [--watch]");
+const lane = headless ? "headless-e2e" : watch ? "sim-dev" : "sim-e2e";
 dotenv.config({ path: path.join(webRoot, ".env") });
 for (const [key, value] of Object.entries({
   R2_ACCESS_KEY_ID: "cubby-sim",
@@ -83,6 +84,21 @@ function swiftSourceVersion(): string {
     .join("|");
 }
 
+function appleSourceVersion(): string {
+  const appRoot = path.join(appleRoot, "App");
+  const files = readdirSync(appRoot, { recursive: true, encoding: "utf8" })
+    .filter((entry) => entry.endsWith(".swift"))
+    .map((entry) => path.join(appRoot, entry));
+  files.push(path.join(appleRoot, "project.yml"));
+  return [
+    swiftSourceVersion(),
+    ...files.sort().map((file) => {
+      const stat = statSync(file);
+      return `${file}:${stat.mtimeMs}:${stat.size}`;
+    }),
+  ].join("|");
+}
+
 async function assertNativeEdit(
   productId: string,
   expectedName?: string,
@@ -90,13 +106,21 @@ async function assertNativeEdit(
   const checkPool = new Pool({ connectionString: databaseURL });
   try {
     const { SIM_PRODUCT_UPDATED_NAME } = await import("./scenarios/simulator");
-    const result = await checkPool.query<{ name: string }>(
-      'SELECT name FROM "Product" WHERE shortcode = $1',
-      [productId],
-    );
-    if (result.rows[0]?.name !== (expectedName ?? SIM_PRODUCT_UPDATED_NAME)) {
+    const targetName = expectedName ?? SIM_PRODUCT_UPDATED_NAME;
+    const deadline = performance.now() + 15_000;
+    let actualName: string | undefined;
+    do {
+      const result = await checkPool.query<{ name: string }>(
+        'SELECT name FROM "Product" WHERE shortcode = $1',
+        [productId],
+      );
+      actualName = result.rows[0]?.name;
+      if (actualName === targetName) break;
+      await new Promise((resolve) => setTimeout(resolve, 250));
+    } while (performance.now() < deadline);
+    if (actualName !== targetName) {
       throw new Error(
-        `Native edit did not reach ${simName}: ${JSON.stringify(result.rows)}`,
+        `Native edit did not reach ${simName}: ${actualName ?? "missing"}`,
       );
     }
     console.log(`[${lane}] Native edit verified in ${simName}`);
@@ -110,8 +134,10 @@ async function run(
   args: string[],
   cwd = repoRoot,
   stdoutFile?: string,
+  allowInterrupted = false,
 ): Promise<void> {
-  if (interrupted) throw new Error(`${lane} interrupted by ${interrupted}`);
+  if (interrupted && !allowInterrupted)
+    throw new Error(`${lane} interrupted by ${interrupted}`);
   appendFileSync(
     path.join(artifacts, "commands.log"),
     `${command} ${args.join(" ")}\n`,
@@ -138,7 +164,7 @@ async function run(
     child.once("error", reject);
     child.once("close", (code) => {
       activeChild = undefined;
-      if (code === 0 && !interrupted) resolve();
+      if (code === 0 && (!interrupted || allowInterrupted)) resolve();
       else
         reject(
           new Error(
@@ -292,6 +318,157 @@ async function recordSimulatorVideo(
   };
 }
 
+async function runWarmSimulator(options: {
+  deviceID: string;
+  common: string[];
+  session: string;
+  productId: string;
+  userId: string;
+  install: () => Promise<void>;
+  launch: () => Promise<void>;
+}): Promise<void> {
+  const { SIM_PRODUCT_NAME, SIM_PRODUCT_UPDATED_NAME, seedSimulatorScenario } =
+    await import("./scenarios/simulator");
+  const { deviceID, common, session, productId, userId, install, launch } =
+    options;
+  const stateDir = path.join(artifacts, "agent-device-state");
+  const sessionArgs = [
+    ...common,
+    "--session",
+    session,
+    "--state-dir",
+    stateDir,
+  ];
+  let builtVersion = appleSourceVersion();
+  let sessionActive = false;
+  const input = createInterface({
+    input: process.stdin,
+    output: process.stdout,
+  });
+  input.on("SIGINT", () => {
+    interrupted = "SIGINT";
+    activeChild?.kill("SIGTERM");
+    input.close();
+  });
+  stopWatch = () => input.close();
+  const replay = async (
+    id: string,
+    originalName: string,
+    updatedName: string,
+  ) => {
+    const started = performance.now();
+    try {
+      if (appleSourceVersion() !== builtVersion) {
+        await run("pnpm", [
+          "exec",
+          "agent-device",
+          "close",
+          ...sessionArgs,
+        ]).catch(() => {});
+        sessionActive = false;
+        await install();
+        builtVersion = appleSourceVersion();
+        await launch();
+      }
+      console.log(`[${lane}] Product ${id}; cubby://entity/${id}`);
+      sessionActive = true;
+      await run("pnpm", [
+        "exec",
+        "agent-device",
+        "replay",
+        "apps/apple/e2e/product-edit-warm.ad",
+        ...sessionArgs,
+        "--timeout",
+        "120000",
+        "-e",
+        `PRODUCT_ID=${id}`,
+        "-e",
+        `PRODUCT_NAME=${originalName}`,
+        "-e",
+        `UPDATED_NAME=${updatedName}`,
+      ]);
+      await assertNativeEdit(id, updatedName);
+      console.log(
+        `[${lane}] Simulator replay ${(performance.now() - started).toFixed(0)}ms`,
+      );
+    } catch (error) {
+      if (interrupted) throw error;
+      await run("pnpm", [
+        "exec",
+        "agent-device",
+        "screenshot",
+        ...sessionArgs,
+        "--out",
+        path.join(artifacts, "failure.png"),
+      ]).catch(() => {});
+      await run(
+        "pnpm",
+        ["exec", "agent-device", "snapshot", "-i", ...sessionArgs],
+        repoRoot,
+        path.join(artifacts, "failure-ui-tree.txt"),
+      ).catch(() => {});
+      console.error(
+        `[${lane}] Replay failed: ${String(error)}; inspect ${artifacts}`,
+      );
+    }
+  };
+  console.log(
+    `[${lane}] Simulator ${deviceID}; agent-device session ${session}; state ${stateDir}`,
+  );
+  try {
+    await replay(productId, SIM_PRODUCT_NAME, SIM_PRODUCT_UPDATED_NAME);
+    let iteration = 0;
+    console.log(
+      `[${lane}] Press Enter to seed and replay; Ctrl-C drops ${simName}`,
+    );
+    for await (const _ of input) {
+      if (interrupted) break;
+      iteration += 1;
+      const originalName = `${SIM_PRODUCT_NAME} ${iteration}`;
+      const updatedName = `${SIM_PRODUCT_UPDATED_NAME} ${iteration}`;
+      const nextPool = new Pool({ connectionString: databaseURL });
+      let nextID: string;
+      try {
+        nextID = await seedSimulatorScenario(nextPool, userId, originalName);
+      } finally {
+        await nextPool.end();
+      }
+      await replay(nextID, originalName, updatedName);
+      console.log(`[${lane}] Press Enter to rerun; Ctrl-C drops ${simName}`);
+    }
+  } finally {
+    stopWatch = undefined;
+    input.close();
+    if (sessionActive)
+      await run(
+        "pnpm",
+        ["exec", "agent-device", "close", ...sessionArgs],
+        repoRoot,
+        undefined,
+        true,
+      ).catch(console.error);
+  }
+}
+
+function startDatabaseWatchdog(): void {
+  const watchdog = spawn(
+    process.execPath,
+    [
+      path.join(webRoot, "tooling/e2e-db-watchdog.mjs"),
+      adminURL,
+      simName,
+      String(process.pid),
+      path.join(artifacts, "watchdog.log"),
+      ...(headless
+        ? []
+        : [`cubby-sim-${simName}`, path.join(artifacts, "agent-device-state")]),
+    ],
+    { cwd: webRoot, detached: true, stdio: "ignore" },
+  );
+  if (!watchdog.pid) throw new Error("Could not start E2E DB watchdog");
+  watchdog.unref();
+}
+
 async function main(): Promise<void> {
   assertSimulatorAdminUrl(adminURL);
   if (process.env.CUBBY_SIM_DB_EXTERNAL !== "1")
@@ -353,22 +530,7 @@ async function main(): Promise<void> {
     await admin.query(`CREATE DATABASE "${simName}"`);
     created = true;
     console.log(`[${lane}] Disposable database ${simName}`);
-    if (watch) {
-      const watchdog = spawn(
-        process.execPath,
-        [
-          path.join(webRoot, "tooling/e2e-db-watchdog.mjs"),
-          adminURL,
-          simName,
-          String(process.pid),
-          path.join(artifacts, "watchdog.log"),
-        ],
-        { cwd: webRoot, detached: true, stdio: "ignore" },
-      );
-      if (!watchdog.pid)
-        throw new Error("Could not start headless DB watchdog");
-      watchdog.unref();
-    }
+    if (watch) startDatabaseWatchdog();
     const pool = new Pool({ connectionString: databaseURL });
     try {
       const { ensureDbExtensions } = await import("./db-extensions");
@@ -480,6 +642,7 @@ async function main(): Promise<void> {
         });
         input.on("SIGINT", () => {
           interrupted = "SIGINT";
+          activeChild?.kill("SIGTERM");
           input.close();
         });
         stopWatch = () => input.close();
@@ -521,75 +684,95 @@ async function main(): Promise<void> {
       if (device.state !== "Booted")
         await run("xcrun", ["simctl", "boot", device.udid]);
       await run("xcrun", ["simctl", "bootstatus", device.udid, "-b"]);
-      await run("pnpm", ["apple", "gen"]);
-      await run("xcodebuild", [
-        "-project",
-        "apps/apple/Cubby.xcodeproj",
-        "-scheme",
-        "Cubby-iOS",
-        "-configuration",
-        "Debug",
-        "-destination",
-        `platform=iOS Simulator,id=${device.udid}`,
-        "-derivedDataPath",
-        "apps/apple/DerivedData",
-        "CODE_SIGNING_ALLOWED=NO",
-        "COMPILER_INDEX_STORE_ENABLE=NO",
-        "build",
-      ]);
       const appPath = path.join(
         repoRoot,
         "apps/apple/DerivedData/Build/Products/Debug-iphonesimulator/Cubby.app",
       );
       const common = ["--platform", "ios", "--udid", device.udid];
-      await run("pnpm", [
-        "exec",
-        "agent-device",
-        "reinstall",
-        "com.nickysemenza.cubby",
-        appPath,
-        ...common,
-      ]);
-      await run("pnpm", [
-        "exec",
-        "agent-device",
-        "prepare",
-        "ios-runner",
-        ...common,
-        "--timeout",
-        "240000",
-      ]);
-      await run("xcrun", [
-        "simctl",
-        "launch",
-        "--terminate-running-process",
-        device.udid,
-        "com.nickysemenza.cubby",
-        "--cubby-e2e-server",
-        url.origin,
-      ]);
+      const session = `cubby-sim-${simName}`;
+      const install = async () => {
+        await run("pnpm", ["apple", "gen"]);
+        await run("xcodebuild", [
+          "-project",
+          "apps/apple/Cubby.xcodeproj",
+          "-scheme",
+          "Cubby-iOS",
+          "-configuration",
+          "Debug",
+          "-destination",
+          `platform=iOS Simulator,id=${device.udid}`,
+          "-derivedDataPath",
+          "apps/apple/DerivedData",
+          "CODE_SIGNING_ALLOWED=NO",
+          "COMPILER_INDEX_STORE_ENABLE=NO",
+          "build",
+        ]);
+        await run("pnpm", [
+          "exec",
+          "agent-device",
+          "reinstall",
+          "com.nickysemenza.cubby",
+          appPath,
+          ...common,
+        ]);
+      };
+      const launch = async () => {
+        await run("xcrun", [
+          "simctl",
+          "launch",
+          "--terminate-running-process",
+          device.udid,
+          "com.nickysemenza.cubby",
+          "--cubby-e2e-server",
+          url.origin,
+        ]);
+      };
       try {
-        const stopRecording = video
-          ? await recordSimulatorVideo(device.udid)
-          : undefined;
-        try {
-          await run("pnpm", [
-            "exec",
-            "agent-device",
-            "test",
-            "apps/apple/e2e/product-edit.ad",
-            ...common,
-            "--artifacts-dir",
-            artifacts,
-            "--reporter",
-            "default",
-            "--reporter",
-            `junit:${path.join(artifacts, "junit.xml")}`,
-            "-e",
-            `PRODUCT_ID=${productId}`,
-          ]);
-        } finally {
-          await stopRecording?.();
+        await install();
+        await run("pnpm", [
+          "exec",
+          "agent-device",
+          "prepare",
+          "ios-runner",
+          ...common,
+          "--timeout",
+          "240000",
+        ]);
+        await launch();
+        if (watch) {
+          await runWarmSimulator({
+            deviceID: device.udid,
+            common,
+            session,
+            productId,
+            userId,
+            install,
+            launch,
+          });
+        } else {
+          const stopRecording = video
+            ? await recordSimulatorVideo(device.udid)
+            : undefined;
+          try {
+            await run("pnpm", [
+              "exec",
+              "agent-device",
+              "test",
+              "apps/apple/e2e/product-edit.ad",
+              ...common,
+              "--artifacts-dir",
+              artifacts,
+              "--reporter",
+              "default",
+              "--reporter",
+              `junit:${path.join(artifacts, "junit.xml")}`,
+              "-e",
+              `PRODUCT_ID=${productId}`,
+            ]);
+          } finally {
+            await stopRecording?.();
+          }
+          await assertNativeEdit(productId);
         }
       } catch (error) {
         await run("xcrun", [
@@ -641,7 +824,6 @@ async function main(): Promise<void> {
         }
         throw error;
       }
-      await assertNativeEdit(productId);
     }
   } catch (error) {
     failure = error instanceof Error ? error : new Error(String(error));
