@@ -60,8 +60,8 @@ test("declared record lists retain identities, relationships and amounts on desk
       }),
     }),
   ).toContainText("Purchase");
-  // The parent relationship is visible in both table rows and mobile cards;
-  // Children remains hidden by default in the existing display preferences.
+  // The parent relationship is visible in table rows; Children remains hidden
+  // by default in the existing display preferences.
   await gotoAuthenticatedPage(
     page,
     `/locations?name=${encodeURIComponent(`${name} shelf`)}`,

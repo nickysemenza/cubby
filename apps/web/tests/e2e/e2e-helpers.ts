@@ -59,9 +59,8 @@ async function observedSessionStatus(page: Page): Promise<number | "unknown"> {
  * Wait until React has hydrated the authenticated application shell.
  *
  * The shell flips this explicit marker after the initial hydration render, so
- * it proves shell-level click handlers are attached across both desktop chrome
- * and contextual mobile chrome without coupling the wait to a route-specific
- * control.
+ * it proves shell-level click handlers are attached without coupling the wait
+ * to a route-specific control.
  *
  * Two distinct failure modes look alike from the outside (no shell, timeout)
  * but have different causes and need different messages: SSR can render the
