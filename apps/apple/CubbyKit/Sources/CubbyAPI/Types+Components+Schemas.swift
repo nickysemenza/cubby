@@ -18187,10 +18187,33 @@ extension Components {
             case gmailAttachment = "gmail_attachment"
             case manualUpload = "manual_upload"
         }
+        /// - Remark: Generated from `#/components/schemas/ImportRunPurpose`.
+        @frozen public enum ImportRunPurpose: String, Codable, Hashable, Sendable, CaseIterable {
+            case accountSync = "account_sync"
+            case purchaseValidation = "purchase_validation"
+            case productEnrichment = "product_enrichment"
+            case photoInventory = "photo_inventory"
+            case aiSuggest = "ai_suggest"
+            case aiAction = "ai_action"
+            case background = "background"
+            case fileImport = "file_import"
+            case legacy = "legacy"
+        }
         /// importRun shortcode, e.g. RUN-4K7M
         ///
         /// - Remark: Generated from `#/components/schemas/ImportRunShortcode`.
         public typealias ImportRunShortcode = Swift.String
+        /// - Remark: Generated from `#/components/schemas/ImportRunStatus`.
+        @frozen public enum ImportRunStatus: String, Codable, Hashable, Sendable, CaseIterable {
+            case running = "running"
+            case pausedAuth = "paused_auth"
+            case pausedOffline = "paused_offline"
+            case pausedApproval = "paused_approval"
+            case needsReview = "needs_review"
+            case completed = "completed"
+            case failed = "failed"
+            case dispatchFailed = "dispatch_failed"
+        }
         /// - Remark: Generated from `#/components/schemas/ImportRunTargetOutcome`.
         @frozen public enum ImportRunTargetOutcome: String, Codable, Hashable, Sendable, CaseIterable {
             case replayed = "replayed"
@@ -25787,6 +25810,8 @@ extension Components {
         }
         /// - Remark: Generated from `#/components/schemas/OutputShared26B48472A8B9D338`.
         public typealias OutputShared26B48472A8B9D338 = [Components.Schemas.InfLocation]
+        /// - Remark: Generated from `#/components/schemas/OutputShared29A61BDC638B0D71`.
+        public typealias OutputShared29A61BDC638B0D71 = [Components.Schemas.PhotoGroupProposal]
         /// - Remark: Generated from `#/components/schemas/OutputShared2ADBDB45D4B6E35E`.
         public typealias OutputShared2ADBDB45D4B6E35E = [Components.Schemas.Amount]
         /// Whether this row is a line item or a slice of a total that was never itemized. 'allocation' means the money was cut by payment schedule (a deposit and a balance on one order) or by an estimated materials/labor split of a lump-sum contract — such a row can never carry a productId, and its costType may be an estimate rather than a vendor-stated fact.
@@ -26007,6 +26032,35 @@ extension Components {
         public typealias OutputSharedA30B74759D5E3171 = [Components.Schemas.OutputSharedA30B74759D5E3171Payload]
         /// - Remark: Generated from `#/components/schemas/OutputSharedA7CB83B4F73D810C`.
         public typealias OutputSharedA7CB83B4F73D810C = [Components.Schemas.OutputShared149147B35854263F]
+        /// - Remark: Generated from `#/components/schemas/OutputSharedB03068E397C0900B`.
+        public struct OutputSharedB03068E397C0900B: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/OutputSharedB03068E397C0900B/id`.
+            public var id: Components.Schemas.ProductShortcode
+            /// - Remark: Generated from `#/components/schemas/OutputSharedB03068E397C0900B/name`.
+            public var name: Swift.String
+            /// - Remark: Generated from `#/components/schemas/OutputSharedB03068E397C0900B/coverUrl`.
+            public var coverUrl: Swift.String?
+            /// Creates a new `OutputSharedB03068E397C0900B`.
+            ///
+            /// - Parameters:
+            ///   - id:
+            ///   - name:
+            ///   - coverUrl:
+            public init(
+                id: Components.Schemas.ProductShortcode,
+                name: Swift.String,
+                coverUrl: Swift.String? = nil
+            ) {
+                self.id = id
+                self.name = name
+                self.coverUrl = coverUrl
+            }
+            public enum CodingKeys: String, CodingKey {
+                case id
+                case name
+                case coverUrl
+            }
+        }
         /// - Remark: Generated from `#/components/schemas/OutputSharedB5A49AD64401213B`.
         public typealias OutputSharedB5A49AD64401213B = [Components.Schemas.ProductWithMappingsAndFoodOut]
         /// - Remark: Generated from `#/components/schemas/OutputSharedB839361FBE3EB0DF`.
@@ -26342,6 +26396,453 @@ extension Components {
         public typealias OutputSharedF6568EEE6A12E98E = [Components.Schemas.RecipeTopLevel]
         /// - Remark: Generated from `#/components/schemas/PerceptualHash`.
         public typealias PerceptualHash = Swift.String
+        /// - Remark: Generated from `#/components/schemas/PhotoGroupApprovalResult`.
+        public struct PhotoGroupApprovalResult: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/PhotoGroupApprovalResult/groupKey`.
+            public var groupKey: Swift.String
+            /// - Remark: Generated from `#/components/schemas/PhotoGroupApprovalResult/outcome`.
+            @frozen public enum OutcomePayload: String, Codable, Hashable, Sendable, CaseIterable {
+                case committed = "committed"
+                case replayed = "replayed"
+                case conflict = "conflict"
+                case failed = "failed"
+            }
+            /// - Remark: Generated from `#/components/schemas/PhotoGroupApprovalResult/outcome`.
+            public var outcome: Components.Schemas.PhotoGroupApprovalResult.OutcomePayload
+            /// - Remark: Generated from `#/components/schemas/PhotoGroupApprovalResult/error`.
+            public var error: Swift.String?
+            /// Creates a new `PhotoGroupApprovalResult`.
+            ///
+            /// - Parameters:
+            ///   - groupKey:
+            ///   - outcome:
+            ///   - error:
+            public init(
+                groupKey: Swift.String,
+                outcome: Components.Schemas.PhotoGroupApprovalResult.OutcomePayload,
+                error: Swift.String? = nil
+            ) {
+                self.groupKey = groupKey
+                self.outcome = outcome
+                self.error = error
+            }
+            public enum CodingKeys: String, CodingKey {
+                case groupKey
+                case outcome
+                case error
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/PhotoGroupProposal`.
+        public struct PhotoGroupProposal: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/PhotoGroupProposal/groupKey`.
+            public var groupKey: Swift.String
+            /// - Remark: Generated from `#/components/schemas/PhotoGroupProposal/state`.
+            public var state: Components.Schemas.PhotoGroupProposalState
+            /// - Remark: Generated from `#/components/schemas/PhotoGroupProposal/ImagesPayload`.
+            public struct ImagesPayloadPayload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/PhotoGroupProposal/ImagesPayload/id`.
+                public var id: Components.Schemas.ImageShortcode
+                /// - Remark: Generated from `#/components/schemas/PhotoGroupProposal/ImagesPayload/purpose`.
+                public var purpose: Components.Schemas.ProductImagePurpose
+                /// Creates a new `ImagesPayloadPayload`.
+                ///
+                /// - Parameters:
+                ///   - id:
+                ///   - purpose:
+                public init(
+                    id: Components.Schemas.ImageShortcode,
+                    purpose: Components.Schemas.ProductImagePurpose
+                ) {
+                    self.id = id
+                    self.purpose = purpose
+                }
+                public enum CodingKeys: String, CodingKey {
+                    case id
+                    case purpose
+                }
+            }
+            /// - Remark: Generated from `#/components/schemas/PhotoGroupProposal/images`.
+            public typealias ImagesPayload = [Components.Schemas.PhotoGroupProposal.ImagesPayloadPayload]
+            /// - Remark: Generated from `#/components/schemas/PhotoGroupProposal/images`.
+            public var images: Components.Schemas.PhotoGroupProposal.ImagesPayload
+            /// - Remark: Generated from `#/components/schemas/PhotoGroupProposal/SkipPayload`.
+            public struct SkipPayloadPayload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/PhotoGroupProposal/SkipPayload/id`.
+                public var id: Components.Schemas.ImageShortcode
+                /// - Remark: Generated from `#/components/schemas/PhotoGroupProposal/SkipPayload/reason`.
+                public var reason: Swift.String
+                /// Creates a new `SkipPayloadPayload`.
+                ///
+                /// - Parameters:
+                ///   - id:
+                ///   - reason:
+                public init(
+                    id: Components.Schemas.ImageShortcode,
+                    reason: Swift.String
+                ) {
+                    self.id = id
+                    self.reason = reason
+                }
+                public enum CodingKeys: String, CodingKey {
+                    case id
+                    case reason
+                }
+            }
+            /// - Remark: Generated from `#/components/schemas/PhotoGroupProposal/skip`.
+            public typealias SkipPayload = [Components.Schemas.PhotoGroupProposal.SkipPayloadPayload]
+            /// - Remark: Generated from `#/components/schemas/PhotoGroupProposal/skip`.
+            public var skip: Components.Schemas.PhotoGroupProposal.SkipPayload
+            /// - Remark: Generated from `#/components/schemas/PhotoGroupProposal/product`.
+            @frozen public enum ProductPayload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/PhotoGroupProposal/product/PhotoGroupProposalCreate`.
+                case create(Components.Schemas.PhotoGroupProposalCreate)
+                /// - Remark: Generated from `#/components/schemas/PhotoGroupProposal/product/PhotoGroupProposalExisting`.
+                case existing(Components.Schemas.PhotoGroupProposalExisting)
+                public enum CodingKeys: String, CodingKey {
+                    case kind
+                }
+                public init(from decoder: any Swift.Decoder) throws {
+                    let container = try decoder.container(keyedBy: CodingKeys.self)
+                    let discriminator = try container.decode(
+                        Swift.String.self,
+                        forKey: .kind
+                    )
+                    switch discriminator {
+                    case "create":
+                        self = .create(try .init(from: decoder))
+                    case "existing":
+                        self = .existing(try .init(from: decoder))
+                    default:
+                        throw Swift.DecodingError.unknownOneOfDiscriminator(
+                            discriminatorKey: CodingKeys.kind,
+                            discriminatorValue: discriminator,
+                            codingPath: decoder.codingPath
+                        )
+                    }
+                }
+                public func encode(to encoder: any Swift.Encoder) throws {
+                    switch self {
+                    case let .create(value):
+                        try value.encode(to: encoder)
+                    case let .existing(value):
+                        try value.encode(to: encoder)
+                    }
+                }
+            }
+            /// - Remark: Generated from `#/components/schemas/PhotoGroupProposal/product`.
+            public var product: Components.Schemas.PhotoGroupProposal.ProductPayload
+            /// - Remark: Generated from `#/components/schemas/PhotoGroupProposal/committedProduct`.
+            public var committedProduct: Components.Schemas.OutputSharedB03068E397C0900B?
+            /// - Remark: Generated from `#/components/schemas/PhotoGroupProposal/inventory`.
+            public struct InventoryPayload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/PhotoGroupProposal/inventory/locationId`.
+                public var locationId: Components.Schemas.LocationShortcode?
+                /// - Remark: Generated from `#/components/schemas/PhotoGroupProposal/inventory/locationName`.
+                public var locationName: Swift.String?
+                /// - Remark: Generated from `#/components/schemas/PhotoGroupProposal/inventory/ownershipMode`.
+                public var ownershipMode: Components.Schemas.InventoryOwnershipMode?
+                /// - Remark: Generated from `#/components/schemas/PhotoGroupProposal/inventory/ownerPartyId`.
+                public var ownerPartyId: Components.Schemas.LedgerPartyShortcode?
+                /// - Remark: Generated from `#/components/schemas/PhotoGroupProposal/inventory/quantity`.
+                public var quantity: Swift.Int
+                /// Creates a new `InventoryPayload`.
+                ///
+                /// - Parameters:
+                ///   - locationId:
+                ///   - locationName:
+                ///   - ownershipMode:
+                ///   - ownerPartyId:
+                ///   - quantity:
+                public init(
+                    locationId: Components.Schemas.LocationShortcode? = nil,
+                    locationName: Swift.String? = nil,
+                    ownershipMode: Components.Schemas.InventoryOwnershipMode? = nil,
+                    ownerPartyId: Components.Schemas.LedgerPartyShortcode? = nil,
+                    quantity: Swift.Int
+                ) {
+                    self.locationId = locationId
+                    self.locationName = locationName
+                    self.ownershipMode = ownershipMode
+                    self.ownerPartyId = ownerPartyId
+                    self.quantity = quantity
+                }
+                public enum CodingKeys: String, CodingKey {
+                    case locationId
+                    case locationName
+                    case ownershipMode
+                    case ownerPartyId
+                    case quantity
+                }
+            }
+            /// - Remark: Generated from `#/components/schemas/PhotoGroupProposal/inventory`.
+            public var inventory: Components.Schemas.PhotoGroupProposal.InventoryPayload?
+            /// - Remark: Generated from `#/components/schemas/PhotoGroupProposal/evidence`.
+            public var evidence: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/PhotoGroupProposal/conflict`.
+            public var conflict: [Components.Schemas.OutputSharedB03068E397C0900B]?
+            /// - Remark: Generated from `#/components/schemas/PhotoGroupProposal/lastError`.
+            public var lastError: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/PhotoGroupProposal/missingImageCount`.
+            public var missingImageCount: Swift.Int
+            /// - Remark: Generated from `#/components/schemas/PhotoGroupProposal/committedAt`.
+            public var committedAt: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/PhotoGroupProposal/updatedAt`.
+            public var updatedAt: Swift.String
+            /// Creates a new `PhotoGroupProposal`.
+            ///
+            /// - Parameters:
+            ///   - groupKey:
+            ///   - state:
+            ///   - images:
+            ///   - skip:
+            ///   - product:
+            ///   - committedProduct:
+            ///   - inventory:
+            ///   - evidence:
+            ///   - conflict:
+            ///   - lastError:
+            ///   - missingImageCount:
+            ///   - committedAt:
+            ///   - updatedAt:
+            public init(
+                groupKey: Swift.String,
+                state: Components.Schemas.PhotoGroupProposalState,
+                images: Components.Schemas.PhotoGroupProposal.ImagesPayload,
+                skip: Components.Schemas.PhotoGroupProposal.SkipPayload,
+                product: Components.Schemas.PhotoGroupProposal.ProductPayload,
+                committedProduct: Components.Schemas.OutputSharedB03068E397C0900B? = nil,
+                inventory: Components.Schemas.PhotoGroupProposal.InventoryPayload? = nil,
+                evidence: Swift.String? = nil,
+                conflict: [Components.Schemas.OutputSharedB03068E397C0900B]? = nil,
+                lastError: Swift.String? = nil,
+                missingImageCount: Swift.Int,
+                committedAt: Swift.String? = nil,
+                updatedAt: Swift.String
+            ) {
+                self.groupKey = groupKey
+                self.state = state
+                self.images = images
+                self.skip = skip
+                self.product = product
+                self.committedProduct = committedProduct
+                self.inventory = inventory
+                self.evidence = evidence
+                self.conflict = conflict
+                self.lastError = lastError
+                self.missingImageCount = missingImageCount
+                self.committedAt = committedAt
+                self.updatedAt = updatedAt
+            }
+            public enum CodingKeys: String, CodingKey {
+                case groupKey
+                case state
+                case images
+                case skip
+                case product
+                case committedProduct
+                case inventory
+                case evidence
+                case conflict
+                case lastError
+                case missingImageCount
+                case committedAt
+                case updatedAt
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/PhotoGroupProposalCreate`.
+        public struct PhotoGroupProposalCreate: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/PhotoGroupProposalCreate/kind`.
+            @frozen public enum KindPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                case create = "create"
+            }
+            /// - Remark: Generated from `#/components/schemas/PhotoGroupProposalCreate/kind`.
+            public var kind: Components.Schemas.PhotoGroupProposalCreate.KindPayload
+            /// - Remark: Generated from `#/components/schemas/PhotoGroupProposalCreate/create`.
+            public struct CreatePayload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/PhotoGroupProposalCreate/create/name`.
+                public var name: Swift.String
+                /// - Remark: Generated from `#/components/schemas/PhotoGroupProposalCreate/create/categoryId`.
+                public var categoryId: Components.Schemas.ProductCategoryShortcode?
+                /// - Remark: Generated from `#/components/schemas/PhotoGroupProposalCreate/create/manufacturer`.
+                public var manufacturer: Swift.String?
+                /// - Remark: Generated from `#/components/schemas/PhotoGroupProposalCreate/create/model`.
+                public var model: Swift.String?
+                /// - Remark: Generated from `#/components/schemas/PhotoGroupProposalCreate/create/notes`.
+                public var notes: Swift.String?
+                /// - Remark: Generated from `#/components/schemas/PhotoGroupProposalCreate/create/tags`.
+                public var tags: [Swift.String]?
+                /// Creates a new `CreatePayload`.
+                ///
+                /// - Parameters:
+                ///   - name:
+                ///   - categoryId:
+                ///   - manufacturer:
+                ///   - model:
+                ///   - notes:
+                ///   - tags:
+                public init(
+                    name: Swift.String,
+                    categoryId: Components.Schemas.ProductCategoryShortcode? = nil,
+                    manufacturer: Swift.String? = nil,
+                    model: Swift.String? = nil,
+                    notes: Swift.String? = nil,
+                    tags: [Swift.String]? = nil
+                ) {
+                    self.name = name
+                    self.categoryId = categoryId
+                    self.manufacturer = manufacturer
+                    self.model = model
+                    self.notes = notes
+                    self.tags = tags
+                }
+                public enum CodingKeys: String, CodingKey {
+                    case name
+                    case categoryId
+                    case manufacturer
+                    case model
+                    case notes
+                    case tags
+                }
+            }
+            /// - Remark: Generated from `#/components/schemas/PhotoGroupProposalCreate/create`.
+            public var create: Components.Schemas.PhotoGroupProposalCreate.CreatePayload
+            /// Creates a new `PhotoGroupProposalCreate`.
+            ///
+            /// - Parameters:
+            ///   - kind:
+            ///   - create:
+            public init(
+                kind: Components.Schemas.PhotoGroupProposalCreate.KindPayload,
+                create: Components.Schemas.PhotoGroupProposalCreate.CreatePayload
+            ) {
+                self.kind = kind
+                self.create = create
+            }
+            public enum CodingKeys: String, CodingKey {
+                case kind
+                case create
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/PhotoGroupProposalExisting`.
+        public struct PhotoGroupProposalExisting: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/PhotoGroupProposalExisting/kind`.
+            @frozen public enum KindPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                case existing = "existing"
+            }
+            /// - Remark: Generated from `#/components/schemas/PhotoGroupProposalExisting/kind`.
+            public var kind: Components.Schemas.PhotoGroupProposalExisting.KindPayload
+            /// - Remark: Generated from `#/components/schemas/PhotoGroupProposalExisting/existing`.
+            public var existing: Components.Schemas.OutputSharedB03068E397C0900B?
+            /// Creates a new `PhotoGroupProposalExisting`.
+            ///
+            /// - Parameters:
+            ///   - kind:
+            ///   - existing:
+            public init(
+                kind: Components.Schemas.PhotoGroupProposalExisting.KindPayload,
+                existing: Components.Schemas.OutputSharedB03068E397C0900B? = nil
+            ) {
+                self.kind = kind
+                self.existing = existing
+            }
+            public enum CodingKeys: String, CodingKey {
+                case kind
+                case existing
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/PhotoGroupProposalList`.
+        public struct PhotoGroupProposalList: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/PhotoGroupProposalList/runId`.
+            public var runId: Components.Schemas.ImportRunShortcode
+            /// - Remark: Generated from `#/components/schemas/PhotoGroupProposalList/runStatus`.
+            public var runStatus: Components.Schemas.ImportRunStatus
+            /// - Remark: Generated from `#/components/schemas/PhotoGroupProposalList/proposals`.
+            public var proposals: Components.Schemas.OutputShared29A61BDC638B0D71
+            /// - Remark: Generated from `#/components/schemas/PhotoGroupProposalList/unassignedImageIds`.
+            public var unassignedImageIds: Components.Schemas.InputSharedEBBF8976E5192330
+            /// Creates a new `PhotoGroupProposalList`.
+            ///
+            /// - Parameters:
+            ///   - runId:
+            ///   - runStatus:
+            ///   - proposals:
+            ///   - unassignedImageIds:
+            public init(
+                runId: Components.Schemas.ImportRunShortcode,
+                runStatus: Components.Schemas.ImportRunStatus,
+                proposals: Components.Schemas.OutputShared29A61BDC638B0D71,
+                unassignedImageIds: Components.Schemas.InputSharedEBBF8976E5192330
+            ) {
+                self.runId = runId
+                self.runStatus = runStatus
+                self.proposals = proposals
+                self.unassignedImageIds = unassignedImageIds
+            }
+            public enum CodingKeys: String, CodingKey {
+                case runId
+                case runStatus
+                case proposals
+                case unassignedImageIds
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/PhotoGroupProposalState`.
+        @frozen public enum PhotoGroupProposalState: String, Codable, Hashable, Sendable, CaseIterable {
+            case proposed = "proposed"
+            case committed = "committed"
+            case discarded = "discarded"
+        }
+        /// - Remark: Generated from `#/components/schemas/PhotoImportApproveGroupsInput`.
+        public struct PhotoImportApproveGroupsInput: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/PhotoImportApproveGroupsInput/runId`.
+            public var runId: Components.Schemas.ImportRunShortcode
+            /// - Remark: Generated from `#/components/schemas/PhotoImportApproveGroupsInput/groupKeys`.
+            public var groupKeys: [Swift.String]
+            /// Creates a new `PhotoImportApproveGroupsInput`.
+            ///
+            /// - Parameters:
+            ///   - runId:
+            ///   - groupKeys:
+            public init(
+                runId: Components.Schemas.ImportRunShortcode,
+                groupKeys: [Swift.String]
+            ) {
+                self.runId = runId
+                self.groupKeys = groupKeys
+            }
+            public enum CodingKeys: String, CodingKey {
+                case runId
+                case groupKeys
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/PhotoImportChooseExistingInput`.
+        public struct PhotoImportChooseExistingInput: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/PhotoImportChooseExistingInput/runId`.
+            public var runId: Components.Schemas.ImportRunShortcode
+            /// - Remark: Generated from `#/components/schemas/PhotoImportChooseExistingInput/groupKey`.
+            public var groupKey: Swift.String
+            /// - Remark: Generated from `#/components/schemas/PhotoImportChooseExistingInput/productId`.
+            public var productId: Components.Schemas.ProductShortcode
+            /// Creates a new `PhotoImportChooseExistingInput`.
+            ///
+            /// - Parameters:
+            ///   - runId:
+            ///   - groupKey:
+            ///   - productId:
+            public init(
+                runId: Components.Schemas.ImportRunShortcode,
+                groupKey: Swift.String,
+                productId: Components.Schemas.ProductShortcode
+            ) {
+                self.runId = runId
+                self.groupKey = groupKey
+                self.productId = productId
+            }
+            public enum CodingKeys: String, CodingKey {
+                case runId
+                case groupKey
+                case productId
+            }
+        }
         /// - Remark: Generated from `#/components/schemas/PhotoImportCommitInput`.
         public struct PhotoImportCommitInput: Codable, Hashable, Sendable {
             /// - Remark: Generated from `#/components/schemas/PhotoImportCommitInput/idempotencyKey`.
@@ -26940,6 +27441,29 @@ extension Components {
                 case runId
             }
         }
+        /// - Remark: Generated from `#/components/schemas/PhotoImportDiscardGroupInput`.
+        public struct PhotoImportDiscardGroupInput: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/PhotoImportDiscardGroupInput/runId`.
+            public var runId: Components.Schemas.ImportRunShortcode
+            /// - Remark: Generated from `#/components/schemas/PhotoImportDiscardGroupInput/groupKey`.
+            public var groupKey: Swift.String
+            /// Creates a new `PhotoImportDiscardGroupInput`.
+            ///
+            /// - Parameters:
+            ///   - runId:
+            ///   - groupKey:
+            public init(
+                runId: Components.Schemas.ImportRunShortcode,
+                groupKey: Swift.String
+            ) {
+                self.runId = runId
+                self.groupKey = groupKey
+            }
+            public enum CodingKeys: String, CodingKey {
+                case runId
+                case groupKey
+            }
+        }
         /// - Remark: Generated from `#/components/schemas/PhotoImportFinalizeImage`.
         public struct PhotoImportFinalizeImage: Codable, Hashable, Sendable {
             /// - Remark: Generated from `#/components/schemas/PhotoImportFinalizeImage/imageId`.
@@ -27419,6 +27943,322 @@ extension Components {
             }
             public enum CodingKeys: String, CodingKey {
                 case items
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/PhotoImportStartGroupingInput`.
+        public struct PhotoImportStartGroupingInput: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/PhotoImportStartGroupingInput/runId`.
+            public var runId: Components.Schemas.ImportRunShortcode
+            /// Creates a new `PhotoImportStartGroupingInput`.
+            ///
+            /// - Parameters:
+            ///   - runId:
+            public init(runId: Components.Schemas.ImportRunShortcode) {
+                self.runId = runId
+            }
+            public enum CodingKeys: String, CodingKey {
+                case runId
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/PhotoImportStartGroupingOutput`.
+        public struct PhotoImportStartGroupingOutput: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/PhotoImportStartGroupingOutput/runId`.
+            public var runId: Components.Schemas.ImportRunShortcode
+            /// - Remark: Generated from `#/components/schemas/PhotoImportStartGroupingOutput/started`.
+            public var started: Swift.Bool
+            /// Creates a new `PhotoImportStartGroupingOutput`.
+            ///
+            /// - Parameters:
+            ///   - runId:
+            ///   - started:
+            public init(
+                runId: Components.Schemas.ImportRunShortcode,
+                started: Swift.Bool
+            ) {
+                self.runId = runId
+                self.started = started
+            }
+            public enum CodingKeys: String, CodingKey {
+                case runId
+                case started
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/PhotoImportUpdateDraftInput`.
+        public struct PhotoImportUpdateDraftInput: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/PhotoImportUpdateDraftInput/runId`.
+            public var runId: Components.Schemas.ImportRunShortcode
+            /// - Remark: Generated from `#/components/schemas/PhotoImportUpdateDraftInput/groupKey`.
+            public var groupKey: Swift.String
+            /// - Remark: Generated from `#/components/schemas/PhotoImportUpdateDraftInput/name`.
+            public var name: Swift.String
+            /// - Remark: Generated from `#/components/schemas/PhotoImportUpdateDraftInput/categoryId`.
+            public var categoryId: Components.Schemas.ProductCategoryShortcode?
+            /// - Remark: Generated from `#/components/schemas/PhotoImportUpdateDraftInput/manufacturer`.
+            public var manufacturer: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/PhotoImportUpdateDraftInput/model`.
+            public var model: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/PhotoImportUpdateDraftInput/notes`.
+            public var notes: Swift.String?
+            /// Creates a new `PhotoImportUpdateDraftInput`.
+            ///
+            /// - Parameters:
+            ///   - runId:
+            ///   - groupKey:
+            ///   - name:
+            ///   - categoryId:
+            ///   - manufacturer:
+            ///   - model:
+            ///   - notes:
+            public init(
+                runId: Components.Schemas.ImportRunShortcode,
+                groupKey: Swift.String,
+                name: Swift.String,
+                categoryId: Components.Schemas.ProductCategoryShortcode? = nil,
+                manufacturer: Swift.String? = nil,
+                model: Swift.String? = nil,
+                notes: Swift.String? = nil
+            ) {
+                self.runId = runId
+                self.groupKey = groupKey
+                self.name = name
+                self.categoryId = categoryId
+                self.manufacturer = manufacturer
+                self.model = model
+                self.notes = notes
+            }
+            public enum CodingKeys: String, CodingKey {
+                case runId
+                case groupKey
+                case name
+                case categoryId
+                case manufacturer
+                case model
+                case notes
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/PhotoProductCandidate`.
+        public struct PhotoProductCandidate: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/PhotoProductCandidate/id`.
+            public var id: Components.Schemas.ProductShortcode
+            /// - Remark: Generated from `#/components/schemas/PhotoProductCandidate/name`.
+            public var name: Swift.String
+            /// - Remark: Generated from `#/components/schemas/PhotoProductCandidate/coverUrl`.
+            public var coverUrl: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/PhotoProductCandidate/match`.
+            public struct MatchPayload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/PhotoProductCandidate/match/source`.
+                @frozen public enum SourcePayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case catalogName = "catalog_name"
+                }
+                /// - Remark: Generated from `#/components/schemas/PhotoProductCandidate/match/source`.
+                public var source: Components.Schemas.PhotoProductCandidate.MatchPayload.SourcePayload
+                /// - Remark: Generated from `#/components/schemas/PhotoProductCandidate/match/sharedNameTerms`.
+                public var sharedNameTerms: [Swift.String]
+                /// - Remark: Generated from `#/components/schemas/PhotoProductCandidate/match/brandMatches`.
+                public var brandMatches: Swift.Bool
+                /// Creates a new `MatchPayload`.
+                ///
+                /// - Parameters:
+                ///   - source:
+                ///   - sharedNameTerms:
+                ///   - brandMatches:
+                public init(
+                    source: Components.Schemas.PhotoProductCandidate.MatchPayload.SourcePayload,
+                    sharedNameTerms: [Swift.String],
+                    brandMatches: Swift.Bool
+                ) {
+                    self.source = source
+                    self.sharedNameTerms = sharedNameTerms
+                    self.brandMatches = brandMatches
+                }
+                public enum CodingKeys: String, CodingKey {
+                    case source
+                    case sharedNameTerms
+                    case brandMatches
+                }
+            }
+            /// - Remark: Generated from `#/components/schemas/PhotoProductCandidate/match`.
+            public var match: Components.Schemas.PhotoProductCandidate.MatchPayload
+            /// - Remark: Generated from `#/components/schemas/PhotoProductCandidate/hasOwnPhoto`.
+            public var hasOwnPhoto: Swift.Bool
+            /// - Remark: Generated from `#/components/schemas/PhotoProductCandidate/hasPhotoImport`.
+            public var hasPhotoImport: Swift.Bool
+            /// - Remark: Generated from `#/components/schemas/PhotoProductCandidate/hasPurchase`.
+            public var hasPurchase: Swift.Bool
+            /// - Remark: Generated from `#/components/schemas/PhotoProductCandidate/hasInventory`.
+            public var hasInventory: Swift.Bool
+            /// Creates a new `PhotoProductCandidate`.
+            ///
+            /// - Parameters:
+            ///   - id:
+            ///   - name:
+            ///   - coverUrl:
+            ///   - match:
+            ///   - hasOwnPhoto:
+            ///   - hasPhotoImport:
+            ///   - hasPurchase:
+            ///   - hasInventory:
+            public init(
+                id: Components.Schemas.ProductShortcode,
+                name: Swift.String,
+                coverUrl: Swift.String? = nil,
+                match: Components.Schemas.PhotoProductCandidate.MatchPayload,
+                hasOwnPhoto: Swift.Bool,
+                hasPhotoImport: Swift.Bool,
+                hasPurchase: Swift.Bool,
+                hasInventory: Swift.Bool
+            ) {
+                self.id = id
+                self.name = name
+                self.coverUrl = coverUrl
+                self.match = match
+                self.hasOwnPhoto = hasOwnPhoto
+                self.hasPhotoImport = hasPhotoImport
+                self.hasPurchase = hasPurchase
+                self.hasInventory = hasInventory
+            }
+            public enum CodingKeys: String, CodingKey {
+                case id
+                case name
+                case coverUrl
+                case match
+                case hasOwnPhoto
+                case hasPhotoImport
+                case hasPurchase
+                case hasInventory
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/PhotoProductCandidatesResponse`.
+        public struct PhotoProductCandidatesResponse: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/PhotoProductCandidatesResponse/candidates`.
+            public var candidates: [Components.Schemas.PhotoProductCandidate]
+            /// Creates a new `PhotoProductCandidatesResponse`.
+            ///
+            /// - Parameters:
+            ///   - candidates:
+            public init(candidates: [Components.Schemas.PhotoProductCandidate]) {
+                self.candidates = candidates
+            }
+            public enum CodingKeys: String, CodingKey {
+                case candidates
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/PhotoRunImage`.
+        public struct PhotoRunImage: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/PhotoRunImage/id`.
+            public var id: Components.Schemas.ImageShortcode
+            /// - Remark: Generated from `#/components/schemas/PhotoRunImage/position`.
+            public var position: Swift.Int?
+            /// - Remark: Generated from `#/components/schemas/PhotoRunImage/targetState`.
+            public var targetState: Components.Schemas.ImportRunTargetState
+            /// - Remark: Generated from `#/components/schemas/PhotoRunImage/originalUrl`.
+            public var originalUrl: Swift.String
+            /// - Remark: Generated from `#/components/schemas/PhotoRunImage/cutoutUrl`.
+            public var cutoutUrl: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/PhotoRunImage/cutout`.
+            public var cutout: Components.Schemas.ImageProcessingJobState?
+            /// - Remark: Generated from `#/components/schemas/PhotoRunImage/describe`.
+            public var describe: Components.Schemas.ImageProcessingJobState?
+            /// - Remark: Generated from `#/components/schemas/PhotoRunImage/describeStartedAt`.
+            public var describeStartedAt: Foundation.Date?
+            /// - Remark: Generated from `#/components/schemas/PhotoRunImage/describeCompletedAt`.
+            public var describeCompletedAt: Foundation.Date?
+            /// - Remark: Generated from `#/components/schemas/PhotoRunImage/localAnalysisReady`.
+            public var localAnalysisReady: Swift.Bool
+            /// - Remark: Generated from `#/components/schemas/PhotoRunImage/cutoutReason`.
+            public var cutoutReason: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/PhotoRunImage/describeReason`.
+            public var describeReason: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/PhotoRunImage/description`.
+            public var description: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/PhotoRunImage/recognizedText`.
+            public var recognizedText: Swift.String?
+            /// Creates a new `PhotoRunImage`.
+            ///
+            /// - Parameters:
+            ///   - id:
+            ///   - position:
+            ///   - targetState:
+            ///   - originalUrl:
+            ///   - cutoutUrl:
+            ///   - cutout:
+            ///   - describe:
+            ///   - describeStartedAt:
+            ///   - describeCompletedAt:
+            ///   - localAnalysisReady:
+            ///   - cutoutReason:
+            ///   - describeReason:
+            ///   - description:
+            ///   - recognizedText:
+            public init(
+                id: Components.Schemas.ImageShortcode,
+                position: Swift.Int? = nil,
+                targetState: Components.Schemas.ImportRunTargetState,
+                originalUrl: Swift.String,
+                cutoutUrl: Swift.String? = nil,
+                cutout: Components.Schemas.ImageProcessingJobState? = nil,
+                describe: Components.Schemas.ImageProcessingJobState? = nil,
+                describeStartedAt: Foundation.Date? = nil,
+                describeCompletedAt: Foundation.Date? = nil,
+                localAnalysisReady: Swift.Bool,
+                cutoutReason: Swift.String? = nil,
+                describeReason: Swift.String? = nil,
+                description: Swift.String? = nil,
+                recognizedText: Swift.String? = nil
+            ) {
+                self.id = id
+                self.position = position
+                self.targetState = targetState
+                self.originalUrl = originalUrl
+                self.cutoutUrl = cutoutUrl
+                self.cutout = cutout
+                self.describe = describe
+                self.describeStartedAt = describeStartedAt
+                self.describeCompletedAt = describeCompletedAt
+                self.localAnalysisReady = localAnalysisReady
+                self.cutoutReason = cutoutReason
+                self.describeReason = describeReason
+                self.description = description
+                self.recognizedText = recognizedText
+            }
+            public enum CodingKeys: String, CodingKey {
+                case id
+                case position
+                case targetState
+                case originalUrl
+                case cutoutUrl
+                case cutout
+                case describe
+                case describeStartedAt
+                case describeCompletedAt
+                case localAnalysisReady
+                case cutoutReason
+                case describeReason
+                case description
+                case recognizedText
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/PhotoRunReviewResponse`.
+        public struct PhotoRunReviewResponse: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/PhotoRunReviewResponse/review`.
+            public var review: Components.Schemas.PhotoGroupProposalList
+            /// - Remark: Generated from `#/components/schemas/PhotoRunReviewResponse/images`.
+            public var images: [Components.Schemas.PhotoRunImage]
+            /// Creates a new `PhotoRunReviewResponse`.
+            ///
+            /// - Parameters:
+            ///   - review:
+            ///   - images:
+            public init(
+                review: Components.Schemas.PhotoGroupProposalList,
+                images: [Components.Schemas.PhotoRunImage]
+            ) {
+                self.review = review
+                self.images = images
+            }
+            public enum CodingKeys: String, CodingKey {
+                case review
+                case images
             }
         }
         /// Calendar day as "YYYY-MM-DD"
@@ -30368,6 +31208,11 @@ extension Components {
                 case created
                 case sideEffects
             }
+        }
+        /// - Remark: Generated from `#/components/schemas/ProductImagePurpose`.
+        @frozen public enum ProductImagePurpose: String, Codable, Hashable, Sendable, CaseIterable {
+            case item = "item"
+            case label = "label"
         }
         /// - Remark: Generated from `#/components/schemas/ProductLabelNutrition`.
         public struct ProductLabelNutrition: Codable, Hashable, Sendable {
@@ -36893,6 +37738,204 @@ extension Components {
             public enum CodingKeys: String, CodingKey {
                 case retried
                 case submissionId
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/ReviewPhotoGroupsOutput`.
+        public struct ReviewPhotoGroupsOutput: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ReviewPhotoGroupsOutput/runId`.
+            public var runId: Components.Schemas.ImportRunShortcode
+            /// - Remark: Generated from `#/components/schemas/ReviewPhotoGroupsOutput/runStatus`.
+            public var runStatus: Components.Schemas.ImportRunStatus
+            /// - Remark: Generated from `#/components/schemas/ReviewPhotoGroupsOutput/proposals`.
+            public var proposals: Components.Schemas.OutputShared29A61BDC638B0D71
+            /// - Remark: Generated from `#/components/schemas/ReviewPhotoGroupsOutput/unassignedImageIds`.
+            public var unassignedImageIds: Components.Schemas.InputSharedEBBF8976E5192330
+            /// - Remark: Generated from `#/components/schemas/ReviewPhotoGroupsOutput/results`.
+            public var results: [Components.Schemas.PhotoGroupApprovalResult]
+            /// - Remark: Generated from `#/components/schemas/ReviewPhotoGroupsOutput/frozenGroupKeys`.
+            public var frozenGroupKeys: [Swift.String]
+            /// Creates a new `ReviewPhotoGroupsOutput`.
+            ///
+            /// - Parameters:
+            ///   - runId:
+            ///   - runStatus:
+            ///   - proposals:
+            ///   - unassignedImageIds:
+            ///   - results:
+            ///   - frozenGroupKeys:
+            public init(
+                runId: Components.Schemas.ImportRunShortcode,
+                runStatus: Components.Schemas.ImportRunStatus,
+                proposals: Components.Schemas.OutputShared29A61BDC638B0D71,
+                unassignedImageIds: Components.Schemas.InputSharedEBBF8976E5192330,
+                results: [Components.Schemas.PhotoGroupApprovalResult],
+                frozenGroupKeys: [Swift.String]
+            ) {
+                self.runId = runId
+                self.runStatus = runStatus
+                self.proposals = proposals
+                self.unassignedImageIds = unassignedImageIds
+                self.results = results
+                self.frozenGroupKeys = frozenGroupKeys
+            }
+            public enum CodingKeys: String, CodingKey {
+                case runId
+                case runStatus
+                case proposals
+                case unassignedImageIds
+                case results
+                case frozenGroupKeys
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/RunWorkSnapshotOutput`.
+        public struct RunWorkSnapshotOutput: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/RunWorkSnapshotOutput/runId`.
+            public var runId: Components.Schemas.ImportRunShortcode
+            /// - Remark: Generated from `#/components/schemas/RunWorkSnapshotOutput/purpose`.
+            public var purpose: Components.Schemas.ImportRunPurpose
+            /// - Remark: Generated from `#/components/schemas/RunWorkSnapshotOutput/status`.
+            public var status: Components.Schemas.ImportRunStatus
+            /// - Remark: Generated from `#/components/schemas/RunWorkSnapshotOutput/ordersSeen`.
+            public var ordersSeen: Swift.Int
+            /// - Remark: Generated from `#/components/schemas/RunWorkSnapshotOutput/imported`.
+            public var imported: Swift.Int
+            /// - Remark: Generated from `#/components/schemas/RunWorkSnapshotOutput/updated`.
+            public var updated: Swift.Int
+            /// - Remark: Generated from `#/components/schemas/RunWorkSnapshotOutput/skipped`.
+            public var skipped: Swift.Int
+            /// - Remark: Generated from `#/components/schemas/RunWorkSnapshotOutput/targetsTotal`.
+            public var targetsTotal: Swift.Int
+            /// - Remark: Generated from `#/components/schemas/RunWorkSnapshotOutput/targetsCompleted`.
+            public var targetsCompleted: Swift.Int
+            /// - Remark: Generated from `#/components/schemas/RunWorkSnapshotOutput/ProgressPayload`.
+            public struct ProgressPayloadPayload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/RunWorkSnapshotOutput/ProgressPayload/phase`.
+                public var phase: Swift.String
+                /// - Remark: Generated from `#/components/schemas/RunWorkSnapshotOutput/ProgressPayload/detail`.
+                public var detail: Swift.String?
+                /// - Remark: Generated from `#/components/schemas/RunWorkSnapshotOutput/ProgressPayload/createdAt`.
+                public var createdAt: Foundation.Date
+                /// Creates a new `ProgressPayloadPayload`.
+                ///
+                /// - Parameters:
+                ///   - phase:
+                ///   - detail:
+                ///   - createdAt:
+                public init(
+                    phase: Swift.String,
+                    detail: Swift.String? = nil,
+                    createdAt: Foundation.Date
+                ) {
+                    self.phase = phase
+                    self.detail = detail
+                    self.createdAt = createdAt
+                }
+                public enum CodingKeys: String, CodingKey {
+                    case phase
+                    case detail
+                    case createdAt
+                }
+            }
+            /// - Remark: Generated from `#/components/schemas/RunWorkSnapshotOutput/progress`.
+            public typealias ProgressPayload = [Components.Schemas.RunWorkSnapshotOutput.ProgressPayloadPayload]
+            /// - Remark: Generated from `#/components/schemas/RunWorkSnapshotOutput/progress`.
+            public var progress: Components.Schemas.RunWorkSnapshotOutput.ProgressPayload
+            /// - Remark: Generated from `#/components/schemas/RunWorkSnapshotOutput/OperationsPayload`.
+            public struct OperationsPayloadPayload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/RunWorkSnapshotOutput/OperationsPayload/kind`.
+                public var kind: Swift.String
+                /// - Remark: Generated from `#/components/schemas/RunWorkSnapshotOutput/OperationsPayload/state`.
+                public var state: Swift.String
+                /// - Remark: Generated from `#/components/schemas/RunWorkSnapshotOutput/OperationsPayload/startedAt`.
+                public var startedAt: Foundation.Date
+                /// - Remark: Generated from `#/components/schemas/RunWorkSnapshotOutput/OperationsPayload/completedAt`.
+                public var completedAt: Foundation.Date?
+                /// - Remark: Generated from `#/components/schemas/RunWorkSnapshotOutput/OperationsPayload/error`.
+                public var error: Swift.String?
+                /// Creates a new `OperationsPayloadPayload`.
+                ///
+                /// - Parameters:
+                ///   - kind:
+                ///   - state:
+                ///   - startedAt:
+                ///   - completedAt:
+                ///   - error:
+                public init(
+                    kind: Swift.String,
+                    state: Swift.String,
+                    startedAt: Foundation.Date,
+                    completedAt: Foundation.Date? = nil,
+                    error: Swift.String? = nil
+                ) {
+                    self.kind = kind
+                    self.state = state
+                    self.startedAt = startedAt
+                    self.completedAt = completedAt
+                    self.error = error
+                }
+                public enum CodingKeys: String, CodingKey {
+                    case kind
+                    case state
+                    case startedAt
+                    case completedAt
+                    case error
+                }
+            }
+            /// - Remark: Generated from `#/components/schemas/RunWorkSnapshotOutput/operations`.
+            public typealias OperationsPayload = [Components.Schemas.RunWorkSnapshotOutput.OperationsPayloadPayload]
+            /// - Remark: Generated from `#/components/schemas/RunWorkSnapshotOutput/operations`.
+            public var operations: Components.Schemas.RunWorkSnapshotOutput.OperationsPayload
+            /// Creates a new `RunWorkSnapshotOutput`.
+            ///
+            /// - Parameters:
+            ///   - runId:
+            ///   - purpose:
+            ///   - status:
+            ///   - ordersSeen:
+            ///   - imported:
+            ///   - updated:
+            ///   - skipped:
+            ///   - targetsTotal:
+            ///   - targetsCompleted:
+            ///   - progress:
+            ///   - operations:
+            public init(
+                runId: Components.Schemas.ImportRunShortcode,
+                purpose: Components.Schemas.ImportRunPurpose,
+                status: Components.Schemas.ImportRunStatus,
+                ordersSeen: Swift.Int,
+                imported: Swift.Int,
+                updated: Swift.Int,
+                skipped: Swift.Int,
+                targetsTotal: Swift.Int,
+                targetsCompleted: Swift.Int,
+                progress: Components.Schemas.RunWorkSnapshotOutput.ProgressPayload,
+                operations: Components.Schemas.RunWorkSnapshotOutput.OperationsPayload
+            ) {
+                self.runId = runId
+                self.purpose = purpose
+                self.status = status
+                self.ordersSeen = ordersSeen
+                self.imported = imported
+                self.updated = updated
+                self.skipped = skipped
+                self.targetsTotal = targetsTotal
+                self.targetsCompleted = targetsCompleted
+                self.progress = progress
+                self.operations = operations
+            }
+            public enum CodingKeys: String, CodingKey {
+                case runId
+                case purpose
+                case status
+                case ordersSeen
+                case imported
+                case updated
+                case skipped
+                case targetsTotal
+                case targetsCompleted
+                case progress
+                case operations
             }
         }
         /// - Remark: Generated from `#/components/schemas/ScanAtLocationInput`.

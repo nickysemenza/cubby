@@ -1,8 +1,16 @@
 import { shortcodeEntities } from "@cubby/schemas/entity-manifest";
-import { imageShortcode, importRunShortcode } from "@cubby/schemas/identifiers";
+import {
+  imageShortcode,
+  importRunShortcode,
+  productCategoryShortcode,
+  productShortcode,
+} from "@cubby/schemas/identifiers";
 import { ImageStatus, imageAssociationSchema } from "@cubby/schemas/image";
 import { imageSightingReportFields } from "@cubby/schemas/image-sighting";
 import {
+  photoProductCandidatesResponse,
+  photoRunReviewResponse,
+  reviewPhotoGroupsOutput,
   photoImportCreateRunInput,
   photoImportCreateRunOutput,
   photoImportFinalizeInput,
@@ -10,7 +18,7 @@ import {
 } from "@cubby/schemas/photo-import-run";
 import { z } from "zod";
 
-import { defineContract, mutation } from "~/contracts/define";
+import { defineContract, mutation, query } from "~/contracts/define";
 
 const sha256Schema = z.string().regex(/^[0-9a-f]{64}$/);
 const perceptualHashSchema = z.string().regex(/^[0-9a-f]{16}$/);
@@ -235,6 +243,62 @@ export type PhotoImportFinalizeOutput = z.output<
 >;
 
 export const photoImportContract = defineContract("photoImport", {
+  startGrouping: mutation({
+    native: "Start photo grouping after a finalized upload",
+    input: z.object({ runId: importRunShortcode }),
+    output: z.object({ runId: importRunShortcode, started: z.boolean() }),
+  }),
+  review: query({
+    native: "Review proposed photo groups and processing status in Apple apps",
+    input: z.object({ runId: importRunShortcode }),
+    output: photoRunReviewResponse,
+  }),
+  candidates: query({
+    native: "Explain possible Product matches for a proposed photo group",
+    input: z.object({
+      runId: importRunShortcode,
+      groupKey: z.string().min(1).max(200),
+    }),
+    output: photoProductCandidatesResponse,
+  }),
+  chooseExisting: mutation({
+    native: "Select an existing Product for a proposed photo group",
+    input: z.object({
+      runId: importRunShortcode,
+      groupKey: z.string().min(1).max(200),
+      productId: productShortcode,
+    }),
+    output: reviewPhotoGroupsOutput,
+  }),
+  updateDraft: mutation({
+    native: "Correct proposed product identity before approving photos",
+    input: z.object({
+      runId: importRunShortcode,
+      groupKey: z.string().min(1).max(200),
+      name: z.string().trim().min(1).max(500),
+      categoryId: productCategoryShortcode.nullable().optional(),
+      manufacturer: z.string().trim().max(500).nullable().optional(),
+      model: z.string().trim().max(500).nullable().optional(),
+      notes: z.string().trim().max(5000).nullable().optional(),
+    }),
+    output: reviewPhotoGroupsOutput,
+  }),
+  approveGroups: mutation({
+    native: "Approve reviewed photo groups in Apple apps",
+    input: z.object({
+      runId: importRunShortcode,
+      groupKeys: z.array(z.string().min(1).max(200)).min(1).max(200),
+    }),
+    output: reviewPhotoGroupsOutput,
+  }),
+  discardGroup: mutation({
+    native: "Discard a proposed photo group in Apple apps",
+    input: z.object({
+      runId: importRunShortcode,
+      groupKey: z.string().min(1).max(200),
+    }),
+    output: reviewPhotoGroupsOutput,
+  }),
   stage: mutation({
     native: "Manifest photo import staging",
     input: photoImportStageInputSchema,

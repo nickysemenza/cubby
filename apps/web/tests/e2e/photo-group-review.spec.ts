@@ -195,7 +195,7 @@ test("suggests an existing variant and previews every merge decision for a creat
   await settled
     .getByRole("button", { name: "Review possible matches" })
     .click();
-  await settled.getByRole("link", { name: "Review match" }).click();
+  await settled.locator(`a[href*="candidate=${existing.id}"]`).click();
   await expect(page).toHaveURL(/recommendations\/workbench/);
   await expect(page.getByText(candidateName).first()).toBeVisible();
   await page.getByRole("button", { name: "Review merge" }).click();

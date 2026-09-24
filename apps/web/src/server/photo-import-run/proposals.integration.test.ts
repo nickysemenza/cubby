@@ -30,6 +30,8 @@ import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
 import {
   approvePhotoGroupProposals,
+  chooseExistingProductForPhotoGroup,
+  updatePhotoGroupProductDraft,
   discardPhotoGroupProposal,
   listPhotoGroupProposals,
   proposePhotoGroups,
@@ -110,6 +112,95 @@ describe("photo group proposals", () => {
       );
     return row;
   };
+
+  it("keeps photo roles and evidence when a reviewer selects an existing product", async () => {
+    const { run, codes } = await seedRun(2);
+    const existing = await createProductFixture(
+      ctx.db,
+      makeProductInput({ name: "Synthetic Canvas Shirt" }),
+      ctx.actor,
+    );
+    await proposePhotoGroups(ctx.db, {
+      runId: run.shortcode,
+      groups: [
+        {
+          ...createGroup("shirt", [codes[0]!]),
+          skip: [
+            {
+              id: parseShortcodeFor("image", codes[1]!),
+              reason: "Duplicate angle",
+            },
+          ],
+          evidence: "One shirt with a duplicate photo",
+        },
+      ],
+    });
+
+    const chosen = await chooseExistingProductForPhotoGroup(ctx.db, {
+      runId: run.shortcode,
+      groupKey: "shirt",
+      productId: existing.id,
+    });
+    const group = chosen.proposals.find((item) => item.groupKey === "shirt");
+    expect(group?.product.kind).toBe("existing");
+    expect(group?.images).toEqual([{ id: codes[0], purpose: "item" }]);
+    expect(group?.skip).toEqual([{ id: codes[1], reason: "Duplicate angle" }]);
+    expect(group?.evidence).toBe("One shirt with a duplicate photo");
+
+    const approved = await approvePhotoGroupProposals(
+      ctx.db,
+      { runId: run.shortcode, groupKeys: ["shirt"] },
+      ctx.actor,
+    );
+    expect(approved.results).toEqual([
+      { groupKey: "shirt", outcome: "committed" },
+    ]);
+    expect(
+      approved.proposals.find((item) => item.groupKey === "shirt")
+        ?.committedProduct?.id,
+    ).toBe(existing.id);
+  });
+
+  it("edits the proposed product without changing the reviewed photos", async () => {
+    const { run, codes } = await seedRun(2);
+    await proposePhotoGroups(ctx.db, {
+      runId: run.shortcode,
+      groups: [
+        {
+          ...createGroup("shirt", [codes[0]!]),
+          skip: [
+            {
+              id: parseShortcodeFor("image", codes[1]!),
+              reason: "Out of focus",
+            },
+          ],
+          evidence: "One garment, second photo is unusable",
+        },
+      ],
+    });
+
+    const changed = await updatePhotoGroupProductDraft(ctx.db, {
+      runId: run.shortcode,
+      groupKey: "shirt",
+      name: "Synthetic Canvas Shirt, Medium",
+      categoryId: null,
+      manufacturer: "ForgeWear",
+      model: null,
+      notes: "Size confirmed from tag",
+    });
+    const group = changed.proposals.find((item) => item.groupKey === "shirt");
+    expect(group?.product).toMatchObject({
+      kind: "create",
+      create: {
+        name: "Synthetic Canvas Shirt, Medium",
+        manufacturer: "ForgeWear",
+        notes: "Size confirmed from tag",
+      },
+    });
+    expect(group?.images).toEqual([{ id: codes[0], purpose: "item" }]);
+    expect(group?.skip).toEqual([{ id: codes[1], reason: "Out of focus" }]);
+    expect(group?.evidence).toBe("One garment, second photo is unusable");
+  });
 
   describe("propose validation", () => {
     it.each([

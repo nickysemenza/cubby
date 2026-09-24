@@ -655,6 +655,92 @@ export async function proposePhotoGroups(
   return { ...(await buildList(db, run)), frozenGroupKeys };
 }
 
+/** A reviewer changes only the destination Product; the photo roster and other evidence stay put. */
+export async function chooseExistingProductForPhotoGroup(
+  db: Database,
+  input: { runId: string; groupKey: string; productId: string },
+) {
+  const review = await listPhotoGroupProposals(db, input.runId);
+  const group = review.proposals.find(
+    (item) => item.groupKey === input.groupKey,
+  );
+  if (!group || group.state !== "proposed")
+    throw new Error("Proposed photo group was not found");
+  const inventory = group.inventory?.locationId
+    ? {
+        locationId: group.inventory.locationId,
+        ownershipMode: group.inventory.ownershipMode,
+        ownerPartyId: group.inventory.ownerPartyId,
+        quantity: group.inventory.quantity,
+      }
+    : undefined;
+  return proposePhotoGroups(db, {
+    runId: input.runId,
+    groups: [
+      {
+        groupKey: group.groupKey,
+        images: group.images,
+        skip: group.skip,
+        product: { kind: "existing", existingId: input.productId },
+        inventory,
+        evidence: group.evidence,
+      },
+    ],
+  });
+}
+
+/** Keep the reviewed photo grouping intact while correcting a new Product's identity. */
+export async function updatePhotoGroupProductDraft(
+  db: Database,
+  input: {
+    runId: string;
+    groupKey: string;
+    name: string;
+    categoryId?: string | null;
+    manufacturer?: string | null;
+    model?: string | null;
+    notes?: string | null;
+  },
+) {
+  const review = await listPhotoGroupProposals(db, input.runId);
+  const group = review.proposals.find(
+    (item) => item.groupKey === input.groupKey,
+  );
+  if (!group || group.state !== "proposed" || group.product.kind !== "create")
+    throw new Error("Proposed new-product group was not found");
+  const inventory = group.inventory?.locationId
+    ? {
+        locationId: group.inventory.locationId,
+        ownershipMode: group.inventory.ownershipMode,
+        ownerPartyId: group.inventory.ownerPartyId,
+        quantity: group.inventory.quantity,
+      }
+    : undefined;
+  return proposePhotoGroups(db, {
+    runId: input.runId,
+    groups: [
+      {
+        groupKey: group.groupKey,
+        images: group.images,
+        skip: group.skip,
+        product: {
+          kind: "create",
+          create: {
+            ...group.product.create,
+            name: input.name,
+            categoryId: input.categoryId ?? undefined,
+            manufacturer: input.manufacturer ?? undefined,
+            model: input.model ?? undefined,
+            notes: input.notes ?? undefined,
+          },
+        },
+        inventory,
+        evidence: group.evidence,
+      },
+    ],
+  });
+}
+
 /** Rebuild the writer's input from a stored row, refusing a row whose chosen Product or Location was deleted. */
 async function commitInputFor(
   db: Database,
