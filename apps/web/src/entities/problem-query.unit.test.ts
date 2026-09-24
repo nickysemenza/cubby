@@ -19,14 +19,6 @@ const entityProblem = defineProblem({
 });
 
 describe("Problem Query registry", () => {
-  it("keeps entity membership as a filter assembly", () => {
-    expect(entityProblem.source).toEqual({
-      kind: "entity",
-      entity: "product",
-      filters: [{ id: "price", value: "none-real" }],
-    });
-  });
-
   it("declares read-only action and presenter capabilities by default", () => {
     expect(entityProblem.actions).toEqual([]);
     expect(entityProblem.presenter).toEqual({

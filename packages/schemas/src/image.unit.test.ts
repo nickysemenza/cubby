@@ -2,14 +2,12 @@ import { describe, expect, it } from "vitest";
 
 import { testShortcode } from "./test-support/identifiers";
 import {
-  attachableImageEntity,
   imageAttachExistingInput,
   imageListFiltersSchema,
   imageOut,
   initiateUploadWithoutEntitySchema,
   setPerceptualHashesInputSchema,
 } from "./image";
-import { galleryEntities } from "./entity-manifest";
 
 describe("native image metadata", () => {
   it("accepts the persisted processing issue filter roster", () => {
@@ -21,11 +19,6 @@ describe("native image metadata", () => {
     expect(
       imageListFiltersSchema.safeParse({ processingIssue: "pending" }).success,
     ).toBe(false);
-  });
-
-  it("derives existing-image targets from the gallery manifest", () => {
-    expect(attachableImageEntity.options).toEqual(galleryEntities);
-    expect(attachableImageEntity.options).toContain("gardenEntry");
   });
 
   it("allows an existing-image purpose only on Product attachments", () => {

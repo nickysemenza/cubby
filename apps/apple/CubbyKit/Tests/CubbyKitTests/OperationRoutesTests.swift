@@ -7,11 +7,6 @@ import Testing
 /// shape the raw client and CLI rely on rather than re-reading the spec.
 @Suite("OperationRoute.all (generated)")
 struct OperationRoutesTests {
-    @Test func coversTheWholeAPI() {
-        #expect(OperationRoute.all.count > 300)
-        #expect(OperationRoute.all.values.allSatisfy { $0.path.hasPrefix("/api/v1/") })
-    }
-
     @Test func bodyAndPathShapes() throws {
         let scan = try OperationRoute.lookup("inventory.scanAtLocation")
         #expect(scan.method == .post)

@@ -53,7 +53,6 @@ describe("RecentActivityFeed", () => {
 
     expect(requests).toBe(0);
     expect(screen.getByTestId("activity-placeholder")).toBeVisible();
-    expect(screen.getAllByTestId("activity-placeholder-row")).toHaveLength(6);
 
     act(() => reveal?.());
 

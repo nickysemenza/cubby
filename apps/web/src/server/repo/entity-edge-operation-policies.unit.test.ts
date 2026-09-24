@@ -1,5 +1,9 @@
 import type { Entity } from "@cubby/schemas/entity";
-import { allEntities, entityManifest } from "@cubby/schemas/entity-manifest";
+import {
+  allEntities,
+  auditableEntities,
+  entityManifest,
+} from "@cubby/schemas/entity-manifest";
 import { describe, expect, expectTypeOf, it } from "vitest";
 
 import { INCOMING_EDGES } from "~/server/db/entity-incoming-edges";
@@ -12,8 +16,18 @@ import {
   PRODUCT_EDGE_ROLES,
 } from "~/server/repo/product/edge-roles";
 import type { ProductRetainingEdgeKey } from "~/server/repo/product/edge-roles";
+import { SHORTCODE_TABLE } from "~/server/repo/shortcode-tables";
 
 describe("incoming-edge operation policies", () => {
+  it("keeps audited removal entities aligned with the shortcode table roster", () => {
+    // Image is hard-deleted and ImportRun is immutable history.
+    expect([...auditableEntities].sort()).toEqual(
+      Object.keys(SHORTCODE_TABLE)
+        .filter((entity) => entity !== "image" && entity !== "importRun")
+        .sort(),
+    );
+  });
+
   // Iterates ENTITY_LIFECYCLE_REGISTRY itself rather than a hand-listed
   // subset, so every declared policy is covered automatically — a policy
   // added to the registry (or dropped from it) changes what this loop checks

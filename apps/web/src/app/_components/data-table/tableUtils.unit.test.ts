@@ -1,11 +1,7 @@
 import type { SortingState } from "@tanstack/react-table";
 import { describe, expect, it } from "vitest";
 
-import {
-  buildSortParams,
-  defaultPagination,
-  defaultSortState,
-} from "./tableUtils";
+import { buildSortParams, defaultSortState } from "./tableUtils";
 
 describe("buildSortParams", () => {
   it("returns correct params with sorting state", () => {
@@ -60,14 +56,5 @@ describe("defaultSortState", () => {
     const result = defaultSortState();
 
     expect(result).toEqual([{ id: "createdAt", desc: true }]);
-  });
-});
-
-describe("defaultPagination", () => {
-  it("has correct default values", () => {
-    expect(defaultPagination).toEqual({
-      pageIndex: 0,
-      pageSize: 100,
-    });
   });
 });

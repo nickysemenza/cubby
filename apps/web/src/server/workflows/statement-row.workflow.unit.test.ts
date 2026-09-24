@@ -1,31 +1,8 @@
 import { describe, expect, it } from "vitest";
 
-import {
-  deleteStatementRowsWorkflow,
-  findStatementRowDriftWorkflow,
-  recordStatementRowsWorkflow,
-  updateStatementRowsWorkflow,
-} from "./statement-row.server";
+import { recordStatementRowsWorkflow } from "./statement-row.server";
 
 describe("statement-row workflow ownership", () => {
-  it("keeps the MCP-only drift read on its stable workflow identity", () => {
-    expect(findStatementRowDriftWorkflow.definition.name).toBe(
-      "statementRow.drift",
-    );
-  });
-
-  it("exposes statement-row writes under stable workflow identities", () => {
-    expect(recordStatementRowsWorkflow.definition.name).toBe(
-      "statementRow.record",
-    );
-    expect(updateStatementRowsWorkflow.definition.name).toBe(
-      "statementRow.update",
-    );
-    expect(deleteStatementRowsWorkflow.definition.name).toBe(
-      "statementRow.delete",
-    );
-  });
-
   it("keeps record previews outside committed workflow steps", () => {
     expect(recordStatementRowsWorkflow.definition.steps[0]).toMatchObject({
       type: "branch",

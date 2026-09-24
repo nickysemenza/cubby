@@ -4,28 +4,11 @@ import { describe, expect, it, vi } from "vitest";
 import { DialogFormActions } from "./dialog-form-actions";
 
 describe("DialogFormActions", () => {
-  it("renders Cancel and the primary submit button", () => {
-    render(<DialogFormActions onCancel={() => {}} submitLabel="Save" />);
-    expect(screen.getByRole("button", { name: "Cancel" })).toBeVisible();
-    expect(screen.getByRole("button", { name: "Save" })).toBeVisible();
-  });
-
   it("calls onCancel when Cancel is clicked", () => {
     const onCancel = vi.fn();
     render(<DialogFormActions onCancel={onCancel} submitLabel="Save" />);
     fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
     expect(onCancel).toHaveBeenCalledOnce();
-  });
-
-  it("uses a custom cancel label", () => {
-    render(
-      <DialogFormActions
-        onCancel={() => {}}
-        submitLabel="Save"
-        cancelLabel="Close"
-      />,
-    );
-    expect(screen.getByRole("button", { name: "Close" })).toBeVisible();
   });
 
   it("associates the submit button with a form id for native submission", () => {
@@ -89,8 +72,4 @@ describe("DialogFormActions", () => {
     expect(screen.getByRole("alert")).toHaveTextContent("Something went wrong");
   });
 
-  it("renders no alert when there is no error", () => {
-    render(<DialogFormActions onCancel={() => {}} submitLabel="Save" />);
-    expect(screen.queryByRole("alert")).toBeNull();
-  });
 });

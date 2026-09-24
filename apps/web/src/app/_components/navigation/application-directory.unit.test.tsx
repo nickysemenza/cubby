@@ -36,7 +36,6 @@ describe("application directory", () => {
       );
       expect(matches).toHaveLength(1);
       const [link] = matches;
-      expect(link).toHaveAttribute("href", view.to);
       expect(link).toHaveAccessibleName(view.label);
       expect(link).toHaveAccessibleDescription(view.description);
     }

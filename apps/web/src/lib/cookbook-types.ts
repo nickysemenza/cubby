@@ -33,7 +33,7 @@ type UndefinedKeys<T> = {
  * field name and every leaf type still has to match. That is why the
  * conversions below need no type assertion — they are ordinary assignments
  * that `tsc` checks in full, and they stop compiling the moment a real field
- * drifts. `cookbook-types.unit.test.ts` exists to make that failure loud.
+ * drifts.
  */
 type Storable<T> = T extends readonly (infer U)[]
   ? Storable<U>[]

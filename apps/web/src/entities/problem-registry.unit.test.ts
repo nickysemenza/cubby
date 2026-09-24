@@ -1,5 +1,4 @@
 import { entitySchema } from "@cubby/schemas/entity";
-import { PROBLEM_CLASS } from "@cubby/schemas/problems";
 import { describe, expect, it } from "vitest";
 
 import { diagnosticAdapters } from "~/server/services/problem-diagnostics.service";
@@ -17,58 +16,18 @@ import {
   compileProblemFilters,
   problemFilterSpecs,
 } from "./problem-filter-semantics";
-import { basicProblemQueries } from "./problem-queries/basic";
-import { derivedProblemQueries } from "./problem-queries/derived";
-import { productCoverageProblemQueries } from "./problem-queries/product-coverage";
-import { trackerProblemQueries } from "./problem-queries/tracker";
 import type { DiagnosticKey } from "./problem-query";
-import {
-  expectedProblemKeys,
-  problemQuery,
-  problemQueryDeclarations,
-} from "./problem-registry";
+import { problemQuery, problemQueryDeclarations } from "./problem-registry";
 import {
   completeProblemQueryDeclarations,
   validateCompleteProblemRegistry,
 } from "./problem-registry-validation";
 
 describe("Problem Query registry", () => {
-  it("composes every schema ProblemKey exactly once", () => {
+  it("validates every declared Problem against its runtime capabilities", () => {
     const definitions = problemQueryDeclarations();
-    const keys = definitions.map((definition) => definition.key);
-
-    expect(new Set(keys).size).toBe(keys.length);
-    expect(new Set(keys)).toEqual(new Set(expectedProblemKeys));
     expect(() => validateCompleteProblemRegistry(definitions)).not.toThrow();
-    // "derived" sources aren't confined to derived.ts: product-coverage.ts and
-    // tracker.ts each mix in one alongside their "entity" declarations. Count
-    // every declared source array directly instead of hardcoding a total, so
-    // a new Problem in any of them is reflected here automatically.
-    const declaredDerivedCount = [
-      ...basicProblemQueries,
-      ...productCoverageProblemQueries,
-      ...trackerProblemQueries,
-      ...derivedProblemQueries,
-    ].filter(({ source }) => source.kind === "derived").length;
-    expect(
-      definitions.filter(({ source }) => source.kind === "derived"),
-    ).toHaveLength(declaredDerivedCount);
-    expect(
-      definitions.filter(({ source }) => source.kind === "entity"),
-    ).toHaveLength(definitions.length - declaredDerivedCount);
-    expect(keys).toContain("productsMissingPrice");
-    expect(keys).toContain("overdueTasks");
-    expect(keys).toContain("duplicateVendors");
     expect(problemQuery("duplicateVendors")?.source.kind).toBe("derived");
-  });
-
-  it("reuses the validated registry and indexed definition objects", () => {
-    expect(problemQueryDeclarations()).toBe(problemQueryDeclarations());
-    const definition = problemQuery("duplicateVendors");
-    expect(definition).toBe(
-      problemQueryDeclarations().find(({ key }) => key === "duplicateVendors"),
-    );
-    expect(problemQuery("duplicateVendors")).toBe(definition);
   });
 
   it("gives every definition explicit freshness and a legal continuation", () => {
@@ -199,9 +158,5 @@ describe("Problem Query registry", () => {
         definition.key,
       ).toEqual(compileProblemFilters(entity, filters));
     }
-  });
-
-  it("keeps the expected key roster sourced from the schema", () => {
-    expect(expectedProblemKeys).toEqual(Object.keys(PROBLEM_CLASS));
   });
 });

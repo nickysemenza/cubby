@@ -13,7 +13,11 @@ describe("Start operation serializable carrier", () => {
         message: "Failed",
         diagnostics: { causes: 42 },
       }),
-    ).toMatchObject({ code: "INTERNAL_SERVER_ERROR", message: "Failed" });
+    ).toEqual({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Failed",
+      diagnostics: undefined,
+    });
   });
 
   it("preserves TanStack-supported undefined, Date, collections, and nesting", () => {

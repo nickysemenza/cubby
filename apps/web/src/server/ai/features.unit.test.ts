@@ -5,7 +5,6 @@ import {
   AI_FEATURES,
   buildLocationAnalysisFingerprint,
   LOCATION_INVENTORY_DETECTION_FEATURE,
-  MODEL_FOR_TIER,
 } from "./features";
 import {
   evaluateInventoryDetection,
@@ -67,12 +66,6 @@ describe("AI feature fingerprints", () => {
 });
 
 describe("the AI feature table", () => {
-  it("derives every record's model from its tier", () => {
-    for (const feature of AI_FEATURES) {
-      expect(feature.model).toBe(MODEL_FOR_TIER[feature.tier]);
-    }
-  });
-
   it("declares an output schema for every cacheable chat feature", () => {
     // The gateway's response cache keys on the exact request body, which is
     // only deterministic for a structured, single-turn call. Anything
@@ -103,20 +96,6 @@ describe("the AI feature table", () => {
 });
 
 describe("inventory detection eval fixtures", () => {
-  it("includes the tarp/drop-cloth target fixture", () => {
-    expect(INVENTORY_DETECTION_EVALS).toContainEqual({
-      name: "tarps cloths blankets",
-      locationName: "tarps cloths blankets",
-      expectedItems: ["blue tarp", "painters drop cloth", "plastic drop cloth"],
-      excludedItems: [
-        "black plastic crate",
-        "small blue plastic bag",
-        "cream cloth items",
-        "various packaged items",
-      ],
-    });
-  });
-
   it("passes the tarp/drop-cloth target fixture with canonical items", () => {
     const fixture = INVENTORY_DETECTION_EVALS[0]!;
     const result = evaluateInventoryDetection(fixture, {

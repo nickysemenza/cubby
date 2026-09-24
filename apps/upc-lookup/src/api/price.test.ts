@@ -3,54 +3,26 @@ import { isMultiPack, extractBestPrice } from "./price";
 import type { UPCitemdbOffer } from "./types";
 
 describe("isMultiPack", () => {
-  it("detects 'Pack of 4'", () => {
+  it("detects multi-pack title variants", () => {
     expect(
-      isMultiPack("BOBS RED MILL, FLOUR WHT UNBLCH, 5 LB, (Pack of 4)"),
-    ).toBe(true);
+      [
+        "Sample flour, 5 LB, (Pack of 4)",
+        "Sample flour (Pack of4)",
+        "Sample flour - 5 lb - Case of 4",
+        "Sample flour (4x5lb)",
+        "Sample flour Pack Of 4",
+        "Sample product (4-pack)",
+        "Sample kitchen set of 6",
+      ].filter((title) => !isMultiPack(title)),
+    ).toEqual([]);
   });
 
-  it("detects 'Pack of4' without space", () => {
-    expect(isMultiPack("Bob's Red Mill Flour (Pack of4)")).toBe(true);
-  });
-
-  it("detects 'Case of 4'", () => {
+  it("does not flag single-item title variants", () => {
     expect(
-      isMultiPack(
-        "Bob s Red Mill Unbleached White All-Purpose Baking Flour - 5 lb - Case of 4",
+      ["Sample flour, 5 lb", "Sample flour 5", "19505 Sample flour"].filter(
+        isMultiPack,
       ),
-    ).toBe(true);
-  });
-
-  it("detects '(4x5lb)' format", () => {
-    expect(isMultiPack("Bob's Red Mill Unbleached White Flour (4x5lb)")).toBe(
-      true,
-    );
-  });
-
-  it("detects 'Pack Of 4' case insensitive", () => {
-    expect(isMultiPack("Flour Wht Unblch 5 Lb Pack Of 4")).toBe(true);
-  });
-
-  it("detects '(4-pack)'", () => {
-    expect(isMultiPack("Some Product (4-pack)")).toBe(true);
-  });
-
-  it("detects 'Set of 6'", () => {
-    expect(isMultiPack("Kitchen Set of 6")).toBe(true);
-  });
-
-  it("does not flag single items", () => {
-    expect(
-      isMultiPack("Bobs Red Mill, Unbleached White All-Purpose Flour, 5 Lb"),
-    ).toBe(false);
-  });
-
-  it("does not flag items with numbers in weight", () => {
-    expect(isMultiPack("BOB'S RED MILL Unbleached White Flour 5")).toBe(false);
-  });
-
-  it("does not flag '19505' product codes", () => {
-    expect(isMultiPack("19505 Unbleached White Flour")).toBe(false);
+    ).toEqual([]);
   });
 });
 

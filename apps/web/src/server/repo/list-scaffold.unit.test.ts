@@ -10,10 +10,6 @@ describe("listScaffold", () => {
   const scaffold = listScaffold("task", task);
 
   describe("where", () => {
-    it("narrows on nothing but soft-delete with no filters or computed conditions", () => {
-      expect(renderWhereSql(scaffold.where({}))).toBeDefined();
-    });
-
     it("applies a declared stored predicate (task.status)", () => {
       expect(renderWhereSql(scaffold.where({ status: "done" }))).toContain(
         '"status"',

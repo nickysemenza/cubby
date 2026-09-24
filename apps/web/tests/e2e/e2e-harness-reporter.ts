@@ -1,6 +1,16 @@
-import type { Reporter, TestCase, TestResult } from "@playwright/test/reporter";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import path from "node:path";
+import type {
+  FullResult,
+  Reporter,
+  TestCase,
+  TestResult,
+} from "@playwright/test/reporter";
+import { z } from "zod";
 
+import { writeE2ERunBundle } from "../../tooling/e2e-run-bundle";
 import { assertTestRunContract } from "../../tooling/test-run-contract";
+import { readWebBuildProvenance } from "../../tooling/web-build-provenance";
 
 import {
   NAVIGATION_ANNOTATION,
@@ -9,6 +19,12 @@ import {
 
 class E2EHarnessReporter implements Reporter {
   private outcomes: Array<{ name: string; state: string }> = [];
+  private bundleCases: Array<{
+    name: string;
+    status: string;
+    durationMs: number;
+  }> = [];
+  private runStatus = "interrupted";
   private navigation: Array<{ name: string; ms: number; count: number }> = [];
   private durations: Array<{
     name: string;
@@ -20,9 +36,15 @@ class E2EHarnessReporter implements Reporter {
 
   onTestEnd(test: TestCase, result: TestResult): void {
     if (result.retry === 0) {
+      const name = test.titlePath().join(" > ");
       this.outcomes.push({
-        name: test.titlePath().join(" > "),
+        name,
         state: result.status,
+      });
+      this.bundleCases.push({
+        name,
+        status: result.status,
+        durationMs: result.duration,
       });
     }
     const loads = result.annotations
@@ -51,7 +73,8 @@ class E2EHarnessReporter implements Reporter {
     }
   }
 
-  onEnd(): void {
+  onEnd(result: FullResult): void {
+    this.runStatus = result.status;
     this.printNavigationSummary();
     this.printDurationSummary();
     assertTestRunContract(this.outcomes, {
@@ -59,6 +82,51 @@ class E2EHarnessReporter implements Reporter {
         process.argv.includes(argument),
       ),
     });
+  }
+
+  onExit(): Promise<void> {
+    const webRoot = path.resolve(import.meta.dirname, "../..");
+    const repoRoot = path.resolve(webRoot, "../..");
+    const reportDir = path.join(webRoot, "playwright-report");
+    mkdirSync(reportDir, { recursive: true });
+    const resultsPath = path.join(reportDir, "run-results.json");
+    writeFileSync(
+      resultsPath,
+      `${JSON.stringify({ status: this.runStatus, cases: this.bundleCases }, null, 2)}\n`,
+    );
+    const manifest = writeE2ERunBundle({
+      repoRoot,
+      outputDir: reportDir,
+      evidence: [resultsPath],
+      kind: "browser",
+      status: this.runStatus,
+      build: readWebBuildProvenance(repoRoot),
+      command: [
+        "pnpm",
+        "--dir",
+        "apps/web",
+        "test:e2e",
+        ...process.argv.slice(2).filter((argument) => argument !== "test"),
+      ],
+      cases: this.bundleCases,
+      runtime: {
+        playwright: z
+          .object({ version: z.string() })
+          .parse(
+            JSON.parse(
+              readFileSync(
+                path.join(
+                  webRoot,
+                  "node_modules/@playwright/test/package.json",
+                ),
+                "utf8",
+              ),
+            ),
+          ).version,
+      },
+    });
+    console.log(`[E2E artifact] ${manifest}`);
+    return Promise.resolve();
   }
 
   private printDurationSummary(): void {

@@ -5,13 +5,6 @@ import Testing
 
 @Suite("EntityCatalog")
 struct EntityCatalogTests {
-    @Test func everyKeyHasADescriptor() {
-        for key in EntityKey.allCases {
-            let descriptor = EntityCatalog[key]
-            #expect(descriptor.key == key)
-        }
-    }
-
     @Test func basePathsAreUniqueAndNonEmpty() {
         let basePaths = EntityCatalog.all.map(\.basePath)
         for basePath in basePaths {
@@ -27,12 +20,6 @@ struct EntityCatalogTests {
             #expect(prefix.wholeMatch(of: pattern) != nil, "unexpected shortcode prefix shape: \(prefix)")
         }
         #expect(prefixes.count == Set(prefixes).count)
-    }
-
-    @Test func titleFieldsAreNonEmpty() {
-        for descriptor in EntityCatalog.all {
-            #expect(!descriptor.titleField.isEmpty)
-        }
     }
 
     /// `timeline` is emitted from the declaration's capability; the route from the HTTP

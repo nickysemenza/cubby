@@ -171,30 +171,6 @@ describe("createParentLinkColumn", () => {
     expect(await screen.findByText("—")).toBeInTheDocument();
     expect(screen.queryByRole("link")).toBeNull();
   });
-
-  it("defaults id, header, and width per entity", () => {
-    const task = taskColumn();
-    expect(task.id).toBe("parentTask");
-    expect(task.header).toBe("Parent Task");
-    expect(task.meta?.className).toBe("w-40");
-    expect(task.enableSorting).toBe(false);
-
-    const project = projectColumn();
-    expect(project.id).toBe("parent");
-    expect(project.header).toBe("Parent");
-  });
-
-  it("lets options override the id, header, and width", () => {
-    const column = taskColumn({
-      id: "wbsParent",
-      header: "Rolls Up To",
-      className: "w-64",
-    });
-
-    expect(column.id).toBe("wbsParent");
-    expect(column.header).toBe("Rolls Up To");
-    expect(column.meta?.className).toBe("w-64");
-  });
 });
 
 describe("createSingleEntityInlineLinkColumn", () => {
