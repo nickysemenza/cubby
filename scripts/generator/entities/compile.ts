@@ -6,7 +6,6 @@ import { photoCategories } from "../../../packages/schemas/src/photo-categories.
 import type {
   EntityDeclarationMetadata,
   EntityFieldModelMetadata,
-  EntityStorageMetadata,
 } from "../../../packages/schemas/src/entity-definitions/definition.ts";
 import {
   EntityDeclarationError,
@@ -357,13 +356,9 @@ const compileFieldModel = (
     }
     displayedColumnIds.add(columnId);
   }
-  const isStorageObject = (
-    entry: EntityStorageMetadata,
-  ): entry is Exclude<EntityStorageMetadata, string> =>
-    typeof entry !== "string";
   const storage = model.storage.map((entry, index): EntityStorageField => {
     const fieldContext = `${context}.storage[${index}]`;
-    const field = isStorageObject(entry) ? entry : { key: entry };
+    const field = entry;
     const key = field.key;
     const declared = fields.find((candidate) => candidate.key === key);
     if (!declared)
@@ -372,7 +367,7 @@ const compileFieldModel = (
       );
     const defaultKind = field.default ?? "none";
     const defaultValue = field.defaultValue ?? null;
-    if (defaultKind === "literal" && !("defaultValue" in field))
+    if (defaultKind === "literal" && field.defaultValue === undefined)
       throw new EntityDeclarationError(
         `${fieldContext}.defaultValue is required for a literal default.`,
       );

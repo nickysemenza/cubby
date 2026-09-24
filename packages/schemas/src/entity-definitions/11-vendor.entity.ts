@@ -130,8 +130,8 @@ export default defineEntity({
         key: "orderUrlTemplate",
         kind: "text",
         nullable: true,
-        label: "Order URL",
-        control: { kind: "text", renderer: "url", section: "details" },
+        labelOverride: "Order URL",
+        control: { kind: "text", renderer: "url", sectionOverride: "details" },
         display: { detail: true },
         validation: {
           read: z
@@ -172,10 +172,10 @@ export default defineEntity({
         key: "orderEvidence",
         kind: "enum",
         nullable: true,
-        label: "Order evidence",
+        labelOverride: "Order evidence",
         control: {
           kind: "select",
-          section: "details",
+          sectionOverride: "details",
           options: [
             { value: "online_account", label: "Online account" },
             { value: "receipt_only", label: "Receipt only" },
@@ -192,11 +192,11 @@ export default defineEntity({
       {
         key: "orderEmailSenders",
         kind: "text-array",
-        label: "Order email senders",
+        labelOverride: "Order email senders",
         control: {
           kind: "specialized",
           renderer: "tag-list",
-          section: "details",
+          sectionOverride: "details",
         },
         display: { detail: true },
         validation: {
@@ -208,11 +208,11 @@ export default defineEntity({
       {
         key: "browserDomains",
         kind: "text-array",
-        label: "Browser domains",
+        labelOverride: "Browser domains",
         control: {
           kind: "specialized",
           renderer: "tag-list",
-          section: "details",
+          sectionOverride: "details",
         },
         display: { detail: true },
         validation: {
@@ -224,11 +224,11 @@ export default defineEntity({
       {
         key: "agentHints",
         kind: "json",
-        label: "Import hints",
+        labelOverride: "Import hints",
         control: {
           kind: "specialized",
           renderer: "structured-field",
-          section: "details",
+          sectionOverride: "details",
         },
         display: { detail: true, renderer: { detail: "vendor-agent-hints" } },
         validation: {
@@ -246,8 +246,12 @@ export default defineEntity({
         key: "returnWindowDays",
         kind: "number",
         nullable: true,
-        label: "Return window",
-        control: { kind: "number", section: "details", placeholder: "Days" },
+        labelOverride: "Return window",
+        control: {
+          kind: "number",
+          sectionOverride: "details",
+          placeholder: "Days",
+        },
         display: { detail: true },
         validation: {
           read: z.number().int().nonnegative().nullable(),
@@ -267,7 +271,7 @@ export default defineEntity({
       {
         key: "purchaseCount",
         kind: "number",
-        label: "Purchases",
+        labelOverride: "Purchases",
         display: {
           list: true,
           detail: true,
@@ -383,11 +387,20 @@ export default defineEntity({
           update: null,
         },
       },
-      { key: "shortcode", kind: "text", readKey: null },
-      { key: "deletedAt", kind: "timestamp", nullable: true, readKey: null },
+      { key: "shortcode", kind: "text", readKeyOverride: null },
+      {
+        key: "deletedAt",
+        kind: "timestamp",
+        nullable: true,
+        readKeyOverride: null,
+      },
     ],
     storage: [
-      { key: "id", default: "generated", specialized: "primary-key:VendorId" },
+      {
+        key: "id",
+        defaultOverride: "generated",
+        specialized: "primary-key:VendorId",
+      },
       { key: "shortcode", specialized: "shortcode" },
       "name",
       "website",
@@ -395,27 +408,27 @@ export default defineEntity({
       "orderEvidence",
       {
         key: "orderEmailSenders",
-        default: "literal",
+        defaultOverride: "literal",
         defaultValue: "'{}'::text[]",
         specialized: "text-array",
       },
       {
         key: "browserDomains",
-        default: "literal",
+        defaultOverride: "literal",
         defaultValue: "'{}'::text[]",
         specialized: "text-array",
       },
       {
         key: "agentHints",
-        default: "literal",
+        defaultOverride: "literal",
         defaultValue:
           '\'{"ordersListUrl":null,"pagination":null,"orderLinkPattern":null,"notes":[]}\'::jsonb',
         specialized: "json:agentHints",
       },
       "returnWindowDays",
       "notes",
-      { key: "createdAt", default: "now" },
-      { key: "updatedAt", default: "now", specialized: "updated-at" },
+      { key: "createdAt", defaultOverride: "now" },
+      { key: "updatedAt", defaultOverride: "now", specialized: "updated-at" },
       "deletedAt",
     ],
     create: [

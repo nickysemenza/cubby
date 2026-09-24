@@ -15,7 +15,7 @@ const daysField = <const K extends string>(key: K, label: string) =>
     key,
     kind: "number",
     nullable: true,
-    label,
+    labelOverride: label,
     control: { kind: "number" },
     display: { detail: true },
     validation: {
@@ -32,7 +32,7 @@ const derivedText = <const K extends string>(
   key,
   kind: "text" as const,
   nullable: true as const,
-  label,
+  labelOverride: label,
   display: { detail: true as const },
   provenance: {
     kind: "derived" as const,
@@ -139,7 +139,7 @@ export default defineEntity({
         key: "gardenGuideKey",
         kind: "text",
         nullable: true,
-        label: "Crop",
+        labelOverride: "Crop",
         control: {
           kind: "select",
           options: gardenCropKeys.map((key) => ({
@@ -178,7 +178,7 @@ export default defineEntity({
         kind: "identifier",
         nullable: true,
         reference: { entity: "ingredient" },
-        label: "Ingredient",
+        labelOverride: "Ingredient",
         control: { kind: "specialized", renderer: "entity-select" },
         display: { detail: true },
         validation: {
@@ -191,7 +191,7 @@ export default defineEntity({
         key: "latinName",
         kind: "text",
         nullable: true,
-        label: "Latin name",
+        labelOverride: "Latin name",
         control: { kind: "text" },
         display: { detail: true },
         validation: {
@@ -279,11 +279,20 @@ export default defineEntity({
         kind: "timestamp",
         validation: { read: z.date(), create: null, update: null },
       },
-      { key: "shortcode", kind: "text", readKey: null },
-      { key: "deletedAt", kind: "timestamp", nullable: true, readKey: null },
+      { key: "shortcode", kind: "text", readKeyOverride: null },
+      {
+        key: "deletedAt",
+        kind: "timestamp",
+        nullable: true,
+        readKeyOverride: null,
+      },
     ],
     storage: [
-      { key: "id", default: "generated", specialized: "primary-key:PlantId" },
+      {
+        key: "id",
+        defaultOverride: "generated",
+        specialized: "primary-key:PlantId",
+      },
       { key: "shortcode", specialized: "shortcode" },
       "name",
       "gardenGuideKey",
@@ -296,8 +305,8 @@ export default defineEntity({
       "daysFromTransplantMin",
       "daysFromTransplantMax",
       "notes",
-      { key: "createdAt", default: "now" },
-      { key: "updatedAt", default: "now", specialized: "updated-at" },
+      { key: "createdAt", defaultOverride: "now" },
+      { key: "updatedAt", defaultOverride: "now", specialized: "updated-at" },
       "deletedAt",
     ],
     create: [

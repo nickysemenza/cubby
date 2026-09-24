@@ -372,10 +372,15 @@ model: {
 ```
 
 Field defaults are non-nullable, a label derived from the camel-case key, and a
-read key equal to that key. Use `readKey: null` for fields without a scalar read
+read key equal to that key. Use `labelOverride` for a different label and
+`readKeyOverride: null` for fields without a scalar read
 projection. Missing controls and display flags expose no UI. A control defaults
 to the `main` section; a reference defaults to one entity. Explicit labels,
 nullability, read keys, sections, and renderers override these defaults.
+Declaration inputs use `sectionOverride` for a control's default `main` group,
+and `display.columnIdOverride`, `detailOrderOverride`, and `listOrderOverride`
+when a rendered field needs a different identity or order. The compiled
+manifest retains `section`, `columnId`, `detailOrder`, and `listOrder`.
 
 A reference may declare `multiple: true` and an ordered `scope` mapping. Each
 scope item maps a sibling form `sourceField` to a filter `targetField` on the
@@ -423,7 +428,9 @@ omitted values preserve existing data. Schema maps reference these exact objects
 
 A storage string uses the declared field's kind and nullability, the key as its
 column name, and no database default. An object such as
-`{ key: "name", column: "title" }` overrides only the differing storage facts.
+`{ key: "name", columnOverride: "title" }` overrides only the differing storage facts.
+Storage objects also name `kindOverride`, `nullableOverride`, and
+`defaultOverride` when they replace the field or storage defaults.
 Stored-field order and create/update/output/bulk/audit rosters remain explicit:
 presentation defaults never grant mutation capabilities or introduce columns.
 
@@ -486,7 +493,7 @@ declared label and sort. A legacy override remains only as a migration seam for
 specialist columns not yet manifest-owned. An explicit
 `add()` outside the declaration is reserved for client-hydrated data, relation
 projections, a second projection that hosts a filter control, and the
-synthetic identity column. A `list: true` field with `readKey: null` needs an
+synthetic identity column. A `list: true` field with `readKeyOverride: null` needs an
 override; column compilation fails otherwise. `display.listHidden` owns a
 declared column's hidden-by-default state; pages retain
 `initialColumnVisibility` only for computed or relation columns outside the

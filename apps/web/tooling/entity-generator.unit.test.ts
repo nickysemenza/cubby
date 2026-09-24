@@ -725,6 +725,7 @@ describe("typed entity compiler", () => {
           {
             key: "displayName",
             kind: "text",
+            readKeyOverride: "display_name",
             validation: { read: z.string() },
           },
         ],
@@ -743,8 +744,9 @@ describe("typed entity compiler", () => {
     void invalidOutputFields;
     expectTypeOf(outputFields).toEqualTypeOf<readonly ["displayName"]>();
     expectTypeOf(readFieldSchemas(definition)).toEqualTypeOf<{
-      displayName: z.ZodString;
+      display_name: z.ZodString;
     }>();
+    expect(Object.keys(readFieldSchemas(definition))).toEqual(["display_name"]);
   });
 
   it("parses field metadata once while retaining declared Zod instances", () => {
@@ -830,7 +832,7 @@ describe("typed entity compiler", () => {
 
   it.each([
     [{ nullable: null }, "nullable must be a boolean"],
-    [{ label: null }, "label must be a non-empty string"],
+    [{ labelOverride: null }, "labelOverride must be a non-empty string"],
     [{ display: { list: null } }, "display.list must be a boolean"],
     [{ validation: { read: { kind: "string" } } }, "must be a Zod schema"],
     [{ validation: { write: z.string() } }, "write is not allowed"],
@@ -858,17 +860,17 @@ describe("typed entity compiler", () => {
             {
               key: "name",
               kind: "text",
-              label: "Title",
-              readKey: null,
+              labelOverride: "Title",
+              readKeyOverride: null,
               nullable: true,
             },
           ],
           storage: [
             {
               key: "name",
-              column: "title",
-              nullable: false,
-              default: "literal",
+              columnOverride: "title",
+              nullableOverride: false,
+              defaultOverride: "literal",
               defaultValue: "Example",
             },
           ],
@@ -1050,7 +1052,7 @@ describe("typed entity compiler", () => {
           model: {
             ...model,
             fields: [
-              { ...model.fields[0], readKey },
+              { ...model.fields[0], readKeyOverride: readKey },
               { key: "other", kind: "text", validation: { read: z.string() } },
             ],
           },
@@ -1075,7 +1077,7 @@ describe("typed entity compiler", () => {
         presentation,
         model: {
           ...model,
-          fields: [{ ...model.fields[0], readKey: null }],
+          fields: [{ ...model.fields[0], readKeyOverride: null }],
         },
       },
     ])[0]!;
@@ -1212,7 +1214,11 @@ describe("typed entity compiler", () => {
           model: {
             ...model,
             fields: [
-              { key: "name", kind: "text", display: { list: true, listOrder } },
+              {
+                key: "name",
+                kind: "text",
+                display: { list: true, listOrderOverride: listOrder },
+              },
             ],
           },
         },
@@ -1233,7 +1239,7 @@ describe("typed entity compiler", () => {
       {
         key: "parentId",
         kind: "identifier",
-        label: "Parent",
+        labelOverride: "Parent",
         reference: { entity: "alpha" },
       },
     ];
@@ -1608,7 +1614,7 @@ describe("typed entity compiler", () => {
               {
                 key: "pendingImageIds",
                 kind: "text",
-                readKey: null,
+                readKeyOverride: null,
                 control: { kind: "text" },
                 provenance: {
                   kind: "relation",
@@ -1743,7 +1749,7 @@ describe("typed entity compiler", () => {
         ...base,
         route: {
           basePath: "alphas",
-          detailParam: "id",
+          detailParamOverride: "id",
           createOverride: "page",
           listOverride: null,
           detailOverride: {

@@ -70,11 +70,11 @@ export default defineEntity({
       {
         key: "productId",
         kind: "identifier",
-        label: "Product",
-        readKey: null,
+        labelOverride: "Product",
+        readKeyOverride: null,
         reference: { entity: "product" },
         control: { kind: "specialized", renderer: "entity-select" },
-        display: { detail: true, detailOrder: 2 },
+        display: { detail: true, detailOrderOverride: 2 },
         validation: {
           read: null,
           create: productShortcode,
@@ -84,15 +84,15 @@ export default defineEntity({
       {
         key: "locationId",
         kind: "identifier",
-        label: "Location",
-        readKey: null,
+        labelOverride: "Location",
+        readKeyOverride: null,
         reference: { entity: "location" },
         control: {
           kind: "specialized",
           renderer: "entity-select",
           suggest: { basis: ["productId"] },
         },
-        display: { detail: true, detailOrder: 1 },
+        display: { detail: true, detailOrderOverride: 1 },
         validation: {
           read: null,
           create: locationShortcode,
@@ -106,7 +106,7 @@ export default defineEntity({
         display: {
           list: true,
           detail: true,
-          detailOrder: 0,
+          detailOrderOverride: 0,
           format: "amount",
           mobile: { slot: "trailing", priority: 0 },
         },
@@ -126,7 +126,7 @@ export default defineEntity({
             { value: "installed", label: "Installed" },
           ],
         },
-        display: { list: true, detail: true, detailOrder: 4 },
+        display: { list: true, detail: true, detailOrderOverride: 4 },
         validation: {
           read: inventoryPlacement.describe(
             "'stock' = movable stock; 'installed' = a fixed installation, kept as a record but excluded from browsing, counting and audits",
@@ -146,7 +146,7 @@ export default defineEntity({
       {
         key: "ownershipMode",
         kind: "enum",
-        label: "Ownership",
+        labelOverride: "Ownership",
         control: {
           kind: "select",
           options: [
@@ -158,7 +158,7 @@ export default defineEntity({
         display: {
           list: true,
           detail: true,
-          detailOrder: 5,
+          detailOrderOverride: 5,
           renderer: { detail: "ownershipMode" },
         },
         validation: {
@@ -171,7 +171,7 @@ export default defineEntity({
         key: "ownerLedgerPartyId",
         kind: "identifier",
         nullable: true,
-        label: "Explicit owner",
+        labelOverride: "Explicit owner",
         reference: {
           entity: "ledgerParty",
           filters: [{ field: "kind", values: ["member", "guest"] }],
@@ -179,7 +179,7 @@ export default defineEntity({
         control: { kind: "specialized", renderer: "entity-select" },
         display: {
           detail: true,
-          detailOrder: 6,
+          detailOrderOverride: 6,
           renderer: { detail: "ownerLedgerPartyId" },
         },
         validation: {
@@ -191,7 +191,7 @@ export default defineEntity({
       {
         key: "effectiveOwnership",
         kind: "json",
-        label: "Effective owner",
+        labelOverride: "Effective owner",
         explanation: {
           ruleId: "inventory.effective-owner",
           version: 1,
@@ -203,7 +203,7 @@ export default defineEntity({
         },
         display: {
           detail: true,
-          detailOrder: 7,
+          detailOrderOverride: 7,
           renderer: { detail: "effectiveOwnership" },
         },
         provenance: {
@@ -274,8 +274,8 @@ export default defineEntity({
         key: "verifiedAt",
         kind: "timestamp",
         nullable: true,
-        label: "Verified",
-        display: { list: true, detail: true, detailOrder: 3 },
+        labelOverride: "Verified",
+        display: { list: true, detail: true, detailOrderOverride: 3 },
         validation: {
           read: z
             .date()
@@ -303,33 +303,38 @@ export default defineEntity({
           update: null,
         },
       },
-      { key: "shortcode", kind: "text", readKey: null },
-      { key: "deletedAt", kind: "timestamp", nullable: true, readKey: null },
+      { key: "shortcode", kind: "text", readKeyOverride: null },
+      {
+        key: "deletedAt",
+        kind: "timestamp",
+        nullable: true,
+        readKeyOverride: null,
+      },
     ],
     storage: [
       {
         key: "id",
-        default: "generated",
+        defaultOverride: "generated",
         specialized: "primary-key:InventoryItemId",
       },
       { key: "shortcode", specialized: "shortcode" },
       { key: "productId", reference: "product" },
       { key: "amount", specialized: "json:amount" },
-      { key: "createdAt", default: "now" },
-      { key: "updatedAt", default: "now", specialized: "updated-at" },
+      { key: "createdAt", defaultOverride: "now" },
+      { key: "updatedAt", defaultOverride: "now", specialized: "updated-at" },
       "deletedAt",
       { key: "locationId", reference: "location" },
-      { key: "valuation", kind: "number", specialized: "real" },
+      { key: "valuation", kindOverride: "number", specialized: "real" },
       "verifiedAt",
       {
         key: "placement",
-        default: "literal",
+        defaultOverride: "literal",
         defaultValue: "'stock'",
         specialized: "enum:InventoryPlacement",
       },
       {
         key: "ownershipMode",
-        default: "literal",
+        defaultOverride: "literal",
         defaultValue: "inherit",
         specialized: "enum:ownershipMode",
       },

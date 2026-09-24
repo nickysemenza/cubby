@@ -80,7 +80,7 @@ export default defineEntity({
       {
         key: "name",
         kind: "text",
-        control: { kind: "text", section: "identity" },
+        control: { kind: "text", sectionOverride: "identity" },
         display: { list: true, detail: true, standard: "name" },
         validation: {
           read: z.string(),
@@ -123,15 +123,15 @@ export default defineEntity({
         // The rendered column keeps its existing "yield" id (structured
         // yield falls back to servings — see recipelist.tsx) and its
         // existing "Yield" header, distinct from this field's own key.
-        label: "Yield",
-        control: { kind: "number", section: "servings" },
+        labelOverride: "Yield",
+        control: { kind: "number", sectionOverride: "servings" },
         display: {
           list: true,
           detail: true,
           width: "xs",
           mobile: { slot: "trailing", priority: 5, interactive: true },
-          columnId: "yield",
-          listOrder: 1,
+          columnIdOverride: "yield",
+          listOrderOverride: 1,
         },
         validation: {
           read: recipeServings.nullable().optional(),
@@ -144,7 +144,7 @@ export default defineEntity({
         kind: "text-array",
         nullable: true,
         control: { kind: "specialized", renderer: "tag-list" },
-        display: { list: true, detail: true, listOrder: 0 },
+        display: { list: true, detail: true, listOrderOverride: 0 },
         validation: {
           read: recipeTags.nullable().optional(),
           create: recipeTags.nullable().optional(),
@@ -171,12 +171,12 @@ export default defineEntity({
         key: "costTotal",
         kind: "number",
         nullable: true,
-        label: "Cost",
+        labelOverride: "Cost",
         // Computed from `totals.cost` at read time — no column of its own
         // in the list row, so column building requires the override
         // recipelist.tsx supplies.
-        readKey: null,
-        display: { list: true, listOrder: 2 },
+        readKeyOverride: null,
+        display: { list: true, listOrderOverride: 2 },
         provenance: { kind: "derived", sources: [{ entity: "recipe" }] },
         explanation: {
           ruleId: "recipe.cost-total",
@@ -196,10 +196,10 @@ export default defineEntity({
         key: "caloriesTotal",
         kind: "number",
         nullable: true,
-        label: "Calories",
+        labelOverride: "Calories",
         // Computed from `totals.nutrition.kcal` at read time; see costTotal.
-        readKey: null,
-        display: { list: true, listOrder: 3 },
+        readKeyOverride: null,
+        display: { list: true, listOrderOverride: 3 },
         provenance: { kind: "derived", sources: [{ entity: "recipe" }] },
         explanation: {
           ruleId: "recipe.calories-total",
@@ -218,13 +218,13 @@ export default defineEntity({
       {
         key: "meals",
         kind: "number",
-        label: "Meals",
+        labelOverride: "Meals",
         // The list row carries this as `mealCount` (a live MealRecipe count,
         // not a stored column); `reference` marks it as relation-derived so
         // column building requires the override recipelist.tsx supplies.
-        readKey: "mealCount",
+        readKeyOverride: "mealCount",
         reference: { entity: "meal", multiple: true },
-        display: { list: true, listOrder: 6 },
+        display: { list: true, listOrderOverride: 6 },
         explanation: {
           ruleId: "recipe.meal-count",
           description:
@@ -259,8 +259,8 @@ export default defineEntity({
       {
         key: "pendingImageIds",
         kind: "identifier",
-        label: "Pending Image IDs",
-        readKey: null,
+        labelOverride: "Pending Image IDs",
+        readKeyOverride: null,
         reference: { entity: "image", multiple: true },
         control: { kind: "specialized", renderer: "entity-multi-select" },
         validation: {
@@ -272,8 +272,8 @@ export default defineEntity({
       {
         key: "removeImageIds",
         kind: "identifier",
-        label: "Remove Image IDs",
-        readKey: null,
+        labelOverride: "Remove Image IDs",
+        readKeyOverride: null,
         reference: { entity: "image", multiple: true },
         control: { kind: "specialized", renderer: "entity-multi-select" },
         validation: {
@@ -285,7 +285,7 @@ export default defineEntity({
       {
         key: "imageOrder",
         kind: "text",
-        readKey: null,
+        readKeyOverride: null,
         control: { kind: "specialized", renderer: "image-order" },
         provenance: {
           kind: "relation",
@@ -336,7 +336,7 @@ export default defineEntity({
         display: {
           list: true,
           detail: true,
-          listOrder: 5,
+          listOrderOverride: 5,
           renderer: { list: "recipe-source", detail: "recipe-source" },
         },
         provenance: { kind: "derived", sources: [{ label: "Recipe source" }] },
@@ -379,7 +379,7 @@ export default defineEntity({
       {
         key: "images",
         kind: "json",
-        display: { list: true, standard: "image", columnId: "image" },
+        display: { list: true, standard: "image", columnIdOverride: "image" },
         provenance: {
           kind: "derived",
           sources: [{ entity: "image", relation: "images" }],
@@ -403,23 +403,38 @@ export default defineEntity({
           update: null,
         },
       },
-      { key: "shortcode", kind: "text", readKey: null },
-      { key: "deletedAt", kind: "timestamp", nullable: true, readKey: null },
-      { key: "SourceType", kind: "enum", nullable: true, readKey: "source" },
-      { key: "SourceData", kind: "text", nullable: true, readKey: "source" },
+      { key: "shortcode", kind: "text", readKeyOverride: null },
+      {
+        key: "deletedAt",
+        kind: "timestamp",
+        nullable: true,
+        readKeyOverride: null,
+      },
+      {
+        key: "SourceType",
+        kind: "enum",
+        nullable: true,
+        readKeyOverride: "source",
+      },
+      {
+        key: "SourceData",
+        kind: "text",
+        nullable: true,
+        readKeyOverride: "source",
+      },
       {
         key: "cookbookId",
         kind: "identifier",
         nullable: true,
-        label: "Cookbook ID",
-        readKey: null,
+        labelOverride: "Cookbook ID",
+        readKeyOverride: null,
         reference: { entity: "cookbook" },
       },
       {
         key: "forkedFromRecipeId",
         kind: "identifier",
         nullable: true,
-        label: "Forked from",
+        labelOverride: "Forked from",
         reference: { entity: "recipe" },
         control: { kind: "specialized", renderer: "entity-select" },
         display: { detail: true },
@@ -446,20 +461,25 @@ export default defineEntity({
         key: "totalsComputedAt",
         kind: "timestamp",
         nullable: true,
-        readKey: null,
+        readKeyOverride: null,
       },
-      { key: "activeMinutes", kind: "number", nullable: true, readKey: null },
+      {
+        key: "activeMinutes",
+        kind: "number",
+        nullable: true,
+        readKeyOverride: null,
+      },
       {
         key: "totalMinutes",
         kind: "number",
         nullable: true,
-        label: "Time",
+        labelOverride: "Time",
         // No row scalar of its own — the list column prints the source's
         // own time prose (recipe.meta.times.total) when there is one, which
         // doesn't always imply a present totalMinutes count. Requires the
         // override recipelist.tsx supplies.
-        readKey: null,
-        display: { list: true, listOrder: 4 },
+        readKeyOverride: null,
+        display: { list: true, listOrderOverride: 4 },
         explanation: {
           ruleId: "recipe.total-time",
           description:
@@ -472,11 +492,15 @@ export default defineEntity({
       },
     ],
     storage: [
-      { key: "id", default: "generated", specialized: "primary-key:RecipeId" },
+      {
+        key: "id",
+        defaultOverride: "generated",
+        specialized: "primary-key:RecipeId",
+      },
       { key: "shortcode", specialized: "shortcode" },
       "name",
-      { key: "createdAt", default: "now" },
-      { key: "updatedAt", default: "now", specialized: "updated-at" },
+      { key: "createdAt", defaultOverride: "now" },
+      { key: "updatedAt", defaultOverride: "now", specialized: "updated-at" },
       "deletedAt",
       { key: "SourceType", specialized: "enum:RecipeSource" },
       "SourceData",

@@ -39,7 +39,7 @@ export default defineEntity({
       {
         key: "imageId",
         kind: "identifier",
-        label: "Image",
+        labelOverride: "Image",
         reference: { entity: "image" },
         control: { kind: "specialized", renderer: "entity-select" },
         display: { detail: true },
@@ -52,10 +52,14 @@ export default defineEntity({
       {
         key: "ledgerPartyId",
         kind: "identifier",
-        label: "Library owner",
+        labelOverride: "Library owner",
         reference: { entity: "ledgerParty" },
         control: { kind: "specialized", renderer: "entity-select" },
-        display: { list: true, detail: true, columnId: "ledgerPartyName" },
+        display: {
+          list: true,
+          detail: true,
+          columnIdOverride: "ledgerPartyName",
+        },
         validation: {
           read: ledgerPartyShortcode,
           // Omittable on create: resolved from the acting login's linked
@@ -67,10 +71,10 @@ export default defineEntity({
       {
         key: "deviceId",
         kind: "identifier",
-        label: "Reporter",
+        labelOverride: "Reporter",
         reference: { entity: "device" },
         control: { kind: "specialized", renderer: "entity-select" },
-        display: { list: true, detail: true, columnId: "deviceName" },
+        display: { list: true, detail: true, columnIdOverride: "deviceName" },
         validation: {
           read: deviceShortcode,
           create: deviceShortcode,
@@ -80,7 +84,7 @@ export default defineEntity({
       {
         key: "assetKey",
         kind: "text",
-        label: "Asset key",
+        labelOverride: "Asset key",
         display: { detail: true },
         validation: {
           read: z.string(),
@@ -92,7 +96,7 @@ export default defineEntity({
         key: "cloudIdentifier",
         kind: "text",
         nullable: true,
-        readKey: null,
+        readKeyOverride: null,
         validation: {
           read: null,
           create: z.string().trim().min(1).nullable().optional(),
@@ -103,7 +107,7 @@ export default defineEntity({
         key: "localIdentifier",
         kind: "text",
         nullable: true,
-        readKey: null,
+        readKeyOverride: null,
         validation: {
           read: null,
           create: z.string().trim().min(1).nullable().optional(),
@@ -113,7 +117,7 @@ export default defineEntity({
       {
         key: "sourceType",
         kind: "enum",
-        label: "Source type",
+        labelOverride: "Source type",
         control: {
           kind: "select",
           options: [
@@ -132,7 +136,7 @@ export default defineEntity({
       {
         key: "mediaSubtypes",
         kind: "text-array",
-        label: "Media subtypes",
+        labelOverride: "Media subtypes",
         display: { detail: true },
         validation: {
           read: z.array(z.string()),
@@ -144,7 +148,7 @@ export default defineEntity({
         key: "originalFilename",
         kind: "text",
         nullable: true,
-        label: "Original filename",
+        labelOverride: "Original filename",
         display: { detail: true },
         validation: {
           read: z.string().nullable(),
@@ -156,7 +160,7 @@ export default defineEntity({
         key: "pixelWidth",
         kind: "number",
         nullable: true,
-        label: "Pixel width",
+        labelOverride: "Pixel width",
         display: { detail: true },
         validation: {
           read: z.number().int().positive().nullable(),
@@ -168,7 +172,7 @@ export default defineEntity({
         key: "pixelHeight",
         kind: "number",
         nullable: true,
-        label: "Pixel height",
+        labelOverride: "Pixel height",
         display: { detail: true },
         validation: {
           read: z.number().int().positive().nullable(),
@@ -179,7 +183,7 @@ export default defineEntity({
       {
         key: "hasAdjustments",
         kind: "boolean",
-        label: "Has adjustments",
+        labelOverride: "Has adjustments",
         control: { kind: "checkbox" },
         display: { detail: true },
         validation: {
@@ -192,7 +196,7 @@ export default defineEntity({
         key: "capturedAt",
         kind: "timestamp",
         nullable: true,
-        label: "Captured at",
+        labelOverride: "Captured at",
         display: { list: true, detail: true, format: "timestamp" },
         validation: {
           read: z.date().nullable(),
@@ -204,7 +208,7 @@ export default defineEntity({
         key: "capturedAtOffsetMinutes",
         kind: "number",
         nullable: true,
-        label: "Captured at offset (minutes)",
+        labelOverride: "Captured at offset (minutes)",
         display: { detail: true },
         validation: {
           read: z.number().int().nullable(),
@@ -216,7 +220,7 @@ export default defineEntity({
         key: "addedAt",
         kind: "timestamp",
         nullable: true,
-        label: "Added at",
+        labelOverride: "Added at",
         display: { detail: true, format: "timestamp" },
         validation: {
           read: z.date().nullable(),
@@ -228,7 +232,7 @@ export default defineEntity({
         key: "location",
         kind: "json",
         nullable: true,
-        label: "Location",
+        labelOverride: "Location",
         display: {
           detail: true,
           renderer: { detail: "image-sighting-location" },
@@ -243,7 +247,7 @@ export default defineEntity({
         key: "placeName",
         kind: "text",
         nullable: true,
-        label: "Place name",
+        labelOverride: "Place name",
         display: { detail: true },
         validation: {
           read: z.string().nullable(),
@@ -255,7 +259,7 @@ export default defineEntity({
         key: "camera",
         kind: "json",
         nullable: true,
-        label: "Camera",
+        labelOverride: "Camera",
         display: {
           detail: true,
           renderer: { detail: "image-sighting-camera" },
@@ -269,7 +273,7 @@ export default defineEntity({
       {
         key: "matchKind",
         kind: "enum",
-        label: "Match kind",
+        labelOverride: "Match kind",
         control: {
           kind: "select",
           options: [
@@ -288,7 +292,7 @@ export default defineEntity({
         key: "hashDistance",
         kind: "number",
         nullable: true,
-        label: "Hash distance",
+        labelOverride: "Hash distance",
         display: { detail: true },
         validation: {
           read: z.number().int().nonnegative().nullable(),
@@ -300,7 +304,7 @@ export default defineEntity({
         key: "aspectGate",
         kind: "boolean",
         nullable: true,
-        label: "Aspect gate",
+        labelOverride: "Aspect gate",
         display: { detail: true },
         validation: {
           read: z.boolean().nullable(),
@@ -311,7 +315,7 @@ export default defineEntity({
       {
         key: "observedAt",
         kind: "timestamp",
-        label: "Observed at",
+        labelOverride: "Observed at",
         display: { detail: true, format: "timestamp" },
         validation: {
           read: z.date(),
@@ -347,13 +351,18 @@ export default defineEntity({
         display: { detail: true },
         validation: { read: z.date(), create: null, update: null },
       },
-      { key: "shortcode", kind: "text", readKey: null },
-      { key: "deletedAt", kind: "timestamp", nullable: true, readKey: null },
+      { key: "shortcode", kind: "text", readKeyOverride: null },
+      {
+        key: "deletedAt",
+        kind: "timestamp",
+        nullable: true,
+        readKeyOverride: null,
+      },
     ],
     storage: [
       {
         key: "id",
-        default: "generated",
+        defaultOverride: "generated",
         specialized: "primary-key:ImageSightingId",
       },
       { key: "shortcode", specialized: "shortcode" },
@@ -366,14 +375,18 @@ export default defineEntity({
       { key: "sourceType", specialized: "enum:sourceType" },
       {
         key: "mediaSubtypes",
-        default: "literal",
+        defaultOverride: "literal",
         defaultValue: "'{}'::text[]",
         specialized: "text-array",
       },
       "originalFilename",
       "pixelWidth",
       "pixelHeight",
-      { key: "hasAdjustments", default: "literal", defaultValue: false },
+      {
+        key: "hasAdjustments",
+        defaultOverride: "literal",
+        defaultValue: false,
+      },
       "capturedAt",
       "capturedAtOffsetMinutes",
       "addedAt",
@@ -384,8 +397,8 @@ export default defineEntity({
       "hashDistance",
       "aspectGate",
       "observedAt",
-      { key: "createdAt", default: "now" },
-      { key: "updatedAt", default: "now", specialized: "updated-at" },
+      { key: "createdAt", defaultOverride: "now" },
+      { key: "updatedAt", defaultOverride: "now", specialized: "updated-at" },
       "deletedAt",
     ],
     create: [

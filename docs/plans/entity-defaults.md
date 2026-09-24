@@ -11,8 +11,9 @@ Declaration inputs that replace inferred values use explicit `Override` names
 (`defaultOverride`, `directionOverride`, `sectionOverrides`,
 `actionOverrides`, `viewOverrides`, `displaySourceOverrides`). Omission selects
 the default; an empty collection opts out where the schema permits it. The
-generated manifest retains ordinary resolved names. This naming rule extends
-to field-level fallbacks as those defaults become universal.
+generated manifest retains ordinary resolved names. Field labels, read keys,
+control sections, display column identities and orders, storage fallbacks,
+route parameters, and embedding decisions follow the same naming rule.
 
 ## Current boundary
 
