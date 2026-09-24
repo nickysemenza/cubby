@@ -5,6 +5,19 @@ import { createServer } from "node:http";
 export async function createE2EObjectStorage() {
   const objects = new Map<string, { bytes: Buffer; contentType: string }>();
   const server = createServer(async (request, response) => {
+    response.setHeader("Access-Control-Allow-Origin", "*");
+    response.setHeader(
+      "Access-Control-Allow-Methods",
+      "GET, PUT, DELETE, OPTIONS",
+    );
+    response.setHeader(
+      "Access-Control-Allow-Headers",
+      "Content-Type, x-amz-content-sha256",
+    );
+    if (request.method === "OPTIONS") {
+      response.writeHead(204).end();
+      return;
+    }
     const pathname = new URL(request.url ?? "/", "http://localhost").pathname;
     const key = decodeURIComponent(
       pathname.replace(/^\/e2e-bucket\//, "/").slice(1),

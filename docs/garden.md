@@ -110,3 +110,6 @@ The `planting` calendar lane emits one item per milestone (`sowed`,
 `transplanted`, `finished`) as the `garden` ICS feed (also folded into
 `all`); ICS-only, matching the tenet that garden data has no reservation or
 locking semantics.
+
+The [local journey coverage map](agents/core-journey-e2e.md) links the
+planting and journal browser check and names the remaining native input path.

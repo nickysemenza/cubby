@@ -358,6 +358,9 @@ and workerd harness. The `cubby` CLI signs in through `AuthFlow`, searches,
 builds an `EntityPatch`, updates through `CubbyClient`, and checks native readback
 plus the database row. It skips Xcode, installation, and UI automation for a
 quicker native data-flow loop; use `test:e2e:sim` for tab, sheet, and layout behavior.
+The [local journey coverage map](docs/agents/core-journey-e2e.md) tracks
+input-first checks for Product, photo, order, statement, inventory, and other
+documented core flows, including their remaining UI gaps.
 Headless failure logs are under `artifacts/headless-e2e/`.
 For repeated native changes, `pnpm test:e2e:headless:watch` keeps that database
 and workerd harness running. Press Enter to seed a fresh product and rerun the

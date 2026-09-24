@@ -63,3 +63,7 @@ Purchase stations open Purchases; the derived Vendor branch owns Vendor links
 from its own evidence. The route output is an API contract, not a schema or
 database migration. Existing specialized Product sections remain the source
 of their mutation behavior and are not duplicated by the relationship preview.
+
+The [local journey coverage map](agents/core-journey-e2e.md) tracks the
+relationship browser check alongside the Product, photo, order, and statement
+journeys that create its underlying evidence.

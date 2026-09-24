@@ -156,11 +156,13 @@ the repository.
 
 ## How to check the journey
 
-Use synthetic fixtures for the complete path: manual creation or exact match,
-photo grouping and approval, order preparation and replay, ambiguous
-settlement, and a return or trial that does not imply ownership. On iPhone,
-repeat the direct photo and new Product paths in a disposable local database;
-inspect the candidate order, taps, review language, and final Product detail.
-On web, verify the same Product, attached image roles, purchase line, and
-settlement status. Record a simulator or browser video when interaction quality
-is the question. Keep real household evidence in local analysis only.
+The [local journey coverage map](agents/core-journey-e2e.md) names each
+executable Product path, its actual synthetic input, the few seeded
+prerequisites, and its remaining gap. The wardrobe check carries uploaded
+photos and a parsed Monarch CSV through grouping, approval, purchase import,
+settlement, and Product merge. A separate browser check creates a Product from
+item and label files without an import run. On iPhone, repeat direct photo and
+new Product paths in a disposable local database; inspect candidate order,
+taps, review language, and final Product detail. Record a simulator or browser
+video when interaction quality is the question. Keep real household evidence
+in local analysis only.

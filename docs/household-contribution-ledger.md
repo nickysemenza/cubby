@@ -51,3 +51,7 @@ Client labels are derived from party kind. Route-capable entity references elsew
 ## Import boundary
 
 Clients orchestrate provider reads from Splitwise, Gmail, Monarch, or local exports and send normalized reviewed changes through the standard mutations. Cubby receives no provider credentials, raw emails, file paths, or whole exports. There is no global transaction across providers or independent records. Each record can be resumed from durable Source Claims and evidence, so a partial import does not require a global rollback or batch receipt.
+
+The [local journey coverage map](agents/core-journey-e2e.md) distinguishes
+the tested Project/Task browser path from the still-missing full contribution
+attribution journey.
