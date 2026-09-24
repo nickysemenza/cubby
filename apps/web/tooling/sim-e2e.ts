@@ -992,14 +992,14 @@ async function main(): Promise<void> {
   let harness:
     | Awaited<
         ReturnType<
-          (typeof import("../tests/e2e/e2e-worker-runtime"))["createHarness"]
+          (typeof import("./local-workerd-harness"))["createLocalWorkerdHarness"]
         >
       >
     | undefined;
   let objectStorage:
     | Awaited<
         ReturnType<
-          (typeof import("../tests/e2e/e2e-object-storage"))["createE2EObjectStorage"]
+          (typeof import("./local-object-storage"))["createE2EObjectStorage"]
         >
       >
     | undefined;
@@ -1065,21 +1065,13 @@ async function main(): Promise<void> {
     }
 
     await run("pnpm", ["run", "build:cf"], webRoot);
-    const { writeE2ECompatibleWranglerConfig } =
-      await import("./e2e-worker-config");
-    writeE2ECompatibleWranglerConfig(webRoot);
-    const runtime = await import("../tests/e2e/e2e-worker-runtime");
-    const { createE2EObjectStorage } =
-      await import("../tests/e2e/e2e-object-storage");
-    const { ensureHarnessServiceBundles } =
-      await import("../tests/e2e/harness-services/bundle");
+    const { writeLocalWorkerdConfig } = await import("./e2e-worker-config");
+    writeLocalWorkerdConfig(webRoot);
+    const runtime = await import("./local-workerd-harness");
+    const { createE2EObjectStorage } = await import("./local-object-storage");
     restoreEnvironment = runtime.installDatabaseEnvironment(databaseURL);
     objectStorage = await createE2EObjectStorage();
-    harness = runtime.createHarness(
-      databaseURL,
-      objectStorage.url,
-      await ensureHarnessServiceBundles(),
-    );
+    harness = runtime.createLocalWorkerdHarness(databaseURL, objectStorage.url);
     const { url } = await harness.listen();
     const context = await request.newContext({
       baseURL: url.origin,
@@ -1109,12 +1101,12 @@ async function main(): Promise<void> {
       const { seedSimulatorPhotoActor, seedSimulatorScenario } =
         await import("./scenarios/simulator");
       await seedSimulatorPhotoActor(seedPool, userId);
-      productId = await seedSimulatorScenario(seedPool, userId);
+      if (!photo) productId = await seedSimulatorScenario(seedPool, userId);
     } finally {
       await seedPool.end();
     }
     console.log(
-      `[${lane}] Workerd at ${url.origin}; seeded product ${productId}`,
+      `[${lane}] Workerd at ${url.origin}${productId ? `; seeded product ${productId}` : ""}`,
     );
 
     if (headless) {

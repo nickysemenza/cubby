@@ -114,27 +114,18 @@ async function main(): Promise<void> {
     }
   }
 
-  const { createE2EObjectStorage } =
-    await import("../tests/e2e/e2e-object-storage");
-  const { createHarness, installDatabaseEnvironment } =
-    await import("../tests/e2e/e2e-worker-runtime");
-  const { ensureHarnessServiceBundles } =
-    await import("../tests/e2e/harness-services/bundle");
+  const { createE2EObjectStorage } = await import("./local-object-storage");
+  const { createLocalWorkerdHarness, installDatabaseEnvironment } =
+    await import("./local-workerd-harness");
   const { seedCorpus } = await import("./scenarios/corpus");
-  const { writeE2ECompatibleWranglerConfig } =
-    await import("./e2e-worker-config");
+  const { writeLocalWorkerdConfig } = await import("./e2e-worker-config");
   // A short-lived harness only to run the real sign-up flow (so the local dev
   // user's password hash and session model exactly match production). It is
   // pointed at the persistent dev database, not a throwaway IntegreSQL one.
-  writeE2ECompatibleWranglerConfig(webRoot);
+  writeLocalWorkerdConfig(webRoot);
   const restoreEnvironment = installDatabaseEnvironment(databaseUrl);
   const objectStorage = await createE2EObjectStorage();
-  const harnessServiceBundles = await ensureHarnessServiceBundles();
-  const harness = createHarness(
-    databaseUrl,
-    objectStorage.url,
-    harnessServiceBundles,
-  );
+  const harness = createLocalWorkerdHarness(databaseUrl, objectStorage.url);
   let userId: string;
   try {
     const { url } = await harness.listen();

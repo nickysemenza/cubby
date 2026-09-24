@@ -1,33 +1,18 @@
-import { readFileSync } from "node:fs";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
 import { request, type APIRequestContext } from "@playwright/test";
-import { createTestHarness, type TestHarness } from "wrangler";
-import { z } from "zod";
+import { type TestHarness } from "wrangler";
 
 import {
   closeE2EWorkerResources,
   type E2EWorkerResources,
 } from "../../tooling/e2e-worker-resources";
-import { createE2EDatabase } from "./e2e-database";
-import { createE2EObjectStorage } from "./e2e-object-storage";
 import {
-  ensureHarnessServiceBundles,
-  type HarnessServiceBundles,
-} from "./harness-services/bundle";
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-const webRoot = path.join(__dirname, "../..");
-const e2eConfigPath = "dist/server/wrangler.e2e.json";
-const e2eEnvironmentKeys = [
-  "E2E_DATABASE_URL",
-  "WRANGLER_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE",
-  "WRANGLER_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE_CACHED",
-] as const;
+  createLocalWorkerdHarness,
+  installDatabaseEnvironment,
+} from "../../tooling/local-workerd-harness";
+import { createE2EDatabase } from "./e2e-database";
+import { createE2EObjectStorage } from "../../tooling/local-object-storage";
 
 type E2EStorageState = Awaited<ReturnType<APIRequestContext["storageState"]>>;
-type EnvironmentKey = (typeof e2eEnvironmentKeys)[number];
 
 export interface E2EWorkerRuntime {
   baseURL: string;
@@ -36,109 +21,6 @@ export interface E2EWorkerRuntime {
   storageState: E2EStorageState;
   debug(): void;
   close(): Promise<void>;
-}
-
-/** Exported for tooling/dev-db-seed.ts, which needs this before its own `createHarness` call too. */
-export function installDatabaseEnvironment(databaseUrl: string) {
-  const previous = new Map<EnvironmentKey, string | undefined>();
-  for (const key of e2eEnvironmentKeys) previous.set(key, process.env[key]);
-  process.env.E2E_DATABASE_URL = databaseUrl;
-  process.env.WRANGLER_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE =
-    databaseUrl;
-  process.env.WRANGLER_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE_CACHED =
-    databaseUrl;
-  return () => {
-    for (const [key, value] of previous) {
-      if (value === undefined) delete process.env[key];
-      else process.env[key] = value;
-    }
-  };
-}
-
-/** Exported for tooling/dev-db-seed.ts, which points this at the persistent dev database. */
-export function createHarness(
-  databaseUrl: string,
-  objectStorageUrl: string,
-  harnessServiceBundles: HarnessServiceBundles,
-) {
-  const compatibilityDate = z
-    .object({ compatibility_date: z.string() })
-    .parse(
-      JSON.parse(readFileSync(path.join(webRoot, e2eConfigPath), "utf8")),
-    ).compatibility_date;
-
-  return createTestHarness({
-    root: webRoot,
-    workers: [
-      {
-        configPath: e2eConfigPath,
-        vars: {
-          ALLOW_SIGNUP: "true",
-          INSECURE_AUTH_COOKIES: "true",
-          E2E_AUTH_TEST_MODE: "true",
-          DATABASE_URL: databaseUrl,
-          R2_ENDPOINT: objectStorageUrl,
-          R2_PUBLIC_URL: objectStorageUrl,
-          R2_BUCKET_NAME: "e2e-bucket",
-          R2_KEY_PREFIX: "e2e",
-          R2_ACCESS_KEY_ID: "dummy",
-          R2_SECRET_ACCESS_KEY: "dummy",
-          USDA_API_URL: "http://127.0.0.1:9/",
-          // Keyless like CI (emptyStringAsUndefined), so a local .env key never
-          // turns E2E into slow, billed, nondeterministic model calls: every
-          // AI operation takes the same fast "not configured" path everywhere.
-          AI_GATEWAY_API_KEY: "",
-        },
-        secrets: {
-          BETTER_AUTH_SECRET:
-            process.env.BETTER_AUTH_SECRET || "e2e-test-secret",
-        },
-        bindingOverrides: {
-          USDA_API: "e2e-usda-empty",
-          UPC_LOOKUP: "e2e-upc-empty",
-          PURCHASE_AGENT: "e2e-purchase-agent-empty",
-        },
-      },
-      {
-        config: {
-          name: "e2e-usda-empty",
-          main: harnessServiceBundles.usdaEmpty,
-          no_bundle: true,
-          compatibility_date: compatibilityDate,
-        },
-      },
-      {
-        config: {
-          name: "e2e-upc-empty",
-          main: harnessServiceBundles.upcEmpty,
-          no_bundle: true,
-          compatibility_date: compatibilityDate,
-        },
-      },
-      {
-        config: {
-          name: "e2e-purchase-agent-empty",
-          main: harnessServiceBundles.purchaseAgentEmpty,
-          no_bundle: true,
-          compatibility_date: compatibilityDate,
-        },
-      },
-      {
-        config: {
-          name: "e2e-queue-sink",
-          main: harnessServiceBundles.queueSink,
-          no_bundle: true,
-          compatibility_date: compatibilityDate,
-          queues: {
-            consumers: [
-              { queue: "cubby-background", max_batch_timeout: 0 },
-              { queue: "cubby-telemetry", max_batch_timeout: 0 },
-            ],
-          },
-        },
-      },
-    ],
-  });
 }
 
 async function authenticate(baseURL: string): Promise<E2EStorageState> {
@@ -208,11 +90,9 @@ export async function createE2EWorkerRuntime({
     resources.objectStorage = objectStorage;
     logPhase("object storage");
 
-    const harnessServiceBundles = await ensureHarnessServiceBundles();
-    harness = createHarness(
+    harness = createLocalWorkerdHarness(
       database.databaseUrl,
       objectStorage.url,
-      harnessServiceBundles,
     );
     resources.harness = harness;
     const { url } = await harness.listen();

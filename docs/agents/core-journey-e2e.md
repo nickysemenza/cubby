@@ -27,6 +27,12 @@ intentional: this is a regression check for Cubby's non-AI contracts, not a
 score for model decisions. Run a separate live Flue trial for proposal quality,
 streaming, and wall time.
 
+The browser and simulator loops run the built Cubby Worker in a local Wrangler
+harness with isolated PostgreSQL and object storage. Only external service
+bindings return offline responses; one local peer handles USDA, UPC, and the
+inactive purchase agent, and acknowledges background queues. Photo journeys
+seed the signed-in actor but create their Products from the uploaded photos.
+
 ## Other documented core journeys
 
 | Documented journey                                                 | Local browser check                                                                                                                                                                                                                                   | Actual user action exercised                                       | Gap to close                                                                 |
