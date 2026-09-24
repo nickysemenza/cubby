@@ -105,3 +105,4 @@ apps/apple/CubbyKit/Frameworks/
 # Local cargo overrides (patches to sibling checkouts); machine-specific
 .cargo/config.toml
 artifacts/sim-e2e/
+artifacts/headless-e2e/

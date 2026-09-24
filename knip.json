@@ -46,6 +46,7 @@
         "scripts/ensure-db-extensions.ts!",
         "scripts/generate-apple-preview-fixtures.ts!",
         "tooling/**/*.{ts,tsx}!",
+        "tooling/e2e-db-watchdog.mjs!",
         "drizzle.config.ts!",
         "instrument.server.mjs!"
       ],

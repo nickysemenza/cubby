@@ -8,7 +8,7 @@ struct CubbyCLI: AsyncParsableCommand {
         abstract: "Cubby native test harness (CLI, not a shipped product).",
         subcommands: [
             Version.self, Auth.self, Call.self, Entity.self, Scan.self, Search.self, Parse.self,
-            Photo.self,
+            Photo.self, HeadlessProductEdit.self,
         ]
     )
 }
