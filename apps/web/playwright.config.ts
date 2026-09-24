@@ -43,11 +43,10 @@ const isCI = !!process.env.CI;
 export default defineConfig({
   testDir: "./tests/e2e",
   /* Public-repository ubuntu-latest CI runners have 4 vCPU, shared by the
-     browser, Worker, and database. CI runs one Playwright worker per runner
-     and shards desktop tests across two runners (--shard) instead of running
-     multiple workers on one — two workers on a single runner flaked (see
-     tooling/e2e-workers.ts). Preserve the local fast-failure budget while
-     giving CI scenarios more wall-clock room. */
+     browser, Worker, and database. CI shards desktop tests across two runners;
+     its workflow currently benchmarks two workers per runner via --workers.
+     Preserve the local fast-failure budget while giving CI scenarios more
+     wall-clock room. */
   timeout: isCI ? 120_000 : 30_000,
 
   /* Global setup prepares the immutable Worker config and database template. */
@@ -59,9 +58,9 @@ export default defineConfig({
   forbidOnly: !!process.env.CI,
   /* Browser canaries are deterministic contracts; retries hide flakes. */
   retries: 0,
-  /* Each local worker owns an isolated database and harness. CI runs one
-     worker per runner (see the timeout comment above for why); local macOS
-     may override the measured cap. See tooling/e2e-workers.ts. */
+  /* Each worker owns an isolated database and harness. The CI workflow can
+     override this default through --workers; local macOS may override its
+     measured cap. See tooling/e2e-workers.ts. */
   workers: resolveE2EWorkers(),
   /* Backstop for a dead worker harness, which fails every remaining test
      identically. Kept loose enough that a genuine multi-test regression still
