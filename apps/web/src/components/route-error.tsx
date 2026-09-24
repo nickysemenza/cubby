@@ -1,8 +1,8 @@
-import { ArrowClockwiseIcon as RefreshCw } from "@phosphor-icons/react/dist/csr/ArrowClockwise";
-import { CaretDownIcon as ChevronDown } from "@phosphor-icons/react/dist/csr/CaretDown";
-import { SignInIcon as LogIn } from "@phosphor-icons/react/dist/csr/SignIn";
-import { WarningCircleIcon as AlertCircle } from "@phosphor-icons/react/dist/csr/WarningCircle";
-import { WifiSlashIcon as WifiOff } from "@phosphor-icons/react/dist/csr/WifiSlash";
+import { ArrowClockwiseIcon } from "@phosphor-icons/react/dist/csr/ArrowClockwise";
+import { CaretDownIcon } from "@phosphor-icons/react/dist/csr/CaretDown";
+import { SignInIcon } from "@phosphor-icons/react/dist/csr/SignIn";
+import { WarningCircleIcon } from "@phosphor-icons/react/dist/csr/WarningCircle";
+import { WifiSlashIcon } from "@phosphor-icons/react/dist/csr/WifiSlash";
 import * as Sentry from "@sentry/tanstackstart-react";
 import {
   type ErrorComponentProps,
@@ -91,11 +91,11 @@ const categorizeError = (
 const getIcon = (category: ErrorCategory) => {
   switch (category) {
     case "network":
-      return <WifiOff className="size-12 text-muted-foreground" />;
+      return <WifiSlashIcon className="size-12 text-muted-foreground" />;
     case "notFound":
-      return <AlertCircle className="size-12 text-muted-foreground" />;
+      return <WarningCircleIcon className="size-12 text-muted-foreground" />;
     default:
-      return <AlertCircle className="size-12 text-destructive" />;
+      return <WarningCircleIcon className="size-12 text-destructive" />;
   }
 };
 
@@ -160,7 +160,7 @@ export function RouteErrorComponent({ error, reset }: ErrorComponentProps) {
           }
           nativeButton={false}
         >
-          <LogIn className="mr-2 size-4" />
+          <SignInIcon className="mr-2 size-4" />
           Sign in
         </Button>
       )}
@@ -178,7 +178,7 @@ export function RouteErrorComponent({ error, reset }: ErrorComponentProps) {
               }
             }}
           >
-            <RefreshCw className="mr-2 size-4" />
+            <ArrowClockwiseIcon className="mr-2 size-4" />
             {category === "staleBuild" || category === "navigation"
               ? "Reload app"
               : "Try again"}
@@ -202,7 +202,7 @@ export function RouteErrorComponent({ error, reset }: ErrorComponentProps) {
             }
           >
             Technical details
-            <ChevronDown
+            <CaretDownIcon
               className={`ml-1 size-3 transition-transform ${detailsOpen ? "rotate-180" : ""}`}
             />
           </CollapsibleTrigger>

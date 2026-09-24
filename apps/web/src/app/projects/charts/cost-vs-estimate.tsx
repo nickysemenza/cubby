@@ -1,5 +1,5 @@
 import type { ProjectPortfolioAnalyticsOut } from "@cubby/schemas/project";
-import { CurrencyDollarIcon as DollarSign } from "@phosphor-icons/react/dist/csr/CurrencyDollar";
+import { CurrencyDollarIcon } from "@phosphor-icons/react/dist/csr/CurrencyDollar";
 import { useMemo } from "react";
 
 import { useProjectOptions } from "~/app/_components/hooks/useProjectOptions";
@@ -84,7 +84,7 @@ export function CostVsEstimate({
   );
 
   if (data.length === 0) {
-    return <ChartEmpty icon={DollarSign} title="No cost data." />;
+    return <ChartEmpty icon={CurrencyDollarIcon} title="No cost data." />;
   }
 
   return (

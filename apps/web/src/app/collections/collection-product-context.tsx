@@ -2,10 +2,10 @@ import type {
   CollectionProductPlacementOut,
   CollectionProductPurchaseOut,
 } from "@cubby/schemas/collection";
-import { CheckIcon as Check } from "@phosphor-icons/react/dist/csr/Check";
-import { ClipboardIcon as ClipboardCopy } from "@phosphor-icons/react/dist/csr/Clipboard";
-import { MapPinIcon as MapPin } from "@phosphor-icons/react/dist/csr/MapPin";
-import { ReceiptIcon as ReceiptText } from "@phosphor-icons/react/dist/csr/Receipt";
+import { CheckIcon } from "@phosphor-icons/react/dist/csr/Check";
+import { ClipboardIcon } from "@phosphor-icons/react/dist/csr/Clipboard";
+import { MapPinIcon } from "@phosphor-icons/react/dist/csr/MapPin";
+import { ReceiptIcon } from "@phosphor-icons/react/dist/csr/Receipt";
 import { Link } from "@tanstack/react-router";
 import { format } from "date-fns";
 import { useEffect, useState } from "react";
@@ -53,9 +53,9 @@ export function CopyableShortcode({
     >
       {code}
       {copied ? (
-        <Check className="size-3" aria-hidden />
+        <CheckIcon className="size-3" aria-hidden />
       ) : (
-        <ClipboardCopy className="size-3" aria-hidden />
+        <ClipboardIcon className="size-3" aria-hidden />
       )}
     </button>
   );
@@ -69,7 +69,7 @@ export function ProductPlacementsPopover({
   if (placements.length === 0) {
     return (
       <span className="inline-flex items-center gap-1 text-2xs text-muted-foreground">
-        <MapPin className="size-3" aria-hidden /> Unplaced
+        <MapPinIcon className="size-3" aria-hidden /> Unplaced
       </span>
     );
   }
@@ -82,7 +82,7 @@ export function ProductPlacementsPopover({
         className="inline-flex h-5 items-center gap-1 text-2xs text-muted-foreground underline decoration-border decoration-dotted underline-offset-2 hover:text-primary hover:decoration-primary focus-visible:outline-2 focus-visible:outline-ring"
         aria-label={`Show ${placements.length} current ${placements.length === 1 ? "location" : "locations"}`}
       >
-        <MapPin className="size-3" aria-hidden />
+        <MapPinIcon className="size-3" aria-hidden />
         {placements.length} {placements.length === 1 ? "location" : "locations"}
       </PopoverTrigger>
       <PopoverContent side="bottom" align="start" className="w-80 p-0">
@@ -119,7 +119,7 @@ export function ProductPurchasesPopover({
   if (purchases.length === 0) {
     return (
       <span className="inline-flex items-center gap-1 text-2xs text-muted-foreground">
-        <ReceiptText className="size-3" aria-hidden /> No purchase
+        <ReceiptIcon className="size-3" aria-hidden /> No purchase
       </span>
     );
   }
@@ -132,7 +132,7 @@ export function ProductPurchasesPopover({
         className="inline-flex h-5 items-center gap-1 text-2xs text-muted-foreground underline decoration-border decoration-dotted underline-offset-2 hover:text-primary hover:decoration-primary focus-visible:outline-2 focus-visible:outline-ring"
         aria-label={`Show ${purchases.length} linked ${purchases.length === 1 ? "purchase" : "purchases"}`}
       >
-        <ReceiptText className="size-3" aria-hidden />
+        <ReceiptIcon className="size-3" aria-hidden />
         {purchases.length} {purchases.length === 1 ? "purchase" : "purchases"}
       </PopoverTrigger>
       <PopoverContent side="bottom" align="start" className="w-80 p-0">

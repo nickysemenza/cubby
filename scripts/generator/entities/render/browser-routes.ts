@@ -46,13 +46,13 @@ const renderIndexRoute = (entity: RoutedEntity, listed: boolean): string => {
     entity.route.create === "dialog"
       ? `<CreateDialogAction request={captureRequest(${JSON.stringify(entity.key)})} />`
       : entity.route.create === "page"
-        ? `<Button render={<Link to=${JSON.stringify(`/${basePath}/new`)} />} nativeButton={false}><Plus />New</Button>`
+        ? `<Button render={<Link to=${JSON.stringify(`/${basePath}/new`)} />} nativeButton={false}><PlusIcon />New</Button>`
         : null;
   const imports = [
     ...(entity.route.create === "page"
       ? [
           'import { createFileRoute, Link, stripSearchParams } from "@tanstack/react-router";',
-          'import { PlusIcon as Plus } from "@phosphor-icons/react/dist/csr/Plus";',
+          'import { PlusIcon } from "@phosphor-icons/react/dist/csr/Plus";',
         ]
       : [
           'import { createFileRoute, stripSearchParams } from "@tanstack/react-router";',

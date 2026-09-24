@@ -1,5 +1,5 @@
-import { PlusIcon as Plus } from "@phosphor-icons/react/dist/csr/Plus";
-import { XIcon as X } from "@phosphor-icons/react/dist/csr/X";
+import { PlusIcon } from "@phosphor-icons/react/dist/csr/Plus";
+import { XIcon } from "@phosphor-icons/react/dist/csr/X";
 import {
   type CSSProperties,
   type FC,
@@ -172,7 +172,7 @@ export const ChipsInput: FC<ChipsInputProps> = ({
                 onClick={() => removeTag(tag)}
                 className="ml-1 rounded hover:bg-muted"
               >
-                <X size={12} />
+                <XIcon size={12} />
               </button>
             </Badge>
           ))}
@@ -201,7 +201,7 @@ export const ChipsInput: FC<ChipsInputProps> = ({
             onClick={() => inputValue.trim() && addTag(inputValue)}
             disabled={!inputValue.trim()}
           >
-            <Plus className="size-4" />
+            <PlusIcon className="size-4" />
           </Button>
         </Row>
 

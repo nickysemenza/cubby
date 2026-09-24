@@ -4,7 +4,7 @@ import {
   parseShortcodeFor,
 } from "@cubby/schemas/identifiers";
 import type { RecommendationKind } from "@cubby/schemas/recommendations";
-import { XIcon as X } from "@phosphor-icons/react/dist/csr/X";
+import { XIcon } from "@phosphor-icons/react/dist/csr/X";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
@@ -329,7 +329,7 @@ function TagPropagationRecommendation({
               disabled={dismiss.isPending}
               onClick={() => dismiss.mutate({ sourceId, tag: proposal.tag })}
             >
-              <X className="size-3" />
+              <XIcon className="size-3" />
               Dismiss
             </Button>
           </Row>
@@ -478,7 +478,7 @@ function WorkbenchRelatedProductRow({
           disabled={pending}
           onClick={onDismiss}
         >
-          <X className="size-3" />
+          <XIcon className="size-3" />
           Dismiss
         </Button>
       }
@@ -549,7 +549,7 @@ function DuplicateProductRecommendation({
           disabled={dismiss.isPending}
           onClick={() => dismiss.mutate({ sourceId })}
         >
-          <X className="size-3" />
+          <XIcon className="size-3" />
           Dismiss
         </Button>
       </Row>

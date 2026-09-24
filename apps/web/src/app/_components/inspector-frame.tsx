@@ -1,6 +1,6 @@
 import type { Entity } from "@cubby/schemas/entity";
-import { ArrowSquareOutIcon as ExternalLink } from "@phosphor-icons/react/dist/csr/ArrowSquareOut";
-import { XIcon as X } from "@phosphor-icons/react/dist/csr/X";
+import { ArrowSquareOutIcon } from "@phosphor-icons/react/dist/csr/ArrowSquareOut";
+import { XIcon } from "@phosphor-icons/react/dist/csr/X";
 import { Link } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 
@@ -37,7 +37,7 @@ function OpenEntityLink({ entity, id }: { entity: Entity; id: string }) {
         )
       }
     >
-      <ExternalLink />
+      <ArrowSquareOutIcon />
     </Button>
   );
 }
@@ -120,7 +120,7 @@ export function EntityInspectorFrame({
                 aria-label="Close inspector"
                 onClick={onClose}
               >
-                <X />
+                <XIcon />
               </Button>
             ) : null}
           </div>

@@ -1,5 +1,5 @@
-import { FileArrowUpIcon as FileUp } from "@phosphor-icons/react/dist/csr/FileArrowUp";
-import { UploadIcon as Upload } from "@phosphor-icons/react/dist/csr/Upload";
+import { FileArrowUpIcon } from "@phosphor-icons/react/dist/csr/FileArrowUp";
+import { UploadIcon } from "@phosphor-icons/react/dist/csr/Upload";
 import { useCallback, useState } from "react";
 import { type Accept, type FileRejection, useDropzone } from "react-dropzone";
 
@@ -116,7 +116,7 @@ export function FileDropField({
             onClick={open}
             disabled={disabled}
           >
-            <FileUp />
+            <FileArrowUpIcon />
             {label}
           </Button>
           {description && (
@@ -148,7 +148,7 @@ export function FileDropField({
             "border-primary bg-primary/10 text-foreground ring-2 ring-primary/20",
         )}
       >
-        <Upload className="size-5" />
+        <UploadIcon className="size-5" />
         <span className="text-sm font-medium text-foreground">{label}</span>
         {description && <span className="text-xs">{description}</span>}
       </button>

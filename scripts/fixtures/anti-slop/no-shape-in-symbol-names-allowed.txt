@@ -1,4 +1,5 @@
 import { ZodRawShape as SchemaFields } from "zod";
+import { ShapesIcon } from "@phosphor-icons/react/dist/csr/Shapes";
 import * as z from "zod";
 
 declare const schema: { shape: SchemaFields };

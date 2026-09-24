@@ -9,12 +9,12 @@ import { isGalleryEntity } from "@cubby/schemas/entity-manifest";
 import { entityAttachmentRead } from "@cubby/schemas/entity-read-media";
 import { entitySummary } from "@cubby/schemas/entity-summary";
 import { imageOut, partitionEntityFiles } from "@cubby/schemas/image";
-import { ClockIcon as Clock } from "@phosphor-icons/react/dist/csr/Clock";
-import { FileTextIcon as FileText } from "@phosphor-icons/react/dist/csr/FileText";
+import { ClockIcon } from "@phosphor-icons/react/dist/csr/Clock";
+import { FileTextIcon } from "@phosphor-icons/react/dist/csr/FileText";
 import { ImageIcon } from "@phosphor-icons/react/dist/csr/Image";
-import { InfoIcon as Info } from "@phosphor-icons/react/dist/csr/Info";
-import { LinkIcon as Link2 } from "@phosphor-icons/react/dist/csr/Link";
-import { PuzzlePieceIcon as Puzzle } from "@phosphor-icons/react/dist/csr/PuzzlePiece";
+import { InfoIcon } from "@phosphor-icons/react/dist/csr/Info";
+import { LinkIcon } from "@phosphor-icons/react/dist/csr/Link";
+import { PuzzlePieceIcon } from "@phosphor-icons/react/dist/csr/PuzzlePiece";
 import { Link } from "@tanstack/react-router";
 import { Suspense, useMemo, useState } from "react";
 import { z } from "zod";
@@ -116,13 +116,13 @@ const presentationOf = (
 const sectionIcon = (kind: DeclaredSection["kind"]) => {
   switch (kind) {
     case "fields":
-      return Info;
+      return InfoIcon;
     case "relation":
-      return Link2;
+      return LinkIcon;
     case "timeline":
-      return Clock;
+      return ClockIcon;
     case "slot":
-      return Puzzle;
+      return PuzzlePieceIcon;
   }
 };
 
@@ -563,7 +563,7 @@ export function GenericEntityDetail<E extends GenericDetailEntity>({
     sections.push({
       id: `connected-${view.key}`,
       title: view.title,
-      icon: Link2,
+      icon: LinkIcon,
       placement: "primary",
       content: (
         <ConnectedRecordsTable
@@ -608,7 +608,7 @@ export function GenericEntityDetail<E extends GenericDetailEntity>({
     sections.push({
       id: "documents",
       title: "Documents",
-      icon: FileText,
+      icon: FileTextIcon,
       placement: "primary",
       content: <DocumentViewerList documents={documents} />,
     });

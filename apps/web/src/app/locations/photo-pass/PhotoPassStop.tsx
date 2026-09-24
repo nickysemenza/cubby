@@ -9,8 +9,8 @@
  */
 
 import { isDisplayableImageFile } from "@cubby/schemas/image";
-import { CameraIcon as Camera } from "@phosphor-icons/react/dist/csr/Camera";
-import { SkipForwardIcon as SkipForward } from "@phosphor-icons/react/dist/csr/SkipForward";
+import { CameraIcon } from "@phosphor-icons/react/dist/csr/Camera";
+import { SkipForwardIcon } from "@phosphor-icons/react/dist/csr/SkipForward";
 import { useRef } from "react";
 
 import { LocationIcon } from "~/app/_components/locations/location-icons";
@@ -119,7 +119,7 @@ export function PhotoPassStop({
               {isCapturing ? (
                 <Spinner className="mr-2 size-5" />
               ) : (
-                <Camera className="mr-2 size-5" />
+                <CameraIcon className="mr-2 size-5" />
               )}
               {cover ? "Retake photo" : "Take photo"}
             </Button>
@@ -130,7 +130,7 @@ export function PhotoPassStop({
               disabled={isCapturing}
               onClick={onSkip}
             >
-              <SkipForward className="mr-2 size-4" />
+              <SkipForwardIcon className="mr-2 size-4" />
               Skip
             </Button>
           </Row>

@@ -1,6 +1,6 @@
 import { isPrincipalExpense } from "@cubby/schemas/expense-line-kind";
 import type { ExpenseOut, Trade } from "@cubby/schemas/project";
-import { ShoppingBagIcon as ShoppingBag } from "@phosphor-icons/react/dist/csr/ShoppingBag";
+import { ShoppingBagIcon } from "@phosphor-icons/react/dist/csr/ShoppingBag";
 import { sumBy } from "es-toolkit";
 import { Fragment, type ReactElement, useMemo } from "react";
 
@@ -153,7 +153,7 @@ export function TradeCostMatrix({
   };
 
   if (rows.length === 0) {
-    return <ChartEmpty icon={ShoppingBag} title="No expense data." />;
+    return <ChartEmpty icon={ShoppingBagIcon} title="No expense data." />;
   }
 
   const columns: readonly PivotCostKey[] = PIVOT_COST_KEYS;

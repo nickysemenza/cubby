@@ -1,6 +1,6 @@
 import { isPrincipalExpense } from "@cubby/schemas/expense-line-kind";
 import type { ExpenseOut, Trade } from "@cubby/schemas/project";
-import { ShoppingBagIcon as ShoppingBag } from "@phosphor-icons/react/dist/csr/ShoppingBag";
+import { ShoppingBagIcon } from "@phosphor-icons/react/dist/csr/ShoppingBag";
 import { useMemo } from "react";
 
 import { HorizontalBarChart } from "~/app/_components/charts/kit";
@@ -64,7 +64,7 @@ export function TradeBars({ expenses }: { expenses: ExpenseOut[] }) {
   }, [expenses]);
 
   if (data.length === 0) {
-    return <ChartEmpty icon={ShoppingBag} title="No expense data." />;
+    return <ChartEmpty icon={ShoppingBagIcon} title="No expense data." />;
   }
 
   return (

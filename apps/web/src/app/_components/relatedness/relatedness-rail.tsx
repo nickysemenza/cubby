@@ -1,6 +1,6 @@
 import type { EntityRecommendationGroup } from "@cubby/schemas/entity-recommendations";
 import type { ProductShortcode } from "@cubby/schemas/identifiers";
-import { SparkleIcon as Sparkles } from "@phosphor-icons/react/dist/csr/Sparkle";
+import { SparkleIcon } from "@phosphor-icons/react/dist/csr/Sparkle";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useEffect, useMemo } from "react";
@@ -67,7 +67,7 @@ function RelatednessIndexPrompt({
         disabled={refreshing || indexing}
         onClick={onRefresh}
       >
-        <Sparkles className="size-3" />
+        <SparkleIcon className="size-3" />
         {indexing ? "Indexing…" : "Index now"}
       </Button>
     </Row>

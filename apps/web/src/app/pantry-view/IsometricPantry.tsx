@@ -4,9 +4,9 @@
  * interaction live in use-isometric-pantry.
  */
 import { formatCategoryLabel, getCategoryColor } from "@cubby/shared";
-import { ArrowLeftIcon as ArrowLeft } from "@phosphor-icons/react/dist/csr/ArrowLeft";
-import { ArrowsOutSimpleIcon as Maximize2 } from "@phosphor-icons/react/dist/csr/ArrowsOutSimple";
-import { CircleNotchIcon as Loader2 } from "@phosphor-icons/react/dist/csr/CircleNotch";
+import { ArrowLeftIcon } from "@phosphor-icons/react/dist/csr/ArrowLeft";
+import { ArrowsOutSimpleIcon } from "@phosphor-icons/react/dist/csr/ArrowsOutSimple";
+import { CircleNotchIcon } from "@phosphor-icons/react/dist/csr/CircleNotch";
 import { Link } from "@tanstack/react-router";
 
 import { createActionFor } from "~/app/_components/actions/action-items";
@@ -75,7 +75,7 @@ export function IsometricPantry() {
     return (
       <div className="flex h-full items-center justify-center bg-background">
         <div className="flex items-center gap-2 text-muted-foreground">
-          <Loader2 className="size-5 animate-spin" />
+          <CircleNotchIcon className="size-5 animate-spin" />
           <span>Loading pantry...</span>
         </div>
       </div>
@@ -120,7 +120,7 @@ export function IsometricPantry() {
           render={<Link to="/inventory" />}
           nativeButton={false}
         >
-          <ArrowLeft className="mr-1 size-4" />
+          <ArrowLeftIcon className="mr-1 size-4" />
           Back
         </Button>
         <Button
@@ -129,7 +129,7 @@ export function IsometricPantry() {
           className="text-muted-foreground hover:text-foreground"
           onClick={resetView}
         >
-          <Maximize2 className="mr-1 size-4" />
+          <ArrowsOutSimpleIcon className="mr-1 size-4" />
           Reset View
         </Button>
         <NativeSelect

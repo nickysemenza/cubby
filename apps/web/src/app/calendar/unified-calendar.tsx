@@ -4,9 +4,9 @@ import type {
   CalendarItemKind,
   CalendarRangeInput,
 } from "@cubby/schemas/calendar";
-import { CaretLeftIcon as ChevronLeft } from "@phosphor-icons/react/dist/csr/CaretLeft";
-import { CaretRightIcon as ChevronRight } from "@phosphor-icons/react/dist/csr/CaretRight";
-import { PlusIcon as Plus } from "@phosphor-icons/react/dist/csr/Plus";
+import { CaretLeftIcon } from "@phosphor-icons/react/dist/csr/CaretLeft";
+import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
+import { PlusIcon } from "@phosphor-icons/react/dist/csr/Plus";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { addDays, format } from "date-fns";
 import {
@@ -471,7 +471,7 @@ export function UnifiedCalendar({
             aria-label={`Previous ${period}`}
             onClick={() => shiftAnchor(-1)}
           >
-            <ChevronLeft />
+            <CaretLeftIcon />
           </Button>
           <Button
             type="button"
@@ -488,7 +488,7 @@ export function UnifiedCalendar({
             aria-label={`Next ${period}`}
             onClick={() => shiftAnchor(1)}
           >
-            <ChevronRight />
+            <CaretRightIcon />
           </Button>
           <h2 className="font-heading text-base font-semibold">
             {periodTitle}
@@ -683,7 +683,7 @@ function CalendarDaySheet({
                   variant="outline"
                   onClick={() => onCreate(kind)}
                 >
-                  <Plus />
+                  <PlusIcon />
                   <Icon />
                   {kind === "expense" ? "Planned expense" : KIND_LABELS[kind]}
                 </Button>

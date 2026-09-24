@@ -3,7 +3,7 @@ import { mergeProps } from "@base-ui/react/merge-props";
 import { useRender } from "@base-ui/react/use-render";
 
 import { cn } from "~/lib/utils";
-import { CaretRightIcon as ChevronRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
+import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
 
 function Breadcrumb({ className, ...props }: React.ComponentProps<"nav">) {
   return (
@@ -85,7 +85,7 @@ function BreadcrumbSeparator({
       className={cn("[&>svg]:size-3.5", className)}
       {...props}
     >
-      {children ?? <ChevronRightIcon />}
+      {children ?? <CaretRightIcon />}
     </li>
   );
 }

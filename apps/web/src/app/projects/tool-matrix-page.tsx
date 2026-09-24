@@ -29,12 +29,12 @@ import {
   projectKindValues,
   projectStatusValues,
 } from "@cubby/schemas/project";
-import { CaretLeftIcon as ChevronLeft } from "@phosphor-icons/react/dist/csr/CaretLeft";
-import { CaretRightIcon as ChevronRight } from "@phosphor-icons/react/dist/csr/CaretRight";
-import { CheckIcon as Check } from "@phosphor-icons/react/dist/csr/Check";
-import { MagnifyingGlassIcon as Search } from "@phosphor-icons/react/dist/csr/MagnifyingGlass";
-import { ProhibitIcon as Slash } from "@phosphor-icons/react/dist/csr/Prohibit";
-import { WrenchIcon as Wrench } from "@phosphor-icons/react/dist/csr/Wrench";
+import { CaretLeftIcon } from "@phosphor-icons/react/dist/csr/CaretLeft";
+import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
+import { CheckIcon } from "@phosphor-icons/react/dist/csr/Check";
+import { MagnifyingGlassIcon } from "@phosphor-icons/react/dist/csr/MagnifyingGlass";
+import { ProhibitIcon } from "@phosphor-icons/react/dist/csr/Prohibit";
+import { WrenchIcon } from "@phosphor-icons/react/dist/csr/Wrench";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -303,9 +303,9 @@ function MatrixCell({
           )}
         >
           {(state === "attached" || state === "purchased") && (
-            <Check className="size-3" aria-hidden />
+            <CheckIcon className="size-3" aria-hidden />
           )}
-          {locked && <Slash className="size-3" aria-hidden />}
+          {locked && <ProhibitIcon className="size-3" aria-hidden />}
         </span>
       </button>
     </td>
@@ -448,7 +448,10 @@ export function ToolMatrixPage({
         >
           <Row align="center" gap="sm">
             <span className="eyebrow">Projects</span>
-            <Search className="size-3.5 text-muted-foreground" aria-hidden />
+            <MagnifyingGlassIcon
+              className="size-3.5 text-muted-foreground"
+              aria-hidden
+            />
             <Input
               value={projectDraft}
               aria-label="Filter projects"
@@ -519,7 +522,7 @@ export function ToolMatrixPage({
               onClick={() => onSearchChange({ page: page - 1 })}
               className="flex size-7 items-center justify-center rounded border border-[var(--border)] text-muted-foreground hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
             >
-              <ChevronLeft className="size-3.5" aria-hidden />
+              <CaretLeftIcon className="size-3.5" aria-hidden />
             </button>
             <span
               className="font-mono text-2xs whitespace-nowrap text-slate"
@@ -536,7 +539,7 @@ export function ToolMatrixPage({
               onClick={() => onSearchChange({ page: page + 1 })}
               className="flex size-7 items-center justify-center rounded border border-[var(--border)] text-muted-foreground hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
             >
-              <ChevronRight className="size-3.5" aria-hidden />
+              <CaretRightIcon className="size-3.5" aria-hidden />
             </button>
           </Row>
         </Row>
@@ -566,7 +569,10 @@ export function ToolMatrixPage({
           />
           <Row align="center" gap="sm" className="ml-auto">
             <span className="eyebrow">Tools</span>
-            <Search className="size-3.5 text-muted-foreground" aria-hidden />
+            <MagnifyingGlassIcon
+              className="size-3.5 text-muted-foreground"
+              aria-hidden
+            />
             <Input
               value={toolDraft}
               aria-label="Filter tools"
@@ -588,7 +594,7 @@ export function ToolMatrixPage({
         {data.rows.length === 0 || data.columns.length === 0 ? (
           <Empty variant="minimal">
             <EmptyHeader>
-              <Wrench className="size-5" aria-hidden />
+              <WrenchIcon className="size-5" aria-hidden />
               <EmptyTitle>Nothing to plot</EmptyTitle>
             </EmptyHeader>
             <EmptyDescription>
@@ -638,7 +644,7 @@ export function ToolMatrixPage({
               className="flex size-3 items-center justify-center rounded-[3px] bg-muted/50 text-muted-foreground"
               aria-hidden
             >
-              <Slash className="size-3" />
+              <ProhibitIcon className="size-3" />
             </span>
             Not owned then
           </Row>

@@ -1,6 +1,6 @@
 import type { GalleryEntity } from "@cubby/schemas/entity-manifest";
 import type { ImageOut } from "@cubby/schemas/image";
-import { CameraPlusIcon as ImagePlus } from "@phosphor-icons/react/dist/csr/CameraPlus";
+import { CameraPlusIcon } from "@phosphor-icons/react/dist/csr/CameraPlus";
 import { useRef } from "react";
 import { toast } from "sonner";
 
@@ -116,7 +116,7 @@ export function EntityPhotosSection<E extends GalleryEntity>({
         disabled={isCapturing}
         onClick={() => inputRef.current?.click()}
       >
-        {isCapturing ? <Spinner className="size-4" /> : <ImagePlus />}
+        {isCapturing ? <Spinner className="size-4" /> : <CameraPlusIcon />}
         Add photos
       </Button>
     </Stack>

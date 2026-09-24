@@ -11,7 +11,7 @@ import {
   DialogTitle,
 } from "~/components/ui/dialog";
 import { InputGroup, InputGroupAddon } from "~/components/ui/input-group";
-import { MagnifyingGlassIcon as SearchIcon } from "@phosphor-icons/react/dist/csr/MagnifyingGlass";
+import { MagnifyingGlassIcon } from "@phosphor-icons/react/dist/csr/MagnifyingGlass";
 import { CheckIcon } from "@phosphor-icons/react/dist/csr/Check";
 
 function Command({
@@ -84,7 +84,7 @@ function CommandInput({
           {...props}
         />
         <InputGroupAddon>
-          <SearchIcon className="size-3.5 shrink-0 opacity-50" />
+          <MagnifyingGlassIcon className="size-3.5 shrink-0 opacity-50" />
           {startAdornment}
         </InputGroupAddon>
       </InputGroup>

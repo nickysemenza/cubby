@@ -1,7 +1,7 @@
 import type { AuditJsonValue } from "@cubby/schemas/audit";
-import { CaretDownIcon as ChevronDown } from "@phosphor-icons/react/dist/csr/CaretDown";
-import { CaretRightIcon as ChevronRight } from "@phosphor-icons/react/dist/csr/CaretRight";
-import { RobotIcon as Bot } from "@phosphor-icons/react/dist/csr/Robot";
+import { CaretDownIcon } from "@phosphor-icons/react/dist/csr/CaretDown";
+import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
+import { RobotIcon } from "@phosphor-icons/react/dist/csr/Robot";
 import { sortBy } from "es-toolkit";
 import { useState } from "react";
 
@@ -399,7 +399,7 @@ export function AuditLogEntryComponent({
                   !entry.user && "bg-muted text-muted-foreground",
                 )}
               >
-                {entry.user ? userInitials : <Bot className="size-4" />}
+                {entry.user ? userInitials : <RobotIcon className="size-4" />}
               </AvatarFallback>
             </Avatar>
 
@@ -443,9 +443,9 @@ export function AuditLogEntryComponent({
               {changes && hasChanges && (
                 <CollapsibleTrigger className="mt-1 flex min-h-11 items-center gap-1 text-xs text-muted-foreground transition-colors hover:text-foreground md:mt-2 md:min-h-0">
                   {isOpen ? (
-                    <ChevronDown className="size-3" />
+                    <CaretDownIcon className="size-3" />
                   ) : (
-                    <ChevronRight className="size-3" />
+                    <CaretRightIcon className="size-3" />
                   )}
                   {Object.keys(changes).length} field
                   {Object.keys(changes).length > 1 ? "s" : ""} changed

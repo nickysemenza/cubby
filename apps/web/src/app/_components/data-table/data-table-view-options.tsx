@@ -1,4 +1,4 @@
-import { GearSixIcon as Settings2 } from "@phosphor-icons/react/dist/csr/GearSix";
+import { GearSixIcon } from "@phosphor-icons/react/dist/csr/GearSix";
 import type { RowData } from "@tanstack/react-table";
 import { useState } from "react";
 
@@ -63,7 +63,7 @@ export function DataTableViewOptions<TData extends RowData>({
 
   const triggerContent = (
     <>
-      <Settings2 className="size-3.5" />
+      <GearSixIcon className="size-3.5" />
       Columns
       {isCustomized && (
         <span className="font-mono text-2xs tracking-normal text-muted-foreground normal-case">

@@ -1,11 +1,11 @@
 import type { EntityImage } from "@cubby/schemas/entity";
 import { ALLOWED_IMAGE_TYPES } from "@cubby/schemas/image";
-import { CameraIcon as Camera } from "@phosphor-icons/react/dist/csr/Camera";
-import { CaretLeftIcon as ChevronLeft } from "@phosphor-icons/react/dist/csr/CaretLeft";
-import { CaretRightIcon as ChevronRight } from "@phosphor-icons/react/dist/csr/CaretRight";
-import { LinkIcon as Link } from "@phosphor-icons/react/dist/csr/Link";
-import { StarIcon as Star } from "@phosphor-icons/react/dist/csr/Star";
-import { XIcon as X } from "@phosphor-icons/react/dist/csr/X";
+import { CameraIcon } from "@phosphor-icons/react/dist/csr/Camera";
+import { CaretLeftIcon } from "@phosphor-icons/react/dist/csr/CaretLeft";
+import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
+import { LinkIcon } from "@phosphor-icons/react/dist/csr/Link";
+import { StarIcon } from "@phosphor-icons/react/dist/csr/Star";
+import { XIcon } from "@phosphor-icons/react/dist/csr/X";
 import { useMutation } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -514,7 +514,7 @@ export function PendingImageUpload({
           onClick={() => cameraInputRef.current?.click()}
           disabled={uploading || importing}
         >
-          <Camera className="mr-2 size-4" />
+          <CameraIcon className="mr-2 size-4" />
           Camera
         </Button>
         <Input
@@ -536,7 +536,7 @@ export function PendingImageUpload({
           onClick={handleImportFromUrl}
           disabled={importing || uploading || !imageUrl.trim()}
         >
-          <Link className="mr-2 size-4" />
+          <LinkIcon className="mr-2 size-4" />
           Import
         </Button>
         <NativeSelect
@@ -621,7 +621,7 @@ export function PendingImageUpload({
                     aria-label={`Remove ${draft.filename}`}
                     onClick={() => removeUploadDraft(draft.id)}
                   >
-                    <X className="size-3.5" />
+                    <XIcon className="size-3.5" />
                   </Button>
                 </div>
               </div>
@@ -646,7 +646,7 @@ export function PendingImageUpload({
                 aria-label={`Remove ${image.filename}`}
                 title={`Remove ${image.filename}`}
               >
-                <X className="size-4" />
+                <XIcon className="size-4" />
               </Button>
             )}
           />
@@ -672,7 +672,7 @@ export function PendingImageUpload({
                   title={`Remove ${image.filename}`}
                   onClick={() => removeExistingImage(image.id)}
                 >
-                  <X className="size-4" />
+                  <XIcon className="size-4" />
                 </Button>
                 {onExistingImagesReorder && index === 0 && (
                   <span className="absolute bottom-1 left-1 z-20 rounded-sm bg-background/80 px-1 font-mono text-2xs text-foreground uppercase">
@@ -705,7 +705,7 @@ export function PendingImageUpload({
                       title="Make cover"
                       onClick={() => moveExistingImage(image.id, "front")}
                     >
-                      <Star className="size-4" />
+                      <StarIcon className="size-4" />
                     </Button>
                     <Button
                       type="button"
@@ -715,7 +715,7 @@ export function PendingImageUpload({
                       title="Move earlier"
                       onClick={() => moveExistingImage(image.id, "left")}
                     >
-                      <ChevronLeft className="size-4" />
+                      <CaretLeftIcon className="size-4" />
                     </Button>
                     {index < currentExistingImages.length - 1 && (
                       <Button
@@ -726,7 +726,7 @@ export function PendingImageUpload({
                         title="Move later"
                         onClick={() => moveExistingImage(image.id, "right")}
                       >
-                        <ChevronRight className="size-4" />
+                        <CaretRightIcon className="size-4" />
                       </Button>
                     )}
                   </div>

@@ -1,7 +1,7 @@
 import { isPrincipalExpense } from "@cubby/schemas/expense-line-kind";
 import type { ExpenseOut, Trade } from "@cubby/schemas/project";
 import { ResponsiveLine } from "@nivo/line";
-import { TrendUpIcon as TrendingUp } from "@phosphor-icons/react/dist/csr/TrendUp";
+import { TrendUpIcon } from "@phosphor-icons/react/dist/csr/TrendUp";
 import { useMemo, useState } from "react";
 
 import { Row, Stack } from "~/components/layout";
@@ -180,7 +180,7 @@ function TotalSpend({
   );
 
   if (points.length === 0) {
-    return <ChartEmpty icon={TrendingUp} title="No dated expense data." />;
+    return <ChartEmpty icon={TrendUpIcon} title="No dated expense data." />;
   }
 
   const data = [{ id: "Cumulative Spend", data: points }];

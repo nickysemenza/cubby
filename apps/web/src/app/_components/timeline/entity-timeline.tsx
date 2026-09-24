@@ -8,13 +8,13 @@ import {
   type EntityTimelineOut,
   type EntityTimelineRow,
 } from "@cubby/schemas/entity-timeline";
-import { ArrowDownIcon as ArrowDown } from "@phosphor-icons/react/dist/csr/ArrowDown";
-import { ArrowUpIcon as ArrowUp } from "@phosphor-icons/react/dist/csr/ArrowUp";
-import { CalendarBlankIcon as CalendarRange } from "@phosphor-icons/react/dist/csr/CalendarBlank";
-import { CalendarCheckIcon as CalendarClock } from "@phosphor-icons/react/dist/csr/CalendarCheck";
-import { CaretLeftIcon as ChevronLeft } from "@phosphor-icons/react/dist/csr/CaretLeft";
-import { CaretRightIcon as ChevronRight } from "@phosphor-icons/react/dist/csr/CaretRight";
-import { ClockIcon as Clock3 } from "@phosphor-icons/react/dist/csr/Clock";
+import { ArrowDownIcon } from "@phosphor-icons/react/dist/csr/ArrowDown";
+import { ArrowUpIcon } from "@phosphor-icons/react/dist/csr/ArrowUp";
+import { CalendarBlankIcon } from "@phosphor-icons/react/dist/csr/CalendarBlank";
+import { CalendarCheckIcon } from "@phosphor-icons/react/dist/csr/CalendarCheck";
+import { CaretLeftIcon } from "@phosphor-icons/react/dist/csr/CaretLeft";
+import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
+import { ClockIcon } from "@phosphor-icons/react/dist/csr/Clock";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { type ReactNode, useId, useMemo, useState } from "react";
@@ -77,12 +77,12 @@ export interface EntityTimelineProps<
 }
 
 const MODE_OPTIONS = [
-  { value: "events", label: "Events", icon: Clock3 },
-  { value: "lifecycles", label: "Lifecycles", icon: CalendarRange },
+  { value: "events", label: "Events", icon: ClockIcon },
+  { value: "lifecycles", label: "Lifecycles", icon: CalendarBlankIcon },
 ] as const satisfies readonly {
   value: EntityTimelineMode;
   label: string;
-  icon: typeof Clock3;
+  icon: typeof ClockIcon;
 }[];
 
 /**
@@ -209,7 +209,7 @@ function Controls({
           size="sm"
           onClick={() => onChange({ order: order === "desc" ? "asc" : "desc" })}
         >
-          {order === "desc" ? <ArrowDown /> : <ArrowUp />}
+          {order === "desc" ? <ArrowDownIcon /> : <ArrowUpIcon />}
           {order === "desc" ? "Newest first" : "Oldest first"}
         </Button>
       </Row>
@@ -305,7 +305,10 @@ function EventGroup({
 function EventsView({ groups }: { groups: EntityTimelineGroup[] }) {
   if (groups.length === 0)
     return (
-      <ChartEmpty icon={CalendarClock} title="Nothing dated in this window." />
+      <ChartEmpty
+        icon={CalendarCheckIcon}
+        title="Nothing dated in this window."
+      />
     );
   return (
     <Stack gap="md">
@@ -343,7 +346,10 @@ function LifecyclesView({
   );
   if (!extent || rows.length === 0)
     return (
-      <ChartEmpty icon={CalendarClock} title="Nothing dated in this window." />
+      <ChartEmpty
+        icon={CalendarCheckIcon}
+        title="Nothing dated in this window."
+      />
     );
   const start = parsePlainDate(extent.from).getTime();
   const end = parsePlainDate(extent.to).getTime();
@@ -548,7 +554,7 @@ function TimelinePager({
         disabled={meta.pageIndex === 0}
       >
         <span className="sr-only">Go to previous page</span>
-        <ChevronLeft />
+        <CaretLeftIcon />
       </Button>
       <Button
         variant="outline"
@@ -557,7 +563,7 @@ function TimelinePager({
         disabled={meta.pageIndex + 1 >= pageCount}
       >
         <span className="sr-only">Go to next page</span>
-        <ChevronRight />
+        <CaretRightIcon />
       </Button>
     </Row>
   );

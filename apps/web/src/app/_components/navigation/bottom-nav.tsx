@@ -1,5 +1,5 @@
-import { DotsThreeIcon as MoreHorizontal } from "@phosphor-icons/react/dist/csr/DotsThree";
-import { SignInIcon as LogIn } from "@phosphor-icons/react/dist/csr/SignIn";
+import { DotsThreeIcon } from "@phosphor-icons/react/dist/csr/DotsThree";
+import { SignInIcon } from "@phosphor-icons/react/dist/csr/SignIn";
 import type { Icon } from "@phosphor-icons/react/lib";
 import { Link, useLocation } from "@tanstack/react-router";
 import * as React from "react";
@@ -130,7 +130,7 @@ export function BottomNav() {
             <BottomNavItem
               as="button"
               type="button"
-              icon={MoreHorizontal}
+              icon={DotsThreeIcon}
               label="More"
               active={isMoreActive}
               aria-label="More options"
@@ -162,7 +162,7 @@ export function BottomNav() {
             <BottomNavItem
               to="/auth/$authView"
               params={{ authView: "sign-in" }}
-              icon={LogIn}
+              icon={SignInIcon}
               label="Sign In"
             />
           </>

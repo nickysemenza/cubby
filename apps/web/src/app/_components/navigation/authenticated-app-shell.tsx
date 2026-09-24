@@ -1,7 +1,7 @@
-import { CaretLeftIcon as ChevronLeft } from "@phosphor-icons/react/dist/csr/CaretLeft";
-import { CaretRightIcon as ChevronRight } from "@phosphor-icons/react/dist/csr/CaretRight";
-import { MagnifyingGlassIcon as Search } from "@phosphor-icons/react/dist/csr/MagnifyingGlass";
-import { WrenchIcon as Wrench } from "@phosphor-icons/react/dist/csr/Wrench";
+import { CaretLeftIcon } from "@phosphor-icons/react/dist/csr/CaretLeft";
+import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
+import { MagnifyingGlassIcon } from "@phosphor-icons/react/dist/csr/MagnifyingGlass";
+import { WrenchIcon } from "@phosphor-icons/react/dist/csr/Wrench";
 import { Link, useLocation, useRouter } from "@tanstack/react-router";
 import {
   type ReactNode,
@@ -199,7 +199,7 @@ function MobileRouteBar({
         size="icon"
         className="size-11"
       >
-        <ChevronLeft className="size-5" />
+        <CaretLeftIcon className="size-5" />
       </Button>
       <p className="truncate font-heading text-sm font-semibold tracking-tight">
         {descriptor.label}
@@ -229,7 +229,7 @@ function DesktopCommandHeader({
         aria-label="Search"
         title="Search"
       >
-        <Search className="size-3.5" />
+        <MagnifyingGlassIcon className="size-3.5" />
         <span className="sr-only">Search Cubby</span>
       </Button>
       <Button
@@ -242,7 +242,7 @@ function DesktopCommandHeader({
         className="ml-auto hidden h-8 min-w-52 justify-start px-2 text-muted-foreground lg:flex"
         aria-label="Search"
       >
-        <Search className="size-3.5" />
+        <MagnifyingGlassIcon className="size-3.5" />
         Search Cubby
         <span className="ml-auto font-mono text-2xs">⌘K</span>
       </Button>
@@ -321,7 +321,7 @@ function WorkspaceSidebar({
           aria-label={expanded ? "Collapse sidebar" : "Expand sidebar"}
           title={expanded ? "Collapse sidebar" : "Expand sidebar"}
         >
-          {expanded ? <ChevronLeft /> : <ChevronRight />}
+          {expanded ? <CaretLeftIcon /> : <CaretRightIcon />}
         </Button>
       </div>
       {utilityMounted && (
@@ -365,7 +365,7 @@ function SidebarUtilityLinks({
           aria-label="Tools & data"
           title="Tools & data"
         >
-          <Wrench />
+          <WrenchIcon />
         </Button>
         <div className="flex size-10 items-center justify-center">
           <Suspense fallback={<div className="size-7" aria-hidden="true" />}>
@@ -386,7 +386,7 @@ function SidebarUtilityLinks({
             onClick={onOpenUtility}
             className="mb-1 h-8 w-full justify-start gap-2 px-2 text-muted-foreground"
           >
-            <Wrench className="size-3.5" />
+            <WrenchIcon className="size-3.5" />
             <span className="truncate">Tools & data</span>
           </Button>
           <div className="flex h-8 items-center gap-2 px-2 text-xs text-muted-foreground">

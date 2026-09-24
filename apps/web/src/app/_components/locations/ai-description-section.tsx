@@ -1,6 +1,6 @@
 import type { AiCacheMetadata, Confidence } from "@cubby/schemas/ai";
 import type { LocationShortcode } from "@cubby/schemas/identifiers";
-import { EyeIcon as Eye } from "@phosphor-icons/react/dist/csr/Eye";
+import { EyeIcon } from "@phosphor-icons/react/dist/csr/Eye";
 import type { FC } from "react";
 
 import { VerbButton } from "~/app/_components/actions/action-verb-ui";
@@ -132,7 +132,7 @@ export const AiDescriptionSection: FC<AiDescriptionSectionProps> = ({
       {!review && currentDescription && (
         <div className="border border-border bg-muted/30 p-4 text-sm">
           <Row align="center" gap="sm" className="mb-1 text-muted-foreground">
-            <Eye className="size-3" />
+            <EyeIcon className="size-3" />
             <span className="font-medium">AI description</span>
           </Row>
           <p>{currentDescription}</p>

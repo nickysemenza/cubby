@@ -1,4 +1,4 @@
-import { GraphIcon as GitGraph } from "@phosphor-icons/react/dist/csr/Graph";
+import { GraphIcon } from "@phosphor-icons/react/dist/csr/Graph";
 
 import { Row } from "~/components/layout";
 import type { BuildMetadata } from "~/lib/build-metadata";
@@ -45,7 +45,7 @@ export function AppFooter({ metadata }: { metadata: BuildMetadata }) {
             className="-m-2 inline-flex min-h-11 min-w-11 items-center justify-center p-2 text-muted-foreground transition-colors hover:text-foreground sm:m-0 sm:min-h-0 sm:min-w-0 sm:p-0"
             aria-label="GitHub repository"
           >
-            <GitGraph className="size-3.5" />
+            <GraphIcon className="size-3.5" />
           </a>
         </Row>
       </Row>

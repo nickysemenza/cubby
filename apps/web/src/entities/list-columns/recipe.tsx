@@ -1,6 +1,6 @@
 import { hasKnownEstimate } from "@cubby/schemas/nutrition";
 import type { RecipeListItem } from "@cubby/schemas/recipe";
-import { ArrowCounterClockwiseIcon as RotateCcw } from "@phosphor-icons/react/dist/csr/ArrowCounterClockwise";
+import { ArrowCounterClockwiseIcon } from "@phosphor-icons/react/dist/csr/ArrowCounterClockwise";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 
@@ -86,7 +86,9 @@ function StuckTotalsCell({
           recompute.mutate({ id: recipe.id });
         }}
       >
-        <RotateCcw className={recompute.isPending ? "animate-spin" : ""} />
+        <ArrowCounterClockwiseIcon
+          className={recompute.isPending ? "animate-spin" : ""}
+        />
         Recompute
       </Button>
     </Row>

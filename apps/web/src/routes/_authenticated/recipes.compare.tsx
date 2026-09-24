@@ -1,4 +1,4 @@
-import { ArrowLeftIcon as ArrowLeft } from "@phosphor-icons/react/dist/csr/ArrowLeft";
+import { ArrowLeftIcon } from "@phosphor-icons/react/dist/csr/ArrowLeft";
 import { useQueries } from "@tanstack/react-query";
 import {
   createFileRoute,
@@ -127,7 +127,7 @@ function RecipeComparePage() {
             </p>
             <Link to="/recipes" className="mt-4 inline-block">
               <Button>
-                <ArrowLeft className="mr-2 size-4" />
+                <ArrowLeftIcon className="mr-2 size-4" />
                 Back to Recipes
               </Button>
             </Link>
@@ -145,7 +145,7 @@ function RecipeComparePage() {
       actions={
         <Link to="/recipes">
           <Button variant="outline">
-            <ArrowLeft className="mr-2 size-4" />
+            <ArrowLeftIcon className="mr-2 size-4" />
             Back to Recipes
           </Button>
         </Link>

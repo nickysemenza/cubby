@@ -1,4 +1,4 @@
-import { ArrowCounterClockwiseIcon as RotateCcw } from "@phosphor-icons/react/dist/csr/ArrowCounterClockwise";
+import { ArrowCounterClockwiseIcon } from "@phosphor-icons/react/dist/csr/ArrowCounterClockwise";
 import { formatDistanceToNow } from "date-fns";
 import type { ReactNode } from "react";
 
@@ -124,7 +124,7 @@ export function QueuePassResumePrompt<TExtra>({
               className="min-h-12"
               onClick={onStartNew}
             >
-              <RotateCcw />
+              <ArrowCounterClockwiseIcon />
               {startOverLabel}
             </Button>
           </Row>

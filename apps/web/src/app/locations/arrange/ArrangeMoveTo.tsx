@@ -1,6 +1,6 @@
 import type { LocationShortcode } from "@cubby/schemas/identifiers";
 import type { InfLocation } from "@cubby/schemas/location";
-import { FolderSimplePlusIcon as FolderInput } from "@phosphor-icons/react/dist/csr/FolderSimplePlus";
+import { FolderSimplePlusIcon } from "@phosphor-icons/react/dist/csr/FolderSimplePlus";
 import { useState } from "react";
 import { match } from "ts-pattern";
 
@@ -60,7 +60,7 @@ export function ArrangeMoveTo({ target }: { target: ArrangeMoveTarget }) {
             />
           }
         >
-          <FolderInput />
+          <FolderSimplePlusIcon />
         </TooltipTrigger>
         <TooltipContent>Move to…</TooltipContent>
       </Tooltip>

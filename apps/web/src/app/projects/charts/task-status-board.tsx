@@ -4,7 +4,7 @@ import type {
   TaskStatus,
 } from "@cubby/schemas/project";
 import { taskStatusValues } from "@cubby/schemas/project";
-import { ListChecksIcon as ListChecks } from "@phosphor-icons/react/dist/csr/ListChecks";
+import { ListChecksIcon } from "@phosphor-icons/react/dist/csr/ListChecks";
 import { Link } from "@tanstack/react-router";
 import { useMemo } from "react";
 
@@ -88,7 +88,7 @@ export function TaskStatusBoard({
   if (rows.length === 0) {
     return (
       <ChartEmpty
-        icon={ListChecks}
+        icon={ListChecksIcon}
         title={
           breakdown.length === 0
             ? "No task data."

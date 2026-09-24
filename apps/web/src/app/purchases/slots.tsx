@@ -1,5 +1,5 @@
 import type { PurchaseProductOut } from "@cubby/schemas/purchase";
-import { LinkIcon as Link2 } from "@phosphor-icons/react/dist/csr/Link";
+import { LinkIcon } from "@phosphor-icons/react/dist/csr/Link";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 
@@ -209,7 +209,7 @@ export const PurchaseReconciliation: DetailSlotComponent<"purchase"> = ({
       <ReconciliationNote status={status} />
       <Row gap="sm" wrap>
         <Button variant="outline" size="sm" onClick={() => setLinkOpen(true)}>
-          <Link2 />
+          <LinkIcon />
           Attach existing expenses
         </Button>
         <Button
@@ -217,7 +217,7 @@ export const PurchaseReconciliation: DetailSlotComponent<"purchase"> = ({
           size="sm"
           onClick={() => setLinkProductsOpen(true)}
         >
-          <Link2 />
+          <LinkIcon />
           Attach products
         </Button>
       </Row>

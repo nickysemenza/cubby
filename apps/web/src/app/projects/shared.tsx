@@ -8,7 +8,7 @@ import type {
   TaskOut,
   TaskStatus,
 } from "@cubby/schemas/project";
-import { FunnelIcon as ListFilter } from "@phosphor-icons/react/dist/csr/Funnel";
+import { FunnelIcon } from "@phosphor-icons/react/dist/csr/Funnel";
 import { Link } from "@tanstack/react-router";
 import { z } from "zod";
 
@@ -359,7 +359,7 @@ export function expenseOrderIdColumn(
             className="text-muted-foreground hover:text-foreground"
             aria-label={`Show the rest of order ${v}`}
           >
-            <ListFilter className="size-3.5" />
+            <FunnelIcon className="size-3.5" />
           </Link>
           <OrderIdLink
             orderUrl={expense.orderUrl}

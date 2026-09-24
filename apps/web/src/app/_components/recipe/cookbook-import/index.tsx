@@ -11,7 +11,7 @@ import {
   ALLOWED_IMAGE_TYPES,
   type AllowedImageType,
 } from "@cubby/schemas/image";
-import { WarningIcon as AlertTriangle } from "@phosphor-icons/react/dist/csr/Warning";
+import { WarningIcon } from "@phosphor-icons/react/dist/csr/Warning";
 import { useMutation, useQueries } from "@tanstack/react-query";
 import { useBlocker } from "@tanstack/react-router";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -1013,7 +1013,7 @@ export function CookbookImport({
           gap="xs"
           className="border border-destructive/40 bg-destructive/5 p-2 text-xs text-destructive"
         >
-          <AlertTriangle className="size-4 shrink-0" />
+          <WarningIcon className="size-4 shrink-0" />
           {getErrorMessage(source.error)}
         </Row>
       )}
@@ -1024,7 +1024,7 @@ export function CookbookImport({
           gap="xs"
           className="border border-warning/40 bg-warning/5 p-2 text-xs text-warning-ink"
         >
-          <AlertTriangle className="size-4 shrink-0" />
+          <WarningIcon className="size-4 shrink-0" />
           Keep this page open — extraction and import run here, not in the
           background. Leaving now loses in-progress work.
         </Row>

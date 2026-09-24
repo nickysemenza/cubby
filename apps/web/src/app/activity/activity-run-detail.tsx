@@ -1,4 +1,4 @@
-import { CopyIcon as Copy } from "@phosphor-icons/react/dist/csr/Copy";
+import { CopyIcon } from "@phosphor-icons/react/dist/csr/Copy";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { useEffect, useMemo } from "react";
 import { z } from "zod";
@@ -143,7 +143,7 @@ export function ActivityRunDetail({
                           void copyText(attempt.diagnosticsJson ?? "")
                         }
                       >
-                        <Copy />
+                        <CopyIcon />
                         Copy diagnostics
                       </Button>
                     ) : null}
@@ -154,7 +154,7 @@ export function ActivityRunDetail({
                         size="sm"
                         onClick={() => void copyText(attempt.resultJson ?? "")}
                       >
-                        <Copy />
+                        <CopyIcon />
                         Copy result
                       </Button>
                     ) : null}
@@ -219,7 +219,7 @@ export function ActivityRunDetail({
                     size="sm"
                     onClick={() => void copyText(event.detailsJson ?? "")}
                   >
-                    <Copy />
+                    <CopyIcon />
                     Copy diagnostics
                   </Button>
                 ) : null}

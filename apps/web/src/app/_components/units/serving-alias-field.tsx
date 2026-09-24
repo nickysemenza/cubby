@@ -11,7 +11,7 @@ import {
   KEY_NUTRIENT_KEYS,
   type NutrientKey,
 } from "@cubby/usda-schemas";
-import { PlusIcon as Plus } from "@phosphor-icons/react/dist/csr/Plus";
+import { PlusIcon } from "@phosphor-icons/react/dist/csr/Plus";
 import { useId, useMemo, useState } from "react";
 
 import { Row } from "~/components/layout";
@@ -153,7 +153,7 @@ export function ServingAliasField({
         {updateProductMutation.isPending ? (
           <Spinner size="sm" />
         ) : (
-          <Plus aria-hidden />
+          <PlusIcon aria-hidden />
         )}
         Add alias
       </Button>

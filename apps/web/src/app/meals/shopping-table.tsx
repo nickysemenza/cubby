@@ -1,6 +1,6 @@
 import type { ShoppingListItem } from "@cubby/schemas/meal";
-import { CaretDownIcon as ChevronDown } from "@phosphor-icons/react/dist/csr/CaretDown";
-import { CaretRightIcon as ChevronRight } from "@phosphor-icons/react/dist/csr/CaretRight";
+import { CaretDownIcon } from "@phosphor-icons/react/dist/csr/CaretDown";
+import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
 import { Link } from "@tanstack/react-router";
 import { format, parseISO } from "date-fns";
 import { useState } from "react";
@@ -122,9 +122,9 @@ function RowGroup({
               className="shrink-0 text-muted-foreground transition-colors hover:text-foreground"
             >
               {isOpen ? (
-                <ChevronDown className="size-3.5" />
+                <CaretDownIcon className="size-3.5" />
               ) : (
-                <ChevronRight className="size-3.5" />
+                <CaretRightIcon className="size-3.5" />
               )}
             </button>
             {item.ingredientId ? (

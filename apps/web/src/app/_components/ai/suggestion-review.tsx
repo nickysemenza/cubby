@@ -2,7 +2,7 @@ import type {
   FieldSuggestion,
   FieldSuggestionOutcome,
 } from "@cubby/schemas/ai";
-import { ArrowRightIcon as ArrowRight } from "@phosphor-icons/react/dist/csr/ArrowRight";
+import { ArrowRightIcon } from "@phosphor-icons/react/dist/csr/ArrowRight";
 import {
   createContext,
   useContext,
@@ -283,7 +283,7 @@ function SetReviewBody({
         {currentValue?.trim() ? (
           <>
             {reviewCurrentContent(children, currentLabel, currentValue)}
-            <ArrowRight
+            <ArrowRightIcon
               className="size-3.5 shrink-0"
               aria-label="suggested replacement"
             />

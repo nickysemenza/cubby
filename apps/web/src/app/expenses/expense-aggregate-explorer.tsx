@@ -7,10 +7,10 @@ import type {
   ExpenseAnalyzeRowDimension,
   ExpenseFilters,
 } from "@cubby/schemas/project";
-import { ArrowCounterClockwiseIcon as RotateCcw } from "@phosphor-icons/react/dist/csr/ArrowCounterClockwise";
-import { ArrowsLeftRightIcon as ArrowLeftRight } from "@phosphor-icons/react/dist/csr/ArrowsLeftRight";
-import { ClipboardIcon as ClipboardCopy } from "@phosphor-icons/react/dist/csr/Clipboard";
-import { DownloadIcon as Download } from "@phosphor-icons/react/dist/csr/Download";
+import { ArrowCounterClockwiseIcon } from "@phosphor-icons/react/dist/csr/ArrowCounterClockwise";
+import { ArrowsLeftRightIcon } from "@phosphor-icons/react/dist/csr/ArrowsLeftRight";
+import { ClipboardIcon } from "@phosphor-icons/react/dist/csr/Clipboard";
+import { DownloadIcon } from "@phosphor-icons/react/dist/csr/Download";
 import { useQuery } from "@tanstack/react-query";
 import type { CellData, SortingState } from "@tanstack/react-table";
 import { useId, useMemo, useState } from "react";
@@ -1103,7 +1103,7 @@ export function ExpenseAggregateExplorer({
             onConfigChange(swapExpenseAnalyzeAxes(config, filters))
           }
         >
-          <ArrowLeftRight />
+          <ArrowsLeftRightIcon />
           Swap
         </Button>
         <Button
@@ -1112,11 +1112,11 @@ export function ExpenseAggregateExplorer({
           disabled={isReset}
           onClick={() => onConfigChange(resetConfig)}
         >
-          <RotateCcw />
+          <ArrowCounterClockwiseIcon />
           Reset
         </Button>
         <Button variant="outline" size="sm" onClick={handleCopyLink}>
-          <ClipboardCopy />
+          <ClipboardIcon />
           Copy link
         </Button>
         <Button
@@ -1125,7 +1125,7 @@ export function ExpenseAggregateExplorer({
           disabled={!downloadReady}
           onClick={handleDownload}
         >
-          <Download />
+          <DownloadIcon />
           Download CSV
         </Button>
       </Row>

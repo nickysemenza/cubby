@@ -1,5 +1,5 @@
 import type { AllProblems } from "@cubby/schemas/problems";
-import { MagicWandIcon as Wand2 } from "@phosphor-icons/react/dist/csr/MagicWand";
+import { MagicWandIcon } from "@phosphor-icons/react/dist/csr/MagicWand";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -115,7 +115,7 @@ export function AutoFixButton({ problems }: { problems: AllProblems }) {
         </>
       ) : (
         <>
-          <Wand2 className="mr-2 size-3.5" />
+          <MagicWandIcon className="mr-2 size-3.5" />
           Fix{" "}
           {tasks.length ? `${items} ${items === 1 ? "item" : "items"}` : "—"}
         </>

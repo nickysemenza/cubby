@@ -3,11 +3,11 @@ import {
   browserRoutedEntities,
   type BrowserRoutedEntity,
 } from "@cubby/schemas/entity-manifest";
-import { ArrowsLeftRightIcon as ArrowRightLeft } from "@phosphor-icons/react/dist/csr/ArrowsLeftRight";
-import { PlusIcon as Plus } from "@phosphor-icons/react/dist/csr/Plus";
-import { ShoppingCartIcon as ShoppingCart } from "@phosphor-icons/react/dist/csr/ShoppingCart";
-import { SparkleIcon as Sparkles } from "@phosphor-icons/react/dist/csr/Sparkle";
-import { WarningIcon as AlertTriangle } from "@phosphor-icons/react/dist/csr/Warning";
+import { ArrowsLeftRightIcon } from "@phosphor-icons/react/dist/csr/ArrowsLeftRight";
+import { PlusIcon } from "@phosphor-icons/react/dist/csr/Plus";
+import { ShoppingCartIcon } from "@phosphor-icons/react/dist/csr/ShoppingCart";
+import { SparkleIcon } from "@phosphor-icons/react/dist/csr/Sparkle";
+import { WarningIcon } from "@phosphor-icons/react/dist/csr/Warning";
 import type { Icon } from "@phosphor-icons/react/lib";
 
 import { entities, isBrowserRoutedEntity } from "~/entities/entities";
@@ -155,7 +155,7 @@ export const actionItems: ActionItem[] = [
     id: "what-can-i-make",
     name: "What can I make?",
     path: "/meals/suggestions",
-    icon: Sparkles,
+    icon: SparkleIcon,
     keywords: ["cook", "tonight", "recipe", "available", "pantry", "dinner"],
     surfaces: ["palette-quick", "home-quick"],
   },
@@ -163,7 +163,7 @@ export const actionItems: ActionItem[] = [
     id: "shopping-list",
     name: "Shopping list",
     path: "/meals/shopping-list",
-    icon: ShoppingCart,
+    icon: ShoppingCartIcon,
     keywords: ["shop", "buy", "groceries", "needs", "meal plan"],
     surfaces: ["palette-quick", "home-quick"],
   },
@@ -172,7 +172,7 @@ export const actionItems: ActionItem[] = [
     id: "bulk-move",
     name: "Bulk Move Inventory",
     path: "/inventory/bulk-move",
-    icon: ArrowRightLeft,
+    icon: ArrowsLeftRightIcon,
     keywords: ["move", "transfer", "relocate", "inventory"],
     surfaces: ["palette-quick"],
   },
@@ -180,7 +180,7 @@ export const actionItems: ActionItem[] = [
     id: "problems",
     name: "Problems",
     path: "/problems",
-    icon: AlertTriangle,
+    icon: WarningIcon,
     keywords: ["issues", "errors", "warnings", "audit"],
     surfaces: ["palette-quick"],
   },
@@ -203,7 +203,7 @@ export const actionItems: ActionItem[] = [
     name: "Single Item",
     path: entities.inventory.routes.list,
     search: { create: true },
-    icon: Plus,
+    icon: PlusIcon,
     keywords: ["inventory", "add", "manual"],
     surfaces: ["inventory-page"],
   },

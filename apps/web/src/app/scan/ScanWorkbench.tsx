@@ -1,5 +1,5 @@
-import { BarcodeIcon as ScanBarcode } from "@phosphor-icons/react/dist/csr/Barcode";
-import { KeyboardIcon as Keyboard } from "@phosphor-icons/react/dist/csr/Keyboard";
+import { BarcodeIcon } from "@phosphor-icons/react/dist/csr/Barcode";
+import { KeyboardIcon } from "@phosphor-icons/react/dist/csr/Keyboard";
 import { useCallback, useId, useRef, useState } from "react";
 
 import {
@@ -73,7 +73,7 @@ export function ScanWorkbench({
           className="min-h-11 shrink-0"
           onClick={() => setManualOpen(true)}
         >
-          <Keyboard className="size-4" />
+          <KeyboardIcon className="size-4" />
           Enter code
         </Button>
       </div>
@@ -145,7 +145,7 @@ export function ScanWorkbench({
             className="min-h-11 w-full"
             disabled={resolving || manualValue.trim().length === 0}
           >
-            {resolving ? <Spinner /> : <ScanBarcode className="size-4" />}
+            {resolving ? <Spinner /> : <BarcodeIcon className="size-4" />}
             Open
           </Button>
         </Stack>

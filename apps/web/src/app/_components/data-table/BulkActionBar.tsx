@@ -1,4 +1,4 @@
-import { XIcon as X } from "@phosphor-icons/react/dist/csr/X";
+import { XIcon } from "@phosphor-icons/react/dist/csr/X";
 import type { RowData } from "@tanstack/react-table";
 
 import { Row as LayoutRow } from "~/components/layout";
@@ -149,7 +149,7 @@ export function BulkActionBar<TData extends RowData>({
         disabled={disabled || isExecuting}
         className="ml-auto max-md:sticky max-md:right-0 max-md:bg-card"
       >
-        <X className="size-3" />
+        <XIcon className="size-3" />
         <span className="sr-only">Clear selection</span>
       </Button>
     </LayoutRow>

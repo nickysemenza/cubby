@@ -10,8 +10,8 @@ import {
   type MeasureEstimate,
   type NutritionTotals,
 } from "@cubby/schemas/nutrition";
-import { PencilIcon as Pencil } from "@phosphor-icons/react/dist/csr/Pencil";
-import { TrashIcon as Trash2 } from "@phosphor-icons/react/dist/csr/Trash";
+import { PencilIcon } from "@phosphor-icons/react/dist/csr/Pencil";
+import { TrashIcon } from "@phosphor-icons/react/dist/csr/Trash";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useState } from "react";
@@ -236,7 +236,7 @@ function NutritionPeople({
                                   className="min-h-11"
                                   onClick={() => onEdit(person, food)}
                                 >
-                                  <Pencil className="size-3.5" />
+                                  <PencilIcon className="size-3.5" />
                                   Edit amount
                                 </Button>
                               )
@@ -248,7 +248,7 @@ function NutritionPeople({
                                 className="min-h-11"
                                 onClick={() => onRemove(food)}
                               >
-                                <Trash2 className="size-3.5" />
+                                <TrashIcon className="size-3.5" />
                                 Remove food
                               </Button>
                             )}

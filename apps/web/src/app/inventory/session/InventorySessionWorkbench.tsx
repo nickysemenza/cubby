@@ -6,9 +6,9 @@ import type {
 import type { InventorySessionResolution } from "@cubby/schemas/inventory";
 import type { InfLocation } from "@cubby/schemas/location";
 import type { ProductQuantitySummariesOut } from "@cubby/schemas/product";
-import { ArrowCounterClockwiseIcon as RotateCcw } from "@phosphor-icons/react/dist/csr/ArrowCounterClockwise";
-import { CheckCircleIcon as CheckCircle2 } from "@phosphor-icons/react/dist/csr/CheckCircle";
-import { ListChecksIcon as ListChecks } from "@phosphor-icons/react/dist/csr/ListChecks";
+import { ArrowCounterClockwiseIcon } from "@phosphor-icons/react/dist/csr/ArrowCounterClockwise";
+import { CheckCircleIcon } from "@phosphor-icons/react/dist/csr/CheckCircle";
+import { ListChecksIcon } from "@phosphor-icons/react/dist/csr/ListChecks";
 import { skipToken, useMutation, useQuery } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { formatDistanceToNow } from "date-fns";
@@ -946,7 +946,7 @@ function SessionComplete({
     <Card className="mx-auto w-full max-w-2xl">
       <CardHeader>
         <Row align="center" gap="sm">
-          <CheckCircle2 className="size-6 text-positive" />
+          <CheckCircleIcon className="size-6 text-positive" />
           <div>
             <h2>
               <CardTitle>{parent.name} recount complete</CardTitle>
@@ -980,7 +980,7 @@ function SessionComplete({
                 className="min-h-12"
                 onClick={onRevisitSkipped}
               >
-                <ListChecks />
+                <ListChecksIcon />
                 Revisit {pluralize("skipped location", skippedCount, true)}
               </Button>
             )}
@@ -998,7 +998,7 @@ function SessionComplete({
               className="min-h-12"
               onClick={onStartNew}
             >
-              <RotateCcw />
+              <ArrowCounterClockwiseIcon />
               Recount {parent.name} again
             </Button>
             <Link

@@ -4,7 +4,7 @@ import type {
   inventoryListItemOut,
 } from "@cubby/schemas/inventory";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { ArrowRightIcon as ArrowRight } from "@phosphor-icons/react/dist/csr/ArrowRight";
+import { ArrowRightIcon } from "@phosphor-icons/react/dist/csr/ArrowRight";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
@@ -377,7 +377,7 @@ export default function BulkMoveForm({
             searchType="location"
           />
         </div>
-        <ArrowRight className="mb-2 size-6 text-muted-foreground" />
+        <ArrowRightIcon className="mb-2 size-6 text-muted-foreground" />
         <div className="flex-1">
           <DestinationLocationField
             form={form}

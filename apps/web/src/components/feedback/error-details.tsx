@@ -1,5 +1,5 @@
-import { ArrowSquareOutIcon as ExternalLink } from "@phosphor-icons/react/dist/csr/ArrowSquareOut";
-import { CopyIcon as Copy } from "@phosphor-icons/react/dist/csr/Copy";
+import { ArrowSquareOutIcon } from "@phosphor-icons/react/dist/csr/ArrowSquareOut";
+import { CopyIcon } from "@phosphor-icons/react/dist/csr/Copy";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -74,7 +74,7 @@ export function ErrorDetailsBody({ error }: { error: unknown }) {
             target="_blank"
             rel="noreferrer"
           >
-            View in Sentry <ExternalLink className="size-3" />
+            View in Sentry <ArrowSquareOutIcon className="size-3" />
           </a>
         )}
         {diagnostics?.cloudflareUrl && (
@@ -84,7 +84,7 @@ export function ErrorDetailsBody({ error }: { error: unknown }) {
             target="_blank"
             rel="noreferrer"
           >
-            Open Workers Observability <ExternalLink className="size-3" />
+            Open Workers Observability <ArrowSquareOutIcon className="size-3" />
           </a>
         )}
         <Button
@@ -96,7 +96,7 @@ export function ErrorDetailsBody({ error }: { error: unknown }) {
             else toast.error("Could not copy error details");
           }}
         >
-          <Copy className="size-3" />
+          <CopyIcon className="size-3" />
           <span aria-live="polite">{copied ? "Copied" : "Copy details"}</span>
         </Button>
       </div>

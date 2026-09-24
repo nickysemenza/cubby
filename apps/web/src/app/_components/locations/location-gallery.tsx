@@ -3,7 +3,7 @@ import type {
   InventoryItemForTree,
   LocationType,
 } from "@cubby/schemas/location";
-import { CaretLeftIcon as ChevronLeft } from "@phosphor-icons/react/dist/csr/CaretLeft";
+import { CaretLeftIcon } from "@phosphor-icons/react/dist/csr/CaretLeft";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import {
@@ -591,7 +591,7 @@ function MobileGalleryDrillDown({
       {path.length > 0 && (
         <Row align="center" gap="xs" className="text-sm">
           <Button variant="ghost" onClick={handleBack}>
-            <ChevronLeft className="size-4" />
+            <CaretLeftIcon className="size-4" />
             Back
           </Button>
           <Row align="center" gap="xs" className="text-muted-foreground">

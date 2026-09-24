@@ -4,8 +4,8 @@ import type {
   FieldSuggestionOutcome,
   FieldSuggestionRemoval,
 } from "@cubby/schemas/ai";
-import { SparkleIcon as Sparkle } from "@phosphor-icons/react/dist/csr/Sparkle";
-import { WarningCircleIcon as CircleAlert } from "@phosphor-icons/react/dist/csr/WarningCircle";
+import { SparkleIcon } from "@phosphor-icons/react/dist/csr/Sparkle";
+import { WarningCircleIcon } from "@phosphor-icons/react/dist/csr/WarningCircle";
 import { ClassicV2 } from "loading-dev";
 import type { MouseEvent, ReactNode } from "react";
 
@@ -310,7 +310,7 @@ function MarkGlyph({
       onClick={stopPropagation}
       className={glyphTriggerClass(surface)}
     >
-      <Sparkle
+      <SparkleIcon
         className={cn(
           "size-3",
           accented
@@ -357,7 +357,7 @@ function UnsettledMark({
         className={glyphTriggerClass(surface)}
       >
         {failed ? (
-          <CircleAlert className="size-3 text-destructive" />
+          <WarningCircleIcon className="size-3 text-destructive" />
         ) : (
           <ClassicV2 size={12} className="text-muted-foreground" />
         )}

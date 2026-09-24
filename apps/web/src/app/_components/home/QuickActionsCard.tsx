@@ -1,4 +1,4 @@
-import { LightningIcon as Zap } from "@phosphor-icons/react/dist/csr/Lightning";
+import { LightningIcon } from "@phosphor-icons/react/dist/csr/Lightning";
 import { Link } from "@tanstack/react-router";
 import { useId } from "react";
 
@@ -19,7 +19,10 @@ export function DailyPasses() {
   return (
     <section aria-labelledby={titleId}>
       <div className="flex items-start gap-2 border-b border-border pb-2">
-        <Zap className="mt-0.5 size-4 shrink-0 text-slate" aria-hidden />
+        <LightningIcon
+          className="mt-0.5 size-4 shrink-0 text-slate"
+          aria-hidden
+        />
         <div>
           <h2 id={titleId} className="font-heading text-sm font-semibold">
             Daily passes

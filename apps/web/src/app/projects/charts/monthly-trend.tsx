@@ -1,5 +1,5 @@
 import type { ProjectPortfolioAnalyticsOut } from "@cubby/schemas/project";
-import { CalendarCheckIcon as CalendarClock } from "@phosphor-icons/react/dist/csr/CalendarCheck";
+import { CalendarCheckIcon } from "@phosphor-icons/react/dist/csr/CalendarCheck";
 import { useMemo } from "react";
 
 import { SpendTrend } from "~/app/_components/charts/kit";
@@ -43,7 +43,7 @@ export function MonthlyTrend({
   if (rows.length < 2) {
     return (
       <ChartEmpty
-        icon={CalendarClock}
+        icon={CalendarCheckIcon}
         title="Not enough data for a trend (need 2+ months)."
       />
     );

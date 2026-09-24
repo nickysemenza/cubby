@@ -5,7 +5,7 @@ import {
   parseShortcodeFor,
 } from "@cubby/schemas/identifiers";
 import type { LocationType } from "@cubby/schemas/location";
-import { PencilIcon as Pencil } from "@phosphor-icons/react/dist/csr/Pencil";
+import { PencilIcon } from "@phosphor-icons/react/dist/csr/Pencil";
 import type { ReactNode } from "react";
 
 import { Stack } from "~/components/layout";
@@ -186,7 +186,7 @@ export function InventoryEntriesCell<
         onQuickEdit(row);
       }}
     >
-      <Pencil className="size-3 text-muted-foreground" />
+      <PencilIcon className="size-3 text-muted-foreground" />
     </Button>
   ) : null;
 

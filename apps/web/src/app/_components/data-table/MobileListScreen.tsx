@@ -1,6 +1,6 @@
 import type { Entity } from "@cubby/schemas/entity";
-import { ListIcon as List } from "@phosphor-icons/react/dist/csr/List";
-import { ListDashesIcon as LayoutList } from "@phosphor-icons/react/dist/csr/ListDashes";
+import { ListIcon } from "@phosphor-icons/react/dist/csr/List";
+import { ListDashesIcon } from "@phosphor-icons/react/dist/csr/ListDashes";
 import type { RowData } from "@tanstack/react-table";
 import type { ReactNode } from "react";
 
@@ -95,9 +95,9 @@ export function MobileListScreen<TItem extends RowData>({
         aria-label={grouped ? "Show flat list" : "Show grouped list"}
       >
         {grouped ? (
-          <List className="size-4" />
+          <ListIcon className="size-4" />
         ) : (
-          <LayoutList className="size-4" />
+          <ListDashesIcon className="size-4" />
         )}
       </Button>
     ) : null;

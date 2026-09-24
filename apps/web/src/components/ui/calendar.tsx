@@ -1,9 +1,9 @@
 "use client";
 
-import { CaretDownIcon as ChevronDown } from "@phosphor-icons/react/dist/csr/CaretDown";
-import { CaretLeftIcon as ChevronLeft } from "@phosphor-icons/react/dist/csr/CaretLeft";
-import { CaretRightIcon as ChevronRight } from "@phosphor-icons/react/dist/csr/CaretRight";
-import { CaretUpIcon as ChevronUp } from "@phosphor-icons/react/dist/csr/CaretUp";
+import { CaretDownIcon } from "@phosphor-icons/react/dist/csr/CaretDown";
+import { CaretLeftIcon } from "@phosphor-icons/react/dist/csr/CaretLeft";
+import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
+import { CaretUpIcon } from "@phosphor-icons/react/dist/csr/CaretUp";
 import type { ComponentProps } from "react";
 import type { ChevronProps } from "react-day-picker";
 import { DayPicker } from "react-day-picker";
@@ -82,12 +82,12 @@ function Calendar({
 function CalendarChevron({ className, orientation }: ChevronProps) {
   const Icon =
     orientation === "up"
-      ? ChevronUp
+      ? CaretUpIcon
       : orientation === "down"
-        ? ChevronDown
+        ? CaretDownIcon
         : orientation === "right"
-          ? ChevronRight
-          : ChevronLeft;
+          ? CaretRightIcon
+          : CaretLeftIcon;
   return <Icon className={cn("size-4", className)} />;
 }
 

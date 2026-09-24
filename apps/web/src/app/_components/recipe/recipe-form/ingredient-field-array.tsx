@@ -1,7 +1,7 @@
-import { ArrowSquareOutIcon as ExternalLink } from "@phosphor-icons/react/dist/csr/ArrowSquareOut";
-import { DotsThreeVerticalIcon as MoreVertical } from "@phosphor-icons/react/dist/csr/DotsThreeVertical";
-import { PlusIcon as Plus } from "@phosphor-icons/react/dist/csr/Plus";
-import { TrashIcon as Trash } from "@phosphor-icons/react/dist/csr/Trash";
+import { ArrowSquareOutIcon } from "@phosphor-icons/react/dist/csr/ArrowSquareOut";
+import { DotsThreeVerticalIcon } from "@phosphor-icons/react/dist/csr/DotsThreeVertical";
+import { PlusIcon } from "@phosphor-icons/react/dist/csr/Plus";
+import { TrashIcon } from "@phosphor-icons/react/dist/csr/Trash";
 import type { FC, KeyboardEvent } from "react";
 import { useState } from "react";
 import { Controller, type UseFormReturn, useFieldArray } from "react-hook-form";
@@ -274,7 +274,7 @@ export const IngredientFieldArray: FC<IngredientFieldArrayProps> = ({
                         />
                       }
                     >
-                      <MoreVertical className="size-3.5" />
+                      <DotsThreeVerticalIcon className="size-3.5" />
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
                       <DropdownMenuItem
@@ -340,7 +340,7 @@ export const IngredientFieldArray: FC<IngredientFieldArrayProps> = ({
                             )
                           }
                         >
-                          <ExternalLink />
+                          <ArrowSquareOutIcon />
                           Open{" "}
                           {row.type === "ingredient" ? "ingredient" : "recipe"}
                         </DropdownMenuItem>
@@ -350,7 +350,7 @@ export const IngredientFieldArray: FC<IngredientFieldArrayProps> = ({
                         variant="destructive"
                         onClick={() => remove(ingredientIndex)}
                       >
-                        <Trash />
+                        <TrashIcon />
                         Delete row
                       </DropdownMenuItem>
                     </DropdownMenuContent>
@@ -390,7 +390,7 @@ export const IngredientFieldArray: FC<IngredientFieldArrayProps> = ({
                           );
                         }}
                       >
-                        <Trash className="size-3.5" />
+                        <TrashIcon className="size-3.5" />
                       </Button>
                     </div>
                   );
@@ -410,7 +410,7 @@ export const IngredientFieldArray: FC<IngredientFieldArrayProps> = ({
 
       <Row gap="sm" className="mt-2">
         <Button type="button" variant="outline" size="sm" onClick={appendRow}>
-          <Plus className="mr-2 size-3.5" />
+          <PlusIcon className="mr-2 size-3.5" />
           Ingredient
         </Button>
         <Button
@@ -419,7 +419,7 @@ export const IngredientFieldArray: FC<IngredientFieldArrayProps> = ({
           size="sm"
           onClick={() => append(newRow("recipe"))}
         >
-          <Plus className="mr-2 size-3.5" />
+          <PlusIcon className="mr-2 size-3.5" />
           Sub-recipe
         </Button>
       </Row>

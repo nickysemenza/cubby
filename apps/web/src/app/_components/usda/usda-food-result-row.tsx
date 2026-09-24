@@ -1,7 +1,7 @@
 import type { FoodSummaryWithLinkedProducts } from "@cubby/schemas/usda";
 import { dataTypeLabel } from "@cubby/usda-schemas";
-import { CopyIcon as Copy } from "@phosphor-icons/react/dist/csr/Copy";
-import { LinkIcon as Link2 } from "@phosphor-icons/react/dist/csr/Link";
+import { CopyIcon } from "@phosphor-icons/react/dist/csr/Copy";
+import { LinkIcon } from "@phosphor-icons/react/dist/csr/Link";
 
 import { Row } from "~/components/layout";
 import { isUnspecifiedManufacturer } from "~/lib/manufacturer-utils";
@@ -97,13 +97,13 @@ export function UsdaFoodResultRow({
         {legacyFoodInfo && <MetaChip>NDB {legacyFoodInfo.ndb_number}</MetaChip>}
         {linkedCount > 0 && (
           <MetaChip>
-            <Link2 className="size-3" />
+            <LinkIcon className="size-3" />
             {linkedCount} linked
           </MetaChip>
         )}
         {duplicateCount > 0 && (
           <MetaChip>
-            <Copy className="size-3" />+{duplicateCount} record
+            <CopyIcon className="size-3" />+{duplicateCount} record
             {duplicateCount === 1 ? "" : "s"}
           </MetaChip>
         )}

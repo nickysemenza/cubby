@@ -3,10 +3,10 @@ import type {
   ProjectOut,
   TaskOut,
 } from "@cubby/schemas/project";
-import { CalendarIcon as Calendar } from "@phosphor-icons/react/dist/csr/Calendar";
-import { CurrencyDollarIcon as DollarSign } from "@phosphor-icons/react/dist/csr/CurrencyDollar";
-import { HammerIcon as Hammer } from "@phosphor-icons/react/dist/csr/Hammer";
-import { WalletIcon as Wallet } from "@phosphor-icons/react/dist/csr/Wallet";
+import { CalendarIcon } from "@phosphor-icons/react/dist/csr/Calendar";
+import { CurrencyDollarIcon } from "@phosphor-icons/react/dist/csr/CurrencyDollar";
+import { HammerIcon } from "@phosphor-icons/react/dist/csr/Hammer";
+import { WalletIcon } from "@phosphor-icons/react/dist/csr/Wallet";
 import { useQuery } from "@tanstack/react-query";
 import { getRouteApi, Link } from "@tanstack/react-router";
 import {
@@ -124,7 +124,7 @@ function DashboardErrorState({
   return (
     <Empty>
       <EmptyHeader>
-        <EmptyIcon icon={Hammer} />
+        <EmptyIcon icon={HammerIcon} />
         <EmptyTitle>Couldn't load the project dashboard</EmptyTitle>
         <EmptyDescription>{getErrorMessage(error)}</EmptyDescription>
       </EmptyHeader>
@@ -495,7 +495,7 @@ function ProjectCards({
     return (
       <Empty>
         <EmptyHeader>
-          <EmptyIcon icon={Hammer} />
+          <EmptyIcon icon={HammerIcon} />
           <EmptyTitle>No projects found</EmptyTitle>
           <EmptyDescription>Adjust your filters.</EmptyDescription>
         </EmptyHeader>
@@ -647,7 +647,7 @@ export function ProjectCard({
             ))}
             {hasEstimate && (
               <Badge variant="outline">
-                <DollarSign className="size-3" />
+                <CurrencyDollarIcon className="size-3" />
                 {formatCurrency(estimate ?? 0, 0)}
               </Badge>
             )}
@@ -661,13 +661,13 @@ export function ProjectCard({
                     : "outline"
                 }
               >
-                <Wallet className="size-3" />
+                <WalletIcon className="size-3" />
                 {formatCurrency(spent, 0)} spent
               </Badge>
             )}
             {(project.dates.effectiveStart || project.dates.effectiveEnd) && (
               <Badge variant="outline">
-                <Calendar className="size-3" />
+                <CalendarIcon className="size-3" />
                 {formatDateRange(
                   project.dates.effectiveStart,
                   project.dates.effectiveEnd,

@@ -6,30 +6,30 @@ import type {
 import { generatedEntitySort } from "@cubby/schemas/entity-sort";
 import { entitySummary } from "@cubby/schemas/entity-summary";
 import { displayGtin } from "@cubby/schemas/external-id";
-import { ArrowsLeftRightIcon as ArrowLeftRight } from "@phosphor-icons/react/dist/csr/ArrowsLeftRight";
-import { BarcodeIcon as Barcode } from "@phosphor-icons/react/dist/csr/Barcode";
-import { BookOpenIcon as BookOpen } from "@phosphor-icons/react/dist/csr/BookOpen";
-import { BowlFoodIcon as Apple } from "@phosphor-icons/react/dist/csr/BowlFood";
-import { CalendarDotsIcon as CalendarDays } from "@phosphor-icons/react/dist/csr/CalendarDots";
-import { CarrotIcon as Carrot } from "@phosphor-icons/react/dist/csr/Carrot";
-import { ChefHatIcon as ChefHat } from "@phosphor-icons/react/dist/csr/ChefHat";
-import { CreditCardIcon as CreditCard } from "@phosphor-icons/react/dist/csr/CreditCard";
-import { DeviceMobileIcon as Smartphone } from "@phosphor-icons/react/dist/csr/DeviceMobile";
-import { EyeIcon as Eye } from "@phosphor-icons/react/dist/csr/Eye";
-import { HammerIcon as Hammer } from "@phosphor-icons/react/dist/csr/Hammer";
-import { HeartIcon as Heart } from "@phosphor-icons/react/dist/csr/Heart";
-import { ImageIcon as Image } from "@phosphor-icons/react/dist/csr/Image";
-import { KeyIcon as KeyRound } from "@phosphor-icons/react/dist/csr/Key";
-import { LeafIcon as Leaf } from "@phosphor-icons/react/dist/csr/Leaf";
-import { ListChecksIcon as ListChecks } from "@phosphor-icons/react/dist/csr/ListChecks";
-import { MapPinIcon as MapPin } from "@phosphor-icons/react/dist/csr/MapPin";
-import { PackageIcon as Package } from "@phosphor-icons/react/dist/csr/Package";
-import { PlantIcon as Sprout } from "@phosphor-icons/react/dist/csr/Plant";
-import { ReceiptIcon as Receipt } from "@phosphor-icons/react/dist/csr/Receipt";
-import { RobotIcon as Bot } from "@phosphor-icons/react/dist/csr/Robot";
-import { StorefrontIcon as Store } from "@phosphor-icons/react/dist/csr/Storefront";
-import { TagIcon as Tags } from "@phosphor-icons/react/dist/csr/Tag";
-import { UsersIcon as Users } from "@phosphor-icons/react/dist/csr/Users";
+import { ArrowsLeftRightIcon } from "@phosphor-icons/react/dist/csr/ArrowsLeftRight";
+import { BarcodeIcon } from "@phosphor-icons/react/dist/csr/Barcode";
+import { BookOpenIcon } from "@phosphor-icons/react/dist/csr/BookOpen";
+import { BowlFoodIcon } from "@phosphor-icons/react/dist/csr/BowlFood";
+import { CalendarDotsIcon } from "@phosphor-icons/react/dist/csr/CalendarDots";
+import { CarrotIcon } from "@phosphor-icons/react/dist/csr/Carrot";
+import { ChefHatIcon } from "@phosphor-icons/react/dist/csr/ChefHat";
+import { CreditCardIcon } from "@phosphor-icons/react/dist/csr/CreditCard";
+import { DeviceMobileIcon } from "@phosphor-icons/react/dist/csr/DeviceMobile";
+import { EyeIcon } from "@phosphor-icons/react/dist/csr/Eye";
+import { HammerIcon } from "@phosphor-icons/react/dist/csr/Hammer";
+import { HeartIcon } from "@phosphor-icons/react/dist/csr/Heart";
+import { ImageIcon } from "@phosphor-icons/react/dist/csr/Image";
+import { KeyIcon } from "@phosphor-icons/react/dist/csr/Key";
+import { LeafIcon } from "@phosphor-icons/react/dist/csr/Leaf";
+import { ListChecksIcon } from "@phosphor-icons/react/dist/csr/ListChecks";
+import { MapPinIcon } from "@phosphor-icons/react/dist/csr/MapPin";
+import { PackageIcon } from "@phosphor-icons/react/dist/csr/Package";
+import { PlantIcon } from "@phosphor-icons/react/dist/csr/Plant";
+import { ReceiptIcon } from "@phosphor-icons/react/dist/csr/Receipt";
+import { RobotIcon } from "@phosphor-icons/react/dist/csr/Robot";
+import { StorefrontIcon } from "@phosphor-icons/react/dist/csr/Storefront";
+import { TagIcon } from "@phosphor-icons/react/dist/csr/Tag";
+import { UsersIcon } from "@phosphor-icons/react/dist/csr/Users";
 import type { Icon, IconProps } from "@phosphor-icons/react/lib";
 
 import {
@@ -186,30 +186,30 @@ type EntityDefinitionSeed = Pick<
 type DeclaredPhosphorIcon =
   (typeof entitySummary)[BrowserRoutedEntity]["icons"]["phosphor"];
 const PHOSPHOR_ICONS = {
-  BowlFood: Apple,
-  ArrowsLeftRight: ArrowLeftRight,
-  Barcode: Barcode,
-  BookOpen: BookOpen,
-  Robot: Bot,
-  CalendarDots: CalendarDays,
-  Carrot: Carrot,
-  ChefHat: ChefHat,
-  CreditCard: CreditCard,
-  Eye: Eye,
-  Hammer: Hammer,
-  Heart: Heart,
-  Image: Image,
-  Key: KeyRound,
-  ListChecks: ListChecks,
-  MapPin: MapPin,
-  Package: Package,
-  Receipt: Receipt,
-  Leaf: Leaf,
-  DeviceMobile: Smartphone,
-  Plant: Sprout,
-  Storefront: Store,
-  Tag: Tags,
-  Users: Users,
+  BowlFood: BowlFoodIcon,
+  ArrowsLeftRight: ArrowsLeftRightIcon,
+  Barcode: BarcodeIcon,
+  BookOpen: BookOpenIcon,
+  Robot: RobotIcon,
+  CalendarDots: CalendarDotsIcon,
+  Carrot: CarrotIcon,
+  ChefHat: ChefHatIcon,
+  CreditCard: CreditCardIcon,
+  Eye: EyeIcon,
+  Hammer: HammerIcon,
+  Heart: HeartIcon,
+  Image: ImageIcon,
+  Key: KeyIcon,
+  ListChecks: ListChecksIcon,
+  MapPin: MapPinIcon,
+  Package: PackageIcon,
+  Receipt: ReceiptIcon,
+  Leaf: LeafIcon,
+  DeviceMobile: DeviceMobileIcon,
+  Plant: PlantIcon,
+  Storefront: StorefrontIcon,
+  Tag: TagIcon,
+  Users: UsersIcon,
 } satisfies Record<DeclaredPhosphorIcon, Icon>;
 const isBrowserEntityKey = (value: string): value is BrowserRoutedEntity =>
   Object.hasOwn(entitySummary, value);

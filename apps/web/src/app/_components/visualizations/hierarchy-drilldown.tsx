@@ -1,8 +1,8 @@
 import type { LocationShortcode } from "@cubby/schemas/identifiers";
 import type { ImageUrlSummary } from "@cubby/schemas/image-summary";
-import { CaretLeftIcon as ChevronLeft } from "@phosphor-icons/react/dist/csr/CaretLeft";
-import { CaretRightIcon as ChevronRight } from "@phosphor-icons/react/dist/csr/CaretRight";
-import { MapPinIcon as MapPin } from "@phosphor-icons/react/dist/csr/MapPin";
+import { CaretLeftIcon } from "@phosphor-icons/react/dist/csr/CaretLeft";
+import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
+import { MapPinIcon } from "@phosphor-icons/react/dist/csr/MapPin";
 import { Link } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 
@@ -186,7 +186,7 @@ export function HierarchyDrilldown({
                   }
                   className="-ml-1 inline-flex min-h-10 shrink-0 items-center gap-1 px-1 text-xs font-medium text-primary underline-offset-4 transition-colors duration-100 ease-cozy hover:bg-muted hover:underline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring motion-reduce:transition-none sm:min-h-8"
                 >
-                  <ChevronLeft aria-hidden="true" className="size-3.5" />
+                  <CaretLeftIcon aria-hidden="true" className="size-3.5" />
                   Back
                 </button>
               )}
@@ -203,7 +203,7 @@ export function HierarchyDrilldown({
                         )}
                       >
                         {index > 0 && (
-                          <ChevronRight
+                          <CaretRightIcon
                             aria-hidden="true"
                             className="hidden size-3.5 shrink-0 text-muted-foreground sm:block"
                           />
@@ -322,7 +322,7 @@ export function HierarchyDrilldown({
                     )}
                   >
                     {content}
-                    <ChevronRight
+                    <CaretRightIcon
                       aria-hidden="true"
                       className="size-3.5 shrink-0 text-muted-foreground"
                     />
@@ -338,7 +338,7 @@ export function HierarchyDrilldown({
                     )}
                   >
                     {content}
-                    <MapPin
+                    <MapPinIcon
                       aria-hidden="true"
                       className="size-3.5 shrink-0 text-muted-foreground transition-colors duration-100 ease-cozy group-hover:text-primary motion-reduce:transition-none"
                     />

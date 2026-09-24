@@ -2,9 +2,9 @@ import type {
   MealFoodAmount,
   MealPreparationYieldBasis,
 } from "@cubby/schemas/meal";
-import { CheckIcon as Check } from "@phosphor-icons/react/dist/csr/Check";
-import { PlusIcon as Plus } from "@phosphor-icons/react/dist/csr/Plus";
-import { TrashIcon as Trash2 } from "@phosphor-icons/react/dist/csr/Trash";
+import { CheckIcon } from "@phosphor-icons/react/dist/csr/Check";
+import { PlusIcon } from "@phosphor-icons/react/dist/csr/Plus";
+import { TrashIcon } from "@phosphor-icons/react/dist/csr/Trash";
 import { format, parseISO } from "date-fns";
 import { useEffect, useMemo, useRef, useState } from "react";
 
@@ -225,7 +225,7 @@ export function PortionSheet({
             Cancel
           </Button>
           <Button type="button" disabled={!canSave} onClick={submit}>
-            <Check className="size-4" />
+            <CheckIcon className="size-4" />
             {isSaving ? "Saving…" : "Save portions"}
           </Button>
         </DialogFooter>
@@ -418,7 +418,7 @@ function PeopleFields({
           </Description>
         </Stack>
         <Button type="button" variant="outline" size="sm" onClick={onAdd}>
-          <Plus className="size-4" />
+          <PlusIcon className="size-4" />
           Add person
         </Button>
       </Row>
@@ -476,7 +476,7 @@ function PortionDraftRow({
           onClick={onRemove}
           disabled={!canRemove}
         >
-          <Trash2 className="size-4" />
+          <TrashIcon className="size-4" />
         </Button>
       </Row>
       <div className="grid gap-2 sm:grid-cols-[1fr_1fr_minmax(11rem,0.9fr)]">

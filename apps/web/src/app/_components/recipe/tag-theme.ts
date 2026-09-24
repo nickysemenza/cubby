@@ -1,7 +1,7 @@
-import { BookIcon as Book } from "@phosphor-icons/react/dist/csr/Book";
-import { ForkKnifeIcon as UtensilsCrossed } from "@phosphor-icons/react/dist/csr/ForkKnife";
-import { TagIcon as Tag } from "@phosphor-icons/react/dist/csr/Tag";
-import { UserIcon as User } from "@phosphor-icons/react/dist/csr/User";
+import { BookIcon } from "@phosphor-icons/react/dist/csr/Book";
+import { ForkKnifeIcon } from "@phosphor-icons/react/dist/csr/ForkKnife";
+import { TagIcon } from "@phosphor-icons/react/dist/csr/Tag";
+import { UserIcon } from "@phosphor-icons/react/dist/csr/User";
 import type { Icon } from "@phosphor-icons/react/lib";
 
 /**
@@ -77,13 +77,13 @@ export const getTagTint = (prefix: TagPrefix): string =>
 export const getTagIcon = (prefix: TagPrefix): Icon => {
   switch (prefix) {
     case "cuisine":
-      return UtensilsCrossed;
+      return ForkKnifeIcon;
     case "author":
-      return User;
+      return UserIcon;
     case "cookbook":
-      return Book;
+      return BookIcon;
     case "none":
-      return Tag;
+      return TagIcon;
   }
 };
 

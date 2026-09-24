@@ -1,6 +1,6 @@
 import type { CandidateEquivalence } from "@cubby/schemas/equivalences";
-import { ArrowClockwiseIcon as RefreshCw } from "@phosphor-icons/react/dist/csr/ArrowClockwise";
-import { WarningIcon as AlertTriangle } from "@phosphor-icons/react/dist/csr/Warning";
+import { ArrowClockwiseIcon } from "@phosphor-icons/react/dist/csr/ArrowClockwise";
+import { WarningIcon } from "@phosphor-icons/react/dist/csr/Warning";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useMemo } from "react";
@@ -113,7 +113,9 @@ export function EquivalencesReport() {
           onClick={() => refetch()}
           disabled={isFetching}
         >
-          <RefreshCw className={cn("size-4", isFetching && "animate-spin")} />
+          <ArrowClockwiseIcon
+            className={cn("size-4", isFetching && "animate-spin")}
+          />
           {isFetching ? "Scanning…" : "Rescan"}
         </Button>
         {data &&
@@ -201,7 +203,7 @@ export function EquivalencesReport() {
                               <span className="inline-flex text-warning" />
                             }
                           >
-                            <AlertTriangle className="size-3.5" />
+                            <WarningIcon className="size-3.5" />
                           </TooltipTrigger>
                           <TooltipContent>
                             Existing mapping converts 1 {c.unitA} ≈{" "}

@@ -1,16 +1,16 @@
 import type { ProductCategory } from "@cubby/shared";
 import { getLocationTypeColor, type LocationType } from "@cubby/shared";
-import { CubeIcon as Box } from "@phosphor-icons/react/dist/csr/Cube";
-import { FileArchiveIcon as FileBox } from "@phosphor-icons/react/dist/csr/FileArchive";
-import { FlowerIcon as Flower2 } from "@phosphor-icons/react/dist/csr/Flower";
-import { HouseIcon as Home } from "@phosphor-icons/react/dist/csr/House";
-import { PackageIcon as Package } from "@phosphor-icons/react/dist/csr/Package";
-import { PlantIcon as Sprout } from "@phosphor-icons/react/dist/csr/Plant";
-import { ShoppingBagIcon as ShoppingBag } from "@phosphor-icons/react/dist/csr/ShoppingBag";
-import { ShoppingCartIcon as ShoppingCart } from "@phosphor-icons/react/dist/csr/ShoppingCart";
-import { SquaresFourIcon as LayoutGrid } from "@phosphor-icons/react/dist/csr/SquaresFour";
-import { StackIcon as Layers } from "@phosphor-icons/react/dist/csr/Stack";
-import { TableIcon as Table2 } from "@phosphor-icons/react/dist/csr/Table";
+import { CubeIcon } from "@phosphor-icons/react/dist/csr/Cube";
+import { FileArchiveIcon } from "@phosphor-icons/react/dist/csr/FileArchive";
+import { FlowerIcon } from "@phosphor-icons/react/dist/csr/Flower";
+import { HouseIcon } from "@phosphor-icons/react/dist/csr/House";
+import { PackageIcon } from "@phosphor-icons/react/dist/csr/Package";
+import { PlantIcon } from "@phosphor-icons/react/dist/csr/Plant";
+import { ShoppingBagIcon } from "@phosphor-icons/react/dist/csr/ShoppingBag";
+import { ShoppingCartIcon } from "@phosphor-icons/react/dist/csr/ShoppingCart";
+import { SquaresFourIcon } from "@phosphor-icons/react/dist/csr/SquaresFour";
+import { StackIcon } from "@phosphor-icons/react/dist/csr/Stack";
+import { TableIcon } from "@phosphor-icons/react/dist/csr/Table";
 import type { Icon } from "@phosphor-icons/react/lib";
 
 import { getCategoryIcon } from "../products/category-theme";
@@ -72,18 +72,18 @@ export const getLocationTypeGroup = (
 // Exhaustive at construction: a new LocationType without a key here is a compile
 // error (replaces the old assertNever default-case guarantee).
 const locationIcons = {
-  house: Home,
-  room: Home,
-  area: LayoutGrid,
-  bag: ShoppingBag,
-  shelf: Layers,
-  table: Table2,
-  drawer: FileBox,
-  cart: ShoppingCart,
-  cabinet: Box,
-  box: Box,
-  bed: Sprout,
-  planter: Flower2,
+  house: HouseIcon,
+  room: HouseIcon,
+  area: SquaresFourIcon,
+  bag: ShoppingBagIcon,
+  shelf: StackIcon,
+  table: TableIcon,
+  drawer: FileArchiveIcon,
+  cart: ShoppingCartIcon,
+  cabinet: CubeIcon,
+  box: CubeIcon,
+  bed: PlantIcon,
+  planter: FlowerIcon,
 } satisfies Record<LocationType, Icon>;
 
 /**
@@ -93,7 +93,7 @@ export const getLocationIcon = (type: LocationType | null): Icon =>
   // safe: complete Record keyed by the enum. Null means the location is an
   // instance of a Product; callers holding that Product should prefer
   // `getLocationGlyph`, which resolves the SKU's category icon instead.
-  type ? locationIcons[type] : Package;
+  type ? locationIcons[type] : PackageIcon;
 
 /**
  * The glyph for a location, resolving identity before form factor.
@@ -110,5 +110,5 @@ export const getLocationGlyph = (location: {
 }): Icon => {
   if (location.type) return locationIcons[location.type];
   const category = location.product?.category;
-  return category ? getCategoryIcon(category.feature) : Package;
+  return category ? getCategoryIcon(category.feature) : PackageIcon;
 };

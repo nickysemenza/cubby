@@ -1,7 +1,7 @@
 import type { Confidence } from "@cubby/schemas/ai";
 import type { EnrichmentRow } from "@cubby/schemas/ingredient";
 import type { FoodSummaryWithLinkedProducts } from "@cubby/schemas/usda";
-import { CheckIcon as Check } from "@phosphor-icons/react/dist/csr/Check";
+import { CheckIcon } from "@phosphor-icons/react/dist/csr/Check";
 import { useQuery } from "@tanstack/react-query";
 
 import { UsdaFoodSearchField } from "~/app/_components/combobox/with-usda-food-search";
@@ -69,7 +69,7 @@ export function EnrichmentWorkbenchInspector({
                   gap="xs"
                   className="text-xs text-positive"
                 >
-                  <Check className="size-3" />
+                  <CheckIcon className="size-3" />
                   {food.foodInfo.description}
                 </Row>
               )}

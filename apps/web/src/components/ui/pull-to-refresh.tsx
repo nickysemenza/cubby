@@ -1,4 +1,4 @@
-import { CircleNotchIcon as Loader2 } from "@phosphor-icons/react/dist/csr/CircleNotch";
+import { CircleNotchIcon } from "@phosphor-icons/react/dist/csr/CircleNotch";
 import { useCallback, useRef, useState } from "react";
 import { cn } from "~/lib/utils";
 
@@ -113,7 +113,7 @@ export function PullToRefresh({
             opacity: progress,
           }}
         >
-          <Loader2
+          <CircleNotchIcon
             className={cn("size-5 text-muted-foreground", isRefreshing && "animate-spin")}
           />
         </div>

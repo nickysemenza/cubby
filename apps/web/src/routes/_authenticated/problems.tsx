@@ -1,4 +1,4 @@
-import { GitMergeIcon as GitMerge } from "@phosphor-icons/react/dist/csr/GitMerge";
+import { GitMergeIcon } from "@phosphor-icons/react/dist/csr/GitMerge";
 import {
   createFileRoute,
   Link,
@@ -83,7 +83,7 @@ function ProblemsPage() {
           }
           nativeButton={false}
         >
-          <GitMerge className="size-3.5" />
+          <GitMergeIcon className="size-3.5" />
           Product matches
         </Button>
       }

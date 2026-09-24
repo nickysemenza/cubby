@@ -1,7 +1,7 @@
 import type { Entity } from "@cubby/schemas/entity";
 import type { EntityFieldProvenance } from "@cubby/schemas/entity-fields";
 import { localRelationshipByKey } from "@cubby/schemas/entity-manifest";
-import { LinkIcon as Link2 } from "@phosphor-icons/react/dist/csr/Link";
+import { LinkIcon } from "@phosphor-icons/react/dist/csr/Link";
 import type React from "react";
 
 import { EntityIcon, entityLabel, entityPluralLabel } from "./entities";
@@ -131,7 +131,7 @@ export function FieldProvenance({
         {iconEntities.length === 0 ? (
           // A labelled source ("Image storage") has no entity mark; a generic
           // source glyph keeps its phrase discoverable.
-          <Link2 aria-hidden="true" className="size-3" />
+          <LinkIcon aria-hidden="true" className="size-3" />
         ) : (
           iconEntities.map((entity) => (
             <EntityIcon

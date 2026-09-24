@@ -1,7 +1,7 @@
 "use client";
 
 import { CalendarIcon } from "@phosphor-icons/react/dist/csr/Calendar";
-import { XIcon as X } from "@phosphor-icons/react/dist/csr/X";
+import { XIcon } from "@phosphor-icons/react/dist/csr/X";
 import { format } from "date-fns";
 import {
   type FocusEvent,
@@ -87,7 +87,7 @@ const DateClearButton = ({
       className="inline-flex h-full w-7 shrink-0 items-center justify-center text-muted-foreground transition-colors hover:text-foreground disabled:pointer-events-none disabled:opacity-50 max-sm:w-10"
       onClick={onClear}
     >
-      <X className="size-3.5" />
+      <XIcon className="size-3.5" />
     </button>
   );
 };

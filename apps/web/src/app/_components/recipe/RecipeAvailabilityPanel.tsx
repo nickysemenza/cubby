@@ -1,6 +1,6 @@
 import type { IngredientAvailability } from "@cubby/schemas/availability";
 import type { RecipeShortcode } from "@cubby/schemas/identifiers";
-import { ChefHatIcon as ChefHat } from "@phosphor-icons/react/dist/csr/ChefHat";
+import { ChefHatIcon } from "@phosphor-icons/react/dist/csr/ChefHat";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 
@@ -98,7 +98,7 @@ export function RecipeAvailabilityPanel({
     return (
       <Row align="center" justify="between" gap="sm" className={SHELL}>
         <Row align="center" gap="xs">
-          <ChefHat className="size-3.5 text-slate" />
+          <ChefHatIcon className="size-3.5 text-slate" />
           <span className="my-0 eyebrow">Can I make this?</span>
         </Row>
         <Skeleton className="h-4 w-28" />
@@ -117,7 +117,7 @@ export function RecipeAvailabilityPanel({
     <Stack gap="snug" className={SHELL}>
       <Row align="center" justify="between" wrap gap="sm">
         <Row align="center" gap="xs">
-          <ChefHat className="size-3.5 text-slate" />
+          <ChefHatIcon className="size-3.5 text-slate" />
           <span className="my-0 eyebrow">Can I make this?</span>
         </Row>
         <Row align="center" gap="xs">

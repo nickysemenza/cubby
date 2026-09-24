@@ -1,6 +1,6 @@
 import type { Progress } from "@cubby/recipebridge";
-import { ProhibitIcon as Ban } from "@phosphor-icons/react/dist/csr/Prohibit";
-import { WarningCircleIcon as AlertCircle } from "@phosphor-icons/react/dist/csr/WarningCircle";
+import { ProhibitIcon } from "@phosphor-icons/react/dist/csr/Prohibit";
+import { WarningCircleIcon } from "@phosphor-icons/react/dist/csr/WarningCircle";
 
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
@@ -65,7 +65,7 @@ export function ExtractStatusLine({
         gap="xs"
         className="text-xs text-destructive"
       >
-        <AlertCircle className="size-3" /> {phase.message}
+        <WarningCircleIcon className="size-3" /> {phase.message}
       </Row>
     );
   }
@@ -106,7 +106,7 @@ export function ExtractProgressPanel({
           )}
         </Row>
         <Button type="button" variant="outline" size="sm" onClick={onCancel}>
-          <Ban className="mr-1 size-3" />
+          <ProhibitIcon className="mr-1 size-3" />
           Cancel
         </Button>
       </Row>

@@ -1,7 +1,7 @@
 import type { ProjectContributionOut } from "@cubby/schemas/household-contribution";
-import { UsersIcon as UsersRound } from "@phosphor-icons/react/dist/csr/Users";
-import { WalletIcon as WalletCards } from "@phosphor-icons/react/dist/csr/Wallet";
-import { WarningIcon as AlertTriangle } from "@phosphor-icons/react/dist/csr/Warning";
+import { UsersIcon } from "@phosphor-icons/react/dist/csr/Users";
+import { WalletIcon } from "@phosphor-icons/react/dist/csr/Wallet";
+import { WarningIcon } from "@phosphor-icons/react/dist/csr/Warning";
 import type { Icon } from "@phosphor-icons/react/lib";
 import { useQuery } from "@tanstack/react-query";
 import { useId } from "react";
@@ -84,7 +84,7 @@ export function ProjectContributionReport({
           </h3>
           {data.parties.length === 0 ? (
             <CompactEmpty
-              icon={UsersRound}
+              icon={UsersIcon}
               title="No beneficiaries attributed"
               detail="Record who consumed the project’s spend to compare contributions fairly."
             />
@@ -124,7 +124,7 @@ export function ProjectContributionReport({
           </h3>
           {data.funders.length === 0 ? (
             <CompactEmpty
-              icon={WalletCards}
+              icon={WalletIcon}
               title="No original funders attributed"
               detail="Initial funding can be recorded without implying a later reimbursement."
             />
@@ -186,7 +186,7 @@ export function ProjectContributionReport({
                       table-fixed with nowrap cells, so labels must wrap. */}
                   <TableCell className="whitespace-normal">
                     <Row align="center" gap="xs">
-                      <AlertTriangle className="size-3.5 shrink-0 text-warning-ink" />
+                      <WarningIcon className="size-3.5 shrink-0 text-warning-ink" />
                       {contributionGapLabels[gap.code]}
                     </Row>
                   </TableCell>

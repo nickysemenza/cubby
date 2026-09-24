@@ -1,5 +1,5 @@
 import type { ProjectPortfolioAnalyticsOut } from "@cubby/schemas/project";
-import { HammerIcon as Hammer } from "@phosphor-icons/react/dist/csr/Hammer";
+import { HammerIcon } from "@phosphor-icons/react/dist/csr/Hammer";
 import { useMemo } from "react";
 
 import { formatCurrency } from "~/lib/utils";
@@ -52,7 +52,7 @@ export function TradeActivity({
   if (data.length === 0) {
     return (
       <div>
-        <ChartEmpty icon={Hammer} title="No principal trade spend yet." />
+        <ChartEmpty icon={HammerIcon} title="No principal trade spend yet." />
         {adjustments !== 0 ? (
           <p className="mt-2 text-center text-xs text-muted-foreground">
             Total spend is {formatCurrency(adjustments, 0)} in purchase

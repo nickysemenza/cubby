@@ -1,6 +1,6 @@
 import type { UnitMapping } from "@cubby/schemas/unitmapping";
 import { MACRO_KEYS } from "@cubby/usda-schemas";
-import { CheckIcon as Check } from "@phosphor-icons/react/dist/csr/Check";
+import { CheckIcon } from "@phosphor-icons/react/dist/csr/Check";
 
 import { Row } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
@@ -23,7 +23,7 @@ function chip(key: string, label: string, on: boolean) {
       variant={on ? "secondary" : "outline"}
       className={on ? undefined : "text-muted-foreground"}
     >
-      {on && <Check className="mr-1 size-3" />}
+      {on && <CheckIcon className="mr-1 size-3" />}
       {label}
     </Badge>
   );

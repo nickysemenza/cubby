@@ -27,18 +27,17 @@ import type {
   ProjectAttentionType,
 } from "@cubby/schemas/project";
 import { getMiscDisplayName } from "@cubby/shared";
-import { BarcodeIcon as ScanBarcode } from "@phosphor-icons/react/dist/csr/Barcode";
-import { DownloadIcon as Download } from "@phosphor-icons/react/dist/csr/Download";
-import { FunnelIcon as ListFilter } from "@phosphor-icons/react/dist/csr/Funnel";
-import { ImageBrokenIcon as ImageOff } from "@phosphor-icons/react/dist/csr/ImageBroken";
-import { LinkBreakIcon as Link2Off } from "@phosphor-icons/react/dist/csr/LinkBreak";
-import { LinkBreakIcon as Unlink } from "@phosphor-icons/react/dist/csr/LinkBreak";
-import { NetworkIcon as Network } from "@phosphor-icons/react/dist/csr/Network";
-import { ScalesIcon as Scale } from "@phosphor-icons/react/dist/csr/Scales";
-import { SparkleIcon as Sparkles } from "@phosphor-icons/react/dist/csr/Sparkle";
-import { StorefrontIcon as Store } from "@phosphor-icons/react/dist/csr/Storefront";
-import { WarningIcon as AlertTriangle } from "@phosphor-icons/react/dist/csr/Warning";
-import { WrenchIcon as Wrench } from "@phosphor-icons/react/dist/csr/Wrench";
+import { BarcodeIcon } from "@phosphor-icons/react/dist/csr/Barcode";
+import { DownloadIcon } from "@phosphor-icons/react/dist/csr/Download";
+import { FunnelIcon } from "@phosphor-icons/react/dist/csr/Funnel";
+import { ImageBrokenIcon } from "@phosphor-icons/react/dist/csr/ImageBroken";
+import { LinkBreakIcon } from "@phosphor-icons/react/dist/csr/LinkBreak";
+import { NetworkIcon } from "@phosphor-icons/react/dist/csr/Network";
+import { ScalesIcon } from "@phosphor-icons/react/dist/csr/Scales";
+import { SparkleIcon } from "@phosphor-icons/react/dist/csr/Sparkle";
+import { StorefrontIcon } from "@phosphor-icons/react/dist/csr/Storefront";
+import { WarningIcon } from "@phosphor-icons/react/dist/csr/Warning";
+import { WrenchIcon } from "@phosphor-icons/react/dist/csr/Wrench";
 import type { Icon } from "@phosphor-icons/react/lib";
 import { Link } from "@tanstack/react-router";
 import { groupBy } from "es-toolkit";
@@ -364,7 +363,7 @@ function UpcApplyAction({ product }: { product: ProductWithBetterUpcData }) {
       onClick={() => apply.mutate({ id: product.id, upc: product.upc })}
       disabled={apply.isPending}
     >
-      <Download className="mr-1 size-3" />
+      <DownloadIcon className="mr-1 size-3" />
       {apply.isPending ? "Applying…" : "Apply"}
     </Button>
   );
@@ -541,7 +540,7 @@ function RecountLink({ shortcode }: { shortcode: string }) {
       render={<Link to="/inventory/session" search={{ parent: shortcode }} />}
       nativeButton={false}
     >
-      <ScanBarcode className="mr-1 size-3" />
+      <BarcodeIcon className="mr-1 size-3" />
       Recount
     </Button>
   );
@@ -555,7 +554,7 @@ function ManufacturerVariantLink({ manufacturer }: { manufacturer: string }) {
       render={<Link to="/products" search={{ manufacturer }} />}
       nativeButton={false}
     >
-      <ListFilter className="mr-1 size-3" />
+      <FunnelIcon className="mr-1 size-3" />
       Show products
     </Button>
   );
@@ -581,7 +580,7 @@ function WorkbenchFixLink({ ingredientId }: { ingredientId: string | null }) {
       }
       nativeButton={false}
     >
-      <Wrench className="mr-1 size-3" />
+      <WrenchIcon className="mr-1 size-3" />
       Fix in workbench
     </Button>
   );
@@ -851,7 +850,7 @@ const DECLARED_SECTIONS = [
     label: "Purchase imports",
     select: (p) => p.importFindings,
     problemKeys: ["importFindings"],
-    icon: AlertTriangle,
+    icon: WarningIcon,
     renderItem: (finding) => ({
       key: finding.id,
       title: finding.summary,
@@ -955,7 +954,7 @@ const DECLARED_SECTIONS = [
     label: "Unconnected",
     select: (p) => p.unconnectedEntities,
     problemKeys: ["unconnectedEntities"],
-    icon: Link2Off,
+    icon: LinkBreakIcon,
     renderItem: (item) => ({
       key: `${item.kind}:${item.id}`,
       title: item.name ?? item.id,
@@ -1103,7 +1102,7 @@ const DECLARED_SECTIONS = [
       "ingredientsWithPartialCoverage",
       "productsWithIslandedMappings",
     ],
-    icon: Network,
+    icon: NetworkIcon,
     title: "Unit coverage",
     description:
       "Products that can't fully convert between their units (including to price). Link a USDA food, set a price, or bridge disconnected groups.",
@@ -1126,7 +1125,7 @@ const DECLARED_SECTIONS = [
     // No meter: the denominator would be "every product that could ever state a
     // size in its name", which is not a knowable population.
     coverage: { keys: ["productsWithTitleDerivableSize"] },
-    icon: Scale,
+    icon: ScalesIcon,
     title: "Sizes stated in the title but not recorded",
     description:
       "A food or ingredient product name states a size, but nothing records it — so no comparable unit price can be shown. Check each one describes ONE unit before accepting: titles carrying a pack count are excluded, because they read 6-12x too small.",
@@ -1365,7 +1364,7 @@ const DECLARED_SECTIONS = [
         doneLabel: "with a mini logo",
       },
     },
-    icon: Store,
+    icon: StorefrontIcon,
     renderItem: (vendor) => ({
       title: vendor.name,
       subtitle: vendor.website ?? "No website recorded",
@@ -1433,7 +1432,7 @@ const DECLARED_SECTIONS = [
         doneLabel: "photographed",
       },
     },
-    icon: ImageOff,
+    icon: ImageBrokenIcon,
     headerAction: <BackfillButton {...BACKFILL.fetchUpcImages} />,
     renderItem: (product) => ({
       title: product.name,
@@ -1472,7 +1471,7 @@ const DECLARED_SECTIONS = [
     select: (p) => p.locationsWithoutAiDescription ?? [],
     problemKeys: ["locationsWithoutAiDescription"],
     totalKey: "locationsWithoutAiDescription",
-    icon: Sparkles,
+    icon: SparkleIcon,
     headerAction: <BackfillButton {...BACKFILL.analyzeDescriptions} />,
     renderItem: (location) => ({
       title: location.name,
@@ -1490,7 +1489,7 @@ const DECLARED_SECTIONS = [
     label: "Unindexed",
     select: (p) => p.entitiesMissingEmbeddings,
     problemKeys: ["entitiesMissingEmbeddings"],
-    icon: Wrench,
+    icon: WrenchIcon,
     headerAction: <MissingEmbeddingsBackfillAction />,
     renderItem: (entity) => ({
       key: `${entity.entityType}:${entity.entityId}`,
@@ -1597,7 +1596,7 @@ const DECLARED_SECTIONS = [
     label: "Dangling refs",
     select: (p) => p.referentialLivenessViolations,
     problemKeys: ["referentialLivenessViolations"],
-    icon: Unlink,
+    icon: LinkBreakIcon,
     // Regression guard: healthy is the overwhelming common case, so don't
     // spend a permanent card on "nothing found".
     hideWhenEmpty: true,
@@ -1630,7 +1629,7 @@ const DECLARED_SECTIONS = [
     label: "Dependency cycles",
     select: (p) => p.dependencyCycles,
     problemKeys: ["dependencyCycles"],
-    icon: Network,
+    icon: NetworkIcon,
     // Regression guard: healthy is the overwhelming common case, so don't
     // spend a permanent card on "nothing found".
     hideWhenEmpty: true,
@@ -1659,7 +1658,7 @@ const DECLARED_SECTIONS = [
     problemKeys: TRACKER_GROUPS.map(
       (group) => TRACKER_PROBLEM_KEY_BY_TYPE[group.type],
     ),
-    icon: AlertTriangle,
+    icon: WarningIcon,
     title: "Projects, tasks & expenses needing attention",
     description:
       "Household-tracker items that need a decision: overdue tasks, blocked or stalled projects, planned expenses past their date, spend with no budget or trade recorded, and a manual date override narrower than the work it hides.",
@@ -1672,7 +1671,7 @@ const DECLARED_SECTIONS = [
     label: "UPC Updates",
     select: (p) => p.productsWithBetterUpcData ?? [],
     problemKeys: ["productsWithBetterUpcData"],
-    icon: Download,
+    icon: DownloadIcon,
     renderItem: (product) => {
       const { proposed } = product;
       // Show the actual value a fresh lookup would write per field — not just

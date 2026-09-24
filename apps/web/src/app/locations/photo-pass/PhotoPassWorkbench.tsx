@@ -23,10 +23,10 @@ import type {
  * shared with the recount session and the ingredient review queue.
  */
 import type { InfLocation } from "@cubby/schemas/location";
-import { ArrowCounterClockwiseIcon as RotateCcw } from "@phosphor-icons/react/dist/csr/ArrowCounterClockwise";
-import { CameraIcon as Camera } from "@phosphor-icons/react/dist/csr/Camera";
-import { CheckIcon as Check } from "@phosphor-icons/react/dist/csr/Check";
-import { HouseIcon as Home } from "@phosphor-icons/react/dist/csr/House";
+import { ArrowCounterClockwiseIcon } from "@phosphor-icons/react/dist/csr/ArrowCounterClockwise";
+import { CameraIcon } from "@phosphor-icons/react/dist/csr/Camera";
+import { CheckIcon } from "@phosphor-icons/react/dist/csr/Check";
+import { HouseIcon } from "@phosphor-icons/react/dist/csr/House";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
@@ -152,7 +152,7 @@ function PhotoPassStart() {
               className="min-h-12 flex-1 px-4"
               onClick={() => go({ scope: "house" })}
             >
-              <Home className="mr-2 size-4" />
+              <HouseIcon className="mr-2 size-4" />
               Everything missing a photo
             </Button>
           </Row>
@@ -398,7 +398,7 @@ function QueuePass({ parent, all, type }: PhotoPassSearch) {
                 })
               }
             >
-              <RotateCcw className="mr-2 size-4" />
+              <ArrowCounterClockwiseIcon className="mr-2 size-4" />
               Include photographed
             </Button>
           )}
@@ -432,7 +432,7 @@ function QueuePass({ parent, all, type }: PhotoPassSearch) {
 
       {complete || !current ? (
         <Empty>
-          <Check className="size-8 text-muted-foreground" />
+          <CheckIcon className="size-8 text-muted-foreground" />
           <EmptyTitle>Pass complete</EmptyTitle>
           <EmptyDescription>
             {counts.completed} photographed
@@ -446,7 +446,7 @@ function QueuePass({ parent, all, type }: PhotoPassSearch) {
               onClick={pass.revisitSkipped}
               disabled={counts.skipped === 0}
             >
-              <Camera className="mr-2 size-4" />
+              <CameraIcon className="mr-2 size-4" />
               Revisit skipped
             </Button>
             <Link

@@ -1,5 +1,5 @@
 import type { PurchaseFilters, PurchaseOut } from "@cubby/schemas/purchase";
-import { FileTextIcon as FileText } from "@phosphor-icons/react/dist/csr/FileText";
+import { FileTextIcon } from "@phosphor-icons/react/dist/csr/FileText";
 import { sumBy } from "es-toolkit";
 import { useMemo } from "react";
 
@@ -254,7 +254,7 @@ export const purchaseListOverride = defineListOverride<
               cell: (info) =>
                 info.getValue() > 0 ? (
                   <Row align="center" justify="end" gap="xs">
-                    <FileText className="size-3.5 text-muted-foreground" />
+                    <FileTextIcon className="size-3.5 text-muted-foreground" />
                     <span className="tabular-nums">{info.getValue()}</span>
                   </Row>
                 ) : (

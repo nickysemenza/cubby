@@ -1,5 +1,5 @@
 import type { SearchHit } from "@cubby/schemas/search";
-import { MagnifyingGlassIcon as Search } from "@phosphor-icons/react/dist/csr/MagnifyingGlass";
+import { MagnifyingGlassIcon } from "@phosphor-icons/react/dist/csr/MagnifyingGlass";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useState } from "react";
@@ -98,7 +98,7 @@ export function SearchDebugPage() {
           placeholder="Search debug query"
         />
         <Button type="submit" variant="outline">
-          <Search />
+          <MagnifyingGlassIcon />
           Run
         </Button>
       </form>

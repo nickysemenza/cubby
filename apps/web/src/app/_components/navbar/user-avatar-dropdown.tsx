@@ -1,7 +1,7 @@
-import { GearIcon as Settings } from "@phosphor-icons/react/dist/csr/Gear";
-import { PlugIcon as Plug } from "@phosphor-icons/react/dist/csr/Plug";
-import { SignOutIcon as LogOut } from "@phosphor-icons/react/dist/csr/SignOut";
-import { UserIcon as User } from "@phosphor-icons/react/dist/csr/User";
+import { GearIcon } from "@phosphor-icons/react/dist/csr/Gear";
+import { PlugIcon } from "@phosphor-icons/react/dist/csr/Plug";
+import { SignOutIcon } from "@phosphor-icons/react/dist/csr/SignOut";
+import { UserIcon } from "@phosphor-icons/react/dist/csr/User";
 import { Link } from "@tanstack/react-router";
 
 import { Avatar, AvatarFallback, AvatarImage } from "~/components/ui/avatar";
@@ -75,15 +75,15 @@ export const UserAvatarDropdown = () => {
               />
             }
           >
-            <User />
+            <UserIcon />
             <span>Account</span>
           </DropdownMenuItem>
           <DropdownMenuItem render={<Link to="/account/connected-apps" />}>
-            <Plug />
+            <PlugIcon />
             <span>Connected apps</span>
           </DropdownMenuItem>
           <DropdownMenuItem render={<Link to="/settings" />}>
-            <Settings />
+            <GearIcon />
             <span>Settings</span>
           </DropdownMenuItem>
         </DropdownMenuGroup>
@@ -92,7 +92,7 @@ export const UserAvatarDropdown = () => {
           onClick={() => authClient.signOut()}
           variant="destructive"
         >
-          <LogOut />
+          <SignOutIcon />
           <span>Sign out</span>
         </DropdownMenuItem>
       </DropdownMenuContent>

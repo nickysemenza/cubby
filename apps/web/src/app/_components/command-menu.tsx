@@ -6,12 +6,12 @@ import type {
   SearchResultGroup,
 } from "@cubby/schemas/search";
 import { type ParsedShortcode, parseShortcode } from "@cubby/shared";
-import { CaretRightIcon as ChevronRight } from "@phosphor-icons/react/dist/csr/CaretRight";
-import { EqualsIcon as Equal } from "@phosphor-icons/react/dist/csr/Equals";
-import { GearIcon as Settings } from "@phosphor-icons/react/dist/csr/Gear";
-import { MagnifyingGlassIcon as Search } from "@phosphor-icons/react/dist/csr/MagnifyingGlass";
-import { MapPinIcon as MapPin } from "@phosphor-icons/react/dist/csr/MapPin";
-import { XIcon as X } from "@phosphor-icons/react/dist/csr/X";
+import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
+import { EqualsIcon } from "@phosphor-icons/react/dist/csr/Equals";
+import { GearIcon } from "@phosphor-icons/react/dist/csr/Gear";
+import { MagnifyingGlassIcon } from "@phosphor-icons/react/dist/csr/MagnifyingGlass";
+import { MapPinIcon } from "@phosphor-icons/react/dist/csr/MapPin";
+import { XIcon } from "@phosphor-icons/react/dist/csr/X";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import * as React from "react";
@@ -294,7 +294,7 @@ export function GlobalCommandMenu({
                     }
                     className="flex items-center gap-2"
                   >
-                    <Equal className="size-4 shrink-0 text-primary" />
+                    <EqualsIcon className="size-4 shrink-0 text-primary" />
                     <span className="truncate font-mono text-sm font-semibold tabular-nums">
                       {conversion.input} {conversion.ingredientName} ={" "}
                       {conversion.result}
@@ -427,7 +427,7 @@ function CommandMenuInput({
             }
           >
             {scopeLabel}
-            <X data-icon="inline-end" />
+            <XIcon data-icon="inline-end" />
           </Badge>
         ) : undefined
       }
@@ -586,7 +586,7 @@ function SearchResults({
           }}
           className="justify-center text-muted-foreground"
         >
-          <Search className="mr-2 size-4" />
+          <MagnifyingGlassIcon className="mr-2 size-4" />
           See all results for "{search}"
         </CommandItem>
       </CommandGroup>
@@ -747,7 +747,7 @@ export function SearchGroupItem({
             onClick={() => onToggle()}
             className="flex size-11 shrink-0 items-center justify-center text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-primary sm:size-9"
           >
-            <ChevronRight
+            <CaretRightIcon
               className={cn(
                 "size-4 transition-transform motion-reduce:transition-none",
                 expanded && "rotate-90",
@@ -771,7 +771,7 @@ export function SearchGroupItem({
                 onSelect={() => onSelect(destination)}
                 className="min-h-11 gap-2 pl-8 sm:min-h-9"
               >
-                <MapPin className="size-4 shrink-0 text-muted-foreground" />
+                <MapPinIcon className="size-4 shrink-0 text-muted-foreground" />
                 <div className="min-w-0 flex-1">
                   <div className="truncate text-xs font-medium">
                     {placement.locationPath}
@@ -848,7 +848,7 @@ export function SearchGroupItem({
               onSelect={onSeeAll}
               className="min-h-11 justify-center text-xs text-muted-foreground sm:min-h-9"
             >
-              <Search className="mr-2 size-4" />
+              <MagnifyingGlassIcon className="mr-2 size-4" />
               See {hiddenCount} more in full search
             </CommandItem>
           )}
@@ -949,7 +949,7 @@ function DefaultCommandMenu({
             onClose();
           }}
         >
-          <Settings className="size-4" />
+          <GearIcon className="size-4" />
           <span>Settings</span>
         </CommandItem>
       </CommandGroup>

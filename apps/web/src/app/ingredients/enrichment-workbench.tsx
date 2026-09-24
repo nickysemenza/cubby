@@ -4,7 +4,7 @@ import type {
   productMarkUsdaUnavailableManyInput,
 } from "@cubby/schemas/product";
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
-import { SparkleIcon as Sparkles } from "@phosphor-icons/react/dist/csr/Sparkle";
+import { SparkleIcon } from "@phosphor-icons/react/dist/csr/Sparkle";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -672,7 +672,7 @@ export function EnrichmentWorkbench({
         {
           id: "suggest-usda",
           label: "Suggest USDA",
-          icon: <Sparkles className="size-3.5" />,
+          icon: <SparkleIcon className="size-3.5" />,
           preserveSelection: true,
           onExecute: async (selectedRows) => ({
             success: await handleSuggest(
@@ -683,7 +683,7 @@ export function EnrichmentWorkbench({
         {
           id: "suggest-merges",
           label: "Suggest merges",
-          icon: <Sparkles className="size-3.5" />,
+          icon: <SparkleIcon className="size-3.5" />,
           preserveSelection: true,
           onExecute: async (selectedRows) => ({
             success: await handleSuggestMerges(

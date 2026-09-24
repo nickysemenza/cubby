@@ -3,8 +3,8 @@ import type {
   InfLocation,
   InventoryItemForTree,
 } from "@cubby/schemas/location";
-import { HouseIcon as Home } from "@phosphor-icons/react/dist/csr/House";
-import { QuestionIcon as HelpCircle } from "@phosphor-icons/react/dist/csr/Question";
+import { HouseIcon } from "@phosphor-icons/react/dist/csr/House";
+import { QuestionIcon } from "@phosphor-icons/react/dist/csr/Question";
 
 import { LocationIcon } from "~/app/_components/locations/location-icons";
 import { cn } from "~/lib/utils";
@@ -63,11 +63,11 @@ export function ArrangeColumn({
     >
       <div className="flex items-center gap-2 border-b border-[var(--border)] px-2 py-2">
         {pinned ? (
-          <HelpCircle className="size-4 shrink-0 text-muted-foreground" />
+          <QuestionIcon className="size-4 shrink-0 text-muted-foreground" />
         ) : headerLocation ? (
           <LocationIcon type={headerLocation.type} product={null} size={16} />
         ) : (
-          <Home className="size-4 shrink-0 text-muted-foreground" />
+          <HouseIcon className="size-4 shrink-0 text-muted-foreground" />
         )}
         <span className="min-w-0 flex-1 truncate text-sm font-medium">
           {headerLocation?.name ?? "Home"}

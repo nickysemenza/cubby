@@ -1,5 +1,5 @@
 import type { ProjectPortfolioAnalyticsOut } from "@cubby/schemas/project";
-import { WalletIcon as Wallet } from "@phosphor-icons/react/dist/csr/Wallet";
+import { WalletIcon } from "@phosphor-icons/react/dist/csr/Wallet";
 import { useNavigate } from "@tanstack/react-router";
 import { useMemo } from "react";
 
@@ -62,7 +62,7 @@ export function SpendingByProject({
       onClick={(row) =>
         navigate(entityDetailLink("project", String(row.projectId)))
       }
-      emptyIcon={Wallet}
+      emptyIcon={WalletIcon}
       emptyTitle="No spending data."
     />
   );

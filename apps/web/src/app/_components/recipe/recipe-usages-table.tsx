@@ -1,5 +1,5 @@
 import type { RecipeUsage } from "@cubby/schemas/recipe";
-import { WarningCircleIcon as AlertCircle } from "@phosphor-icons/react/dist/csr/WarningCircle";
+import { WarningCircleIcon } from "@phosphor-icons/react/dist/csr/WarningCircle";
 import { useMemo } from "react";
 
 import {
@@ -143,7 +143,8 @@ export function RecipeUsagesTable({
                       <span className="inline-flex items-center gap-1 text-warning" />
                     }
                   >
-                    <AlertCircle className="size-3 shrink-0 text-warning" />—
+                    <WarningCircleIcon className="size-3 shrink-0 text-warning" />
+                    —
                   </TooltipTrigger>
                   <TooltipContent>No parsed amount</TooltipContent>
                 </Tooltip>

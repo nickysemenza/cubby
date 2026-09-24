@@ -1,6 +1,6 @@
 import type { RecipeSource } from "@cubby/schemas/recipe-shared";
-import { ArrowSquareOutIcon as ExternalLink } from "@phosphor-icons/react/dist/csr/ArrowSquareOut";
-import { BookOpenIcon as BookOpen } from "@phosphor-icons/react/dist/csr/BookOpen";
+import { ArrowSquareOutIcon } from "@phosphor-icons/react/dist/csr/ArrowSquareOut";
+import { BookOpenIcon } from "@phosphor-icons/react/dist/csr/BookOpen";
 import { Link } from "@tanstack/react-router";
 import type { MouseEvent } from "react";
 import { match, P } from "ts-pattern";
@@ -66,7 +66,7 @@ export function RecipeSourceLink({
     .with({ type: "book" }, (s) => {
       const body = (
         <>
-          <BookOpen size={iconSize} className="shrink-0" />
+          <BookOpenIcon size={iconSize} className="shrink-0" />
           <span className="truncate">{s.book}</span>
         </>
       );
@@ -91,7 +91,7 @@ export function RecipeSourceLink({
         className={cn(rowCn, "hover:underline")}
         onClick={onClick}
       >
-        <ExternalLink size={iconSize} className="shrink-0" />
+        <ArrowSquareOutIcon size={iconSize} className="shrink-0" />
         <span className="truncate">
           {text === "url" ? s.url : sourceHost(s.url)}
         </span>

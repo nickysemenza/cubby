@@ -3,11 +3,11 @@ import {
   projectStatusSchema,
   taskStatusSchema,
 } from "@cubby/schemas/project";
-import { CheckCircleIcon as CheckCircle2 } from "@phosphor-icons/react/dist/csr/CheckCircle";
-import { CircleIcon as Circle } from "@phosphor-icons/react/dist/csr/Circle";
-import { ClockIcon as Clock } from "@phosphor-icons/react/dist/csr/Clock";
-import { ListChecksIcon as ListTodo } from "@phosphor-icons/react/dist/csr/ListChecks";
-import { ShieldWarningIcon as ShieldAlert } from "@phosphor-icons/react/dist/csr/ShieldWarning";
+import { CheckCircleIcon } from "@phosphor-icons/react/dist/csr/CheckCircle";
+import { CircleIcon } from "@phosphor-icons/react/dist/csr/Circle";
+import { ClockIcon } from "@phosphor-icons/react/dist/csr/Clock";
+import { ListChecksIcon } from "@phosphor-icons/react/dist/csr/ListChecks";
+import { ShieldWarningIcon } from "@phosphor-icons/react/dist/csr/ShieldWarning";
 import type { Icon } from "@phosphor-icons/react/lib";
 import { z } from "zod";
 
@@ -59,7 +59,7 @@ const projectStatus = new Map([
     {
       label: "Done",
       className: "bg-secondary text-secondary-foreground",
-      icon: CheckCircle2,
+      icon: CheckCircleIcon,
     },
   ],
   [
@@ -67,7 +67,7 @@ const projectStatus = new Map([
     {
       label: "In progress",
       className: "bg-primary/15 text-primary",
-      icon: Clock,
+      icon: ClockIcon,
     },
   ],
   [
@@ -75,7 +75,7 @@ const projectStatus = new Map([
     {
       label: "Blocked",
       className: "bg-destructive/15 text-destructive",
-      icon: ShieldAlert,
+      icon: ShieldWarningIcon,
     },
   ],
   [
@@ -83,7 +83,7 @@ const projectStatus = new Map([
     {
       label: "Planning",
       className: "bg-plum/20 text-plum",
-      icon: ListTodo,
+      icon: ListChecksIcon,
     },
   ],
   [
@@ -91,7 +91,7 @@ const projectStatus = new Map([
     {
       label: "Not started",
       className: "bg-muted text-muted-foreground",
-      icon: Circle,
+      icon: CircleIcon,
     },
   ],
   [
@@ -99,7 +99,7 @@ const projectStatus = new Map([
     {
       label: "Later",
       className: "bg-warning/30 text-accent-foreground",
-      icon: Clock,
+      icon: ClockIcon,
     },
   ],
 ] as const);
@@ -149,7 +149,7 @@ export function getStatusBadgeProps(
   return {
     label: value ?? "Unknown",
     className: "bg-slate/20 text-slate",
-    icon: Circle,
+    icon: CircleIcon,
   };
 }
 

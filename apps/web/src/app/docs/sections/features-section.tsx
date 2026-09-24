@@ -1,6 +1,6 @@
-import { BowlFoodIcon as Apple } from "@phosphor-icons/react/dist/csr/BowlFood";
-import { ScalesIcon as Scale } from "@phosphor-icons/react/dist/csr/Scales";
-import { WarningIcon as AlertTriangle } from "@phosphor-icons/react/dist/csr/Warning";
+import { BowlFoodIcon } from "@phosphor-icons/react/dist/csr/BowlFood";
+import { ScalesIcon } from "@phosphor-icons/react/dist/csr/Scales";
+import { WarningIcon } from "@phosphor-icons/react/dist/csr/Warning";
 
 import { Grid, Row } from "~/components/layout";
 import {
@@ -64,7 +64,7 @@ export function FeaturesSection() {
         <Card>
           <CardHeader>
             <Row align="center" gap="sm">
-              <Apple className="size-5 text-muted-foreground" />
+              <BowlFoodIcon className="size-5 text-muted-foreground" />
               <CardTitle>USDA Integration</CardTitle>
             </Row>
             <CardDescription>
@@ -77,7 +77,7 @@ export function FeaturesSection() {
         <Card>
           <CardHeader>
             <Row align="center" gap="sm">
-              <Scale className="size-5 text-muted-foreground" />
+              <ScalesIcon className="size-5 text-muted-foreground" />
               <CardTitle>Unit Conversions</CardTitle>
             </Row>
             <CardDescription>
@@ -90,7 +90,7 @@ export function FeaturesSection() {
         <Card>
           <CardHeader>
             <Row align="center" gap="sm">
-              <AlertTriangle className="size-5 text-muted-foreground" />
+              <WarningIcon className="size-5 text-muted-foreground" />
               <CardTitle>Problems Dashboard</CardTitle>
             </Row>
             <CardDescription>

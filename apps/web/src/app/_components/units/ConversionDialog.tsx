@@ -2,7 +2,7 @@ import type { AmountKind, WAmount, WConversionStep } from "@cubby/recipebridge";
 import { type Amount, amount } from "@cubby/schemas/codec";
 import type { UnitMapping } from "@cubby/schemas/unitmapping";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { CalculatorIcon as Calculator } from "@phosphor-icons/react/dist/csr/Calculator";
+import { CalculatorIcon } from "@phosphor-icons/react/dist/csr/Calculator";
 import * as React from "react";
 import { useId, useState } from "react";
 import { useForm } from "react-hook-form";
@@ -303,7 +303,7 @@ export function ConversionDialog({
             />
           }
         >
-          <Calculator className="size-3" />
+          <CalculatorIcon className="size-3" />
           {!compact && <span>Convert</span>}
         </DialogTrigger>
         <TooltipContent sideOffset={6}>Open unit converter</TooltipContent>

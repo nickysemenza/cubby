@@ -1,5 +1,5 @@
-import { ArrowCounterClockwiseIcon as RotateCcw } from "@phosphor-icons/react/dist/csr/ArrowCounterClockwise";
-import { CopyIcon as Copy } from "@phosphor-icons/react/dist/csr/Copy";
+import { ArrowCounterClockwiseIcon } from "@phosphor-icons/react/dist/csr/ArrowCounterClockwise";
+import { CopyIcon } from "@phosphor-icons/react/dist/csr/Copy";
 import { Link } from "@tanstack/react-router";
 import { format, parseISO } from "date-fns";
 import { useId } from "react";
@@ -125,7 +125,7 @@ export function ShoppingListPage({
               toast.success("Shopping list copied");
             }}
           >
-            <Copy />
+            <CopyIcon />
             Copy
           </Button>
           <Button
@@ -136,7 +136,7 @@ export function ShoppingListPage({
             disabled={remaining === buyRows.length}
             onClick={clearChecked}
           >
-            <RotateCcw />
+            <ArrowCounterClockwiseIcon />
             Clear ticks
           </Button>
         </Row>

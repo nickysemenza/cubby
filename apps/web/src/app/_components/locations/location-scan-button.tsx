@@ -10,7 +10,7 @@
 import type { LocationShortcode } from "@cubby/schemas/identifiers";
 import { locationShortcode } from "@cubby/schemas/identifiers";
 import type { InfLocation } from "@cubby/schemas/location";
-import { QrCodeIcon as QrCode } from "@phosphor-icons/react/dist/csr/QrCode";
+import { QrCodeIcon } from "@phosphor-icons/react/dist/csr/QrCode";
 import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -163,7 +163,7 @@ export function LocationScanButton({
         className="min-h-12 px-4"
         onClick={() => setOpen(true)}
       >
-        <QrCode className="size-4" />
+        <QrCodeIcon className="size-4" />
         {buttonLabel}
       </Button>
       <ScanSheet

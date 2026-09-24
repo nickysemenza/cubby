@@ -1,5 +1,5 @@
-import { ArrowRightIcon as ArrowRight } from "@phosphor-icons/react/dist/csr/ArrowRight";
-import { ClockIcon as Clock } from "@phosphor-icons/react/dist/csr/Clock";
+import { ArrowRightIcon } from "@phosphor-icons/react/dist/csr/ArrowRight";
+import { ClockIcon } from "@phosphor-icons/react/dist/csr/Clock";
 import { Link } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 
@@ -72,7 +72,7 @@ export function RecentActivityFeed({
   return (
     <div ref={hostRef}>
       <DashboardCard
-        icon={Clock}
+        icon={ClockIcon}
         title="Recent activity"
         action={
           // `render` keeps this one element — a <button> inside an <a> is
@@ -85,7 +85,7 @@ export function RecentActivityFeed({
             className="h-11 gap-1 text-xs sm:h-7"
           >
             View all
-            <ArrowRight className="size-3" />
+            <ArrowRightIcon className="size-3" />
           </Button>
         }
       >

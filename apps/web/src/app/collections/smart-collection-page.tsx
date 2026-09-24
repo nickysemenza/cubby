@@ -5,11 +5,11 @@ import {
   type SmartCollectionSummary,
 } from "@cubby/schemas/collection";
 import { TRADE_LABELS, tradeSchema, tradeValues } from "@cubby/schemas/project";
-import { ArrowCounterClockwiseIcon as RotateCcw } from "@phosphor-icons/react/dist/csr/ArrowCounterClockwise";
-import { CaretDownIcon as ChevronDown } from "@phosphor-icons/react/dist/csr/CaretDown";
-import { PlusIcon as Plus } from "@phosphor-icons/react/dist/csr/Plus";
-import { SparkleIcon as Sparkles } from "@phosphor-icons/react/dist/csr/Sparkle";
-import { TrashIcon as Trash2 } from "@phosphor-icons/react/dist/csr/Trash";
+import { ArrowCounterClockwiseIcon } from "@phosphor-icons/react/dist/csr/ArrowCounterClockwise";
+import { CaretDownIcon } from "@phosphor-icons/react/dist/csr/CaretDown";
+import { PlusIcon } from "@phosphor-icons/react/dist/csr/Plus";
+import { SparkleIcon } from "@phosphor-icons/react/dist/csr/Sparkle";
+import { TrashIcon } from "@phosphor-icons/react/dist/csr/Trash";
 import { useQuery } from "@tanstack/react-query";
 import { useId, useState } from "react";
 
@@ -154,7 +154,7 @@ function SmartRuleEditor({
           <div className="flex min-w-0 flex-wrap items-center gap-2">
             <CollapsibleTrigger render={<Button variant="outline" size="sm" />}>
               Edit temporary rules
-              <ChevronDown
+              <CaretDownIcon
                 className={`transition-transform ${open ? "rotate-180" : ""}`}
                 aria-hidden
               />
@@ -168,7 +168,7 @@ function SmartRuleEditor({
           </div>
           {changed && (
             <Button type="button" variant="ghost" size="sm" onClick={onReset}>
-              <RotateCcw aria-hidden /> Reset to starter
+              <ArrowCounterClockwiseIcon aria-hidden /> Reset to starter
             </Button>
           )}
         </div>
@@ -293,7 +293,7 @@ function SmartRuleEditor({
                             })
                           }
                         >
-                          <Trash2 aria-hidden />
+                          <TrashIcon aria-hidden />
                         </Button>
                       </div>
                     );
@@ -335,7 +335,7 @@ function SmartRuleEditor({
                   }
                   disabled={draft.rules.length >= 20}
                 >
-                  <Plus aria-hidden /> Add condition
+                  <PlusIcon aria-hidden /> Add condition
                 </Button>
               </div>
             </div>
@@ -382,7 +382,7 @@ export function SmartCollectionPage({
     <Stack gap="lg">
       <div>
         <div className="flex flex-wrap items-center gap-2">
-          <Sparkles className="size-4 text-primary" aria-hidden />
+          <SparkleIcon className="size-4 text-primary" aria-hidden />
           <Badge variant="outline">Dynamic</Badge>
           <span className="text-xs text-muted-foreground">
             Membership updates from current records

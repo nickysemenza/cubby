@@ -1,7 +1,7 @@
 import type { Entity } from "@cubby/schemas/entity";
 import { relatedViewRegistry } from "@cubby/schemas/related-view";
-import { CaretRightIcon as ChevronRight } from "@phosphor-icons/react/dist/csr/CaretRight";
-import { NetworkIcon as Network } from "@phosphor-icons/react/dist/csr/Network";
+import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
+import { NetworkIcon } from "@phosphor-icons/react/dist/csr/Network";
 import { type ReactNode, useCallback, useMemo, useState } from "react";
 
 import { EntityIdentityMark } from "~/components/entity/entity-identity-mark";
@@ -132,7 +132,7 @@ function EntityRow({
             onClick={onToggle}
             className="shrink-0 rounded p-1 hover:bg-muted"
           >
-            <ChevronRight
+            <CaretRightIcon
               className={cn(
                 "size-3 transition-transform",
                 expanded && "rotate-90",
@@ -219,7 +219,7 @@ function GroupRow({
         aria-expanded={expanded}
         onClick={onToggle}
       >
-        <ChevronRight
+        <CaretRightIcon
           className={cn("size-3 transition-transform", expanded && "rotate-90")}
         />
         <span>{group.label}</span>
@@ -559,4 +559,4 @@ export function RelationshipTree({
 }
 
 /** A conventional detail-section icon for pages composing the tree manually. */
-export const relationshipsSectionIcon = Network;
+export const relationshipsSectionIcon = NetworkIcon;

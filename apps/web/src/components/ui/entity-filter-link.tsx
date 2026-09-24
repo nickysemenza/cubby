@@ -1,5 +1,5 @@
 import { Link, type LinkProps } from "@tanstack/react-router";
-import { FunnelIcon as ListFilter } from "@phosphor-icons/react/dist/csr/Funnel";
+import { FunnelIcon } from "@phosphor-icons/react/dist/csr/Funnel";
 import type { ReactNode } from "react";
 import {
   Tooltip,
@@ -55,7 +55,7 @@ export function EntityFilterLink({
         className,
       )}
     >
-      <ListFilter className="size-3.5" />
+      <FunnelIcon className="size-3.5" />
     </Link>
   );
 

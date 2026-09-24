@@ -1,29 +1,28 @@
-import { ArrowsLeftRightIcon as ArrowRightLeft } from "@phosphor-icons/react/dist/csr/ArrowsLeftRight";
-import { ArrowsMergeIcon as Merge } from "@phosphor-icons/react/dist/csr/ArrowsMerge";
-import { ArrowsSplitIcon as Split } from "@phosphor-icons/react/dist/csr/ArrowsSplit";
-import { BarcodeIcon as ScanBarcode } from "@phosphor-icons/react/dist/csr/Barcode";
-import { CameraIcon as Camera } from "@phosphor-icons/react/dist/csr/Camera";
-import { CheckCircleIcon as CheckCircle2 } from "@phosphor-icons/react/dist/csr/CheckCircle";
-import { ClipboardIcon as ClipboardCopy } from "@phosphor-icons/react/dist/csr/Clipboard";
-import { CopyIcon as Copy } from "@phosphor-icons/react/dist/csr/Copy";
-import { FolderSimplePlusIcon as FolderInput } from "@phosphor-icons/react/dist/csr/FolderSimplePlus";
-import { HandCoinsIcon as HandCoins } from "@phosphor-icons/react/dist/csr/HandCoins";
-import { ImagesIcon as Images } from "@phosphor-icons/react/dist/csr/Images";
-import { ListChecksIcon as ListChecks } from "@phosphor-icons/react/dist/csr/ListChecks";
-import { NotePencilIcon as NotebookPen } from "@phosphor-icons/react/dist/csr/NotePencil";
-import { NotePencilIcon as SquarePen } from "@phosphor-icons/react/dist/csr/NotePencil";
-import { PackageIcon as Package } from "@phosphor-icons/react/dist/csr/Package";
-import { PencilIcon as Pencil } from "@phosphor-icons/react/dist/csr/Pencil";
-import { PrinterIcon as Printer } from "@phosphor-icons/react/dist/csr/Printer";
-import { ScalesIcon as Scale } from "@phosphor-icons/react/dist/csr/Scales";
-import { SealCheckIcon as PackageCheck } from "@phosphor-icons/react/dist/csr/SealCheck";
-import { SidebarSimpleIcon as PanelRight } from "@phosphor-icons/react/dist/csr/SidebarSimple";
-import { SparkleIcon as Sparkles } from "@phosphor-icons/react/dist/csr/Sparkle";
-import { StackMinusIcon as PackageMinus } from "@phosphor-icons/react/dist/csr/StackMinus";
-import { StackPlusIcon as PackagePlus } from "@phosphor-icons/react/dist/csr/StackPlus";
-import { TrashIcon as Trash } from "@phosphor-icons/react/dist/csr/Trash";
-import { WrenchIcon as Wrench } from "@phosphor-icons/react/dist/csr/Wrench";
-import { XIcon as X } from "@phosphor-icons/react/dist/csr/X";
+import { ArrowsLeftRightIcon } from "@phosphor-icons/react/dist/csr/ArrowsLeftRight";
+import { ArrowsMergeIcon } from "@phosphor-icons/react/dist/csr/ArrowsMerge";
+import { ArrowsSplitIcon } from "@phosphor-icons/react/dist/csr/ArrowsSplit";
+import { BarcodeIcon } from "@phosphor-icons/react/dist/csr/Barcode";
+import { CameraIcon } from "@phosphor-icons/react/dist/csr/Camera";
+import { CheckCircleIcon } from "@phosphor-icons/react/dist/csr/CheckCircle";
+import { ClipboardIcon } from "@phosphor-icons/react/dist/csr/Clipboard";
+import { CopyIcon } from "@phosphor-icons/react/dist/csr/Copy";
+import { FolderSimplePlusIcon } from "@phosphor-icons/react/dist/csr/FolderSimplePlus";
+import { HandCoinsIcon } from "@phosphor-icons/react/dist/csr/HandCoins";
+import { ImagesIcon } from "@phosphor-icons/react/dist/csr/Images";
+import { ListChecksIcon } from "@phosphor-icons/react/dist/csr/ListChecks";
+import { NotePencilIcon } from "@phosphor-icons/react/dist/csr/NotePencil";
+import { PackageIcon } from "@phosphor-icons/react/dist/csr/Package";
+import { PencilIcon } from "@phosphor-icons/react/dist/csr/Pencil";
+import { PrinterIcon } from "@phosphor-icons/react/dist/csr/Printer";
+import { ScalesIcon } from "@phosphor-icons/react/dist/csr/Scales";
+import { SealCheckIcon } from "@phosphor-icons/react/dist/csr/SealCheck";
+import { SidebarSimpleIcon } from "@phosphor-icons/react/dist/csr/SidebarSimple";
+import { SparkleIcon } from "@phosphor-icons/react/dist/csr/Sparkle";
+import { StackMinusIcon } from "@phosphor-icons/react/dist/csr/StackMinus";
+import { StackPlusIcon } from "@phosphor-icons/react/dist/csr/StackPlus";
+import { TrashIcon } from "@phosphor-icons/react/dist/csr/Trash";
+import { WrenchIcon } from "@phosphor-icons/react/dist/csr/Wrench";
+import { XIcon } from "@phosphor-icons/react/dist/csr/X";
 import type { Icon } from "@phosphor-icons/react/lib";
 
 /**
@@ -72,34 +71,34 @@ export interface ActionVerb {
 
 export const actionVerbs = {
   // — navigation ————————————————————————————————————————————————————
-  recount: { label: "Recount", icon: ScanBarcode },
-  photoPass: { label: "Photo pass", icon: Camera },
-  printLabel: { label: "Print label", icon: Printer },
-  printLabels: { label: "Print labels", icon: Printer },
-  addToInventory: { label: "Add to inventory", icon: Package },
-  compare: { label: "Compare", icon: Scale },
-  inspect: { label: "Inspect", icon: PanelRight },
+  recount: { label: "Recount", icon: BarcodeIcon },
+  photoPass: { label: "Photo pass", icon: CameraIcon },
+  printLabel: { label: "Print label", icon: PrinterIcon },
+  printLabels: { label: "Print labels", icon: PrinterIcon },
+  addToInventory: { label: "Add to inventory", icon: PackageIcon },
+  compare: { label: "Compare", icon: ScalesIcon },
+  inspect: { label: "Inspect", icon: SidebarSimpleIcon },
 
   // — opens a dialog or picker (trailing `...`) —————————————————————
-  editLocations: { label: "Edit locations", icon: Pencil },
-  discard: { label: "Discard...", icon: PackageMinus },
-  moveTo: { label: "Move to...", icon: ArrowRightLeft },
-  moveUnder: { label: "Move under...", icon: FolderInput },
-  setStatus: { label: "Set status...", icon: ListChecks },
-  bulkEdit: { label: "Bulk edit...", icon: SquarePen },
-  setStockTracking: { label: "Set stock tracking...", icon: PackageCheck },
-  setUsuallyOnHand: { label: "Set usually on hand...", icon: PackageCheck },
+  editLocations: { label: "Edit locations", icon: PencilIcon },
+  discard: { label: "Discard...", icon: StackMinusIcon },
+  moveTo: { label: "Move to...", icon: ArrowsLeftRightIcon },
+  moveUnder: { label: "Move under...", icon: FolderSimplePlusIcon },
+  setStatus: { label: "Set status...", icon: ListChecksIcon },
+  bulkEdit: { label: "Bulk edit...", icon: NotePencilIcon },
+  setStockTracking: { label: "Set stock tracking...", icon: SealCheckIcon },
+  setUsuallyOnHand: { label: "Set usually on hand...", icon: SealCheckIcon },
   createProjectFrom: {
     label: "Create project from selected...",
-    icon: Sparkles,
+    icon: SparkleIcon,
   },
-  recordSale: { label: "Record sale...", icon: HandCoins },
-  split: { label: "Split...", icon: Split },
-  receive: { label: "Receive into inventory...", icon: PackagePlus },
-  logEntry: { label: "Log entry...", icon: NotebookPen },
-  importPhotos: { label: "Import photos...", icon: Images },
-  setProjectUses: { label: "Set project uses...", icon: Wrench },
-  setTradeCost: { label: "Set trade cost...", icon: HandCoins },
+  recordSale: { label: "Record sale...", icon: HandCoinsIcon },
+  split: { label: "Split...", icon: ArrowsSplitIcon },
+  receive: { label: "Receive into inventory...", icon: StackPlusIcon },
+  logEntry: { label: "Log entry...", icon: NotePencilIcon },
+  importPhotos: { label: "Import photos...", icon: ImagesIcon },
+  setProjectUses: { label: "Set project uses...", icon: WrenchIcon },
+  setTradeCost: { label: "Set trade cost...", icon: HandCoinsIcon },
 
   // — AI ——————————————————————————————————————————————————————————————
   //
@@ -113,28 +112,28 @@ export const actionVerbs = {
   // and each surface names its own object through `VerbButton`'s `object` prop
   // — which is also what keeps its accessible name specific on a phone, where
   // the text is hidden. The single-object verbs bake the object into the label.
-  suggest: { label: "Suggest", icon: Sparkles },
-  analyze: { label: "Analyze photos", icon: Sparkles },
-  identify: { label: "Identify product", icon: Sparkles },
-  enrichProducts: { label: "Enrich products...", icon: Sparkles },
-  detect: { label: "Detect items", icon: Sparkles },
-  regenerate: { label: "Regenerate flow", icon: Sparkles },
+  suggest: { label: "Suggest", icon: SparkleIcon },
+  analyze: { label: "Analyze photos", icon: SparkleIcon },
+  identify: { label: "Identify product", icon: SparkleIcon },
+  enrichProducts: { label: "Enrich products...", icon: SparkleIcon },
+  detect: { label: "Detect items", icon: SparkleIcon },
+  regenerate: { label: "Regenerate flow", icon: SparkleIcon },
 
   // — immediate ——————————————————————————————————————————————————————
-  markPurchased: { label: "Mark purchased", icon: CheckCircle2 },
-  markInstalled: { label: "Mark installed", icon: Wrench },
-  markAsStock: { label: "Mark as stock", icon: Wrench },
-  merge: { label: "Merge", icon: Merge },
-  copyCodes: { label: "Copy codes", icon: ClipboardCopy },
-  copyIdentifiers: { label: "Copy identifiers", icon: ClipboardCopy },
-  duplicate: { label: "Duplicate", icon: Copy },
+  markPurchased: { label: "Mark purchased", icon: CheckCircleIcon },
+  markInstalled: { label: "Mark installed", icon: WrenchIcon },
+  markAsStock: { label: "Mark as stock", icon: WrenchIcon },
+  merge: { label: "Merge", icon: ArrowsMergeIcon },
+  copyCodes: { label: "Copy codes", icon: ClipboardIcon },
+  copyIdentifiers: { label: "Copy identifiers", icon: ClipboardIcon },
+  duplicate: { label: "Duplicate", icon: CopyIcon },
 
   // — removal ————————————————————————————————————————————————————————
-  delete: { label: "Delete", icon: Trash, tone: "destructive" },
-  removeComponent: { label: "Remove component", icon: X },
-  removeFromKit: { label: "Remove from kit", icon: X },
-  removeFromPurchase: { label: "Remove from purchase", icon: X },
-  removeFromProject: { label: "Remove from project", icon: X },
+  delete: { label: "Delete", icon: TrashIcon, tone: "destructive" },
+  removeComponent: { label: "Remove component", icon: XIcon },
+  removeFromKit: { label: "Remove from kit", icon: XIcon },
+  removeFromPurchase: { label: "Remove from purchase", icon: XIcon },
+  removeFromProject: { label: "Remove from project", icon: XIcon },
 } as const satisfies Record<string, ActionVerb>;
 
 export type ActionVerbId = keyof typeof actionVerbs;

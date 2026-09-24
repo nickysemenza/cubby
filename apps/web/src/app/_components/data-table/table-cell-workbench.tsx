@@ -1,4 +1,4 @@
-import { NetworkIcon as Network } from "@phosphor-icons/react/dist/csr/Network";
+import { NetworkIcon } from "@phosphor-icons/react/dist/csr/Network";
 import type { MouseEvent, ReactNode } from "react";
 import { useState } from "react";
 
@@ -60,7 +60,7 @@ const iconTriggerProps = (title: string) => ({
   onClick: stopRowInteraction,
 });
 
-const iconTriggerGlyph = <Network className="size-3" />;
+const iconTriggerGlyph = <NetworkIcon className="size-3" />;
 
 /**
  * A dense table-cell entry point for evidence that belongs to related rows.

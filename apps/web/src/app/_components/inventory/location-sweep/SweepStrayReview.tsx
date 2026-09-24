@@ -11,8 +11,8 @@
  */
 
 import type { ScanStrayOut } from "@cubby/schemas/scan";
-import { ArrowLineDownIcon as ArrowDownToLine } from "@phosphor-icons/react/dist/csr/ArrowLineDown";
-import { XIcon as X } from "@phosphor-icons/react/dist/csr/X";
+import { ArrowLineDownIcon } from "@phosphor-icons/react/dist/csr/ArrowLineDown";
+import { XIcon } from "@phosphor-icons/react/dist/csr/X";
 import { useState } from "react";
 
 import { LocationIcon } from "~/app/_components/locations/location-icons";
@@ -116,7 +116,7 @@ export function SweepStrayReview({
               aria-label={`Leave ${bin.name} where it is`}
               onClick={() => onDismissBin(bin.id)}
             >
-              <X className="size-4" />
+              <XIcon className="size-4" />
             </Button>
           </Row>
         ))}
@@ -169,7 +169,7 @@ export function SweepStrayReview({
                   aria-label={`Leave ${stray.productName} where it is`}
                   onClick={() => onDismiss(stray.productId)}
                 >
-                  <X className="size-4" />
+                  <XIcon className="size-4" />
                 </Button>
               </Row>
             );
@@ -193,7 +193,7 @@ export function SweepStrayReview({
           )
         }
       >
-        {committing ? <Spinner /> : <ArrowDownToLine className="size-4" />}
+        {committing ? <Spinner /> : <ArrowLineDownIcon className="size-4" />}
         Move {total === 1 ? "it" : `all ${total}`} into {locationName}
       </Button>
     </Stack>

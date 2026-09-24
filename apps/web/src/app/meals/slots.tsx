@@ -4,8 +4,8 @@ import type {
 } from "@cubby/schemas/identifiers";
 import type { MealRecipeOut } from "@cubby/schemas/meal";
 import { MEAL_KIND_LABELS } from "@cubby/schemas/meal-classification";
-import { PlusIcon as Plus } from "@phosphor-icons/react/dist/csr/Plus";
-import { TrashIcon as Trash2 } from "@phosphor-icons/react/dist/csr/Trash";
+import { PlusIcon } from "@phosphor-icons/react/dist/csr/Plus";
+import { TrashIcon } from "@phosphor-icons/react/dist/csr/Trash";
 import type { QueryKey } from "@tanstack/react-query";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
@@ -75,7 +75,7 @@ export const MealComposition: DetailSlotComponent<"meal"> = ({
     <Stack gap="md">
       <Row justify="end">
         <Button type="button" size="sm" onClick={() => setAddFoodOpen(true)}>
-          <Plus className="size-4" />
+          <PlusIcon className="size-4" />
           Add food
         </Button>
       </Row>
@@ -378,7 +378,7 @@ function RecipeRow({
               disabled={removeRecipe.isPending}
               onClick={() => removeRecipe.mutate({ id: mr.id })}
             >
-              <Trash2 className="size-4" />
+              <TrashIcon className="size-4" />
               Remove
             </Button>
           </Row>

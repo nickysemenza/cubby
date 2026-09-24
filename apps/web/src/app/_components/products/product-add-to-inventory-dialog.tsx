@@ -10,7 +10,7 @@
 
 import type { ProductShortcode } from "@cubby/schemas/identifiers";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { WarningIcon as TriangleAlert } from "@phosphor-icons/react/dist/csr/Warning";
+import { WarningIcon } from "@phosphor-icons/react/dist/csr/Warning";
 import { useQuery } from "@tanstack/react-query";
 import { type FC, useMemo } from "react";
 import { FormProvider, useForm } from "react-hook-form";
@@ -161,7 +161,7 @@ export const ProductAddToInventoryDialog: FC<
           <Stack gap="md">
             {overAccounted && (
               <Alert variant="destructive">
-                <TriangleAlert />
+                <WarningIcon />
                 <AlertTitle>Already accounted for</AlertTitle>
                 <AlertDescription>
                   Its parts hold {overAccounted.accounted} of the{" "}

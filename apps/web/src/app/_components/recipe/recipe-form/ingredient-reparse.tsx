@@ -1,5 +1,5 @@
 import type { Amount } from "@cubby/schemas/codec";
-import { ArrowClockwiseIcon as RefreshCw } from "@phosphor-icons/react/dist/csr/ArrowClockwise";
+import { ArrowClockwiseIcon } from "@phosphor-icons/react/dist/csr/ArrowClockwise";
 import { useState } from "react";
 import type { UseFormReturn } from "react-hook-form";
 import { toast } from "sonner";
@@ -157,7 +157,7 @@ export function IngredientReparse({
             onClick={apply}
             title="Re-parse this line with the current parser and apply"
           >
-            <RefreshCw className="size-3" />
+            <ArrowClockwiseIcon className="size-3" />
             Re-parse
           </Button>
         </div>

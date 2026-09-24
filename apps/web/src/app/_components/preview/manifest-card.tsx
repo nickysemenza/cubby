@@ -1,5 +1,5 @@
 import type { Entity } from "@cubby/schemas/entity";
-import { ArrowUpRightIcon as ArrowUpRight } from "@phosphor-icons/react/dist/csr/ArrowUpRight";
+import { ArrowUpRightIcon } from "@phosphor-icons/react/dist/csr/ArrowUpRight";
 import { Link } from "@tanstack/react-router";
 import { type ReactNode, useMemo } from "react";
 import { match } from "ts-pattern";
@@ -124,7 +124,7 @@ export function ManifestCard({
                     aria-label="Open"
                     className={openIcon}
                   >
-                    <ArrowUpRight className="size-3.5" />
+                    <ArrowUpRightIcon className="size-3.5" />
                   </Link>
                 ) : showOpenAction && isBrowserRoutedEntity(entity) ? (
                   <Link
@@ -133,7 +133,7 @@ export function ManifestCard({
                     aria-label="Open"
                     className={openIcon}
                   >
-                    <ArrowUpRight className="size-3.5" />
+                    <ArrowUpRightIcon className="size-3.5" />
                   </Link>
                 ) : null}
                 <span className="rounded-sm bg-muted px-2 py-px font-mono text-2xs tracking-wide text-muted-foreground uppercase">

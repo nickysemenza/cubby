@@ -1,4 +1,4 @@
-import { SidebarSimpleIcon as PanelRight } from "@phosphor-icons/react/dist/csr/SidebarSimple";
+import { SidebarSimpleIcon } from "@phosphor-icons/react/dist/csr/SidebarSimple";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -55,6 +55,9 @@ describe("action verb registry", () => {
   });
 
   it("defines Inspect as the canonical inspector presentation verb", () => {
-    expect(actionVerbs.inspect).toEqual({ label: "Inspect", icon: PanelRight });
+    expect(actionVerbs.inspect).toEqual({
+      label: "Inspect",
+      icon: SidebarSimpleIcon,
+    });
   });
 });

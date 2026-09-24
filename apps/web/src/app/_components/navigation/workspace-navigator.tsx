@@ -1,6 +1,6 @@
-import { CaretLeftIcon as ChevronLeft } from "@phosphor-icons/react/dist/csr/CaretLeft";
-import { MagnifyingGlassIcon as Search } from "@phosphor-icons/react/dist/csr/MagnifyingGlass";
-import { WrenchIcon as Wrench } from "@phosphor-icons/react/dist/csr/Wrench";
+import { CaretLeftIcon } from "@phosphor-icons/react/dist/csr/CaretLeft";
+import { MagnifyingGlassIcon } from "@phosphor-icons/react/dist/csr/MagnifyingGlass";
+import { WrenchIcon } from "@phosphor-icons/react/dist/csr/Wrench";
 import { Link } from "@tanstack/react-router";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 
@@ -200,7 +200,7 @@ export function WorkspaceNavigator({
     >
       <Stack gap="md">
         <div className="relative">
-          <Search className="absolute top-1/2 left-3 size-3.5 -translate-y-1/2 text-muted-foreground" />
+          <MagnifyingGlassIcon className="absolute top-1/2 left-3 size-3.5 -translate-y-1/2 text-muted-foreground" />
           <Input
             ref={focusOnMount}
             value={query}
@@ -280,7 +280,7 @@ export function WorkspaceNavigator({
               className="w-full justify-start"
               onClick={() => setView("utility")}
             >
-              <Wrench />
+              <WrenchIcon />
               Tools & data
             </Button>
           </>
@@ -292,7 +292,7 @@ export function WorkspaceNavigator({
               className="w-fit"
               onClick={() => setView("household")}
             >
-              <ChevronLeft />
+              <CaretLeftIcon />
               Back to household
             </Button>
             {workspaceUtilitySections.map((section) => (

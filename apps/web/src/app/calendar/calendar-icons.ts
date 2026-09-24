@@ -1,9 +1,9 @@
 import type { CalendarItemKind } from "@cubby/schemas/calendar";
-import { CalendarBlankIcon as CalendarRange } from "@phosphor-icons/react/dist/csr/CalendarBlank";
-import { CheckSquareIcon as CheckSquare } from "@phosphor-icons/react/dist/csr/CheckSquare";
-import { CookingPotIcon as CookingPot } from "@phosphor-icons/react/dist/csr/CookingPot";
-import { CurrencyCircleDollarIcon as CircleDollarSign } from "@phosphor-icons/react/dist/csr/CurrencyCircleDollar";
-import { PlantIcon as Sprout } from "@phosphor-icons/react/dist/csr/Plant";
+import { CalendarBlankIcon } from "@phosphor-icons/react/dist/csr/CalendarBlank";
+import { CheckSquareIcon } from "@phosphor-icons/react/dist/csr/CheckSquare";
+import { CookingPotIcon } from "@phosphor-icons/react/dist/csr/CookingPot";
+import { CurrencyCircleDollarIcon } from "@phosphor-icons/react/dist/csr/CurrencyCircleDollar";
+import { PlantIcon } from "@phosphor-icons/react/dist/csr/Plant";
 import type { Icon } from "@phosphor-icons/react/lib";
 
 /**
@@ -15,9 +15,9 @@ import type { Icon } from "@phosphor-icons/react/lib";
  * `tradeOptions` sits in its own module rather than in `app/projects/shared`.
  */
 export const KIND_ICONS = {
-  meal: CookingPot,
-  task: CheckSquare,
-  expense: CircleDollarSign,
-  project: CalendarRange,
-  planting: Sprout,
+  meal: CookingPotIcon,
+  task: CheckSquareIcon,
+  expense: CurrencyCircleDollarIcon,
+  project: CalendarBlankIcon,
+  planting: PlantIcon,
 } satisfies Record<CalendarItemKind, Icon>;

@@ -12,11 +12,11 @@ import {
 import { isDisplayableImageFile } from "@cubby/schemas/image";
 import { locationType, type LocationType } from "@cubby/schemas/location";
 import type { ProductPricingOut } from "@cubby/schemas/product";
-import { CaretRightIcon as ChevronRight } from "@phosphor-icons/react/dist/csr/CaretRight";
-import { DotsThreeIcon as MoreHorizontal } from "@phosphor-icons/react/dist/csr/DotsThree";
-import { EyeIcon as Eye } from "@phosphor-icons/react/dist/csr/Eye";
+import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
+import { DotsThreeIcon } from "@phosphor-icons/react/dist/csr/DotsThree";
+import { EyeIcon } from "@phosphor-icons/react/dist/csr/Eye";
 import { ImageIcon } from "@phosphor-icons/react/dist/csr/Image";
-import { PushPinIcon as Pin } from "@phosphor-icons/react/dist/csr/PushPin";
+import { PushPinIcon } from "@phosphor-icons/react/dist/csr/PushPin";
 import { Link } from "@tanstack/react-router";
 import type { RowData } from "@tanstack/react-table";
 import { uniqBy } from "es-toolkit";
@@ -371,7 +371,7 @@ export function createNameColumn<T extends BaseRow>(
                   row.getToggleExpandedHandler()();
                 }}
               >
-                <ChevronRight
+                <CaretRightIcon
                   className={cn(
                     "transition-transform",
                     expanded && "rotate-90",
@@ -923,7 +923,7 @@ export function createActionsColumnBase<T extends RowData>(
             render={<Button variant="ghost" size="icon-sm" />}
             onClick={(e) => e.stopPropagation()}
           >
-            <MoreHorizontal className="size-3.5" />
+            <DotsThreeIcon className="size-3.5" />
             <span className="sr-only">Open menu</span>
           </DropdownMenuTrigger>
           {/* The mobile card's row is a click-through to the detail page —
@@ -936,7 +936,7 @@ export function createActionsColumnBase<T extends RowData>(
               <DropdownMenuItem
                 render={<Link to={linkProps.to} params={linkProps.params} />}
               >
-                <Eye />
+                <EyeIcon />
                 View details
               </DropdownMenuItem>
             )}
@@ -1730,7 +1730,10 @@ export function renderProductPriceValue(
         render={<span className="inline-flex items-center gap-1" />}
       >
         {pricing.source === "explicit" ? (
-          <Pin aria-hidden className="size-3 shrink-0 text-muted-foreground" />
+          <PushPinIcon
+            aria-hidden
+            className="size-3 shrink-0 text-muted-foreground"
+          />
         ) : null}
         {formatCurrency(pricing.effectivePrice)}
       </TooltipTrigger>

@@ -1,4 +1,4 @@
-import { PlusIcon as Plus } from "@phosphor-icons/react/dist/csr/Plus";
+import { PlusIcon } from "@phosphor-icons/react/dist/csr/Plus";
 
 import { Row, Stack } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
@@ -40,7 +40,7 @@ export function MealPortionsSection({
             size="sm"
             onClick={onAddPreparedPortion}
           >
-            <Plus className="size-4" />
+            <PlusIcon className="size-4" />
             Add leftovers
           </Button>
         ) : null}

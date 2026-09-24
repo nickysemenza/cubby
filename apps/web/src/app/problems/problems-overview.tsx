@@ -1,7 +1,7 @@
 import type { AllProblems } from "@cubby/schemas/problems";
-import { CaretRightIcon as ChevronRight } from "@phosphor-icons/react/dist/csr/CaretRight";
-import { CheckCircleIcon as CheckCircle } from "@phosphor-icons/react/dist/csr/CheckCircle";
-import { WarningIcon as AlertTriangle } from "@phosphor-icons/react/dist/csr/Warning";
+import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
+import { CheckCircleIcon } from "@phosphor-icons/react/dist/csr/CheckCircle";
+import { WarningIcon } from "@phosphor-icons/react/dist/csr/Warning";
 import { useQuery } from "@tanstack/react-query";
 import { uniq } from "es-toolkit";
 import { useMemo, useRef, useState } from "react";
@@ -174,7 +174,7 @@ export function ProblemsOverview() {
             <Card>
               <CardHeader>
                 <CardTitle>
-                  <AlertTriangle className="size-5 text-destructive" />
+                  <WarningIcon className="size-5 text-destructive" />
                   {section.label}
                 </CardTitle>
                 <CardDescription>
@@ -284,7 +284,7 @@ function ProblemsSummary({
             {analyzing ? (
               <Spinner />
             ) : (
-              <CheckCircle className="size-5 text-secondary-foreground" />
+              <CheckCircleIcon className="size-5 text-secondary-foreground" />
             )}
             {analyzing ? "Analyzing data consistency…" : "All Good!"}
           </CardTitle>
@@ -376,7 +376,7 @@ function AutoFixableGroup({
   return (
     <Collapsible open={open} onOpenChange={onOpenChange}>
       <CollapsibleTrigger className="flex w-full items-center gap-2 border border-border px-4 py-2 text-left text-sm transition-colors hover:bg-muted/50">
-        <ChevronRight
+        <CaretRightIcon
           className={`size-3.5 shrink-0 transition-transform ${open ? "rotate-90" : ""}`}
         />
         <span className="font-medium">Auto-fixable</span>

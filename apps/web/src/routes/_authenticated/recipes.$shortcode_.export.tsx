@@ -1,10 +1,10 @@
 import type { RecipeOut } from "@cubby/schemas/recipe";
-import { BookOpenIcon as BookOpen } from "@phosphor-icons/react/dist/csr/BookOpen";
-import { GitBranchIcon as GitBranch } from "@phosphor-icons/react/dist/csr/GitBranch";
-import { GridNineIcon as Grid3x3 } from "@phosphor-icons/react/dist/csr/GridNine";
-import { ListChecksIcon as ListChecks } from "@phosphor-icons/react/dist/csr/ListChecks";
-import { PrinterIcon as Printer } from "@phosphor-icons/react/dist/csr/Printer";
-import { TreeViewIcon as ListTree } from "@phosphor-icons/react/dist/csr/TreeView";
+import { BookOpenIcon } from "@phosphor-icons/react/dist/csr/BookOpen";
+import { GitBranchIcon } from "@phosphor-icons/react/dist/csr/GitBranch";
+import { GridNineIcon } from "@phosphor-icons/react/dist/csr/GridNine";
+import { ListChecksIcon } from "@phosphor-icons/react/dist/csr/ListChecks";
+import { PrinterIcon } from "@phosphor-icons/react/dist/csr/Printer";
+import { TreeViewIcon } from "@phosphor-icons/react/dist/csr/TreeView";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import {
   createFileRoute,
@@ -50,11 +50,11 @@ import { recipeExportSearchSchema } from "./-recipe-export-search";
 type ExportFormat = "prep" | "read" | "nested" | "matrix" | "flow";
 
 const FORMAT_OPTIONS: ViewSwitcherOption<ExportFormat>[] = [
-  { value: "prep", label: "Prep sheet", icon: ListChecks },
-  { value: "read", label: "Read", icon: BookOpen },
-  { value: "nested", label: "Spec", icon: ListTree },
-  { value: "matrix", label: "Matrix", icon: Grid3x3 },
-  { value: "flow", label: "Flow", icon: GitBranch },
+  { value: "prep", label: "Prep sheet", icon: ListChecksIcon },
+  { value: "read", label: "Read", icon: BookOpenIcon },
+  { value: "nested", label: "Spec", icon: TreeViewIcon },
+  { value: "matrix", label: "Matrix", icon: GridNineIcon },
+  { value: "flow", label: "Flow", icon: GitBranchIcon },
 ];
 
 const searchDefaults = {
@@ -183,7 +183,7 @@ function RecipeExportBody({ recipe }: { recipe: RecipeOut }) {
               onClick={() => window.print()}
               disabled={format === "flow" && !flowReady}
             >
-              <Printer className="mr-2 size-4" />
+              <PrinterIcon className="mr-2 size-4" />
               Print
             </Button>
           </Row>

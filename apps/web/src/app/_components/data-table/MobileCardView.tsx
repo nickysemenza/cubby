@@ -1,6 +1,6 @@
 import type { Entity } from "@cubby/schemas/entity";
-import { BugIcon as Bug } from "@phosphor-icons/react/dist/csr/Bug";
-import { CaretRightIcon as ChevronRight } from "@phosphor-icons/react/dist/csr/CaretRight";
+import { BugIcon } from "@phosphor-icons/react/dist/csr/Bug";
+import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
 import { Link } from "@tanstack/react-router";
 import type { RowData } from "@tanstack/react-table";
 import { useWindowVirtualizer } from "@tanstack/react-virtual";
@@ -581,7 +581,7 @@ function resolveRowActions<TItem extends RowData>(
         row.getToggleExpandedHandler()();
       }}
     >
-      <ChevronRight
+      <CaretRightIcon
         className={cn(
           "size-4 transition-transform",
           row.getIsExpanded() && "rotate-90",
@@ -611,7 +611,7 @@ function resolveDebugContent<TItem extends RowData>(
         title={`Debug Data - Row ${row.id}`}
         trigger={
           <Button variant="ghost" size="icon-sm" className="size-11">
-            <Bug className="size-3" />
+            <BugIcon className="size-3" />
             <span className="sr-only">Debug row data</span>
           </Button>
         }

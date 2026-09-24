@@ -1,8 +1,8 @@
 import type { LocationShortcode } from "@cubby/schemas/identifiers";
 import type { LocationType } from "@cubby/schemas/location";
-import { MagnifyingGlassIcon as Search } from "@phosphor-icons/react/dist/csr/MagnifyingGlass";
-import { PlusIcon as Plus } from "@phosphor-icons/react/dist/csr/Plus";
-import { UsersIcon as Users } from "@phosphor-icons/react/dist/csr/Users";
+import { MagnifyingGlassIcon } from "@phosphor-icons/react/dist/csr/MagnifyingGlass";
+import { PlusIcon } from "@phosphor-icons/react/dist/csr/Plus";
+import { UsersIcon } from "@phosphor-icons/react/dist/csr/Users";
 import { useDebouncedValue } from "@tanstack/react-pacer";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { uniq } from "es-toolkit";
@@ -119,7 +119,7 @@ export function AddLabelsPopover({
       <PopoverTrigger
         render={
           <Button variant="outline" size="sm">
-            <Plus className="mr-2 size-4" />
+            <PlusIcon className="mr-2 size-4" />
             Add
           </Button>
         }
@@ -134,7 +134,7 @@ export function AddLabelsPopover({
         className="w-[calc(100vw-1rem)] p-0 sm:w-96"
       >
         <div className="flex items-center gap-2 border-b px-2 py-2">
-          <Search className="size-4 shrink-0 text-muted-foreground" />
+          <MagnifyingGlassIcon className="size-4 shrink-0 text-muted-foreground" />
           <input
             ref={inputRef}
             type="text"
@@ -192,7 +192,7 @@ export function AddLabelsPopover({
                     className="flex min-h-11 items-center gap-1 px-2 text-xs text-primary hover:bg-muted sm:min-h-0 sm:px-1.5 sm:py-0.5" /* tight */
                     onClick={() => void handleAddChildren(loc)}
                   >
-                    <Users className="size-3" />
+                    <UsersIcon className="size-3" />
                     Children
                   </button>
                 </div>

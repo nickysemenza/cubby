@@ -1,6 +1,6 @@
 import { isPrincipalExpense } from "@cubby/schemas/expense-line-kind";
 import type { ExpenseOut } from "@cubby/schemas/project";
-import { ShoppingBagIcon as ShoppingBag } from "@phosphor-icons/react/dist/csr/ShoppingBag";
+import { ShoppingBagIcon } from "@phosphor-icons/react/dist/csr/ShoppingBag";
 import { sumBy } from "es-toolkit";
 import { useMemo } from "react";
 
@@ -90,7 +90,7 @@ export function ExpenseDonut({
   if (data.length === 0) {
     return (
       <Stack gap="tight">
-        <ChartEmpty icon={ShoppingBag} title="No principal expense data." />
+        <ChartEmpty icon={ShoppingBagIcon} title="No principal expense data." />
         {adjustmentTotal !== 0 ? (
           <p className="text-center text-xs text-muted-foreground">
             Total spend is {formatCurrency(adjustmentTotal, 0)} in purchase
@@ -122,7 +122,7 @@ export function ExpenseDonut({
         renderTooltipExtra={(id) => (
           <TooltipExpenseBreakdown expenses={expensesByType.get(id) ?? []} />
         )}
-        emptyIcon={ShoppingBag}
+        emptyIcon={ShoppingBagIcon}
         emptyTitle="No principal expense data."
       />
       {showExcludedCaption && (

@@ -1,6 +1,6 @@
 import type { NutritionInfo } from "@cubby/usda-schemas";
-import { CaretRightIcon as ChevronRight } from "@phosphor-icons/react/dist/csr/CaretRight";
-import { TreeViewIcon as ListTree } from "@phosphor-icons/react/dist/csr/TreeView";
+import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
+import { TreeViewIcon } from "@phosphor-icons/react/dist/csr/TreeView";
 import { useState } from "react";
 
 import { Row } from "~/components/layout";
@@ -42,11 +42,11 @@ export function FullNutrientBreakdown({
           />
         }
       >
-        <ChevronRight
+        <CaretRightIcon
           className={`size-4 transition-transform ${open ? "rotate-90" : ""}`}
           aria-hidden
         />
-        <ListTree className="size-4" aria-hidden />
+        <TreeViewIcon className="size-4" aria-hidden />
         <span>Full nutrient breakdown</span>
       </CollapsibleTrigger>
       <CollapsibleContent>

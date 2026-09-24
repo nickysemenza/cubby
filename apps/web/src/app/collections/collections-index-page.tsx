@@ -2,10 +2,10 @@ import {
   formatCollectionLabel,
   normalizeCollectionSlug,
 } from "@cubby/shared/collection-tag";
-import { ArrowRightIcon as ArrowRight } from "@phosphor-icons/react/dist/csr/ArrowRight";
-import { GridNineIcon as Grid3X3 } from "@phosphor-icons/react/dist/csr/GridNine";
-import { PlusIcon as Plus } from "@phosphor-icons/react/dist/csr/Plus";
-import { SparkleIcon as Sparkles } from "@phosphor-icons/react/dist/csr/Sparkle";
+import { ArrowRightIcon } from "@phosphor-icons/react/dist/csr/ArrowRight";
+import { GridNineIcon } from "@phosphor-icons/react/dist/csr/GridNine";
+import { PlusIcon } from "@phosphor-icons/react/dist/csr/Plus";
+import { SparkleIcon } from "@phosphor-icons/react/dist/csr/Sparkle";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useId, useState } from "react";
@@ -78,10 +78,10 @@ export function CollectionsIndexPage({
           variant="outline"
           render={<Link to="/collections/assignments" />}
         >
-          <Grid3X3 /> Manage assignments
+          <GridNineIcon /> Manage assignments
         </Button>
         <Button type="button" onClick={() => setShowCreate((value) => !value)}>
-          <Plus /> New Collection
+          <PlusIcon /> New Collection
         </Button>
       </div>
 
@@ -151,7 +151,7 @@ export function CollectionsIndexPage({
         <div className="mb-2 flex flex-wrap items-end justify-between gap-2">
           <div>
             <div className="flex items-center gap-1.5">
-              <Sparkles className="size-3.5 text-primary" aria-hidden />
+              <SparkleIcon className="size-3.5 text-primary" aria-hidden />
               <h2 id="smart-starters-heading" className="text-sm font-semibold">
                 Smart starters
               </h2>
@@ -213,7 +213,7 @@ export function CollectionsIndexPage({
                       {sources.length > 0 && ` · ${sources.join(" · ")}`}
                     </div>
                   </div>
-                  <ArrowRight className="size-4 text-muted-foreground group-hover:text-primary" />
+                  <ArrowRightIcon className="size-4 text-muted-foreground group-hover:text-primary" />
                 </Link>
               );
             })}
@@ -249,7 +249,7 @@ export function CollectionsIndexPage({
                     {collection.rootLocationCount} tagged locations
                   </div>
                 </div>
-                <ArrowRight className="size-4 text-muted-foreground" />
+                <ArrowRightIcon className="size-4 text-muted-foreground" />
               </Link>
             ))}
           </div>

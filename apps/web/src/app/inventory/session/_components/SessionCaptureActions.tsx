@@ -5,10 +5,10 @@ import type {
 } from "@cubby/schemas/identifiers";
 import { ALLOWED_IMAGE_TYPES } from "@cubby/schemas/image";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { BarcodeIcon as Barcode } from "@phosphor-icons/react/dist/csr/Barcode";
-import { CameraIcon as Camera } from "@phosphor-icons/react/dist/csr/Camera";
-import { CameraPlusIcon as ImagePlus } from "@phosphor-icons/react/dist/csr/CameraPlus";
-import { PlusIcon as Plus } from "@phosphor-icons/react/dist/csr/Plus";
+import { BarcodeIcon } from "@phosphor-icons/react/dist/csr/Barcode";
+import { CameraIcon } from "@phosphor-icons/react/dist/csr/Camera";
+import { CameraPlusIcon } from "@phosphor-icons/react/dist/csr/CameraPlus";
+import { PlusIcon } from "@phosphor-icons/react/dist/csr/Plus";
 import { useMutation } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
@@ -346,7 +346,7 @@ export function SessionCaptureActions({
                 className="min-h-12 md:min-h-10"
                 onClick={() => fileInputRef.current?.click()}
               >
-                <Camera className="size-4" />
+                <CameraIcon className="size-4" />
                 Photo
               </Button>
               <Button
@@ -355,7 +355,7 @@ export function SessionCaptureActions({
                 className="min-h-12 md:min-h-10"
                 onClick={() => setScanner("barcode")}
               >
-                <Barcode className="size-4" />
+                <BarcodeIcon className="size-4" />
                 Barcode
               </Button>
               <VerbButton
@@ -377,7 +377,7 @@ export function SessionCaptureActions({
                 onClick={() => addPhotoInputRef.current?.click()}
                 title="Add an unlabeled item from a photo"
               >
-                <ImagePlus className="size-4" />
+                <CameraPlusIcon className="size-4" />
                 Photo item
               </Button>
             </Row>
@@ -496,7 +496,11 @@ export function SessionCaptureActions({
               className="shrink-0"
               disabled={!photoName.trim() || photoIdentityPending}
             >
-              {photoIdentityPending ? <Spinner /> : <Plus className="size-4" />}
+              {photoIdentityPending ? (
+                <Spinner />
+              ) : (
+                <PlusIcon className="size-4" />
+              )}
               Add
             </Button>
           </form>
@@ -657,7 +661,7 @@ function ManualAdd({ locationId }: { locationId: LocationShortcode }) {
         className="min-h-12 shrink-0 px-4 md:min-h-10" /* tight: mobile touch target */
         disabled={createInventory.isPending}
       >
-        <Plus className="size-4" />
+        <PlusIcon className="size-4" />
         <span className="hidden sm:inline">Add item</span>
         <span className="sm:hidden">Add</span>
       </Button>

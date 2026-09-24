@@ -1,11 +1,11 @@
 import type { RecipeOut } from "@cubby/schemas/recipe";
-import { ArrowSquareOutIcon as ExternalLink } from "@phosphor-icons/react/dist/csr/ArrowSquareOut";
-import { BookBookmarkIcon as BookMarked } from "@phosphor-icons/react/dist/csr/BookBookmark";
-import { ClockIcon as Clock } from "@phosphor-icons/react/dist/csr/Clock";
-import { GitForkIcon as GitFork } from "@phosphor-icons/react/dist/csr/GitFork";
-import { TimerIcon as Timer } from "@phosphor-icons/react/dist/csr/Timer";
-import { UsersIcon as Users } from "@phosphor-icons/react/dist/csr/Users";
-import { WrenchIcon as Wrench } from "@phosphor-icons/react/dist/csr/Wrench";
+import { ArrowSquareOutIcon } from "@phosphor-icons/react/dist/csr/ArrowSquareOut";
+import { BookBookmarkIcon } from "@phosphor-icons/react/dist/csr/BookBookmark";
+import { ClockIcon } from "@phosphor-icons/react/dist/csr/Clock";
+import { GitForkIcon } from "@phosphor-icons/react/dist/csr/GitFork";
+import { TimerIcon } from "@phosphor-icons/react/dist/csr/Timer";
+import { UsersIcon } from "@phosphor-icons/react/dist/csr/Users";
+import { WrenchIcon } from "@phosphor-icons/react/dist/csr/Wrench";
 import { Link } from "@tanstack/react-router";
 import { sumBy } from "es-toolkit";
 
@@ -67,7 +67,7 @@ function RecipeSourceBadges({ recipe }: { recipe: RecipeOut }) {
       )}
       {recipe.forkedFromRecipeId && (
         <Row align="center" gap="sm">
-          <GitFork size={12} />
+          <GitForkIcon size={12} />
           <span>Forked from</span>
           <Link
             to="/recipes/$shortcode"
@@ -118,16 +118,16 @@ export function RecipeHero({ recipe }: RecipeHeroProps) {
       className="font-mono text-2xs text-muted-foreground md:gap-4"
     >
       <Row align="center" gap="sm">
-        <Users size={12} />
+        <UsersIcon size={12} />
         <span>{totalIngredients} ingredients</span>
       </Row>
       <Row align="center" gap="sm">
-        <Clock size={12} />
+        <ClockIcon size={12} />
         <span>{totalSteps} steps</span>
       </Row>
       {times.map((t) => (
         <Row key={t.label} align="center" gap="sm">
-          <Timer size={12} />
+          <TimerIcon size={12} />
           <span>
             {t.label} {t.value}
           </span>
@@ -135,13 +135,13 @@ export function RecipeHero({ recipe }: RecipeHeroProps) {
       ))}
       {equipment.length > 0 && (
         <Row align="center" gap="sm">
-          <Wrench size={12} />
+          <WrenchIcon size={12} />
           <span>{equipment.join(", ")}</span>
         </Row>
       )}
       {page && (
         <Row align="center" gap="sm">
-          <BookMarked size={12} />
+          <BookBookmarkIcon size={12} />
           <span>p. {page}</span>
         </Row>
       )}
@@ -152,7 +152,7 @@ export function RecipeHero({ recipe }: RecipeHeroProps) {
           rel="noopener noreferrer"
           className="flex items-center gap-2 hover:underline"
         >
-          <ExternalLink size={12} />
+          <ArrowSquareOutIcon size={12} />
           <span>Source</span>
         </a>
       )}

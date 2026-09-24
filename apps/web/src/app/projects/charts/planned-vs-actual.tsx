@@ -1,6 +1,6 @@
 import { isPrincipalExpense } from "@cubby/schemas/expense-line-kind";
 import type { ExpenseOut } from "@cubby/schemas/project";
-import { CalendarCheckIcon as CalendarClock } from "@phosphor-icons/react/dist/csr/CalendarCheck";
+import { CalendarCheckIcon } from "@phosphor-icons/react/dist/csr/CalendarCheck";
 import { useMemo } from "react";
 
 import { formatCurrency } from "~/lib/utils";
@@ -47,7 +47,10 @@ export function PlannedVsActual({ expenses }: { expenses: ExpenseOut[] }) {
   if (data.length === 0) {
     return (
       <div>
-        <ChartEmpty icon={CalendarClock} title="No principal expense data." />
+        <ChartEmpty
+          icon={CalendarCheckIcon}
+          title="No principal expense data."
+        />
         {adjustmentTotal !== 0 ? (
           <p className="mt-2 text-center text-xs text-muted-foreground">
             Total spend is {formatCurrency(adjustmentTotal, 0)} in purchase

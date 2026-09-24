@@ -1,8 +1,8 @@
 import type { notionPreviewOut } from "@cubby/schemas/import-recipe";
-import { ArrowCounterClockwiseIcon as RotateCcw } from "@phosphor-icons/react/dist/csr/ArrowCounterClockwise";
-import { DownloadSimpleIcon as Import } from "@phosphor-icons/react/dist/csr/DownloadSimple";
-import { MagnifyingGlassIcon as Search } from "@phosphor-icons/react/dist/csr/MagnifyingGlass";
-import { WarningCircleIcon as AlertCircle } from "@phosphor-icons/react/dist/csr/WarningCircle";
+import { ArrowCounterClockwiseIcon } from "@phosphor-icons/react/dist/csr/ArrowCounterClockwise";
+import { DownloadSimpleIcon } from "@phosphor-icons/react/dist/csr/DownloadSimple";
+import { MagnifyingGlassIcon } from "@phosphor-icons/react/dist/csr/MagnifyingGlass";
+import { WarningCircleIcon } from "@phosphor-icons/react/dist/csr/WarningCircle";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { useCallback, useMemo, useRef, useState } from "react";
@@ -188,7 +188,7 @@ export function NotionImport() {
           onClick={() => void preview.refetch()}
           disabled={preview.isFetching || importing}
         >
-          <RotateCcw className="mr-1 size-3" />
+          <ArrowCounterClockwiseIcon className="mr-1 size-3" />
           Refresh
         </Button>
         {items.length > 0 && (
@@ -198,7 +198,7 @@ export function NotionImport() {
             onClick={runImport}
             disabled={importing || selected.size === 0}
           >
-            <Import className="mr-1 size-4" />
+            <DownloadSimpleIcon className="mr-1 size-4" />
             Import {selected.size}
           </Button>
         )}
@@ -213,7 +213,7 @@ export function NotionImport() {
           gap="xs"
           className="text-sm text-destructive"
         >
-          <AlertCircle className="size-4" />
+          <WarningCircleIcon className="size-4" />
           {getErrorMessage(preview.error)}
         </Row>
       )}
@@ -243,7 +243,7 @@ export function NotionImport() {
                 Select visible new &amp; changed ({visibleActionable.length})
               </Description>
               <div className="relative min-w-40 flex-1 sm:max-w-xs">
-                <Search className="pointer-events-none absolute top-1/2 left-2 size-3 -translate-y-1/2 text-muted-foreground" />
+                <MagnifyingGlassIcon className="pointer-events-none absolute top-1/2 left-2 size-3 -translate-y-1/2 text-muted-foreground" />
                 <Input
                   value={search}
                   onChange={(event) => setSearch(event.target.value)}

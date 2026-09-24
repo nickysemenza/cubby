@@ -1,5 +1,5 @@
 import { parseShortcode } from "@cubby/shared";
-import { BugIcon as Bug } from "@phosphor-icons/react/dist/csr/Bug";
+import { BugIcon } from "@phosphor-icons/react/dist/csr/Bug";
 import type { RowData } from "@tanstack/react-table";
 import { flexRender } from "@tanstack/react-table";
 import {
@@ -348,7 +348,7 @@ function DesktopDataRowInner<TItem extends RowData>({
             title={`Debug Data - Row ${row.id}`}
             trigger={
               <Button variant="ghost" size="icon-sm">
-                <Bug className="size-4" />
+                <BugIcon className="size-4" />
                 <span className="sr-only">Debug row data</span>
               </Button>
             }

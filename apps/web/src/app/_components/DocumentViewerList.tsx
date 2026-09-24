@@ -1,5 +1,5 @@
 import type { ImageOut } from "@cubby/schemas/image";
-import { ArrowSquareOutIcon as ExternalLink } from "@phosphor-icons/react/dist/csr/ArrowSquareOut";
+import { ArrowSquareOutIcon } from "@phosphor-icons/react/dist/csr/ArrowSquareOut";
 import prettyBytes from "pretty-bytes";
 import { type FC, useEffect, useRef } from "react";
 
@@ -81,7 +81,7 @@ const DocumentViewer: FC<{
             "shrink-0",
           )}
         >
-          <ExternalLink className="mr-1 size-3" />
+          <ArrowSquareOutIcon className="mr-1 size-3" />
           Open
         </a>
       </Row>

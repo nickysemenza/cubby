@@ -1,5 +1,5 @@
-import { PlusIcon as Plus } from "@phosphor-icons/react/dist/csr/Plus";
-import { XIcon as X } from "@phosphor-icons/react/dist/csr/X";
+import { PlusIcon } from "@phosphor-icons/react/dist/csr/Plus";
+import { XIcon } from "@phosphor-icons/react/dist/csr/X";
 import type * as React from "react";
 import { type Control, type FieldValues, useFieldArray } from "react-hook-form";
 
@@ -70,7 +70,7 @@ function AddRowButton({
       onClick={onClick}
       disabled={disabled}
     >
-      <Plus className="mr-2 size-3.5" />
+      <PlusIcon className="mr-2 size-3.5" />
       {addButtonText}
     </Button>
   );
@@ -143,7 +143,7 @@ export const ArrayFieldManager = <
               aria-label={`Remove ${title.slice(0, -1).toLowerCase()} ${index + 1}`}
               onClick={() => handleRemove(index)}
             >
-              <X className="size-3.5" />
+              <XIcon className="size-3.5" />
             </Button>
           )}
         </div>

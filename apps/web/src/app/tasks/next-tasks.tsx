@@ -4,7 +4,7 @@ import type {
   BlockedTaskOut,
   TaskFilters,
 } from "@cubby/schemas/project";
-import { ListChecksIcon as ListTodo } from "@phosphor-icons/react/dist/csr/ListChecks";
+import { ListChecksIcon } from "@phosphor-icons/react/dist/csr/ListChecks";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { match } from "ts-pattern";
@@ -195,7 +195,7 @@ export function NextTasks({ filters }: { filters: TaskFilters }) {
     return (
       <Empty>
         <EmptyHeader>
-          <EmptyIcon icon={ListTodo} />
+          <EmptyIcon icon={ListChecksIcon} />
           <EmptyTitle>Couldn't load tasks</EmptyTitle>
           <EmptyDescription>{getErrorMessage(error)}</EmptyDescription>
         </EmptyHeader>

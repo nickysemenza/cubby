@@ -1,8 +1,8 @@
 import type { LocationShortcode } from "@cubby/schemas/identifiers";
 import type { InfLocation } from "@cubby/schemas/location";
 import { useDraggable } from "@dnd-kit/core";
-import { CrosshairIcon as Focus } from "@phosphor-icons/react/dist/csr/Crosshair";
-import { DotsSixVerticalIcon as GripVertical } from "@phosphor-icons/react/dist/csr/DotsSixVertical";
+import { CrosshairIcon } from "@phosphor-icons/react/dist/csr/Crosshair";
+import { DotsSixVerticalIcon } from "@phosphor-icons/react/dist/csr/DotsSixVertical";
 import { useEffect, useRef } from "react";
 
 import { LocationIcon } from "~/app/_components/locations/location-icons";
@@ -144,7 +144,7 @@ export function ArrangeLocationRow({
             {...listeners}
             {...attributes}
           >
-            <GripVertical className="size-3.5" />
+            <DotsSixVerticalIcon className="size-3.5" />
           </button>
           {hasChildren && (
             // Zooms the tree to this node (it sets the breadcrumb root), so the
@@ -160,7 +160,7 @@ export function ArrangeLocationRow({
                   />
                 }
               >
-                <Focus className="size-3.5" />
+                <CrosshairIcon className="size-3.5" />
               </TooltipTrigger>
               <TooltipContent>Zoom into {node.name}</TooltipContent>
             </Tooltip>

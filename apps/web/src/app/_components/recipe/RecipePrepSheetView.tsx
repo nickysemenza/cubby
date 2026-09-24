@@ -1,5 +1,5 @@
-import { GridNineIcon as Grid3x3 } from "@phosphor-icons/react/dist/csr/GridNine";
-import { ShoppingCartIcon as ShoppingCart } from "@phosphor-icons/react/dist/csr/ShoppingCart";
+import { GridNineIcon } from "@phosphor-icons/react/dist/csr/GridNine";
+import { ShoppingCartIcon } from "@phosphor-icons/react/dist/csr/ShoppingCart";
 import { memo, useMemo, useState } from "react";
 
 import { Row, Stack } from "~/components/layout";
@@ -57,7 +57,7 @@ function ShoppingList({
   return (
     <details className="border border-[var(--border)] bg-muted/30 px-4 py-2 print:border-0 print:bg-transparent print:px-0">
       <summary className="cursor-pointer eyebrow marker:content-none">
-        <ShoppingCart className="mr-2 inline size-3 align-[-2px]" />
+        <ShoppingCartIcon className="mr-2 inline size-3 align-[-2px]" />
         Shopping list
         <span className="ml-1 text-muted-foreground">· full batch</span>
         {totalCost != null && (
@@ -353,7 +353,7 @@ export const RecipePrepSheetView = memo(function RecipePrepSheetView({
           className="border border-[var(--border)] bg-muted/30 px-4 py-2 print:hidden"
         >
           <summary className="cursor-pointer eyebrow marker:content-none">
-            <Grid3x3 className="mr-2 inline size-3 align-[-2px]" />
+            <GridNineIcon className="mr-2 inline size-3 align-[-2px]" />
             Ingredient × component grid
           </summary>
           <div className="mt-2">

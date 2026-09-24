@@ -1,5 +1,5 @@
-import { ArrowCounterClockwiseIcon as RotateCcw } from "@phosphor-icons/react/dist/csr/ArrowCounterClockwise";
-import { CodeIcon as Code } from "@phosphor-icons/react/dist/csr/Code";
+import { ArrowCounterClockwiseIcon } from "@phosphor-icons/react/dist/csr/ArrowCounterClockwise";
+import { CodeIcon } from "@phosphor-icons/react/dist/csr/Code";
 import { JsonEditor, type JsonData } from "json-edit-react";
 import { useCallback, useMemo, useState } from "react";
 import { z } from "zod";
@@ -86,7 +86,7 @@ export function EditableComponentDemo<T>({
               onClick={handleReset}
               className="h-7 gap-1 px-2 text-xs"
             >
-              <RotateCcw className="size-3" />
+              <ArrowCounterClockwiseIcon className="size-3" />
               Reset
             </Button>
           )}
@@ -96,7 +96,7 @@ export function EditableComponentDemo<T>({
             onClick={() => setIsEditing(!isEditing)}
             className="h-7 gap-1 px-2 text-xs"
           >
-            <Code className="size-3" />
+            <CodeIcon className="size-3" />
             {isEditing ? "Hide JSON" : "Edit JSON"}
           </Button>
         </Row>

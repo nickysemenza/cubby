@@ -2,7 +2,7 @@ import type {
   TaskTodayBriefingItemOut,
   TaskTodayBriefingOut,
 } from "@cubby/schemas/project";
-import { HammerIcon as Hammer } from "@phosphor-icons/react/dist/csr/Hammer";
+import { HammerIcon } from "@phosphor-icons/react/dist/csr/Hammer";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useId, useMemo } from "react";
@@ -139,7 +139,10 @@ export function TodayAttention() {
     <section aria-labelledby={titleId} className="min-w-0">
       <div className="flex items-start justify-between gap-3 border-b border-border pb-2">
         <div className="flex min-w-0 items-start gap-2">
-          <Hammer className="mt-0.5 size-4 shrink-0 text-slate" aria-hidden />
+          <HammerIcon
+            className="mt-0.5 size-4 shrink-0 text-slate"
+            aria-hidden
+          />
           <div className="min-w-0">
             <h2 id={titleId} className="font-heading text-base font-semibold">
               Next up

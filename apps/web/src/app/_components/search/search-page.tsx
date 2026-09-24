@@ -6,9 +6,9 @@ import type {
   SearchType,
 } from "@cubby/schemas/search";
 import { searchableEntities } from "@cubby/schemas/search";
-import { CaretRightIcon as ChevronRight } from "@phosphor-icons/react/dist/csr/CaretRight";
-import { MagnifyingGlassIcon as Search } from "@phosphor-icons/react/dist/csr/MagnifyingGlass";
-import { MapPinIcon as MapPin } from "@phosphor-icons/react/dist/csr/MapPin";
+import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
+import { MagnifyingGlassIcon } from "@phosphor-icons/react/dist/csr/MagnifyingGlass";
+import { MapPinIcon } from "@phosphor-icons/react/dist/csr/MapPin";
 import { useDebouncedValue } from "@tanstack/react-pacer";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
@@ -148,7 +148,7 @@ export function SearchPage({ query = "", type }: SearchPageProps) {
     <Stack gap="md" className="container mx-auto p-1">
       <div className="sticky top-[var(--app-chrome-top)] z-20 -mx-1 space-y-1 border-b border-border bg-background px-1 pb-1">
         <div className="relative">
-          <Search className="absolute top-1/2 left-2 size-4 -translate-y-1/2 text-muted-foreground" />
+          <MagnifyingGlassIcon className="absolute top-1/2 left-2 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             type="search"
             aria-label="Search Cubby"
@@ -502,7 +502,7 @@ function ProductSearchRow({
             onClick={onToggle}
             className="flex size-8 shrink-0 items-center justify-center text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-primary"
           >
-            <ChevronRight
+            <CaretRightIcon
               className={cn(
                 "size-4 transition-transform motion-reduce:transition-none",
                 expanded && "rotate-90",
@@ -568,7 +568,7 @@ function ProductSearchRow({
                 {...getSearchResultRoute(destination)}
                 className="flex min-h-11 items-center gap-3 px-5 py-1.5 hover:bg-muted/60"
               >
-                <MapPin className="size-4 shrink-0 text-muted-foreground" />
+                <MapPinIcon className="size-4 shrink-0 text-muted-foreground" />
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-xs font-medium">
                     {placement.locationPath}
@@ -725,7 +725,7 @@ function MobileSearchResults({
                     }
                     className="flex min-h-11 min-w-11 items-center justify-center text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-primary"
                   >
-                    <ChevronRight
+                    <CaretRightIcon
                       className={cn(
                         "size-4 transition-transform motion-reduce:transition-none",
                         expanded && "rotate-90",
@@ -751,7 +751,7 @@ function MobileSearchResults({
                         {...getSearchResultRoute(destination)}
                         className="flex min-h-11 items-center gap-3 px-3 py-1.5 hover:bg-muted/60"
                       >
-                        <MapPin className="size-4 shrink-0 text-muted-foreground" />
+                        <MapPinIcon className="size-4 shrink-0 text-muted-foreground" />
                         <span className="min-w-0 flex-1">
                           <span className="block truncate text-xs font-medium">
                             {placement.locationPath}
@@ -938,7 +938,7 @@ function SearchLanding({
               onClick={() => onSelect(term)}
               className="w-full px-2 py-2 text-left text-sm hover:bg-muted"
             >
-              <Search className="size-4 shrink-0 text-muted-foreground" />
+              <MagnifyingGlassIcon className="size-4 shrink-0 text-muted-foreground" />
               <span className="truncate">{term}</span>
             </Row>
           ))}
@@ -946,7 +946,7 @@ function SearchLanding({
       )}
       {recents.length === 0 && (
         <div className="flex h-48 flex-col items-center justify-center gap-2 text-muted-foreground">
-          <Search className="size-8 opacity-40" />
+          <MagnifyingGlassIcon className="size-8 opacity-40" />
           <span className="text-sm">Start typing to search across Cubby</span>
         </div>
       )}

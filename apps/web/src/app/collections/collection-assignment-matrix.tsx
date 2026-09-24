@@ -11,11 +11,11 @@ import {
   formatCollectionLabel,
   normalizeCollectionSlug,
 } from "@cubby/shared/collection-tag";
-import { CaretLeftIcon as ChevronLeft } from "@phosphor-icons/react/dist/csr/CaretLeft";
-import { CaretRightIcon as ChevronRight } from "@phosphor-icons/react/dist/csr/CaretRight";
-import { CheckIcon as Check } from "@phosphor-icons/react/dist/csr/Check";
-import { MapPinIcon as MapPin } from "@phosphor-icons/react/dist/csr/MapPin";
-import { PlusIcon as Plus } from "@phosphor-icons/react/dist/csr/Plus";
+import { CaretLeftIcon } from "@phosphor-icons/react/dist/csr/CaretLeft";
+import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
+import { CheckIcon } from "@phosphor-icons/react/dist/csr/Check";
+import { MapPinIcon } from "@phosphor-icons/react/dist/csr/MapPin";
+import { PlusIcon } from "@phosphor-icons/react/dist/csr/Plus";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
@@ -94,7 +94,7 @@ function MatrixPager({
         disabled={page <= 1}
         onClick={() => onPageChange(page - 1)}
       >
-        <ChevronLeft />
+        <CaretLeftIcon />
       </Button>
       <span className="font-mono text-2xs tabular-nums">
         Page {page} / {pageCount}
@@ -106,7 +106,7 @@ function MatrixPager({
         disabled={page >= pageCount}
         onClick={() => onPageChange(page + 1)}
       >
-        <ChevronRight />
+        <CaretRightIcon />
       </Button>
     </div>
   );
@@ -141,7 +141,7 @@ function MobileMatrixPager({
           disabled={page <= 1}
           onClick={() => onPageChange(page - 1)}
         >
-          <ChevronLeft />
+          <CaretLeftIcon />
         </Button>
         <Button
           variant="outline"
@@ -150,7 +150,7 @@ function MobileMatrixPager({
           disabled={page >= pageCount}
           onClick={() => onPageChange(page + 1)}
         >
-          <ChevronRight />
+          <CaretRightIcon />
         </Button>
       </div>
     </div>
@@ -220,7 +220,7 @@ function NewCollectionDialog({
       <DialogTrigger
         render={
           <Button variant="outline" disabled={rows.length === 0}>
-            <Plus /> New Collection
+            <PlusIcon /> New Collection
           </Button>
         }
       />
@@ -526,7 +526,7 @@ export function CollectionAssignmentMatrix({
               direct
             </span>
             <span className="flex items-center gap-1">
-              <MapPin className="size-3" />
+              <MapPinIcon className="size-3" />
               inherited
             </span>
           </div>
@@ -817,8 +817,8 @@ export function CollectionAssignmentMatrix({
                             }
                           }}
                         >
-                          {assigned && <Check />}
-                          {inherited && !assigned && <MapPin />}
+                          {assigned && <CheckIcon />}
+                          {inherited && !assigned && <MapPinIcon />}
                           {assignmentLabel}
                         </Button>
                       </li>
@@ -951,10 +951,10 @@ export function CollectionAssignmentMatrix({
                         : "border-border group-hover/cell:border-primary",
                     )}
                   >
-                    {assigned && <Check className="size-3" />}
+                    {assigned && <CheckIcon className="size-3" />}
                   </span>
                   {inherited && (
-                    <MapPin
+                    <MapPinIcon
                       className={cn(
                         "absolute right-1 bottom-1 size-3",
                         assigned ? "text-primary/70" : "text-muted-foreground",

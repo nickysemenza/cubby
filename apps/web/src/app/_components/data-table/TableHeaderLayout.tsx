@@ -8,10 +8,10 @@ import {
   useSortable,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { ArrowDownIcon as ArrowDown } from "@phosphor-icons/react/dist/csr/ArrowDown";
-import { ArrowsDownUpIcon as ArrowUpDown } from "@phosphor-icons/react/dist/csr/ArrowsDownUp";
-import { ArrowUpIcon as ArrowUp } from "@phosphor-icons/react/dist/csr/ArrowUp";
-import { DotsSixVerticalIcon as GripVertical } from "@phosphor-icons/react/dist/csr/DotsSixVertical";
+import { ArrowDownIcon } from "@phosphor-icons/react/dist/csr/ArrowDown";
+import { ArrowsDownUpIcon } from "@phosphor-icons/react/dist/csr/ArrowsDownUp";
+import { ArrowUpIcon } from "@phosphor-icons/react/dist/csr/ArrowUp";
+import { DotsSixVerticalIcon } from "@phosphor-icons/react/dist/csr/DotsSixVertical";
 import type { Header, RowData } from "@tanstack/react-table";
 import { flexRender } from "@tanstack/react-table";
 import { useId } from "react";
@@ -42,11 +42,11 @@ const sortIcon = (
   styles: HeaderStyles,
 ) => {
   if (direction === "desc")
-    return <ArrowDown className={styles.sortIcon} aria-hidden="true" />;
+    return <ArrowDownIcon className={styles.sortIcon} aria-hidden="true" />;
   if (direction === "asc")
-    return <ArrowUp className={styles.sortIcon} aria-hidden="true" />;
+    return <ArrowUpIcon className={styles.sortIcon} aria-hidden="true" />;
   return canSort ? (
-    <ArrowUpDown
+    <ArrowsDownUpIcon
       className={cn(
         styles.sortIcon,
         "opacity-0 group-hover:opacity-60 group-focus-visible:opacity-60",
@@ -188,7 +188,7 @@ function SortableHeader<TData extends RowData>({
             {...attributes}
             {...listeners}
           >
-            <GripVertical className="size-3" />
+            <DotsSixVerticalIcon className="size-3" />
           </Button>
         )}
         {canSort ? (

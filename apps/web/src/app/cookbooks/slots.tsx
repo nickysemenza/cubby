@@ -1,7 +1,7 @@
 import type { CookbookShortcode } from "@cubby/schemas/identifiers";
-import { ArrowClockwiseIcon as RefreshCw } from "@phosphor-icons/react/dist/csr/ArrowClockwise";
-import { PlusIcon as Plus } from "@phosphor-icons/react/dist/csr/Plus";
-import { WarningIcon as AlertTriangle } from "@phosphor-icons/react/dist/csr/Warning";
+import { ArrowClockwiseIcon } from "@phosphor-icons/react/dist/csr/ArrowClockwise";
+import { PlusIcon } from "@phosphor-icons/react/dist/csr/Plus";
+import { WarningIcon } from "@phosphor-icons/react/dist/csr/Warning";
 import { useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
@@ -33,7 +33,7 @@ function ReextractNotice() {
       gap="sm"
       className="border border-warning/40 bg-warning/5 p-2"
     >
-      <AlertTriangle className="size-4 shrink-0 text-warning" />
+      <WarningIcon className="size-4 shrink-0 text-warning" />
       <Description as="span" size="xs" className="text-warning-ink">
         Extracted with a retired format — re-extract from the EPUB to restore
         the source, its run report, and sub-recipe links.
@@ -122,7 +122,7 @@ export const CookbookImportProgress: DetailSlotComponent<"cookbook"> = ({
             }
             title="Selectively import recipes from this cookbook's source (no AI)"
           >
-            <Plus />
+            <PlusIcon />
             Add from source ({notImported})
           </Button>
         )}
@@ -133,7 +133,9 @@ export const CookbookImportProgress: DetailSlotComponent<"cookbook"> = ({
           disabled={reprocess.running}
           title="Re-derive recipes from the stored extraction (no AI)"
         >
-          <RefreshCw className={reprocess.running ? "animate-spin" : ""} />
+          <ArrowClockwiseIcon
+            className={reprocess.running ? "animate-spin" : ""}
+          />
           Reprocess
         </Button>
       </Row>

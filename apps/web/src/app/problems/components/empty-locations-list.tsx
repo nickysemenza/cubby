@@ -1,5 +1,5 @@
 import type { EmptyLocation } from "@cubby/schemas/problems";
-import { CalendarIcon as Calendar } from "@phosphor-icons/react/dist/csr/Calendar";
+import { CalendarIcon } from "@phosphor-icons/react/dist/csr/Calendar";
 import { formatDistanceToNow } from "date-fns";
 import { type ReactNode, useState } from "react";
 
@@ -63,7 +63,7 @@ export function EmptyLocationsList({
                 gap="xs"
                 className="text-sm text-muted-foreground"
               >
-                <Calendar className="size-3" />
+                <CalendarIcon className="size-3" />
                 Last inventory {formatDistanceToNow(
                   location.lastBulkInventory,
                 )}{" "}

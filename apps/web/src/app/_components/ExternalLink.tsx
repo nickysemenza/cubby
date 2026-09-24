@@ -1,4 +1,4 @@
-import { ArrowSquareOutIcon as ExternalLinkGlyph } from "@phosphor-icons/react/dist/csr/ArrowSquareOut";
+import { ArrowSquareOutIcon } from "@phosphor-icons/react/dist/csr/ArrowSquareOut";
 import type { ReactNode } from "react";
 
 import { cn } from "~/lib/utils";
@@ -44,7 +44,7 @@ export function ExternalLinkIcon({
         className,
       )}
     >
-      <ExternalLinkGlyph className="size-3.5" />
+      <ArrowSquareOutIcon className="size-3.5" />
       <span className="sr-only">{label}</span>
     </a>
   );
@@ -74,7 +74,7 @@ export function ExternalLinkText({
       <span className={truncate ? "truncate" : undefined}>
         {children ?? href}
       </span>
-      <ExternalLinkGlyph className="size-3 shrink-0 text-muted-foreground" />
+      <ArrowSquareOutIcon className="size-3 shrink-0 text-muted-foreground" />
     </a>
   );
 }

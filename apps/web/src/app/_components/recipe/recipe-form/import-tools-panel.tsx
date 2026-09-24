@@ -1,7 +1,7 @@
-import { ClipboardTextIcon as ClipboardList } from "@phosphor-icons/react/dist/csr/ClipboardText";
-import { CodeIcon as Code } from "@phosphor-icons/react/dist/csr/Code";
-import { DownloadSimpleIcon as Import } from "@phosphor-icons/react/dist/csr/DownloadSimple";
-import { LinkIcon as Link2 } from "@phosphor-icons/react/dist/csr/Link";
+import { ClipboardTextIcon } from "@phosphor-icons/react/dist/csr/ClipboardText";
+import { CodeIcon } from "@phosphor-icons/react/dist/csr/Code";
+import { DownloadSimpleIcon } from "@phosphor-icons/react/dist/csr/DownloadSimple";
+import { LinkIcon } from "@phosphor-icons/react/dist/csr/Link";
 import { type Control, Controller } from "react-hook-form";
 
 import { Row, Stack } from "~/components/layout";
@@ -35,9 +35,9 @@ function ImportToolToolbar({
   onToggleTool: (tool: "scrape" | "text" | "html") => void;
 }) {
   const tools = [
-    { id: "scrape" as const, label: "Scrape URL", icon: Link2 },
-    { id: "text" as const, label: "Paste text", icon: ClipboardList },
-    { id: "html" as const, label: "Paste HTML", icon: Code },
+    { id: "scrape" as const, label: "Scrape URL", icon: LinkIcon },
+    { id: "text" as const, label: "Paste text", icon: ClipboardTextIcon },
+    { id: "html" as const, label: "Paste HTML", icon: CodeIcon },
   ];
   return (
     <Row wrap align="center" justify="between" gap="sm">
@@ -113,7 +113,7 @@ function ScrapeImportPanel({
             {scrapePending || isResolving ? (
               <Spinner className="mr-1" />
             ) : (
-              <Import className="mr-1 size-4" />
+              <DownloadSimpleIcon className="mr-1 size-4" />
             )}
             Scrape
           </Button>
@@ -288,7 +288,7 @@ export function ImportToolsPanel({
             {ingredientImport.isImporting ? (
               <Spinner className="mr-1" />
             ) : (
-              <Import className="mr-1 size-4" />
+              <DownloadSimpleIcon className="mr-1 size-4" />
             )}
             {ingredientImport.missingCount > 0
               ? `Import All (create ${ingredientImport.missingCount})`
@@ -346,7 +346,7 @@ export function ImportToolsPanel({
             {parseHtmlPending || isResolving ? (
               <Spinner className="mr-1" />
             ) : (
-              <Import className="mr-1 size-4" />
+              <DownloadSimpleIcon className="mr-1 size-4" />
             )}
             Parse HTML
           </Button>

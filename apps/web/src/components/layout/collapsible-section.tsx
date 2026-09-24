@@ -1,4 +1,4 @@
-import { CaretRightIcon as ChevronRight } from "@phosphor-icons/react/dist/csr/CaretRight";
+import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
 import type * as React from "react";
 import { type ReactNode, useState } from "react";
 
@@ -54,7 +54,7 @@ export function CollapsibleSection({
         onToggle={(event) => setOpen(event.currentTarget.open)}
       >
         <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 border-b border-border pb-1 transition-colors hover:text-foreground sm:min-h-0 [&::-webkit-details-marker]:hidden">
-          <ChevronRight className="size-3.5 shrink-0 text-slate transition-transform group-open:rotate-90" />
+          <CaretRightIcon className="size-3.5 shrink-0 text-slate transition-transform group-open:rotate-90" />
           <h2 className="font-heading text-sm font-semibold">{title}</h2>
           {summary && (
             <span className="truncate font-mono text-2xs text-muted-foreground uppercase">

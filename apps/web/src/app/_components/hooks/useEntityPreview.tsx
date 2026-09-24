@@ -1,5 +1,5 @@
 import type { Entity } from "@cubby/schemas/entity";
-import { SidebarSimpleIcon as PanelRight } from "@phosphor-icons/react/dist/csr/SidebarSimple";
+import { SidebarSimpleIcon } from "@phosphor-icons/react/dist/csr/SidebarSimple";
 import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useRouter } from "@tanstack/react-router";
 import type { ReactNode } from "react";
@@ -438,7 +438,7 @@ export function useEntityPreview(
           aria-label={isInspectorOpen ? "Close inspector" : "Open inspector"}
           aria-pressed={isInspectorOpen}
         >
-          <PanelRight className="size-4" />
+          <SidebarSimpleIcon className="size-4" />
         </Button>
       ) : null,
     [

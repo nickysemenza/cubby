@@ -1,9 +1,9 @@
 import type { EntityRef } from "@cubby/schemas/entity";
 import type { EntityGraphNode } from "@cubby/schemas/entity-graph";
-import { ArrowLeftIcon as ArrowLeft } from "@phosphor-icons/react/dist/csr/ArrowLeft";
-import { ArrowRightIcon as ArrowRight } from "@phosphor-icons/react/dist/csr/ArrowRight";
-import { ListIcon as List } from "@phosphor-icons/react/dist/csr/List";
-import { NetworkIcon as Network } from "@phosphor-icons/react/dist/csr/Network";
+import { ArrowLeftIcon } from "@phosphor-icons/react/dist/csr/ArrowLeft";
+import { ArrowRightIcon } from "@phosphor-icons/react/dist/csr/ArrowRight";
+import { ListIcon } from "@phosphor-icons/react/dist/csr/List";
+import { NetworkIcon } from "@phosphor-icons/react/dist/csr/Network";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useRouter } from "@tanstack/react-router";
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
@@ -205,7 +205,7 @@ export function GraphExplorer({
             setReveal((old) => old + 1);
           }}
         >
-          <ArrowLeft />
+          <ArrowLeftIcon />
         </Button>
         <Button
           variant="outline"
@@ -217,7 +217,7 @@ export function GraphExplorer({
             setReveal((old) => old + 1);
           }}
         >
-          <ArrowRight />
+          <ArrowRightIcon />
         </Button>
         <Input
           aria-label="Find explored records"
@@ -249,7 +249,7 @@ export function GraphExplorer({
           aria-label={showList ? "Show graph" : "Show record list"}
           onClick={() => setShowList((old) => !old)}
         >
-          {showList ? <Network /> : <List />}
+          {showList ? <NetworkIcon /> : <ListIcon />}
         </Button>
         {onList ? (
           <>

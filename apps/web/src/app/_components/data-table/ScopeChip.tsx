@@ -1,5 +1,5 @@
 import { UNRESOLVABLE_ENTITY_FILTER } from "@cubby/shared";
-import { XIcon as X } from "@phosphor-icons/react/dist/csr/X";
+import { XIcon } from "@phosphor-icons/react/dist/csr/X";
 
 import { Badge } from "~/components/ui/badge";
 
@@ -24,7 +24,7 @@ export function ScopeChip({ name, value, onClear }: ScopeChipProps) {
         onClick={onClear}
         className="text-muted-foreground transition-colors hover:text-foreground"
       >
-        <X className="size-3" />
+        <XIcon className="size-3" />
       </button>
     </Badge>
   );

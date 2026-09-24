@@ -4,9 +4,9 @@ import type {
 } from "@cubby/schemas/nutrition";
 import { hasKnownEstimate } from "@cubby/schemas/nutrition";
 import type { RecipeOut } from "@cubby/schemas/recipe";
-import { ChefHatIcon as ChefHat } from "@phosphor-icons/react/dist/csr/ChefHat";
-import { EqualsIcon as Equal } from "@phosphor-icons/react/dist/csr/Equals";
-import { XIcon as X } from "@phosphor-icons/react/dist/csr/X";
+import { ChefHatIcon } from "@phosphor-icons/react/dist/csr/ChefHat";
+import { EqualsIcon } from "@phosphor-icons/react/dist/csr/Equals";
+import { XIcon } from "@phosphor-icons/react/dist/csr/X";
 import { Link } from "@tanstack/react-router";
 import { type ReactNode, useMemo, useState } from "react";
 
@@ -302,7 +302,7 @@ export const RecipeCompareGrid: React.FC<{
                       />
                     ) : (
                       <div className="flex h-10 w-full items-center justify-center rounded-md bg-muted text-muted-foreground">
-                        <ChefHat className="size-4" />
+                        <ChefHatIcon className="size-4" />
                       </div>
                     )}
                     <button
@@ -312,7 +312,7 @@ export const RecipeCompareGrid: React.FC<{
                       className="absolute top-1 right-1 flex size-11 items-center justify-center rounded-full bg-background/70 text-muted-foreground hover:text-destructive sm:size-5"
                       title="Remove from comparison"
                     >
-                      <X className="size-3.5" />
+                      <XIcon className="size-3.5" />
                     </button>
                   </div>
                   <Link
@@ -332,7 +332,7 @@ export const RecipeCompareGrid: React.FC<{
             })}
             <th className="min-w-[110px] border-l-2 border-primary/40 px-2 pt-2 pb-2 text-left align-top font-normal">
               <div className="mb-2 flex h-10 w-full items-center justify-center rounded-md bg-primary/10 text-primary">
-                <Equal className="size-4" />
+                <EqualsIcon className="size-4" />
               </div>
               <div className="min-h-[2.5em] leading-tight font-medium text-primary">
                 Average

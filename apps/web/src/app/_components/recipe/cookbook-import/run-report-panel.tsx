@@ -1,7 +1,7 @@
 import type { CookbookRunReport } from "@cubby/schemas/cookbook";
-import { ArrowCounterClockwiseIcon as RotateCcw } from "@phosphor-icons/react/dist/csr/ArrowCounterClockwise";
-import { CaretDownIcon as ChevronDown } from "@phosphor-icons/react/dist/csr/CaretDown";
-import { WarningCircleIcon as AlertCircle } from "@phosphor-icons/react/dist/csr/WarningCircle";
+import { ArrowCounterClockwiseIcon } from "@phosphor-icons/react/dist/csr/ArrowCounterClockwise";
+import { CaretDownIcon } from "@phosphor-icons/react/dist/csr/CaretDown";
+import { WarningCircleIcon } from "@phosphor-icons/react/dist/csr/WarningCircle";
 import { useMemo } from "react";
 
 import { Row, Stack } from "~/components/layout";
@@ -68,7 +68,7 @@ export function FailuresPanel({
           gap="xs"
           className="text-xs text-warning-ink"
         >
-          <AlertCircle className="size-3 shrink-0" />
+          <WarningCircleIcon className="size-3 shrink-0" />
           {failedCount > 0 &&
             `${failedCount} chunk${failedCount === 1 ? "" : "s"} failed — recipes in ${failedCount === 1 ? "it" : "them"} were lost`}
           {failedCount > 0 && troubled.length > failedCount && " · "}
@@ -79,7 +79,7 @@ export function FailuresPanel({
         </Row>
         {canRetry && (
           <Button type="button" variant="outline" size="sm" onClick={onRetry}>
-            <RotateCcw className="mr-1 size-3" />
+            <ArrowCounterClockwiseIcon className="mr-1 size-3" />
             Retry extraction
           </Button>
         )}
@@ -128,7 +128,7 @@ export function RunReportPanel({ report }: { report: CookbookRunReport }) {
   return (
     <Collapsible>
       <CollapsibleTrigger className="flex w-full items-center gap-1 text-left text-xs text-muted-foreground hover:text-foreground">
-        <ChevronDown className="size-3" />
+        <CaretDownIcon className="size-3" />
         Run report — {formatUsd(report.total_cost_usd)}
         {!report.cost_complete && "+"} · {formatDuration(report.wall_ms)} ·{" "}
         {calls.length} call{calls.length === 1 ? "" : "s"}

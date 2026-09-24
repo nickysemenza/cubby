@@ -1,9 +1,9 @@
 import type { ImageUrlSummary } from "@cubby/schemas/image-summary";
-import { EyeIcon as Eye } from "@phosphor-icons/react/dist/csr/Eye";
-import { EyeSlashIcon as EyeOff } from "@phosphor-icons/react/dist/csr/EyeSlash";
-import { PlusIcon as Plus } from "@phosphor-icons/react/dist/csr/Plus";
-import { WarningIcon as AlertTriangle } from "@phosphor-icons/react/dist/csr/Warning";
-import { WarningCircleIcon as AlertCircle } from "@phosphor-icons/react/dist/csr/WarningCircle";
+import { EyeIcon } from "@phosphor-icons/react/dist/csr/Eye";
+import { EyeSlashIcon } from "@phosphor-icons/react/dist/csr/EyeSlash";
+import { PlusIcon } from "@phosphor-icons/react/dist/csr/Plus";
+import { WarningIcon } from "@phosphor-icons/react/dist/csr/Warning";
+import { WarningCircleIcon } from "@phosphor-icons/react/dist/csr/WarningCircle";
 import { uniq } from "es-toolkit";
 import { useMemo, useState } from "react";
 
@@ -175,7 +175,11 @@ export function IngredientPreviewTable({
           className="gap-1 text-2xs text-muted-foreground"
           onClick={() => setShowRaw((v) => !v)}
         >
-          {showRaw ? <EyeOff className="size-3" /> : <Eye className="size-3" />}
+          {showRaw ? (
+            <EyeSlashIcon className="size-3" />
+          ) : (
+            <EyeIcon className="size-3" />
+          )}
           {showRaw ? "Hide raw" : "Show raw"}
         </Button>
       </Row>
@@ -274,7 +278,7 @@ function IngredientRow({
             />
           ) : (
             <>
-              <AlertCircle className="size-4 text-warning" />
+              <WarningCircleIcon className="size-4 text-warning" />
               <span className="min-w-0 truncate text-warning-ink">
                 {item.parsed.name}
               </span>
@@ -285,7 +289,7 @@ function IngredientRow({
                 className="size-6 p-0 text-warning hover:bg-warning/15 hover:text-warning"
                 onClick={onCreateClick}
               >
-                <Plus className="size-4" />
+                <PlusIcon className="size-4" />
               </Button>
             </>
           )}
@@ -306,7 +310,7 @@ function IngredientRow({
                 <span className="inline-flex cursor-help items-center gap-1 text-warning-ink" />
               }
             >
-              <AlertTriangle className="size-3.5" />
+              <WarningIcon className="size-3.5" />
               <span className="text-xs">No amount read</span>
             </TooltipTrigger>
             <TooltipContent className="max-w-xs">

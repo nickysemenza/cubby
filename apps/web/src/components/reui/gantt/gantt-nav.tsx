@@ -28,9 +28,9 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "~/components/ui/tooltip"
-import { CaretLeftIcon as ChevronLeftIcon } from "@phosphor-icons/react/dist/csr/CaretLeft";
-import { CaretRightIcon as ChevronRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
-import { CaretDownIcon as ChevronDownIcon } from "@phosphor-icons/react/dist/csr/CaretDown";
+import { CaretLeftIcon } from "@phosphor-icons/react/dist/csr/CaretLeft";
+import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
+import { CaretDownIcon } from "@phosphor-icons/react/dist/csr/CaretDown";
 
 const GANTT_SCALES: GanttScale[] = ["day", "week", "month", "quarter", "year"]
 
@@ -135,7 +135,7 @@ function GanttNavPrev({
         {...props}
       >
         {children ?? (
-          <ChevronLeftIcon className="size-4" aria-hidden="true" />
+          <CaretLeftIcon className="size-4" aria-hidden="true" />
         )}
       </Button>
     </NavTooltip>
@@ -167,7 +167,7 @@ function GanttNavNext({
         {...props}
       >
         {children ?? (
-          <ChevronRightIcon className="size-4" aria-hidden="true" />
+          <CaretRightIcon className="size-4" aria-hidden="true" />
         )}
       </Button>
     </NavTooltip>
@@ -277,7 +277,7 @@ function GanttScaleSwitcher({
           {children ?? (
             <>
               {labels.scales[scale]}
-              <ChevronDownIcon className="size-4 opacity-60" aria-hidden="true" />
+              <CaretDownIcon className="size-4 opacity-60" aria-hidden="true" />
             </>
           )}
         </DropdownMenuTrigger>

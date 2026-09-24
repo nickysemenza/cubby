@@ -11,7 +11,7 @@
  */
 
 import type { LocationShortcode } from "@cubby/schemas/identifiers";
-import { QuestionIcon as CircleHelp } from "@phosphor-icons/react/dist/csr/Question";
+import { QuestionIcon } from "@phosphor-icons/react/dist/csr/Question";
 
 import {
   DestinationLocationField,
@@ -158,7 +158,7 @@ export function SweepMissingReview({
           className="min-h-10 self-start px-3 text-xs" /* tight: a footnote link, not a primary action */
           render={
             <a href={`/inventory/session?parent=${locationId}`}>
-              <CircleHelp className="size-4" />
+              <QuestionIcon className="size-4" />
               Recount the items too
             </a>
           }

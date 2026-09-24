@@ -7,8 +7,8 @@ import {
   mealKindSchema,
   mealTypeSchema,
 } from "@cubby/schemas/meal-classification";
-import { CalendarPlusIcon as CalendarPlus } from "@phosphor-icons/react/dist/csr/CalendarPlus";
-import { WarningIcon as TriangleAlert } from "@phosphor-icons/react/dist/csr/Warning";
+import { CalendarPlusIcon } from "@phosphor-icons/react/dist/csr/CalendarPlus";
+import { WarningIcon } from "@phosphor-icons/react/dist/csr/Warning";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { format, parseISO } from "date-fns";
@@ -235,7 +235,7 @@ export function AddToMeal({
         size="sm"
         onClick={() => setOpen(true)}
       >
-        <CalendarPlus className="size-4" />
+        <CalendarPlusIcon className="size-4" />
         Add to meal
       </Button>
       <ResponsiveDialog
@@ -349,7 +349,7 @@ export function AddToMeal({
               className="border border-warning/40 bg-warning/5 px-2 py-2 text-2xs"
             >
               <Row gap="xs" align="center" className="text-warning-ink">
-                <TriangleAlert className="size-3 shrink-0" />
+                <WarningIcon className="size-3 shrink-0" />
                 <span className="font-medium">
                   This is a{" "}
                   {MEAL_KIND_LABELS[selectedMeal.mealKind].toLowerCase()} meal,

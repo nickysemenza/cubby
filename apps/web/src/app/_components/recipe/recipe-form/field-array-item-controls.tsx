@@ -1,6 +1,6 @@
-import { CaretDownIcon as ChevronDown } from "@phosphor-icons/react/dist/csr/CaretDown";
-import { CaretUpIcon as ChevronUp } from "@phosphor-icons/react/dist/csr/CaretUp";
-import { TrashIcon as Trash } from "@phosphor-icons/react/dist/csr/Trash";
+import { CaretDownIcon } from "@phosphor-icons/react/dist/csr/CaretDown";
+import { CaretUpIcon } from "@phosphor-icons/react/dist/csr/CaretUp";
+import { TrashIcon } from "@phosphor-icons/react/dist/csr/Trash";
 import type { FC } from "react";
 
 import { Button } from "~/components/ui/button";
@@ -28,7 +28,7 @@ export const FieldArrayItemControls: FC<FieldArrayItemControlsProps> = ({
       onClick={() => move(index, Math.max(0, index - 1))}
       disabled={index === 0}
     >
-      <ChevronUp className="size-4" />
+      <CaretUpIcon className="size-4" />
     </Button>
     <Button
       type="button"
@@ -37,7 +37,7 @@ export const FieldArrayItemControls: FC<FieldArrayItemControlsProps> = ({
       onClick={() => move(index, Math.min(fieldsLength - 1, index + 1))}
       disabled={index === fieldsLength - 1}
     >
-      <ChevronDown className="size-4" />
+      <CaretDownIcon className="size-4" />
     </Button>
     <Button
       type="button"
@@ -45,7 +45,7 @@ export const FieldArrayItemControls: FC<FieldArrayItemControlsProps> = ({
       size="icon"
       onClick={() => remove(index)}
     >
-      <Trash className="size-4" />
+      <TrashIcon className="size-4" />
     </Button>
   </div>
 );

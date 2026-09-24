@@ -2,11 +2,11 @@ import type {
   InfLocation,
   InventoryItemForTree,
 } from "@cubby/schemas/location";
-import { ArrowsInLineVerticalIcon as ChevronsDownUp } from "@phosphor-icons/react/dist/csr/ArrowsInLineVertical";
-import { CaretRightIcon as ChevronRight } from "@phosphor-icons/react/dist/csr/CaretRight";
-import { CaretUpDownIcon as ChevronsUpDown } from "@phosphor-icons/react/dist/csr/CaretUpDown";
-import { MagnifyingGlassIcon as Search } from "@phosphor-icons/react/dist/csr/MagnifyingGlass";
-import { XIcon as X } from "@phosphor-icons/react/dist/csr/X";
+import { ArrowsInLineVerticalIcon } from "@phosphor-icons/react/dist/csr/ArrowsInLineVertical";
+import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
+import { CaretUpDownIcon } from "@phosphor-icons/react/dist/csr/CaretUpDown";
+import { MagnifyingGlassIcon } from "@phosphor-icons/react/dist/csr/MagnifyingGlass";
+import { XIcon } from "@phosphor-icons/react/dist/csr/X";
 import { Link } from "@tanstack/react-router";
 import { useId, useMemo, useState } from "react";
 
@@ -176,7 +176,7 @@ export function LocationTree({ data }: LocationTreeProps) {
           className="border-b border-[var(--border)] p-2"
         >
           <div className="relative min-w-48 flex-1">
-            <Search
+            <MagnifyingGlassIcon
               aria-hidden
               className="pointer-events-none absolute top-1/2 left-2 size-3.5 -translate-y-1/2 text-muted-foreground"
             />
@@ -201,7 +201,7 @@ export function LocationTree({ data }: LocationTreeProps) {
                 aria-label="Clear tree search"
                 className="absolute inset-y-0 right-0 flex w-9 items-center justify-center text-muted-foreground transition-colors duration-100 ease-cozy hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-primary"
               >
-                <X className="size-3.5" />
+                <XIcon className="size-3.5" />
               </button>
             )}
           </div>
@@ -227,7 +227,7 @@ export function LocationTree({ data }: LocationTreeProps) {
               onClick={() => setCollapsedIds(new Set())}
               className="max-sm:h-10 max-sm:flex-1"
             >
-              <ChevronsUpDown />
+              <CaretUpDownIcon />
               Expand all
             </Button>
             <Button
@@ -238,7 +238,7 @@ export function LocationTree({ data }: LocationTreeProps) {
               onClick={() => setCollapsedIds(new Set(meta.branchIds))}
               className="max-sm:h-10 max-sm:flex-1"
             >
-              <ChevronsDownUp />
+              <ArrowsInLineVerticalIcon />
               Collapse all
             </Button>
           </Row>
@@ -344,7 +344,7 @@ function LocationBranch({
             }
             className="flex size-10 shrink-0 items-center justify-center text-muted-foreground transition-colors duration-100 ease-cozy hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-primary disabled:text-muted-foreground/60 sm:size-5"
           >
-            <ChevronRight
+            <CaretRightIcon
               className={cn(
                 "size-3.5 transition-transform duration-100 ease-cozy motion-reduce:transition-none",
                 expanded && "rotate-90",

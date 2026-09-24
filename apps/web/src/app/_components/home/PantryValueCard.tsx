@@ -1,4 +1,4 @@
-import { WalletIcon as Wallet } from "@phosphor-icons/react/dist/csr/Wallet";
+import { WalletIcon } from "@phosphor-icons/react/dist/csr/Wallet";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useId } from "react";
@@ -45,7 +45,7 @@ export function PantryValueCard() {
   if (isLoading) {
     return (
       <DashboardCard
-        icon={Wallet}
+        icon={WalletIcon}
         title="Pantry value"
         action={inventoryAction}
       >
@@ -58,7 +58,7 @@ export function PantryValueCard() {
   if (isError) {
     return (
       <DashboardCard
-        icon={Wallet}
+        icon={WalletIcon}
         title="Pantry value"
         action={inventoryAction}
       >
@@ -82,7 +82,7 @@ export function PantryValueCard() {
   if (bars.length === 0) {
     return (
       <DashboardCard
-        icon={Wallet}
+        icon={WalletIcon}
         title="Pantry value"
         action={inventoryAction}
       >
@@ -96,7 +96,7 @@ export function PantryValueCard() {
 
   return (
     <DashboardCard
-      icon={Wallet}
+      icon={WalletIcon}
       title="Pantry value"
       description="Where is pantry value stored?"
       action={inventoryAction}

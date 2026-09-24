@@ -1,5 +1,5 @@
 import type { ProjectPortfolioAnalyticsOut } from "@cubby/schemas/project";
-import { ListChecksIcon as ListChecks } from "@phosphor-icons/react/dist/csr/ListChecks";
+import { ListChecksIcon } from "@phosphor-icons/react/dist/csr/ListChecks";
 import { useNavigate } from "@tanstack/react-router";
 import { useMemo } from "react";
 
@@ -81,7 +81,7 @@ export function OpenTasksByProject({
       onClick={(row) =>
         navigate(entityDetailLink("project", String(row.projectId)))
       }
-      emptyIcon={ListChecks}
+      emptyIcon={ListChecksIcon}
       emptyTitle="No open tasks."
     />
   );

@@ -2,10 +2,10 @@ import {
   composeNotesMarkdown,
   type ImportRecipe,
 } from "@cubby/schemas/import-recipe";
-import { ArrowCounterClockwiseIcon as RotateCcw } from "@phosphor-icons/react/dist/csr/ArrowCounterClockwise";
-import { ArrowSquareOutIcon as ExternalLink } from "@phosphor-icons/react/dist/csr/ArrowSquareOut";
-import { CheckIcon as Check } from "@phosphor-icons/react/dist/csr/Check";
-import { WarningCircleIcon as AlertCircle } from "@phosphor-icons/react/dist/csr/WarningCircle";
+import { ArrowCounterClockwiseIcon } from "@phosphor-icons/react/dist/csr/ArrowCounterClockwise";
+import { ArrowSquareOutIcon } from "@phosphor-icons/react/dist/csr/ArrowSquareOut";
+import { CheckIcon } from "@phosphor-icons/react/dist/csr/Check";
+import { WarningCircleIcon } from "@phosphor-icons/react/dist/csr/WarningCircle";
 import { Link } from "@tanstack/react-router";
 import { uniq } from "es-toolkit";
 import { memo, useMemo } from "react";
@@ -235,7 +235,7 @@ function RecipeImportCardImpl({
               className="text-muted-foreground hover:text-foreground"
               title="Open source"
             >
-              <ExternalLink className="size-3.5" />
+              <ArrowSquareOutIcon className="size-3.5" />
             </a>
           )}
           <CopyImportRecipeParseButton recipe={recipe} />
@@ -272,7 +272,7 @@ function RecipeImportCardImpl({
                   size="sm"
                   onClick={onRetryPhoto}
                 >
-                  <RotateCcw className="mr-1 size-3" />
+                  <ArrowCounterClockwiseIcon className="mr-1 size-3" />
                   Retry photo
                 </Button>
               )}
@@ -351,13 +351,13 @@ function ImportStatus({ result }: { result: ImportResult | undefined }) {
         params={{ shortcode: result.id }}
         className="flex items-center gap-1 text-sm text-positive"
       >
-        <Check className="size-4" /> Imported
+        <CheckIcon className="size-4" /> Imported
       </Link>
     );
   }
   return (
     <Row as="span" align="center" gap="xs" className="text-sm text-destructive">
-      <AlertCircle className="size-4" /> {result.message}
+      <WarningCircleIcon className="size-4" /> {result.message}
     </Row>
   );
 }
@@ -376,7 +376,7 @@ function PhotoStatus({ result }: { result: PhotoResult }) {
   if (result.status === "attached" || result.status === "reused") {
     return (
       <Row as="span" align="center" gap="xs" className="text-positive">
-        <Check className="size-3" />
+        <CheckIcon className="size-3" />
         {result.status === "reused"
           ? "Photo already attached"
           : "Photo attached"}

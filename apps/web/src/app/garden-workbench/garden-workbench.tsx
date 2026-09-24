@@ -7,9 +7,9 @@ import {
   gardenPractice,
   gardenPracticeSources,
 } from "@cubby/schemas/garden-practice";
-import { CalendarBlankIcon as CalendarRange } from "@phosphor-icons/react/dist/csr/CalendarBlank";
-import { ListChecksIcon as ListChecks } from "@phosphor-icons/react/dist/csr/ListChecks";
-import { PlantIcon as Sprout } from "@phosphor-icons/react/dist/csr/Plant";
+import { CalendarBlankIcon } from "@phosphor-icons/react/dist/csr/CalendarBlank";
+import { ListChecksIcon } from "@phosphor-icons/react/dist/csr/ListChecks";
+import { PlantIcon } from "@phosphor-icons/react/dist/csr/Plant";
 import { useMemo } from "react";
 
 import {
@@ -41,9 +41,9 @@ import { usePlantingScheduleLabel } from "./planting-schedule-label";
 export type GardenMode = "timing" | "practice" | "plan";
 
 const modes = [
-  { value: "timing", label: "Timing", icon: CalendarRange },
-  { value: "practice", label: "Practice", icon: ListChecks },
-  { value: "plan", label: "Plan", icon: Sprout },
+  { value: "timing", label: "Timing", icon: CalendarBlankIcon },
+  { value: "practice", label: "Practice", icon: ListChecksIcon },
+  { value: "plan", label: "Plan", icon: PlantIcon },
 ] as const;
 
 const crops = [...gardenCropKeys].sort((a, b) =>

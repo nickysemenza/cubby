@@ -1,10 +1,10 @@
-import { ArrowCounterClockwiseIcon as RotateCcw } from "@phosphor-icons/react/dist/csr/ArrowCounterClockwise";
-import { ClipboardIcon as ClipboardCopy } from "@phosphor-icons/react/dist/csr/Clipboard";
-import { MinusIcon as Minus } from "@phosphor-icons/react/dist/csr/Minus";
-import { PauseIcon as Pause } from "@phosphor-icons/react/dist/csr/Pause";
-import { PlayIcon as Play } from "@phosphor-icons/react/dist/csr/Play";
-import { PulseIcon as Activity } from "@phosphor-icons/react/dist/csr/Pulse";
-import { SelectionIcon as SquareDashed } from "@phosphor-icons/react/dist/csr/Selection";
+import { ArrowCounterClockwiseIcon } from "@phosphor-icons/react/dist/csr/ArrowCounterClockwise";
+import { ClipboardIcon } from "@phosphor-icons/react/dist/csr/Clipboard";
+import { MinusIcon } from "@phosphor-icons/react/dist/csr/Minus";
+import { PauseIcon } from "@phosphor-icons/react/dist/csr/Pause";
+import { PlayIcon } from "@phosphor-icons/react/dist/csr/Play";
+import { PulseIcon } from "@phosphor-icons/react/dist/csr/Pulse";
+import { SelectionIcon } from "@phosphor-icons/react/dist/csr/Selection";
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
@@ -115,7 +115,7 @@ export function PerfOverlay() {
           CORNER_CLASS[corner],
         )}
       >
-        <Activity className="size-3 text-primary" />
+        <PulseIcon className="size-3 text-primary" />
         {snap.runtime.fps} fps
       </Row>
     );
@@ -134,7 +134,7 @@ export function PerfOverlay() {
         gap="xs"
         className="border-b border-border/60 bg-muted/40 px-2 py-1"
       >
-        <Activity className="size-3 text-primary" />
+        <PulseIcon className="size-3 text-primary" />
         <span className="font-semibold">perf</span>
         <span className="text-muted-foreground">·</span>
         <span
@@ -148,23 +148,23 @@ export function PerfOverlay() {
         </span>
         <Row align="center" gap="tight" className="ml-auto">
           <IconBtn title="Copy report as JSON" onClick={copyReport}>
-            <ClipboardCopy className="size-3" />
+            <ClipboardIcon className="size-3" />
           </IconBtn>
           <IconBtn title={paused ? "Resume" : "Pause"} onClick={togglePause}>
             {paused ? (
-              <Play className="size-3" />
+              <PlayIcon className="size-3" />
             ) : (
-              <Pause className="size-3" />
+              <PauseIcon className="size-3" />
             )}
           </IconBtn>
           <IconBtn title="Reset" onClick={reset}>
-            <RotateCcw className="size-3" />
+            <ArrowCounterClockwiseIcon className="size-3" />
           </IconBtn>
           <IconBtn title="Move" onClick={cycleCorner}>
-            <SquareDashed className="size-3" />
+            <SelectionIcon className="size-3" />
           </IconBtn>
           <IconBtn title="Minimize" onClick={() => setMinimized(true)}>
-            <Minus className="size-3" />
+            <MinusIcon className="size-3" />
           </IconBtn>
         </Row>
       </Row>

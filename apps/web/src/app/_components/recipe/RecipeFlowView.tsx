@@ -3,12 +3,12 @@ import type {
   RecipeFlowArtifact,
   RecipeFlowOperation,
 } from "@cubby/schemas/recipe-flow";
-import { ArrowClockwiseIcon as RefreshCw } from "@phosphor-icons/react/dist/csr/ArrowClockwise";
-import { BookOpenIcon as BookOpen } from "@phosphor-icons/react/dist/csr/BookOpen";
-import { GitBranchIcon as GitBranch } from "@phosphor-icons/react/dist/csr/GitBranch";
-import { SparkleIcon as Sparkles } from "@phosphor-icons/react/dist/csr/Sparkle";
-import { TableIcon as Table2 } from "@phosphor-icons/react/dist/csr/Table";
-import { WarningIcon as AlertTriangle } from "@phosphor-icons/react/dist/csr/Warning";
+import { ArrowClockwiseIcon } from "@phosphor-icons/react/dist/csr/ArrowClockwise";
+import { BookOpenIcon } from "@phosphor-icons/react/dist/csr/BookOpen";
+import { GitBranchIcon } from "@phosphor-icons/react/dist/csr/GitBranch";
+import { SparkleIcon } from "@phosphor-icons/react/dist/csr/Sparkle";
+import { TableIcon } from "@phosphor-icons/react/dist/csr/Table";
+import { WarningIcon } from "@phosphor-icons/react/dist/csr/Warning";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { type FormEvent, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -43,16 +43,16 @@ import { RecipeWalkthrough } from "./RecipeWalkthrough";
 export type RecipeFlowLayoutMode = "walkthrough" | "map" | "table";
 
 const FLOW_LAYOUT_OPTIONS: ViewSwitcherOption<RecipeFlowLayoutMode>[] = [
-  { value: "walkthrough", label: "Walkthrough", icon: BookOpen },
-  { value: "map", label: "Map", icon: GitBranch },
-  { value: "table", label: "Table", icon: Table2 },
+  { value: "walkthrough", label: "Walkthrough", icon: BookOpenIcon },
+  { value: "map", label: "Map", icon: GitBranchIcon },
+  { value: "table", label: "Table", icon: TableIcon },
 ];
 
 function FlowLoading() {
   return (
     <div className="border border-[var(--border)] bg-card p-4">
       <div className="mb-4 flex items-center gap-2">
-        <Sparkles className="size-5 text-primary" />
+        <SparkleIcon className="size-5 text-primary" />
         <div>
           <div className="font-heading font-semibold">Building recipe flow</div>
           <div className="text-xs text-muted-foreground">
@@ -88,7 +88,7 @@ function FlowAvailability({
   if (error && !artifact)
     return (
       <Alert variant="destructive">
-        <AlertTriangle />
+        <WarningIcon />
         <AlertTitle>Could not load recipe flow</AlertTitle>
         <AlertDescription>{getErrorMessage(error)}</AlertDescription>
       </Alert>
@@ -96,7 +96,7 @@ function FlowAvailability({
   if (artifact) return null;
   return (
     <Alert variant="destructive">
-      <AlertTriangle />
+      <WarningIcon />
       <AlertTitle>Could not generate recipe flow</AlertTitle>
       <AlertDescription>
         {generationError ?? "No valid flow is available for this recipe."}
@@ -108,7 +108,7 @@ function FlowAvailability({
           onClick={onRetry}
           disabled={isGenerating}
         >
-          <RefreshCw />
+          <ArrowClockwiseIcon />
           Retry
         </Button>
       </AlertDescription>
@@ -129,7 +129,7 @@ function FlowStatus({
     <>
       {stale ? (
         <Alert className="border-x-0 border-t-0">
-          <RefreshCw className={generating ? "animate-spin" : ""} />
+          <ArrowClockwiseIcon className={generating ? "animate-spin" : ""} />
           <AlertTitle>Recipe changed</AlertTitle>
           <AlertDescription>
             {generating
@@ -140,7 +140,7 @@ function FlowStatus({
       ) : null}
       {error ? (
         <Alert variant="destructive" className="border-x-0 border-t-0">
-          <AlertTriangle />
+          <WarningIcon />
           <AlertTitle>Refresh failed</AlertTitle>
           <AlertDescription>{error}</AlertDescription>
         </Alert>
@@ -346,7 +346,7 @@ function FlowPlan({
                 onClick={onRegenerate}
                 disabled={generating}
               >
-                <BookOpen />
+                <BookOpenIcon />
                 Generate walkthrough
               </Button>
             </div>

@@ -1,4 +1,4 @@
-import { ClockIcon as Clock } from "@phosphor-icons/react/dist/csr/Clock";
+import { ClockIcon } from "@phosphor-icons/react/dist/csr/Clock";
 import type { FC } from "react";
 
 import { cn } from "~/lib/utils";
@@ -32,7 +32,7 @@ export const QueryTimingIndicator: FC<QueryTimingIndicatorProps> = ({
         className,
       )}
     >
-      <Clock className="size-3" aria-hidden="true" />
+      <ClockIcon className="size-3" aria-hidden="true" />
       {displayText}
     </span>
   );

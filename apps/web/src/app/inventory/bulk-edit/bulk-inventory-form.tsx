@@ -1,8 +1,8 @@
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type { InventoryBulkOperationItem } from "@cubby/schemas/inventory";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { PlusIcon as Plus } from "@phosphor-icons/react/dist/csr/Plus";
-import { XIcon as X } from "@phosphor-icons/react/dist/csr/X";
+import { PlusIcon } from "@phosphor-icons/react/dist/csr/Plus";
+import { XIcon } from "@phosphor-icons/react/dist/csr/X";
 import { skipToken, useMutation, useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -278,7 +278,7 @@ export default function BulkInventoryForm({
               Inventory for {selectedLocation.name}
             </h3>
             <Button type="button" onClick={addInventoryItem} size="sm">
-              <Plus className="mr-1 size-4" />
+              <PlusIcon className="mr-1 size-4" />
               Add Item
             </Button>
           </Row>
@@ -322,7 +322,7 @@ export default function BulkInventoryForm({
                     onClick={() => remove(index)}
                     className="shrink-0"
                   >
-                    <X className="size-4" />
+                    <XIcon className="size-4" />
                   </Button>
                 </Row>
               ))

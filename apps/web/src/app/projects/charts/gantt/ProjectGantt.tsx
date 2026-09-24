@@ -13,7 +13,7 @@
  */
 
 import type { ProjectOut, TaskOut } from "@cubby/schemas/project";
-import { CalendarXIcon as CalendarOff } from "@phosphor-icons/react/dist/csr/CalendarX";
+import { CalendarXIcon } from "@phosphor-icons/react/dist/csr/CalendarX";
 import { Link } from "@tanstack/react-router";
 import {
   lazy,
@@ -196,7 +196,7 @@ export function ProjectGantt({
       {unscheduled.length > 0 && (
         <Stack gap="xs">
           <Row align="center" gap="xs" className="text-muted-foreground">
-            <CalendarOff className="size-3 shrink-0" />
+            <CalendarXIcon className="size-3 shrink-0" />
             <span className="font-mono text-2xs tracking-wider uppercase">
               Unscheduled · {unscheduled.length}
             </span>

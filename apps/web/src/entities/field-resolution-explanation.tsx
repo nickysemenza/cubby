@@ -2,8 +2,8 @@ import type { Entity } from "@cubby/schemas/entity";
 import { entitySummary } from "@cubby/schemas/entity-summary";
 import type { FieldResolution } from "@cubby/schemas/field-resolution";
 import { parseShortcode } from "@cubby/shared";
-import { ArrowCounterClockwiseIcon as RotateCcw } from "@phosphor-icons/react/dist/csr/ArrowCounterClockwise";
-import { WarningIcon as TriangleAlert } from "@phosphor-icons/react/dist/csr/Warning";
+import { ArrowCounterClockwiseIcon } from "@phosphor-icons/react/dist/csr/ArrowCounterClockwise";
+import { WarningIcon } from "@phosphor-icons/react/dist/csr/Warning";
 import type { ReactNode } from "react";
 import { z } from "zod";
 
@@ -73,9 +73,9 @@ function InEffectRow({
         />
         <Badge variant={redundant ? "warning" : "secondary"}>
           {redundant ? (
-            <TriangleAlert aria-hidden="true" />
+            <WarningIcon aria-hidden="true" />
           ) : (
-            <RotateCcw aria-hidden="true" />
+            <ArrowCounterClockwiseIcon aria-hidden="true" />
           )}
           Override on this {noun}
         </Badge>

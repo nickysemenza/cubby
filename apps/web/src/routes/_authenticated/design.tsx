@@ -1,5 +1,5 @@
-import { ClipboardTextIcon as ClipboardList } from "@phosphor-icons/react/dist/csr/ClipboardText";
-import { FloppyDiskIcon as Save } from "@phosphor-icons/react/dist/csr/FloppyDisk";
+import { ClipboardTextIcon } from "@phosphor-icons/react/dist/csr/ClipboardText";
+import { FloppyDiskIcon } from "@phosphor-icons/react/dist/csr/FloppyDisk";
 import { createFileRoute } from "@tanstack/react-router";
 import { useId } from "react";
 
@@ -63,7 +63,7 @@ function DesignSmokeTest() {
       heroActions={{
         primary: (
           <Button variant="outline" size="sm">
-            <ClipboardList />
+            <ClipboardTextIcon />
             Review
           </Button>
         ),
@@ -104,7 +104,7 @@ function DesignSmokeTest() {
                     defaultValue="Illustrative pantry project"
                   />
                   <Button className="sm:shrink-0">
-                    <Save />
+                    <FloppyDiskIcon />
                     Save
                   </Button>
                 </div>
