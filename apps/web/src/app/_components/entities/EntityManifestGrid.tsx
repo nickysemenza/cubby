@@ -8,8 +8,8 @@ import {
   photoCategories,
 } from "@cubby/schemas/entity-manifest";
 import { LEGACY_SHORTCODE_PREFIX } from "@cubby/shared";
+import { CaretDownIcon as ChevronDown } from "@phosphor-icons/react/dist/csr/CaretDown";
 import { useQuery } from "@tanstack/react-query";
-import { ChevronDown } from "lucide-react";
 import { Fragment, type ReactNode } from "react";
 
 import { Stack } from "~/components/layout";
