@@ -32,6 +32,7 @@ type EnvironmentKey = (typeof e2eEnvironmentKeys)[number];
 export interface E2EWorkerRuntime {
   baseURL: string;
   databaseUrl: string;
+  objectStorageUrl: string;
   storageState: E2EStorageState;
   debug(): void;
   close(): Promise<void>;
@@ -228,6 +229,7 @@ export async function createE2EWorkerRuntime({
     return {
       baseURL,
       databaseUrl: database.databaseUrl,
+      objectStorageUrl: objectStorage.url,
       storageState,
       debug: () => harness?.debug(),
       async close() {

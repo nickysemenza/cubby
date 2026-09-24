@@ -4,6 +4,7 @@ import {
   appendFileSync,
   existsSync,
   mkdirSync,
+  readFileSync,
   readdirSync,
   statSync,
   writeFileSync,
@@ -11,7 +12,7 @@ import {
 import path from "node:path";
 import { createInterface } from "node:readline";
 import { fileURLToPath } from "node:url";
-import { request } from "@playwright/test";
+import { chromium, expect, request } from "@playwright/test";
 import { drizzle } from "drizzle-orm/node-postgres";
 import dotenv from "dotenv";
 import { Pool } from "pg";
@@ -27,19 +28,30 @@ const repoRoot = path.resolve(webRoot, "../..");
 const kitRoot = path.join(repoRoot, "apps/apple/CubbyKit");
 const appleRoot = path.join(repoRoot, "apps/apple");
 const headless = process.argv.slice(2).includes("--headless");
+const photo = process.argv.slice(2).includes("--photo");
 const watch = process.argv.slice(2).includes("--watch");
 const video = process.argv.slice(2).includes("--video");
 if (
   (watch && video) ||
   (video && headless) ||
+  (photo && (!headless || watch)) ||
   process.argv
     .slice(2)
     .some(
-      (argument) => !["--headless", "--watch", "--video"].includes(argument),
+      (argument) =>
+        !["--headless", "--watch", "--video", "--photo"].includes(argument),
     )
 )
-  throw new Error("Usage: sim-e2e.ts [--video | --headless] [--watch]");
-const lane = headless ? "headless-e2e" : watch ? "sim-dev" : "sim-e2e";
+  throw new Error(
+    "Usage: sim-e2e.ts [--video | --watch | --headless [--watch | --photo]]",
+  );
+const lane = photo
+  ? "headless-photo-e2e"
+  : headless
+    ? "headless-e2e"
+    : watch
+      ? "sim-dev"
+      : "sim-e2e";
 dotenv.config({ path: path.join(webRoot, ".env") });
 for (const [key, value] of Object.entries({
   R2_ACCESS_KEY_ID: "cubby-sim",
@@ -126,6 +138,180 @@ async function assertNativeEdit(
     console.log(`[${lane}] Native edit verified in ${simName}`);
   } finally {
     await checkPool.end();
+  }
+}
+
+async function assertNativePhotoImport(
+  runID: string,
+  objectStorageUrl: string,
+  expectedCount: number,
+): Promise<string[]> {
+  const checkPool = new Pool({ connectionString: databaseURL });
+  try {
+    const result = await checkPool.query<{
+      id: string;
+      key: string;
+      size: number;
+    }>(
+      `SELECT i.shortcode AS id, i.key, i.size
+       FROM "ImportRunTarget" t
+       JOIN "ImportRun" r ON r.id = t."runId"
+       JOIN "Image" i ON i.id = t."imageId"
+       WHERE r.shortcode = $1 AND r.purpose = 'photo_inventory'
+         AND t.state = 'pending'
+       ORDER BY t.position`,
+      [runID],
+    );
+    if (result.rows.length !== expectedCount)
+      throw new Error(
+        `Native photo import created ${result.rows.length} pending targets, expected ${expectedCount}`,
+      );
+    for (const row of result.rows) {
+      const response = await fetch(
+        `${objectStorageUrl}/e2e-bucket/${encodeURIComponent(row.key)}`,
+      );
+      if (
+        !response.ok ||
+        (await response.arrayBuffer()).byteLength !== row.size
+      )
+        throw new Error(
+          `Native uploaded photo bytes are unavailable for ${runID}`,
+        );
+    }
+    const jobs = await checkPool.query<{ imageId: string; kind: string }>(
+      `SELECT i.shortcode AS "imageId", j.kind
+       FROM "ImageProcessingJob" j
+       JOIN "Image" i ON i.id = j."imageId"
+       JOIN "ImportRunTarget" t ON t."imageId" = i.id
+       JOIN "ImportRun" r ON r.id = t."runId"
+       WHERE r.shortcode = $1`,
+      [runID],
+    );
+    for (const row of result.rows) {
+      const kinds = jobs.rows
+        .filter((job) => job.imageId === row.id)
+        .map((job) => job.kind)
+        .sort();
+      if (kinds.join(",") !== "describe_image,subject_lift")
+        throw new Error(`Native photo ${row.id} scheduled ${kinds.join(",")}`);
+    }
+    console.log(
+      `[${lane}] ${expectedCount} native photo uploads and ${jobs.rows.length} processing jobs verified in ${simName}`,
+    );
+    return result.rows.map((row) => row.id);
+  } finally {
+    await checkPool.end();
+  }
+}
+
+async function exercisePhotoProcessingJobs(imageIDs: string[]): Promise<void> {
+  const pool = new Pool({ connectionString: databaseURL });
+  try {
+    const [scenario, processing, dispatch, schemas] = await Promise.all([
+      import("./scenarios/context"),
+      import("~/server/repo/image-processing"),
+      import("~/server/image-processing/dispatch"),
+      import("@cubby/schemas/image-processing"),
+    ]);
+    const db = scenario.buildScenarioDatabase(pool);
+    const result = await pool.query<{
+      imageId: string;
+      jobId: string;
+      kind: "describe_image" | "subject_lift";
+    }>(
+      `SELECT i.shortcode AS "imageId", j.id AS "jobId", j.kind
+       FROM "ImageProcessingJob" j
+       JOIN "Image" i ON i.id = j."imageId"
+       WHERE i.shortcode = ANY($1::text[])`,
+      [imageIDs],
+    );
+    for (const [index, imageID] of imageIDs.entries()) {
+      const job = result.rows.find(
+        (row) => row.imageId === imageID && row.kind === "describe_image",
+      );
+      if (!job) throw new Error(`Missing description job for ${imageID}`);
+      const lease = await processing.claimImageProcessingJob(db, {
+        jobId: job.jobId,
+        kinds: ["describe_image"],
+        leaseMs: 60_000,
+      });
+      if (!lease) {
+        const state = await pool.query(
+          `SELECT j.state, j."nextAttemptAt", now() AS now, i.status,
+                  j."sourceContentHash" = i.sha256 AS "sourceMatches"
+           FROM "ImageProcessingJob" j JOIN "Image" i ON i.id = j."imageId"
+           WHERE j.id = $1`,
+          [job.jobId],
+        );
+        throw new Error(
+          `Could not claim description job ${job.jobId}: ${JSON.stringify({
+            job: state.rows[0],
+          })}`,
+        );
+      }
+      const completed = await processing.completeImageProcessingJob(db, {
+        result: {
+          jobId: job.jobId,
+          attemptId: lease.attemptId,
+          completedAt: new Date().toISOString(),
+          outcome: {
+            kind: "describe_image",
+            status: "completed",
+            description: {
+              description:
+                [
+                  "Synthetic gray crew shirt",
+                  "Synthetic clothing label",
+                  "Synthetic brown boots",
+                ][index] ?? "Synthetic wardrobe item",
+              claims: [],
+              cutoutEligibility: index === 1 ? "ineligible" : "eligible",
+            },
+            runtime: { platform: "cloud", model: "synthetic-test" },
+          },
+        },
+        cloudAnalysis: {
+          provider: "synthetic-test",
+          model: "synthetic-test",
+          promptRevision: schemas.IMAGE_DESCRIPTION_PROMPT_REVISION,
+          resultSchemaRevision:
+            schemas.IMAGE_DESCRIPTION_RESULT_SCHEMA_REVISION,
+          inputFingerprint: `synthetic-${imageID}`,
+        },
+      });
+      if (!completed.adopted)
+        throw new Error(`Description result was not adopted for ${imageID}`);
+    }
+    for (const row of result.rows.filter((job) => job.kind === "subject_lift"))
+      await dispatch.dispatchImageProcessingWakeup(db, row.jobId);
+    const states = await pool.query<{
+      imageId: string;
+      kind: string;
+      state: string;
+    }>(
+      `SELECT i.shortcode AS "imageId", j.kind, j.state
+       FROM "ImageProcessingJob" j
+       JOIN "Image" i ON i.id = j."imageId"
+       WHERE i.shortcode = ANY($1::text[])`,
+      [imageIDs],
+    );
+    for (const [index, imageID] of imageIDs.entries()) {
+      const state = (kind: string) =>
+        states.rows.find((row) => row.imageId === imageID && row.kind === kind)
+          ?.state;
+      if (state("describe_image") !== "ready")
+        throw new Error(`Description job not ready for ${imageID}`);
+      const expectedLiftState = index === 1 ? "skipped" : "waiting_for_device";
+      if (state("subject_lift") !== expectedLiftState)
+        throw new Error(
+          `Cutout job state for ${imageID}: ${state("subject_lift")}`,
+        );
+    }
+    console.log(
+      `[${lane}] Synthetic descriptions adopted; cutouts skipped or waiting for a device as expected`,
+    );
+  } finally {
+    await pool.end();
   }
 }
 
@@ -469,6 +655,319 @@ function startDatabaseWatchdog(): void {
   watchdog.unref();
 }
 
+async function runHeadlessPhotoScenario(
+  url: URL,
+  objectStorageUrl: string,
+  userId: string,
+): Promise<void> {
+  const pool = new Pool({ connectionString: databaseURL });
+  try {
+    const [{ seedSimulatorPhotoActor }, scenario, maintenance] =
+      await Promise.all([
+        import("./scenarios/simulator"),
+        import("./scenarios/context"),
+        import("~/server/repo/image-processing-maintenance"),
+      ]);
+    await seedSimulatorPhotoActor(pool, userId);
+    await maintenance.updateImageProcessingSettings(
+      scenario.buildScenarioDatabase(pool),
+      { enabled: true, paused: false },
+    );
+  } finally {
+    await pool.end();
+  }
+  const imagePaths = ["shirt", "label", "boots"].map((label) =>
+    path.join(webRoot, "tests/e2e/fixtures", `synthetic-wardrobe-${label}.png`),
+  );
+  const nativeOutput = path.join(artifacts, "native-photo-output.txt");
+  await run(
+    "pnpm",
+    [
+      "apple",
+      "cli",
+      "headless-photo-import",
+      "--base-url",
+      url.origin,
+      ...imagePaths,
+    ],
+    repoRoot,
+    nativeOutput,
+  );
+  const match = readFileSync(nativeOutput, "utf8").match(
+    /Headless native photo import verified: (RUN-[A-Z0-9]+)/u,
+  );
+  const runID = match?.[1];
+  if (!runID)
+    throw new Error("Native photo importer did not report its run id");
+  const imageIDs = await assertNativePhotoImport(
+    runID,
+    objectStorageUrl,
+    imagePaths.length,
+  );
+  const context = await request.newContext({
+    baseURL: url.origin,
+    extraHTTPHeaders: { Origin: url.origin },
+  });
+  try {
+    const login = await context.post("/api/auth/sign-in/email", {
+      data: { email: "sim@cubby.localhost", password: "cubby-sim-local-only" },
+    });
+    if (!login.ok())
+      throw new Error(`Review sign-in failed: ${await login.text()}`);
+    const groups = [
+      {
+        groupKey: "synthetic-shirt",
+        images: [
+          { id: imageIDs[0], purpose: "item" },
+          { id: imageIDs[1], purpose: "label" },
+        ],
+        product: {
+          kind: "create",
+          create: { name: "Synthetic Gray Crew Shirt" },
+        },
+      },
+      {
+        groupKey: "synthetic-boots",
+        images: [{ id: imageIDs[2], purpose: "item" }],
+        product: {
+          kind: "create",
+          create: { name: "Synthetic Brown Boots" },
+        },
+      },
+    ];
+    const proposalPool = new Pool({ connectionString: databaseURL });
+    try {
+      const [
+        { callMcpTool },
+        { McpServer },
+        { registerPhotoImportTools },
+        scenario,
+        testing,
+      ] = await Promise.all([
+        import("~/server/mcp/mcp-test-utils"),
+        import("@modelcontextprotocol/sdk/server/mcp.js"),
+        import("~/server/mcp/tools/photo-import.tools"),
+        import("./scenarios/context"),
+        import("@cubby/schemas/testing"),
+      ]);
+      const db = scenario.buildScenarioDatabase(proposalPool);
+      const kernel = scenario.buildKernelContext(
+        db,
+        testing.testUserId(userId),
+      );
+      const server = new McpServer({
+        name: "photo-import-sim",
+        version: "1.0",
+      });
+      registerPhotoImportTools(server);
+      const proposed = await callMcpTool(
+        server,
+        "propose_photo_groups",
+        { runId: runID, groups },
+        {},
+        { entityKernel: kernel },
+      );
+      if (proposed.isError)
+        throw new Error(
+          `MCP photo proposal failed: ${JSON.stringify(proposed.content)}`,
+        );
+      const beforeApproval = await proposalPool.query<{ count: string }>(
+        `SELECT count(*)::text AS count FROM "Product"
+         WHERE name IN ('Synthetic Gray Crew Shirt', 'Synthetic Brown Boots')
+           AND "deletedAt" IS NULL`,
+      );
+      if (beforeApproval.rows[0]?.count !== "0")
+        throw new Error("MCP proposals created Products before review");
+    } finally {
+      await proposalPool.end();
+    }
+    const browser = await chromium.launch();
+    try {
+      const state = await context.storageState();
+      state.cookies = state.cookies.filter(
+        (cookie) => !cookie.name.endsWith("session_data"),
+      );
+      const browserContext = await browser.newContext({
+        storageState: state,
+        viewport: { width: 1280, height: 900 },
+        recordVideo: { dir: artifacts, size: { width: 1280, height: 900 } },
+      });
+      const page = await browserContext.newPage();
+      try {
+        await page.goto(`${url.origin}/runs/${runID}`);
+        await expect(
+          page.getByRole("heading", { name: "Proposed items" }),
+        ).toBeVisible();
+        for (const [name, expectedPhotos] of [
+          ["Synthetic Gray Crew Shirt", 2],
+          ["Synthetic Brown Boots", 1],
+        ] as const) {
+          const card = page.locator('[data-slot="card"]').filter({
+            has: page.getByRole("heading", { name }),
+          });
+          await expect
+            .poll(() =>
+              card
+                .locator("img")
+                .evaluateAll(
+                  (images) =>
+                    images.filter(
+                      (image) =>
+                        image instanceof HTMLImageElement &&
+                        image.complete &&
+                        image.naturalWidth > 0,
+                    ).length,
+                ),
+            )
+            .toBe(expectedPhotos);
+        }
+        await expect(
+          page.getByRole("button", { name: "Approve all (2)" }),
+        ).toBeEnabled();
+        await page.getByRole("button", { name: "Approve all (2)" }).click();
+        await expect(
+          page.getByText("Completed", { exact: true }).first(),
+        ).toBeVisible();
+      } finally {
+        await browserContext.close();
+        const videoPath = await page.video()?.path();
+        if (videoPath) console.log(`[${lane}] Web review video: ${videoPath}`);
+      }
+    } finally {
+      await browser.close();
+    }
+    const pool = new Pool({ connectionString: databaseURL });
+    try {
+      const result = await pool.query<{ status: string; completed: string }>(
+        `SELECT r.status, count(*) FILTER (WHERE t.state = 'completed')::text AS completed
+         FROM "ImportRun" r
+         JOIN "ImportRunTarget" t ON t."runId" = r.id
+         WHERE r.shortcode = $1
+         GROUP BY r.id`,
+        [runID],
+      );
+      if (
+        result.rows[0]?.status !== "completed" ||
+        result.rows[0]?.completed !== String(imagePaths.length)
+      )
+        throw new Error(
+          `Photo approval left run unsettled: ${JSON.stringify(result.rows)}`,
+        );
+      const products = await pool.query<{ name: string }>(
+        `SELECT name FROM "Product"
+         WHERE name IN ('Synthetic Gray Crew Shirt', 'Synthetic Brown Boots')
+           AND "deletedAt" IS NULL`,
+      );
+      if (products.rows.length !== 2)
+        throw new Error("Photo approval did not create both Products");
+      const attachments = await pool.query<{
+        id: string;
+        purpose: string | null;
+      }>(
+        `SELECT i.shortcode AS id, a.purpose
+         FROM "EntityAttachment" a
+         JOIN "Image" i ON i.id = a."imageId"
+         WHERE i.shortcode = ANY($1::text[]) AND a."deletedAt" IS NULL`,
+        [imageIDs],
+      );
+      const purposes = new Map(
+        attachments.rows.map((row) => [row.id, row.purpose]),
+      );
+      if (
+        purposes.size !== imageIDs.length ||
+        imageIDs.some(
+          (id, index) => purposes.get(id) !== ["item", "label", "item"][index],
+        )
+      )
+        throw new Error("Photo approval lost item or label attachments");
+    } finally {
+      await pool.end();
+    }
+    await exercisePhotoProcessingJobs(imageIDs);
+    console.log(`[${lane}] Proposal submission and reviewer approval verified`);
+  } finally {
+    await context.dispose();
+  }
+}
+
+async function runHeadlessProductScenario(
+  url: URL,
+  productId: string,
+  userId: string,
+): Promise<void> {
+  const { SIM_PRODUCT_NAME, SIM_PRODUCT_UPDATED_NAME } =
+    await import("./scenarios/simulator");
+  let builtVersion: string | undefined;
+  const runNative = async (
+    id: string,
+    originalName: string,
+    updatedName: string,
+  ) => {
+    const started = performance.now();
+    const args = [
+      "headless-product-edit",
+      "--base-url",
+      url.origin,
+      "--product-id",
+      id,
+      "--original-name",
+      originalName,
+      "--updated-name",
+      updatedName,
+    ];
+    const sourceVersion = swiftSourceVersion();
+    if (sourceVersion === builtVersion) {
+      await run(path.join(kitRoot, ".build/debug/cubby"), args);
+    } else {
+      await run("pnpm", ["apple", "cli", ...args]);
+      builtVersion = sourceVersion;
+    }
+    await assertNativeEdit(id, updatedName);
+    console.log(
+      `[${lane}] Native scenario ${(performance.now() - started).toFixed(0)}ms`,
+    );
+  };
+  await runNative(productId, SIM_PRODUCT_NAME, SIM_PRODUCT_UPDATED_NAME);
+  if (watch) {
+    const input = createInterface({
+      input: process.stdin,
+      output: process.stdout,
+    });
+    input.on("SIGINT", () => {
+      interrupted = "SIGINT";
+      activeChild?.kill("SIGTERM");
+      input.close();
+    });
+    stopWatch = () => input.close();
+    let iteration = 0;
+    console.log(
+      `[${lane}] Press Enter to seed a fresh product and rerun; Ctrl-C drops ${simName}`,
+    );
+    try {
+      for await (const _ of input) {
+        if (interrupted) break;
+        iteration += 1;
+        const originalName = `${SIM_PRODUCT_NAME} ${iteration}`;
+        const updatedName = `${SIM_PRODUCT_UPDATED_NAME} ${iteration}`;
+        const nextPool = new Pool({ connectionString: databaseURL });
+        let nextID: string;
+        try {
+          const { seedSimulatorScenario } =
+            await import("./scenarios/simulator");
+          nextID = await seedSimulatorScenario(nextPool, userId, originalName);
+        } finally {
+          await nextPool.end();
+        }
+        await runNative(nextID, originalName, updatedName);
+        console.log(`[${lane}] Press Enter to rerun; Ctrl-C drops ${simName}`);
+      }
+    } finally {
+      stopWatch = undefined;
+      input.close();
+    }
+  }
+}
+
 async function main(): Promise<void> {
   assertSimulatorAdminUrl(adminURL);
   if (process.env.CUBBY_SIM_DB_EXTERNAL !== "1")
@@ -602,83 +1101,8 @@ async function main(): Promise<void> {
     );
 
     if (headless) {
-      const { SIM_PRODUCT_NAME, SIM_PRODUCT_UPDATED_NAME } =
-        await import("./scenarios/simulator");
-      let builtVersion: string | undefined;
-      const runNative = async (
-        id: string,
-        originalName: string,
-        updatedName: string,
-      ) => {
-        const started = performance.now();
-        const args = [
-          "headless-product-edit",
-          "--base-url",
-          url.origin,
-          "--product-id",
-          id,
-          "--original-name",
-          originalName,
-          "--updated-name",
-          updatedName,
-        ];
-        const sourceVersion = swiftSourceVersion();
-        if (sourceVersion === builtVersion) {
-          await run(path.join(kitRoot, ".build/debug/cubby"), args);
-        } else {
-          await run("pnpm", ["apple", "cli", ...args]);
-          builtVersion = sourceVersion;
-        }
-        await assertNativeEdit(id, updatedName);
-        console.log(
-          `[${lane}] Native scenario ${(performance.now() - started).toFixed(0)}ms`,
-        );
-      };
-      await runNative(productId, SIM_PRODUCT_NAME, SIM_PRODUCT_UPDATED_NAME);
-      if (watch) {
-        const input = createInterface({
-          input: process.stdin,
-          output: process.stdout,
-        });
-        input.on("SIGINT", () => {
-          interrupted = "SIGINT";
-          activeChild?.kill("SIGTERM");
-          input.close();
-        });
-        stopWatch = () => input.close();
-        let iteration = 0;
-        console.log(
-          `[${lane}] Press Enter to seed a fresh product and rerun; Ctrl-C drops ${simName}`,
-        );
-        try {
-          for await (const _ of input) {
-            if (interrupted) break;
-            iteration += 1;
-            const originalName = `${SIM_PRODUCT_NAME} ${iteration}`;
-            const updatedName = `${SIM_PRODUCT_UPDATED_NAME} ${iteration}`;
-            const nextPool = new Pool({ connectionString: databaseURL });
-            let nextID: string;
-            try {
-              const { seedSimulatorScenario } =
-                await import("./scenarios/simulator");
-              nextID = await seedSimulatorScenario(
-                nextPool,
-                userId,
-                originalName,
-              );
-            } finally {
-              await nextPool.end();
-            }
-            await runNative(nextID, originalName, updatedName);
-            console.log(
-              `[${lane}] Press Enter to rerun; Ctrl-C drops ${simName}`,
-            );
-          }
-        } finally {
-          stopWatch = undefined;
-          input.close();
-        }
-      }
+      if (photo) await runHeadlessPhotoScenario(url, objectStorage.url, userId);
+      else await runHeadlessProductScenario(url, productId, userId);
     } else {
       const device = await simulator();
       if (device.state !== "Booted")

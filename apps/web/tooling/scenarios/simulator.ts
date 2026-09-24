@@ -13,9 +13,23 @@ import {
   buildScenarioDatabase,
   createFixtureWithContext,
 } from "./context";
+import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
 export const SIM_PRODUCT_NAME = "Synthetic Atlas Lantern";
 export const SIM_PRODUCT_UPDATED_NAME = "Synthetic Atlas Lantern Updated";
+
+export async function seedSimulatorPhotoActor(pool: Pool, userId: string) {
+  const existing = await pool.query(
+    'SELECT 1 FROM "LedgerParty" WHERE "userId" = $1 AND kind = $2 AND "deletedAt" IS NULL LIMIT 1',
+    [userId, "member"],
+  );
+  if (existing.rowCount) return;
+  await insertWithShortcode(buildScenarioDatabase(pool), "ledgerParty", {
+    name: "Synthetic Simulator Member",
+    kind: "member",
+    userId: testUserId(userId),
+  });
+}
 
 /** One named product makes the native read/write contract unambiguous. */
 export async function seedSimulatorScenario(
