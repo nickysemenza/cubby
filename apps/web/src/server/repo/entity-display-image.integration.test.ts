@@ -781,6 +781,63 @@ describe("entity display image resolver", () => {
 
       expect(rows[0]?.displayImages).toEqual([expectedDisplayImage(img)]);
     });
+
+    it("a project borrows principal product images from explicit and purchase-default expenses", async () => {
+      const owner = await insertWithShortcode(ctx.db, "project", {
+        name: `Image owner ${crypto.randomUUID()}`,
+      });
+      const inherited = await insertWithShortcode(ctx.db, "project", {
+        name: `Purchase project ${crypto.randomUUID()}`,
+      });
+      const unrelated = await insertWithShortcode(ctx.db, "project", {
+        name: `Unrelated project ${crypto.randomUUID()}`,
+      });
+      const purchasedProduct = await createProductFixture(
+        ctx.db,
+        makeProductInput({ name: "Synthetic purchased product" }),
+        ctx.actor,
+      );
+      const photo = await makeImage();
+      await getDb(ctx.db).insert(entityAttachment).values({
+        subjectEntityId: purchasedProduct.entityId,
+        imageId: photo.id,
+        sortOrder: 0,
+      });
+      await createExpense(
+        ctx.db,
+        makeExpenseInput({
+          projectId: owner.shortcode,
+          productId: purchasedProduct.id,
+        }),
+        ctx.actor,
+      );
+      const vendor = await insertWithShortcode(ctx.db, "vendor", {
+        name: `Synthetic vendor ${crypto.randomUUID()}`,
+      });
+      const purchase = await insertWithShortcode(ctx.db, "purchase", {
+        vendorId: vendor.id,
+        date: "2026-09-01",
+        defaultProjectId: inherited.id,
+      });
+      await createExpense(
+        ctx.db,
+        makeExpenseInput({
+          purchaseId: purchase.shortcode,
+          productId: purchasedProduct.id,
+        }),
+        ctx.actor,
+      );
+
+      const rows = await withDisplayImages(
+        ctx.db,
+        "project",
+        [{ id: owner.id }, { id: inherited.id }, { id: unrelated.id }],
+        (row) => ({ id: row.id }),
+      );
+      expect(rows[0]?.displayImages).toEqual([expectedDisplayImage(photo)]);
+      expect(rows[1]?.displayImages).toEqual([expectedDisplayImage(photo)]);
+      expect(rows[2]?.displayImages).toEqual([]);
+    });
   });
 
   describe("gardenEntry", () => {
