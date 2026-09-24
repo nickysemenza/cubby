@@ -87,12 +87,6 @@ const clientCodeSplittingGroups = [
     entriesAwareMergeThreshold: 65536,
   },
   {
-    name: "react-runtime",
-    test: /[\\/]react(?:-dom)?[\\/]|[\\/]scheduler[\\/]/,
-    entriesAware: true,
-    entriesAwareMergeThreshold: 65536,
-  },
-  {
     name: "react-hook-form",
     test: /[\\/]react-hook-form[\\/]|[\\/]@hookform[\\/]/,
     entriesAware: true,
@@ -224,12 +218,14 @@ export default defineConfig(async ({ command, mode }) => {
     // Rolldown's native code-splitting groups instead.
     //
     // Only these bounded groups are consolidated, and deliberately:
-    //   - es-toolkit, date-fns, TanStack Router/Query, Floating UI, React runtime,
-    //     hook-form, Radix UI, and small runtime utilities are bounded shared
+    //   - es-toolkit, date-fns, TanStack Router/Query, Floating UI, hook-form,
+    //     Radix UI, and small runtime utilities are bounded shared
     //     families; entry-aware groups keep route-specific subsets local.
     // Application-owned server-function wrappers stay on Rolldown's default
     // graph: grouping image.functions created a cross-chunk initialization
     // cycle once authenticated routes shared entity-schema dependencies.
+    // React stays on the default graph too: its entry-aware group merged a
+    // Base UI timeout singleton into a cyclic chunk, crashing hydration.
     //   - @base-ui was tried and reverted: its grouped chunk is 243KB (80KB gzip)
     //     but the landing page only uses ~7KB of it, so grouping would drag
     //     lazy-route dialog/sheet code into first paint. Lazy-only deps (@nivo,
