@@ -349,6 +349,24 @@ so the desktop runner saving is the comparable resource result. An earlier two-w
 attempt flaked before the browser-cache and reduced-motion changes, so later
 natural product PRs must establish the new median and flake rate.
 
+Two later same-base experiments were closed. [#1323](https://github.com/nickysemenza/cubby/pull/1323)
+gave xcodegen's generated project a content-based mtime, but its successful
+[exact-head run](https://github.com/nickysemenza/cubby/actions/runs/35952001092)
+still reported **142** app SwiftCompile lines after an exact DerivedData cache
+hit, the same count as #1321. Its Apple job took **2:17** versus **2:54** in
+the [main control](https://github.com/nickysemenza/cubby/actions/runs/35951600977),
+but the control restored only a prefix cache after generated-client changes;
+`Web checks` also rose from **3:58 → 4:08**. The proposed cache fix lacked a
+causal compile or overall-gate improvement.
+
+[#1324](https://github.com/nickysemenza/cubby/pull/1324) tried three
+Playwright workers on each of the same two desktop runners. Both shards passed
+at [exact head](https://github.com/nickysemenza/cubby/actions/runs/35952429539),
+but `Web checks` took **4:00** versus **3:58** in that same-base main control.
+Playwright test steps changed only **156s + 162s → 155s + 160s**, while
+desktop job walls rose **3:33 + 3:36 → 3:42 + 3:43**, adding **16s** of desktop
+runner time. Two workers per shard remain.
+
 In the HTTP/2 comparison, desktop runner queue time was **14–15s** in both
 runs. Total desktop runner time rose from **9:49** to **10:14**, so the unchanged
 `Web checks` time did not hide a runner-minute saving.
