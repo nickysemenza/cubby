@@ -84,14 +84,19 @@ export function rankPhotoProductCandidates(
       (candidate.manufacturer?.toLowerCase() === brand ||
         candidate.name.toLowerCase().includes(brand));
     if (shared.length < 2 && !(brandMatch && shared.length >= 1)) return [];
-    const score =
-      shared.length * 15 +
+    // One additional identity word (often the exact color or size) must outrank
+    // every provenance preference combined. Provenance breaks ties between
+    // plausible variants; it cannot turn a different variant into the match.
+    const identityScore =
+      shared.length * 30 +
       (shared.length / Math.max(1, wanted.size)) * 35 +
-      (brandMatch ? 25 : 0) +
+      (brandMatch ? 50 : 0);
+    const provenanceScore =
       (!candidate.hasOwnPhoto ? 10 : 0) +
       (!candidate.hasPhotoImport ? 8 : 0) +
       (candidate.hasPurchase ? 3 : 0) -
       (candidate.hasInventory ? 6 : 0);
+    const score = identityScore + provenanceScore;
     return [{ candidate, score }];
   });
   return scored

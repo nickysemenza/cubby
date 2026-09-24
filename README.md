@@ -862,3 +862,4 @@ promotion triggers. The README deliberately does not mirror the work list.
 - [docs/terminology.md](docs/terminology.md) — glossary disambiguating UI / code / DB names per concept
 - [docs/entities.md](docs/entities.md) — entity genericization ledger: the fixed-point thesis, every rejected generic-machinery direction with evidence, and what stays hand-written on purpose
 - [docs/inventory-audit.md](docs/inventory-audit.md) — inventory audit/session flow: purpose, current behavior, known gaps, redesign direction
+- [docs/product-identity-journey.md](docs/product-identity-journey.md) — the human-facing Product journey from photos, orders, email, transactions, and manual creation
