@@ -31,6 +31,10 @@ const column = (alias: string, name: string) => sql.raw(`${alias}."${name}"`);
  */
 export const effectiveExpenseProjectSql = (
   alias = '"Expense"',
+  // A caller comparing against one Project can skip food classification unless
+  // that Project is the household fallback. Omitting this guard preserves the
+  // canonical scalar expression for all other readers.
+  householdTarget: SQL = sql`TRUE`,
 ): SQL<ProjectId | null> => {
   const lineKind = column(alias, "lineKind");
   const storedProjectId = column(alias, "projectId");
@@ -51,7 +55,7 @@ export const effectiveExpenseProjectSql = (
         AND purchase_project."deletedAt" IS NULL
        WHERE inherited_purchase."id" = ${purchaseId}
          AND inherited_purchase."deletedAt" IS NULL),
-      CASE WHEN EXISTS (
+      CASE WHEN ${householdTarget} AND EXISTS (
         SELECT 1 FROM "Product" food_product
         WHERE food_product."id" = ${productId}
           AND food_product."deletedAt" IS NULL

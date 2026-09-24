@@ -6,6 +6,7 @@ import { getTableConfig, PgTable } from "drizzle-orm/pg-core";
 
 import { INCOMING_EDGES } from "~/server/db/entity-incoming-edges";
 import * as schema from "~/server/db/schema";
+import { effectiveExpenseProjectSql } from "~/server/repo/expense-inheritance";
 import { expenseProjectAllocationSql } from "~/server/repo/expense-project-allocation";
 import {
   effectiveTaskProjectSql,
@@ -133,12 +134,20 @@ function edgeCondition(
   edge: EdgeSpec,
   sourceAlias: string,
   targetAlias: string,
+  productScopedExpense: boolean,
 ): SQL {
   const target = sql.raw(`${targetAlias}."id"`);
   if (edge.edgeKey === "Task.projectId")
     return sql`${effectiveTaskProjectSql(sourceAlias)} = ${target}`;
   if (edge.edgeKey === "Task.subjectProductId")
     return sql`${effectiveTaskSubjectProductSql(sourceAlias)} = ${target}`;
+  // The database requires a product-linked Expense to be principal. For a
+  // product-scoped path, allocation is therefore the scalar effective project.
+  if (edge.edgeKey === "Expense.projectId" && productScopedExpense)
+    return sql`${effectiveExpenseProjectSql(
+      sourceAlias,
+      sql`${sql.raw(`${targetAlias}."shortcode"`)} = 'PRJ-HSHD'`,
+    )} = ${target}`;
   if (edge.edgeKey === "Expense.projectId")
     return sql`EXISTS (
     SELECT 1 FROM (${expenseProjectAllocationSql()}) attributed
@@ -159,6 +168,14 @@ const outgoingTarget = (edge: EdgeSpec, to: Entity | undefined): string => {
   }
   return table;
 };
+
+const productScopedExpenseAt = (
+  steps: readonly RelationshipPathStep[],
+  index: number,
+): boolean =>
+  steps[index]?.edge === "Expense.projectId" &&
+  (steps[index - 1]?.edge === "Expense.productId" ||
+    steps[index + 1]?.edge === "Expense.productId");
 
 /**
  * Compile a manifest-only path into structural joins. `aliasPrefix` is trusted
@@ -217,6 +234,7 @@ export const compileTraversal = (
         edge,
         outgoing ? currentAlias : alias,
         outgoing ? alias : currentAlias,
+        productScopedExpenseAt(steps, index),
       ),
     });
     currentTable = nextTable;
