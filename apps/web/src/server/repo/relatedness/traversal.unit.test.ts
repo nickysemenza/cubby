@@ -3,12 +3,15 @@ import { describe, expect, it } from "vitest";
 import { compileTraversal, invertPath } from "./traversal";
 
 describe("relatedness traversal", () => {
-  it("mechanically reverses a path", () => {
+  it("reverses the edge order and travel direction", () => {
     const path = [
       { edge: "Expense.productId", direction: "incoming" as const },
       { edge: "Expense.purchaseId", direction: "outgoing" as const },
     ];
-    expect(invertPath(invertPath(path))).toEqual(path);
+    expect(invertPath(path)).toEqual([
+      { edge: "Expense.purchaseId", direction: "incoming" },
+      { edge: "Expense.productId", direction: "outgoing" },
+    ]);
   });
 
   it("derives aliases and per-table soft-delete guards", () => {

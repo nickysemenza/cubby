@@ -490,6 +490,8 @@ export const SPEC_AREAS: readonly SpecAreaEntry[] = [
   {
     file: "browser-workflows.spec.ts",
     globs: [
+      `${WEB}/src/routes/_authenticated/recommendations.workbench.tsx`,
+      `${WEB}/src/app/recommendations/**`,
       `${WEB}/src/routes/_authenticated/search.index.tsx`,
       `${WEB}/src/routes/_authenticated/locations.index.tsx`,
       `${WEB}/src/routes/_authenticated/products.index.tsx`,

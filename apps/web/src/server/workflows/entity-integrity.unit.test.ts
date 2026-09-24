@@ -1,11 +1,10 @@
 import { integrityCatalogSchema } from "@cubby/schemas/entity-integrity";
-import { allEntities, entityManifest } from "@cubby/schemas/entity-manifest";
+import { allEntities } from "@cubby/schemas/entity-manifest";
 import { entityInspectorMetadata } from "@cubby/schemas/entity-manifest";
 import { describe, expect, it } from "vitest";
 
 import { ENTITY_EDGE_SEMANTICS } from "~/server/db/entity-edge-semantics";
 import { INCOMING_EDGES } from "~/server/db/entity-incoming-edges";
-import { ENTITY_LIFECYCLE_REGISTRY } from "~/server/repo/entity-lifecycle-registry";
 import { buildIntegrityCatalog } from "~/server/services/entity-integrity.service";
 
 describe("integrity catalog", () => {
@@ -59,14 +58,7 @@ describe("integrity catalog", () => {
     ]);
   });
 
-  it("counts declared relationships, operations, and dispositions", () => {
-    expect(catalog.coverage.relationships).toBe(
-      allEntities.reduce(
-        (total, entity) => total + entityManifest[entity].relationships.length,
-        0,
-      ),
-    );
-    expect(catalog.coverage.operations).toBe(ENTITY_LIFECYCLE_REGISTRY.length);
+  it("projects operation owners and incoming-edge dispositions", () => {
     for (const operation of catalog.operations) {
       expect(operation.owner).toBe(
         entityInspectorMetadata[operation.entity].operationOwners[

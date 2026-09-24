@@ -1,14 +1,18 @@
 # Validation, CI, and delivery
 
-Choose the lowest tier that can expose the changed behavior. Use real
-implementations; mocks are for external seams that cannot run locally. A test
-belongs only when it catches a behavior regression the type system cannot.
+Prefer an E2E scenario at the real user or system boundary for behavior it can
+observe. Use an isolated test for a specific plausible failure that E2E cannot
+reasonably catch, such as a database constraint, native wire contract, or
+concurrency boundary. Use real implementations; mocks are for external seams
+that cannot run locally. Write failure modes and any isolated test before the
+implementation it guards.
 
 ## During implementation
 
-Run one affected web test from the repository root with `pnpm test:file
-src/...`; paths are relative to `apps/web`. For PostgreSQL contracts use `pnpm
-test:file:postgres src/...`. Read a failed run's ending and
+Run one affected E2E scenario when it exposes the behavior. For an isolated web
+contract, run `pnpm test:file src/...` from the repository root; paths are
+relative to `apps/web`. For PostgreSQL contracts use `pnpm test:file:postgres
+src/...`. Read a failed run's ending and
 `apps/web/.vitest-failures.txt` before deciding what to change; do not rerun an
 unchanged tier to rediscover its failures.
 

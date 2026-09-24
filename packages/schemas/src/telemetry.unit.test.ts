@@ -1,8 +1,6 @@
-import { describe, expect, expectTypeOf, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import {
-  type McpToolCallTelemetry,
   mcpToolCallTelemetrySchema,
-  type TelemetryMessageV1,
   telemetryMessageV1Schema,
 } from "./telemetry";
 
@@ -22,14 +20,10 @@ const mcpEvent = {
 };
 
 describe("telemetryMessageV1Schema", () => {
-  it("dispatches the strict versioned union and infers its types", () => {
+  it("dispatches the strict versioned union", () => {
     const parsed = telemetryMessageV1Schema.parse(mcpEvent);
 
     expect(parsed.type).toBe("mcp_tool_call");
-    expectTypeOf(parsed).toMatchTypeOf<TelemetryMessageV1>();
-    expectTypeOf(
-      mcpToolCallTelemetrySchema.parse(mcpEvent),
-    ).toEqualTypeOf<McpToolCallTelemetry>();
   });
 
   it.each(["arguments", "output", "errorText", "sessionId"])(

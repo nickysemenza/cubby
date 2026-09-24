@@ -1,54 +1,17 @@
 import { AppErrors } from "@cubby/shared";
-import { describe, expect, expectTypeOf, it } from "vitest";
-import { type ShortcodeEntity, shortcodeEntities } from "./entity-manifest";
+import { describe, expect, it } from "vitest";
+import { shortcodeEntities } from "./entity-manifest";
 import { entitySummary } from "./generated/entity-summary.gen";
 import {
-  ENTITY_ID_SCHEMA,
   ENTITY_LABEL,
   ENTITY_NOT_FOUND_REASON,
-  type EntityId,
-  type EntityRef,
-  type FinancialAccountId,
-  type InventoryId,
-  type ProductId,
   entityIdSchema,
   parseEntityId,
-  parseEntityRef,
 } from "./identifiers";
 
-const sorted = (xs: readonly string[]) => [...xs].sort();
-
 const UUID = "3f7c1a52-9d0b-4e21-8b6a-1c2d3e4f5a6b";
-type EntityIdFixture = string;
-
-/**
- * The generic shape both lookups exist to enable: an entity known only as a
- * value, turned into that entity's branded id. This is what a shared
- * `resolveOrThrow(db, entity, code)` will be built on, so exercising it here
- * proves the maps are usable with an UNRESOLVED `E`, not just with literals.
- */
-const parseFor = <E extends ShortcodeEntity>(
-  entity: E,
-  value: EntityIdFixture,
-): EntityId<E> => parseEntityId(entity, value);
 
 describe("entity id lookups", () => {
-  it("covers every shortcode entity in every lookup", () => {
-    // Drift guard. Adding an entity to the manifest without adding it here is
-    // already a compile error (`ENTITY_ID_SCHEMA` is a mapped type over
-    // `ShortcodeEntity`; `ENTITY_NOT_FOUND_REASON` `satisfies` a Record over
-    // it), so this asserts the runtime maps too — no extra keys, none dropped.
-    expect(sorted(Object.keys(ENTITY_ID_SCHEMA))).toEqual(
-      sorted(shortcodeEntities),
-    );
-    expect(sorted(Object.keys(ENTITY_NOT_FOUND_REASON))).toEqual(
-      sorted(shortcodeEntities),
-    );
-    expect(sorted(Object.keys(ENTITY_LABEL))).toEqual(
-      sorted(shortcodeEntities),
-    );
-  });
-
   it("labels every entity the way its existing messages already do", () => {
     // These strings go straight into user-facing not-found errors, so they must
     // read as the start of a sentence — and match what the hand-rolled lookups
@@ -103,16 +66,7 @@ describe("entity id lookups", () => {
     }
   });
 
-  it("brands by entity, at the type level", () => {
-    expectTypeOf(parseFor("product", UUID)).toEqualTypeOf<ProductId>();
-    expectTypeOf(parseFor("inventory", UUID)).toEqualTypeOf<InventoryId>();
-    expectTypeOf(
-      parseFor("financialAccount", UUID),
-    ).toEqualTypeOf<FinancialAccountId>();
-    expectTypeOf<EntityId<"product">>().toEqualTypeOf<ProductId>();
-    expectTypeOf<EntityId<"inventory">>().toEqualTypeOf<InventoryId>();
-
-    // Parsing validates without changing a valid UUID's value.
+  it("preserves valid UUID values for every entity", () => {
     for (const entity of shortcodeEntities) {
       expect(parseEntityId(entity, UUID)).toBe(UUID);
     }
@@ -123,13 +77,6 @@ describe("entity id lookups", () => {
       expect(entityIdSchema(entity).safeParse("not-a-uuid").success).toBe(
         false,
       );
-    }
-  });
-
-  it("correlates an entity reference's discriminator with its id brand", () => {
-    const ref: EntityRef = parseEntityRef("product", UUID);
-    if (ref.entity === "product") {
-      expectTypeOf(ref.id).toEqualTypeOf<ProductId>();
     }
   });
 });

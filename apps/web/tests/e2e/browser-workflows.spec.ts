@@ -7,6 +7,18 @@ import {
 import { escapeRegExp, gotoAuthenticatedPage, uniqueName } from "./e2e-helpers";
 import { expect, test } from "./e2e-test";
 
+test("recommendations workbench direct entry shows guidance", async ({
+  page,
+}) => {
+  await gotoAuthenticatedPage(page, "/recommendations/workbench");
+  await expect(
+    page.getByRole("heading", { name: "Recommendations Workbench" }),
+  ).toBeVisible();
+  await expect(
+    page.getByText("Open this workbench from a current recommendation."),
+  ).toBeVisible();
+});
+
 test("browser Back restores the search query and scroll", async ({
   page,
 }, testInfo) => {

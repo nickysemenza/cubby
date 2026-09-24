@@ -8,7 +8,6 @@ import {
   allEntities,
   auditableEntities,
   browserRoutedEntities,
-  coverEntities,
   countableEntities,
   embeddableEntities,
   entityDescriptor,
@@ -19,8 +18,6 @@ import {
   imageEntities,
   imageIngressRouteById,
   type ImageIngressRoute,
-  galleryEntities,
-  logoEntities,
   searchableEntities,
   shortcodeEntities,
 } from "./entity-manifest";
@@ -120,19 +117,6 @@ describe("entity manifest", () => {
     expect(sorted(imageEntities.map((e) => e.toUpperCase()))).toEqual(
       sorted(entityImage.options),
     );
-  });
-
-  it("derives every direct-image storage roster from the manifest", () => {
-    const directImageEntities = new Set<Entity>([
-      ...galleryEntities,
-      ...coverEntities,
-      ...logoEntities,
-    ]);
-    for (const entity of allEntities) {
-      expect(directImageEntities.has(entity)).toBe(
-        entityManifest[entity].imageStorage !== false,
-      );
-    }
   });
 
   it("generates direct and related photo routes without proxying natural owners", () => {

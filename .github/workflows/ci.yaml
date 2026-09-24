@@ -180,7 +180,10 @@ jobs:
         env:
           CUBBY_SOURCE_COMMIT: ${{ github.sha }}
           CUBBY_SOURCE_BRANCH: ${{ github.ref_name }}
-        run: pnpm --filter @cubby/web run build:cf
+        run: |
+          # wasm-pack may add a trailing newline to the tracked package metadata.
+          git restore -- packages/wasm/package.json
+          pnpm --filter @cubby/web run build:cf
       - name: Save recipebridge WASM
         if: matrix.tier == 'node'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
@@ -365,14 +368,21 @@ jobs:
           name: recipebridge-wasm
           path: packages/wasm
       - name: Run Playwright tests
-        run: pnpm --filter @cubby/web run ${{ matrix.test-script }} --shard=${{ matrix.shard }} --workers=2
-      - name: Save Playwright report
-        if: failure()
+        run: |
+          # The downloaded WASM package may carry regenerated metadata.
+          git restore -- packages/wasm/package.json
+          pnpm --filter @cubby/web run ${{ matrix.test-script }} --shard=${{ matrix.shard }} --workers=2
+      - name: Save Playwright run bundle
+        if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
-          name: playwright-report-${{ matrix.slug }}
-          path: apps/web/playwright-report/
-          retention-days: 1
+          name: playwright-run-${{ matrix.slug }}
+          path: |
+            apps/web/playwright-report/run-manifest.json
+            apps/web/playwright-report/run-results.json
+            apps/web/playwright-report/SHA256SUMS
+          if-no-files-found: error
+          retention-days: 7
 
   # Matrix jobs are omitted entirely when web is unaffected. This stable
   # required check verifies their combined result whenever they run.
@@ -588,13 +598,14 @@ jobs:
           CUBBY_SIM_DB_EXTERNAL: "1"
           CI: "1"
         run: pnpm test:e2e:sim
-      - name: Retain simulator diagnostics on failure
-        if: failure()
+      - name: Save simulator E2E run bundle
+        if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
-          name: simulator-e2e-failure
-          if-no-files-found: warn
+          name: simulator-e2e-run
+          if-no-files-found: error
+          retention-days: 7
           path: |
-            artifacts/sim-e2e/**
-            apps/apple/DerivedData/Logs/**
-            ${{ runner.temp }}/cubby-sim-pg.log
+            artifacts/sim-e2e/**/run-manifest.json
+            artifacts/sim-e2e/**/run-results.json
+            artifacts/sim-e2e/**/SHA256SUMS

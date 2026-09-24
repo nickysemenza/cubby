@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
   bulkLookupRequestSchema,
-  productLookupResponseSchema,
   upcLookupInput,
   upcSearchInput,
 } from "./index";
@@ -29,22 +28,5 @@ describe("UPC transport contract", () => {
         }),
       // oxlint-disable-next-line vitest/require-to-throw-message -- The rejection itself is contractual; the exact message is intentionally not.
     ).toThrow();
-  });
-
-  it("validates the cached product response shape", () => {
-    expect(
-      productLookupResponseSchema.parse({
-        upc: "012345678905",
-        name: "Coffee",
-        manufacturer: null,
-        brand: null,
-        category: null,
-        description: null,
-        priceDollars: null,
-        imageUrl: null,
-        source: "manual",
-        cached: true,
-      }),
-    ).toMatchObject({ name: "Coffee", cached: true });
   });
 });

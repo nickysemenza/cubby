@@ -1,23 +1,8 @@
 import { describe, expect, it } from "vitest";
 
-import {
-  DOMAIN_WAYFINDING,
-  domainForEntity,
-  domainForRoute,
-  domainWayfinding,
-} from "./domain-wayfinding";
+import { domainForEntity, domainForRoute } from "./domain-wayfinding";
 
 describe("Porcelain Transit domain wayfinding", () => {
-  it("keeps the five labels and semantic tokens durable", () => {
-    expect(
-      Object.values(DOMAIN_WAYFINDING).map((domain) => domain.label),
-    ).toEqual(["Cook", "Pantry", "Plan", "House", "Finance"]);
-    expect(domainWayfinding("pantry")).toMatchObject({
-      accentToken: "--domain-pantry",
-      surfaceToken: "--domain-pantry-surface",
-    });
-  });
-
   it.each([
     ["/recipes", "cook"],
     ["/ingredients/workbench", "cook"],

@@ -31,11 +31,19 @@
   documented example body `4K7M` is the one code they allow.
 - Comments preserve constraints, regressions, contracts, and active TODOs—not
   narration.
-- A test earns its place by failing on a behavior regression the type system
-  cannot catch. Delete tests that only prove existence, exercise a mock, or
-  restate a typecheck; consolidate same-shape per-entity tests into one
-  table-driven test. A test that names a regression or invariant in a comment
-  is consolidated, never dropped.
+- Prefer E2E tests for complex behavior when a real user or system boundary can
+  expose the failure. Keep a unit or integration test only for a specific,
+  plausible regression that E2E does not reasonably catch. Delete tests that
+  only assert types, declarations, constants, or mock behavior; consolidate
+  duplicate cases. Preserve a named regression in a stronger test before
+  removing its old assertion.
+- Never write unit tests after writing the code they test. Before testing a
+  system in isolation, write down all plausible ways it could fail, then write a failing
+  test for the relevant behavior before implementation. Prefer E2E as the sole
+  automated test for a feature when it covers those failures.
+- Every completed E2E run leaves a sanitized, verifiable artifact with the
+  tested revision, replay command, results, and evidence. See
+  [test tiers and E2E artifacts](docs/agents/validation-tests.md).
 - Spend tool calls on bytes that earn their place. Batch independent read-only
   shell into one call, but prefer a targeted `Grep`/`Glob` over dumping a large
   file: the cost is calls x bytes returned, not calls alone. Re-read a file only

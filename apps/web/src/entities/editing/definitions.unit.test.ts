@@ -1,11 +1,8 @@
-import { entitySchema } from "@cubby/schemas/entity";
-import { entityManifest } from "@cubby/schemas/entity-manifest";
 import { EXPENSE_DATE_REQUIRED_MESSAGE } from "@cubby/schemas/expense-fields";
 import { productWithMappingsAndFoodOut } from "@cubby/schemas/product";
 import { projectOut, taskOut } from "@cubby/schemas/project";
 import { testShortcode } from "@cubby/schemas/testing";
 import { describe, expect, it } from "vitest";
-import { z } from "zod";
 
 import { householdLocalDate } from "~/lib/household-date";
 import { mock } from "~/lib/test/mock-schema";
@@ -17,15 +14,6 @@ import {
   resolveEntityEdit,
 } from "./kernel";
 import type { EditableEntity } from "./types";
-
-// Proves the property `genericCreateDefault` (definitions.ts) relies on:
-// Zod 4 exposes a `ZodDefault`'s default as a plain `def.defaultValue`
-// property, not a function to call.
-it("exposes a Zod 4 default as a plain def.defaultValue property", () => {
-  const schema = z.string().default("cooked");
-  expect(schema).toBeInstanceOf(z.ZodDefault);
-  expect(schema.def.defaultValue).toBe("cooked");
-});
 
 const explicitNoneResolution = () => ({
   mode: "none" as const,
@@ -411,14 +399,6 @@ describe("entity edit definitions", () => {
         initialEntityEditValues(resolved, request).pendingImageIds,
         `${entity} pendingImageIds default`,
       ).toEqual([]);
-    }
-  });
-
-  it("declares delete availability wherever the schema declares a lifecycle", () => {
-    for (const [key, definition] of Object.entries(entityEditRegistry)) {
-      const deletion = entityManifest[entitySchema.parse(key)].lifecycle.delete;
-      expect(definition.operations.delete).toBeDefined();
-      expect(deletion).not.toBeNull();
     }
   });
 

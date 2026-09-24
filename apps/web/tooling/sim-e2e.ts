@@ -1,5 +1,5 @@
-import { spawn } from "node:child_process";
-import { randomBytes } from "node:crypto";
+import { execFileSync, spawn } from "node:child_process";
+import { createHash, randomBytes } from "node:crypto";
 import {
   appendFileSync,
   existsSync,
@@ -18,6 +18,7 @@ import dotenv from "dotenv";
 import { Pool } from "pg";
 import { z } from "zod";
 
+import { writeE2ERunBundle } from "./e2e-run-bundle";
 import { assertSimulatorAdminUrl } from "./sim-db-guard";
 
 const webRoot = path.resolve(
@@ -76,6 +77,14 @@ const databaseURL = adminURL.replace(/\/postgres$/u, `/${simName}`);
 process.env.DATABASE_URL = databaseURL;
 const artifacts = path.join(repoRoot, "artifacts", lane, simName);
 mkdirSync(artifacts, { recursive: true });
+const runStartedAt = performance.now();
+let nativeBuildBinary: string | undefined;
+let nativeBuildSourceVersion: string | undefined;
+let currentNativeSourceVersion: (() => string) | undefined;
+let nativeBuildReady = false;
+let xcodebuildVersion: string | undefined;
+let simulatorName: string | undefined;
+let simulatorRuntime: string | undefined;
 let interrupted: NodeJS.Signals | undefined;
 let activeChild: ReturnType<typeof spawn> | undefined;
 let stopWatch: (() => void) | undefined;
@@ -115,6 +124,31 @@ function appleSourceVersion(): string {
       return `${file}:${stat.mtimeMs}:${stat.size}`;
     }),
   ].join("|");
+}
+
+function nativeSourceFingerprint(includeApp: boolean): string {
+  const kitSources = path.join(kitRoot, "Sources");
+  const files = readdirSync(kitSources, { recursive: true, encoding: "utf8" })
+    .filter((entry) => entry.endsWith(".swift"))
+    .map((entry) => path.join(kitSources, entry));
+  files.push(path.join(kitRoot, "Package.swift"));
+  if (includeApp) {
+    const appSources = path.join(appleRoot, "App");
+    files.push(
+      ...readdirSync(appSources, { recursive: true, encoding: "utf8" })
+        .filter((entry) => entry.endsWith(".swift"))
+        .map((entry) => path.join(appSources, entry)),
+      path.join(appleRoot, "project.yml"),
+    );
+  }
+  const hash = createHash("sha256");
+  for (const file of files.sort()) {
+    hash.update(path.relative(repoRoot, file));
+    hash.update("\0");
+    hash.update(readFileSync(file));
+    hash.update("\0");
+  }
+  return hash.digest("hex");
 }
 
 async function assertNativeEdit(
@@ -371,6 +405,7 @@ async function simulator(): Promise<{
   udid: string;
   name: string;
   state: string;
+  runtime: string;
 }> {
   const deviceType = "com.apple.CoreSimulator.SimDeviceType.iPhone-17";
   const raw = await new Promise<string>((resolve, reject) => {
@@ -409,7 +444,9 @@ async function simulator(): Promise<{
     .parse(JSON.parse(raw));
   const phones = Object.entries(parsed.devices)
     .filter(([runtime]) => runtime.includes(".iOS-"))
-    .flatMap(([, devices]) => devices)
+    .flatMap(([runtime, devices]) =>
+      devices.map((device) => ({ ...device, runtime })),
+    )
     .filter((device) => device.name.includes("iPhone"));
   const preferred = process.env.CUBBY_SIM_DEVICE;
   const selected = preferred
@@ -931,12 +968,17 @@ async function runHeadlessProductScenario(
       updatedName,
     ];
     const sourceVersion = swiftSourceVersion();
+    const sourceFingerprint = nativeSourceFingerprint(false);
     if (sourceVersion === builtVersion) {
       await run(path.join(kitRoot, ".build/debug/cubby"), args);
     } else {
       await run("pnpm", ["apple", "cli", ...args]);
       builtVersion = sourceVersion;
     }
+    nativeBuildBinary = path.join(kitRoot, ".build/debug/cubby");
+    nativeBuildSourceVersion = sourceFingerprint;
+    currentNativeSourceVersion = () => nativeSourceFingerprint(false);
+    nativeBuildReady = true;
     await assertNativeEdit(id, updatedName);
     console.log(
       `[${lane}] Native scenario ${(performance.now() - started).toFixed(0)}ms`,
@@ -980,6 +1022,70 @@ async function runHeadlessProductScenario(
       stopWatch = undefined;
       input.close();
     }
+  }
+}
+
+function nativeBuildMetadata() {
+  const fingerprint =
+    nativeBuildReady && nativeBuildBinary && existsSync(nativeBuildBinary)
+      ? createHash("sha256")
+          .update(readFileSync(nativeBuildBinary))
+          .digest("hex")
+      : null;
+  const matchesSource =
+    fingerprint !== null &&
+    nativeBuildSourceVersion !== undefined &&
+    currentNativeSourceVersion?.() === nativeBuildSourceVersion;
+  const runtime = {
+    mode: headless ? "headless-cli" : "ios-simulator",
+    ...(xcodebuildVersion && { xcodebuildVersion }),
+    ...(simulatorName && { simulatorName }),
+    ...(simulatorRuntime && { simulatorRuntime }),
+    ...(fingerprint && {
+      [headless ? "cliBinarySha256" : "appBinarySha256"]: fingerprint,
+    }),
+  };
+  return { build: { fingerprint, matchesSource }, runtime };
+}
+
+function finishE2ERun(failure: Error | undefined): Error | undefined {
+  if (watch) return failure;
+  try {
+    const { build, runtime } = nativeBuildMetadata();
+    const status = failure === undefined ? "passed" : "failed";
+    const durationMs = Math.round(performance.now() - runStartedAt);
+    const resultsPath = path.join(artifacts, "run-results.json");
+    writeFileSync(
+      resultsPath,
+      `${JSON.stringify({ schemaVersion: 1, status, scenario: lane, durationMs }, null, 2)}\n`,
+    );
+    const command = purchase
+      ? "test:e2e:headless:wardrobe"
+      : photo
+        ? "test:e2e:headless:photo"
+        : headless
+          ? "test:e2e:headless"
+          : video
+            ? "test:e2e:sim:video"
+            : "test:e2e:sim";
+    const manifest = writeE2ERunBundle({
+      repoRoot,
+      outputDir: artifacts,
+      evidence: [resultsPath],
+      kind: "native",
+      status,
+      command: ["pnpm", command],
+      cases: [{ name: lane, status, durationMs }],
+      runtime,
+      build,
+    });
+    console.log(`[${lane}] E2E artifact: ${manifest}`);
+    return failure;
+  } catch (artifactError) {
+    return new AggregateError(
+      failure === undefined ? [artifactError] : [failure, artifactError],
+      `${lane} could not save its E2E artifact`,
+    );
   }
 }
 
@@ -1129,6 +1235,14 @@ async function main(): Promise<void> {
       } else await runHeadlessProductScenario(url, productId, userId);
     } else {
       const device = await simulator();
+      xcodebuildVersion = execFileSync("xcodebuild", ["-version"], {
+        cwd: repoRoot,
+        encoding: "utf8",
+      })
+        .trim()
+        .replaceAll("\n", "; ");
+      simulatorName = device.name;
+      simulatorRuntime = device.runtime;
       if (device.state !== "Booted")
         await run("xcrun", ["simctl", "boot", device.udid]);
       await run("xcrun", ["simctl", "bootstatus", device.udid, "-b"]);
@@ -1140,6 +1254,8 @@ async function main(): Promise<void> {
       const session = `cubby-sim-${simName}`;
       const install = async () => {
         await run("pnpm", ["apple", "gen"]);
+        nativeBuildSourceVersion = nativeSourceFingerprint(true);
+        currentNativeSourceVersion = () => nativeSourceFingerprint(true);
         await run("xcodebuild", [
           "-project",
           "apps/apple/Cubby.xcodeproj",
@@ -1155,6 +1271,8 @@ async function main(): Promise<void> {
           "COMPILER_INDEX_STORE_ENABLE=NO",
           "build",
         ]);
+        nativeBuildBinary = path.join(appPath, "Cubby");
+        nativeBuildReady = true;
         await run("pnpm", [
           "exec",
           "agent-device",
@@ -1285,6 +1403,7 @@ async function main(): Promise<void> {
         `${lane} failed with cleanup errors for ${simName}`,
       );
   }
+  failure = finishE2ERun(failure);
   if (failure !== undefined) throw failure;
 }
 

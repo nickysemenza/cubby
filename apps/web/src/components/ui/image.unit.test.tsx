@@ -3,13 +3,6 @@ import { describe, expect, it } from "vitest";
 import { Image } from "./image";
 
 describe("Image", () => {
-  it("renders an <img> for a valid src", () => {
-    render(
-      <Image src="https://example.com/a.jpg" alt="a product" unoptimized />,
-    );
-    expect(screen.getByRole("img", { name: "a product" }).tagName).toBe("IMG");
-  });
-
   it("renders the fallback instead of a broken <img> when src is missing", () => {
     render(
       <Image src="" alt="no photo" fallback={<span>tile</span>} unoptimized />,

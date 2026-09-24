@@ -167,7 +167,7 @@ export const desktopNav: NavNode[] = [
 ];
 
 /** Every rendered authed leaf, including contextual links under Activities. */
-export const desktopLeaves: NavItem[] = desktopNav.flatMap((node) =>
+const desktopLeaves: NavItem[] = desktopNav.flatMap((node) =>
   isNavGroup(node) ? node.children : [node],
 );
 
@@ -185,10 +185,10 @@ export const completeNavLeaves: NavItem[] = [
 export const primaryNavGroups = desktopNav.filter(
   (node): node is NavGroup => isNavGroup(node) && node.tier === "primary",
 );
-export const utilityNavGroups = desktopNav.filter(
+const utilityNavGroups = desktopNav.filter(
   (node): node is NavGroup => isNavGroup(node) && node.tier === "utility",
 );
-export const developerNavGroups = desktopNav.filter(
+const developerNavGroups = desktopNav.filter(
   (node): node is NavGroup => isNavGroup(node) && node.tier === "developer",
 );
 

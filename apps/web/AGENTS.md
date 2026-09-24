@@ -14,8 +14,9 @@ only when making UI or visual decisions.
   `z.infer`. A narrower subset of a schema is `Pick`/`Omit` of the inferred
   type, not a re-typed copy.
 
-Run the narrowest affected web test tier; browser seams earn E2E only when lower
-tiers cannot observe the failure.
+Use an affected browser E2E scenario when it observes the changed behavior.
+Keep a focused UI or unit test for a distinct failure the browser scenario
+cannot reasonably catch.
 
 Verify browser work by reading, not by looking: `read_page`, `get_page_text`,
 `read_console_messages`, and `javascript_tool` answer almost every question and

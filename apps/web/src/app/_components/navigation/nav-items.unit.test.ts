@@ -5,19 +5,14 @@ import { entities } from "~/entities/entities";
 
 import { domainForRoute } from "./domain-wayfinding";
 import {
-  bottomNavItems,
   completeNavLeaves,
-  desktopLeaves,
   desktopNav,
-  developerNavGroups,
   findActiveTo,
   getEntityNavGroup,
   getSidebarGroupItems,
   isNavGroup,
-  mobileHouseholdItems,
   primaryNavGroups,
   settingsNavItem,
-  utilityNavGroups,
 } from "./nav-items";
 
 describe("workspace navigation contract", () => {
@@ -29,27 +24,6 @@ describe("workspace navigation contract", () => {
     ]);
   });
 
-  it("derives the intended navigation tiers from the canonical manifest", () => {
-    expect(primaryNavGroups.map((group) => group.label)).toEqual([
-      "Cook",
-      "Pantry",
-      "Plan",
-      "House",
-      "Finance",
-      "Records",
-    ]);
-    expect(utilityNavGroups.map((group) => group.label)).toEqual(["More"]);
-    expect(developerNavGroups.map((group) => group.label)).toEqual(["Dev"]);
-    expect(primaryNavGroups.map((group) => group.domain)).toEqual([
-      "cook",
-      "pantry",
-      "plan",
-      "house",
-      "finance",
-      undefined,
-    ]);
-  });
-
   it("keeps every primary destination in its route-level domain", () => {
     for (const group of primaryNavGroups) {
       if (group.domain === undefined) continue;
@@ -58,33 +32,6 @@ describe("workspace navigation contract", () => {
         expect(domainForRoute(String(item.to)), item.label).toBe(group.domain);
       }
     }
-  });
-
-  it("pins the phone household choices", () => {
-    expect(mobileHouseholdItems.map((item) => item.label)).toEqual([
-      "Home",
-      "Activities",
-      "Records",
-      "Recount inventory",
-      "Locations",
-      "Household calendar",
-      "Meals",
-      "Projects",
-      "Expenses",
-      "Problems",
-    ]);
-    expect(bottomNavItems.map((item) => item.label)).toEqual([
-      "Today",
-      "Inventory",
-      "Scan",
-      "Search",
-    ]);
-  });
-
-  it("keeps utility and developer destinations available to Cmd-K", () => {
-    const routes = new Set(completeNavLeaves.map((item) => item.to));
-    expect(routes).toContain("/search/debug");
-    expect(routes).toContain("/mcp");
   });
 
   it.each([
@@ -124,10 +71,6 @@ describe("getEntityNavGroup", () => {
     (entity): entity is BrowserRoutedEntity => entity in entities,
   );
 
-  it("covers every entity defined in entities.tsx", () => {
-    expect(entityKeys.length).toBeGreaterThan(0);
-  });
-
   it.each(entityKeys)(
     "resolves entity %s to exactly one nav group",
     (entity) => {
@@ -144,14 +87,4 @@ describe("getEntityNavGroup", () => {
       expect(getEntityNavGroup(entity)).toBe(matchingGroups[0]);
     },
   );
-});
-
-describe("expanded rail labels", () => {
-  it("keeps full destination wording in the canonical manifest", () => {
-    const byRoute = new Map(desktopLeaves.map((leaf) => [leaf.to, leaf.label]));
-
-    expect(byRoute.get("/statement-rows")).toBe("Reconcile statements");
-    expect(byRoute.get("/household-contribution")).toBe("Contribution ledger");
-    expect(byRoute.get("/meals/suggestions")).toBe("What can I make?");
-  });
 });

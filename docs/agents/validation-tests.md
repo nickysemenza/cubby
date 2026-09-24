@@ -1,9 +1,12 @@
 # Test tiers and runtime traps
 
-Use unit tests for pure logic, UI tests for rendered behavior, PostgreSQL tests
-for constraints/transactions/query behavior, and E2E for the built browser
-application. A `.tsx` change under `apps/web/src` needs the UI tier. Keep pure
-logic imported by node tests in alias-free `.ts` files.
+Prefer E2E for complete behavior through the built browser application or the
+native client. Keep a focused unit, UI, PostgreSQL, or Workers test when it
+catches a concrete failure the available E2E suites do not reasonably observe.
+Before adding an isolated test, record its failure modes and write the failing
+test before the code. For `.tsx` changes, choose browser E2E when it observes
+the behavior; use the UI or preview tier for distinct rendering or layout
+failures. Keep pure logic imported by node tests in alias-free `.ts` files.
 
 `pnpm test` runs fast unit, UI, contract, and auxiliary tests; `pnpm
 test:postgres` runs contract tests; `pnpm test:e2e` runs PostgreSQL-backed
@@ -18,6 +21,15 @@ serves `dist/`, so build it before a standalone run; `verify:local` does. A
 standalone Playwright request context inherits project storage state unless it
 sets empty cookies and origins. RTable's placeholder transition can eat clicks;
 cell-edit tests retry opening and filling as one action.
+
+Every completed E2E run produces a sanitized run bundle with its revision,
+replay command, runtime versions, case results, and SHA-256 checksums. CI uploads
+successful and failed bundles for seven days. A dirty local checkout or a build
+that cannot be tied to its source revision is marked as not exactly replayable.
+Raw HTML reports, traces, screenshots, and database dumps stay local because
+they can contain household data or credentials. Run `shasum -a 256 -c
+SHA256SUMS` from the downloaded bundle directory to verify its contents, then
+replay the `command` array in `run-manifest.json` against the recorded commit.
 
 Run `pnpm wasm` after WASM changes. The shared `CARGO_TARGET_DIR` can be
 written by another checkout, so confirm generated output is current. Generated

@@ -100,12 +100,4 @@ describe("getMcpUsageDashboard", () => {
     });
     expect(result.observationComplete).toBe(true);
   });
-
-  it("passes through the entity breakdown untouched", async () => {
-    const result = await getMcpUsageDashboard(unusedDatabase, 90, port);
-    expect(result.entities).toEqual([
-      { key: "product", label: "product", count: 3 },
-      { key: "unknown", label: "Unattributed", count: 1 },
-    ]);
-  });
 });

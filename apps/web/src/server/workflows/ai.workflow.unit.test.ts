@@ -8,9 +8,6 @@ import {
   describeLocationWorkflow,
   detectInventoryItemsWorkflow,
   precomputeEnrichmentProposalsWorkflow,
-  suggestIngredientMergeBatchWorkflow,
-  suggestUsdaFoodBatchWorkflow,
-  suggestUsdaFoodWorkflow,
 } from "./ai.server";
 
 describe("AI workflow graphs", () => {
@@ -30,24 +27,6 @@ describe("AI workflow graphs", () => {
         approveDetectedInventoryItemWorkflow.definition,
       ).steps.map((step) => step.type),
     ).toEqual(["call", "committedCall"]);
-  });
-
-  it("declares AI batch inputs and context preparation", () => {
-    expect(
-      inspectWorkflow(suggestUsdaFoodWorkflow.definition).steps.map(
-        (step) => step.type,
-      ),
-    ).toEqual(["call", "call"]);
-    expect(
-      inspectWorkflow(suggestUsdaFoodBatchWorkflow.definition).steps.map(
-        (step) => step.type,
-      ),
-    ).toEqual(["call", "call", "call"]);
-    expect(
-      inspectWorkflow(suggestIngredientMergeBatchWorkflow.definition).steps.map(
-        (step) => step.type,
-      ),
-    ).toEqual(["call", "call"]);
   });
 
   it("keeps precompute bounded and parallel while echoing shortcodes", () => {

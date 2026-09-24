@@ -131,7 +131,15 @@ whenever web validation is selected. The browser lanes test the exact bundle
 produced by the node test lane and retain the discovery and no-skip guard;
 desktop Chromium runs as two Playwright shards (two workers each). Phone-web and
 WebKit browser coverage was removed from PR CI and the Playwright suite; native
-checks remain separate. There is no coverage mode. `test-postgres` and `test-e2e` each
+checks remain separate. There is no coverage mode.
+Browser shards save sanitized case results, a run manifest, and SHA-256
+checksums on success and failure for seven days. The manifest records the tested
+commit, build fingerprint, and replay arguments; a dirty local run or unmatched
+build is marked as not exactly replayable. The manually dispatched native
+simulator E2E saves the same bundle format with its app build fingerprint and
+runtime. Raw reports, traces, screenshots, and logs stay local because they may
+contain household data or credentials.
+`test-postgres` and `test-e2e` each
 declare their own `postgres`/`integresql` `services:` block — GitHub Actions
 YAML has no anchors and no reusable construct that fits here, so the
 duplication is accepted rather than worked around. Affected jobs wait on
