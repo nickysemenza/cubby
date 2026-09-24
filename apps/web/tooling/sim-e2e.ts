@@ -347,6 +347,7 @@ async function runWarmSimulator(options: {
   });
   input.on("SIGINT", () => {
     interrupted = "SIGINT";
+    activeChild?.kill("SIGTERM");
     input.close();
   });
   stopWatch = () => input.close();
@@ -641,6 +642,7 @@ async function main(): Promise<void> {
         });
         input.on("SIGINT", () => {
           interrupted = "SIGINT";
+          activeChild?.kill("SIGTERM");
           input.close();
         });
         stopWatch = () => input.close();
