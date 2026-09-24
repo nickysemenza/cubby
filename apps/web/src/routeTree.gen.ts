@@ -111,6 +111,7 @@ import { Route as AuthenticatedRunsShortcodeRouteImport } from './routes/_authen
 import { Route as AuthenticatedSearchIndexRouteImport } from './routes/_authenticated/search.index'
 import { Route as AuthenticatedSearchDebugRouteImport } from './routes/_authenticated/search.debug'
 import { Route as AuthenticatedStatementRowsIndexRouteImport } from './routes/_authenticated/statement-rows.index'
+import { Route as AuthenticatedStatementRowsImportRouteImport } from './routes/_authenticated/statement-rows.import'
 import { Route as AuthenticatedTasksIndexRouteImport } from './routes/_authenticated/tasks.index'
 import { Route as AuthenticatedTasksShortcodeRouteImport } from './routes/_authenticated/tasks.$shortcode'
 import { Route as AuthenticatedUsdaIndexRouteImport } from './routes/_authenticated/usda.index'
@@ -737,6 +738,12 @@ const AuthenticatedStatementRowsIndexRoute =
     path: '/statement-rows/',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
+const AuthenticatedStatementRowsImportRoute =
+  AuthenticatedStatementRowsImportRouteImport.update({
+    id: '/statement-rows/import',
+    path: '/statement-rows/import',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
 const AuthenticatedTasksIndexRoute = AuthenticatedTasksIndexRouteImport.update({
   id: '/tasks/',
   path: '/tasks/',
@@ -1059,6 +1066,7 @@ export interface FileRoutesByFullPath {
   '/recommendations/workbench': typeof AuthenticatedRecommendationsWorkbenchRoute
   '/runs/$shortcode': typeof AuthenticatedRunsShortcodeRoute
   '/search/debug': typeof AuthenticatedSearchDebugRoute
+  '/statement-rows/import': typeof AuthenticatedStatementRowsImportRoute
   '/tasks/$shortcode': typeof AuthenticatedTasksShortcodeRoute
   '/usda/$id': typeof AuthenticatedUsdaIdRoute
   '/vendor-accounts/$shortcode': typeof AuthenticatedVendorAccountsShortcodeRoute
@@ -1205,6 +1213,7 @@ export interface FileRoutesByTo {
   '/recommendations/workbench': typeof AuthenticatedRecommendationsWorkbenchRoute
   '/runs/$shortcode': typeof AuthenticatedRunsShortcodeRoute
   '/search/debug': typeof AuthenticatedSearchDebugRoute
+  '/statement-rows/import': typeof AuthenticatedStatementRowsImportRoute
   '/tasks/$shortcode': typeof AuthenticatedTasksShortcodeRoute
   '/usda/$id': typeof AuthenticatedUsdaIdRoute
   '/vendor-accounts/$shortcode': typeof AuthenticatedVendorAccountsShortcodeRoute
@@ -1354,6 +1363,7 @@ export interface FileRoutesById {
   '/_authenticated/recommendations/workbench': typeof AuthenticatedRecommendationsWorkbenchRoute
   '/_authenticated/runs/$shortcode': typeof AuthenticatedRunsShortcodeRoute
   '/_authenticated/search/debug': typeof AuthenticatedSearchDebugRoute
+  '/_authenticated/statement-rows/import': typeof AuthenticatedStatementRowsImportRoute
   '/_authenticated/tasks/$shortcode': typeof AuthenticatedTasksShortcodeRoute
   '/_authenticated/usda/$id': typeof AuthenticatedUsdaIdRoute
   '/_authenticated/vendor-accounts/$shortcode': typeof AuthenticatedVendorAccountsShortcodeRoute
@@ -1503,6 +1513,7 @@ export interface FileRouteTypes {
     | '/recommendations/workbench'
     | '/runs/$shortcode'
     | '/search/debug'
+    | '/statement-rows/import'
     | '/tasks/$shortcode'
     | '/usda/$id'
     | '/vendor-accounts/$shortcode'
@@ -1649,6 +1660,7 @@ export interface FileRouteTypes {
     | '/recommendations/workbench'
     | '/runs/$shortcode'
     | '/search/debug'
+    | '/statement-rows/import'
     | '/tasks/$shortcode'
     | '/usda/$id'
     | '/vendor-accounts/$shortcode'
@@ -1797,6 +1809,7 @@ export interface FileRouteTypes {
     | '/_authenticated/recommendations/workbench'
     | '/_authenticated/runs/$shortcode'
     | '/_authenticated/search/debug'
+    | '/_authenticated/statement-rows/import'
     | '/_authenticated/tasks/$shortcode'
     | '/_authenticated/usda/$id'
     | '/_authenticated/vendor-accounts/$shortcode'
@@ -2620,6 +2633,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedStatementRowsIndexRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/_authenticated/statement-rows/import': {
+      id: '/_authenticated/statement-rows/import'
+      path: '/statement-rows/import'
+      fullPath: '/statement-rows/import'
+      preLoaderRoute: typeof AuthenticatedStatementRowsImportRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/_authenticated/tasks/': {
       id: '/_authenticated/tasks/'
       path: '/tasks'
@@ -2994,6 +3014,7 @@ interface AuthenticatedRouteChildren {
   AuthenticatedRecommendationsWorkbenchRoute: typeof AuthenticatedRecommendationsWorkbenchRoute
   AuthenticatedRunsShortcodeRoute: typeof AuthenticatedRunsShortcodeRoute
   AuthenticatedSearchDebugRoute: typeof AuthenticatedSearchDebugRoute
+  AuthenticatedStatementRowsImportRoute: typeof AuthenticatedStatementRowsImportRoute
   AuthenticatedTasksShortcodeRoute: typeof AuthenticatedTasksShortcodeRoute
   AuthenticatedUsdaIdRoute: typeof AuthenticatedUsdaIdRoute
   AuthenticatedVendorAccountsShortcodeRoute: typeof AuthenticatedVendorAccountsShortcodeRoute
@@ -3114,6 +3135,7 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
     AuthenticatedRecommendationsWorkbenchRoute,
   AuthenticatedRunsShortcodeRoute: AuthenticatedRunsShortcodeRoute,
   AuthenticatedSearchDebugRoute: AuthenticatedSearchDebugRoute,
+  AuthenticatedStatementRowsImportRoute: AuthenticatedStatementRowsImportRoute,
   AuthenticatedTasksShortcodeRoute: AuthenticatedTasksShortcodeRoute,
   AuthenticatedUsdaIdRoute: AuthenticatedUsdaIdRoute,
   AuthenticatedVendorAccountsShortcodeRoute:

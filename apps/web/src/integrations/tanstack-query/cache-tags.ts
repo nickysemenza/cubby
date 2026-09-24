@@ -512,10 +512,9 @@ export const calendarHouseholdRipple = (
  * `financialAccount`, `ledgerParty`, and `ledgerTransfer` now ripple to it.
  * `["entity","list"]` / `["entity","detail"]` look orphaned
  * statically but are matched at runtime via the `[[entity]]` root
- * `descriptorMeta` appends to every query. `statementRow` (×3)
- * and `auditLog.list` declare no client
- * mutation at all, because those writes arrive over MCP from a different
- * client than this one. The rest — `ai` (×4), `mcp` (×3), `upc.lookup`,
+ * `descriptorMeta` appends to every query. `auditLog.list` has no client
+ * mutation because those writes arrive over MCP from a different client.
+ * The rest — `ai` (×4), `mcp` (×3), `upc.lookup`,
  * `relatedness.product`, `entity.inspectorHealth`, `entityIntegrity` — are
  * external or derived reads with nothing that "writes" them from this app.
  * The global 60-second interactive policy in `query-policy.ts` means none of
