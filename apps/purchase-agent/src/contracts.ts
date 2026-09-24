@@ -4,6 +4,7 @@ const importRunPurpose = z.enum([
   "account_sync",
   "purchase_validation",
   "product_enrichment",
+  "photo_inventory",
 ]);
 
 const nonEmptyId = z.string().trim().min(1).max(256);
@@ -70,8 +71,11 @@ export function parsePurchaseAgentEvent(
 }
 
 /** Flue instance ids are stable per ImportRun, never per queue delivery. */
-export function purchaseImportAgentIdentity(runId: string): string {
-  return `import-run:${z.uuid().parse(runId)}`;
+export function purchaseImportAgentIdentity(
+  runId: string,
+  purpose?: z.infer<typeof importRunPurpose>,
+): string {
+  return `${purpose === "photo_inventory" ? "photo-inventory" : "import-run"}:${z.uuid().parse(runId)}`;
 }
 
 /** Queue redelivery converges on exactly one Flue submission. */

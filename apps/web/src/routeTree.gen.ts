@@ -150,6 +150,7 @@ import { Route as ApiImportAgentOauthCallbackRouteImport } from './routes/api/im
 import { Route as ApiImportAgentOauthStartRouteImport } from './routes/api/import/agent/oauth.start'
 import { Route as ApiImportAgentOauthStatusRouteImport } from './routes/api/import/agent/oauth.status'
 import { Route as ApiImportRunsPublicIdAgentRouteImport } from './routes/api/import/runs.$publicId.agent'
+import { Route as ApiImportRunsPublicIdPhotoAgentRouteImport } from './routes/api/import/runs.$publicId.photo-agent'
 import { Route as ApiImportRunsPublicIdPhotoGroupsRouteImport } from './routes/api/import/runs.$publicId.photo-groups'
 import { Route as ApiImportRunsPublicIdAgentSplatRouteImport } from './routes/api/import/runs.$publicId.agent.$'
 
@@ -949,6 +950,12 @@ const ApiImportRunsPublicIdAgentRoute =
     path: '/agent',
     getParentRoute: () => ApiImportRunsPublicIdRoute,
   } as any)
+const ApiImportRunsPublicIdPhotoAgentRoute =
+  ApiImportRunsPublicIdPhotoAgentRouteImport.update({
+    id: '/photo-agent',
+    path: '/photo-agent',
+    getParentRoute: () => ApiImportRunsPublicIdRoute,
+  } as any)
 const ApiImportRunsPublicIdPhotoGroupsRoute =
   ApiImportRunsPublicIdPhotoGroupsRouteImport.update({
     id: '/photo-groups',
@@ -1103,6 +1110,7 @@ export interface FileRoutesByFullPath {
   '/api/import/agent/oauth/start': typeof ApiImportAgentOauthStartRoute
   '/api/import/agent/oauth/status': typeof ApiImportAgentOauthStatusRoute
   '/api/import/runs/$publicId/agent': typeof ApiImportRunsPublicIdAgentRouteWithChildren
+  '/api/import/runs/$publicId/photo-agent': typeof ApiImportRunsPublicIdPhotoAgentRoute
   '/api/import/runs/$publicId/photo-groups': typeof ApiImportRunsPublicIdPhotoGroupsRoute
   '/api/import/runs/$publicId/agent/$': typeof ApiImportRunsPublicIdAgentSplatRoute
 }
@@ -1246,6 +1254,7 @@ export interface FileRoutesByTo {
   '/api/import/agent/oauth/start': typeof ApiImportAgentOauthStartRoute
   '/api/import/agent/oauth/status': typeof ApiImportAgentOauthStatusRoute
   '/api/import/runs/$publicId/agent': typeof ApiImportRunsPublicIdAgentRouteWithChildren
+  '/api/import/runs/$publicId/photo-agent': typeof ApiImportRunsPublicIdPhotoAgentRoute
   '/api/import/runs/$publicId/photo-groups': typeof ApiImportRunsPublicIdPhotoGroupsRoute
   '/api/import/runs/$publicId/agent/$': typeof ApiImportRunsPublicIdAgentSplatRoute
 }
@@ -1392,6 +1401,7 @@ export interface FileRoutesById {
   '/api/import/agent/oauth/start': typeof ApiImportAgentOauthStartRoute
   '/api/import/agent/oauth/status': typeof ApiImportAgentOauthStatusRoute
   '/api/import/runs/$publicId/agent': typeof ApiImportRunsPublicIdAgentRouteWithChildren
+  '/api/import/runs/$publicId/photo-agent': typeof ApiImportRunsPublicIdPhotoAgentRoute
   '/api/import/runs/$publicId/photo-groups': typeof ApiImportRunsPublicIdPhotoGroupsRoute
   '/api/import/runs/$publicId/agent/$': typeof ApiImportRunsPublicIdAgentSplatRoute
 }
@@ -1538,6 +1548,7 @@ export interface FileRouteTypes {
     | '/api/import/agent/oauth/start'
     | '/api/import/agent/oauth/status'
     | '/api/import/runs/$publicId/agent'
+    | '/api/import/runs/$publicId/photo-agent'
     | '/api/import/runs/$publicId/photo-groups'
     | '/api/import/runs/$publicId/agent/$'
   fileRoutesByTo: FileRoutesByTo
@@ -1681,6 +1692,7 @@ export interface FileRouteTypes {
     | '/api/import/agent/oauth/start'
     | '/api/import/agent/oauth/status'
     | '/api/import/runs/$publicId/agent'
+    | '/api/import/runs/$publicId/photo-agent'
     | '/api/import/runs/$publicId/photo-groups'
     | '/api/import/runs/$publicId/agent/$'
   id:
@@ -1826,6 +1838,7 @@ export interface FileRouteTypes {
     | '/api/import/agent/oauth/start'
     | '/api/import/agent/oauth/status'
     | '/api/import/runs/$publicId/agent'
+    | '/api/import/runs/$publicId/photo-agent'
     | '/api/import/runs/$publicId/photo-groups'
     | '/api/import/runs/$publicId/agent/$'
   fileRoutesById: FileRoutesById
@@ -2854,6 +2867,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiImportRunsPublicIdAgentRouteImport
       parentRoute: typeof ApiImportRunsPublicIdRoute
     }
+    '/api/import/runs/$publicId/photo-agent': {
+      id: '/api/import/runs/$publicId/photo-agent'
+      path: '/photo-agent'
+      fullPath: '/api/import/runs/$publicId/photo-agent'
+      preLoaderRoute: typeof ApiImportRunsPublicIdPhotoAgentRouteImport
+      parentRoute: typeof ApiImportRunsPublicIdRoute
+    }
     '/api/import/runs/$publicId/photo-groups': {
       id: '/api/import/runs/$publicId/photo-groups'
       path: '/photo-groups'
@@ -3166,11 +3186,13 @@ const ApiImportRunsPublicIdAgentRouteWithChildren =
 
 interface ApiImportRunsPublicIdRouteChildren {
   ApiImportRunsPublicIdAgentRoute: typeof ApiImportRunsPublicIdAgentRouteWithChildren
+  ApiImportRunsPublicIdPhotoAgentRoute: typeof ApiImportRunsPublicIdPhotoAgentRoute
   ApiImportRunsPublicIdPhotoGroupsRoute: typeof ApiImportRunsPublicIdPhotoGroupsRoute
 }
 
 const ApiImportRunsPublicIdRouteChildren: ApiImportRunsPublicIdRouteChildren = {
   ApiImportRunsPublicIdAgentRoute: ApiImportRunsPublicIdAgentRouteWithChildren,
+  ApiImportRunsPublicIdPhotoAgentRoute: ApiImportRunsPublicIdPhotoAgentRoute,
   ApiImportRunsPublicIdPhotoGroupsRoute: ApiImportRunsPublicIdPhotoGroupsRoute,
 }
 

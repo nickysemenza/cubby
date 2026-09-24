@@ -12,7 +12,11 @@ export type PurchaseAgentDispatch = (
 
 type PurchaseAgentSignalAttributes = {
   eventId: string;
-  purpose?: "account_sync" | "purchase_validation" | "product_enrichment";
+  purpose?:
+    | "account_sync"
+    | "purchase_validation"
+    | "product_enrichment"
+    | "photo_inventory";
 };
 
 export async function dispatchPurchaseAgentEvent(
@@ -22,7 +26,7 @@ export async function dispatchPurchaseAgentEvent(
   const { runId: _privateRunId, ...observableEvent } = event;
   const attributes: PurchaseAgentSignalAttributes = { eventId: event.eventId };
   await send({
-    id: purchaseImportAgentIdentity(event.runId),
+    id: purchaseImportAgentIdentity(event.runId, event.purpose),
     initialData: {
       runId: event.runId,
       coordinatorModel: event.coordinatorModel,

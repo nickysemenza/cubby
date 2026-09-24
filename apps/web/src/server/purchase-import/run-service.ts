@@ -70,6 +70,7 @@ import {
   importRunOrderCandidate,
   importRunProgress,
   importRunTarget,
+  photoGroupProposal,
   ledgerParty,
   product,
   productExternalId,
@@ -642,6 +643,52 @@ export async function startPhotoInventoryRun(
   });
 }
 
+/** Arm a photo run only after upload has produced pending targets. */
+export async function startPhotoInventoryCoordinator(
+  db: Database,
+  input: { publicId: string; actorUserId: string },
+) {
+  const publicId = importRunShortcode.parse(input.publicId);
+  const actorUserId = userId.parse(input.actorUserId);
+  const eventId = crypto.randomUUID();
+  const [started] = await getDb(db)
+    .update(importRun)
+    .set({
+      dispatchEventId: eventId,
+      dispatchError: null,
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(importRun.shortcode, publicId),
+        eq(importRun.actorUserId, actorUserId),
+        eq(importRun.purpose, "photo_inventory"),
+        eq(importRun.status, "running"),
+        isNull(importRun.dispatchEventId),
+        sql`EXISTS (SELECT 1 FROM ${importRunTarget} WHERE ${importRunTarget.runId} = ${importRun.id} AND ${importRunTarget.imageId} IS NOT NULL AND ${importRunTarget.state} = 'pending')`,
+      ),
+    )
+    .returning({ id: importRun.id, publicId: importRun.shortcode });
+  if (started) return { ...started, eventId, created: true as const };
+  const scope = await loadRunScopeByShortcode(db, publicId);
+  if (scope.public.purpose !== "photo_inventory")
+    throw new Error("Import run is not a photo-inventory run");
+  if (scope.actorUserId !== actorUserId)
+    throw new Error("Only the run's initiating member can start its agent");
+  if (scope.public.status !== "running")
+    throw new Error(`Import run is ${scope.public.status}`);
+  if (scope.public.dispatchEventId)
+    return {
+      id: scope.public.runId,
+      publicId,
+      eventId: scope.public.dispatchEventId,
+      created: false as const,
+    };
+  throw new Error(
+    "Upload and finalize photos before asking the agent to group them",
+  );
+}
+
 /** Consumer-side fence: only the active event generation may admit Flue. */
 export async function acknowledgeImportRunCoordinator(
   db: Database,
@@ -1114,6 +1161,23 @@ export async function reconcileSettledImportRun(
   const scope = await loadRunScope(db, input.runId);
   if (scope.public.status !== "running")
     return { reconciled: false as const, status: scope.public.status };
+  if (scope.public.purpose === "photo_inventory") {
+    const [progress, proposal] = await Promise.all([
+      latestImportRunProgress(db, input.runId),
+      getDb(db)
+        .select({ id: photoGroupProposal.id })
+        .from(photoGroupProposal)
+        .where(
+          and(
+            eq(photoGroupProposal.runId, scope.public.runId),
+            eq(photoGroupProposal.state, "proposed"),
+          ),
+        )
+        .limit(1),
+    ]);
+    if (progress?.awaitingApproval && proposal.length > 0)
+      return { reconciled: false as const, status: "running" as const };
+  }
   if (scope.public.vendorAccountId) {
     const broker = namespace.getByName(scope.public.vendorAccountId);
     const pending = await broker.pendingCommands(scope.public.runId);
@@ -1156,10 +1220,13 @@ export async function expireStaleImportRuns(
       and(
         eq(importRun.status, "running"),
         lt(importRun.updatedAt, cutoff),
-        // A photo-inventory run has no coordinator polling it, so idle time
-        // alone is not staleness: it may sit untouched for days between
-        // native-app upload sessions.
-        ne(importRun.purpose, importRunPurpose.enum.photo_inventory),
+        // Unstarted photo runs may sit between native upload sessions. Once
+        // dispatched, they get the same stalled-coordinator backstop; review
+        // proposals are preserved by reconcileSettledImportRun.
+        or(
+          ne(importRun.purpose, importRunPurpose.enum.photo_inventory),
+          isNotNull(importRun.coordinatorStartedAt),
+        ),
         sql`NOT EXISTS (SELECT 1 FROM ${importRunOperation} WHERE ${importRunOperation.runId} = ${importRun.id} AND ${importRunOperation.startedAt} >= ${cutoff})`,
         sql`NOT EXISTS (SELECT 1 FROM ${importRunProgress} WHERE ${importRunProgress.runId} = ${importRun.id} AND ${importRunProgress.createdAt} >= ${cutoff})`,
       ),
@@ -1382,8 +1449,31 @@ export async function claimNextImportWork(
   }
   // A photo-inventory run is vendor-less by construction; it must never fall
   // through to the account-sync branch below.
-  if (scope.public.purpose === "photo_inventory")
-    throw new Error("Photo inventory runs have no dispatchable work");
+  if (scope.public.purpose === "photo_inventory") {
+    const [run] = await getDb(db)
+      .select({ notes: importRun.notes })
+      .from(importRun)
+      .where(eq(importRun.id, scope.public.runId))
+      .limit(1);
+    const [pending] = await getDb(db)
+      .select({ count: count() })
+      .from(importRunTarget)
+      .where(
+        and(
+          eq(importRunTarget.runId, scope.public.runId),
+          isNotNull(importRunTarget.imageId),
+          eq(importRunTarget.state, "pending"),
+        ),
+      );
+    return pending?.count
+      ? {
+          kind: "photo_inventory" as const,
+          runId: scope.public.shortcode,
+          pendingImages: pending.count,
+          notes: run?.notes ?? null,
+        }
+      : { kind: "none" as const };
+  }
   if (!scope.public.vendorAccountId || !scope.vendorId)
     return { kind: "none" as const };
   const [hunt] = await getDb(db)

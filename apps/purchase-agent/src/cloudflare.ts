@@ -21,7 +21,12 @@ const queueBody: z.ZodType<PurchaseAgentEventCandidate> = z.union([
     runId: z.string().optional(),
     coordinatorModel: z.string().optional(),
     purpose: z
-      .enum(["account_sync", "purchase_validation", "product_enrichment"])
+      .enum([
+        "account_sync",
+        "purchase_validation",
+        "product_enrichment",
+        "photo_inventory",
+      ])
       .optional(),
     eventId: z.string().optional(),
     type: z.string().optional(),

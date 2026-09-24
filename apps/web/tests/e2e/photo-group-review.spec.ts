@@ -26,6 +26,9 @@ test("reviews, approves, and discards proposed photo groups on the photo-invento
   await expect(
     page.getByText("Waiting for an agent to propose groups."),
   ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Ask agent to group photos" }),
+  ).toBeVisible();
   if (recording) await page.waitForTimeout(1_500);
   const proposed = await page.request.post(
     `/api/import/runs/${seed.runId}/photo-groups`,
@@ -39,6 +42,9 @@ test("reviews, approves, and discards proposed photo groups on the photo-invento
       exact: true,
     }),
   ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Ask agent to group photos" }),
+  ).toHaveCount(0);
 
   const g1Card = page.locator('[data-slot="card"]').filter({
     has: page.getByRole("heading", { name: "Gray crew t-shirt — M" }),
