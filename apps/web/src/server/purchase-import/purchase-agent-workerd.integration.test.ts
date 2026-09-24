@@ -126,8 +126,8 @@ function workerdWebConfig(databaseUrl: string) {
   if (assets) assets.directory = "dist/client";
   config.services = (config.services ?? []).map((service) => {
     const replacements: Record<string, string> = {
-      USDA_API: "e2e-usda-empty",
-      UPC_LOOKUP: "e2e-upc-empty",
+      USDA_API: "local-offline-peers",
+      UPC_LOOKUP: "local-offline-peers",
       PURCHASE_AGENT: "purchase-agent",
     };
     const binding = String(service.binding ?? "");
@@ -198,15 +198,8 @@ function createWorkerdHarness(databaseUrl: string) {
       },
       {
         config: {
-          name: "e2e-usda-empty",
-          main: "tests/e2e/harness-services/usda-empty.ts",
-          compatibility_date: "2026-09-19",
-        },
-      },
-      {
-        config: {
-          name: "e2e-upc-empty",
-          main: "tests/e2e/harness-services/upc-empty.ts",
+          name: "local-offline-peers",
+          main: "tooling/local-offline-peers.ts",
           compatibility_date: "2026-09-19",
         },
       },
