@@ -63,7 +63,7 @@ const clientCodeSplittingGroups = [
     priority: -1,
     entriesAware: true,
     entriesAwareMergeThreshold: 65536,
-    includeDependenciesRecursively: true,
+    includeDependenciesRecursively: false,
   },
   {
     name: "icons",
@@ -245,7 +245,9 @@ export default defineConfig(async ({ command, mode }) => {
       client: {
         build: {
           rolldownOptions: {
+            preserveEntrySignatures: "allow-extension",
             output: {
+              strictExecutionOrder: true,
               codeSplitting: { groups: clientCodeSplittingGroups },
             },
           },
