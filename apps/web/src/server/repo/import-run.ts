@@ -8,6 +8,7 @@ import {
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
 import { and, eq, sql } from "drizzle-orm";
 
+import { formatDuration } from "~/lib/format-duration";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { importRun } from "~/server/db/schema";
 import {
@@ -123,6 +124,11 @@ const toOut = (row: ImportRunRow): ImportRunOut =>
     ...row,
     id: parseShortcodeFor("importRun", String(row.shortcode)),
     displayName: `${row.vendorName ?? row.ledgerPartyName ?? row.actorName} · ${PURPOSE_LABEL[importRunPurpose.parse(row.purpose)]}`,
+    wallTime: row.endedAt
+      ? formatDuration(
+          Math.max(0, row.endedAt.getTime() - row.startedAt.getTime()),
+        )
+      : "In progress",
     vendorAccountId: row.vendorAccountShortcode
       ? parseShortcodeFor("vendorAccount", row.vendorAccountShortcode)
       : null,

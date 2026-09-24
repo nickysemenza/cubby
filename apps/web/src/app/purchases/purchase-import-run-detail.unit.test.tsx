@@ -25,6 +25,7 @@ const run = {
   coordinatorModel: "test-model",
   skillRevision: "purchase-import@test",
   runtimeRevision: "flue@test",
+  agentModelMs: 3_200,
   source: { kind: "vendor export", vendorName: "Fixture vendor" },
   actor: {
     name: "Fixture member",
@@ -175,7 +176,10 @@ describe("RunImportWorkflow", () => {
     expect(screen.getByText("fixture-order.pdf")).toBeInTheDocument();
     expect(await screen.findByText("System and Mac log")).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "Retry import" }),
+      screen.getByRole("button", { name: "Retry unresolved work" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Start new run with same inputs" }),
     ).toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: /Terra|Escalate to Sol/ }),
@@ -190,6 +194,37 @@ describe("RunImportWorkflow", () => {
 });
 
 it("shows durable progress and diagnostics alongside photo group review", async () => {
+  const defaultFetch = fetch;
+  vi.stubGlobal(
+    "fetch",
+    vi.fn((input: string | URL | Request, init?: RequestInit) => {
+      const url = input instanceof Request ? input.url : String(input);
+      if (url.endsWith(`/api/import/runs/${run.publicId}`))
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              run: {
+                ...run,
+                purpose: "photo_inventory",
+                targets: [],
+                operations: [
+                  {
+                    operationId: "group-1",
+                    kind: "commit_photo_group",
+                    state: "completed",
+                    startedAt: "2026-09-20T16:01:00.000Z",
+                    completedAt: "2026-09-20T16:01:02.000Z",
+                    error: null,
+                  },
+                ],
+              },
+            }),
+            { status: 200, headers: { "Content-Type": "application/json" } },
+          ),
+        );
+      return defaultFetch(input, init);
+    }),
+  );
   const photoRecord = fromPartial<ImportRunOut>({
     id: run.publicId,
     status: "completed",
@@ -203,11 +238,18 @@ it("shows durable progress and diagnostics alongside photo group review", async 
   expect(screen.getByText("Run progress")).toBeInTheDocument();
   expect(screen.getByText("Timeline and system log")).toBeInTheDocument();
   expect(screen.getByLabelText("Import run transcript")).toHaveTextContent(
-    "extract-1",
+    "group-1",
   );
   expect(await screen.findByText("System and Mac log")).toBeInTheDocument();
   expect(await screen.findByText("Work at a glance")).toBeInTheDocument();
-  expect(screen.getByText("Purchase import complete")).toBeInTheDocument();
+  expect(
+    screen.getByRole("region", { name: "Run step timing table" }),
+  ).toBeInTheDocument();
+  expect(screen.getByText("Total run wall time")).toBeInTheDocument();
+  expect(
+    screen.getByRole("button", { name: "Start new run with same inputs" }),
+  ).toBeInTheDocument();
+  expect(screen.getByText("Photo review complete")).toBeInTheDocument();
   expect(screen.queryByText("Extracted order details")).not.toBeInTheDocument();
   expect(
     screen.getByText("Agent messages and tool calls · 0 messages"),

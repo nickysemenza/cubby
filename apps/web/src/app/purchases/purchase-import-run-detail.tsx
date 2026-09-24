@@ -1,4 +1,5 @@
 import type { ImportRunOut } from "@cubby/schemas/import-run";
+import { flueImportRunPurpose } from "@cubby/schemas/import-run-agent";
 import { initiateImportRunEvidenceUploadOut } from "@cubby/schemas/purchase-import";
 import {
   createFlueClient,
@@ -59,7 +60,6 @@ const TERMINAL_RUN_STATUSES = new Set([
   "failed",
   "needs_review",
   "dispatch_failed",
-  "aborted",
 ]);
 
 const statusBadgeVariant = (status: string): BadgeVariant => {
@@ -155,13 +155,13 @@ function RunControl({ run }: { run: ImportRunDetail }) {
 function TerminalRunControls({ run }: { run: ImportRunDetail }) {
   const queryClient = useQueryClient();
   const retry = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (action: "retry" | "restart") => {
       const response = await fetch(
         `/api/import/runs/${encodeURIComponent(run.publicId)}`,
         {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action: "retry" }),
+          body: JSON.stringify({ action }),
         },
       );
       return readJsonOrThrow(
@@ -183,23 +183,40 @@ function TerminalRunControls({ run }: { run: ImportRunDetail }) {
   });
   if (
     !TERMINAL_RUN_STATUSES.has(run.status) ||
-    run.successorRunPublicId ||
-    run.status === "dispatch_failed"
+    !flueImportRunPurpose.safeParse(run.purpose).success
   )
     return null;
   return (
     <div className="grid justify-items-end gap-2">
       <div className="flex flex-wrap justify-end gap-2">
+        {run.purpose !== "photo_inventory" &&
+        !run.successorRunPublicId &&
+        run.status !== "dispatch_failed" ? (
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={() => retry.mutate("retry")}
+            disabled={retry.isPending}
+          >
+            Retry unresolved work
+          </Button>
+        ) : null}
         <Button
           type="button"
           size="sm"
-          variant="outline"
-          onClick={() => retry.mutate()}
+          onClick={() => retry.mutate("restart")}
           disabled={retry.isPending}
         >
-          Retry import
+          Start new run with same inputs
         </Button>
       </div>
+      {run.purpose === "photo_inventory" ? (
+        <p className="max-w-md text-right text-xs text-muted-foreground">
+          Reuses these uploaded photos and their existing image analysis. The
+          agent groups them again in a separate run.
+        </p>
+      ) : null}
       {retry.isError ? (
         <StatusText tone="destructive">{retry.error.message}</StatusText>
       ) : null}
@@ -419,6 +436,24 @@ function AgentSurface({ run }: { run: ImportRunDetail }) {
   return <ActiveAgentSurface run={run} />;
 }
 
+function agentWorkHeadline(
+  run: ImportRunDetail,
+  isPhotoRun: boolean,
+  proposedGroups?: number,
+): string {
+  if (run.status === "completed")
+    return isPhotoRun ? "Photo review complete" : "Purchase import complete";
+  if (run.status === "paused_auth") return "Waiting for retailer sign-in";
+  if (run.status === "paused_approval") return "Waiting for your approval";
+  if (run.status === "failed" || run.status === "dispatch_failed")
+    return "Agent work stopped";
+  if (isPhotoRun && proposedGroups)
+    return `${proposedGroups} item ${proposedGroups === 1 ? "group is" : "groups are"} ready for review`;
+  return isPhotoRun
+    ? "Preparing photo groups"
+    : "Working through purchase evidence";
+}
+
 function AgentWorkOverview({
   run,
   messages,
@@ -437,28 +472,18 @@ function AgentWorkOverview({
     ...additionalWork,
   ];
   const isPhotoRun = run.purpose === "photo_inventory";
-  const headline =
-    run.status === "completed"
-      ? isPhotoRun
-        ? "Photo review complete"
-        : "Purchase import complete"
-      : run.status === "paused_auth"
-        ? "Waiting for retailer sign-in"
-        : run.status === "paused_approval"
-          ? "Waiting for your approval"
-          : run.status === "failed" || run.status === "dispatch_failed"
-            ? "Agent work stopped"
-            : isPhotoRun && proposedGroups
-              ? `${proposedGroups} item ${proposedGroups === 1 ? "group is" : "groups are"} ready for review`
-              : isPhotoRun
-                ? "Preparing photo groups"
-                : "Working through purchase evidence";
+  const headline = agentWorkHeadline(run, isPhotoRun, proposedGroups);
   const photoCount = run.targets.filter(
     (target) => target.targetType === "image",
   ).length;
   const detail = isPhotoRun
     ? `${photoCount} ${photoCount === 1 ? "photo" : "photos"} received${settledGroups ? ` · ${settledGroups} groups settled` : ""}`
     : `${run.ordersSeen} ${run.ordersSeen === 1 ? "order" : "orders"} seen · ${run.imported} imported · ${run.updated} updated`;
+  const wallMs = Math.max(
+    0,
+    (run.endedAt ? Date.parse(run.endedAt) : Date.now()) -
+      Date.parse(run.startedAt),
+  );
   const workCount = (item: AgentWorkItem) => {
     if (item.kind === "image-description")
       return `${item.completed} ${item.completed === 1 ? "photo" : "photos"}`;
@@ -474,49 +499,151 @@ function AgentWorkOverview({
         {headline}
       </p>
       <p className="text-xs text-muted-foreground">{detail}</p>
-      {work.length ? (
-        <ol className="mt-3 grid gap-1 border-t border-border pt-2">
-          {work.map((item) => {
-            const Icon = item.completed
-              ? CheckCircleIcon
-              : item.failed && !item.running
-                ? WarningCircleIcon
-                : CircleNotchIcon;
-            return (
-              <li
-                key={item.kind}
-                className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 text-xs"
-              >
-                <Icon
-                  className={`size-3.5 shrink-0 ${item.failed && !item.completed ? "text-destructive" : item.completed ? "text-positive" : "text-muted-foreground"}`}
-                  aria-hidden="true"
-                />
-                <span className="font-medium">{item.label}</span>
-                <span className="text-muted-foreground">
-                  {workCount(item)}
-                  {item.durationMs !== null
-                    ? `${workCount(item) ? " · " : ""}${formatWorkDuration(item.durationMs)} ${item.timing === "tool" ? "tool time" : "elapsed"}`
-                    : item.running
-                      ? "In progress"
-                      : null}
-                  {item.failed
-                    ? ` · ${item.failed} failed ${item.failed === 1 ? "attempt" : "attempts"}`
-                    : null}
-                </span>
-              </li>
-            );
-          })}
-        </ol>
+      <p className="mt-2 text-xs text-muted-foreground">
+        Total run wall time{" "}
+        <strong className="font-semibold text-foreground tabular-nums">
+          {formatWorkDuration(wallMs)}
+        </strong>
+        {run.endedAt ? null : " · still running"}
+      </p>
+      {work.length || run.agentModelMs > 0 ? (
+        <section
+          className="mt-3 overflow-x-auto border-t border-border pt-2"
+          aria-label="Run step timing table"
+        >
+          <table className="w-full min-w-[760px] border-collapse text-xs tabular-nums">
+            <thead>
+              <tr className="border-b border-border text-left text-muted-foreground">
+                <th scope="col" className="py-2 pr-3 font-medium">
+                  Step
+                </th>
+                <th scope="col" className="px-2 py-2 text-right font-medium">
+                  Lookups / items
+                </th>
+                <th scope="col" className="px-2 py-2 text-right font-medium">
+                  Tool / attempt
+                </th>
+                <th scope="col" className="px-2 py-2 text-right font-medium">
+                  Agent model
+                </th>
+                <th scope="col" className="px-2 py-2 text-right font-medium">
+                  Waiting
+                </th>
+                <th scope="col" className="py-2 pl-2 text-right font-medium">
+                  Total wall
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {work.map((item) => {
+                const Icon = item.completed
+                  ? CheckCircleIcon
+                  : item.failed && !item.running
+                    ? WarningCircleIcon
+                    : CircleNotchIcon;
+                const toolMs =
+                  item.timing === "tool" ? item.durationMs : item.attemptMs;
+                const elapsedMs =
+                  item.timing === "elapsed" ? item.durationMs : null;
+                return (
+                  <tr
+                    key={item.kind}
+                    className="border-b border-border/70 last:border-0"
+                  >
+                    <th scope="row" className="py-2 pr-3 text-left font-medium">
+                      <span className="flex items-center gap-2">
+                        <Icon
+                          className={`size-3.5 shrink-0 ${item.failed && !item.completed ? "text-destructive" : item.completed ? "text-positive" : "text-muted-foreground"}`}
+                          aria-hidden="true"
+                        />
+                        {item.label}
+                      </span>
+                    </th>
+                    <td className="px-2 py-2 text-right text-muted-foreground">
+                      {workCount(item) ?? "—"}
+                    </td>
+                    <td className="px-2 py-2 text-right">
+                      {toolMs === null || toolMs === undefined
+                        ? "—"
+                        : formatWorkDuration(toolMs)}
+                    </td>
+                    <td className="px-2 py-2 text-right text-muted-foreground">
+                      —
+                    </td>
+                    <td
+                      className="px-2 py-2 text-right"
+                      title={
+                        item.waitingMs === undefined
+                          ? "No waiting interval recorded"
+                          : "Photo batch wall time outside summed completed attempts; a lower bound"
+                      }
+                    >
+                      {item.waitingMs === null || item.waitingMs === undefined
+                        ? "—"
+                        : `≥${formatWorkDuration(item.waitingMs)}`}
+                    </td>
+                    <td
+                      className="py-2 pl-2 text-right"
+                      title={
+                        item.timing === "tool"
+                          ? "Lower bound: summed tool calls; agent time is unmeasured"
+                          : undefined
+                      }
+                    >
+                      {elapsedMs !== null
+                        ? formatWorkDuration(elapsedMs)
+                        : toolMs !== null && toolMs !== undefined
+                          ? `≥${formatWorkDuration(toolMs)}`
+                          : "—"}
+                    </td>
+                  </tr>
+                );
+              })}
+              {run.agentModelMs > 0 ? (
+                <tr className="border-b border-border/70 last:border-0">
+                  <th scope="row" className="py-2 pr-3 text-left font-medium">
+                    <span className="flex items-center gap-2">
+                      <CheckCircleIcon
+                        className="size-3.5 shrink-0 text-positive"
+                        aria-hidden="true"
+                      />
+                      Agent model turns
+                    </span>
+                  </th>
+                  <td className="px-2 py-2 text-right text-muted-foreground">
+                    —
+                  </td>
+                  <td className="px-2 py-2 text-right text-muted-foreground">
+                    —
+                  </td>
+                  <td className="px-2 py-2 text-right">
+                    {formatWorkDuration(run.agentModelMs)}
+                  </td>
+                  <td className="px-2 py-2 text-right text-muted-foreground">
+                    —
+                  </td>
+                  <td
+                    className="py-2 pl-2 text-right"
+                    title="Lower bound: measured model calls only"
+                  >
+                    ≥{formatWorkDuration(run.agentModelMs)}
+                  </td>
+                </tr>
+              ) : null}
+            </tbody>
+          </table>
+        </section>
       ) : (
         <p className="mt-2 text-xs text-muted-foreground">
           No completed work steps have been recorded yet.
         </p>
       )}
-      {work.some((item) => item.timing === "tool") ? (
-        <p className="mt-2 text-2xs text-muted-foreground">
-          Tool time excludes agent reasoning and waiting.
-        </p>
-      ) : null}
+      <p className="mt-2 text-2xs text-muted-foreground">
+        — means no timestamped interval was recorded. Agent model time includes
+        reasoning and generation, which the runtime does not separate or
+        attribute to individual steps. Photo waiting is a lower bound; attempt
+        time includes executor and network latency.
+      </p>
     </div>
   );
 }
@@ -1311,6 +1438,7 @@ export function RunPhotoBatch({ record }: { record: ImportRunOut }) {
     <ImportRunGate record={record}>
       {(run) => (
         <>
+          <TerminalRunControls run={run} />
           {run.dispatch?.eventId && !run.dispatch.coordinatorStartedAt ? (
             <DispatchRecoveryControls run={run} />
           ) : null}

@@ -6,6 +6,7 @@ import { describe, expect, it } from "vitest";
 import type { ImportRunDetail } from "~/lib/purchase-import-run-detail";
 
 import {
+  formatWorkDuration,
   summarizeAgentWork,
   summarizePhotoDescriptions,
 } from "./agent-work-summary";
@@ -123,6 +124,8 @@ describe("agent work summary", () => {
         running: 0,
         durationMs: 1_300,
         timing: "elapsed",
+        attemptMs: null,
+        waitingMs: null,
       },
     ]);
     expect(
@@ -134,5 +137,43 @@ describe("agent work summary", () => {
         }),
       ])[0]?.durationMs,
     ).toBeNull();
+  });
+
+  it("shows long image-job idle time separately from completed attempts", () => {
+    const images = fromPartial<PhotoRunImage[]>([
+      {
+        describe: "ready",
+        describeStartedAt: "2026-09-20T08:00:00.000Z",
+        describeCompletedAt: "2026-09-20T14:38:55.500Z",
+        describeAttemptMs: 4_000,
+        describeWaitingMs: 23_931_500,
+      },
+    ]);
+    const [step] = summarizePhotoDescriptions(images);
+    expect(step?.attemptMs).toBe(4_000);
+    expect(step?.waitingMs).toBe(23_931_500);
+    expect(formatWorkDuration(step!.durationMs!)).toBe("6h 39m");
+  });
+
+  it("counts the gap between photo jobs as batch waiting", () => {
+    const images = fromPartial<PhotoRunImage[]>([
+      {
+        describe: "ready",
+        describeStartedAt: "2026-09-20T08:00:00.000Z",
+        describeCompletedAt: "2026-09-20T08:00:01.000Z",
+        describeAttemptMs: 1_000,
+      },
+      {
+        describe: "ready",
+        describeStartedAt: "2026-09-20T14:00:00.000Z",
+        describeCompletedAt: "2026-09-20T14:00:01.000Z",
+        describeAttemptMs: 1_000,
+      },
+    ]);
+    expect(summarizePhotoDescriptions(images)[0]).toMatchObject({
+      durationMs: 21_601_000,
+      attemptMs: 2_000,
+      waitingMs: 21_599_000,
+    });
   });
 });

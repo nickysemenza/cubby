@@ -1,4 +1,5 @@
 import { flueImportRunPurpose } from "@cubby/schemas/import-run-agent";
+import { getErrorMessage } from "@cubby/shared";
 import { createFileRoute } from "@tanstack/react-router";
 
 import {
@@ -62,6 +63,7 @@ const browserRun = (
   coordinatorModel: run.coordinatorModel,
   skillRevision: run.skillRevision,
   runtimeRevision: run.runtimeRevision,
+  agentModelMs: run.agentModelMs,
   operations: run.operations.map((operation) => ({
     operationId: operation.operationId,
     kind: operation.kind,
@@ -269,7 +271,7 @@ export const Route = createFileRoute("/api/import/runs/$publicId")({
             return notFound();
           return Response.json(
             importRunDetailError.parse({
-              error: "This import run could not be updated.",
+              error: getErrorMessage(error),
             }),
             { status: 409 },
           );

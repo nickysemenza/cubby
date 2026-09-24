@@ -45,6 +45,7 @@ const run: ImportRunDetail = {
   coordinatorModel: null,
   skillRevision: null,
   runtimeRevision: null,
+  agentModelMs: 0,
   source: null,
   actor: {
     name: null,
@@ -125,6 +126,8 @@ const photo = (
   describe: null,
   describeStartedAt: null,
   describeCompletedAt: null,
+  describeAttemptMs: null,
+  describeWaitingMs: null,
   localAnalysisReady: Boolean(text.recognizedText),
   cutoutReason: null,
   describeReason: null,

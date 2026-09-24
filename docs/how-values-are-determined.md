@@ -1223,6 +1223,17 @@ Data gaps are the current checks reported by this entity's data-quality evaluati
 - Value paths: List `dataQuality.gaps`; Summary `dataQuality.gaps`
 - Source dependencies: Detected gaps (`dataQuality.gaps`)
 
+## Runs (`importRun`)
+
+### Wall time (`wallTime`)
+
+Elapsed time from the run's start to its end. An active run is shown as in progress.
+
+- Rule: `import-run.wall-time`, version 1
+- Resolver: Declared field projection
+- Value paths: Default `wallTime`
+- Source dependencies: Started at (`startedAt`); Ended at (`endedAt`)
+
 ## Devices (`device`)
 
 ### Ledger party name (`ledgerPartyName`)
