@@ -278,6 +278,17 @@ async function recordSimulatorVideo(
     if (!existsSync(output) || statSync(output).size === 0)
       throw new Error(`Simulator video was not saved at ${output}`);
     console.log(`[${lane}] Video saved: ${output}`);
+    const contactSheet = path.join(artifacts, "contact-sheet.png");
+    await run("pnpm", [
+      "exec",
+      "agent-device",
+      "record",
+      "contact-sheet",
+      output,
+      "--out",
+      contactSheet,
+    ]);
+    console.log(`[${lane}] Contact sheet saved: ${contactSheet}`);
   };
 }
 
