@@ -103,6 +103,13 @@ export async function createE2EDatabase(): Promise<E2EDatabase> {
     const seedDb = drizzleNodePostgres(seedPool);
     await seedHome(seedDb);
     await seedDb.insert(schema.productCategory).values(taxonomyRootFixtures);
+    // Every worker must start without corpus products, regardless of shard.
+    const { rows } = await seedPool.query<{ count: string }>(
+      'SELECT count(*)::text AS count FROM "Product"',
+    );
+    if (rows[0]?.count !== "0") {
+      throw new Error("E2E database checkout contains corpus products");
+    }
   } finally {
     await seedPool.end();
   }
