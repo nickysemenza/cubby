@@ -3,10 +3,12 @@ import { randomUUID } from "node:crypto";
 import type { AuditEntityType } from "@cubby/schemas/audit";
 import type { AuditChannel } from "@cubby/schemas/context";
 import { testShortcode } from "@cubby/schemas/testing";
+import { fromPartial } from "@total-typescript/shoehorn";
 import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 
+import { setCfEnv } from "~/server/cf-env";
 import { auditLog, product } from "~/server/db/schema";
 import { getAuditLog } from "~/server/repo/audit-log";
 import { listAuditLog } from "~/server/workflows/audit-log";
@@ -30,6 +32,7 @@ import { insertWithShortcode } from "./shortcode-utils";
  */
 describe("getAuditLog — channel + time window", () => {
   const ctx = withTestDb();
+  afterEach(() => setCfEnv(undefined));
 
   it("routes unknown and mismatched public audit subjects to an empty result", async () => {
     const record = await createProduct(
@@ -57,6 +60,33 @@ describe("getAuditLog — channel + time window", () => {
         },
       }),
     ).toEqual({ entries: [] });
+  });
+
+  it("uses the home snapshot only for the unfiltered five-entry window", async () => {
+    const record = await createProduct(
+      ctx.db,
+      makeProductInput({ name: "Synthetic activity subject" }),
+      ctx.actor,
+    );
+    setCfEnv(
+      fromPartial<Env>({
+        DB_FRESHNESS: {
+          getByName: () => ({ getRecentAudit: async () => ({ entries: [] }) }),
+        },
+      }),
+    );
+
+    expect(
+      (await listAuditLog({ db: ctx.db, data: { limit: 5 } })).entries,
+    ).toEqual([]);
+    expect(
+      (
+        await listAuditLog({
+          db: ctx.db,
+          data: { limit: 5, entityType: "product", entityId: record.id },
+        })
+      ).entries.length,
+    ).toBeGreaterThan(0);
   });
 
   // Audit rows reference a real identity (ADR 0006), so each names a product.

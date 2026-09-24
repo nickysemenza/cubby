@@ -1,18 +1,27 @@
 import type { DurableObjectState } from "@cloudflare/workers-types";
+import { auditLogListOut, type AuditLogListOut } from "@cubby/schemas/audit";
+import {
+  dashboardLocalCounts,
+  type DashboardLocalCounts,
+} from "@cubby/schemas/dashboard";
 import {
   type ProblemsCount,
   problemsCountSchema,
 } from "@cubby/schemas/problems";
 import * as Sentry from "@sentry/tanstackstart-react";
 import { DurableObject } from "cloudflare:workers";
+import superjson from "superjson";
+import type { z } from "zod";
 
 import { runWithExecutionCtx, setCfEnv } from "~/server/cf-env";
+import type { Database } from "~/server/db";
 import type { findProblemCountsSnapshot } from "~/server/services/problems.service";
 
 import { databaseFreshness } from "./state";
 
 const REFRESH_DELAY_MS = 15 * 60_000;
 const MAX_SNAPSHOT_AGE_MS = 24 * 60 * 60_000;
+const MAX_READ_SNAPSHOT_AGE_MS = 5 * 60_000;
 
 // SAFETY: this module's named export is declared locally and remains lazy so
 // workerd does not initialize the WASM-backed problem implementation at boot.
@@ -29,9 +38,16 @@ type SnapshotRow = {
   quality: SnapshotQuality;
 };
 
+type ReadSnapshotRow = {
+  payload: string;
+  covered_sequence: number;
+  computed_at: number;
+};
+
 /** One timestamp per database environment, shared by every household client. */
 export class DatabaseFreshnessDurableObject extends DurableObject<Env> {
   private refreshTail: Promise<void> = Promise.resolve();
+  private readonly readRefreshes = new Map<string, Promise<void>>();
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
@@ -57,6 +73,9 @@ export class DatabaseFreshnessDurableObject extends DurableObject<Env> {
     }
     ctx.storage.sql.exec(
       "CREATE TABLE IF NOT EXISTS problem_counts (id INTEGER PRIMARY KEY CHECK (id = 1), counts_json TEXT NOT NULL, computed_at REAL NOT NULL, covered_sequence INTEGER NOT NULL, quality TEXT NOT NULL CHECK (quality IN ('complete', 'degraded')))",
+    );
+    ctx.storage.sql.exec(
+      "CREATE TABLE IF NOT EXISTS read_snapshots (kind TEXT PRIMARY KEY, payload TEXT NOT NULL, computed_at INTEGER NOT NULL, covered_sequence INTEGER NOT NULL)",
     );
   }
 
@@ -101,6 +120,40 @@ export class DatabaseFreshnessDurableObject extends DurableObject<Env> {
     return snapshot.counts;
   }
 
+  async getDashboardCounts(): Promise<DashboardLocalCounts | null> {
+    try {
+      return await this.getReadSnapshot(
+        "dashboard",
+        dashboardLocalCounts,
+        async () =>
+          this.withStrongDatabase(async (db) => {
+            const { getEntityCounts } = await import("~/server/repo/dashboard");
+            return getEntityCounts(db);
+          }),
+      );
+    } catch (error) {
+      console.error("dashboard.snapshot.refresh.failed", error);
+      return null;
+    }
+  }
+
+  async getRecentAudit(): Promise<AuditLogListOut | null> {
+    try {
+      return await this.getReadSnapshot(
+        "recent-audit",
+        auditLogListOut,
+        async () =>
+          this.withStrongDatabase(async (db) => {
+            const { getAuditLog } = await import("~/server/repo/audit-log");
+            return getAuditLog(db, { limit: 5 });
+          }),
+      );
+    } catch (error) {
+      console.error("recent-audit.snapshot.refresh.failed", error);
+      return null;
+    }
+  }
+
   async alarm(): Promise<void> {
     if (this.readRefreshState().refresh_due_at === null) return;
     try {
@@ -124,6 +177,88 @@ export class DatabaseFreshnessDurableObject extends DurableObject<Env> {
     const refresh = this.refreshTail.then(run, run);
     this.refreshTail = refresh.catch(() => undefined);
     return refresh;
+  }
+
+  private async getReadSnapshot<T>(
+    kind: string,
+    schema: z.ZodType<T>,
+    compute: () => Promise<T>,
+  ): Promise<T> {
+    for (;;) {
+      const revision = this.readRefreshState().write_sequence;
+      const row = this.ctx.storage.sql
+        .exec<ReadSnapshotRow>(
+          "SELECT payload, computed_at, covered_sequence FROM read_snapshots WHERE kind = ?",
+          kind,
+        )
+        .toArray()[0];
+      if (
+        row &&
+        row.covered_sequence >= revision &&
+        Date.now() - row.computed_at < MAX_READ_SNAPSHOT_AGE_MS
+      ) {
+        try {
+          const parsed = schema.safeParse(superjson.parse(row.payload));
+          if (parsed.success) return parsed.data;
+          console.error(`${kind}.snapshot.invalid`, parsed.error.message);
+        } catch (error) {
+          // SILENT: a corrupt cached value is discarded and recomputed below.
+          console.error(`${kind}.snapshot.invalid-json`, error);
+        }
+      }
+
+      let refresh = this.readRefreshes.get(kind);
+      if (!refresh) {
+        refresh = this.refreshReadSnapshot(kind, schema, compute);
+        this.readRefreshes.set(kind, refresh);
+        const pending = refresh;
+        void pending
+          .finally(() => {
+            if (this.readRefreshes.get(kind) === pending)
+              this.readRefreshes.delete(kind);
+          })
+          .catch((error) => {
+            // SILENT: await refresh reports this failure through the caller;
+            // this detached promise only removes the singleflight marker.
+            void error;
+          });
+      }
+      await refresh;
+      // A write during the external read leaves its captured revision dirty.
+      // Re-read the revision before returning any snapshot.
+    }
+  }
+
+  private async refreshReadSnapshot<T>(
+    kind: string,
+    schema: z.ZodType<T>,
+    compute: () => Promise<T>,
+  ): Promise<void> {
+    const coveredSequence = this.readRefreshState().write_sequence;
+    const value = schema.parse(await compute());
+    this.ctx.storage.sql.exec(
+      "INSERT INTO read_snapshots (kind, payload, computed_at, covered_sequence) VALUES (?, ?, ?, ?) ON CONFLICT(kind) DO UPDATE SET payload = excluded.payload, computed_at = excluded.computed_at, covered_sequence = excluded.covered_sequence",
+      kind,
+      superjson.stringify(value),
+      Date.now(),
+      coveredSequence,
+    );
+  }
+
+  private async withStrongDatabase<T>(
+    run: (db: Database) => Promise<T>,
+  ): Promise<T> {
+    const connectionString = this.env.HYPERDRIVE?.connectionString;
+    if (!connectionString) {
+      throw new Error("Read-snapshot PostgreSQL backend is unavailable");
+    }
+    setCfEnv(this.env);
+    const { db, withRequestDbClient } = await import("~/server/db");
+    return runWithExecutionCtx(
+      { waitUntil: (task) => this.ctx.waitUntil(task) },
+      () => withRequestDbClient(connectionString, () => run(db)),
+      this.env.APP_ORIGIN,
+    );
   }
 
   private readRefreshState() {

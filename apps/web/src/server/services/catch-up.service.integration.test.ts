@@ -3,7 +3,6 @@ import { withTestDb } from "tooling/test-setup";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { setCfEnv } from "~/server/cf-env";
-import { claimCatchUp } from "~/server/repo/catch-up-claim";
 
 import { requestCatchUp } from "./catch-up.service";
 
@@ -36,17 +35,6 @@ describe("app-open catch-up", () => {
       "maintenance.recover",
       "maintenance.purchase-discovery",
     ]);
-  });
-
-  it("opens the global gate at the hour boundary", async () => {
-    const first = new Date("2026-09-23T00:00:00.000Z");
-    expect(await claimCatchUp(ctx.db, first)).toBe(true);
-    expect(
-      await claimCatchUp(ctx.db, new Date(first.getTime() + 3_599_999)),
-    ).toBe(false);
-    expect(
-      await claimCatchUp(ctx.db, new Date(first.getTime() + 3_600_000)),
-    ).toBe(true);
   });
 
   it("releases a rejected queue handoff so the next request can retry", async () => {

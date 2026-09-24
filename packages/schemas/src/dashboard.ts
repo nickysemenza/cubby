@@ -14,3 +14,15 @@ export const dashboardCountsOut = z.object({
 });
 
 export type DashboardCountsOut = z.infer<typeof dashboardCountsOut>;
+
+/** The complete local snapshot; USDA remains a separate live worker read. */
+export const dashboardLocalCounts = dashboardCountsOut
+  .omit({ usdaFoods: true, usdaFoodsAvailable: true })
+  .required({
+    ledgerParty: true,
+    ledgerTransfer: true,
+    vendorAccount: true,
+    productCategory: true,
+    device: true,
+  });
+export type DashboardLocalCounts = z.infer<typeof dashboardLocalCounts>;

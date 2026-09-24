@@ -1,6 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { readDatabaseFreshness, recordDatabaseWrite } from "./client";
+import {
+  readDashboardCountsSnapshot,
+  readDatabaseFreshness,
+  readRecentAuditSnapshot,
+  recordDatabaseWrite,
+} from "./client";
 import { databaseFreshness } from "./state";
 
 afterEach(() => vi.useRealTimers());
@@ -25,5 +30,22 @@ describe("freshness RPC failure policy", () => {
     const read = readDatabaseFreshness(port);
     await vi.advanceTimersByTimeAsync(1000);
     expect(await read).toBeNull();
+  });
+
+  it("falls back to direct reads when either read snapshot fails", async () => {
+    expect(
+      await readDashboardCountsSnapshot({
+        getDashboardCounts: async () => {
+          throw new Error("offline");
+        },
+      }),
+    ).toBeNull();
+    expect(
+      await readRecentAuditSnapshot({
+        getRecentAudit: async () => {
+          throw new Error("offline");
+        },
+      }),
+    ).toBeNull();
   });
 });

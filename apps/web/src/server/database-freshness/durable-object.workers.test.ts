@@ -1,6 +1,9 @@
+import { auditLogListOut } from "@cubby/schemas/audit";
+import { dashboardLocalCounts } from "@cubby/schemas/dashboard";
 import { problemsCountSchema } from "@cubby/schemas/problems";
 import { evictDurableObject, runInDurableObject } from "cloudflare:test";
 import { env } from "cloudflare:workers";
+import superjson from "superjson";
 import { describe, expect, it } from "vitest";
 
 import { mock } from "~/lib/test/mock-schema";
@@ -77,5 +80,57 @@ describe("database freshness Durable Object", () => {
     });
 
     expect(await stub.getProblemCounts()).toEqual(counts);
+  });
+
+  it("persists warm read snapshots and rejects them after a write", async () => {
+    const stub = env.DB_FRESHNESS.getByName(crypto.randomUUID());
+    const dashboard = dashboardLocalCounts.parse(
+      Object.fromEntries(
+        Object.keys(dashboardLocalCounts.shape).map((key) => [key, 1]),
+      ),
+    );
+    const recentAudit = auditLogListOut.parse({
+      entries: [
+        {
+          entryKey: "synthetic-audit-entry",
+          entityType: "product",
+          entityId: null,
+          canonicalEntityId: null,
+          entityName: "Synthetic product",
+          displayImage: null,
+          action: "create",
+          changes: null,
+          userId: "synthetic-user",
+          channel: "web",
+          oauthClient: null,
+          device: null,
+          runId: null,
+          createdAt: new Date("2026-01-01T00:00:00.000Z"),
+          user: null,
+        },
+      ],
+    });
+
+    await runInDurableObject(stub, (_instance, state) => {
+      for (const [kind, value] of [
+        ["dashboard", dashboard],
+        ["recent-audit", recentAudit],
+      ] as const) {
+        state.storage.sql.exec(
+          "INSERT INTO read_snapshots (kind, payload, computed_at, covered_sequence) VALUES (?, ?, ?, 0)",
+          kind,
+          superjson.stringify(value),
+          Date.now(),
+        );
+      }
+    });
+
+    expect(await stub.getDashboardCounts()).toEqual(dashboard);
+    expect(await stub.getRecentAudit()).toEqual(recentAudit);
+    await evictDurableObject(stub);
+    expect(await stub.getDashboardCounts()).toEqual(dashboard);
+
+    await stub.recordWrite();
+    expect(await stub.getDashboardCounts()).toBeNull();
   });
 });

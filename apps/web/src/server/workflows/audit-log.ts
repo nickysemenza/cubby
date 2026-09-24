@@ -2,6 +2,7 @@ import type { AuditLogListOut, auditLogListInput } from "@cubby/schemas/audit";
 import { deviceId, importRunId } from "@cubby/schemas/identifiers";
 import type { z } from "zod";
 
+import { readRecentAuditSnapshot } from "~/server/database-freshness/client";
 import type { Database } from "~/server/db";
 import { getAuditLog } from "~/server/repo/audit-log";
 import { resolveShortcode } from "~/server/repo/shortcode-resolver";
@@ -29,8 +30,24 @@ const auditLogWorkflow = workflow<Database, AuditInput>("auditLog.list")
       ),
     whenTrue: (branch) =>
       branch
-        .call("entries", async ({ context: db }, { input: { subject } }) =>
-          getAuditLog(db, {
+        .call("entries", async ({ context: db }, { input: { subject } }) => {
+          const data = subject.data;
+          if (
+            data.limit === 5 &&
+            !data.entityType &&
+            !data.entityId &&
+            !data.channel &&
+            !data.oauthClient &&
+            !data.deviceId &&
+            !data.runId &&
+            !data.createdAtFrom &&
+            !data.createdAtTo &&
+            !data.cursor
+          ) {
+            const snapshot = await readRecentAuditSnapshot();
+            if (snapshot) return snapshot;
+          }
+          return getAuditLog(db, {
             entityType: subject.data.entityType,
             entityId: subject.resolved?.id,
             channel: subject.data.channel,
@@ -43,8 +60,8 @@ const auditLogWorkflow = workflow<Database, AuditInput>("auditLog.list")
             createdAtTo: subject.data.createdAtTo,
             limit: subject.data.limit,
             cursor: subject.data.cursor,
-          }),
-        )
+          });
+        })
         .output(({ entries }) => entries),
     whenFalse: (branch) =>
       branch
