@@ -134,12 +134,12 @@ function EntitiesRoute() {
         </TabsContent>
         <TabsContent value="schema">
           <EntityManifestGrid
-            selected={entity ?? "product"}
+            selected={entity ?? null}
             active={tabs.value === "schema"}
             onSelect={(selected) =>
               navigate({
                 to: ".",
-                search: (prev) => ({ ...prev, entity: selected }),
+                search: (prev) => ({ ...prev, entity: selected ?? undefined }),
               })
             }
           />

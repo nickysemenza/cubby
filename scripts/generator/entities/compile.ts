@@ -26,6 +26,7 @@ import {
 import type {
   CompiledEntity,
   DeclarationObject,
+  DeclarationValue,
   EntityField,
   EntityFieldModel,
   EntityPorts,
@@ -58,6 +59,50 @@ const entityPorts = (
 };
 
 const filterKinds = FILTER_KINDS;
+
+/** Preserve the explicitly named declaration exceptions for the catalog. */
+export function collectEntityOverrides(
+  raw: DeclarationObject,
+): CompiledEntity["overrides"] {
+  const overrides: { path: string; value: string }[] = [];
+  // A declaration includes Zod schemas, so only plain JSON metadata is traversed.
+  /* oxlint-disable anti-slop/no-runtime-typeof -- narrow the declaration value union before traversing JSON metadata */
+  const visit = (value: DeclarationValue, path: string) => {
+    if (Array.isArray(value)) {
+      for (const [index, item] of value.entries()) {
+        const key =
+          item !== null &&
+          typeof item === "object" &&
+          "key" in item &&
+          typeof item.key === "string"
+            ? item.key
+            : String(index);
+        visit(item, `${path}[${key}]`);
+      }
+    } else if (
+      value !== null &&
+      typeof value === "object" &&
+      Object.getPrototypeOf(value) === Object.prototype
+    ) {
+      for (const [key, item] of Object.entries(value)) {
+        const nextPath = path ? `${path}.${key}` : key;
+        if (/Overrides?$/u.test(key) && item !== undefined) {
+          const serialized = JSON.stringify(item);
+          if (serialized === undefined)
+            throw new EntityDeclarationError(
+              `${nextPath} cannot be shown in the entity catalog.`,
+            );
+          overrides.push({ path: nextPath, value: serialized });
+        } else {
+          visit(item, nextPath);
+        }
+      }
+    }
+  };
+  /* oxlint-enable anti-slop/no-runtime-typeof */
+  visit(raw, "");
+  return overrides;
+}
 
 const compileEditIntents = (
   value: NonNullable<EntityDeclarationMetadata["model"]>["intents"],
@@ -1435,6 +1480,7 @@ export const compileEntity = (
   const bulkUpdateFields = declaration.capabilities.bulkUpdate?.fields ?? null;
   return {
     key,
+    overrides: collectEntityOverrides(raw),
     shortcode,
     inspector,
     timeline: declaration.capabilities.timeline,

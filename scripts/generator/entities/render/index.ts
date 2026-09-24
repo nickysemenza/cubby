@@ -801,6 +801,7 @@ export const renderEntityArtifacts = (
         entity.key,
         {
           ...entity.inspector,
+          overrides: entity.overrides,
           shortcodePrefix: entity.shortcode,
           searchable: entity.descriptor.searchable === true,
           // Search is a list capability, not a synthetic model field. Keeping
@@ -1222,6 +1223,7 @@ export const renderEntityArtifacts = (
         "export type EntityInspectorMetadata = CompiledEntityPresentation & {\n" +
         "  singular: string;\n" +
         "  plural: string | null;\n" +
+        "  overrides: readonly { path: string; value: string }[];\n" +
         "  shortcodePrefix: string | null;\n" +
         "  searchable: boolean;\n" +
         "  primarySearch: { key: string; placeholder: string } | null;\n" +
