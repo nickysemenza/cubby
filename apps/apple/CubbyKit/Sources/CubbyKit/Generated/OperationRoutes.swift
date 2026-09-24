@@ -245,7 +245,7 @@ extension OperationRoute {
         OperationRoute(operationID: "recommendations.mergeProductMatch", method: .post, path: "/api/v1/recommendations/mergeProductMatch", pathParameters: [], queryParameters: [], hasBody: true),
         OperationRoute(operationID: "recommendations.placement", method: .get, path: "/api/v1/recommendations/placement", pathParameters: [], queryParameters: ["inventoryId"], hasBody: false),
         OperationRoute(operationID: "recommendations.product", method: .get, path: "/api/v1/recommendations/product", pathParameters: [], queryParameters: ["sourceId"], hasBody: false),
-        OperationRoute(operationID: "recommendations.productMatches", method: .get, path: "/api/v1/recommendations/productMatches", pathParameters: [], queryParameters: ["productId"], hasBody: false),
+        OperationRoute(operationID: "recommendations.productMatches", method: .get, path: "/api/v1/recommendations/productMatches", pathParameters: [], queryParameters: ["candidateId", "productId"], hasBody: false),
         OperationRoute(operationID: "recommendations.proposeProductMatch", method: .post, path: "/api/v1/recommendations/proposeProductMatch", pathParameters: [], queryParameters: [], hasBody: true),
         OperationRoute(operationID: "recommendations.tagPropagation", method: .get, path: "/api/v1/recommendations/tagPropagation", pathParameters: [], queryParameters: ["sourceId"], hasBody: false),
         OperationRoute(operationID: "relatedData.branch", method: .get, path: "/api/v1/relatedData/branch", pathParameters: [], queryParameters: ["limit", "offset", "relationKey", "sourceId"], hasBody: false),

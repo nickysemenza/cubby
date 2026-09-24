@@ -57,7 +57,8 @@ existing match — `resolve_products` for name/alias hits, `find_similar_entitie
 for a visual/embedding candidate, and `entity list product { filters: {
 dataGap: "product_unpurchased" } }` scoped to this owner/category for a
 Product a prior photo batch or a purchase already created but never received
-inventory for. An exact identifier read off a label or box (SKU/UPC/model)
+inventory for. Also inspect purchase-linked candidates, especially Products
+with no own-item photo or prior photo-import attachment. An exact identifier read off a label or box (SKU/UPC/model)
 that matches a candidate supports `existingId`. A strong combination of
 visible brand, garment features, color, and variant evidence may also support
 proposing that existing Product for human approval; explain any unreadable size

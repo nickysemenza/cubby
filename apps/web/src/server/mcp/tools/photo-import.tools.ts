@@ -9,6 +9,8 @@ import {
   commitPhotoGroupOutput,
   listPhotoGroupProposalsInput,
   photoGroupProposalList,
+  photoProductCandidateSearchInput,
+  photoProductCandidatesResponse,
   proposePhotoGroupsInput,
   proposePhotoGroupsOutput,
 } from "@cubby/schemas/photo-import-run";
@@ -19,11 +21,27 @@ import {
   proposePhotoGroups,
 } from "~/server/photo-import-run/proposals";
 import { commitPhotoGroup } from "~/server/photo-import-run/writer";
+import { findPhotoProductCandidates } from "~/server/repo/photo-product-candidates";
 
 import { getEntityKernelContext } from "../kernel-context";
 import { READ_ONLY_CLOSED, registerMcpTool, WRITE_CLOSED } from "./_shared";
 
 export function registerPhotoImportTools(server: McpServer) {
+  registerMcpTool(server, {
+    name: "suggest_photo_product_candidates",
+    description:
+      "Find existing Products for a photo group before proposing a new one. Returns read-only name/variant candidates and whether each has a purchase, own photo, earlier photo import, or inventory. Compare exact size and color yourself; the rank is not proof and human approval is required to attach photos.",
+    inputSchema: photoProductCandidateSearchInput,
+    outputSchema: photoProductCandidatesResponse,
+    annotations: READ_ONLY_CLOSED,
+    handler: async (params, extra) => ({
+      candidates: await findPhotoProductCandidates(
+        getEntityKernelContext(extra).db,
+        params,
+      ),
+    }),
+  });
+
   registerMcpTool(server, {
     name: "propose_photo_groups",
     description:

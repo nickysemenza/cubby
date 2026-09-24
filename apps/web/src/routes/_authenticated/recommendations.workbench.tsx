@@ -14,13 +14,17 @@ export const Route = createFileRoute(
 });
 
 function RecommendationWorkbenchPage() {
-  const { kind, inventory, source } = Route.useSearch();
+  const { kind, inventory, source, candidate } = Route.useSearch();
   return (
     <Page variant="list" title="Recommendations Workbench" layout="full">
       {kind === "placement" && inventory ? (
         <RecommendationWorkbench inventoryId={inventory} kind={kind} />
       ) : kind === "product-match" ? (
-        <RecommendationWorkbench sourceId={source} kind={kind} />
+        <RecommendationWorkbench
+          sourceId={source}
+          candidateId={candidate}
+          kind={kind}
+        />
       ) : kind && source ? (
         <RecommendationWorkbench sourceId={source} kind={kind} />
       ) : (

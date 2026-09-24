@@ -1,13 +1,16 @@
 import type { BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
+import { productMergePreview } from "@cubby/schemas/recommendations";
 import { CheckIcon } from "@phosphor-icons/react/dist/csr/Check";
 import { useQuery } from "@tanstack/react-query";
 import { type ReactNode, useMemo, useState } from "react";
+import type { z } from "zod";
 
 import {
   type ImpactPreviewOperations,
   MergeImpactPreview,
 } from "~/app/_components/actions/entity-operation-impact-preview";
 import { Row, Stack } from "~/components/layout";
+import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
 import { Description } from "~/components/ui/description";
@@ -22,10 +25,18 @@ import {
 import { Empty, EmptyDescription, EmptyTitle } from "~/components/ui/empty";
 import { entities } from "~/entities/entities";
 import type { MergeDisplayRow, MergeableConfig } from "~/entities/types";
+import { readJsonOrThrow } from "~/lib/http-error";
 
 /** Display text comes from `mergeable.rowLabel`/`rowStat`, not a hardcoded
  * `name` field — a row shape like `PurchaseOut` (no `name`) works here too. */
 type MergeRow = MergeDisplayRow;
+
+const MERGE_ACTION = {
+  keep: { label: "Keep left", variant: "secondary" },
+  fill: { label: "Fill from right", variant: "positive" },
+  combine: { label: "Merge both", variant: "positive" },
+  dedupe: { label: "Merge unique", variant: "positive" },
+} as const;
 
 const isCopyFactory = (
   value: ReactNode | ((keeperLabel: ReactNode) => ReactNode),
@@ -120,6 +131,7 @@ export function EntityMergeDialog<T extends MergeRow>({
 
   return (
     <RankedMergeDialog
+      entity={entity}
       config={config}
       rows={rows ?? []}
       open={open}
@@ -131,7 +143,128 @@ export function EntityMergeDialog<T extends MergeRow>({
   );
 }
 
+function ProductMergeDecisions({
+  data,
+  error,
+  isPending,
+}: {
+  data?: z.output<typeof productMergePreview>;
+  error: Error | null;
+  isPending: boolean;
+}) {
+  const visibleDecisions =
+    data?.decisions.filter(
+      (decision) =>
+        decision.keeper !== "—" ||
+        decision.incoming !== "—" ||
+        decision.result !== "—",
+    ) ?? [];
+  return (
+    <section aria-label="Product merge decisions" className="min-w-0 space-y-2">
+      <h3 className="text-sm font-semibold">
+        What the merged product will keep
+      </h3>
+      {isPending ? (
+        <Description size="xs">Calculating field decisions…</Description>
+      ) : error ? (
+        <Description size="xs">{String(error)}</Description>
+      ) : (
+        <>
+          {data?.blockers.map((blocker) => (
+            <p
+              key={blocker}
+              className="rounded-md border border-destructive/30 bg-destructive/10 p-2 text-xs text-destructive"
+            >
+              {blocker}
+            </p>
+          ))}
+          <div
+            data-testid="product-merge-mobile-decisions"
+            className="divide-y divide-border rounded-md border border-border md:hidden"
+          >
+            {visibleDecisions.map((decision) => (
+              <div key={decision.field} className="space-y-1.5 p-2 text-xs">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-semibold">{decision.field}</span>
+                  <Badge variant={MERGE_ACTION[decision.action].variant}>
+                    {MERGE_ACTION[decision.action].label}
+                  </Badge>
+                </div>
+                <div className="grid grid-cols-[4.5rem_minmax(0,1fr)] gap-x-2 gap-y-1 break-words">
+                  <span className="text-muted-foreground">Keep</span>
+                  <span>{decision.keeper}</span>
+                  <span className="text-muted-foreground">Merge in</span>
+                  <span>{decision.incoming}</span>
+                  <span className="font-medium">Result</span>
+                  <span className="font-medium">{decision.result}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="hidden overflow-x-auto rounded-md border border-border md:block">
+            <table className="w-full min-w-[42rem] table-fixed border-collapse text-left text-xs">
+              <thead className="sticky top-0 bg-card text-muted-foreground">
+                <tr>
+                  <th
+                    scope="col"
+                    className="sticky left-0 z-10 w-24 bg-card p-2"
+                  >
+                    Field
+                  </th>
+                  <th scope="col" className="p-2">
+                    Keep product
+                  </th>
+                  <th scope="col" className="p-2">
+                    Merge in
+                  </th>
+                  <th scope="col" className="w-30 p-2">
+                    Action
+                  </th>
+                  <th scope="col" className="p-2">
+                    Result
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {visibleDecisions.map((decision) => (
+                  <tr
+                    key={decision.field}
+                    className="border-t border-border align-top"
+                  >
+                    <th
+                      scope="row"
+                      className="sticky left-0 bg-card p-2 font-medium"
+                    >
+                      {decision.field}
+                    </th>
+                    <td className="p-2 break-words">{decision.keeper}</td>
+                    <td className="p-2 break-words">{decision.incoming}</td>
+                    <td className="p-2">
+                      <Badge variant={MERGE_ACTION[decision.action].variant}>
+                        {MERGE_ACTION[decision.action].label}
+                      </Badge>
+                    </td>
+                    <td className="p-2 font-medium break-words">
+                      {decision.result}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p className="text-2xs text-muted-foreground">
+            Only fields with a value are shown. Kept values win; empty fields
+            are filled. Names become searchable aliases; images and tags are
+            combined, with exact duplicates removed.
+          </p>
+        </>
+      )}
+    </section>
+  );
+}
+
 function RankedMergeDialog<T extends MergeRow>({
+  entity,
   config,
   rows,
   open,
@@ -140,6 +273,7 @@ function RankedMergeDialog<T extends MergeRow>({
   isPending,
   impactPreviewOperations,
 }: {
+  entity: BrowserRoutedEntity;
   config: MergeableConfig;
   rows: T[];
   open: boolean;
@@ -156,10 +290,31 @@ function RankedMergeDialog<T extends MergeRow>({
     () => rows.filter((row) => row.id !== effectiveKeepId).map((row) => row.id),
     [effectiveKeepId, rows],
   );
+  const productPreviewEnabled =
+    entity === "product" && open && !!effectiveKeepId && aliasIds.length === 1;
+  const productPreview = useQuery({
+    queryKey: ["product-merge-decisions", effectiveKeepId, aliasIds[0]],
+    enabled: productPreviewEnabled,
+    queryFn: async () => {
+      const response = await fetch("/api/products/merge-preview", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ keepId: effectiveKeepId, mergeId: aliasIds[0] }),
+      });
+      return readJsonOrThrow(
+        response,
+        productMergePreview,
+        "Merge preview could not load.",
+        { method: "POST" },
+      );
+    },
+  });
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent
+        className={productPreviewEnabled ? "sm:max-w-5xl" : undefined}
+      >
         <DialogHeader>
           <DialogTitle>{resolveCopyText(config.copy.title, null)}</DialogTitle>
           {config.copy.description && (
@@ -213,6 +368,13 @@ function RankedMergeDialog<T extends MergeRow>({
             <Description size="xs">{config.copy.caution}</Description>
           )}
         </Stack>
+        {productPreviewEnabled && (
+          <ProductMergeDecisions
+            data={productPreview.data}
+            error={productPreview.error}
+            isPending={productPreview.isPending}
+          />
+        )}
         <MergeImpactPreview
           losers={rows
             .filter((row) => aliasIds.includes(row.id))
@@ -220,7 +382,15 @@ function RankedMergeDialog<T extends MergeRow>({
           operations={impactPreviewOperations}
         />
         <MergeDialogFooter
-          disabled={isPending || !effectiveKeepId || aliasIds.length === 0}
+          disabled={
+            isPending ||
+            !effectiveKeepId ||
+            aliasIds.length === 0 ||
+            (productPreviewEnabled &&
+              (productPreview.isPending ||
+                productPreview.isError ||
+                !!productPreview.data?.blockers.length))
+          }
           isPending={isPending}
           label="Merge"
           onCancel={() => onOpenChange(false)}

@@ -167,17 +167,51 @@ function candidate(
   };
 }
 
-/**
- * The one product match queue: open agent proposals first (they carry
- * evidence the detector cannot see), then the detector's live photo-first ×
- * purchase-first pairs. Dismissed pairs and pairs whose side was merged away
- * never appear.
- */
+async function getDirectedProductMatchQueue(
+  db: Database,
+  input: { productId: ProductShortcode; candidateId: ProductShortcode },
+): Promise<ProductMatchQueueOut> {
+  const [sourceId, candidateId] = await resolvePair(db, [
+    input.productId,
+    input.candidateId,
+  ]);
+  const [rows, sides] = await Promise.all([
+    listProductMatchRows(db),
+    loadProductMatchSides(db, [sourceId, candidateId]),
+  ]);
+  const existing = rows.find(
+    (row) =>
+      productPairKey(row.productAId, row.productBId) ===
+      productPairKey(sourceId, candidateId),
+  );
+  const source = sides.get(sourceId);
+  const match = sides.get(candidateId);
+  return {
+    semanticRanking: false,
+    items:
+      source && match && existing?.state !== "dismissed"
+        ? [
+            candidate(existing?.source ?? "detector", source, match, {
+              evidence: existing?.evidence ?? null,
+              sourceUrls: existing?.sourceUrls ?? [],
+              signals: existing ? [] : ["Suggested from photo review"],
+            }),
+          ]
+        : [],
+  };
+}
+
+/** Open agent proposals first, then the detector's live photo × purchase pairs. */
 export async function getProductMatchQueue(
   db: Database,
-  input: { productId?: ProductShortcode },
+  input: { productId?: ProductShortcode; candidateId?: ProductShortcode },
   deps: ProductMatchDependencies = productionProductMatchDependencies,
 ): Promise<ProductMatchQueueOut> {
+  if (input.productId && input.candidateId)
+    return getDirectedProductMatchQueue(db, {
+      productId: input.productId,
+      candidateId: input.candidateId,
+    });
   const focus = input.productId
     ? await resolveOrThrow(db, "product", input.productId)
     : undefined;

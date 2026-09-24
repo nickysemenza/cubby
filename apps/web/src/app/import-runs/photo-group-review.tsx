@@ -6,6 +6,7 @@ import { productCategoryShortcode } from "@cubby/schemas/identifiers";
 import type { ImageProcessingJobState } from "@cubby/schemas/image-processing";
 import {
   photoRunReviewResponse,
+  photoProductCandidatesResponse,
   reviewPhotoGroupsOutput,
   type PhotoGroupProposal,
   type PhotoGroupProposalGroup,
@@ -18,6 +19,7 @@ import { CheckIcon } from "@phosphor-icons/react/dist/csr/Check";
 import { DotsThreeIcon } from "@phosphor-icons/react/dist/csr/DotsThree";
 import { TrashIcon } from "@phosphor-icons/react/dist/csr/Trash";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
@@ -438,10 +440,12 @@ function ProductPicker({
 }
 
 function ProductPanel({
+  runId,
   proposal,
   save,
   busy,
 }: {
+  runId: string;
   proposal: PhotoGroupProposal;
   save: Save;
   busy: boolean;
@@ -514,6 +518,12 @@ function ProductPanel({
         )
       ) : (
         <Stack gap="sm">
+          <PhotoProductSuggestions
+            runId={runId}
+            proposal={proposal}
+            onPick={attachExisting}
+            busy={busy}
+          />
           <CommitInput
             label="New product name"
             value={product.create.name}
@@ -641,6 +651,122 @@ function ProductPanel({
   );
 }
 
+function PhotoProductSuggestions({
+  runId,
+  proposal,
+  onPick,
+  busy,
+  settled = false,
+}: {
+  runId: string;
+  proposal: PhotoGroupProposal;
+  onPick?: (id: ProductShortcode) => void;
+  busy?: boolean;
+  settled?: boolean;
+}) {
+  const suggestions = useQuery({
+    queryKey: [
+      "photo-product-candidates",
+      runId,
+      proposal.groupKey,
+      proposal.updatedAt,
+    ],
+    queryFn: async () => {
+      const query = new URLSearchParams({ groupKey: proposal.groupKey });
+      const response = await fetch(
+        `/api/import/runs/${encodeURIComponent(runId)}/photo-groups/candidates?${query}`,
+      );
+      return readJsonOrThrow(
+        response,
+        photoProductCandidatesResponse,
+        "Product matches could not load.",
+      );
+    },
+  });
+  if (suggestions.isPending)
+    return <StatusText tone="muted">Finding existing products…</StatusText>;
+  if (suggestions.isError)
+    return (
+      <StatusText tone="destructive">{suggestions.error.message}</StatusText>
+    );
+  if (!suggestions.data.candidates.length) return null;
+  return (
+    <div className="min-w-0 rounded-md border border-border bg-muted/30 p-2">
+      <p className="mb-2 text-xs font-semibold">
+        {settled
+          ? "Possible product matches"
+          : "Could this already be a product?"}
+      </p>
+      <div className="space-y-1">
+        {suggestions.data.candidates.slice(0, 3).map((candidate) => (
+          <div
+            key={candidate.id}
+            className="flex min-w-0 items-center gap-2 rounded-sm bg-card p-1.5"
+          >
+            <Image
+              src={candidate.coverUrl ?? undefined}
+              alt={candidate.name}
+              displayWidth={44}
+              className="size-11 shrink-0 rounded-sm border border-border object-cover"
+            />
+            <div className="min-w-0 flex-1">
+              <p
+                className="truncate text-xs font-medium"
+                title={candidate.name}
+              >
+                {candidate.name}
+              </p>
+              <p className="text-2xs text-muted-foreground">
+                {[
+                  candidate.hasPurchase ? "Purchase linked" : null,
+                  !candidate.hasOwnPhoto ? "No own photo" : null,
+                  !candidate.hasPhotoImport ? "No prior photo import" : null,
+                ]
+                  .filter(Boolean)
+                  .join(" · ") || "Compare details"}
+              </p>
+            </div>
+            {settled && proposal.committedProduct ? (
+              <Button
+                variant="outline"
+                size="sm"
+                className="min-h-11 shrink-0"
+                render={
+                  <Link
+                    to="/recommendations/workbench"
+                    search={{
+                      kind: "product-match",
+                      source: proposal.committedProduct.id,
+                      candidate: candidate.id,
+                    }}
+                  />
+                }
+              >
+                Review match
+              </Button>
+            ) : (
+              <Button
+                variant="outline"
+                size="sm"
+                className="min-h-11 shrink-0"
+                disabled={busy}
+                onClick={() => onPick?.(candidate.id)}
+              >
+                Use product
+              </Button>
+            )}
+          </div>
+        ))}
+      </div>
+      {!settled && (
+        <p className="mt-2 text-2xs text-muted-foreground">
+          Compare the exact size and color before approval.
+        </p>
+      )}
+    </div>
+  );
+}
+
 function InventoryFields({
   proposal,
   save,
@@ -718,6 +844,7 @@ function InventoryFields({
 }
 
 function ProposalCard({
+  runId,
   proposal,
   proposals,
   imagesById,
@@ -725,6 +852,7 @@ function ProposalCard({
   save,
   action,
 }: {
+  runId: string;
   proposal: PhotoGroupProposal;
   proposals: readonly PhotoGroupProposal[];
   imagesById: ImagesById;
@@ -862,7 +990,12 @@ function ProposalCard({
             editable
             busy={working}
           />
-          <ProductPanel proposal={proposal} save={save} busy={working} />
+          <ProductPanel
+            runId={runId}
+            proposal={proposal}
+            save={save}
+            busy={working}
+          />
         </div>
         {proposal.missingImageCount ? (
           <StatusText as="p" tone="warning" className="mt-3 text-xs">
@@ -888,55 +1021,87 @@ function ProposalCard({
 }
 
 function SettledRow({
+  runId,
   proposal,
   imagesById,
 }: {
+  runId: string;
   proposal: PhotoGroupProposal;
   imagesById: ImagesById;
 }) {
   const committed = proposal.committedProduct;
+  const [showMatches, setShowMatches] = useState(false);
   return (
-    <TableRow>
-      <TableCell>
-        <Row gap="xs">
-          {[...proposal.images, ...proposal.skip].slice(0, 6).map((entry) => (
-            <PhotoThumb
-              key={entry.id}
-              image={imagesById.get(entry.id)}
-              size={32}
-              dimmed={proposal.state === "discarded"}
+    <>
+      <TableRow>
+        <TableCell>
+          <Row gap="xs">
+            {[...proposal.images, ...proposal.skip].slice(0, 6).map((entry) => (
+              <PhotoThumb
+                key={entry.id}
+                image={imagesById.get(entry.id)}
+                size={32}
+                dimmed={proposal.state === "discarded"}
+              />
+            ))}
+          </Row>
+        </TableCell>
+        <TableCell className="max-w-72">
+          {committed ? (
+            <Stack gap="xs" className="min-w-0">
+              <EntityInlineLink
+                entity="product"
+                data={{ id: committed.id, name: committed.name }}
+                displayImage={null}
+                truncate
+                className="min-w-0 text-xs"
+              />
+              {proposal.product.kind === "create" && (
+                <>
+                  <Button
+                    size="sm"
+                    variant="link"
+                    className="h-auto w-fit p-0 text-xs"
+                    onClick={() => setShowMatches((value) => !value)}
+                  >
+                    {showMatches
+                      ? "Hide possible matches"
+                      : "Review possible matches"}
+                  </Button>
+                </>
+              )}
+            </Stack>
+          ) : (
+            <span className="text-xs text-muted-foreground">
+              {proposal.state === "discarded"
+                ? "Photos skipped"
+                : proposalName(proposal)}
+            </span>
+          )}
+        </TableCell>
+        <TableCell>
+          <Badge
+            variant={proposal.state === "committed" ? "positive" : "secondary"}
+          >
+            {proposal.state === "committed" ? "Approved" : "Discarded"}
+          </Badge>
+        </TableCell>
+        <TableCell className="font-mono text-2xs text-muted-foreground">
+          {proposal.groupKey}
+        </TableCell>
+      </TableRow>
+      {showMatches && (
+        <TableRow>
+          <TableCell colSpan={4}>
+            <PhotoProductSuggestions
+              runId={runId}
+              proposal={proposal}
+              settled
             />
-          ))}
-        </Row>
-      </TableCell>
-      <TableCell className="max-w-72">
-        {committed ? (
-          <EntityInlineLink
-            entity="product"
-            data={{ id: committed.id, name: committed.name }}
-            displayImage={null}
-            truncate
-            className="min-w-0 text-xs"
-          />
-        ) : (
-          <span className="text-xs text-muted-foreground">
-            {proposal.state === "discarded"
-              ? "Photos skipped"
-              : proposalName(proposal)}
-          </span>
-        )}
-      </TableCell>
-      <TableCell>
-        <Badge
-          variant={proposal.state === "committed" ? "positive" : "secondary"}
-        >
-          {proposal.state === "committed" ? "Approved" : "Discarded"}
-        </Badge>
-      </TableCell>
-      <TableCell className="font-mono text-2xs text-muted-foreground">
-        {proposal.groupKey}
-      </TableCell>
-    </TableRow>
+          </TableCell>
+        </TableRow>
+      )}
+    </>
   );
 }
 
@@ -1212,6 +1377,7 @@ export function PhotoGroupReview({
       {proposed.map((proposal) => (
         <ProposalCard
           key={proposal.groupKey}
+          runId={runId}
           proposal={proposal}
           proposals={review.proposals}
           imagesById={imagesById}
@@ -1272,6 +1438,7 @@ export function PhotoGroupReview({
                 {settled.map((proposal) => (
                   <SettledRow
                     key={proposal.groupKey}
+                    runId={runId}
                     proposal={proposal}
                     imagesById={imagesById}
                   />

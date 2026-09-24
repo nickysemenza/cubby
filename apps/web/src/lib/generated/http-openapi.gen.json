@@ -24150,6 +24150,17 @@
             },
             "style": "form",
             "explode": true
+          },
+          {
+            "name": "candidateId",
+            "in": "query",
+            "description": "product shortcode, e.g. PRD-4K7M",
+            "schema": {
+              "type": "string",
+              "pattern": "^PRD-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$"
+            },
+            "style": "form",
+            "explode": true
           }
         ],
         "operationId": "recommendations.productMatches",

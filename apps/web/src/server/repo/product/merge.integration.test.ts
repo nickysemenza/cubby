@@ -23,6 +23,7 @@ import {
   createProduct,
   mergeProducts,
   previewMergeProducts,
+  previewProductMergeDecisions,
 } from "~/server/repo/product";
 import {
   attachProductComponents,
@@ -90,6 +91,59 @@ describe("mergeProducts", () => {
     );
     return parseEntityId("location", await resolveId(created.id, "location"));
   };
+
+  it("previews kept names, filled attributes, and combined images before merge", async () => {
+    const keeper = await seedProduct("ForgeWear pocket tee black small", {
+      manufacturer: "ForgeWear",
+      model: null,
+    });
+    const incoming = await seedProduct("Dark pocket shirt from photo", {
+      model: "Loose Fit",
+    });
+    for (const [index, item] of [keeper, incoming].entries()) {
+      const photo = await createUploadedImageRecord(ctx.db, {
+        key: `images/${crypto.randomUUID()}-${index}.jpg`,
+        filename: `${index}.jpg`,
+        contentType: "image/jpeg",
+        size: 100,
+      });
+      await getDb(ctx.db).insert(entityAttachment).values({
+        subjectEntityId: item.id,
+        imageId: photo.id,
+      });
+    }
+
+    const preview = await previewProductMergeDecisions(ctx.db, {
+      keepId: keeper.id,
+      mergeId: incoming.id,
+    });
+    expect(preview.blockers).toEqual([]);
+    expect(preview.decisions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          field: "Name",
+          keeper: "ForgeWear pocket tee black small",
+          incoming: "Dark pocket shirt from photo",
+          result: "ForgeWear pocket tee black small",
+          action: "keep",
+        }),
+        expect.objectContaining({
+          field: "Model",
+          keeper: "—",
+          incoming: "Loose Fit",
+          result: "Loose Fit",
+          action: "fill",
+        }),
+        expect.objectContaining({
+          field: "Images",
+          keeper: "1 image",
+          incoming: "1 image",
+          result: "2 images",
+          action: "combine",
+        }),
+      ]),
+    );
+  });
 
   const liveExternalIds = (productId: ProductId) =>
     getDb(ctx.db).query.productExternalId.findMany({

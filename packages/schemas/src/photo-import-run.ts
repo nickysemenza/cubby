@@ -356,6 +356,25 @@ export const photoRunImage = z.object({
 });
 export type PhotoRunImage = z.infer<typeof photoRunImage>;
 
+export const photoProductCandidate = z.object({
+  id: productShortcode,
+  name: z.string(),
+  coverUrl: z.string().nullable(),
+  hasOwnPhoto: z.boolean(),
+  hasPhotoImport: z.boolean(),
+  hasPurchase: z.boolean(),
+  hasInventory: z.boolean(),
+});
+export type PhotoProductCandidate = z.infer<typeof photoProductCandidate>;
+
+export const photoProductCandidatesResponse = z.object({
+  candidates: z.array(photoProductCandidate),
+});
+export const photoProductCandidateSearchInput = z.object({
+  name: z.string().trim().min(3).max(500),
+  manufacturer: z.string().trim().max(300).optional(),
+});
+
 /** The run page's review read: proposals plus every run photo. */
 export const photoRunReviewResponse = z.object({
   review: photoGroupProposalList,

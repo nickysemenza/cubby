@@ -27,6 +27,7 @@ export const recommendationWorkbenchSearch = z
   .object({
     kind: recommendationKind.optional(),
     source: productShortcode.optional(),
+    candidate: productShortcode.optional(),
     inventory: inventoryShortcode.optional(),
   })
   .strict();
@@ -149,6 +150,7 @@ export type ProductMatchCandidate = z.infer<typeof productMatchCandidate>;
 
 export const productMatchQueueInput = z.object({
   productId: productShortcode.optional(),
+  candidateId: productShortcode.optional(),
 });
 export const productMatchQueueOut = z.object({
   /** False when the vector index is unreachable: ranking fell back to names. */
@@ -165,6 +167,18 @@ export const dismissProductMatchInput = z.object({
 export const mergeProductMatchInput = z.object({
   keepId: productShortcode,
   mergeId: productShortcode,
+});
+
+export const productMergeDecision = z.object({
+  field: z.string(),
+  keeper: z.string(),
+  incoming: z.string(),
+  result: z.string(),
+  action: z.enum(["keep", "fill", "combine", "dedupe"]),
+});
+export const productMergePreview = z.object({
+  decisions: z.array(productMergeDecision),
+  blockers: z.array(z.string()),
 });
 
 export const proposeProductMatchInput = z.object({

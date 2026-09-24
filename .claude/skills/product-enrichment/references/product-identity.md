@@ -48,8 +48,8 @@ purchase's own vendor Product (vendor name plus catalog image), then record
 the candidate pair with `propose_product_match`
 (`{productIds: [photoProductId, vendorProductId], evidence, sourceUrls?}`)
 for a human to review side by side in the web recommendations workbench.
-Never claim a descriptive-only match directly, and never merge one without
-that human confirmation.
+The purchase import does not claim a descriptive-only match directly, and a
+later merge requires human confirmation.
 
 **Purchase first, photos later** — when photo-inventory-import runs after a
 purchase already exists, check for the existing purchase Product before
@@ -57,8 +57,16 @@ creating: exact identifiers first, then the vendor's purchased Products
 (`list_purchase_products`, `resolve_products`, `find_similar_entities`) for a
 descriptive candidate. Purchase-created Products usually have no category and
 an empty manufacturer until enriched, so never filter candidates by either.
-Claim it directly only on an exact identifier; on a descriptive match, create the photo's own Product and call
-`propose_product_match` instead of guessing.
+Prioritize the exact variant with no own-item photo and no earlier photo-import
+attachment; a vendor-import association is compatible with this candidate.
+Read label position and context before assigning size or fit (a letter beside
+"Loose Fit" may describe fit while a separate boxed letter is the size).
+When brand, garment features, and variant evidence strongly favor one Product,
+propose `existingId` in the photo group with the evidence and uncertainty.
+The human approves that attachment. If two color or size variants remain
+plausible, leave the choice for review. Create a separate photo Product only
+when no existing variant fits; then use `propose_product_match` if later
+evidence connects two already-created Products.
 
 A server detector also surfaces candidate pairs automatically from both
 sides. Agents call `propose_product_match` themselves when they hold evidence

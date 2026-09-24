@@ -127,6 +127,7 @@ import { Route as ApiImportMerchantRulesRouteImport } from './routes/api/import/
 import { Route as ApiImportRunLogsRouteImport } from './routes/api/import/run-logs'
 import { Route as ApiImportRunsRouteImport } from './routes/api/import/runs'
 import { Route as ApiImportTargetedRouteImport } from './routes/api/import/targeted'
+import { Route as ApiProductsMergePreviewRouteImport } from './routes/api/products/merge-preview'
 import { Route as ApiSettingsMemberLoginsRouteImport } from './routes/api/settings/member-logins'
 import { Route as ApiV1ResourceRouteImport } from './routes/api/v1/$resource'
 import { Route as ApiV1DocsRouteImport } from './routes/api/v1/docs'
@@ -153,6 +154,7 @@ import { Route as ApiImportRunsPublicIdAgentRouteImport } from './routes/api/imp
 import { Route as ApiImportRunsPublicIdPhotoAgentRouteImport } from './routes/api/import/runs.$publicId.photo-agent'
 import { Route as ApiImportRunsPublicIdPhotoGroupsRouteImport } from './routes/api/import/runs.$publicId.photo-groups'
 import { Route as ApiImportRunsPublicIdAgentSplatRouteImport } from './routes/api/import/runs.$publicId.agent.$'
+import { Route as ApiImportRunsPublicIdPhotoGroupsCandidatesRouteImport } from './routes/api/import/runs.$publicId.photo-groups.candidates'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -822,6 +824,11 @@ const ApiImportTargetedRoute = ApiImportTargetedRouteImport.update({
   path: '/api/import/targeted',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiProductsMergePreviewRoute = ApiProductsMergePreviewRouteImport.update({
+  id: '/api/products/merge-preview',
+  path: '/api/products/merge-preview',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiSettingsMemberLoginsRoute = ApiSettingsMemberLoginsRouteImport.update({
   id: '/api/settings/member-logins',
   path: '/api/settings/member-logins',
@@ -968,6 +975,12 @@ const ApiImportRunsPublicIdAgentSplatRoute =
     path: '/$',
     getParentRoute: () => ApiImportRunsPublicIdAgentRoute,
   } as any)
+const ApiImportRunsPublicIdPhotoGroupsCandidatesRoute =
+  ApiImportRunsPublicIdPhotoGroupsCandidatesRouteImport.update({
+    id: '/candidates',
+    path: '/candidates',
+    getParentRoute: () => ApiImportRunsPublicIdPhotoGroupsRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -1057,6 +1070,7 @@ export interface FileRoutesByFullPath {
   '/api/import/run-logs': typeof ApiImportRunLogsRoute
   '/api/import/runs': typeof ApiImportRunsRouteWithChildren
   '/api/import/targeted': typeof ApiImportTargetedRoute
+  '/api/products/merge-preview': typeof ApiProductsMergePreviewRoute
   '/api/settings/member-logins': typeof ApiSettingsMemberLoginsRoute
   '/api/v1/$resource': typeof ApiV1ResourceRouteWithChildren
   '/api/v1/docs': typeof ApiV1DocsRoute
@@ -1111,8 +1125,9 @@ export interface FileRoutesByFullPath {
   '/api/import/agent/oauth/status': typeof ApiImportAgentOauthStatusRoute
   '/api/import/runs/$publicId/agent': typeof ApiImportRunsPublicIdAgentRouteWithChildren
   '/api/import/runs/$publicId/photo-agent': typeof ApiImportRunsPublicIdPhotoAgentRoute
-  '/api/import/runs/$publicId/photo-groups': typeof ApiImportRunsPublicIdPhotoGroupsRoute
+  '/api/import/runs/$publicId/photo-groups': typeof ApiImportRunsPublicIdPhotoGroupsRouteWithChildren
   '/api/import/runs/$publicId/agent/$': typeof ApiImportRunsPublicIdAgentSplatRoute
+  '/api/import/runs/$publicId/photo-groups/candidates': typeof ApiImportRunsPublicIdPhotoGroupsCandidatesRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -1201,6 +1216,7 @@ export interface FileRoutesByTo {
   '/api/import/run-logs': typeof ApiImportRunLogsRoute
   '/api/import/runs': typeof ApiImportRunsRouteWithChildren
   '/api/import/targeted': typeof ApiImportTargetedRoute
+  '/api/products/merge-preview': typeof ApiProductsMergePreviewRoute
   '/api/settings/member-logins': typeof ApiSettingsMemberLoginsRoute
   '/api/v1/$resource': typeof ApiV1ResourceRouteWithChildren
   '/api/v1/docs': typeof ApiV1DocsRoute
@@ -1255,8 +1271,9 @@ export interface FileRoutesByTo {
   '/api/import/agent/oauth/status': typeof ApiImportAgentOauthStatusRoute
   '/api/import/runs/$publicId/agent': typeof ApiImportRunsPublicIdAgentRouteWithChildren
   '/api/import/runs/$publicId/photo-agent': typeof ApiImportRunsPublicIdPhotoAgentRoute
-  '/api/import/runs/$publicId/photo-groups': typeof ApiImportRunsPublicIdPhotoGroupsRoute
+  '/api/import/runs/$publicId/photo-groups': typeof ApiImportRunsPublicIdPhotoGroupsRouteWithChildren
   '/api/import/runs/$publicId/agent/$': typeof ApiImportRunsPublicIdAgentSplatRoute
+  '/api/import/runs/$publicId/photo-groups/candidates': typeof ApiImportRunsPublicIdPhotoGroupsCandidatesRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -1348,6 +1365,7 @@ export interface FileRoutesById {
   '/api/import/run-logs': typeof ApiImportRunLogsRoute
   '/api/import/runs': typeof ApiImportRunsRouteWithChildren
   '/api/import/targeted': typeof ApiImportTargetedRoute
+  '/api/products/merge-preview': typeof ApiProductsMergePreviewRoute
   '/api/settings/member-logins': typeof ApiSettingsMemberLoginsRoute
   '/api/v1/$resource': typeof ApiV1ResourceRouteWithChildren
   '/api/v1/docs': typeof ApiV1DocsRoute
@@ -1402,8 +1420,9 @@ export interface FileRoutesById {
   '/api/import/agent/oauth/status': typeof ApiImportAgentOauthStatusRoute
   '/api/import/runs/$publicId/agent': typeof ApiImportRunsPublicIdAgentRouteWithChildren
   '/api/import/runs/$publicId/photo-agent': typeof ApiImportRunsPublicIdPhotoAgentRoute
-  '/api/import/runs/$publicId/photo-groups': typeof ApiImportRunsPublicIdPhotoGroupsRoute
+  '/api/import/runs/$publicId/photo-groups': typeof ApiImportRunsPublicIdPhotoGroupsRouteWithChildren
   '/api/import/runs/$publicId/agent/$': typeof ApiImportRunsPublicIdAgentSplatRoute
+  '/api/import/runs/$publicId/photo-groups/candidates': typeof ApiImportRunsPublicIdPhotoGroupsCandidatesRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -1495,6 +1514,7 @@ export interface FileRouteTypes {
     | '/api/import/run-logs'
     | '/api/import/runs'
     | '/api/import/targeted'
+    | '/api/products/merge-preview'
     | '/api/settings/member-logins'
     | '/api/v1/$resource'
     | '/api/v1/docs'
@@ -1551,6 +1571,7 @@ export interface FileRouteTypes {
     | '/api/import/runs/$publicId/photo-agent'
     | '/api/import/runs/$publicId/photo-groups'
     | '/api/import/runs/$publicId/agent/$'
+    | '/api/import/runs/$publicId/photo-groups/candidates'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -1639,6 +1660,7 @@ export interface FileRouteTypes {
     | '/api/import/run-logs'
     | '/api/import/runs'
     | '/api/import/targeted'
+    | '/api/products/merge-preview'
     | '/api/settings/member-logins'
     | '/api/v1/$resource'
     | '/api/v1/docs'
@@ -1695,6 +1717,7 @@ export interface FileRouteTypes {
     | '/api/import/runs/$publicId/photo-agent'
     | '/api/import/runs/$publicId/photo-groups'
     | '/api/import/runs/$publicId/agent/$'
+    | '/api/import/runs/$publicId/photo-groups/candidates'
   id:
     | '__root__'
     | '/'
@@ -1785,6 +1808,7 @@ export interface FileRouteTypes {
     | '/api/import/run-logs'
     | '/api/import/runs'
     | '/api/import/targeted'
+    | '/api/products/merge-preview'
     | '/api/settings/member-logins'
     | '/api/v1/$resource'
     | '/api/v1/docs'
@@ -1841,6 +1865,7 @@ export interface FileRouteTypes {
     | '/api/import/runs/$publicId/photo-agent'
     | '/api/import/runs/$publicId/photo-groups'
     | '/api/import/runs/$publicId/agent/$'
+    | '/api/import/runs/$publicId/photo-groups/candidates'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -1863,6 +1888,7 @@ export interface RootRouteChildren {
   ApiImportRunLogsRoute: typeof ApiImportRunLogsRoute
   ApiImportRunsRoute: typeof ApiImportRunsRouteWithChildren
   ApiImportTargetedRoute: typeof ApiImportTargetedRoute
+  ApiProductsMergePreviewRoute: typeof ApiProductsMergePreviewRoute
   ApiSettingsMemberLoginsRoute: typeof ApiSettingsMemberLoginsRoute
   ApiV1ResourceRoute: typeof ApiV1ResourceRouteWithChildren
   ApiV1DocsRoute: typeof ApiV1DocsRoute
@@ -2706,6 +2732,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiImportTargetedRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/products/merge-preview': {
+      id: '/api/products/merge-preview'
+      path: '/api/products/merge-preview'
+      fullPath: '/api/products/merge-preview'
+      preLoaderRoute: typeof ApiProductsMergePreviewRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/settings/member-logins': {
       id: '/api/settings/member-logins'
       path: '/api/settings/member-logins'
@@ -2887,6 +2920,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/api/import/runs/$publicId/agent/$'
       preLoaderRoute: typeof ApiImportRunsPublicIdAgentSplatRouteImport
       parentRoute: typeof ApiImportRunsPublicIdAgentRoute
+    }
+    '/api/import/runs/$publicId/photo-groups/candidates': {
+      id: '/api/import/runs/$publicId/photo-groups/candidates'
+      path: '/candidates'
+      fullPath: '/api/import/runs/$publicId/photo-groups/candidates'
+      preLoaderRoute: typeof ApiImportRunsPublicIdPhotoGroupsCandidatesRouteImport
+      parentRoute: typeof ApiImportRunsPublicIdPhotoGroupsRoute
     }
   }
 }
@@ -3184,16 +3224,32 @@ const ApiImportRunsPublicIdAgentRouteWithChildren =
     ApiImportRunsPublicIdAgentRouteChildren,
   )
 
+interface ApiImportRunsPublicIdPhotoGroupsRouteChildren {
+  ApiImportRunsPublicIdPhotoGroupsCandidatesRoute: typeof ApiImportRunsPublicIdPhotoGroupsCandidatesRoute
+}
+
+const ApiImportRunsPublicIdPhotoGroupsRouteChildren: ApiImportRunsPublicIdPhotoGroupsRouteChildren =
+  {
+    ApiImportRunsPublicIdPhotoGroupsCandidatesRoute:
+      ApiImportRunsPublicIdPhotoGroupsCandidatesRoute,
+  }
+
+const ApiImportRunsPublicIdPhotoGroupsRouteWithChildren =
+  ApiImportRunsPublicIdPhotoGroupsRoute._addFileChildren(
+    ApiImportRunsPublicIdPhotoGroupsRouteChildren,
+  )
+
 interface ApiImportRunsPublicIdRouteChildren {
   ApiImportRunsPublicIdAgentRoute: typeof ApiImportRunsPublicIdAgentRouteWithChildren
   ApiImportRunsPublicIdPhotoAgentRoute: typeof ApiImportRunsPublicIdPhotoAgentRoute
-  ApiImportRunsPublicIdPhotoGroupsRoute: typeof ApiImportRunsPublicIdPhotoGroupsRoute
+  ApiImportRunsPublicIdPhotoGroupsRoute: typeof ApiImportRunsPublicIdPhotoGroupsRouteWithChildren
 }
 
 const ApiImportRunsPublicIdRouteChildren: ApiImportRunsPublicIdRouteChildren = {
   ApiImportRunsPublicIdAgentRoute: ApiImportRunsPublicIdAgentRouteWithChildren,
   ApiImportRunsPublicIdPhotoAgentRoute: ApiImportRunsPublicIdPhotoAgentRoute,
-  ApiImportRunsPublicIdPhotoGroupsRoute: ApiImportRunsPublicIdPhotoGroupsRoute,
+  ApiImportRunsPublicIdPhotoGroupsRoute:
+    ApiImportRunsPublicIdPhotoGroupsRouteWithChildren,
 }
 
 const ApiImportRunsPublicIdRouteWithChildren =
@@ -3248,6 +3304,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiImportRunLogsRoute: ApiImportRunLogsRoute,
   ApiImportRunsRoute: ApiImportRunsRouteWithChildren,
   ApiImportTargetedRoute: ApiImportTargetedRoute,
+  ApiProductsMergePreviewRoute: ApiProductsMergePreviewRoute,
   ApiSettingsMemberLoginsRoute: ApiSettingsMemberLoginsRoute,
   ApiV1ResourceRoute: ApiV1ResourceRouteWithChildren,
   ApiV1DocsRoute: ApiV1DocsRoute,
