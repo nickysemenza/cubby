@@ -9,6 +9,7 @@ import {
 } from "@cubby/schemas/entity-manifest";
 import { LEGACY_SHORTCODE_PREFIX } from "@cubby/shared";
 import { useQuery } from "@tanstack/react-query";
+import { ChevronDown } from "lucide-react";
 import { Fragment, type ReactNode } from "react";
 
 import { Stack } from "~/components/layout";
@@ -30,6 +31,7 @@ import {
   type EntityInspectorHealth,
   entityInspectorHealth,
 } from "~/entities/entity-inspector-health";
+import { entityDeclarationOverrides } from "~/entities/generated/entity-overrides.gen";
 import { viewsForEntity } from "~/entities/view-manifest";
 import { authClient } from "~/lib/auth-client";
 import { ENTITY_NATIVE_COVERAGE } from "~/lib/generated/entity-native-coverage.gen";
@@ -72,16 +74,6 @@ function Dot({ value, title }: { value: boolean; title?: string }) {
   );
 }
 
-/** A count, with the full item list in a `title` tooltip; a dash when empty. */
-function CountTip({ items }: { items: readonly string[] }) {
-  if (items.length === 0) return dash;
-  return (
-    <span className={mono} title={items.join(", ")}>
-      {items.length}
-    </span>
-  );
-}
-
 function emittedCode(entity: Entity) {
   const prefix = metadataFor(entity).shortcodePrefix;
   return prefix ? `${prefix}XXXX` : null;
@@ -117,27 +109,18 @@ function metadataFor(entity: Entity): EntityInspectorMetadata {
   return entityInspectorMetadata[entity] as EntityInspectorMetadata;
 }
 
-/**
- * The inbound-only single-letter prefix a printed label may still carry. Not
- * a manifest fact: the parser's alias table in `@cubby/shared` is the only
- * place the legacy form survives.
- */
+function overridesFor(
+  entity: Entity,
+): readonly { path: string; value: string }[] {
+  return entityDeclarationOverrides[entity];
+}
+
 function legacyPrefix(entity: Entity): string | null {
   return (
     Object.entries(LEGACY_SHORTCODE_PREFIX).find(
       ([, target]) => target === entity,
     )?.[0] ?? null
   );
-}
-
-function acceptedCodes(entity: Entity) {
-  return [metadataFor(entity).shortcodePrefix, legacyPrefix(entity)]
-    .filter((prefix) => prefix !== null)
-    .map((prefix) => `${prefix}XXXX`);
-}
-
-function printsLabels(entity: Entity): entity is "product" | "location" {
-  return entity === "product" || entity === "location";
 }
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
@@ -193,20 +176,9 @@ function PhotoCategoriesSection() {
   );
 }
 
-function inspectorRoute(entity: Entity) {
-  return isBrowserRoutedEntity(entity)
-    ? browserEntityDefinition(entity).routes
-    : null;
-}
-
 function mcpTransportLabel(entity: Entity) {
   const metadata = metadataFor(entity);
   return `${metadata.mcpOwner ?? "none"}: ${metadata.mcpOperations.join(", ") || "—"}`;
-}
-
-function routeCoverageLabel(entity: Entity) {
-  const route = inspectorRoute(entity);
-  return route ? `${route.list} · ${route.detail}` : "workflow-owned";
 }
 
 /** `list · get · update` plus a `+N rpc` suffix; a dash when the app never touches it. */
@@ -265,18 +237,18 @@ function KernelActionsCell({ entity }: { entity: Entity }) {
   );
 }
 
-function idFilterCount(entity: Entity) {
-  return metadataFor(entity).filterDescriptors.filter(
-    (filter) => filter.kind === "id" || filter.kind === "idMulti",
-  ).length;
-}
-
 function cardinalitySplit(entity: Entity) {
   const relationships = extendedManifest(entity).relationships;
   const one = relationships.filter(
     (relation) => relation.cardinality === "one",
   ).length;
   return { one, many: relationships.length - one };
+}
+
+function idFilterCount(entity: Entity) {
+  return metadataFor(entity).filterDescriptors.filter(
+    (filter) => filter.kind === "id" || filter.kind === "idMulti",
+  ).length;
 }
 
 type RelationDetailStatus =
@@ -347,43 +319,15 @@ function manyDetailTally(entity: Entity) {
   const relationships = extendedManifest(entity).relationships.filter(
     (relation) => relation.cardinality === "many",
   );
-  let declared = 0;
-  let derived = 0;
-  let omitted = 0;
+  const tally = { declared: 0, derived: 0, omitted: 0 };
   for (const relation of relationships) {
     const { status } = relationDetailStatus(entity, relation);
-    if (status === "declared") declared += 1;
-    else if (status === "derived") derived += 1;
-    else omitted += 1;
+    if (status === "declared") tally.declared += 1;
+    else if (status === "derived") tally.derived += 1;
+    else tally.omitted += 1;
   }
-  return { declared, derived, omitted, total: relationships.length };
+  return tally;
 }
-
-/** The value most entities share for a column — the rendering caller mutes
- * this value and leaves outliers at normal weight, so a scan of the column
- * finds the exceptions instead of rereading the norm 24 times. */
-function mostCommon<T extends string>(values: readonly T[]): T {
-  const counts = new Map<T, number>();
-  for (const value of values) counts.set(value, (counts.get(value) ?? 0) + 1);
-  // SAFETY: every caller passes `allEntities.map(...)`, which is always
-  // non-empty, so `values[0]` is always a `T`, never `undefined`.
-  let best = values[0] as T;
-  let bestCount = 0;
-  for (const [value, count] of counts) {
-    if (count > bestCount) {
-      best = value;
-      bestCount = count;
-    }
-  }
-  return best;
-}
-
-const MODAL_MCP_OWNER = mostCommon(
-  allEntities.map((entity) => metadataFor(entity).mcpOwner ?? "none"),
-);
-const MODAL_DETAIL_VARIANT = mostCommon(
-  allEntities.map((entity) => metadataFor(entity).detail.variant),
-);
 
 /** `shortcodePrefix` without its trailing dash, already a stable 3-4 letter
  * abbreviation the rest of the app uses — reused here as the matrix's
@@ -541,341 +485,287 @@ function RelationsSubRow({ entity }: { entity: Entity }) {
   }
   return (
     <TableRow className="bg-muted/20 hover:bg-muted/20">
-      <TableCell colSpan={COLUMN_COUNT} className="p-0">
-        <Table className="w-full table-auto text-2xs">
-          <TableHeader>
-            <TableRow>
-              <TableHead className={headCls}>Key</TableHead>
-              <TableHead className={headCls}>Target</TableHead>
-              <TableHead className={headCls}>Cardinality</TableHead>
-              <TableHead className={headCls}>Origin</TableHead>
-              <TableHead className={headCls}>Detail table</TableHead>
-              <TableHead className={headCls}>Filter</TableHead>
-              <TableHead className={headCls}>Notes</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {relationships.map((relation) => {
-              const detail = relationDetailStatus(entity, relation);
-              return (
-                <TableRow key={relation.key}>
-                  <TableCell className={cn(cellCls, "font-mono")}>
-                    {relation.key}
-                  </TableCell>
-                  <TableCell className={cn(cellCls, "font-mono")}>
-                    {relation.target}
-                  </TableCell>
-                  <TableCell className={cellCls}>
-                    {relation.cardinality}
-                  </TableCell>
-                  <TableCell className={cellCls}>
-                    {relation.derived ? "derived" : "declared"}
-                  </TableCell>
-                  <TableCell
-                    title={detail.reason}
-                    className={cn(cellCls, matrixStatusClass(detail.status))}
-                  >
-                    {DETAIL_STATUS_LABEL[detail.status]}
-                  </TableCell>
-                  <TableCell className={cn(cellCls, "font-mono")}>
-                    {detail.descriptor ?? dash}
-                  </TableCell>
-                  <TableCell
-                    className={cn(cellCls, "max-w-md text-muted-foreground")}
-                  >
-                    {detail.reason ?? relation.label}
-                  </TableCell>
-                </TableRow>
-              );
-            })}
-          </TableBody>
-        </Table>
+      <TableCell colSpan={COLUMN_COUNT} className="px-4 py-3">
+        <div className="max-w-5xl">
+          <h3 className="mb-2 text-xs font-semibold">Relations</h3>
+          <Table className="w-full table-auto text-2xs">
+            <TableHeader>
+              <TableRow>
+                <TableHead className={headCls}>Key</TableHead>
+                <TableHead className={headCls}>Target</TableHead>
+                <TableHead className={headCls}>Cardinality</TableHead>
+                <TableHead className={headCls}>Origin</TableHead>
+                <TableHead className={headCls}>Detail table</TableHead>
+                <TableHead className={headCls}>Filter</TableHead>
+                <TableHead className={headCls}>Notes</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {relationships.map((relation) => {
+                const detail = relationDetailStatus(entity, relation);
+                return (
+                  <TableRow key={relation.key}>
+                    <TableCell className={cn(cellCls, "font-mono")}>
+                      {relation.key}
+                    </TableCell>
+                    <TableCell className={cn(cellCls, "font-mono")}>
+                      {relation.target}
+                    </TableCell>
+                    <TableCell className={cellCls}>
+                      {relation.cardinality}
+                    </TableCell>
+                    <TableCell className={cellCls}>
+                      {relation.derived ? "derived" : "declared"}
+                    </TableCell>
+                    <TableCell
+                      title={detail.reason}
+                      className={cn(cellCls, matrixStatusClass(detail.status))}
+                    >
+                      {DETAIL_STATUS_LABEL[detail.status]}
+                    </TableCell>
+                    <TableCell className={cn(cellCls, "font-mono")}>
+                      {detail.descriptor ?? dash}
+                    </TableCell>
+                    <TableCell
+                      className={cn(cellCls, "max-w-md text-muted-foreground")}
+                    >
+                      {detail.reason ?? relation.label}
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+        </div>
       </TableCell>
     </TableRow>
   );
 }
-const COLUMN_COUNT = 20; // entity + 19 data columns (see the two header rows below)
+const COLUMN_COUNT = 9;
 
-/**
- * One row per entity, grouped columns, sticky header and first column,
- * `text-[11px]` throughout. Replaces the old `ComparisonMatrix` plus the
- * separate per-entity detail cards: clicking a row expands a dense relations
- * sub-table in place instead of navigating to a second view. Reuses the
- * `selected` / `onSelect` props as the (always-one-expanded) row so deep
- * links keep working.
- */
+function OverrideValue({ value }: { value: string }) {
+  if (value.length <= 120)
+    return (
+      <code className="font-mono break-all whitespace-normal">{value}</code>
+    );
+  const parsed: unknown = JSON.parse(value);
+  const label = Array.isArray(parsed)
+    ? `${parsed.length} entries`
+    : "Show value";
+  return (
+    <details>
+      <summary className="w-fit cursor-pointer text-primary hover:underline">
+        {label}
+      </summary>
+      <pre className="mt-1 max-h-80 overflow-auto font-mono text-2xs break-all whitespace-pre-wrap">
+        {JSON.stringify(parsed, null, 2)}
+      </pre>
+    </details>
+  );
+}
+
+function EffectiveBehavior({ entity }: { entity: Entity }) {
+  const metadata = metadataFor(entity);
+  const tally = manyDetailTally(entity);
+  const route = isBrowserRoutedEntity(entity)
+    ? browserEntityDefinition(entity).routes
+    : null;
+  const facts: readonly [string, ReactNode][] = [
+    [
+      "Legacy code",
+      legacyPrefix(entity) ? `${legacyPrefix(entity)}XXXX` : dash,
+    ],
+    ["Storage table", entityManifest[entity].dbTable ?? dash],
+    [
+      "Filters",
+      `${metadata.filterDescriptors.length} total · ${idFilterCount(entity)} ID`,
+    ],
+    [
+      "Relation tables",
+      `${tally.declared} declared · ${tally.derived} derived · ${tally.omitted} omitted`,
+    ],
+    [
+      "Delete / merge",
+      `${metadata.lifecycle.delete?.mode ?? "none"} · ${metadata.lifecycle.merge ? "merge" : "no merge"}`,
+    ],
+    [
+      "MCP",
+      `${metadata.mcpOwner ?? "none"} · ${metadata.mcpOperations.join(", ") || "no operations"}`,
+    ],
+    ["Routes", route ? `${route.list} · ${route.detail}` : "workflow owned"],
+    [
+      "Detail",
+      `${metadata.detail.variant} · ${metadata.detail.sections.length} sections`,
+    ],
+    [
+      "Printed labels",
+      entity === "product" || entity === "location" ? "yes" : "no",
+    ],
+  ];
+  return (
+    <section>
+      <h3 className="mb-2 text-xs font-semibold">Effective behavior</h3>
+      <dl className="grid gap-x-5 gap-y-2 text-xs sm:grid-cols-2 lg:grid-cols-3">
+        {facts.map(([label, value]) => (
+          <div key={label} className="min-w-0">
+            <dt className="text-muted-foreground">{label}</dt>
+            <dd className="min-w-0 break-all">{value}</dd>
+          </div>
+        ))}
+      </dl>
+    </section>
+  );
+}
+
+function OverridesSubRow({ entity }: { entity: Entity }) {
+  const overrides = overridesFor(entity);
+  return (
+    <TableRow className="bg-muted/20 hover:bg-muted/20">
+      <TableCell colSpan={COLUMN_COUNT} className="px-4 py-3 whitespace-normal">
+        <div id={`entity-details-${entity}`} className="max-w-5xl space-y-4">
+          <EffectiveBehavior entity={entity} />
+          <div>
+            <h3 className="text-xs font-semibold">Declaration overrides</h3>
+            <p className="text-2xs text-muted-foreground">
+              Explicit *Override inputs in the entity manifest. Generated
+              defaults are omitted.
+            </p>
+          </div>
+          {overrides.length === 0 ? (
+            <p className="text-xs text-muted-foreground">
+              No overrides declared.
+            </p>
+          ) : (
+            <dl className="divide-y divide-border/60 border-y border-border/60 text-xs">
+              {overrides.map(({ path, value }) => (
+                <div
+                  key={path}
+                  className="grid gap-1 py-1.5 md:grid-cols-[minmax(14rem,2fr)_minmax(0,3fr)] md:gap-4"
+                >
+                  <dt className="min-w-0 font-mono break-all text-muted-foreground">
+                    {path}
+                  </dt>
+                  <dd className="min-w-0 whitespace-normal">
+                    <OverrideValue value={value} />
+                  </dd>
+                </div>
+              ))}
+            </dl>
+          )}
+        </div>
+      </TableCell>
+    </TableRow>
+  );
+}
+
+/** A compact scan of effective capabilities; the selected row holds the full
+ * declaration exceptions and relationship inventory. */
 function MegaTable({
   selected,
   counts,
   onSelect,
 }: {
-  selected: Entity;
+  selected: Entity | null;
   counts: EntityInspectorHealth["counts"] | undefined;
-  onSelect: (entity: Entity) => void;
+  onSelect: (entity: Entity | null) => void;
 }) {
   return (
-    <div>
-      <Table
-        containerClassName="border-y"
-        className="w-max table-auto text-[11px]"
-      >
-        <TableHeader>
-          <TableRow>
-            <TableHead
-              rowSpan={2}
-              className={cn(
-                headCls,
-                "sticky top-0 left-0 z-30 bg-muted align-bottom",
-              )}
-            >
-              Entity
-            </TableHead>
-            <TableHead
-              colSpan={4}
-              className={cn(headCls, "sticky top-0 z-10 bg-muted text-center")}
-            >
-              Identity
-            </TableHead>
-            <TableHead
-              colSpan={1}
-              className={cn(headCls, "sticky top-0 z-10 bg-muted text-center")}
-            >
-              Kernel
-            </TableHead>
-            <TableHead
-              colSpan={2}
-              className={cn(headCls, "sticky top-0 z-10 bg-muted text-center")}
-            >
-              Filters
-            </TableHead>
-            <TableHead
-              colSpan={1}
-              className={cn(headCls, "sticky top-0 z-10 bg-muted text-center")}
-            >
-              Search
-            </TableHead>
-            <TableHead
-              colSpan={2}
-              className={cn(headCls, "sticky top-0 z-10 bg-muted text-center")}
-            >
-              Relations
-            </TableHead>
-            <TableHead
-              colSpan={2}
-              className={cn(headCls, "sticky top-0 z-10 bg-muted text-center")}
-            >
-              Lifecycle
-            </TableHead>
-            <TableHead
-              colSpan={3}
-              className={cn(headCls, "sticky top-0 z-10 bg-muted text-center")}
-            >
-              Transports / MCP
-            </TableHead>
-            <TableHead
-              colSpan={2}
-              className={cn(headCls, "sticky top-0 z-10 bg-muted text-center")}
-            >
-              Presentation
-            </TableHead>
-            <TableHead
-              colSpan={1}
-              className={cn(headCls, "sticky top-0 z-10 bg-muted text-center")}
-            >
-              Native
-            </TableHead>
-            <TableHead
-              colSpan={1}
-              className={cn(headCls, "sticky top-0 z-10 bg-muted text-center")}
-            >
-              Labels
-            </TableHead>
-          </TableRow>
-          <TableRow>
-            <TableHead className={cn(headCls, "sticky top-6 z-10 bg-muted")}>
-              Code
-            </TableHead>
-            <TableHead className={cn(headCls, "sticky top-6 z-10 bg-muted")}>
-              Aliases
-            </TableHead>
-            <TableHead className={cn(headCls, "sticky top-6 z-10 bg-muted")}>
-              Table
-            </TableHead>
-            <TableHead className={cn(headCls, "sticky top-6 z-10 bg-muted")}>
-              Rows
-            </TableHead>
-            <TableHead className={cn(headCls, "sticky top-6 z-10 bg-muted")}>
-              Actions
-            </TableHead>
-            <TableHead className={cn(headCls, "sticky top-6 z-10 bg-muted")}>
-              Filters
-            </TableHead>
-            <TableHead className={cn(headCls, "sticky top-6 z-10 bg-muted")}>
-              ID
-            </TableHead>
-            <TableHead className={cn(headCls, "sticky top-6 z-10 bg-muted")}>
-              Search
-            </TableHead>
-            <TableHead className={cn(headCls, "sticky top-6 z-10 bg-muted")}>
-              1:N
-            </TableHead>
-            <TableHead className={cn(headCls, "sticky top-6 z-10 bg-muted")}>
-              Detail
-            </TableHead>
-            <TableHead className={cn(headCls, "sticky top-6 z-10 bg-muted")}>
-              Delete
-            </TableHead>
-            <TableHead className={cn(headCls, "sticky top-6 z-10 bg-muted")}>
-              Merge
-            </TableHead>
-            <TableHead className={cn(headCls, "sticky top-6 z-10 bg-muted")}>
-              MCP
-            </TableHead>
-            <TableHead className={cn(headCls, "sticky top-6 z-10 bg-muted")}>
-              Owner
-            </TableHead>
-            <TableHead className={cn(headCls, "sticky top-6 z-10 bg-muted")}>
-              Routes
-            </TableHead>
-            <TableHead className={cn(headCls, "sticky top-6 z-10 bg-muted")}>
-              Variant
-            </TableHead>
-            <TableHead className={cn(headCls, "sticky top-6 z-10 bg-muted")}>
-              Sect.
-            </TableHead>
-            <TableHead className={cn(headCls, "sticky top-6 z-10 bg-muted")}>
-              Native
-            </TableHead>
-            <TableHead className={cn(headCls, "sticky top-6 z-10 bg-muted")}>
-              Print
-            </TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {allEntities.map((entity) => {
-            const metadata = metadataFor(entity);
-            const isSelected = selected === entity;
-            const { one, many } = cardinalitySplit(entity);
-            const tally = manyDetailTally(entity);
-            const routed = isBrowserRoutedEntity(entity);
-            return (
-              <Fragment key={entity}>
-                <TableRow
-                  data-state={isSelected ? "selected" : undefined}
-                  className="cursor-pointer"
-                  onClick={() => onSelect(entity)}
+    <Table
+      containerClassName="border-y"
+      className="w-full min-w-[48rem] table-auto text-xs"
+    >
+      <TableHeader>
+        <TableRow>
+          <TableHead className={cn(headCls, "sticky left-0 z-10 bg-muted")}>
+            Entity
+          </TableHead>
+          <TableHead className={headCls}>Code</TableHead>
+          <TableHead className={headCls}>Rows</TableHead>
+          <TableHead className={headCls}>Actions</TableHead>
+          <TableHead className={headCls}>Search</TableHead>
+          <TableHead className={headCls}>Relations</TableHead>
+          <TableHead className={headCls}>MCP</TableHead>
+          <TableHead className={headCls}>Overrides</TableHead>
+          <TableHead className={headCls}>Native</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {allEntities.map((entity) => {
+          const metadata = metadataFor(entity);
+          const isSelected = selected === entity;
+          const { one, many } = cardinalitySplit(entity);
+          return (
+            <Fragment key={entity}>
+              <TableRow data-state={isSelected ? "selected" : undefined}>
+                <TableCell
+                  className={cn(cellCls, "sticky left-0 z-10 bg-background")}
                 >
-                  <TableCell
-                    className={cn(
-                      cellCls,
-                      "sticky left-0 z-10 bg-background font-mono",
-                    )}
+                  <button
+                    type="button"
+                    className="inline-flex min-h-8 items-center gap-1.5 text-left font-mono hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                    aria-expanded={isSelected}
+                    aria-controls={`entity-details-${entity}`}
+                    onClick={() => onSelect(isSelected ? null : entity)}
                   >
-                    <span className="inline-flex items-center gap-1.5">
-                      <EntityIcon entity={entity} className="size-3.5" />
-                      {entity}
-                    </span>
-                  </TableCell>
-                  <TableCell className={cn(cellCls, mono)}>
-                    {emittedCode(entity) ?? dash}
-                  </TableCell>
-                  <TableCell className={cellCls}>
-                    <CountTip items={acceptedCodes(entity).slice(1)} />
-                  </TableCell>
-                  <TableCell className={cn(cellCls, "font-mono")}>
-                    {entityManifest[entity].dbTable ?? dash}
-                  </TableCell>
-                  <TableCell className={cn(cellCls, mono)}>
-                    {countFor(entity, counts) ?? dash}
-                  </TableCell>
-                  <TableCell className={cellCls}>
-                    <KernelActionsCell entity={entity} />
-                  </TableCell>
-                  <TableCell className={cn(cellCls, mono)}>
-                    {metadata.filterDescriptors.length}
-                  </TableCell>
-                  <TableCell className={cn(cellCls, mono)}>
-                    {idFilterCount(entity) || (
-                      <span className="text-muted-foreground/30">0</span>
-                    )}
-                  </TableCell>
-                  <TableCell className={cellCls}>
-                    <Dot
-                      value={metadata.searchable}
-                      title={
-                        metadata.searchable
-                          ? "lexical + semantic search"
-                          : "not searchable"
-                      }
+                    <ChevronDown
+                      aria-hidden
+                      className={cn(
+                        "size-3.5 shrink-0 transition-transform",
+                        !isSelected && "-rotate-90",
+                      )}
                     />
-                  </TableCell>
-                  <TableCell
-                    className={cn(cellCls, mono)}
-                    title={`${one} one-cardinality · ${many} many-cardinality`}
-                  >
-                    {one}/{many}
-                  </TableCell>
-                  <TableCell
-                    className={cn(cellCls, mono)}
-                    title={`${tally.declared} declared · ${tally.derived} derived · ${tally.omitted} omitted (of ${tally.total} many-relations)`}
-                  >
-                    {tally.total === 0
-                      ? dash
-                      : `${tally.declared}/${tally.derived}/${tally.omitted}`}
-                  </TableCell>
-                  <TableCell className={cellCls}>
-                    {metadata.lifecycle.delete?.mode ?? dash}
-                  </TableCell>
-                  <TableCell className={cellCls}>
-                    <Dot value={metadata.lifecycle.merge} />
-                  </TableCell>
-                  <TableCell
-                    className={cn(cellCls, mono)}
-                    title={mcpTransportLabel(entity)}
-                  >
-                    {metadata.mcpOperations.length}
-                  </TableCell>
-                  <TableCell
-                    className={cn(
-                      cellCls,
-                      (metadata.mcpOwner ?? "none") === MODAL_MCP_OWNER &&
-                        "text-muted-foreground",
-                    )}
-                  >
-                    {metadata.mcpOwner ?? "none"}
-                  </TableCell>
-                  <TableCell className={cellCls}>
-                    <Dot value={routed} title={routeCoverageLabel(entity)} />
-                  </TableCell>
-                  <TableCell
-                    className={cn(
-                      cellCls,
-                      metadata.detail.variant === MODAL_DETAIL_VARIANT &&
-                        "text-muted-foreground",
-                    )}
-                  >
-                    {metadata.detail.variant}
-                  </TableCell>
-                  <TableCell className={cn(cellCls, mono)}>
-                    {metadata.detail.sections.length}
-                  </TableCell>
-                  <TableCell
-                    className={cn(cellCls, "max-w-[14rem] truncate")}
-                    title={nativeCoverageLabel(entity)}
-                  >
-                    {nativeCoverageLabel(entity)}
-                  </TableCell>
-                  <TableCell className={cellCls}>
-                    <Dot value={printsLabels(entity)} />
-                  </TableCell>
-                </TableRow>
-                {isSelected && <RelationsSubRow entity={entity} />}
-              </Fragment>
-            );
-          })}
-        </TableBody>
-      </Table>
-    </div>
+                    <EntityIcon entity={entity} className="size-3.5 shrink-0" />
+                    {entity}
+                  </button>
+                </TableCell>
+                <TableCell className={cn(cellCls, mono)}>
+                  {emittedCode(entity) ?? dash}
+                </TableCell>
+                <TableCell className={cn(cellCls, mono)}>
+                  {countFor(entity, counts) ?? dash}
+                </TableCell>
+                <TableCell className={cellCls}>
+                  <KernelActionsCell entity={entity} />
+                </TableCell>
+                <TableCell className={cellCls}>
+                  <Dot
+                    value={metadata.searchable}
+                    title={
+                      metadata.searchable
+                        ? "lexical + semantic search"
+                        : "not searchable"
+                    }
+                  />
+                </TableCell>
+                <TableCell
+                  className={cn(cellCls, mono)}
+                  title={`${one} one-cardinality · ${many} many-cardinality`}
+                >
+                  {one}/{many}
+                </TableCell>
+                <TableCell
+                  className={cn(cellCls, mono)}
+                  title={mcpTransportLabel(entity)}
+                >
+                  {metadata.mcpOperations.length}
+                </TableCell>
+                <TableCell className={cn(cellCls, mono)}>
+                  {overridesFor(entity).length}
+                </TableCell>
+                <TableCell
+                  className={cn(cellCls, "max-w-[10rem] truncate")}
+                  title={nativeCoverageLabel(entity)}
+                >
+                  {nativeCoverageLabel(entity)}
+                </TableCell>
+              </TableRow>
+              {isSelected && <OverridesSubRow entity={entity} />}
+              {isSelected && <RelationsSubRow entity={entity} />}
+            </Fragment>
+          );
+        })}
+      </TableBody>
+    </Table>
   );
 }
 
@@ -884,8 +774,8 @@ export function EntityManifestGrid({
   onSelect,
   active = true,
 }: {
-  selected: Entity;
-  onSelect: (entity: Entity) => void;
+  selected: Entity | null;
+  onSelect: (entity: Entity | null) => void;
   active?: boolean;
 }) {
   const session = authClient.useSession();

@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import type { ReactNode } from "react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { EntityManifestGrid, SavedViewChips } from "./EntityManifestGrid";
 
@@ -116,7 +116,9 @@ describe("EntityManifestGrid mega table: relations sub-row", () => {
 
     // The selected row's relations sub-table is always expanded inline.
     expect(screen.getByText("candidates")).toBeInTheDocument();
-    const reasonCell = screen.getByText(/Candidate alternatives/);
+    const reasonCell = screen.getByText(
+      "The Candidate alternatives section edits candidates in place with its own renderer.",
+    );
     expect(reasonCell).toBeInTheDocument();
   });
 
@@ -143,5 +145,40 @@ describe("EntityManifestGrid mega table: baseline rendering", () => {
     for (const entity of ["product", "recipe", "vendor", "financialAccount"]) {
       expect(screen.getAllByText(entity).length).toBeGreaterThan(0);
     }
+  });
+
+  it("starts collapsed and lets the selected entity close or another entity open", () => {
+    const onSelect = vi.fn();
+    const { rerender } = renderGrid({ selected: null, onSelect });
+    const product = within(findEntityRow("product")).getByRole("button");
+    const recipe = within(findEntityRow("recipe")).getByRole("button");
+
+    expect(product).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByText("Declaration overrides")).not.toBeInTheDocument();
+    fireEvent.click(product);
+    expect(onSelect).toHaveBeenLastCalledWith("product");
+
+    rerender(
+      <EntityManifestGrid
+        selected="product"
+        onSelect={onSelect}
+        active={false}
+      />,
+    );
+    expect(product).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByText("Declaration overrides")).toBeInTheDocument();
+    expect(screen.getByText("Effective behavior")).toBeInTheDocument();
+    expect(screen.getByText("Storage table")).toBeInTheDocument();
+    expect(
+      screen.getByText("presentation.detail.sectionOverrides"),
+    ).toBeInTheDocument();
+    fireEvent.click(product);
+    expect(onSelect).toHaveBeenLastCalledWith(null);
+
+    rerender(
+      <EntityManifestGrid selected={null} onSelect={onSelect} active={false} />,
+    );
+    fireEvent.click(recipe);
+    expect(onSelect).toHaveBeenLastCalledWith("recipe");
   });
 });
