@@ -105,7 +105,8 @@ extension PreviewFixtures {
             "dueDate": "2026-09-11",
             "dueEndDate": null,
             "projectId": "PRJ-3GHT",
-            "projectName": "Kitchen"
+            "projectName": "Kitchen",
+            "projectIcon": null
           },
           {
             "id": "TSK-7QXN",
@@ -114,7 +115,8 @@ extension PreviewFixtures {
             "dueDate": "2026-09-12",
             "dueEndDate": null,
             "projectId": "PRJ-8MNQ",
-            "projectName": "Cubby app"
+            "projectName": "Cubby app",
+            "projectIcon": null
           },
           {
             "id": "TSK-9VBH",
@@ -123,7 +125,8 @@ extension PreviewFixtures {
             "dueDate": null,
             "dueEndDate": null,
             "projectId": null,
-            "projectName": null
+            "projectName": null,
+            "projectIcon": null
           }
         ]
         """#

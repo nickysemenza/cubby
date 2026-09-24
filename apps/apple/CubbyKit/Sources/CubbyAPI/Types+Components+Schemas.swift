@@ -40232,6 +40232,8 @@ extension Components {
             public var projectId: Components.Schemas.ProjectShortcode?
             /// - Remark: Generated from `#/components/schemas/TaskTodayBriefingItemOut/projectName`.
             public var projectName: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/TaskTodayBriefingItemOut/projectIcon`.
+            public var projectIcon: Swift.String?
             /// Creates a new `TaskTodayBriefingItemOut`.
             ///
             /// - Parameters:
@@ -40242,6 +40244,7 @@ extension Components {
             ///   - dueEndDate:
             ///   - projectId:
             ///   - projectName:
+            ///   - projectIcon:
             public init(
                 id: Components.Schemas.TaskShortcode,
                 name: Swift.String,
@@ -40249,7 +40252,8 @@ extension Components {
                 dueDate: Swift.String? = nil,
                 dueEndDate: Swift.String? = nil,
                 projectId: Components.Schemas.ProjectShortcode? = nil,
-                projectName: Swift.String? = nil
+                projectName: Swift.String? = nil,
+                projectIcon: Swift.String? = nil
             ) {
                 self.id = id
                 self.name = name
@@ -40258,6 +40262,7 @@ extension Components {
                 self.dueEndDate = dueEndDate
                 self.projectId = projectId
                 self.projectName = projectName
+                self.projectIcon = projectIcon
             }
             public enum CodingKeys: String, CodingKey {
                 case id
@@ -40267,6 +40272,7 @@ extension Components {
                 case dueEndDate
                 case projectId
                 case projectName
+                case projectIcon
             }
         }
         /// - Remark: Generated from `#/components/schemas/TaskTodayBriefingOut`.
