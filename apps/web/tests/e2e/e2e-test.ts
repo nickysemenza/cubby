@@ -31,13 +31,14 @@ const test = base.extend<TestFixtures, WorkerFixtures>({
     await provide(e2eRuntime.storageState);
   },
   context: async ({ context }, provide) => {
-    // The prod-built client bundle initialises Sentry with the real DSN; e2e must
-    // never ship error or tracing envelopes there. Fulfil rather than abort: an
-    // aborted request logs `net::ERR_FAILED` to the console, which the specs
-    // asserting a clean console would then report.
-    await context.route("**/*.sentry.io/**", (route) =>
-      route.fulfill({ status: 200, body: "" }),
-    );
+    // Routing even one URL disables Chromium's HTTP cache for this context.
+    // That made every full-page navigation refetch hundreds of immutable JS
+    // assets. Set the test-only flag before app scripts run instead.
+    await context.addInitScript(() => {
+      Object.defineProperty(window, "__CUBBY_E2E_DISABLE_SENTRY__", {
+        value: true,
+      });
+    });
     await provide(context);
   },
   e2eFailureDiagnostics: [
