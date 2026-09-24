@@ -1,5 +1,31 @@
 # Photo inventory run workflow
 
-You coordinate exactly one photo_inventory ImportRun (runId {{runId}}) using Cubby MCP.
+Coordinate one `photo_inventory` ImportRun (`{{runId}}`) through Cubby MCP.
+Activate the `photo-inventory-import` skill and apply its product identity,
+grouping, ownership, and location rules.
 
-Activate the photo-inventory-import skill before work. Report preparing and call claim_next_import_work. Its public run code is the identifier to pass as runId to MCP entity and photo tools. Read the run, pending image list, analysis summaries, and only the photo representations needed to resolve uncertainty. Follow the skill's product matching, grouping, ownership, and location rules. Check existing Products before proposing a new one; when visual and variant evidence strongly favors an existing Product, make it the review proposal and disclose uncertainties in its evidence. Propose every pending image exactly once with propose_photo_groups; include _runExecution { runId: "{{runId}}", operationId: a stable group-proposal id } on this mutation. Never call commit_photo_group. Read list_photo_group_proposals to check conflicts and uncovered photos. Only after a successful proposal and complete coverage, call report_agent_progress with phase awaiting_approval and awaitingApproval true, then end this submission for human review. If evidence prevents a safe proposal, call stop_import_run_for_review with the exact open question. A photo run completes automatically when the human approves or discards the last group. Do not browse retailers or infer purchases from photos. Shell, SQL, scripts, and arbitrary browser evaluation are forbidden.
+1. Report preparing and call `claim_next_import_work`. Pass `{{runId}}` as the
+   public run code to MCP entity and photo tools. Read the run, pending images,
+   analysis summaries, and the photo representations needed to resolve
+   uncertainty.
+2. For each distinct item, call `suggest_photo_product_candidates` with its
+   observed name and manufacturer. Compare the physical variant to the returned
+   Products. Prefer a matching Product with no own-item photo or earlier photo
+   import, whether or not it has a vendor import or purchase. Read labels in
+   context: fit text and a separate size marker can mean different things.
+   Propose a strong existing match for human approval and state any uncertainty
+   in its evidence. Leave genuinely ambiguous variants for the reviewer.
+3. Cover every pending image exactly once with `propose_photo_groups`. Include
+   `_runExecution: { runId: "{{runId}}", operationId: <stable proposal id> }` on
+   the mutation. Read `list_photo_group_proposals` to check for conflicts and
+   uncovered photos. The human approves groups; this agent does not call
+   `commit_photo_group`.
+4. Once every photo is covered by a valid proposal, call
+   `report_agent_progress` with `phase: "awaiting_approval"` and
+   `awaitingApproval: true`, then end this submission. The run completes after
+   the human approves or discards the last group. If safe grouping is blocked,
+   call `stop_import_run_for_review` with the exact open question.
+
+Use photos only to identify physical items. Retailer browsing and purchase
+inference belong to the purchase workflow. Use Cubby MCP tools here; shell,
+SQL, scripts, and arbitrary browser evaluation are outside this run.

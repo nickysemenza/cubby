@@ -1,4 +1,7 @@
-import { seedPhotoGroupReviewRun } from "./e2e-fixtures";
+import {
+  seedPhotoGroupReviewRun,
+  seedProductPrerequisite,
+} from "./e2e-fixtures";
 import { gotoAuthenticatedPage } from "./e2e-helpers";
 import { expect, test } from "./e2e-test";
 
@@ -139,4 +142,80 @@ test("reviews, approves, and discards proposed photo groups on the photo-invento
     page.getByText("Completed", { exact: true }).first(),
   ).toBeVisible({ timeout: 10_000 });
   if (recording) await page.waitForTimeout(1_500);
+});
+
+test("suggests an existing variant and previews every merge decision for a created photo product", async ({
+  page,
+  e2eRuntime,
+}) => {
+  const name = `Photo match ${Date.now()}`;
+  const candidateName = `Gray crew t-shirt M ${name}`;
+  const existing = await seedProductPrerequisite(page, { name: candidateName });
+  const seed = await seedPhotoGroupReviewRun(
+    page,
+    name,
+    e2eRuntime.objectStorageUrl,
+  );
+  await gotoAuthenticatedPage(
+    page,
+    `/runs/${seed.runId}`,
+    page.getByRole("heading", { name: "Proposed items" }),
+  );
+  const proposed = await page.request.post(
+    `/api/import/runs/${seed.runId}/photo-groups`,
+    {
+      data: { action: "save", groups: seed.groups },
+    },
+  );
+  expect(proposed.ok(), await proposed.text()).toBeTruthy();
+
+  const group = page.locator('[data-slot="card"]').filter({
+    has: page.getByRole("heading", { name: "Gray crew t-shirt — M" }),
+  });
+  await expect(
+    group.getByText("Could this already be a product?"),
+  ).toBeVisible();
+  await expect(group.getByText(candidateName)).toBeVisible();
+  await group.getByRole("button", { name: "Approve", exact: true }).click();
+  await expect(
+    page.getByRole("link", { name: "Gray crew t-shirt — M" }),
+  ).toBeVisible();
+  const review = await page.request.get(
+    `/api/import/runs/${seed.runId}/photo-groups`,
+  );
+  const body = await review.json();
+  const createdId = body.review.proposals.find(
+    (item: { groupKey: string }) => item.groupKey === "g1",
+  )?.committedProduct?.id;
+  expect(createdId).toBeTruthy();
+
+  const settled = page.locator('[data-slot="card"]').filter({
+    has: page.getByRole("heading", { name: "Settled groups" }),
+  });
+  await settled
+    .getByRole("button", { name: "Review possible matches" })
+    .click();
+  await settled.getByRole("link", { name: "Review match" }).click();
+  await expect(page).toHaveURL(/recommendations\/workbench/);
+  await expect(page.getByText(candidateName).first()).toBeVisible();
+  await page.getByRole("button", { name: "Review merge" }).click();
+  const dialog = page.getByRole("dialog");
+  await expect(
+    dialog.getByRole("heading", { name: "What the merged product will keep" }),
+  ).toBeVisible();
+  if ((page.viewportSize()?.width ?? 0) < 768) {
+    const decisions = dialog.getByTestId("product-merge-mobile-decisions");
+    await expect(decisions).toBeVisible();
+    await expect(decisions).toContainText("Gray crew t-shirt — M");
+    await expect(decisions).toContainText("Merge both");
+    await expect(decisions).toContainText("1 image");
+  } else {
+    await expect(dialog.getByRole("row", { name: /Name/ })).toContainText(
+      "Gray crew t-shirt — M",
+    );
+    await expect(dialog.getByRole("row", { name: /Images/ })).toContainText(
+      "1 image",
+    );
+  }
+  expect(existing.id).not.toBe(createdId);
 });

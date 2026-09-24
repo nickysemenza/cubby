@@ -40,6 +40,7 @@ const STATIC_TRACE_ROUTES = new Set([
   "/api/import/runs",
   "/api/import/targeted",
   "/api/mcp",
+  "/api/products/merge-preview",
   "/api/settings/member-logins",
   "/api/v1/docs",
   "/api/v1/openapi.json",
@@ -112,6 +113,10 @@ const DYNAMIC_TRACE_ROUTES: ReadonlyArray<{
   {
     pattern: /^\/api\/import\/runs\/[^/]+\/photo-groups$/u,
     template: "/api/import/runs/:publicId/photo-groups",
+  },
+  {
+    pattern: /^\/api\/import\/runs\/[^/]+\/photo-groups\/candidates$/u,
+    template: "/api/import/runs/:publicId/photo-groups/candidates",
   },
   {
     pattern: /^\/api\/import\/runs\/[^/]+\/photo-agent$/u,

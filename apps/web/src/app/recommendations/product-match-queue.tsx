@@ -51,14 +51,16 @@ const pairKey = (item: ProductMatchCandidate) =>
  */
 export function ProductMatchQueue({
   sourceId,
+  candidateId,
   operations,
 }: {
   sourceId?: ProductShortcode;
+  candidateId?: ProductShortcode;
   operations: ProductMatchQueueOperations;
 }) {
   const queue = useQuery(
     operations.productMatches.queryOptions(
-      sourceId ? { productId: sourceId } : {},
+      sourceId ? { productId: sourceId, candidateId } : {},
     ),
   );
   const items = useMemo(() => queue.data?.items ?? [], [queue.data?.items]);
@@ -85,9 +87,9 @@ export function ProductMatchQueue({
   return (
     <Stack gap="md">
       <p className="text-sm text-muted-foreground">
-        Products created from a photo and products created from a purchase that
-        look like the same item. Merging keeps the purchase product by default,
-        so the order and spend history stay attached.
+        Review whether these products are the same real item. Merging keeps the
+        purchase product by default, so its order and spend history stay
+        attached.
         {queue.data && !queue.data.semanticRanking
           ? " The similarity index is unavailable, so pairs are ranked by name only."
           : null}

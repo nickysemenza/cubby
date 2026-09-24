@@ -106,11 +106,13 @@ function ReadinessMessage({
 /** A focused review surface: candidates are always re-resolved, never URL data. */
 export function RecommendationWorkbench({
   sourceId,
+  candidateId,
   inventoryId,
   kind,
   operations = productionRecommendationWorkbenchOperations,
 }: {
   sourceId?: ProductShortcode;
+  candidateId?: ProductShortcode;
   inventoryId?: InventoryShortcode;
   kind: RecommendationKind;
   operations?: RecommendationWorkbenchOperations;
@@ -124,7 +126,13 @@ export function RecommendationWorkbench({
     ) : null;
   }
   if (kind === "product-match") {
-    return <ProductMatchQueue sourceId={sourceId} operations={operations} />;
+    return (
+      <ProductMatchQueue
+        sourceId={sourceId}
+        candidateId={candidateId}
+        operations={operations}
+      />
+    );
   }
   if (!sourceId) return null;
   return kind === "duplicate-product" ? (

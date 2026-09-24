@@ -41,12 +41,14 @@ import {
   expense,
   importRunEvidence,
   importRunTarget,
+  ingredient,
   inventoryEntry,
   location,
   mealFoodEntry,
   photoGroupProposal,
   planting,
   product,
+  productCategory,
   productComponent,
   productConversionCoverage,
   productExternalId,
@@ -1855,15 +1857,32 @@ export const previewMergeProducts = async (
   if (plan === null) {
     return { blockers: [], changes: [], sideEffects: [] };
   }
+  return previewMergeProductsFromPlan(db, plan);
+};
+
+const previewMergeProductsFromPlan = async (
+  db: Database,
+  plan: ProductMergePlan,
+  admitted?: ProductMergeCategoryAdmission,
+): Promise<{
+  blockers: ImpactItem[];
+  changes: ImpactItem[];
+  sideEffects: ImpactItem[];
+}> => {
+  const keepId = plan.keeper.id;
+  const losers = plan.loserIds;
+  const dbClient = getDb(db);
   const inventoryPlan = plan.inventory;
   const unitMappingPlan = plan.unitMappings;
   const componentPlan = plan.components;
   const isbns = distinctIsbns(plan.externalIds.rows);
   // Read-only admission uses a transaction so it resolves the same inherited
   // category feature and keeper planting edge as the atomic executor.
-  const categoryAdmission = await withTransaction(db, async (tx) =>
-    admitMergedProductCategory(tx, plan),
-  );
+  const categoryAdmission =
+    admitted ??
+    (await withTransaction(db, async (tx) =>
+      admitMergedProductCategory(tx, plan),
+    ));
   // Blockers are labelled, not just described: `ImpactRow` renders
   // total/label/code and never `description`, so naming the cycle or the
   // disagreeing quantities anywhere else would make them invisible in the UI.
@@ -2309,3 +2328,159 @@ export const previewMergeProducts = async (
 
   return { blockers, changes, sideEffects };
 };
+
+/** Values shown before a two-product merge. Derived from the mutation's plan. */
+export async function previewProductMergeDecisions(
+  db: Database,
+  input: { keepId: ProductId; mergeId: ProductId },
+) {
+  assertDistinctMergeTargets("product", input.keepId, [input.mergeId]);
+  const plan = await buildProductMergePlan(
+    getDb(db),
+    { keepId: input.keepId, loserIds: [input.mergeId] },
+    { allowMissingKeeper: true },
+  );
+  if (!plan || plan.losers.length !== 1)
+    throw createAppError(
+      "PRODUCT_NOT_FOUND",
+      "Both products must be available to preview a merge",
+    );
+  const incoming = plan.losers[0]!;
+  const categoryAdmission = await withTransaction(db, async (tx) =>
+    admitMergedProductCategory(tx, plan),
+  );
+  const categoryIds = uniq(
+    [
+      plan.keeper.categoryId,
+      incoming.categoryId,
+      categoryAdmission.categoryId,
+    ].filter((id): id is NonNullable<typeof id> => id != null),
+  );
+  const ingredientIds = uniq(
+    [
+      plan.keeper.ingredientId,
+      incoming.ingredientId,
+      plan.carried.ingredientId,
+    ].filter((id): id is NonNullable<typeof id> => id != null),
+  );
+  const categories = categoryIds.length
+    ? await getDb(db)
+        .select({ id: productCategory.id, name: productCategory.name })
+        .from(productCategory)
+        .where(inArray(productCategory.id, categoryIds))
+    : [];
+  const ingredients = ingredientIds.length
+    ? await getDb(db)
+        .select({ id: ingredient.id, name: ingredient.name })
+        .from(ingredient)
+        .where(inArray(ingredient.id, ingredientIds))
+    : [];
+  const categoryName = new Map(categories.map((row) => [row.id, row.name]));
+  const ingredientName = new Map(ingredients.map((row) => [row.id, row.name]));
+  const value = (input: string | number | boolean | null | undefined) =>
+    input == null || input === "" ? "—" : String(input);
+  const fieldValue = (
+    row: ProductMergeRow | ProductCarriedValues,
+    column: CarriedColumn,
+  ) => {
+    const field = row[column];
+    if (field == null || field === "") return "—";
+    if (column === "price" || column === "expectedQuantity")
+      return JSON.stringify(field);
+    return String(field);
+  };
+  const category = (id: ProductMergeRow["categoryId"] | undefined) =>
+    id ? value(categoryName.get(id)) : "—";
+  const list = (values: readonly string[]) =>
+    values.length ? values.join(", ") : "—";
+  const count = (n: number) => `${n} ${n === 1 ? "image" : "images"}`;
+  const decisions: Array<{
+    field: string;
+    keeper: string;
+    incoming: string;
+    result: string;
+    action: "keep" | "fill" | "combine" | "dedupe";
+  }> = [];
+  const add = (
+    field: string,
+    keeper: string,
+    incomingValue: string,
+    result: string,
+    action: (typeof decisions)[number]["action"],
+  ) =>
+    decisions.push({ field, keeper, incoming: incomingValue, result, action });
+  add("Name", plan.keeper.name, incoming.name, plan.keeper.name, "keep");
+  for (const [field, column] of [
+    ["Manufacturer", "manufacturer"],
+    ["Model", "model"],
+    ["Price", "price"],
+    ["Notes", "notes"],
+    ["Expected quantity", "expectedQuantity"],
+    ["Stock tracking", "stockTracked"],
+    ["USDA food identity", "fdc_id"],
+  ] as const) {
+    const carried = plan.carriedFields.includes(column);
+    add(
+      field,
+      fieldValue(plan.keeper, column),
+      fieldValue(incoming, column),
+      fieldValue(carried ? plan.carried : plan.keeper, column),
+      carried ? "fill" : "keep",
+    );
+  }
+  add(
+    "Category",
+    category(plan.keeper.categoryId),
+    category(incoming.categoryId),
+    category(categoryAdmission.categoryId),
+    categoryAdmission.categoryId !== plan.keeper.categoryId ? "fill" : "keep",
+  );
+  const ingredientLabel = (id: ProductMergeRow["ingredientId"] | undefined) =>
+    id ? value(ingredientName.get(id)) : "—";
+  add(
+    "Linked ingredient",
+    ingredientLabel(plan.keeper.ingredientId),
+    ingredientLabel(incoming.ingredientId),
+    ingredientLabel(plan.carried.ingredientId ?? plan.keeper.ingredientId),
+    plan.carriedFields.includes("ingredientId") ? "fill" : "keep",
+  );
+  add(
+    "Aliases",
+    list(plan.keeper.aliases),
+    list([incoming.name, ...incoming.aliases]),
+    list(plan.aliases),
+    "combine",
+  );
+  add(
+    "Tags",
+    list(plan.keeper.tags),
+    list(incoming.tags),
+    list(plan.tags),
+    "combine",
+  );
+  const keeperImages = plan.images.rows.filter(
+    (row) => row.productId === input.keepId,
+  ).length;
+  const incomingImages = plan.images.rows.filter(
+    (row) => row.productId === input.mergeId,
+  ).length;
+  const duplicateImages = plan.images.collision.absorb.flatMap(
+    ({ rows }) => rows,
+  ).length;
+  add(
+    "Images",
+    count(keeperImages),
+    count(incomingImages),
+    `${count(keeperImages + incomingImages - duplicateImages)}${duplicateImages ? ` (${duplicateImages} duplicate ${duplicateImages === 1 ? "attachment" : "attachments"} removed)` : ""}`,
+    duplicateImages ? "dedupe" : "combine",
+  );
+  const preview = await previewMergeProductsFromPlan(
+    db,
+    plan,
+    categoryAdmission,
+  );
+  return {
+    decisions,
+    blockers: preview.blockers.map((item) => item.label),
+  };
+}

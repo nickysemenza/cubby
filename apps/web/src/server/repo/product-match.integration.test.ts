@@ -76,6 +76,22 @@ describe("product match queue", () => {
       ctx.actor,
     );
 
+  it("opens a directed photo-review pair even before the detector has enough history", async () => {
+    const source = await product("ForgeWear dark pocket tee");
+    const candidate = await product("ForgeWear black small pocket tee");
+    const queue = await getProductMatchQueue(
+      ctx.db,
+      { productId: source.id, candidateId: candidate.id },
+      namesOnly,
+    );
+    expect(queue.items).toHaveLength(1);
+    expect([queue.items[0]?.keeper.id, queue.items[0]?.other.id]).toEqual([
+      source.id,
+      candidate.id,
+    ]);
+    expect(queue.items[0]?.signals).toContain("Suggested from photo review");
+  });
+
   /** Stocked, never bought: what a wardrobe photo import creates. */
   const photoProduct = async (
     name: string,

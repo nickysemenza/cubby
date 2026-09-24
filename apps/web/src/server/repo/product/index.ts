@@ -65,7 +65,11 @@ export {
 // Merge (fold duplicate SKUs into one survivor). `PRODUCT_MERGE_EDGE_POLICY`
 // is deliberately NOT re-exported here — the lifecycle registry imports it from
 // `./merge` directly, the same way it reaches every other entity's policy.
-export { mergeProducts, previewMergeProducts } from "./merge";
+export {
+  mergeProducts,
+  previewMergeProducts,
+  previewProductMergeDecisions,
+} from "./merge";
 export { resolveProductNames } from "./resolve-names";
 
 // Stored conversion rows, kept out of `crud.ts` so the inventory-valuation
