@@ -377,8 +377,30 @@ Apple checks **5:13** after generated native client changes. The sum of
 non-skipped CI job walls was **26:03**. Browser jobs queued about **2s** after
 creation; the `Web checks` aggregate queued **38s** after its dependencies
 finished. [#1318](https://github.com/nickysemenza/cubby/pull/1318) merged later,
-but its final tested head did not contain #1321, so it is excluded. This is
-**one of five** natural PRs needed for a post-change median.
+but its final tested head did not contain #1321, so it is excluded.
+
+The second eligible natural product PR was
+[#1327](https://github.com/nickysemenza/cubby/pull/1327). Its final tested
+head contained #1321, and its successful
+[CI run](https://github.com/nickysemenza/cubby/actions/runs/35954520331)
+reached `Web checks` and completed the workflow in **4:04** from creation.
+Desktop job walls were **3:32 + 3:38**, PostgreSQL **3:45**, Apple checks
+**3:35**, and Apple package tests **1:49**. The sum of non-skipped CI job
+walls was **23:45**. The two browser jobs and PostgreSQL each queued **2s**;
+the `Web checks` aggregate also queued **2s**. These are **two of five**
+natural PRs needed for a post-change median; the roughly three-minute
+target remains unproven.
+
+[#1328](https://github.com/nickysemenza/cubby/pull/1328) removed idle
+pre-navigation steps and unconditional success screenshots in browser tests.
+Its successful [exact-head run](https://github.com/nickysemenza/cubby/actions/runs/35955254884)
+reached `Web checks` in **4:14**, versus **4:36** on the same-base
+[main control](https://github.com/nickysemenza/cubby/actions/runs/35955088762).
+The Playwright test steps were effectively unchanged: **150s + 161s** in the
+PR versus **149s + 162s** in control, and combined reporter test time fell
+only about **2s**. The control waited **34–51s** for the tested web bundle;
+the PR waited **12–18s**. The apparent gate gain came from artifact timing,
+so this test-cost experiment was closed and is not a natural product sample.
 
 In the HTTP/2 comparison, desktop runner queue time was **14–15s** in both
 runs. Total desktop runner time rose from **9:49** to **10:14**, so the unchanged
