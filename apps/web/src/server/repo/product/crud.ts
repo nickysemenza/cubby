@@ -183,6 +183,7 @@ import {
   effectiveProductPriceSql,
   enrichProductRowsWithPricing,
   loadEffectiveProductPricesById,
+  loadProductPriceSum,
   loadProductPricing,
   resolveProductPricing,
 } from "./pricing";
@@ -1104,15 +1105,8 @@ export const productList = async (
         count: () => countWhere(db, product, whereClause),
       }),
       skipAggregates
-        ? Promise.resolve([{ priceSum: 0 }])
-        : getDb(db)
-            .select({
-              priceSum: sql<number>`sum(${sql.raw(
-                effectiveProductPriceSql('"Product"'),
-              )})`,
-            })
-            .from(product)
-            .where(whereClause),
+        ? Promise.resolve(0)
+        : loadProductPriceSum(db, whereClause),
       // Net-basis total for the Net basis column's footer, over the FULL filtered
       // set — without it `createCurrencyColumn` falls back to reducing the loaded
       // rows only, which silently under-reports on an infinite-scrolled list.
@@ -1174,7 +1168,7 @@ export const productList = async (
     usdaClient,
   );
 
-  const priceSum = Number(aggregates[0]?.priceSum ?? 0);
+  const priceSum = aggregates;
   const expenseTotalSum = Number(expenseAggregates[0]?.expenseTotalSum ?? 0);
 
   const result = {

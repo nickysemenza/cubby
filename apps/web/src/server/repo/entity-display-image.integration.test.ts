@@ -852,6 +852,26 @@ describe("entity display image resolver", () => {
         }),
         ctx.actor,
       );
+      const overriddenProduct = await createProductFixture(
+        ctx.db,
+        makeProductInput({ name: "Synthetic override product" }),
+        ctx.actor,
+      );
+      const overridePhoto = await makeImage();
+      await getDb(ctx.db).insert(entityAttachment).values({
+        subjectEntityId: overriddenProduct.entityId,
+        imageId: overridePhoto.id,
+        sortOrder: 0,
+      });
+      await createExpense(
+        ctx.db,
+        makeExpenseInput({
+          projectId: owner.shortcode,
+          purchaseId: purchase.shortcode,
+          productId: overriddenProduct.id,
+        }),
+        ctx.actor,
+      );
 
       const rows = await withDisplayImages(
         ctx.db,
@@ -859,7 +879,10 @@ describe("entity display image resolver", () => {
         [{ id: owner.id }, { id: inherited.id }, { id: unrelated.id }],
         (row) => ({ id: row.id }),
       );
-      expect(rows[0]?.displayImages).toEqual([expectedDisplayImage(photo)]);
+      expect(rows[0]?.displayImages).toHaveLength(2);
+      expect(new Set(rows[0]?.displayImages.map((image) => image.id))).toEqual(
+        new Set([photo.shortcode, overridePhoto.shortcode]),
+      );
       expect(rows[1]?.displayImages).toEqual([expectedDisplayImage(photo)]);
       expect(rows[2]?.displayImages).toEqual([]);
     });

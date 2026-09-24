@@ -28,6 +28,7 @@ interface EdgeSpec {
 
 interface TraversalHop {
   table: string;
+  relation?: string;
   alias: string;
   fromAlias: string;
   fromColumn: string;
@@ -43,6 +44,7 @@ export interface Traversal {
   leafTable: string;
   leafAlias: string;
   joins: SQL;
+  usesExpenseProjectRelation: boolean;
 }
 
 const entityTable = (entity: Entity): string => {
@@ -177,6 +179,35 @@ const productScopedExpenseAt = (
   (steps[index - 1]?.edge === "Expense.productId" ||
     steps[index + 1]?.edge === "Expense.productId");
 
+const mappedExpenseProjectAt = (
+  edge: EdgeSpec,
+  outgoing: boolean,
+  steps: readonly RelationshipPathStep[],
+  index: number,
+  relation: string | undefined,
+): boolean =>
+  !outgoing &&
+  edge.edgeKey === "Expense.projectId" &&
+  productScopedExpenseAt(steps, index) &&
+  relation !== undefined;
+
+const traversalEdgeCondition = (
+  edge: EdgeSpec,
+  alias: string,
+  currentAlias: string,
+  outgoing: boolean,
+  productScopedExpense: boolean,
+  mappedExpenseProject: boolean,
+): SQL =>
+  mappedExpenseProject
+    ? sql`${sql.raw(`${alias}."effectiveProjectId"`)} = ${sql.raw(`${currentAlias}."id"`)}`
+    : edgeCondition(
+        edge,
+        outgoing ? currentAlias : alias,
+        outgoing ? alias : currentAlias,
+        productScopedExpense,
+      );
+
 /**
  * Compile a manifest-only path into structural joins. `aliasPrefix` is trusted
  * server code, and lets two paths meet at a hub without alias collisions.
@@ -193,6 +224,8 @@ export const compileTraversal = (
      * multi-target edge outward (an Image back to whatever it is attached to).
      */
     to?: Entity;
+    /** A page-wide effective Expense assignment relation supplied by the caller. */
+    expenseProjectRelation?: string;
   },
 ): Traversal => {
   const rootTable = entityTable(from);
@@ -221,8 +254,18 @@ export const compileTraversal = (
           index === steps.length - 1 ? aliases?.to : undefined,
         )
       : edge.sourceTable;
+    const mappedExpenseProject = mappedExpenseProjectAt(
+      edge,
+      outgoing,
+      steps,
+      index,
+      aliases?.expenseProjectRelation,
+    );
     hops.push({
       table: nextTable,
+      relation: mappedExpenseProject
+        ? aliases.expenseProjectRelation
+        : undefined,
       alias,
       fromAlias: currentAlias,
       fromColumn: outgoing ? edge.sourceColumn : "id",
@@ -230,11 +273,13 @@ export const compileTraversal = (
       softDelete: outgoing
         ? softDeleteForTable(nextTable)
         : edge.sourceSoftDeletable,
-      condition: edgeCondition(
+      condition: traversalEdgeCondition(
         edge,
-        outgoing ? currentAlias : alias,
-        outgoing ? alias : currentAlias,
+        alias,
+        currentAlias,
+        outgoing,
         productScopedExpenseAt(steps, index),
+        mappedExpenseProject,
       ),
     });
     currentTable = nextTable;
@@ -247,6 +292,7 @@ export const compileTraversal = (
     hops,
     leafTable: currentTable,
     leafAlias: currentAlias,
+    usesExpenseProjectRelation: hops.some((hop) => hop.relation !== undefined),
   };
   return { ...traversal, joins: renderJoins(traversal) };
 };
@@ -256,7 +302,7 @@ const renderJoins = (traversal: Pick<Traversal, "hops">): SQL =>
   sql.join(
     traversal.hops.map(
       (hop) =>
-        sql`JOIN ${sql.raw(`"${hop.table}"`)} ${sql.raw(hop.alias)} ON (${hop.condition}${
+        sql`JOIN ${sql.raw(`"${hop.relation ?? hop.table}"`)} ${sql.raw(hop.alias)} ON (${hop.condition}${
           hop.softDelete
             ? sql` AND ${sql.raw(`${hop.alias}."deletedAt"`)} IS NULL`
             : sql``

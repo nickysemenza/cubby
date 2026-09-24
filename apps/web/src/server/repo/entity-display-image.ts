@@ -13,6 +13,7 @@ import {
 import type { EntityAttachmentRead } from "@cubby/schemas/entity-read-media";
 import { imageShortcode } from "@cubby/schemas/identifiers";
 import type { ImageUrlSummary } from "@cubby/schemas/image-summary";
+import { HOUSEHOLD_PROJECT_SHORTCODE } from "@cubby/schemas/project";
 import {
   and,
   asc,
@@ -29,6 +30,7 @@ import { entityAttachment, image } from "~/server/db/schema";
 import { notDeleted, unwrapDb } from "~/server/repo/database-helpers";
 import { mapImages } from "~/server/repo/database-helpers/transform";
 import { previousShortcodesFor } from "~/server/repo/entity-identity";
+import { effectiveExpenseProjectSql } from "~/server/repo/expense-inheritance";
 import { displayableImageSql } from "~/server/repo/image-displayability";
 import { compileTraversal } from "~/server/repo/relatedness/traversal";
 import { resolveLiveShortcodes } from "~/server/repo/shortcode-resolver";
@@ -57,6 +59,14 @@ type DisplayPath = Readonly<{
   target: Entity;
   steps: readonly RelationshipPathStep[];
 }>;
+
+type DisplayBranch = Readonly<{
+  entity: Entity;
+  branch: SQL;
+  usesExpenseProjectRelation: boolean;
+}>;
+
+const EXPENSE_PROJECT_RELATION = "display_expense_project";
 
 /**
  * A display source is a manifest relationship path followed by the target's
@@ -180,12 +190,15 @@ const directStorageBranch = (entity: Entity): SQL | null => {
  * the target record itself. That preserves declared link order while making
  * newest/oldest policy data-driven rather than an entity-name switch.
  */
-const displaySourceBranch = (source: DisplaySource, index: number): SQL => {
+const displaySourceBranch = (
+  source: DisplaySource,
+  index: number,
+): Pick<DisplayBranch, "branch" | "usesExpenseProjectRelation"> => {
   const traversal = compileTraversal(
     source.entity,
     source.path,
     `display_source_${index}_${sourceAlias(source.entity)}`,
-    { root: "s", leaf: "i" },
+    { root: "s", leaf: "i", expenseProjectRelation: EXPENSE_PROJECT_RELATION },
   );
   const targetImageSteps =
     source.target === "image"
@@ -212,7 +225,9 @@ const displaySourceBranch = (source: DisplaySource, index: number): SQL => {
   const createdAt = targetGallery
     ? optionalColumn(attachmentHop!.alias, "createdAt")
     : optionalColumn(groupAlias, "createdAt");
-  return sql`
+  return {
+    usesExpenseProjectRelation: traversal.usesExpenseProjectRelation,
+    branch: sql`
         SELECT i.key, i.shortcode, ${source.priority} AS priority,
                ${groupCreatedAt} AS "groupCreatedAt", ${optionalColumn(groupAlias, "id")} AS "groupId",
                ${sortOrder} AS "sortOrder", ${createdAt} AS "createdAt", i.id AS "imageId"
@@ -222,17 +237,20 @@ const displaySourceBranch = (source: DisplaySource, index: number): SQL => {
           AND s.id = refs."entityId"
           AND ${rootLiveCondition(source.entity, "s")}
           AND ${displayAttachmentCondition(source.target, attachmentHop?.alias ?? "")}
-          AND ${displayableImageSql("i")}`;
+          AND ${displayableImageSql("i")}`,
+  };
 };
 
-const DISPLAY_BRANCHES = [
+const DISPLAY_BRANCHES: readonly DisplayBranch[] = [
   ...allEntities.flatMap((entity) => {
     const branch = directStorageBranch(entity);
-    return branch === null ? [] : [{ entity, branch }];
+    return branch === null
+      ? []
+      : [{ entity, branch, usesExpenseProjectRelation: false }];
   }),
   ...DISPLAY_SOURCES.map((source, index) => ({
     entity: source.entity,
-    branch: displaySourceBranch(source, index),
+    ...displaySourceBranch(source, index),
   })),
 ];
 
@@ -278,14 +296,49 @@ async function resolveUniversalEntityDisplayImageLists(
   // Unrelated entity arms still incur planner/JIT costs even when their WHERE
   // clauses can never match. Compile only the source types in this batch.
   const sourceTypes = new Set(supported.map((ref) => ref.entityType));
-  const displayBranches = DISPLAY_BRANCHES.filter(({ entity }) =>
+  const selectedBranches = DISPLAY_BRANCHES.filter(({ entity }) =>
     sourceTypes.has(entity),
-  ).map(({ branch }) => branch);
+  );
+  const displayBranches = selectedBranches.map(({ branch }) => branch);
+  // Explicit and purchase assignments identify page candidates through their
+  // indexes. The effective-project expression still decides precedence; food
+  // fallback requires the wider set only when the household project is in refs.
+  const expenseProjectRelation = selectedBranches.some(
+    ({ usesExpenseProjectRelation }) => usesExpenseProjectRelation,
+  )
+    ? sql`, "${sql.raw(EXPENSE_PROJECT_RELATION)}" AS MATERIALIZED (
+        SELECT e.*, ${effectiveExpenseProjectSql("e")} AS "effectiveProjectId"
+        FROM "Expense" e
+        WHERE e."deletedAt" IS NULL
+          AND e."lineKind" = 'principal'
+          AND e."productId" IS NOT NULL
+          AND (
+            e."projectId" IN (
+              SELECT r."entityId" FROM refs r WHERE r."entityType" = 'project'
+            )
+            OR e."purchaseId" IN (
+              SELECT purchase.id
+              FROM "Purchase" purchase
+              JOIN refs r ON r."entityId" = purchase."defaultProjectId"
+              WHERE r."entityType" = 'project'
+                AND purchase."deletedAt" IS NULL
+            )
+            OR EXISTS (
+              SELECT 1
+              FROM refs r JOIN "Project" household ON household.id = r."entityId"
+              WHERE r."entityType" = 'project'
+                AND household."shortcode" = ${HOUSEHOLD_PROJECT_SHORTCODE}
+                AND household."deletedAt" IS NULL
+            )
+          )
+      )`
+    : sql``;
   const borrowedImages = displayBranches.length
     ? sql`UNION ALL ${sql.join(displayBranches, sql` UNION ALL `)}`
     : sql``;
   const result = await unwrapDb(db).execute(sql`
     WITH refs("entityType", "entityId") AS (VALUES ${values})
+    ${expenseProjectRelation}
     SELECT refs."entityType", refs."entityId"::text AS "entityId", (
       SELECT COALESCE(
         json_agg(
