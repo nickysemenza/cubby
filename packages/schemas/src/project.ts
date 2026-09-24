@@ -440,6 +440,7 @@ export const taskTodayBriefingItemOut = z.object({
   dueEndDate: z.string().nullable(),
   projectId: projectShortcode.nullable(),
   projectName: z.string().nullable(),
+  projectIcon: z.string().nullable(),
 });
 export type TaskTodayBriefingItemOut = z.infer<typeof taskTodayBriefingItemOut>;
 

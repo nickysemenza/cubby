@@ -101,7 +101,11 @@ function TodayTaskRow({ task: item }: { task: TaskTodayBriefingItemOut }) {
       {item.projectId && item.projectName ? (
         <EntityInlineLink
           entity="project"
-          data={{ id: item.projectId, name: item.projectName }}
+          data={{
+            id: item.projectId,
+            name: item.projectName,
+            icon: item.projectIcon,
+          }}
           displayImage={projectImage}
           className={TODAY_ENTITY_LINK_CLASS}
           compact

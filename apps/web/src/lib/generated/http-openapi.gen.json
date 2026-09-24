@@ -77840,6 +77840,12 @@
               "string",
               "null"
             ]
+          },
+          "projectIcon": {
+            "type": [
+              "string",
+              "null"
+            ]
           }
         },
         "required": [
@@ -77848,7 +77854,8 @@
           "status",
           "dueDate",
           "dueEndDate",
-          "projectName"
+          "projectName",
+          "projectIcon"
         ]
       },
       "TaskTodayBriefingOut": {
