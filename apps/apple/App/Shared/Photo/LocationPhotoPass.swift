@@ -202,7 +202,9 @@ struct LocationPhotoPassView: View {
                             text: Binding(
                                 get: { pass.scanCode }, set: { pass.scanCode = $0 })
                         )
-                        .textInputAutocapitalization(.characters)
+                        #if os(iOS)
+                            .textInputAutocapitalization(.characters)
+                        #endif
                         .onSubmit { pass.scan(pass.scanCode) }
                         Button("Go") { pass.scan(pass.scanCode) }
                     }

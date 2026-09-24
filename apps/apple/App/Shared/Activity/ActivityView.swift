@@ -593,7 +593,9 @@ struct ActivityDetailView: View {
     private func runSection(detail: ActivityDetailOutput) -> some View {
         Section("Run") {
             if detail.run.kind == .photoInventory {
-                Link(destination: appModel.webURL(for: detail.run.id)) {
+                NavigationLink {
+                    ImportRunReviewView(runID: detail.run.id)
+                } label: {
                     Label("Review photos and proposed items", systemImage: "photo.on.rectangle")
                 }
                 .font(.headline)

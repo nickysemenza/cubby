@@ -86,11 +86,18 @@ filter:
     - location.makeTree
     - maintenance.requestCatchUp
     - meal.getNutrition
+    - photoImport.approveGroups
+    - photoImport.candidates
+    - photoImport.chooseExisting
     - photoImport.commit
     - photoImport.createRun
+    - photoImport.discardGroup
     - photoImport.finalize
     - photoImport.reconcile
+    - photoImport.review
     - photoImport.stage
+    - photoImport.startGrouping
+    - photoImport.updateDraft
     - problems.getCounts
     - product.findOrCreateByCode
     - product.findOrCreateByUPC
@@ -197,6 +204,7 @@ filter:
     - resources.wish.get
     - resources.wish.list
     - resources.wish.update
+    - run.workSnapshot
     - search.find
     - task.board
     - task.bulkReorder

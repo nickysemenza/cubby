@@ -330,21 +330,42 @@ public protocol APIProtocol: Sendable {
     /// - Remark: HTTP `PATCH /api/v1/meals/{id}`.
     /// - Remark: Generated from `#/paths//api/v1/meals/{id}/patch(resources.meal.update)`.
     func resources_meal_update(_ input: Operations.Resources_meal_update.Input) async throws -> Operations.Resources_meal_update.Output
+    /// - Remark: HTTP `POST /api/v1/photoImport/approveGroups`.
+    /// - Remark: Generated from `#/paths//api/v1/photoImport/approveGroups/post(photoImport.approveGroups)`.
+    func photoImport_approveGroups(_ input: Operations.PhotoImport_approveGroups.Input) async throws -> Operations.PhotoImport_approveGroups.Output
+    /// - Remark: HTTP `GET /api/v1/photoImport/candidates`.
+    /// - Remark: Generated from `#/paths//api/v1/photoImport/candidates/get(photoImport.candidates)`.
+    func photoImport_candidates(_ input: Operations.PhotoImport_candidates.Input) async throws -> Operations.PhotoImport_candidates.Output
+    /// - Remark: HTTP `POST /api/v1/photoImport/chooseExisting`.
+    /// - Remark: Generated from `#/paths//api/v1/photoImport/chooseExisting/post(photoImport.chooseExisting)`.
+    func photoImport_chooseExisting(_ input: Operations.PhotoImport_chooseExisting.Input) async throws -> Operations.PhotoImport_chooseExisting.Output
     /// - Remark: HTTP `POST /api/v1/photoImport/commit`.
     /// - Remark: Generated from `#/paths//api/v1/photoImport/commit/post(photoImport.commit)`.
     func photoImport_commit(_ input: Operations.PhotoImport_commit.Input) async throws -> Operations.PhotoImport_commit.Output
     /// - Remark: HTTP `POST /api/v1/photoImport/createRun`.
     /// - Remark: Generated from `#/paths//api/v1/photoImport/createRun/post(photoImport.createRun)`.
     func photoImport_createRun(_ input: Operations.PhotoImport_createRun.Input) async throws -> Operations.PhotoImport_createRun.Output
+    /// - Remark: HTTP `POST /api/v1/photoImport/discardGroup`.
+    /// - Remark: Generated from `#/paths//api/v1/photoImport/discardGroup/post(photoImport.discardGroup)`.
+    func photoImport_discardGroup(_ input: Operations.PhotoImport_discardGroup.Input) async throws -> Operations.PhotoImport_discardGroup.Output
     /// - Remark: HTTP `POST /api/v1/photoImport/finalize`.
     /// - Remark: Generated from `#/paths//api/v1/photoImport/finalize/post(photoImport.finalize)`.
     func photoImport_finalize(_ input: Operations.PhotoImport_finalize.Input) async throws -> Operations.PhotoImport_finalize.Output
     /// - Remark: HTTP `POST /api/v1/photoImport/reconcile`.
     /// - Remark: Generated from `#/paths//api/v1/photoImport/reconcile/post(photoImport.reconcile)`.
     func photoImport_reconcile(_ input: Operations.PhotoImport_reconcile.Input) async throws -> Operations.PhotoImport_reconcile.Output
+    /// - Remark: HTTP `GET /api/v1/photoImport/review`.
+    /// - Remark: Generated from `#/paths//api/v1/photoImport/review/get(photoImport.review)`.
+    func photoImport_review(_ input: Operations.PhotoImport_review.Input) async throws -> Operations.PhotoImport_review.Output
     /// - Remark: HTTP `POST /api/v1/photoImport/stage`.
     /// - Remark: Generated from `#/paths//api/v1/photoImport/stage/post(photoImport.stage)`.
     func photoImport_stage(_ input: Operations.PhotoImport_stage.Input) async throws -> Operations.PhotoImport_stage.Output
+    /// - Remark: HTTP `POST /api/v1/photoImport/startGrouping`.
+    /// - Remark: Generated from `#/paths//api/v1/photoImport/startGrouping/post(photoImport.startGrouping)`.
+    func photoImport_startGrouping(_ input: Operations.PhotoImport_startGrouping.Input) async throws -> Operations.PhotoImport_startGrouping.Output
+    /// - Remark: HTTP `POST /api/v1/photoImport/updateDraft`.
+    /// - Remark: Generated from `#/paths//api/v1/photoImport/updateDraft/post(photoImport.updateDraft)`.
+    func photoImport_updateDraft(_ input: Operations.PhotoImport_updateDraft.Input) async throws -> Operations.PhotoImport_updateDraft.Output
     /// Use page=1&pageSize=20&sort=name,-createdAt. Filters are individual query parameters: text is literal, numbers and booleans are plain, and a list repeats its key (tag=a&tag=b). Response pagination metadata remains zero-based. Resource methods depend on entity capabilities.
     ///
     /// - Remark: HTTP `GET /api/v1/plantings`.
@@ -476,6 +497,9 @@ public protocol APIProtocol: Sendable {
     /// - Remark: HTTP `GET /api/v1/recommendations/forEntity`.
     /// - Remark: Generated from `#/paths//api/v1/recommendations/forEntity/get(recommendations.forEntity)`.
     func recommendations_forEntity(_ input: Operations.Recommendations_forEntity.Input) async throws -> Operations.Recommendations_forEntity.Output
+    /// - Remark: HTTP `GET /api/v1/run/workSnapshot`.
+    /// - Remark: Generated from `#/paths//api/v1/run/workSnapshot/get(run.workSnapshot)`.
+    func run_workSnapshot(_ input: Operations.Run_workSnapshot.Input) async throws -> Operations.Run_workSnapshot.Output
     /// - Remark: HTTP `GET /api/v1/search/find`.
     /// - Remark: Generated from `#/paths//api/v1/search/find/get(search.find)`.
     func search_find(_ input: Operations.Search_find.Input) async throws -> Operations.Search_find.Output
@@ -1658,6 +1682,39 @@ extension APIProtocol {
             body: body
         ))
     }
+    /// - Remark: HTTP `POST /api/v1/photoImport/approveGroups`.
+    /// - Remark: Generated from `#/paths//api/v1/photoImport/approveGroups/post(photoImport.approveGroups)`.
+    public func photoImport_approveGroups(
+        headers: Operations.PhotoImport_approveGroups.Input.Headers = .init(),
+        body: Operations.PhotoImport_approveGroups.Input.Body? = nil
+    ) async throws -> Operations.PhotoImport_approveGroups.Output {
+        try await photoImport_approveGroups(Operations.PhotoImport_approveGroups.Input(
+            headers: headers,
+            body: body
+        ))
+    }
+    /// - Remark: HTTP `GET /api/v1/photoImport/candidates`.
+    /// - Remark: Generated from `#/paths//api/v1/photoImport/candidates/get(photoImport.candidates)`.
+    public func photoImport_candidates(
+        query: Operations.PhotoImport_candidates.Input.Query,
+        headers: Operations.PhotoImport_candidates.Input.Headers = .init()
+    ) async throws -> Operations.PhotoImport_candidates.Output {
+        try await photoImport_candidates(Operations.PhotoImport_candidates.Input(
+            query: query,
+            headers: headers
+        ))
+    }
+    /// - Remark: HTTP `POST /api/v1/photoImport/chooseExisting`.
+    /// - Remark: Generated from `#/paths//api/v1/photoImport/chooseExisting/post(photoImport.chooseExisting)`.
+    public func photoImport_chooseExisting(
+        headers: Operations.PhotoImport_chooseExisting.Input.Headers = .init(),
+        body: Operations.PhotoImport_chooseExisting.Input.Body? = nil
+    ) async throws -> Operations.PhotoImport_chooseExisting.Output {
+        try await photoImport_chooseExisting(Operations.PhotoImport_chooseExisting.Input(
+            headers: headers,
+            body: body
+        ))
+    }
     /// - Remark: HTTP `POST /api/v1/photoImport/commit`.
     /// - Remark: Generated from `#/paths//api/v1/photoImport/commit/post(photoImport.commit)`.
     public func photoImport_commit(
@@ -1676,6 +1733,17 @@ extension APIProtocol {
         body: Operations.PhotoImport_createRun.Input.Body? = nil
     ) async throws -> Operations.PhotoImport_createRun.Output {
         try await photoImport_createRun(Operations.PhotoImport_createRun.Input(
+            headers: headers,
+            body: body
+        ))
+    }
+    /// - Remark: HTTP `POST /api/v1/photoImport/discardGroup`.
+    /// - Remark: Generated from `#/paths//api/v1/photoImport/discardGroup/post(photoImport.discardGroup)`.
+    public func photoImport_discardGroup(
+        headers: Operations.PhotoImport_discardGroup.Input.Headers = .init(),
+        body: Operations.PhotoImport_discardGroup.Input.Body? = nil
+    ) async throws -> Operations.PhotoImport_discardGroup.Output {
+        try await photoImport_discardGroup(Operations.PhotoImport_discardGroup.Input(
             headers: headers,
             body: body
         ))
@@ -1702,6 +1770,17 @@ extension APIProtocol {
             body: body
         ))
     }
+    /// - Remark: HTTP `GET /api/v1/photoImport/review`.
+    /// - Remark: Generated from `#/paths//api/v1/photoImport/review/get(photoImport.review)`.
+    public func photoImport_review(
+        query: Operations.PhotoImport_review.Input.Query,
+        headers: Operations.PhotoImport_review.Input.Headers = .init()
+    ) async throws -> Operations.PhotoImport_review.Output {
+        try await photoImport_review(Operations.PhotoImport_review.Input(
+            query: query,
+            headers: headers
+        ))
+    }
     /// - Remark: HTTP `POST /api/v1/photoImport/stage`.
     /// - Remark: Generated from `#/paths//api/v1/photoImport/stage/post(photoImport.stage)`.
     public func photoImport_stage(
@@ -1709,6 +1788,28 @@ extension APIProtocol {
         body: Operations.PhotoImport_stage.Input.Body? = nil
     ) async throws -> Operations.PhotoImport_stage.Output {
         try await photoImport_stage(Operations.PhotoImport_stage.Input(
+            headers: headers,
+            body: body
+        ))
+    }
+    /// - Remark: HTTP `POST /api/v1/photoImport/startGrouping`.
+    /// - Remark: Generated from `#/paths//api/v1/photoImport/startGrouping/post(photoImport.startGrouping)`.
+    public func photoImport_startGrouping(
+        headers: Operations.PhotoImport_startGrouping.Input.Headers = .init(),
+        body: Operations.PhotoImport_startGrouping.Input.Body? = nil
+    ) async throws -> Operations.PhotoImport_startGrouping.Output {
+        try await photoImport_startGrouping(Operations.PhotoImport_startGrouping.Input(
+            headers: headers,
+            body: body
+        ))
+    }
+    /// - Remark: HTTP `POST /api/v1/photoImport/updateDraft`.
+    /// - Remark: Generated from `#/paths//api/v1/photoImport/updateDraft/post(photoImport.updateDraft)`.
+    public func photoImport_updateDraft(
+        headers: Operations.PhotoImport_updateDraft.Input.Headers = .init(),
+        body: Operations.PhotoImport_updateDraft.Input.Body? = nil
+    ) async throws -> Operations.PhotoImport_updateDraft.Output {
+        try await photoImport_updateDraft(Operations.PhotoImport_updateDraft.Input(
             headers: headers,
             body: body
         ))
@@ -2154,6 +2255,17 @@ extension APIProtocol {
         headers: Operations.Recommendations_forEntity.Input.Headers = .init()
     ) async throws -> Operations.Recommendations_forEntity.Output {
         try await recommendations_forEntity(Operations.Recommendations_forEntity.Input(
+            query: query,
+            headers: headers
+        ))
+    }
+    /// - Remark: HTTP `GET /api/v1/run/workSnapshot`.
+    /// - Remark: Generated from `#/paths//api/v1/run/workSnapshot/get(run.workSnapshot)`.
+    public func run_workSnapshot(
+        query: Operations.Run_workSnapshot.Input.Query,
+        headers: Operations.Run_workSnapshot.Input.Headers = .init()
+    ) async throws -> Operations.Run_workSnapshot.Output {
+        try await run_workSnapshot(Operations.Run_workSnapshot.Input(
             query: query,
             headers: headers
         ))

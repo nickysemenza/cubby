@@ -398,7 +398,9 @@ public typealias ImageUrlSummary = Components.Schemas.ImageUrlSummary
 public typealias ImageWithEntity = Components.Schemas.ImageWithEntity
 public typealias ImpactItem = Components.Schemas.ImpactItem
 public typealias ImportRunEvidenceKind = Components.Schemas.ImportRunEvidenceKind
+public typealias ImportRunPurpose = Components.Schemas.ImportRunPurpose
 public typealias ImportRunShortcode = Components.Schemas.ImportRunShortcode
+public typealias ImportRunStatus = Components.Schemas.ImportRunStatus
 public typealias ImportRunTargetOutcome = Components.Schemas.ImportRunTargetOutcome
 public typealias ImportRunTargetState = Components.Schemas.ImportRunTargetState
 public typealias ImportTargetSummary = Components.Schemas.ImportTargetSummary
@@ -558,10 +560,19 @@ public typealias OptionalFieldResolutions = Components.Schemas.OptionalFieldReso
 public typealias OptionalImageRepresentations = Components.Schemas.OptionalImageRepresentations
 public typealias OptionalProjectAllocations = Components.Schemas.OptionalProjectAllocations
 public typealias PerceptualHash = Components.Schemas.PerceptualHash
+public typealias PhotoGroupApprovalResult = Components.Schemas.PhotoGroupApprovalResult
+public typealias PhotoGroupProposal = Components.Schemas.PhotoGroupProposal
+public typealias PhotoGroupProposalCreate = Components.Schemas.PhotoGroupProposalCreate
+public typealias PhotoGroupProposalExisting = Components.Schemas.PhotoGroupProposalExisting
+public typealias PhotoGroupProposalList = Components.Schemas.PhotoGroupProposalList
+public typealias PhotoGroupProposalState = Components.Schemas.PhotoGroupProposalState
+public typealias PhotoImportApproveGroupsInput = Components.Schemas.PhotoImportApproveGroupsInput
+public typealias PhotoImportChooseExistingInput = Components.Schemas.PhotoImportChooseExistingInput
 public typealias PhotoImportCommitInput = Components.Schemas.PhotoImportCommitInput
 public typealias PhotoImportCommitOutput = Components.Schemas.PhotoImportCommitOutput
 public typealias PhotoImportCreateRunInput = Components.Schemas.PhotoImportCreateRunInput
 public typealias PhotoImportCreateRunOutput = Components.Schemas.PhotoImportCreateRunOutput
+public typealias PhotoImportDiscardGroupInput = Components.Schemas.PhotoImportDiscardGroupInput
 public typealias PhotoImportFinalizeImage = Components.Schemas.PhotoImportFinalizeImage
 public typealias PhotoImportFinalizeInput = Components.Schemas.PhotoImportFinalizeInput
 public typealias PhotoImportFinalizeOutput = Components.Schemas.PhotoImportFinalizeOutput
@@ -569,6 +580,13 @@ public typealias PhotoImportReconcileInput = Components.Schemas.PhotoImportRecon
 public typealias PhotoImportReconcileOutput = Components.Schemas.PhotoImportReconcileOutput
 public typealias PhotoImportStageInput = Components.Schemas.PhotoImportStageInput
 public typealias PhotoImportStageOutput = Components.Schemas.PhotoImportStageOutput
+public typealias PhotoImportStartGroupingInput = Components.Schemas.PhotoImportStartGroupingInput
+public typealias PhotoImportStartGroupingOutput = Components.Schemas.PhotoImportStartGroupingOutput
+public typealias PhotoImportUpdateDraftInput = Components.Schemas.PhotoImportUpdateDraftInput
+public typealias PhotoProductCandidate = Components.Schemas.PhotoProductCandidate
+public typealias PhotoProductCandidatesResponse = Components.Schemas.PhotoProductCandidatesResponse
+public typealias PhotoRunImage = Components.Schemas.PhotoRunImage
+public typealias PhotoRunReviewResponse = Components.Schemas.PhotoRunReviewResponse
 public typealias PlainDate = Components.Schemas.PlainDate
 public typealias PlantBreeding = Components.Schemas.PlantBreeding
 public typealias PlantCreateInput = Components.Schemas.PlantCreateInput
@@ -614,6 +632,7 @@ public typealias ProductFindOrCreateByCodeInputIsbn = Components.Schemas.Product
 public typealias ProductFindOrCreateByCodeInputScan = Components.Schemas.ProductFindOrCreateByCodeInputScan
 public typealias ProductFindOrCreateByUPCInput = Components.Schemas.ProductFindOrCreateByUPCInput
 public typealias ProductFindOrCreateByUPCOut = Components.Schemas.ProductFindOrCreateByUPCOut
+public typealias ProductImagePurpose = Components.Schemas.ProductImagePurpose
 public typealias ProductLabelNutrition = Components.Schemas.ProductLabelNutrition
 public typealias ProductLabelNutritionInput = Components.Schemas.ProductLabelNutritionInput
 public typealias ProductListInventoryEntryOut = Components.Schemas.ProductListInventoryEntryOut
@@ -706,6 +725,8 @@ public typealias ResolveScanStraysInput = Components.Schemas.ResolveScanStraysIn
 public typealias ResolveScanStraysOut = Components.Schemas.ResolveScanStraysOut
 public typealias RetryImageProcessingInput = Components.Schemas.RetryImageProcessingInput
 public typealias RetryImageProcessingOutput = Components.Schemas.RetryImageProcessingOutput
+public typealias ReviewPhotoGroupsOutput = Components.Schemas.ReviewPhotoGroupsOutput
+public typealias RunWorkSnapshotOutput = Components.Schemas.RunWorkSnapshotOutput
 public typealias ScanAtLocationInput = Components.Schemas.ScanAtLocationInput
 public typealias ScanAtLocationOut = Components.Schemas.ScanAtLocationOut
 public typealias ScanStrayOut = Components.Schemas.ScanStrayOut
@@ -903,6 +924,8 @@ extension Components.Schemas.MealOut: Identifiable {}
 extension Components.Schemas.MealRecipeOut: Identifiable {}
 extension Components.Schemas.MealRecipeSummary: Identifiable {}
 extension Components.Schemas.NutritionMeal: Identifiable {}
+extension Components.Schemas.PhotoProductCandidate: Identifiable {}
+extension Components.Schemas.PhotoRunImage: Identifiable {}
 extension Components.Schemas.PlantDetail: Identifiable {}
 extension Components.Schemas.PlantingDetail: Identifiable {}
 extension Components.Schemas.PlantingListItem: Identifiable {}

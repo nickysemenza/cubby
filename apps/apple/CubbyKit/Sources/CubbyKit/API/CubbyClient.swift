@@ -468,6 +468,70 @@ public actor CubbyClient {
         }
     }
 
+    public func photoRunReview(_ runID: ImportRunShortcode) async throws -> PhotoRunReviewResponse {
+        try await perform {
+            try await api.photoImport_review(query: .init(runId: runID)).ok.body.json
+        }
+    }
+
+    public func startPhotoGrouping(_ runID: ImportRunShortcode) async throws {
+        _ = try await perform {
+            try await api.photoImport_startGrouping(body: .json(.init(runId: runID))).ok.body.json
+        }
+    }
+
+    public func photoProductCandidates(
+        runID: ImportRunShortcode, groupKey: String
+    ) async throws -> PhotoProductCandidatesResponse {
+        try await perform {
+            try await api.photoImport_candidates(query: .init(runId: runID, groupKey: groupKey))
+                .ok.body.json
+        }
+    }
+
+    public func choosePhotoGroupProduct(
+        runID: ImportRunShortcode, groupKey: String, productID: ProductCode
+    ) async throws -> ReviewPhotoGroupsOutput {
+        try await perform {
+            try await api.photoImport_chooseExisting(
+                body: .json(.init(runId: runID, groupKey: groupKey, productId: productID))
+            )
+            .ok.body.json
+        }
+    }
+
+    public func updatePhotoGroupDraft(_ input: PhotoImportUpdateDraftInput) async throws
+        -> ReviewPhotoGroupsOutput
+    {
+        try await perform {
+            try await api.photoImport_updateDraft(body: .json(input)).ok.body.json
+        }
+    }
+
+    public func approvePhotoGroups(
+        runID: ImportRunShortcode, groupKeys: [String]
+    ) async throws -> ReviewPhotoGroupsOutput {
+        try await perform {
+            try await api.photoImport_approveGroups(body: .json(.init(runId: runID, groupKeys: groupKeys)))
+                .ok.body.json
+        }
+    }
+
+    public func discardPhotoGroup(
+        runID: ImportRunShortcode, groupKey: String
+    ) async throws -> ReviewPhotoGroupsOutput {
+        try await perform {
+            try await api.photoImport_discardGroup(body: .json(.init(runId: runID, groupKey: groupKey)))
+                .ok.body.json
+        }
+    }
+
+    public func runWorkSnapshot(_ runID: ImportRunShortcode) async throws -> RunWorkSnapshotOutput {
+        try await perform {
+            try await api.run_workSnapshot(query: .init(runId: runID)).ok.body.json
+        }
+    }
+
     /// Finalizes one chunk (≤100 images) of a bulk upload into `input.runId`. Idempotent: a retry
     /// after a transport error replays safely, since a previously finalized image comes back in
     /// `alreadyFinalized` rather than erroring.

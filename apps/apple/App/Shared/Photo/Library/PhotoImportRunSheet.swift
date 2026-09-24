@@ -283,15 +283,6 @@ private struct RunningView: View {
     let onResume: () -> Void
     let onDone: (ImportRunShortcode) -> Void
 
-    @Environment(AppModel.self) private var appModel
-
-    private func reviewURL(for runID: ImportRunShortcode) -> URL {
-        let base = appModel.webURL(for: runID)
-        var components = URLComponents(url: base, resolvingAgainstBaseURL: false)
-        components?.queryItems = [URLQueryItem(name: "startGrouping", value: "1")]
-        return components?.url ?? base
-    }
-
     var body: some View {
         VStack(alignment: .leading, spacing: PorcelainTokens.Space.md) {
             Text(stageTitle)
@@ -345,12 +336,12 @@ private struct RunningView: View {
                     Label("Photo details are still processing on this device.", systemImage: "sparkles")
                         .foregroundStyle(PorcelainTokens.graphiteSecondary)
                 }
-                Text(
-                    "The agent will propose item groups. Review them on the web before products are created."
-                )
-                .font(.porcelainBody)
-                Link(destination: reviewURL(for: runID)) {
-                    Label("Review item groups on web", systemImage: "arrow.up.right")
+                Text("The agent will propose item groups for your review before products are created.")
+                    .font(.porcelainBody)
+                NavigationLink {
+                    ImportRunReviewView(runID: runID)
+                } label: {
+                    Label("Review item groups", systemImage: "square.stack.3d.up")
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.borderedProminent)
