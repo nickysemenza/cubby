@@ -141,6 +141,22 @@ test("reviews, approves, and discards proposed photo groups on the photo-invento
   await expect(
     page.getByText("Completed", { exact: true }).first(),
   ).toBeVisible({ timeout: 10_000 });
+  await page
+    .getByRole("button", { name: "Start new run with same inputs" })
+    .click();
+  await expect(page).not.toHaveURL(new RegExp(`/runs/${seed.runId}$`));
+  const restartedId = new URL(page.url()).pathname.split("/").at(-1);
+  expect(restartedId).toBeTruthy();
+  const restarted = await page.request.get(`/api/import/runs/${restartedId}`);
+  expect(restarted.ok(), await restarted.text()).toBeTruthy();
+  const restartedRun = (await restarted.json()).run;
+  expect(restartedRun.predecessorRunPublicId).toBe(seed.runId);
+  expect(restartedRun.targets).toHaveLength(3);
+  expect(
+    restartedRun.targets.every(
+      (target: { targetType: string }) => target.targetType === "image",
+    ),
+  ).toBe(true);
   if (recording) await page.waitForTimeout(1_500);
 });
 
