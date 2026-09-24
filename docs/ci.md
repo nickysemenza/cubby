@@ -325,6 +325,16 @@ the critical path in the PR run; its setup and test steps both varied despite
 no PostgreSQL change. Both desktop shards and PostgreSQL passed. This is one
 controlled comparison, not a five-run post-change median.
 
+Reusing the node job's web build in PostgreSQL was also tested in
+[#1316](https://github.com/nickysemenza/cubby/pull/1316). The successful
+[exact-head run](https://github.com/nickysemenza/cubby/actions/runs/35946972886)
+reached `Web checks` in **4:49**, versus **4:43** in the preceding reduced-motion
+run. PostgreSQL spent **4s** building its purchase-agent Worker and **24s**
+waiting for and restoring the web artifact, nearly replacing the prior **28s**
+coupled-build step. Its test step also varied from **168s** to **140s**, so the
+faster PostgreSQL job does not establish an artifact-reuse gain. Desktop shard 2
+was the critical path; the experiment was closed under the overall-gate rule.
+
 In the HTTP/2 comparison, desktop runner queue time was **14–15s** in both
 runs. Total desktop runner time rose from **9:49** to **10:14**, so the unchanged
 `Web checks` time did not hide a runner-minute saving.
