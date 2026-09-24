@@ -19,7 +19,10 @@ import { z } from "zod";
 import { deferPublications } from "~/server/background-tasks/publish";
 import { createAppError } from "~/server/errors/app-error";
 import { withTransactionDatabase } from "~/server/repo/database-helpers";
-import { withUniversalEntityMedia } from "~/server/repo/entity-display-image";
+import {
+  withListEntityMedia,
+  withUniversalEntityMedia,
+} from "~/server/repo/entity-display-image";
 import {
   describeUnresolvableCode,
   isShortcodeEntity,
@@ -400,11 +403,10 @@ export const defineEntityOperations = <
       })
       .call("mediaPage", async ({ context }, { page }) => ({
         ...page,
-        data: await withUniversalEntityMedia(
+        data: await withListEntityMedia(
           context.readDb,
           binding.entity,
           page.data,
-          false,
         ),
       }))
       .output(({ validated, mediaPage }) =>
