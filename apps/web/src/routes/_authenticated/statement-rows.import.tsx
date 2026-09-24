@@ -10,9 +10,15 @@ import { useState } from "react";
 
 import { financialTransaction } from "~/app/finance/finance.functions";
 import {
-  fingerprintMonarchCsv,
-  parseMonarchCsv,
-} from "~/app/finance/monarch-csv";
+  type CsvColumnMapping,
+  fingerprintStatementCsv,
+  parseMappedStatementCsv,
+  parseStatementCsv,
+  previewStatementBatch,
+  recognizedStatementSource,
+  recordStatementBatch,
+  statementCsvHeaders,
+} from "~/app/finance/statement-csv";
 import { ErrorDisplay } from "~/components/feedback/error-display";
 import { Page } from "~/components/page/Page";
 import { Button } from "~/components/ui/button";
@@ -21,14 +27,14 @@ import { pageTitle } from "~/lib/page-title";
 import { statementRow } from "~/lib/statement-row.functions";
 import { formatCurrency } from "~/lib/utils";
 
-type ParsedImport = ReturnType<typeof parseMonarchCsv>;
+type ParsedImport = ReturnType<typeof parseStatementCsv>;
 type RecordStatementRowsOut = Awaited<
   ReturnType<typeof statementRow.record.call>
 >;
 type Review = {
   fileName: string;
   parsed: ParsedImport;
-  preview: FinancialStatementImportPreviewOut;
+  preview: FinancialStatementImportPreviewOut | null;
   dryRun: RecordStatementRowsOut;
 };
 
@@ -56,6 +62,29 @@ function statusLabel(
 
 function StatementImportPage() {
   const [review, setReview] = useState<Review | null>(null);
+  const [mappingFile, setMappingFile] = useState<{
+    text: string;
+    fileName: string;
+    fingerprint: string;
+    headers: string[];
+  } | null>(null);
+  const [mapping, setMapping] = useState<CsvColumnMapping>({
+    source: "",
+    account: "",
+    accountColumn: "",
+    date: "",
+    amount: "",
+    description: "",
+    merchant: "",
+    category: "",
+    notes: "",
+    direction: "",
+    status: "",
+    pendingValue: "pending",
+    chargeValue: "debit",
+    creditValue: "credit",
+    sign: "charges-negative",
+  });
   const [selected, setSelected] = useState<string[]>([]);
   const [kinds, setKinds] = useState<Record<string, FinancialTransactionKind>>(
     {},
@@ -65,34 +94,92 @@ function StatementImportPage() {
   );
   const recordRows = useMutation(statementRow.record.mutationOptions());
   const [busy, setBusy] = useState(false);
+  const [progress, setProgress] = useState<string | null>(null);
   const [error, setError] = useState<unknown>(null);
   const [result, setResult] = useState<{
     transactions: number;
     evidence: number;
-    withheld: number;
+    alreadyPresentOrIndistinguishable: number;
   } | null>(null);
+
+  async function prepareReview(parsed: ParsedImport, fileName: string) {
+    const firstPreview = previewStatementBatch(parsed);
+    const [preview, dryRun] = await Promise.all([
+      firstPreview
+        ? financialTransaction.previewStatementImport.call(firstPreview)
+        : Promise.resolve(null),
+      statementRow.record.call({
+        ...recordStatementBatch(parsed),
+        dryRun: true,
+      }),
+    ]);
+    setReview({ fileName, parsed, preview, dryRun });
+    setSelected([]);
+    setMappingFile(null);
+  }
 
   async function openFile(file: File) {
     setBusy(true);
     setError(null);
     setReview(null);
+    setMappingFile(null);
     setResult(null);
     setKinds({});
     try {
-      const parsed = parseMonarchCsv(
-        await file.text(),
-        file.name,
-        await fingerprintMonarchCsv(file),
-      );
-      const [preview, dryRun] = await Promise.all([
-        financialTransaction.previewStatementImport.call(parsed.preview),
-        statementRow.record.call({ ...parsed.record, dryRun: true }),
-      ]);
-      setReview({ fileName: file.name, parsed, preview, dryRun });
-      setSelected(
-        preview.rows
-          .filter((row) => row.status === "ready_to_create")
-          .map((row) => row.key),
+      const text = await file.text();
+      const fingerprint = await fingerprintStatementCsv(file);
+      const headers = statementCsvHeaders(text);
+      if (recognizedStatementSource(headers)) {
+        await prepareReview(
+          parseStatementCsv(text, file.name, fingerprint),
+          file.name,
+        );
+      } else {
+        setMappingFile({ text, fileName: file.name, fingerprint, headers });
+        setMapping((before) => ({
+          ...before,
+          source: "",
+          account: "",
+          accountColumn:
+            headers.find((header) => /account/i.test(header)) ?? "",
+          merchant: "",
+          category: "",
+          notes: "",
+          direction: "",
+          status: headers.find((header) => /^status$/i.test(header)) ?? "",
+          sign: "charges-negative",
+          date:
+            headers.find((header) => /date|when|posted|time/i.test(header)) ??
+            "",
+          amount:
+            headers.find((header) => /amount|total|value|sum/i.test(header)) ??
+            "",
+          description:
+            headers.find((header) =>
+              /description|merchant|name|memo|details|payee/i.test(header),
+            ) ?? "",
+        }));
+      }
+    } catch (cause) {
+      setError(cause);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function previewMappedFile() {
+    if (!mappingFile) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await prepareReview(
+        parseMappedStatementCsv(
+          mappingFile.text,
+          mappingFile.fileName,
+          mappingFile.fingerprint,
+          mapping,
+        ),
+        mappingFile.fileName,
       );
     } catch (cause) {
       setError(cause);
@@ -107,13 +194,29 @@ function StatementImportPage() {
     setBusy(true);
     setError(null);
     try {
+      let evidence = 0;
+      for (
+        let offset = 0;
+        offset < review.parsed.recordRows.length;
+        offset += 500
+      ) {
+        setProgress(
+          `Saving source rows ${offset + 1}–${Math.min(offset + 500, review.parsed.recordRows.length)} of ${review.parsed.recordRows.length}`,
+        );
+        const recorded = await recordRows.mutateAsync(
+          recordStatementBatch(review.parsed, offset),
+        );
+        evidence += recorded.inserted;
+      }
       // A second preview catches a transaction written since the file was
       // opened. Source refs make a retry after a partial failure resumable.
-      const current = await financialTransaction.previewStatementImport.call(
-        review.parsed.preview,
-      );
+      const firstPreview = previewStatementBatch(review.parsed);
+      const current =
+        selected.length && firstPreview
+          ? await financialTransaction.previewStatementImport.call(firstPreview)
+          : null;
       let transactions = 0;
-      for (const row of current.rows) {
+      for (const row of current?.rows ?? []) {
         if (row.status !== "ready_to_create" || !selected.includes(row.key))
           continue;
         if (!row.accountId) throw new Error(`No account for row ${row.key}`);
@@ -140,19 +243,22 @@ function StatementImportPage() {
           data,
         });
         transactions++;
+        setProgress(
+          `Creating reviewed transactions ${transactions} of ${selected.length}`,
+        );
       }
-      const recorded = await recordRows.mutateAsync(review.parsed.record);
       setResult({
         transactions,
-        evidence: recorded.inserted,
-        withheld:
-          current.rows.length - transactions - current.summary.alreadyRecorded,
+        evidence,
+        alreadyPresentOrIndistinguishable:
+          review.parsed.recordRows.length - evidence,
       });
       setReview(null);
     } catch (cause) {
       setError(cause);
     } finally {
       setBusy(false);
+      setProgress(null);
     }
   }
 
@@ -176,13 +282,13 @@ function StatementImportPage() {
       <div className="mx-auto flex w-full max-w-5xl flex-col gap-5 py-5">
         <div className="border-b border-border pb-5">
           <p className="text-sm text-muted-foreground">
-            Choose a Monarch CSV. Cubby reads it in this browser, then shows
-            account and duplicate checks before you confirm. Rows that need
-            judgment stay visible in the statement worklist.
+            Choose a statement CSV. Cubby reads it in this browser and checks
+            source rows, accounts, and possible duplicates before saving.
+            Transactions require a separate, explicit review decision.
           </p>
           <label className="mt-4 flex min-h-20 cursor-pointer items-center justify-center rounded-sm border border-dashed border-border bg-card px-4 text-sm font-medium hover:border-primary">
             <input
-              aria-label="Monarch CSV file"
+              aria-label="Statement CSV file"
               type="file"
               accept=".csv,text/csv"
               className="sr-only"
@@ -193,18 +299,183 @@ function StatementImportPage() {
                 event.currentTarget.value = "";
               }}
             />
-            {busy ? "Working…" : "Choose Monarch CSV"}
+            {busy ? (progress ?? "Reading statement…") : "Choose statement CSV"}
           </label>
         </div>
 
         {error !== null && <ErrorDisplay error={error} />}
+
+        {mappingFile && (
+          <section
+            aria-label="Map statement columns"
+            className="space-y-4 rounded-sm border border-border bg-card p-4"
+          >
+            <div>
+              <h2 className="text-lg font-semibold">
+                Map this CSV once before review
+              </h2>
+              <p className="text-sm text-muted-foreground">
+                {mappingFile.fileName} has unfamiliar columns. Check the amount
+                direction against the first rows in your file before saving. No
+                transaction is created from this mapping alone.
+              </p>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className="text-sm">
+                Source name
+                <input
+                  className="mt-1 w-full rounded-sm border border-border bg-background px-2 py-2"
+                  value={mapping.source}
+                  onChange={(event) =>
+                    setMapping((before) => ({
+                      ...before,
+                      source: event.target.value,
+                    }))
+                  }
+                  placeholder="venmo"
+                />
+              </label>
+              <label className="text-sm">
+                Account name (for a single-account file)
+                <input
+                  className="mt-1 w-full rounded-sm border border-border bg-background px-2 py-2"
+                  value={mapping.account}
+                  onChange={(event) =>
+                    setMapping((before) => ({
+                      ...before,
+                      account: event.target.value,
+                    }))
+                  }
+                  placeholder="Checking (...1234)"
+                />
+              </label>
+              {(
+                [
+                  "date",
+                  "amount",
+                  "description",
+                  "accountColumn",
+                  "merchant",
+                  "category",
+                  "notes",
+                  "direction",
+                  "status",
+                ] as const
+              ).map((field) => (
+                <label key={field} className="text-sm">
+                  {field === "accountColumn"
+                    ? "Account"
+                    : field[0]!.toUpperCase() + field.slice(1)}{" "}
+                  column
+                  {["date", "amount", "description"].includes(field)
+                    ? " *"
+                    : ""}
+                  <select
+                    aria-label={`${field === "accountColumn" ? "Account" : field[0]!.toUpperCase() + field.slice(1)} column`}
+                    className="mt-1 w-full rounded-sm border border-border bg-background px-2 py-2"
+                    value={mapping[field]}
+                    onChange={(event) =>
+                      setMapping((before) => ({
+                        ...before,
+                        [field]: event.target.value,
+                      }))
+                    }
+                  >
+                    <option value="">
+                      {["date", "amount", "description"].includes(field)
+                        ? "Choose column"
+                        : "None"}
+                    </option>
+                    {mappingFile.headers.map((header) => (
+                      <option key={header} value={header}>
+                        {header}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ))}
+              <label className="text-sm">
+                Amount convention
+                <select
+                  aria-label="Amount convention"
+                  className="mt-1 w-full rounded-sm border border-border bg-background px-2 py-2"
+                  value={mapping.sign}
+                  onChange={(event) => {
+                    const sign = event.target.value;
+                    if (
+                      sign === "charges-negative" ||
+                      sign === "charges-positive" ||
+                      sign === "direction-column"
+                    )
+                      setMapping((before) => ({ ...before, sign }));
+                  }}
+                >
+                  <option value="charges-negative">Charges are negative</option>
+                  <option value="charges-positive">Charges are positive</option>
+                  <option value="direction-column">
+                    Direction column says charge or credit
+                  </option>
+                </select>
+              </label>
+              {mapping.sign === "direction-column" && (
+                <div className="flex gap-2">
+                  <label className="text-sm">
+                    Charge value
+                    <input
+                      className="mt-1 w-full rounded-sm border border-border bg-background px-2 py-2"
+                      value={mapping.chargeValue}
+                      onChange={(event) =>
+                        setMapping((before) => ({
+                          ...before,
+                          chargeValue: event.target.value,
+                        }))
+                      }
+                    />
+                  </label>
+                  <label className="text-sm">
+                    Credit value
+                    <input
+                      className="mt-1 w-full rounded-sm border border-border bg-background px-2 py-2"
+                      value={mapping.creditValue}
+                      onChange={(event) =>
+                        setMapping((before) => ({
+                          ...before,
+                          creditValue: event.target.value,
+                        }))
+                      }
+                    />
+                  </label>
+                </div>
+              )}
+              {mapping.status && (
+                <label className="text-sm">
+                  Pending status value
+                  <input
+                    className="mt-1 w-full rounded-sm border border-border bg-background px-2 py-2"
+                    value={mapping.pendingValue}
+                    onChange={(event) =>
+                      setMapping((before) => ({
+                        ...before,
+                        pendingValue: event.target.value,
+                      }))
+                    }
+                  />
+                </label>
+              )}
+            </div>
+            <Button disabled={busy} onClick={() => void previewMappedFile()}>
+              {busy ? "Checking rows…" : "Preview mapped rows"}
+            </Button>
+          </section>
+        )}
 
         {result && (
           <output className="rounded-sm border border-border bg-card p-4">
             <p className="text-sm font-semibold">Statement recorded</p>
             <p className="mt-1 text-sm text-muted-foreground">
               {result.transactions} transactions created · {result.evidence} new
-              source rows · {result.withheld} held for review
+              source rows · {result.alreadyPresentOrIndistinguishable} already
+              present or indistinguishable
             </p>
             <Button
               className="mt-3"
@@ -225,27 +496,48 @@ function StatementImportPage() {
                   {review.fileName}
                 </p>
                 <h2 className="mt-1 text-lg font-semibold">
-                  Review {review.preview.summary.rowsIn}{" "}
-                  {review.preview.summary.rowsIn === 1 ? "row" : "rows"}
+                  {review.parsed.recordRows.length.toLocaleString()} source rows
+                  · {review.parsed.source}
                 </h2>
                 <p className="text-xs text-muted-foreground">
-                  {review.preview.summary.readyToCreate} ready ·{" "}
-                  {review.preview.summary.alreadyRecorded} recorded ·{" "}
-                  {review.preview.summary.unresolvedAccount +
-                    review.preview.summary.possibleExisting +
-                    review.preview.summary.indistinguishableDuplicate}{" "}
-                  need review
+                  {review.preview ? (
+                    <>
+                      Previewing the first {review.preview.summary.rowsIn}{" "}
+                      posted rows · {review.preview.summary.readyToCreate} ready
+                      · {review.preview.summary.alreadyRecorded} recorded ·{" "}
+                      {review.preview.summary.unresolvedAccount +
+                        review.preview.summary.possibleExisting +
+                        review.preview.summary.indistinguishableDuplicate}{" "}
+                      need review
+                    </>
+                  ) : (
+                    "No posted rows; pending rows can be saved as evidence."
+                  )}
                 </p>
+                {review.parsed.pending > 0 && (
+                  <p className="text-xs text-muted-foreground">
+                    {review.parsed.pending} pending rows will be saved as
+                    evidence only.
+                  </p>
+                )}
+                {review.parsed.zeroValueRows > 0 && (
+                  <p className="text-xs text-amber-700">
+                    {review.parsed.zeroValueRows} zero-value rows cannot be
+                    stored as financial statement rows and will be skipped.
+                  </p>
+                )}
               </div>
               <Button
                 onClick={() => void confirm()}
                 disabled={busy || selected.some((key) => !kinds[key])}
               >
                 {busy
-                  ? "Recording…"
+                  ? (progress ?? "Saving…")
                   : selected.some((key) => !kinds[key])
                     ? "Choose transaction kinds"
-                    : `Confirm ${selected.length} ${selected.length === 1 ? "transaction" : "transactions"}`}
+                    : selected.length > 0
+                      ? `Save rows and create ${selected.length} reviewed transactions`
+                      : `Save ${review.parsed.recordRows.length.toLocaleString()} source rows`}
               </Button>
             </div>
             {review.dryRun.signWarning && (
@@ -254,7 +546,7 @@ function StatementImportPage() {
               </p>
             )}
             <div className="divide-y divide-border rounded-sm border border-border bg-card">
-              {review.preview.rows.map((row) => {
+              {review.preview?.rows.map((row) => {
                 const ready = row.status === "ready_to_create";
                 return (
                   <div
@@ -284,12 +576,12 @@ function StatementImportPage() {
                       <span className="block text-xs text-muted-foreground">
                         {row.proposed.postedDate} ·{" "}
                         {row.accountName ??
-                          review.parsed.preview.rows.find(
+                          review.parsed.rows.find(
                             (input) => input.key === row.key,
                           )?.account}
                       </span>
                       <span className="block text-xs text-muted-foreground">
-                        Monarch category:{" "}
+                        {review.parsed.source} category:{" "}
                         {row.proposed.sourceCategory || "Uncategorized"}
                       </span>
                       {ready && (
@@ -341,10 +633,10 @@ function StatementImportPage() {
               })}
             </div>
             <p className="text-xs text-muted-foreground">
-              Choose a kind for each selected row before recording. All source
-              rows are retained, including those held for review. This does not
-              create Purchases or invent a match; existing Purchase settlement
-              is checked separately.
+              Nonzero source rows are saved in bounded, retryable batches. Only
+              checked rows with an explicit kind become transactions. For large
+              files, use the statement worklist to review the remaining rows.
+              Purchases and settlement matches are reviewed separately.
             </p>
           </section>
         )}

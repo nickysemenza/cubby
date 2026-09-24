@@ -459,10 +459,11 @@ export const derivedProblemQueries = [
       reason: "Each result is an import aggregate, not a transaction row.",
     },
     freshness: { kind: "live" },
-    title: "Incomplete statement imports",
+    title: "Statement imports needing coverage review",
     description:
-      "Statement imports whose stored transaction count is below the declared row count.",
-    emptyMessage: "Every statement import stored every row it declared.",
+      "Imports with fewer rows attached than declared. Identical rows from overlapping exports may already belong to an earlier import; compare the source file before treating the difference as missing data.",
+    emptyMessage:
+      "Every statement import has its declared number of rows attached.",
     source: {
       kind: "derived",
       diagnostic: "incomplete-statement-imports",

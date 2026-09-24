@@ -121,13 +121,16 @@ history is the archive. Permanent product constraints live in the
   [core journey E2E](agents/core-journey-e2e.md), with only account/login
   prerequisites seeded.
 
-- **Review full-size Monarch exports in the browser.** The new statement
-  screen handles one preview batch (200 rows), while a real multi-year export
-  can be much larger. Page preview and confirmation through bounded batches,
-  keep a single file-level progress/retry state, and check duplicate source
-  identities across batch boundaries before offering bulk approval. Add a
-  category-aware bulk kind decision for selected rows; never infer payment,
-  transfer, income, or purchase solely from the amount's sign.
+- **Extend source-neutral statement import beyond CSV.** Accept PDF and OFX
+  exports after the CSV path, preserving source text, date semantics, and
+  account evidence. Use frontier AI to propose extraction or column mappings
+  for unfamiliar layouts, but require a visible preview before storing rows.
+  Use Jev only for bounded choices among existing account, transaction, or
+  Purchase candidates, with reasons and human confirmation. Add resumable
+  file-level progress and a category-aware bulk kind decision; never infer
+  payment, transfer, income, or purchase solely from the amount's sign. Make
+  import coverage count rows already present in overlapping exports, rather
+  than treating every unattached row as missing.
 
 - **Accept recipe links from the iOS Share Sheet.** Route incoming recipe URLs
   into the native recipe flow before retiring the remaining web intake.
