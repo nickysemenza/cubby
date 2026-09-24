@@ -7,6 +7,9 @@ import {
   type FlueConversationPart,
 } from "@flue/sdk";
 import { ArrowSquareOutIcon } from "@phosphor-icons/react/dist/csr/ArrowSquareOut";
+import { CheckCircleIcon } from "@phosphor-icons/react/dist/csr/CheckCircle";
+import { CircleNotchIcon } from "@phosphor-icons/react/dist/csr/CircleNotch";
+import { WarningCircleIcon } from "@phosphor-icons/react/dist/csr/WarningCircle";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   type ReactNode,
@@ -17,6 +20,7 @@ import {
 } from "react";
 import { z } from "zod";
 
+import { usePhotoRunReview } from "~/app/import-runs/photo-group-review";
 import { PhotoImportRunView } from "~/app/import-runs/photo-run-detail";
 import { importRunHref } from "~/app/purchases/purchase-import-links";
 import { Badge, type BadgeVariant } from "~/components/ui/badge";
@@ -34,6 +38,13 @@ import {
   importRunDetailResponse,
   type ImportRunDetail,
 } from "~/lib/purchase-import-run-detail";
+
+import {
+  formatWorkDuration,
+  summarizeAgentWork,
+  summarizePhotoDescriptions,
+  type AgentWorkItem,
+} from "./agent-work-summary";
 
 const ACTIVE_RUN_STATUSES = new Set([
   "running",
@@ -408,6 +419,167 @@ function AgentSurface({ run }: { run: ImportRunDetail }) {
   return <ActiveAgentSurface run={run} />;
 }
 
+function AgentWorkOverview({
+  run,
+  messages,
+  proposedGroups,
+  settledGroups,
+  additionalWork = [],
+}: {
+  run: ImportRunDetail;
+  messages: readonly FlueConversationMessage[];
+  proposedGroups?: number;
+  settledGroups?: number;
+  additionalWork?: AgentWorkItem[];
+}) {
+  const work = [
+    ...summarizeAgentWork(messages, run.operations),
+    ...additionalWork,
+  ];
+  const isPhotoRun = run.purpose === "photo_inventory";
+  const headline =
+    run.status === "completed"
+      ? isPhotoRun
+        ? "Photo review complete"
+        : "Purchase import complete"
+      : run.status === "paused_auth"
+        ? "Waiting for retailer sign-in"
+        : run.status === "paused_approval"
+          ? "Waiting for your approval"
+          : run.status === "failed" || run.status === "dispatch_failed"
+            ? "Agent work stopped"
+            : isPhotoRun && proposedGroups
+              ? `${proposedGroups} item ${proposedGroups === 1 ? "group is" : "groups are"} ready for review`
+              : isPhotoRun
+                ? "Preparing photo groups"
+                : "Working through purchase evidence";
+  const photoCount = run.targets.filter(
+    (target) => target.targetType === "image",
+  ).length;
+  const detail = isPhotoRun
+    ? `${photoCount} ${photoCount === 1 ? "photo" : "photos"} received${settledGroups ? ` · ${settledGroups} groups settled` : ""}`
+    : `${run.ordersSeen} ${run.ordersSeen === 1 ? "order" : "orders"} seen · ${run.imported} imported · ${run.updated} updated`;
+  const workCount = (item: AgentWorkItem) => {
+    if (item.kind === "image-description")
+      return `${item.completed} ${item.completed === 1 ? "photo" : "photos"}`;
+    if (item.completed < 2) return null;
+    if (item.kind === "catalog" || item.kind === "records")
+      return `${item.completed} lookups`;
+    return `${item.completed} times`;
+  };
+  return (
+    <div className="rounded-md border border-border bg-muted/20 p-3">
+      <h3 className="text-sm font-semibold">Work at a glance</h3>
+      <p className="mt-1 text-sm" aria-live="polite">
+        {headline}
+      </p>
+      <p className="text-xs text-muted-foreground">{detail}</p>
+      {work.length ? (
+        <ol className="mt-3 grid gap-1 border-t border-border pt-2">
+          {work.map((item) => {
+            const Icon = item.completed
+              ? CheckCircleIcon
+              : item.failed && !item.running
+                ? WarningCircleIcon
+                : CircleNotchIcon;
+            return (
+              <li
+                key={item.kind}
+                className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 text-xs"
+              >
+                <Icon
+                  className={`size-3.5 shrink-0 ${item.failed && !item.completed ? "text-destructive" : item.completed ? "text-positive" : "text-muted-foreground"}`}
+                  aria-hidden="true"
+                />
+                <span className="font-medium">{item.label}</span>
+                <span className="text-muted-foreground">
+                  {workCount(item)}
+                  {item.durationMs !== null
+                    ? `${workCount(item) ? " · " : ""}${formatWorkDuration(item.durationMs)} ${item.timing === "tool" ? "tool time" : "elapsed"}`
+                    : item.running
+                      ? "In progress"
+                      : null}
+                  {item.failed
+                    ? ` · ${item.failed} failed ${item.failed === 1 ? "attempt" : "attempts"}`
+                    : null}
+                </span>
+              </li>
+            );
+          })}
+        </ol>
+      ) : (
+        <p className="mt-2 text-xs text-muted-foreground">
+          No completed work steps have been recorded yet.
+        </p>
+      )}
+      {work.some((item) => item.timing === "tool") ? (
+        <p className="mt-2 text-2xs text-muted-foreground">
+          Tool time excludes agent reasoning and waiting.
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+function PhotoAgentWorkOverview({
+  run,
+  messages,
+}: {
+  run: ImportRunDetail;
+  messages: readonly FlueConversationMessage[];
+}) {
+  const review = usePhotoRunReview(run.publicId, run.status);
+  const descriptionWork = summarizePhotoDescriptions(review.data?.images ?? []);
+  return (
+    <AgentWorkOverview
+      run={run}
+      messages={messages}
+      additionalWork={descriptionWork}
+      proposedGroups={
+        review.data?.review.proposals.filter(
+          (proposal) => proposal.state === "proposed",
+        ).length
+      }
+      settledGroups={
+        review.data?.review.proposals.filter(
+          (proposal) => proposal.state !== "proposed",
+        ).length
+      }
+    />
+  );
+}
+
+function AgentOverview({
+  run,
+  messages,
+}: {
+  run: ImportRunDetail;
+  messages: readonly FlueConversationMessage[];
+}) {
+  return run.purpose === "photo_inventory" ? (
+    <PhotoAgentWorkOverview run={run} messages={messages} />
+  ) : (
+    <AgentWorkOverview run={run} messages={messages} />
+  );
+}
+
+function AgentTranscriptDisclosure({
+  messages,
+  settlements,
+}: {
+  messages: FlueConversationMessage[];
+  settlements: Array<{ submissionId: string; outcome: string }>;
+}) {
+  return (
+    <details className="border-t border-border pt-2">
+      <summary className="cursor-pointer text-sm font-medium">
+        Agent messages and tool calls · {messages.length} messages
+      </summary>
+      <FlueTranscript messages={messages} settlements={settlements} />
+    </details>
+  );
+}
+
 function useAbsentAgentRefresh(
   phase: string,
   dispatchEventId: string | null | undefined,
@@ -526,10 +698,13 @@ function TerminalAgentSurface({ run }: { run: ImportRunDetail }) {
         <StatusText tone="destructive">{history.error.message}</StatusText>
       ) : null}
       {history.data ? (
-        <FlueTranscript
-          messages={history.data.messages}
-          settlements={history.data.settlements}
-        />
+        <>
+          <AgentOverview run={run} messages={history.data.messages} />
+          <AgentTranscriptDisclosure
+            messages={history.data.messages}
+            settlements={history.data.settlements}
+          />
+        </>
       ) : null}
     </section>
   );
@@ -648,7 +823,8 @@ function ActiveAgentSurface({ run }: { run: ImportRunDetail }) {
             agent.error?.message}
         </StatusText>
       ) : null}
-      <FlueTranscript
+      <AgentOverview run={run} messages={messages} />
+      <AgentTranscriptDisclosure
         messages={messages}
         settlements={agent.conversation?.settlements ?? []}
       />

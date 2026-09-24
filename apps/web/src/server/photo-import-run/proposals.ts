@@ -949,6 +949,15 @@ export async function discardPhotoGroupProposal(
   return buildList(db, await loadRun(db, input.runId));
 }
 
+function descriptionJobTiming(
+  job: { dispatchedAt: Date | null; completedAt: Date | null } | undefined,
+) {
+  return {
+    describeStartedAt: job?.dispatchedAt?.toISOString() ?? null,
+    describeCompletedAt: job?.completedAt?.toISOString() ?? null,
+  };
+}
+
 /** Every run photo with both renditions, processing state and analysis snippets, for the review table. */
 export async function listPhotoRunImages(
   db: Database,
@@ -979,6 +988,8 @@ export async function listPhotoRunImages(
         kind: imageProcessingJob.kind,
         state: imageProcessingJob.state,
         lastError: imageProcessingJob.lastError,
+        dispatchedAt: imageProcessingJob.dispatchedAt,
+        completedAt: imageProcessingJob.completedAt,
         sourceContentHash: imageProcessingJob.sourceContentHash,
       })
       .from(imageProcessingJob)
@@ -1028,6 +1039,7 @@ export async function listPhotoRunImages(
       cutoutUrl: rendition.transparent,
       cutout: cutout?.state ?? null,
       describe: describe?.state ?? null,
+      ...descriptionJobTiming(describe),
       localAnalysisReady: locallyAnalyzed.has(row.imageId),
       cutoutReason:
         cutout && (cutout.state === "skipped" || cutout.state === "failed")
