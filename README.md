@@ -296,13 +296,11 @@ Required keys (see [apps/web/.env.example](apps/web/.env.example) for the full f
 
 `pnpm run dev` uses whatever `DATABASE_URL` is in `apps/web/.env` — normally
 the shared prod Neon instance (see "⚠ Shared prod DB" below). For iteration
-that shouldn't touch prod, run against a persistent local PostgreSQL instead:
+that shouldn't touch prod, use the persistent local PostgreSQL lane:
 
 ```sh
-pnpm db:dev:up      # start (or reuse) a local "cubby-dev-pg" Apple container
-pnpm db:dev:push    # push the Drizzle schema to it
-pnpm db:dev:seed    # seed a deterministic synthetic household corpus
-pnpm dev:local      # vite dev, DATABASE_URL pointed at the local container
+pnpm dev:local      # start PostgreSQL, push schema, seed if empty, then Vite
+pnpm db:dev:reset  # delete the guarded local volume, then rebuild its corpus
 pnpm db:dev:down    # stop the container (the named volume, and its data, persist)
 ```
 
@@ -310,10 +308,15 @@ pnpm db:dev:down    # stop the container (the named volume, and its data, persis
 (`cubby-dev-pg`) and port (`localhost:55432`), and is idempotent — rerunning
 it reuses the existing container rather than recreating it. `db:dev:push` and
 `db:dev:seed` refuse to run against anything but that local database (checked
-by host + database name), so a stray `DATABASE_URL` can never point them at
-prod. `db:dev:seed` is **not** idempotent — a second run fails on duplicate
-names; reset with `db:dev:down && container volume rm cubby-dev-pg-data`
-before reseeding.
+by protocol, host, port, user, password, and database). The reset also checks
+the running container's image, published port, environment, and named volume
+before removing it; after `db:dev:down`, run `db:dev:up` before resetting.
+`dev:local` skips corpus seeding when products already exist;
+`db:dev:reset` restores a clean corpus. The persistent database is shared by
+local worktrees.
+If a later schema change needs a Drizzle rename decision, `dev:local` stops
+before changing data; run `pnpm db:dev:push` interactively or use the explicit
+reset to replace the synthetic corpus.
 
 The corpus is created through a local, synthetic-only account
 (`dev@cubby.localhost` / `cubby-dev-local-only`, seeded by the real
@@ -325,6 +328,20 @@ a financial account, and tasks. See
 for exactly what it seeds and what it deliberately leaves out (recipes need
 the WASM build; a few Playwright-only scenarios aren't reimplemented
 headlessly).
+
+The Vite-only `/__dev/login` route signs the synthetic user in through Better
+Auth on loopback. For example, open `http://localhost:3000/__dev/login?next=/`.
+It exists only with the guarded local database; the deployed Worker has no
+such route. Browser E2E still uses its API-authenticated storage state.
+
+`pnpm test:e2e:sim` builds a Debug iOS app and runs the committed agent-device
+flow on an iPhone 17 simulator against a uniquely named disposable PostgreSQL
+database and workerd server. It creates that simulator if needed and always
+drops the database after the run. Set
+`CUBBY_SIM_DEVICE` to an iPhone 17 simulator name or UDID to choose an existing phone;
+failure artifacts are under `artifacts/sim-e2e/`. The manual `CI` workflow
+dispatch option `simulator_e2e` runs the same command with native PostgreSQL
+17 and pgvector on a hosted macOS runner. This lane is not a required PR check.
 
 For faster local Playwright iteration, `pnpm --filter @cubby/web
 test:e2e:watch` keeps warm PostgreSQL/IntegreSQL containers across runs

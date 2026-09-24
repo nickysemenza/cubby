@@ -211,6 +211,9 @@ importers:
       '@types/node':
         specifier: ^26.1.1
         version: 26.5.0
+      agent-device:
+        specifier: 0.21.12
+        version: 0.21.12
       concurrently:
         specifier: ^10.0.5
         version: 10.0.5
@@ -6912,6 +6915,16 @@ packages:
   agent-base@7.1.4:
     resolution: {integrity: sha512-MnA+YT8fwfJPgBx3m60MNqakm30XOkyIoH1y6huTQvC0PwZG7ki8NacLBcrPbNoo8vEZy7Jpuk7+jMO+CUovTQ==}
     engines: {node: '>= 14'}
+
+  agent-device@0.21.12:
+    resolution: {integrity: sha512-aeIMmmMRUCnpRzhl3it0/PpTxhfcnxk8U3epV3kGRw9aQgo2UZa04kBc/h6i7wswhiuZw29TSPO0ewths3eJHg==}
+    engines: {node: '>=22.12'}
+    hasBin: true
+    peerDependencies:
+      ai: ^6.0.0 || ^7.0.0
+    peerDependenciesMeta:
+      ai:
+        optional: true
 
   agents@0.20.1:
     resolution: {integrity: sha512-HQRYMeZpD3k8djYBH7atRPojZMee3NvmXkzsmMWXfdHZ94vMljmWqSsD1XZd70LovHyQrw6/R81AZZIsRiFM6Q==}
@@ -17204,6 +17217,8 @@ snapshots:
       - supports-color
 
   agent-base@7.1.4: {}
+
+  agent-device@0.21.12: {}
 
   agents@0.20.1(@babel/core@8.0.6)(@babel/runtime@7.29.7)(@cloudflare/workers-types@5.20260917.1)(@modelcontextprotocol/client@2.0.0)(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@10.2.2)(zod@4.6.5))(@modelcontextprotocol/server@2.0.0)(@tanstack/ai@0.54.0(@opentelemetry/api@1.9.1)(zod@4.6.5))(react@19.3.0)(rolldown@1.2.9)(vite@8.3.0(@types/node@26.5.0)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.1)(yaml@2.9.0))(zod@4.6.5):
     dependencies:

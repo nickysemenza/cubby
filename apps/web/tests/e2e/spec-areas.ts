@@ -129,6 +129,14 @@ export const SPEC_AREAS: readonly SpecAreaEntry[] = [
     ],
   },
   {
+    file: "corpus-isolation.spec.ts",
+    globs: [`${WEB}/tests/e2e/corpus-test.ts`, `${WEB}/tooling/scenarios/**`],
+  },
+  {
+    file: "minimal-start-isolation.spec.ts",
+    globs: [`${WEB}/tests/e2e/corpus-test.ts`, `${WEB}/tooling/scenarios/**`],
+  },
+  {
     file: "create-recipe-full-flow.spec.ts",
     globs: [
       `${WEB}/src/routes/_authenticated/recipes.new.tsx`,
