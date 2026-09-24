@@ -145,11 +145,15 @@ async function assertNativePhotoImport(
   runID: string,
   objectStorageUrl: string,
   expectedCount: number,
-): Promise<void> {
+): Promise<string[]> {
   const checkPool = new Pool({ connectionString: databaseURL });
   try {
-    const result = await checkPool.query<{ key: string; size: number }>(
-      `SELECT i.key, i.size
+    const result = await checkPool.query<{
+      id: string;
+      key: string;
+      size: number;
+    }>(
+      `SELECT i.shortcode AS id, i.key, i.size
        FROM "ImportRunTarget" t
        JOIN "ImportRun" r ON r.id = t."runId"
        JOIN "Image" i ON i.id = t."imageId"
@@ -174,9 +178,27 @@ async function assertNativePhotoImport(
           `Native uploaded photo bytes are unavailable for ${runID}`,
         );
     }
-    console.log(
-      `[${lane}] ${expectedCount} native photo uploads verified in ${simName}`,
+    const jobs = await checkPool.query<{ imageId: string; kind: string }>(
+      `SELECT i.shortcode AS "imageId", j.kind
+       FROM "ImageProcessingJob" j
+       JOIN "Image" i ON i.id = j."imageId"
+       JOIN "ImportRunTarget" t ON t."imageId" = i.id
+       JOIN "ImportRun" r ON r.id = t."runId"
+       WHERE r.shortcode = $1`,
+      [runID],
     );
+    for (const row of result.rows) {
+      const kinds = jobs.rows
+        .filter((job) => job.imageId === row.id)
+        .map((job) => job.kind)
+        .sort();
+      if (kinds.join(",") !== "describe_image,subject_lift")
+        throw new Error(`Native photo ${row.id} scheduled ${kinds.join(",")}`);
+    }
+    console.log(
+      `[${lane}] ${expectedCount} native photo uploads and ${jobs.rows.length} processing jobs verified in ${simName}`,
+    );
+    return result.rows.map((row) => row.id);
   } finally {
     await checkPool.end();
   }
@@ -557,7 +579,106 @@ async function runHeadlessPhotoScenario(
   const runID = match?.[1];
   if (!runID)
     throw new Error("Native photo importer did not report its run id");
-  await assertNativePhotoImport(runID, objectStorageUrl, imagePaths.length);
+  const imageIDs = await assertNativePhotoImport(
+    runID,
+    objectStorageUrl,
+    imagePaths.length,
+  );
+  const context = await request.newContext({
+    baseURL: url.origin,
+    extraHTTPHeaders: { Origin: url.origin },
+  });
+  try {
+    const login = await context.post("/api/auth/sign-in/email", {
+      data: { email: "sim@cubby.localhost", password: "cubby-sim-local-only" },
+    });
+    if (!login.ok())
+      throw new Error(`Review sign-in failed: ${await login.text()}`);
+    const endpoint = `/api/import/runs/${runID}/photo-groups`;
+    const proposed = await context.post(endpoint, {
+      data: {
+        action: "save",
+        groups: [
+          {
+            groupKey: "synthetic-shirt",
+            images: [
+              { id: imageIDs[0], purpose: "item" },
+              { id: imageIDs[1], purpose: "label" },
+            ],
+            product: {
+              kind: "create",
+              create: { name: "Synthetic Gray Crew Shirt" },
+            },
+          },
+          {
+            groupKey: "synthetic-boots",
+            images: [{ id: imageIDs[2], purpose: "item" }],
+            product: {
+              kind: "create",
+              create: { name: "Synthetic Brown Boots" },
+            },
+          },
+        ],
+      },
+    });
+    if (!proposed.ok())
+      throw new Error(`Photo proposal failed: ${await proposed.text()}`);
+    const approved = await context.post(endpoint, {
+      data: { action: "approve" },
+    });
+    if (!approved.ok())
+      throw new Error(`Photo approval failed: ${await approved.text()}`);
+    const pool = new Pool({ connectionString: databaseURL });
+    try {
+      const result = await pool.query<{ status: string; completed: string }>(
+        `SELECT r.status, count(*) FILTER (WHERE t.state = 'completed')::text AS completed
+         FROM "ImportRun" r
+         JOIN "ImportRunTarget" t ON t."runId" = r.id
+         WHERE r.shortcode = $1
+         GROUP BY r.id`,
+        [runID],
+      );
+      if (
+        result.rows[0]?.status !== "completed" ||
+        result.rows[0]?.completed !== String(imagePaths.length)
+      )
+        throw new Error(
+          `Photo approval left run unsettled: ${JSON.stringify(result.rows)}`,
+        );
+      const products = await pool.query<{ name: string }>(
+        `SELECT name FROM "Product"
+         WHERE name IN ('Synthetic Gray Crew Shirt', 'Synthetic Brown Boots')
+           AND "deletedAt" IS NULL`,
+      );
+      if (products.rows.length !== 2)
+        throw new Error("Photo approval did not create both Products");
+      const attachments = await pool.query<{
+        id: string;
+        purpose: string | null;
+      }>(
+        `SELECT i.shortcode AS id, a.purpose
+         FROM "EntityAttachment" a
+         JOIN "Image" i ON i.id = a."imageId"
+         WHERE i.shortcode = ANY($1::text[]) AND a."deletedAt" IS NULL`,
+        [imageIDs],
+      );
+      const purposes = new Map(
+        attachments.rows.map((row) => [row.id, row.purpose]),
+      );
+      if (
+        purposes.size !== imageIDs.length ||
+        imageIDs.some(
+          (id, index) => purposes.get(id) !== ["item", "label", "item"][index],
+        )
+      )
+        throw new Error("Photo approval lost item or label attachments");
+    } finally {
+      await pool.end();
+    }
+    console.log(`[${lane}] Proposal submission and reviewer approval verified`);
+  } finally {
+    await context.dispose();
+  }
 }
 
 async function runHeadlessProductScenario(
