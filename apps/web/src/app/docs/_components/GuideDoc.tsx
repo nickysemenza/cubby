@@ -1,8 +1,14 @@
-import { useEffect, useState, type ComponentPropsWithoutRef } from "react";
+import {
+  isValidElement,
+  useEffect,
+  useState,
+  type ComponentPropsWithoutRef,
+} from "react";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
 import { resolveDocHref } from "../doc-paths";
+import { MermaidDiagram } from "./MermaidDiagram";
 import { Prose } from "./Prose";
 
 /**
@@ -26,6 +32,21 @@ function clean<T extends keyof React.JSX.IntrinsicElements>({
 
 function componentsFor(sourcePath: string) {
   return {
+    pre: (props: ElementProps<"pre">) => {
+      const code = props.children;
+      if (
+        isValidElement<{ className?: string; children: string }>(code) &&
+        code.props.className?.split(" ").includes("language-mermaid")
+      ) {
+        return (
+          <MermaidDiagram
+            key={code.props.children}
+            source={code.props.children.trim()}
+          />
+        );
+      }
+      return <pre {...clean(props)} />;
+    },
     a: (props: ElementProps<"a">) => (
       <a
         {...clean(props)}

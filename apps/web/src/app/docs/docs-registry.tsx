@@ -56,44 +56,6 @@ const markdownModules = import.meta.glob<string>(
   { query: "?url", import: "default" },
 );
 
-const groupNames = new Map([
-  ["adr", "ADRs"],
-  ["agents", "Agent guides"],
-  ["application-framework", "Application framework"],
-  ["plans", "Plans"],
-  ["runbooks", "Runbooks"],
-]);
-
-const wordNames = new Map([
-  ["adr", "ADR"],
-  ["api", "API"],
-  ["caldav", "CalDAV"],
-  ["ci", "CI"],
-  ["json", "JSON"],
-  ["mcp", "MCP"],
-  ["r2", "R2"],
-  ["readme", "Overview"],
-  ["ui", "UI"],
-  ["wasm", "WASM"],
-  ["xcode", "Xcode"],
-]);
-
-function titleForDoc(path: string): string {
-  const name = path.split("/").at(-1)!.replace(/\.md$/, "");
-  if (name === "README") return "Overview";
-  const title = name
-    .split("-")
-    .map((word) => wordNames.get(word.toLowerCase()) ?? word)
-    .join(" ");
-  return title.charAt(0).toUpperCase() + title.slice(1);
-}
-
-function groupForDoc(path: string): string {
-  const folder = path.split("/")[0];
-  if (!path.includes("/")) return "Docs";
-  return groupNames.get(folder!) ?? titleForDoc(`${folder!}.md`);
-}
-
 const markdownSections: DocSection[] = Object.entries(markdownModules)
   .sort(([left], [right]) => {
     const leftPath = left.slice(DOCS_PREFIX.length);
@@ -108,6 +70,7 @@ const markdownSections: DocSection[] = Object.entries(markdownModules)
   })
   .map(([modulePath, load]) => {
     const sourcePath = modulePath.slice(DOCS_PREFIX.length);
+    const parts = sourcePath.split("/");
     const GuideSection = lazy(async () => {
       const [sourceUrl, { GuideDoc }] = await Promise.all([
         load(),
@@ -122,8 +85,8 @@ const markdownSections: DocSection[] = Object.entries(markdownModules)
 
     return {
       slug: docSlug(sourcePath),
-      title: titleForDoc(sourcePath),
-      group: groupForDoc(sourcePath),
+      title: parts.at(-1)!,
+      group: parts.length > 1 ? parts[0]! : "docs",
       sourcePath,
       render: () => <GuideSection />,
     };

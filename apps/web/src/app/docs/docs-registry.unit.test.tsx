@@ -19,11 +19,12 @@ describe("repository documentation", () => {
 
     expect(published).toEqual(files);
     expect(DEFAULT_DOC_SLUG).toBe("readme");
-    expect(docSections[0]?.title).toBe("Overview");
-    expect(getDocSection("inventory-audit")?.group).toBe("Docs");
+    expect(docSections[0]?.title).toBe("README.md");
+    expect(getDocSection("ci")?.title).toBe("ci.md");
+    expect(getDocSection("inventory-audit")?.group).toBe("docs");
     expect(
       getDocSection("adr--0001-entity-relationship-authority")?.group,
-    ).toBe("ADRs");
+    ).toBe("adr");
   });
 
   it("keeps docs links in the app and sends repository links to the source", () => {

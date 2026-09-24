@@ -52,6 +52,8 @@ overrides:
   # bump from 10.2.0.
   ip-address: ^10.3.1
   lodash: ^4.18.0
+  # GHSA-r5fr-rjxr-66jc. Mermaid's Chevrotain parser pins vulnerable 4.17.23.
+  lodash-es: ^4.18.1
   next: ^16.2.6
   postcss: ^8.5.16
   qs: ^6.15.2
