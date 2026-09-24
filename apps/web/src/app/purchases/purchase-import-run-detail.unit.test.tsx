@@ -255,3 +255,49 @@ it("shows durable progress and diagnostics alongside photo group review", async 
     screen.getByText("Agent messages and tool calls · 0 messages"),
   ).toBeInTheDocument();
 });
+
+it("shows the remaining photo milestones while a run is active", async () => {
+  const defaultFetch = fetch;
+  vi.stubGlobal(
+    "fetch",
+    vi.fn((input: string | URL | Request, init?: RequestInit) => {
+      const url = input instanceof Request ? input.url : String(input);
+      if (url.endsWith(`/api/import/runs/${run.publicId}`))
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              run: {
+                ...run,
+                purpose: "photo_inventory",
+                status: "running",
+                endedAt: null,
+                targets: [],
+                operations: [],
+              },
+            }),
+            { status: 200, headers: { "Content-Type": "application/json" } },
+          ),
+        );
+      return defaultFetch(input, init);
+    }),
+  );
+  render(
+    <RunPhotoBatch
+      record={fromPartial<ImportRunOut>({
+        id: run.publicId,
+        status: "running",
+        purpose: "photo_inventory",
+      })}
+    />,
+    { wrapper: harness.wrapper },
+  );
+
+  const table = await screen.findByRole("region", {
+    name: "Run step timing table",
+  });
+  expect(table).toHaveTextContent("Read photos and analysis");
+  expect(table).toHaveTextContent("Compare existing products");
+  expect(table).toHaveTextContent("Propose item groups");
+  expect(table).toHaveTextContent("Review proposed groups");
+  expect(table).toHaveTextContent("Upcoming");
+});

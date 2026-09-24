@@ -5,28 +5,62 @@
  * `commit_photo_group` writer, which also stays callable directly.
  */
 import {
+  importRunShortcode,
+  ledgerPartyShortcode,
+} from "@cubby/schemas/identifiers";
+import {
   commitPhotoGroupInput,
   commitPhotoGroupOutput,
   listPhotoGroupProposalsInput,
   photoGroupProposalList,
   photoProductCandidateSearchInput,
   photoProductCandidatesResponse,
+  photoRunImage,
   proposePhotoGroupsInput,
   proposePhotoGroupsOutput,
 } from "@cubby/schemas/photo-import-run";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { z } from "zod";
 
 import {
   listPhotoGroupProposals,
+  listPhotoRunImages,
   proposePhotoGroups,
 } from "~/server/photo-import-run/proposals";
 import { commitPhotoGroup } from "~/server/photo-import-run/writer";
+import { getImportRunByShortcode } from "~/server/repo/import-run";
 import { findPhotoProductCandidates } from "~/server/repo/photo-product-candidates";
 
 import { getEntityKernelContext } from "../kernel-context";
 import { READ_ONLY_CLOSED, registerMcpTool, WRITE_CLOSED } from "./_shared";
 
 export function registerPhotoImportTools(server: McpServer) {
+  registerMcpTool(server, {
+    name: "get_photo_run_context",
+    description:
+      "Read one photo-inventory run's owner, notes, ordered photos, local analysis and cloud descriptions in a single bounded result. Use this before proposing groups; only inspect individual images when these summaries leave a concrete question unanswered.",
+    inputSchema: z.object({ runId: importRunShortcode }),
+    outputSchema: z.object({
+      runId: importRunShortcode,
+      ledgerPartyId: ledgerPartyShortcode,
+      notes: z.string().nullable(),
+      images: z.array(photoRunImage),
+    }),
+    annotations: READ_ONLY_CLOSED,
+    handler: async (params, extra) => {
+      const db = getEntityKernelContext(extra).db;
+      const run = await getImportRunByShortcode(db, params.runId);
+      if (!run || run.purpose !== "photo_inventory" || !run.ledgerPartyId)
+        throw new Error("Photo-inventory run and owner were not found");
+      return {
+        runId: params.runId,
+        ledgerPartyId: run.ledgerPartyId,
+        notes: run.notes,
+        images: await listPhotoRunImages(db, params.runId),
+      };
+    },
+  });
+
   registerMcpTool(server, {
     name: "suggest_photo_product_candidates",
     description:

@@ -7,6 +7,29 @@ import type { PurchaseImportService } from "./service";
 const runId = "f47ac10b-58cc-4372-a567-0e02b2c3d479";
 
 describe("cubbyMcpConnection", () => {
+  it("mounts only the photo workflow tools for photo inventory runs", () => {
+    const connection = cubbyMcpConnection(
+      runId,
+      () => {
+        throw new Error("The connection should not fetch during setup");
+      },
+      "photo_inventory",
+    );
+
+    expect(connection.tools).toEqual([
+      "get_photo_run_context",
+      "get_image_processing",
+      "suggest_photo_product_candidates",
+      "resolve_products",
+      "find_similar_entities",
+      "propose_photo_groups",
+      "list_photo_group_proposals",
+      "patch_product_external_ids",
+    ]);
+    expect(connection.tools).not.toContain("get_entities");
+    expect(connection.tools).not.toContain("entity");
+  });
+
   it("resolves run-bound auth per request and proxies through the service binding", async () => {
     const mcpFetch = vi.fn(async (request: Request) => {
       expect(request.url).toBe("https://mcp.internal.test/api/mcp?session=7");

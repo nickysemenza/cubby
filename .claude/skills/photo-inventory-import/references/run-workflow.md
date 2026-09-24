@@ -5,9 +5,9 @@ Activate the `photo-inventory-import` skill and apply its product identity,
 grouping, ownership, and location rules.
 
 1. Report preparing and call `claim_next_import_work`. Pass `{{runId}}` as the
-   public run code to MCP entity and photo tools. Read the run, pending images,
-   analysis summaries, and the photo representations needed to resolve
-   uncertainty.
+   public run code to `get_photo_run_context`. Its bounded result gives the
+   owner, notes, ordered pending photos, and analysis summaries. Inspect an
+   individual image only when the summary leaves a concrete question.
 2. For each distinct item, call `suggest_photo_product_candidates` with its
    observed name and manufacturer. Compare the physical variant to the returned
    Products. Prefer a matching Product with no own-item photo or earlier photo

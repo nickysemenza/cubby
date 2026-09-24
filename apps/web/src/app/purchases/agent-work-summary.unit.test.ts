@@ -7,11 +7,77 @@ import type { ImportRunDetail } from "~/lib/purchase-import-run-detail";
 
 import {
   formatWorkDuration,
+  plannedPhotoWorkSteps,
   summarizeAgentWork,
   summarizePhotoDescriptions,
 } from "./agent-work-summary";
 
 describe("agent work summary", () => {
+  it("shows known future photo work without marking it as running or timed", () => {
+    expect(plannedPhotoWorkSteps([], "running", 0)).toEqual([
+      {
+        kind: "photo-context",
+        label: "Read photos and analysis",
+        status: "upcoming",
+      },
+      {
+        kind: "catalog",
+        label: "Compare existing products",
+        status: "upcoming",
+      },
+      {
+        kind: "photo-groups",
+        label: "Propose item groups",
+        status: "upcoming",
+      },
+      {
+        kind: "photo-review",
+        label: "Review proposed groups",
+        status: "upcoming",
+      },
+    ]);
+    const observed = summarizeAgentWork(
+      [
+        fromPartial<FlueConversationMessage>({
+          parts: [
+            {
+              type: "dynamic-tool",
+              toolName: "mcp__cubby__propose_photo_groups",
+              state: "output-available",
+              durationMs: 400,
+            },
+          ],
+        }),
+      ],
+      [],
+    );
+    expect(plannedPhotoWorkSteps(observed, "running", 1)).toEqual([
+      {
+        kind: "photo-review",
+        label: "Review proposed groups",
+        status: "waiting_for_you",
+      },
+    ]);
+    expect(
+      plannedPhotoWorkSteps(
+        [
+          {
+            kind: "photo-context",
+            label: "Read photos and analysis",
+            completed: 0,
+            failed: 0,
+            running: 1,
+            durationMs: null,
+            timing: "tool",
+          },
+        ],
+        "running",
+        0,
+      ).map((step) => step.kind),
+    ).toEqual(["catalog", "photo-groups", "photo-review"]);
+    expect(plannedPhotoWorkSteps(observed, "completed", 0)).toEqual([]);
+  });
+
   it("groups recorded work and reports only measured durations", () => {
     const messages = [
       fromPartial<FlueConversationMessage>({

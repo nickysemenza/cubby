@@ -5,6 +5,7 @@ import type { ImportRunDetail } from "~/lib/purchase-import-run-detail";
 export { formatDuration as formatWorkDuration } from "~/lib/format-duration";
 
 type WorkKind =
+  | "photo-context"
   | "photo-analysis"
   | "image-description"
   | "image-description-reused"
@@ -14,7 +15,8 @@ type WorkKind =
   | "product-match"
   | "purchase-review"
   | "purchase-import"
-  | "photo-commit";
+  | "photo-commit"
+  | "photo-review";
 
 export type AgentWorkItem = {
   kind: WorkKind;
@@ -31,6 +33,7 @@ export type AgentWorkItem = {
 };
 
 const WORK_LABELS = {
+  "photo-context": "Read photos and analysis",
   "photo-analysis": "Read photo analysis",
   "image-description": "Processed image descriptions",
   "image-description-reused": "Reused earlier image descriptions",
@@ -41,11 +44,14 @@ const WORK_LABELS = {
   "purchase-review": "Prepared orders for review",
   "purchase-import": "Imported approved orders",
   "photo-commit": "Saved reviewed photo groups",
+  "photo-review": "Review proposed groups",
 } satisfies Record<WorkKind, string>;
 
 function toolWorkKind(name: string): WorkKind | null {
   const leaf = name.split("__").at(-1) ?? name;
   switch (leaf) {
+    case "get_photo_run_context":
+      return "photo-context";
     case "get_image_processing":
       return "photo-analysis";
     case "resolve_products":
@@ -64,6 +70,49 @@ function toolWorkKind(name: string): WorkKind | null {
     default:
       return null;
   }
+}
+
+export type PlannedPhotoWorkStep = {
+  kind: WorkKind;
+  label: string;
+  status: "upcoming" | "waiting_for_you";
+};
+
+/** Milestones the photo workflow always needs, without invented measurements. */
+export function plannedPhotoWorkSteps(
+  work: readonly AgentWorkItem[],
+  runStatus: string,
+  proposedGroups: number,
+): PlannedPhotoWorkStep[] {
+  if (runStatus !== "running") return [];
+  const started = new Set(
+    work
+      .filter((item) => item.completed > 0 || item.running > 0)
+      .map((item) => item.kind),
+  );
+  const reached =
+    proposedGroups > 0 || started.has("photo-groups")
+      ? 2
+      : started.has("catalog")
+        ? 1
+        : started.has("photo-context") || started.has("records")
+          ? 0
+          : -1;
+  const steps: PlannedPhotoWorkStep[] = [
+    {
+      kind: "photo-context",
+      label: WORK_LABELS["photo-context"],
+      status: "upcoming",
+    },
+    { kind: "catalog", label: "Compare existing products", status: "upcoming" },
+    { kind: "photo-groups", label: "Propose item groups", status: "upcoming" },
+    {
+      kind: "photo-review",
+      label: WORK_LABELS["photo-review"],
+      status: proposedGroups > 0 ? "waiting_for_you" : "upcoming",
+    },
+  ];
+  return steps.filter((_, index) => index > reached);
 }
 
 function operationWorkKind(kind: string): WorkKind | null {

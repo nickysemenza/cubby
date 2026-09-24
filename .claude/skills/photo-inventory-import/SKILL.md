@@ -19,13 +19,13 @@ party. Free-text `notes` gives context such as a location by time window
 
 ## Read the run
 
-`entity get importRun { id }` for `ledgerPartyId` and `notes`. Then
-`entity list image { filters: { importRunId, targetState: ["pending"] } }` —
-the list is already ordered by the run's picker `position`, which reflects
-capture order. Each image carries `importTarget` (`state`, `position`) and
-`analysisSummary` (`description`, `classifications`, `recognizedText` —
-on-device Vision plus the cloud description, when either has run). Read
-`analysisSummary` and `position` adjacency first; open an image (`representations`)
+Call `get_photo_run_context { runId }` for `ledgerPartyId`, `notes`, and the
+run's photos. Filter its images to `targetState: "pending"`; the list is
+already ordered by the run's picker `position`, which reflects
+capture order. Each image carries `targetState`, `position`, `description`,
+and `recognizedText` (on-device Vision OCR plus the cloud
+description, when either has run). Read those summaries and `position`
+adjacency first; open an image (`originalUrl` or `cutoutUrl`)
 only when the summary leaves the item, its label text, or a group boundary
 genuinely unclear — most groups resolve from the summary alone. Background
 removal is queued for every image automatically; cutouts appear only while
@@ -57,7 +57,7 @@ existing match — call `suggest_photo_product_candidates` once per distinct
 item with its observed name and manufacturer. Its results include purchase,
 own-photo, earlier photo-import, and inventory evidence. Compare exact variant
 facts yourself; rank and absence of an own photo are useful leads, not proof.
-Use `resolve_products`, `find_similar_entities`, or a scoped Product list only
+Use `resolve_products` or `find_similar_entities` only
 when the candidate response leaves a concrete identity question unanswered;
 avoid repeating broad catalog reads for every photo of the same item. A
 purchase-created Product without an own photo deserves close inspection even
@@ -115,9 +115,9 @@ group with only its own photos needs no reordering.
 
 ## Finish
 
-The run is done once `entity list image { filters: { importRunId,
-targetState: ["pending"] } }` returns nothing — the approval (or discard)
-that settles the last pending image marks the run `completed` automatically. Report items
+The run is done once `get_photo_run_context` has no pending images — the
+approval (or discard) that settles the last pending image marks the run
+`completed` automatically. Report items
 committed, images skipped (with reasons), Products matched vs. created,
 inventory received, and every open question (ambiguous ownership, unresolved
 location, an unresolved `conflict`). Then check

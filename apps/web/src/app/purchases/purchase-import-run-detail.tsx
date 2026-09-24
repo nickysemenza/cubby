@@ -9,6 +9,7 @@ import {
 } from "@flue/sdk";
 import { ArrowSquareOutIcon } from "@phosphor-icons/react/dist/csr/ArrowSquareOut";
 import { CheckCircleIcon } from "@phosphor-icons/react/dist/csr/CheckCircle";
+import { CircleIcon } from "@phosphor-icons/react/dist/csr/Circle";
 import { CircleNotchIcon } from "@phosphor-icons/react/dist/csr/CircleNotch";
 import { WarningCircleIcon } from "@phosphor-icons/react/dist/csr/WarningCircle";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -42,6 +43,7 @@ import {
 
 import {
   formatWorkDuration,
+  plannedPhotoWorkSteps,
   summarizeAgentWork,
   summarizePhotoDescriptions,
   type AgentWorkItem,
@@ -472,6 +474,9 @@ function AgentWorkOverview({
     ...additionalWork,
   ];
   const isPhotoRun = run.purpose === "photo_inventory";
+  const plannedSteps = isPhotoRun
+    ? plannedPhotoWorkSteps(work, run.status, proposedGroups ?? 0)
+    : [];
   const headline = agentWorkHeadline(run, isPhotoRun, proposedGroups);
   const photoCount = run.targets.filter(
     (target) => target.targetType === "image",
@@ -509,12 +514,20 @@ function AgentWorkOverview({
         </strong>
         {run.endedAt ? null : " · still running"}
       </p>
-      {work.length || run.agentModelMs > 0 ? (
+      {work.length || plannedSteps.length || run.agentModelMs > 0 ? (
         <section
           className="mt-3 overflow-x-auto border-t border-border pt-2"
           aria-label="Run step timing table"
         >
-          <table className="w-full min-w-[760px] border-collapse text-xs tabular-nums">
+          <table className="w-full min-w-[760px] table-fixed border-collapse text-xs tabular-nums">
+            <colgroup>
+              <col className="w-[26%]" />
+              <col className="w-[14%]" />
+              <col className="w-[15%]" />
+              <col className="w-[14%]" />
+              <col className="w-[13%]" />
+              <col className="w-[18%]" />
+            </colgroup>
             <thead>
               <tr className="border-b border-border text-left text-muted-foreground">
                 <th scope="col" className="py-2 pr-3 font-medium">
@@ -602,6 +615,27 @@ function AgentWorkOverview({
                   </tr>
                 );
               })}
+              {plannedSteps.map((step) => (
+                <tr
+                  key={`planned-${step.kind}`}
+                  className="border-b border-border/70 text-muted-foreground last:border-0"
+                >
+                  <th scope="row" className="py-2 pr-3 text-left font-medium">
+                    <span className="flex items-center gap-2">
+                      <CircleIcon
+                        className="size-3.5 shrink-0"
+                        aria-hidden="true"
+                      />
+                      <span>{step.label}</span>
+                    </span>
+                  </th>
+                  <td className="px-2 py-2 text-left" colSpan={5}>
+                    {step.status === "waiting_for_you"
+                      ? "Waiting for your review"
+                      : "Upcoming"}
+                  </td>
+                </tr>
+              ))}
               {run.agentModelMs > 0 ? (
                 <tr className="border-b border-border/70 last:border-0">
                   <th scope="row" className="py-2 pr-3 text-left font-medium">
@@ -632,6 +666,24 @@ function AgentWorkOverview({
                     ≥{formatWorkDuration(run.agentModelMs)}
                   </td>
                 </tr>
+              ) : messages.length && run.endedAt ? (
+                <tr className="border-b border-border/70 last:border-0">
+                  <th scope="row" className="py-2 pr-3 text-left font-medium">
+                    Agent model turns
+                  </th>
+                  <td colSpan={2} className="text-right text-muted-foreground">
+                    —
+                  </td>
+                  <td
+                    className="px-2 py-2 text-right text-muted-foreground"
+                    title="No model-turn duration was stored for this run"
+                  >
+                    Not recorded
+                  </td>
+                  <td colSpan={2} className="text-right text-muted-foreground">
+                    —
+                  </td>
+                </tr>
               ) : null}
             </tbody>
           </table>
@@ -643,9 +695,9 @@ function AgentWorkOverview({
       )}
       <p className="mt-2 text-2xs text-muted-foreground">
         — means no timestamped interval was recorded. Agent model time includes
-        reasoning and generation, which the runtime does not separate or
-        attribute to individual steps. Photo waiting is a lower bound; attempt
-        time includes executor and network latency.
+        reasoning and generation; it is measured per turn, then summed for the
+        run, without attributing it to individual steps. Photo waiting is a
+        lower bound; attempt time includes executor and network latency.
       </p>
     </div>
   );
