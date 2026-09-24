@@ -352,6 +352,10 @@ export const photoRunImage = z.object({
   /** The current description job's dispatch-to-completion interval, if recorded. */
   describeStartedAt: z.iso.datetime().nullable(),
   describeCompletedAt: z.iso.datetime().nullable(),
+  /** Sum of completed execution attempts; includes executor network latency. */
+  describeAttemptMs: z.number().nonnegative().nullable(),
+  /** Dispatch-to-completion time outside completed attempts. */
+  describeWaitingMs: z.number().nonnegative().nullable(),
   /** True after the device has submitted its local Vision analysis. */
   localAnalysisReady: z.boolean(),
   /** The cutout processor's skip or failure reason, e.g. `not_suitable`. */

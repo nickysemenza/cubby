@@ -87,12 +87,7 @@ export default defineEntity({
             "runtimeRevision",
             "decisionRevision",
             "dispatchAttempts",
-            "dispatchError",
-            "coordinatorStartedAt",
-            "auditedAt",
             "predecessorRunId",
-            "createdAt",
-            "updatedAt",
           ],
         },
       ],
@@ -211,6 +206,26 @@ export default defineEntity({
         nullable: true,
         display: { list: true, detail: true, format: "timestamp" },
         validation: readOnly(z.date().nullable()),
+      },
+      {
+        key: "wallTime",
+        kind: "text",
+        display: { detail: true },
+        provenance: {
+          kind: "derived",
+          sources: [{ label: "Run start and end times" }],
+        },
+        explanation: {
+          ruleId: "import-run.wall-time",
+          description:
+            "Elapsed time from the run's start to its end. An active run is shown as in progress.",
+          readPath: "wallTime",
+          sourceDependencies: [
+            { path: "startedAt", label: "Started at" },
+            { path: "endedAt", label: "Ended at" },
+          ],
+        },
+        validation: readOnly(z.string()),
       },
       {
         key: "ordersSeen",
@@ -419,6 +434,7 @@ export default defineEntity({
       "actorName",
       "startedAt",
       "endedAt",
+      "wallTime",
       "ordersSeen",
       "imported",
       "updated",

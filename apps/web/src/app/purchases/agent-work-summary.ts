@@ -2,6 +2,7 @@ import type { PhotoRunImage } from "@cubby/schemas/photo-import-run";
 import type { FlueConversationMessage } from "@flue/sdk";
 
 import type { ImportRunDetail } from "~/lib/purchase-import-run-detail";
+export { formatDuration as formatWorkDuration } from "~/lib/format-duration";
 
 type WorkKind =
   | "photo-analysis"
@@ -22,6 +23,10 @@ export type AgentWorkItem = {
   running: number;
   durationMs: number | null;
   timing: "tool" | "elapsed";
+  /** Photo processing only: sum of executor attempt intervals. */
+  attemptMs?: number | null;
+  /** Photo processing only: batch wall time outside summed attempts, a lower bound. */
+  waitingMs?: number | null;
 };
 
 const WORK_LABELS = {
@@ -134,11 +139,6 @@ export function summarizeAgentWork(
   return [...items.values()];
 }
 
-export function formatWorkDuration(durationMs: number): string {
-  if (durationMs < 1_000) return `${Math.round(durationMs)}ms`;
-  return `${(durationMs / 1_000).toFixed(1)}s`;
-}
-
 /** Actual dispatch-to-completion wall time for the completed description batch. */
 export function summarizePhotoDescriptions(
   images: readonly PhotoRunImage[],
@@ -163,6 +163,12 @@ export function summarizePhotoDescriptions(
             Math.min(...timed.map((photo) => photo.startedAt)),
         )
       : null;
+  const attemptMs = described.every(
+    (photo) =>
+      photo.describeAttemptMs !== null && photo.describeAttemptMs !== undefined,
+  )
+    ? described.reduce((sum, photo) => sum + (photo.describeAttemptMs ?? 0), 0)
+    : null;
   return [
     {
       kind: "image-description",
@@ -172,6 +178,11 @@ export function summarizePhotoDescriptions(
       running: 0,
       durationMs,
       timing: "elapsed",
+      attemptMs,
+      waitingMs:
+        durationMs !== null && attemptMs !== null
+          ? Math.max(0, durationMs - attemptMs)
+          : null,
     },
   ];
 }

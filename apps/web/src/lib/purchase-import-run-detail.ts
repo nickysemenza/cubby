@@ -158,6 +158,7 @@ const importRunDetail = z.object({
   coordinatorModel: z.string().nullable(),
   skillRevision: z.string().nullable(),
   runtimeRevision: z.string().nullable(),
+  agentModelMs: z.number().nonnegative(),
   source: z
     .object({ kind: z.string(), vendorName: z.string().nullable() })
     .nullable(),
@@ -205,6 +206,7 @@ export const importRunControlInput = z.object({
     "approve",
     "reject",
     "retry",
+    "restart",
     "escalate_sol",
     "retry_dispatch",
     "abort",

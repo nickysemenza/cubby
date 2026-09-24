@@ -8,5 +8,6 @@ describe("formatDuration", () => {
     expect(formatDuration(1000)).toBe("1.0s");
     expect(formatDuration(12750)).toBe("12.8s");
     expect(formatDuration(60500)).toBe("1m 1s");
+    expect(formatDuration(23_935_500)).toBe("6h 39m");
   });
 });

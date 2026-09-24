@@ -57,6 +57,7 @@ import type {
 } from "~/contracts/photo-import.contract";
 import type { Database } from "~/server/db";
 import {
+  aiUsage,
   entityAttachment,
   financialTransaction,
   financialTransactionAllocation,
@@ -2848,6 +2849,7 @@ export async function loadImportRunByShortcode(
     controlHistory,
     targets,
     evidence,
+    agentModelUsage,
   ] = await Promise.all([
     run.predecessorRunId
       ? database
@@ -2999,6 +3001,18 @@ export async function loadImportRunByShortcode(
       .from(importRunEvidence)
       .where(eq(importRunEvidence.runId, run.id))
       .orderBy(asc(importRunEvidence.createdAt)),
+    database
+      .select({
+        durationMs: sql<number>`coalesce(sum(${aiUsage.durationMs}), 0)`,
+      })
+      .from(aiUsage)
+      .where(
+        and(
+          eq(aiUsage.runId, run.id),
+          eq(aiUsage.feature, "purchase_import_agent"),
+          notDeleted(aiUsage),
+        ),
+      ),
   ]);
   return {
     publicId: run.publicId,
@@ -3060,6 +3074,7 @@ export async function loadImportRunByShortcode(
     coordinatorModel: run.coordinatorModel,
     skillRevision: run.skillRevision,
     runtimeRevision: run.runtimeRevision,
+    agentModelMs: Number(agentModelUsage[0]?.durationMs ?? 0),
     decisionRevision: run.decisionRevision,
     operations,
     approvals,
@@ -3083,6 +3098,7 @@ const runControlInput = z.object({
     "approve",
     "reject",
     "retry",
+    "restart",
     "retry_dispatch",
     "upload_evidence",
     "no_evidence_available",
@@ -3101,6 +3117,7 @@ const importRunControlAction = z.enum([
   "approve",
   "reject",
   "retry",
+  "restart",
   "retry_dispatch",
   "upload_evidence",
   "no_evidence_available",
@@ -3240,6 +3257,7 @@ export async function controlImportRun(
           vendorId: importRun.vendorId,
           purpose: importRun.purpose,
           trigger: importRun.trigger,
+          notes: importRun.notes,
           skillRevision: importRun.skillRevision,
           runtimeRevision: importRun.runtimeRevision,
           dispatchEventId: importRun.dispatchEventId,
@@ -3251,6 +3269,101 @@ export async function controlImportRun(
         .limit(1)
         .for("update");
       if (!locked) throw new Error("Purchase import run was not found");
+      if (input.action === "restart") {
+        if (
+          !new Set([
+            "completed",
+            "failed",
+            "needs_review",
+            "dispatch_failed",
+          ]).has(locked.status)
+        )
+          throw new Error(
+            `Only a finished run can be started again (${locked.status})`,
+          );
+        if (!flueImportRunPurpose.safeParse(locked.purpose).success)
+          throw new Error("Only agent import runs can be started again");
+        const sourceTargets = await tx
+          .select({
+            purchaseId: importRunTarget.purchaseId,
+            productId: importRunTarget.productId,
+            imageId: importRunTarget.imageId,
+            position: importRunTarget.position,
+            vendorAccountId: importRunTarget.vendorAccountId,
+            sourceKind: importRunTarget.sourceKind,
+            sourceExternalKey: importRunTarget.sourceExternalKey,
+            targetFingerprint: importRunTarget.targetFingerprint,
+          })
+          .from(importRunTarget)
+          .where(eq(importRunTarget.runId, scope.public.runId));
+        if (locked.purpose !== "account_sync" && sourceTargets.length === 0)
+          throw new Error("This run has no inputs to start again");
+        if (
+          locked.purpose === "photo_inventory" &&
+          sourceTargets.some((target) => !target.imageId)
+        )
+          throw new Error("Photo run inputs are incomplete");
+        if (locked.purpose === "account_sync" && !locked.vendorAccountId)
+          throw new Error(
+            "This account run has no vendor account to start again",
+          );
+        const successorId = importRunId.parse(crypto.randomUUID());
+        const dispatchEventId = crypto.randomUUID();
+        const [successor] = await tx
+          .insert(importRun)
+          .values({
+            id: successorId,
+            shortcode: generateShortcode("importRun"),
+            ledgerPartyId: locked.ledgerPartyId,
+            actorUserId: userId.parse(controller.userId),
+            actorName: controller.name,
+            actorEmail: controller.email,
+            actorLedgerPartyShortcode: controller.ledgerPartyShortcode,
+            actorLedgerPartyName: controller.ledgerPartyName,
+            actorLedgerPartyKind: controller.ledgerPartyKind,
+            vendorAccountId: locked.vendorAccountId,
+            vendorId: locked.vendorId,
+            predecessorRunId: scope.public.runId,
+            purpose: locked.purpose,
+            trigger: "manual",
+            notes: locked.notes,
+            coordinatorModel: "gpt-6-sol",
+            skillRevision: locked.skillRevision,
+            runtimeRevision: locked.runtimeRevision,
+            dispatchEventId,
+            agentSessionId: importRunAgentIdentity(
+              successorId,
+              flueImportRunPurpose.parse(locked.purpose),
+            ),
+          })
+          .returning({
+            publicId: importRun.shortcode,
+            status: importRun.status,
+          });
+        if (!successor) throw new Error("New import run was not created");
+        if (sourceTargets.length)
+          await tx.insert(importRunTarget).values(
+            sourceTargets.map((target) => ({
+              ...target,
+              runId: successorId,
+              state: "pending" as const,
+            })),
+          );
+        return {
+          publicId: input.runPublicId,
+          status: locked.status,
+          successorRunId: successorId,
+          successorRunPublicId: successor.publicId,
+          successorStatus: successor.status,
+          successorCoordinatorModel: "gpt-6-sol",
+          created: true,
+          dispatchRunId: successorId,
+          dispatchPublicId: successor.publicId,
+          dispatchPurpose: locked.purpose,
+          dispatchCoordinatorModel: "gpt-6-sol",
+          dispatchEventId,
+        };
+      }
       await tx.insert(importRunControlEvent).values({
         runId: scope.public.runId,
         action: input.action,

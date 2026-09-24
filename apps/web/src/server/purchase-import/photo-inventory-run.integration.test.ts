@@ -1,5 +1,6 @@
 import {
   imageId as parseImageId,
+  importRunId as parseImportRunId,
   importRunShortcode,
   parseShortcodeFor,
 } from "@cubby/schemas/identifiers";
@@ -8,15 +9,18 @@ import { withTestDb } from "tooling/test-setup";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { imageProcessingJob } from "~/server/db/image-processing-schema";
-import { image, importRun, importRunTarget } from "~/server/db/schema";
+import { aiUsage, image, importRun, importRunTarget } from "~/server/db/schema";
 import { getDb } from "~/server/repo/database-helpers";
 import { updateImageProcessingSettings } from "~/server/repo/image-processing-maintenance";
+import { getImportRunByShortcode } from "~/server/repo/import-run";
 import { createImageFixture } from "~/server/repo/repo.fixtures";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import { productionPhotoImportCommitPorts } from "~/server/services/photo-import-commit.service";
 
 import {
+  controlImportRun,
   finalizePhotoImportRun,
+  loadImportRunByShortcode,
   startPhotoInventoryCoordinator,
   startPhotoInventoryRun,
 } from "./run-service";
@@ -74,6 +78,85 @@ describe("photo import finalize", () => {
         actorUserId: ctx.actor.userId,
       }),
     ).rejects.toThrow("Upload and finalize photos");
+  });
+
+  it("starts a fresh run with the same photo inputs and independent pending targets", async () => {
+    const original = await startRun();
+    const photo = await createImageFixture(ctx.db, "replay-input", {
+      status: "UPLOADED",
+      sha256: "e".repeat(64),
+    });
+    await getDb(ctx.db)
+      .insert(importRunTarget)
+      .values({
+        runId: original.id,
+        imageId: parseImageId.parse(photo.id),
+        position: 0,
+        state: "completed",
+        targetFingerprint: "e".repeat(64),
+      });
+    await getDb(ctx.db)
+      .update(importRun)
+      .set({
+        status: "completed",
+        startedAt: new Date("2026-09-20T08:00:00.000Z"),
+        endedAt: new Date("2026-09-20T14:38:55.500Z"),
+      })
+      .where(eq(importRun.id, original.id));
+    expect(
+      (await getImportRunByShortcode(ctx.db, original.publicId))?.wallTime,
+    ).toBe("6h 39m");
+    await getDb(ctx.db).insert(aiUsage).values({
+      runId: original.id,
+      feature: "purchase_import_agent",
+      provider: "fixture",
+      model: "fixture-model",
+      operation: "flue.photo_inventory",
+      durationMs: 3_200,
+    });
+    expect(
+      (await loadImportRunByShortcode(ctx.db, ctx.actor, original.publicId))
+        .agentModelMs,
+    ).toBe(3_200);
+
+    const restarted = await controlImportRun(ctx.db, ctx.actor, {
+      runPublicId: original.publicId,
+      action: "restart",
+    });
+    expect(restarted).toMatchObject({
+      created: true,
+      dispatchPurpose: "photo_inventory",
+    });
+    if (!("successorRunId" in restarted)) throw new Error("Missing new run");
+    const [newRun] = await getDb(ctx.db)
+      .select({
+        predecessorRunId: importRun.predecessorRunId,
+        dispatchEventId: importRun.dispatchEventId,
+      })
+      .from(importRun)
+      .where(
+        eq(importRun.id, parseImportRunId.parse(restarted.successorRunId)),
+      );
+    expect(newRun?.predecessorRunId).toBe(original.id);
+    expect(newRun?.dispatchEventId).toBeTruthy();
+    const targets = await getDb(ctx.db)
+      .select({
+        runId: importRunTarget.runId,
+        imageId: importRunTarget.imageId,
+        state: importRunTarget.state,
+      })
+      .from(importRunTarget)
+      .where(eq(importRunTarget.imageId, parseImageId.parse(photo.id)));
+    expect(targets).toEqual(
+      expect.arrayContaining([
+        { runId: original.id, imageId: photo.id, state: "completed" },
+        {
+          runId: restarted.successorRunId,
+          imageId: photo.id,
+          state: "pending",
+        },
+      ]),
+    );
   });
 
   it("finalizes a staged image: creates a target, activates it, and schedules processing", async () => {

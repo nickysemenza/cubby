@@ -8,6 +8,7 @@ import { describe, expect, it } from "vitest";
 import {
   image,
   imageProcessingJob,
+  imageProcessingAttempt,
   importRun,
   importRunTarget,
   inventoryEntry,
@@ -34,6 +35,7 @@ import {
   updatePhotoGroupProductDraft,
   discardPhotoGroupProposal,
   listPhotoGroupProposals,
+  listPhotoRunImages,
   proposePhotoGroups,
 } from "./proposals";
 import { commitPhotoGroup } from "./writer";
@@ -374,7 +376,7 @@ describe("photo group proposals", () => {
   it("waits for current cloud descriptions but lets device cutout work continue", async () => {
     const { run, codes } = await seedRun(1);
     const [source] = await getDb(ctx.db)
-      .select({ id: image.id, sha256: image.sha256 })
+      .select({ id: image.id })
       .from(image)
       .where(eq(image.shortcode, codes[0]!));
     if (!source) throw new Error("fixture: image not found");
@@ -428,6 +430,52 @@ describe("photo group proposals", () => {
     );
     expect(approved.results).toEqual([
       { groupKey: "sweater", outcome: "committed" },
+    ]);
+  });
+
+  it("reports description attempt time separately from queue time", async () => {
+    const { run, codes } = await seedRun(1);
+    const [source] = await getDb(ctx.db)
+      .select({ id: image.id })
+      .from(image)
+      .where(eq(image.shortcode, codes[0]!));
+    if (!source) throw new Error("fixture: image not found");
+    const contentHash = "e".repeat(64);
+    await getDb(ctx.db)
+      .update(image)
+      .set({ sha256: contentHash })
+      .where(eq(image.id, source.id));
+    const dispatchedAt = new Date("2026-09-20T08:00:00.000Z");
+    const completedAt = new Date("2026-09-20T14:38:55.500Z");
+    const [job] = await getDb(ctx.db)
+      .insert(imageProcessingJob)
+      .values({
+        imageId: parseEntityId("image", source.id),
+        kind: "describe_image",
+        state: "ready",
+        sourceContentHash: contentHash,
+        processorRevision: 1,
+        dispatchedAt,
+        completedAt,
+      })
+      .returning({ id: imageProcessingJob.id });
+    await getDb(ctx.db)
+      .insert(imageProcessingAttempt)
+      .values({
+        id: crypto.randomUUID(),
+        jobId: job!.id,
+        number: 1,
+        state: "ready",
+        startedAt: new Date("2026-09-20T14:38:51.500Z"),
+        completedAt,
+      });
+
+    expect(await listPhotoRunImages(ctx.db, run.shortcode)).toEqual([
+      expect.objectContaining({
+        id: codes[0],
+        describeAttemptMs: 4_000,
+        describeWaitingMs: 23_931_500,
+      }),
     ]);
   });
 

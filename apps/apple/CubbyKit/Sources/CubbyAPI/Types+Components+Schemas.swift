@@ -28163,6 +28163,10 @@ extension Components {
             public var describeStartedAt: Foundation.Date?
             /// - Remark: Generated from `#/components/schemas/PhotoRunImage/describeCompletedAt`.
             public var describeCompletedAt: Foundation.Date?
+            /// - Remark: Generated from `#/components/schemas/PhotoRunImage/describeAttemptMs`.
+            public var describeAttemptMs: Swift.Double?
+            /// - Remark: Generated from `#/components/schemas/PhotoRunImage/describeWaitingMs`.
+            public var describeWaitingMs: Swift.Double?
             /// - Remark: Generated from `#/components/schemas/PhotoRunImage/localAnalysisReady`.
             public var localAnalysisReady: Swift.Bool
             /// - Remark: Generated from `#/components/schemas/PhotoRunImage/cutoutReason`.
@@ -28185,6 +28189,8 @@ extension Components {
             ///   - describe:
             ///   - describeStartedAt:
             ///   - describeCompletedAt:
+            ///   - describeAttemptMs:
+            ///   - describeWaitingMs:
             ///   - localAnalysisReady:
             ///   - cutoutReason:
             ///   - describeReason:
@@ -28200,6 +28206,8 @@ extension Components {
                 describe: Components.Schemas.ImageProcessingJobState? = nil,
                 describeStartedAt: Foundation.Date? = nil,
                 describeCompletedAt: Foundation.Date? = nil,
+                describeAttemptMs: Swift.Double? = nil,
+                describeWaitingMs: Swift.Double? = nil,
                 localAnalysisReady: Swift.Bool,
                 cutoutReason: Swift.String? = nil,
                 describeReason: Swift.String? = nil,
@@ -28215,6 +28223,8 @@ extension Components {
                 self.describe = describe
                 self.describeStartedAt = describeStartedAt
                 self.describeCompletedAt = describeCompletedAt
+                self.describeAttemptMs = describeAttemptMs
+                self.describeWaitingMs = describeWaitingMs
                 self.localAnalysisReady = localAnalysisReady
                 self.cutoutReason = cutoutReason
                 self.describeReason = describeReason
@@ -28231,6 +28241,8 @@ extension Components {
                 case describe
                 case describeStartedAt
                 case describeCompletedAt
+                case describeAttemptMs
+                case describeWaitingMs
                 case localAnalysisReady
                 case cutoutReason
                 case describeReason

@@ -59,6 +59,7 @@ import {
   aiAnalysis,
   image,
   imageProcessingJob,
+  imageProcessingAttempt,
   importRun,
   importRunTarget,
   ledgerParty,
@@ -1036,11 +1037,36 @@ export async function discardPhotoGroupProposal(
 }
 
 function descriptionJobTiming(
-  job: { dispatchedAt: Date | null; completedAt: Date | null } | undefined,
+  job:
+    | { id: string; dispatchedAt: Date | null; completedAt: Date | null }
+    | undefined,
+  attempts: readonly {
+    jobId: string;
+    startedAt: Date;
+    completedAt: Date | null;
+  }[],
 ) {
+  const completedAttempts = attempts.filter(
+    (attempt) => attempt.jobId === job?.id && attempt.completedAt,
+  );
+  const attemptMs = completedAttempts.reduce(
+    (total, attempt) =>
+      total +
+      Math.max(0, attempt.completedAt!.getTime() - attempt.startedAt.getTime()),
+    0,
+  );
+  const elapsedMs =
+    job?.dispatchedAt && job.completedAt
+      ? Math.max(0, job.completedAt.getTime() - job.dispatchedAt.getTime())
+      : null;
   return {
     describeStartedAt: job?.dispatchedAt?.toISOString() ?? null,
     describeCompletedAt: job?.completedAt?.toISOString() ?? null,
+    describeAttemptMs: completedAttempts.length ? attemptMs : null,
+    describeWaitingMs:
+      elapsedMs !== null && completedAttempts.length
+        ? Math.max(0, elapsedMs - attemptMs)
+        : null,
   };
 }
 
@@ -1070,6 +1096,7 @@ export async function listPhotoRunImages(
     loadImageAnalysisSummaries(db, shortcodes),
     getDb(db)
       .select({
+        id: imageProcessingJob.id,
         imageId: imageProcessingJob.imageId,
         kind: imageProcessingJob.kind,
         state: imageProcessingJob.state,
@@ -1101,6 +1128,19 @@ export async function listPhotoRunImages(
         ),
       ),
   ]);
+  const descriptionJobIds = jobs
+    .filter((job) => job.kind === "describe_image")
+    .map((job) => job.id);
+  const descriptionAttempts = descriptionJobIds.length
+    ? await getDb(db)
+        .select({
+          jobId: imageProcessingAttempt.jobId,
+          startedAt: imageProcessingAttempt.startedAt,
+          completedAt: imageProcessingAttempt.completedAt,
+        })
+        .from(imageProcessingAttempt)
+        .where(inArray(imageProcessingAttempt.jobId, descriptionJobIds))
+    : [];
   const locallyAnalyzed = new Set(localAnalyses.map((entry) => entry.imageId));
   const hashById = new Map(rows.map((row) => [row.imageId, row.sha256]));
   // Newest processor revision first: the first current-source job per
@@ -1125,7 +1165,7 @@ export async function listPhotoRunImages(
       cutoutUrl: rendition.transparent,
       cutout: cutout?.state ?? null,
       describe: describe?.state ?? null,
-      ...descriptionJobTiming(describe),
+      ...descriptionJobTiming(describe, descriptionAttempts),
       localAnalysisReady: locallyAnalyzed.has(row.imageId),
       cutoutReason:
         cutout && (cutout.state === "skipped" || cutout.state === "failed")
