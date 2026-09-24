@@ -513,6 +513,7 @@ export const mealFoodEntry = pgTable(
 
 export {
   entityIdentity,
+  entityIdentityRelations,
   installEntityIdentityTriggers,
 } from "./entity-identity-schema";
 export { productCategory } from "./product-category-schema";
@@ -3611,6 +3612,10 @@ export const auditLog = pgTable(
 );
 
 export const auditLogRelations = relations(auditLog, ({ one }) => ({
+  identity: one(entityIdentity, {
+    fields: [auditLog.entityId],
+    references: [entityIdentity.id],
+  }),
   user: one(user, {
     fields: [auditLog.userId],
     references: [user.id],
