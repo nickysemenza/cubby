@@ -33,6 +33,38 @@ const scaledRecipeTotals = (
   return scaleTotals(totals, scale);
 };
 
+type PlannedRecipeForTotals = {
+  deletedAt: Date | null;
+  scale: number;
+  recipe: {
+    deletedAt: Date | null;
+    totals: StoredRecipeTotals | null;
+    totalsComputedAt: Date | null;
+  };
+};
+
+/** Soft-deleted associations and Recipes never contribute to Meal totals. */
+const livePlannedRecipes = <T extends PlannedRecipeForTotals>(
+  recipes: readonly T[],
+): T[] =>
+  recipes.filter(
+    (entry) => entry.deletedAt === null && entry.recipe.deletedAt === null,
+  );
+
+/** Compact Home totals use the same live-recipe scaling as the full projection. */
+export const rollupMealTotals = (
+  recipes: readonly PlannedRecipeForTotals[],
+): NutritionTotals =>
+  aggregateTotals(
+    livePlannedRecipes(recipes).map((entry) =>
+      scaledRecipeTotals(
+        entry.recipe.totals,
+        entry.recipe.totalsComputedAt,
+        entry.scale,
+      ),
+    ),
+  );
+
 /** Shape of a meal row loaded with `relations.meal.full`. */
 type MealRow = {
   id: MealId;
@@ -73,11 +105,10 @@ export const dbMealToAPI = (
   row: MealRow,
   dataQuality: DataQuality,
 ): MealOut => {
-  const recipes: MealRecipeOut[] = row.recipes
+  const recipes: MealRecipeOut[] = livePlannedRecipes(row.recipes)
     // `relations.meal.full.recipes` already filters soft-deleted occurrences
     // (`where: notDeleted(mealRecipe)`); the to-one `recipe` join can't be
     // filtered in `with`, so `mr.recipe.deletedAt` is the backstop here.
-    .filter((mr) => mr.deletedAt === null && mr.recipe.deletedAt === null)
     .map((mr) => ({
       id: mr.id,
       mealId: parseShortcodeFor("meal", row.shortcode),
