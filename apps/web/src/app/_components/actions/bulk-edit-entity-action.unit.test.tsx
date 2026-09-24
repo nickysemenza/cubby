@@ -82,14 +82,14 @@ describe("BulkEditDialogBody", () => {
     {
       entity: "planting" as const,
       key: "finishedOn",
-      label: "Finished",
+      label: "Finished on",
       action: "Clear",
       item: { id: "PLT-ABCD", name: "Seedlings" },
     },
     {
       entity: "location" as const,
       key: "parentId",
-      label: "Parent Location",
+      label: "Parent",
       action: "Clear",
       item: { id: "LOC-ABCD", name: "Storage bin" },
     },
@@ -287,16 +287,14 @@ describe("BulkEditDialogBody", () => {
     // The reference field's search-backed picker is present (the injected
     // fake `searchProviderFor` above proves this is the same search seam
     // `EntityIntentFields` wires reference fields through, not a plain select).
-    const picker = screen.getByRole("combobox", { name: "Parent Location" });
+    const picker = screen.getByRole("combobox", { name: "Parent" });
     fireEvent.keyDown(picker, { key: "ArrowDown" });
     fireEvent.click(screen.getByRole("option", { name: "Garage" }));
 
     // Clear only appears once a value is selected — matching
     // `moveToProject`'s old "Clear project" affordance, now generic.
     fireEvent.keyDown(picker, { key: "ArrowDown" });
-    fireEvent.click(
-      screen.getByRole("button", { name: "Clear Parent Location" }),
-    );
+    fireEvent.click(screen.getByRole("button", { name: "Clear Parent" }));
 
     fireEvent.click(screen.getByRole("button", { name: "Update" }));
 
@@ -336,7 +334,7 @@ describe("BulkEditDialogBody", () => {
       wrapper: harness.wrapper,
     });
 
-    const checkbox = screen.getByRole("checkbox", { name: "Stock tracking" });
+    const checkbox = screen.getByRole("checkbox", { name: "Stock tracked" });
     fireEvent.click(checkbox);
     expect(screen.getByRole("button", { name: "Update" })).toBeEnabled();
 

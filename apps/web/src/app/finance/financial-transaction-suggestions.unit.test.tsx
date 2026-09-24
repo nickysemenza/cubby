@@ -129,7 +129,7 @@ describe("Financial Transaction Vendor suggestions", () => {
       vendorId: undefined,
     });
     expect(entityListHiddenColumns("financialTransaction")).toMatchObject({
-      possibleVendor: false,
+      vendorInference: false,
     });
   });
 });
