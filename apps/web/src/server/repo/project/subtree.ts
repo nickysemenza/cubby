@@ -10,7 +10,7 @@
  * single query, single-user scale — build the parent→children map once,
  * compute the page's descendant id set in TS, then fetch OWN rollups (the one
  * relatively expensive aggregate) only for the page ids + their descendants
- * via the existing batched `projectRollups`. Never one query per project.
+ * via the shared batched project aggregates. Never one query per project.
  *
  * That whole sequence is {@link loadProjectSubtreeRollups} — call it rather
  * than re-assembling the four steps by hand (it was copy-pasted across five
@@ -32,7 +32,10 @@ import type { Database } from "~/server/db";
 import { project } from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
 
-import { projectContentDates, projectRollups } from "./analytics";
+import {
+  projectContentDates,
+  projectRollupsAndContentDates,
+} from "./analytics";
 import {
   EMPTY_PROJECT_CONTENT_DATES,
   EMPTY_PROJECT_OWN_ROLLUP,
@@ -145,8 +148,8 @@ export function collectDescendantIds(
  * Pure and memoized (each id's subtree computed once regardless of how many
  * ancestors read it), depth-capped like `collectDescendantIds`. `ownRollups`
  * only needs to cover the ids the caller actually fetched (typically a
- * page's projects + their descendants, via `projectRollups`) — ids outside
- * that set fall back to a zero rollup, which is harmless since callers only
+ * page's projects + their descendants) — ids outside that set fall back to a
+ * zero rollup, which is harmless since callers only
  * read the map entries for ids whose full descendant set was included in the
  * `ownRollups` fetch.
  */
@@ -370,7 +373,7 @@ export async function loadProjectDateWindows(
 /**
  * The whole load pattern in one call: tree → descendant ids → batched OWN
  * rollups + content dates → subtree aggregation. Four queries total (one for
- * the tree, two inside `projectRollups`, one for `projectContentDates`),
+ * the tree, one shared expense allocation aggregate, and two task aggregates),
  * regardless of how many projects are involved.
  *
  * `ids` scopes the (relatively expensive) OWN-rollup fetch to those projects
@@ -402,14 +405,10 @@ export async function loadProjectSubtreeRollups(
           ),
         ]);
 
-  const [ownRollups, contentDates] = await Promise.all([
-    projectRollups(db, rollupIds),
-    // Unscoped, unlike the rollups: `aggregateSubtreeDates` emits a window for
-    // every row in `allRows`, so scoping the content scan to `rollupIds` would
-    // leave the rest of the tree looking undated. It is one grouped query
-    // either way — the date columns are indexed and the tables are small.
-    projectContentDates(db),
-  ]);
+  const { ownRollups, contentDates } = await projectRollupsAndContentDates(
+    db,
+    rollupIds,
+  );
   return {
     ...loaded,
     ownRollups,

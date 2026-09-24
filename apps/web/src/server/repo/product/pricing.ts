@@ -5,7 +5,7 @@ import {
 } from "@cubby/schemas/identifiers";
 import type { ProductTopLevelOut } from "@cubby/schemas/product";
 import type { AnyColumn } from "drizzle-orm";
-import { and, inArray, isNotNull, sql } from "drizzle-orm";
+import { and, inArray, isNotNull, sql, type SQL } from "drizzle-orm";
 import { z } from "zod";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
@@ -327,6 +327,39 @@ const derivedProductPriceSql = (productAlias = '"product"') =>
 
 export const effectiveProductPriceSql = (productAlias = '"product"') =>
   `COALESCE(${productAlias}."price", ${derivedProductPriceSql(productAlias)})`;
+
+/**
+ * The list footer sums the same effective prices as the rows, but projects all
+ * filtered unpriced products in one kit walk. A correlated effective-price
+ * scalar otherwise repeats the recursive walk once per catalog product.
+ */
+const productPriceSumSql = (whereClause: SQL | undefined): SQL<number> => {
+  const condition = whereClause ?? sql`TRUE`;
+  return sql<number>`${kitAncestorCteSql(sql`
+    SELECT "Product"."id", "Product"."id", 1::numeric, 1::numeric, 0
+      FROM "Product"
+     WHERE ${condition} AND "Product"."price" IS NULL
+  `)}, derived AS (
+    SELECT ka.target, ${sql.raw(PROJECTED_DERIVED_PRICE)} AS price
+      ${sql.raw(PRICING_PROJECTION_FROM)}
+     GROUP BY ka.target
+  )
+  SELECT (COALESCE((
+    SELECT sum("Product"."price"::numeric) FROM "Product"
+     WHERE ${condition} AND "Product"."price" IS NOT NULL
+  ), 0) + COALESCE((SELECT sum(price::numeric) FROM derived), 0))::double precision AS "priceSum"`;
+};
+
+export const loadProductPriceSum = async (
+  db: Database | DrizzleTransaction,
+  whereClause: SQL | undefined,
+): Promise<number> => {
+  const rows = projectionRows(
+    await unwrapDb(db).execute(productPriceSumSql(whereClause)),
+    z.object({ priceSum: z.number() }),
+  );
+  return rows[0]?.priceSum ?? 0;
+};
 
 /**
  * The same derived price as a Drizzle fragment, for the Product list's shared

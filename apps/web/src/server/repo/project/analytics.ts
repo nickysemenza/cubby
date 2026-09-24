@@ -32,65 +32,62 @@ import {
   type ProjectOwnRollup,
 } from "./helpers";
 
-/**
- * SUM/COUNT rollups over live expenses and tasks, per project — this
- * project's OWN aggregate only (never recursive; see repo/project/subtree.ts
- * for the subtree total built on top of this).
- *
- * `spent` sums ALL live expenses including `future` (not-yet-made) ones —
- * this matches the retired Notion rollup's semantics (a planned spend still
- * counts toward the running total against the estimate). See
- * packages/schemas/src/project.ts's `projectRollup` doc comment.
- */
-export async function projectRollups(
-  db: Database,
-  projectIds: ProjectId[],
-): Promise<Map<ProjectId, ProjectOwnRollup>> {
-  const out = new Map<ProjectId, ProjectOwnRollup>();
-  if (projectIds.length === 0) return out;
-  for (const id of projectIds) out.set(id, { ...EMPTY_PROJECT_OWN_ROLLUP });
+type ProjectExpenseStatsRow = {
+  projectId: ProjectId | null;
+  spent: number;
+  actualSpent: number;
+  committedSpent: number;
+  contributions: number;
+  expenseCount: number;
+  contentStart: string | null;
+  contentEnd: string | null;
+};
 
-  const [expenseRows, taskRows] = await Promise.all([
-    getDb(db)
-      .execute<{
-        projectId: ProjectId | null;
-        spent: number;
-        actualSpent: number;
-        committedSpent: number;
-        contributions: number;
-        expenseCount: number;
-      }>(sql`
+const projectExpenseStats = async (
+  db: Database,
+): Promise<ProjectExpenseStatsRow[]> =>
+  getDb(db)
+    .execute<ProjectExpenseStatsRow>(sql`
       SELECT allocation."projectId",
         (coalesce(sum(allocation."attributedCents"::bigint), 0) / 100.0)::double precision AS "spent",
         (coalesce(sum(allocation."attributedCents"::bigint) filter (where e."future" = false and e."cost" >= 0), 0) / 100.0)::double precision AS "actualSpent",
         (coalesce(sum(allocation."attributedCents"::bigint) filter (where e."future" = true), 0) / 100.0)::double precision AS "committedSpent",
         (coalesce(sum(-allocation."attributedCents"::bigint) filter (where e."future" = false and e."cost" < 0), 0) / 100.0)::double precision AS "contributions",
-        count(distinct allocation."expenseId")::int AS "expenseCount"
+        count(distinct allocation."expenseId")::int AS "expenseCount",
+        min(e."date") AS "contentStart", max(e."date") AS "contentEnd"
       FROM (${expenseProjectAllocationSql()}) allocation
       JOIN "Expense" e ON e."id" = allocation."expenseId"
-      WHERE allocation."projectId" = ANY(${uuidArrayParam(projectIds)})
       GROUP BY allocation."projectId"
     `)
-      .then((result) => result.rows),
-    getDb(db)
-      .select({
-        projectId: effectiveTaskProjectSql("Task"),
-        taskCount: sql<number>`count(*)::int`,
-        doneTaskCount: sql<number>`count(*) filter (where ${task.status} = ${"done"})::int`,
-      })
-      .from(task)
-      .where(
-        and(
-          sql`${effectiveTaskProjectSql("Task")} = ANY(${uuidArrayParam(projectIds)})`,
-          notDeleted(task),
-        ),
-      )
-      .groupBy(effectiveTaskProjectSql("Task")),
-  ]);
+    .then((result) => result.rows);
 
+const projectTaskRollupRows = (db: Database, projectIds: ProjectId[]) =>
+  getDb(db)
+    .select({
+      projectId: effectiveTaskProjectSql("Task"),
+      taskCount: sql<number>`count(*)::int`,
+      doneTaskCount: sql<number>`count(*) filter (where ${task.status} = ${"done"})::int`,
+    })
+    .from(task)
+    .where(
+      and(
+        sql`${effectiveTaskProjectSql("Task")} = ANY(${uuidArrayParam(projectIds)})`,
+        notDeleted(task),
+      ),
+    )
+    .groupBy(effectiveTaskProjectSql("Task"));
+
+const mergeProjectOwnRollups = (
+  projectIds: ProjectId[],
+  expenseRows: ProjectExpenseStatsRow[],
+  taskRows: Awaited<ReturnType<typeof projectTaskRollupRows>>,
+): Map<ProjectId, ProjectOwnRollup> => {
+  const out = new Map<ProjectId, ProjectOwnRollup>();
+  for (const id of projectIds) out.set(id, { ...EMPTY_PROJECT_OWN_ROLLUP });
+  const selected = new Set(projectIds);
   for (const row of expenseRows) {
-    if (!row.projectId) continue;
-    const existing = out.get(row.projectId) ?? { ...EMPTY_PROJECT_OWN_ROLLUP };
+    if (!row.projectId || !selected.has(row.projectId)) continue;
+    const existing = out.get(row.projectId)!;
     out.set(row.projectId, {
       ...existing,
       spent: row.spent,
@@ -110,6 +107,68 @@ export async function projectRollups(
     });
   }
   return out;
+};
+
+const projectTaskDateRows = (db: Database, projectIds?: ProjectId[]) => {
+  const projectId = effectiveTaskProjectSql();
+  return getDb(db)
+    .select({
+      projectId,
+      contentStart: sql<string | null>`min(${task.dueDate})`,
+      contentEnd: sql<string | null>`max(${effectiveTaskDueDateSql()})`,
+    })
+    .from(task)
+    .where(
+      and(
+        projectIds ? inArray(projectId, projectIds) : isNotNull(projectId),
+        notDeleted(task),
+      ),
+    )
+    .groupBy(projectId);
+};
+
+const mergeProjectContentDates = (
+  taskRows: Awaited<ReturnType<typeof projectTaskDateRows>>,
+  expenseRows: Array<{
+    projectId: ProjectId | null;
+    contentStart: string | null;
+    contentEnd: string | null;
+  }>,
+): Map<ProjectId, ProjectContentDates> => {
+  const out = new Map<ProjectId, ProjectContentDates>();
+  for (const row of [...taskRows, ...expenseRows]) {
+    if (!row.projectId) continue;
+    const existing = out.get(row.projectId) ?? EMPTY_PROJECT_CONTENT_DATES;
+    out.set(row.projectId, {
+      contentStart: minPlainDate(existing.contentStart, row.contentStart),
+      contentEnd: maxPlainDate(existing.contentEnd, row.contentEnd),
+    });
+  }
+  return out;
+};
+
+/**
+ * Share one allocation pass when a subtree reader needs money and dates.
+ * `spent` includes future expenses, matching the project's own rollup contract.
+ */
+export async function projectRollupsAndContentDates(
+  db: Database,
+  rollupIds: ProjectId[],
+): Promise<{
+  ownRollups: Map<ProjectId, ProjectOwnRollup>;
+  contentDates: Map<ProjectId, ProjectContentDates>;
+}> {
+  const [expenseRows, taskRows, taskDateRows] = await Promise.all([
+    projectExpenseStats(db),
+    rollupIds.length > 0
+      ? projectTaskRollupRows(db, rollupIds)
+      : Promise.resolve([]),
+    projectTaskDateRows(db),
+  ]);
+  return {
+    ownRollups: mergeProjectOwnRollups(rollupIds, expenseRows, taskRows),
+    contentDates: mergeProjectContentDates(taskDateRows, expenseRows),
+  };
 }
 
 /**
@@ -143,15 +202,7 @@ export async function projectContentDates(
     projectIds ? inArray(column, projectIds) : isNotNull(column);
 
   const [taskRows, expenseRows] = await Promise.all([
-    getDb(db)
-      .select({
-        projectId: effectiveTaskProjectSql(),
-        contentStart: sql<string | null>`min(${task.dueDate})`,
-        contentEnd: sql<string | null>`max(${effectiveTaskDueDateSql()})`,
-      })
-      .from(task)
-      .where(and(scope(effectiveTaskProjectSql()), notDeleted(task)))
-      .groupBy(effectiveTaskProjectSql()),
+    projectTaskDateRows(db, projectIds),
     getDb(db)
       .execute<{
         projectId: ProjectId;
@@ -169,15 +220,7 @@ export async function projectContentDates(
       .then((result) => result.rows),
   ]);
 
-  for (const row of [...taskRows, ...expenseRows]) {
-    if (!row.projectId) continue;
-    const existing = out.get(row.projectId) ?? EMPTY_PROJECT_CONTENT_DATES;
-    out.set(row.projectId, {
-      contentStart: minPlainDate(existing.contentStart, row.contentStart),
-      contentEnd: maxPlainDate(existing.contentEnd, row.contentEnd),
-    });
-  }
-  return out;
+  return mergeProjectContentDates(taskRows, expenseRows);
 }
 
 /**
