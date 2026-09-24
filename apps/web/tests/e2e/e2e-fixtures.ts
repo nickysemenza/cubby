@@ -1,4 +1,5 @@
 import "./build-constants";
+import { readFileSync } from "node:fs";
 
 import { taxonomyShortcode } from "../../tooling/product-category-fixtures";
 
@@ -42,7 +43,6 @@ import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import { requireActor } from "~/server/request-context";
 import { createTestRequestContext } from "~/server/testing/request-context";
 import { householdDaysFromNow, householdLocalDate } from "~/lib/household-date";
-import { proposePhotoGroups } from "~/server/photo-import-run/proposals";
 import { startPhotoInventoryRun } from "~/server/purchase-import/run-service";
 import {
   buildKernelContext,
@@ -950,15 +950,19 @@ export async function seedInheritancePrerequisite(page: Page, name: string) {
 
 /**
  * A running photo-inventory ImportRun with three synthetic photos, seeded
- * two proposed groups (a two-photo item/label pair and a single-photo item),
+ * two suggested groups (a two-photo item/label pair and a single-photo item),
  * and the Location the item group's inventory targets. There is no browser
  * flow to create a photo-inventory run with real uploaded photos, so this
  * mirrors `proposals.integration.test.ts`'s `seedRun`: an ImportRunTarget row
  * is inserted directly per image rather than through the byte-verifying
- * `finalizePhotoImportRun` upload path, since `proposePhotoGroups` only
- * requires each image to be a still-`pending` target of the run.
+ * `finalizePhotoImportRun` upload path. The browser test submits proposals
+ * through the same authenticated review route an agent can use.
  */
-export async function seedPhotoGroupReviewRun(page: Page, name: string) {
+export async function seedPhotoGroupReviewRun(
+  page: Page,
+  name: string,
+  objectStorageUrl: string,
+) {
   const db = getFixtureDb();
   const userId = await fixtureUserId(page);
 
@@ -978,22 +982,41 @@ export async function seedPhotoGroupReviewRun(page: Page, name: string) {
   }
 
   const location = await seedLocationPrerequisite(page, `${name} location`);
+  const category = await seedProductCategoryPrerequisite(page, {
+    name: `${name} apparel`,
+  });
 
-  const seedRunImage = async (label: string) => {
+  const seedRunImage = async (label: "shirt" | "label" | "boots") => {
+    const bytes = readFileSync(
+      new URL(`./fixtures/synthetic-wardrobe-${label}.png`, import.meta.url),
+    );
+    const key = `e2e-${name}-${label}-${crypto.randomUUID()}`;
+    const upload = await fetch(
+      `${objectStorageUrl}/e2e-bucket/${encodeURIComponent(key)}`,
+      { method: "PUT", headers: { "Content-Type": "image/png" }, body: bytes },
+    );
+    if (!upload.ok)
+      throw new Error(`Synthetic photo upload failed: ${upload.status}`);
     const row = await createUploadedImageRecord(db, {
-      key: `e2e-${name}-${label}-${crypto.randomUUID()}`,
+      key,
       filename: `4K7M-${label}.png`,
       contentType: "image/png",
-      size: 100,
+      size: bytes.length,
+      width: 640,
+      height: 640,
+      detectedContentType: "image/png",
+      renderStatus: "verified",
+      storageStatus: "available",
+      verifiedAt: new Date(),
     });
     return {
       uuid: parseEntityId("image", row.id),
       shortcode: parseShortcodeFor("image", row.shortcode),
     };
   };
-  const itemImage = await seedRunImage("item");
+  const itemImage = await seedRunImage("shirt");
   const labelImage = await seedRunImage("label");
-  const soloImage = await seedRunImage("solo");
+  const soloImage = await seedRunImage("boots");
 
   const run = await startPhotoInventoryRun(db, { actorUserId: userId });
 
@@ -1012,10 +1035,8 @@ export async function seedPhotoGroupReviewRun(page: Page, name: string) {
   const groups: PhotoGroupProposalGroup[] = [
     {
       groupKey: "g1",
-      images: [
-        { id: itemImage.shortcode, purpose: "item" },
-        { id: labelImage.shortcode, purpose: "label" },
-      ],
+      images: [{ id: itemImage.shortcode, purpose: "item" }],
+      skip: [{ id: labelImage.shortcode, reason: "Tag photo needs review" }],
       product: { kind: "create", create: { name: "Gray crew t-shirt — M" } },
       inventory: {
         locationId: parseShortcodeFor("location", location.id),
@@ -1029,11 +1050,11 @@ export async function seedPhotoGroupReviewRun(page: Page, name: string) {
     },
   ];
 
-  await proposePhotoGroups(db, { runId: run.publicId, groups });
-
   return {
     runId: run.publicId,
+    groups,
     location,
+    category,
     itemImage,
     labelImage,
     soloImage,

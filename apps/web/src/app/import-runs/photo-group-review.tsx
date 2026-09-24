@@ -2,6 +2,7 @@ import type {
   ImageShortcode,
   ProductShortcode,
 } from "@cubby/schemas/identifiers";
+import { productCategoryShortcode } from "@cubby/schemas/identifiers";
 import type { ImageProcessingJobState } from "@cubby/schemas/image-processing";
 import {
   photoRunReviewResponse,
@@ -14,6 +15,7 @@ import {
 } from "@cubby/schemas/photo-import-run";
 import { ArrowsMergeIcon } from "@phosphor-icons/react/dist/csr/ArrowsMerge";
 import { CheckIcon } from "@phosphor-icons/react/dist/csr/Check";
+import { CopyIcon } from "@phosphor-icons/react/dist/csr/Copy";
 import { DotsThreeIcon } from "@phosphor-icons/react/dist/csr/DotsThree";
 import { TrashIcon } from "@phosphor-icons/react/dist/csr/Trash";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -21,6 +23,7 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
 import { EntityPicker } from "~/app/_components/combobox/entity-picker";
+import { referenceEntitySearch } from "~/app/_components/combobox/reference-entity-search";
 import { WithEntitySearch } from "~/app/_components/combobox/with-search-hook";
 import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import { showErrorToast } from "~/components/feedback/error-details";
@@ -48,6 +51,7 @@ import {
   TableHeader,
   TableRow,
 } from "~/components/ui/table";
+import { copyText } from "~/lib/clipboard";
 import { readJsonOrThrow } from "~/lib/http-error";
 import {
   IMPORT_RUN_TARGET_STATE_LABEL,
@@ -112,6 +116,7 @@ function usePhotoRunReview(runId: string, runStatus: string) {
 function useReviewAction(runId: string) {
   const queryClient = useQueryClient();
   return useMutation({
+    scope: { id: `photo-run-review-${runId}` },
     mutationFn: (action: ReviewPhotoGroupsAction) => postReview(runId, action),
     onSuccess: (data) => {
       queryClient.setQueryData<PhotoRunReview>(reviewQueryKey(runId), (old) =>
@@ -167,6 +172,14 @@ function useReviewAction(runId: string) {
 type Save = (build: () => ProposalEdit) => void;
 type SaveGroup = (build: () => PhotoGroupProposalGroup) => void;
 type ImagesById = ReadonlyMap<string, PhotoRunImage>;
+const WithProductCategorySearch = referenceEntitySearch("productCategory");
+
+const isStaleGroup = (proposal: PhotoGroupProposal, imagesById: ImagesById) =>
+  proposal.missingImageCount > 0 ||
+  [...proposal.images, ...proposal.skip].some((entry) => {
+    const photo = imagesById.get(entry.id);
+    return photo !== undefined && photo.targetState !== "pending";
+  });
 
 const proposalName = (proposal: PhotoGroupProposal): string =>
   proposal.product.kind === "create"
@@ -221,9 +234,16 @@ function ImageMenu({
         groups: [
           {
             ...input,
-            images: input.images.map((image) =>
-              image.id === imageId ? { ...image, purpose: next } : image,
-            ),
+            images:
+              purpose === null
+                ? [...input.images, { id: imageId, purpose: next }]
+                : input.images.map((image) =>
+                    image.id === imageId ? { ...image, purpose: next } : image,
+                  ),
+            skip:
+              purpose === null
+                ? input.skip?.filter((image) => image.id !== imageId)
+                : input.skip,
           },
         ],
         removeGroupKeys: [],
@@ -245,13 +265,18 @@ function ImageMenu({
         <DotsThreeIcon />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-56">
-        {purpose ? (
+        {groupKey ? (
           <>
             <DropdownMenuItem
               onClick={() => setPurpose(purpose === "item" ? "label" : "item")}
             >
               Mark as {purpose === "item" ? "label" : "item"} photo
             </DropdownMenuItem>
+            {purpose === null ? (
+              <DropdownMenuItem onClick={() => setPurpose("label")}>
+                Mark as label photo
+              </DropdownMenuItem>
+            ) : null}
             <DropdownMenuSeparator />
           </>
         ) : null}
@@ -473,6 +498,40 @@ function ProductPanel({
               })
             }
           />
+          <label className="flex min-w-0 flex-col gap-1 text-xs">
+            <span className="text-muted-foreground">Category</span>
+            <WithProductCategorySearch>
+              {({ items, onSearchChange, isLoading, onOpenChange }) => (
+                <EntityPicker
+                  entity="productCategory"
+                  label="category"
+                  items={items}
+                  value={
+                    items.find(
+                      (item) => item.id === product.create.categoryId,
+                    ) ?? null
+                  }
+                  setValue={(item) =>
+                    saveProduct({
+                      kind: "create",
+                      create: {
+                        ...product.create,
+                        categoryId: item
+                          ? productCategoryShortcode.parse(item.id)
+                          : null,
+                      },
+                    })
+                  }
+                  onSearchChange={onSearchChange}
+                  onOpenChange={onOpenChange}
+                  isLoading={isLoading}
+                  disabled={busy}
+                  placeholder="Choose a category"
+                  clearable
+                />
+              )}
+            </WithProductCategorySearch>
+          </label>
           <Row gap="sm" className="min-w-0">
             <CommitInput
               label="Manufacturer"
@@ -661,31 +720,25 @@ function ProposalCard({
   proposal,
   proposals,
   imagesById,
-  runId,
   busy,
   save,
+  action,
 }: {
   proposal: PhotoGroupProposal;
   proposals: readonly PhotoGroupProposal[];
   imagesById: ImagesById;
-  runId: string;
   busy: boolean;
   save: Save;
+  action: ReturnType<typeof useReviewAction>;
 }) {
-  const action = useReviewAction(runId);
-  const working = busy || action.isPending;
+  const working = busy;
   const mergeTargets = proposals.filter(
     (other) =>
       other.state === "proposed" && other.groupKey !== proposal.groupKey,
   );
   // Photos deleted or settled outside this review (e.g. a direct commit) make
   // the group unapprovable and undiscardable; removing it is the way out.
-  const stale =
-    proposal.missingImageCount > 0 ||
-    [...proposal.images, ...proposal.skip].some((entry) => {
-      const photo = imagesById.get(entry.id);
-      return photo !== undefined && photo.targetState !== "pending";
-    });
+  const stale = isStaleGroup(proposal, imagesById);
   return (
     <Card>
       <CardHeader>
@@ -758,7 +811,7 @@ function ProposalCard({
             <Button
               variant="destructive"
               size="sm"
-              disabled={working}
+              disabled={working || stale}
               onClick={() =>
                 action.mutate({
                   action: "discard",
@@ -773,6 +826,7 @@ function ProposalCard({
               size="sm"
               disabled={
                 working ||
+                stale ||
                 (proposal.product.kind === "existing" &&
                   !proposal.product.existing)
               }
@@ -806,6 +860,12 @@ function ProposalCard({
             {proposal.missingImageCount === 1
               ? "1 photo in this group was deleted."
               : `${proposal.missingImageCount} photos in this group were deleted.`}
+          </StatusText>
+        ) : null}
+        {stale ? (
+          <StatusText as="p" tone="warning" className="mt-3 text-xs">
+            This group includes photos that can no longer be reviewed. Remove
+            the group to continue.
           </StatusText>
         ) : null}
         {proposal.lastError ? (
@@ -1077,6 +1137,9 @@ export function PhotoGroupReview({
     for (const entry of [...proposal.images, ...proposal.skip])
       groupByImage.set(entry.id, proposal.groupKey);
   const busy = action.isPending;
+  const hasStaleGroups = proposed.some((proposal) =>
+    isStaleGroup(proposal, imagesById),
+  );
 
   return (
     <Stack gap="lg">
@@ -1091,7 +1154,7 @@ export function PhotoGroupReview({
               </span>
             </Stack>
             <Button
-              disabled={busy || proposed.length === 0}
+              disabled={busy || proposed.length === 0 || hasStaleGroups}
               onClick={() => action.mutate({ action: "approve" })}
             >
               <CheckIcon />
@@ -1101,11 +1164,41 @@ export function PhotoGroupReview({
         </CardHeader>
         {proposed.length === 0 ? (
           <CardContent>
-            <StatusText tone="muted">
-              {settled.length
-                ? "Every proposed group has been approved or discarded."
-                : "The agent hasn't proposed any groups yet. They appear here as it works through the photos."}
-            </StatusText>
+            {settled.length ? (
+              <StatusText tone="muted">
+                Every proposed group has been approved or discarded.
+              </StatusText>
+            ) : (
+              <Stack gap="sm" className="items-start">
+                <StatusText tone="muted">
+                  Waiting for an agent to propose groups.
+                </StatusText>
+                {images.length ? (
+                  <>
+                    <p className="text-xs text-muted-foreground">
+                      Ask your agent to group the photos in this run. Proposed
+                      items will appear here for you to review before any
+                      products are created.
+                    </p>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={async () => {
+                        if (
+                          await copyText(
+                            `Propose product groups for photo import run ${runId}. Stop before approving; I will review the groups in Cubby.`,
+                          )
+                        )
+                          toast.success("Agent instruction copied");
+                      }}
+                    >
+                      <CopyIcon />
+                      Copy agent instruction
+                    </Button>
+                  </>
+                ) : null}
+              </Stack>
+            )}
           </CardContent>
         ) : null}
       </Card>
@@ -1116,9 +1209,9 @@ export function PhotoGroupReview({
           proposal={proposal}
           proposals={review.proposals}
           imagesById={imagesById}
-          runId={runId}
           busy={busy}
           save={save}
+          action={action}
         />
       ))}
 

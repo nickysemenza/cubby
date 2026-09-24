@@ -2,11 +2,19 @@ import { seedPhotoGroupReviewRun } from "./e2e-fixtures";
 import { gotoAuthenticatedPage } from "./e2e-helpers";
 import { expect, test } from "./e2e-test";
 
+const recording = process.env.CUBBY_PHOTO_REVIEW_VIDEO === "1";
+test.use({ video: recording ? "on" : "off" });
+
 test("reviews, approves, and discards proposed photo groups on the photo-inventory run page", async ({
   page,
+  e2eRuntime,
 }) => {
   const name = `Photo run ${Date.now()}`;
-  const seed = await seedPhotoGroupReviewRun(page, name);
+  const seed = await seedPhotoGroupReviewRun(
+    page,
+    name,
+    e2eRuntime.objectStorageUrl,
+  );
   const g2Name = `${name} solo find`;
 
   await gotoAuthenticatedPage(
@@ -14,6 +22,16 @@ test("reviews, approves, and discards proposed photo groups on the photo-invento
     `/runs/${seed.runId}`,
     page.getByRole("heading", { name: "Proposed items" }),
   );
+
+  await expect(
+    page.getByText("Waiting for an agent to propose groups."),
+  ).toBeVisible();
+  if (recording) await page.waitForTimeout(1_500);
+  const proposed = await page.request.post(
+    `/api/import/runs/${seed.runId}/photo-groups`,
+    { data: { action: "save", groups: seed.groups } },
+  );
+  expect(proposed.ok(), await proposed.text()).toBeTruthy();
 
   // Both proposed groups render, and every seeded photo is assigned to one.
   await expect(
@@ -27,12 +45,50 @@ test("reviews, approves, and discards proposed photo groups on the photo-invento
   });
   await expect(g1Card).toBeVisible();
   await expect(g1Card.getByText("Item", { exact: true })).toBeVisible();
+  await expect(g1Card.getByText("Skipped", { exact: true })).toBeVisible();
+  await g1Card
+    .getByRole("button", { name: `Photo ${seed.labelImage.shortcode} actions` })
+    .click();
+  await page.getByRole("menuitem", { name: "Mark as label photo" }).click();
   await expect(g1Card.getByText("Label", { exact: true })).toBeVisible();
+  await expect
+    .poll(async () =>
+      g1Card
+        .locator("img")
+        .evaluateAll(
+          (images) =>
+            images.filter(
+              (image) =>
+                image instanceof HTMLImageElement &&
+                image.complete &&
+                image.naturalWidth > 0,
+            ).length,
+        ),
+    )
+    .toBe(2);
 
   const g2Card = page.locator('[data-slot="card"]').filter({
     has: page.getByRole("heading", { name: g2Name }),
   });
   await expect(g2Card).toBeVisible();
+  if (recording) await page.waitForTimeout(1_500);
+
+  await g1Card
+    .getByRole("combobox", { name: "category" })
+    .fill(`${name} apparel`);
+  await page.getByRole("option", { name: `${name} apparel` }).click();
+  await expect
+    .poll(async () => {
+      const response = await page.request.get(
+        `/api/import/runs/${seed.runId}/photo-groups`,
+      );
+      const body = await response.json();
+      return body.review.proposals.find(
+        (proposal: { groupKey: string }) => proposal.groupKey === "g1",
+      )?.product.create.categoryId;
+    })
+    .toBe(seed.category.id);
+  if (recording) await page.waitForTimeout(1_500);
 
   // The Photos table lists every seeded image.
   const photosCard = page.locator('[data-slot="card"]').filter({
@@ -42,18 +98,24 @@ test("reviews, approves, and discards proposed photo groups on the photo-invento
     photosCard.getByRole("link", { name: /^Open photo / }),
   ).toHaveCount(3);
 
-  // Approve G1: it moves into the settled table and its Product now exists.
+  // Blurring the edited name and clicking Approve in the same gesture must
+  // save the correction before creating the Product.
+  const correctedName = "Gray crew t-shirt — size M";
+  await g1Card
+    .getByRole("textbox", { name: "New product name" })
+    .fill(correctedName);
   await g1Card.getByRole("button", { name: "Approve", exact: true }).click();
   const settledCard = page.locator('[data-slot="card"]').filter({
     has: page.getByRole("heading", { name: "Settled groups" }),
   });
   await expect(settledCard).toBeVisible();
   await expect(
-    settledCard.getByRole("link", { name: "Gray crew t-shirt — M" }),
+    settledCard.getByRole("link", { name: correctedName }),
   ).toBeVisible();
   await expect(
     settledCard.getByText("Approved", { exact: true }),
   ).toBeVisible();
+  if (recording) await page.waitForTimeout(1_500);
 
   // Discard G2: nothing is left pending and the run completes.
   await g2Card.getByRole("button", { name: "Discard", exact: true }).click();
@@ -70,4 +132,5 @@ test("reviews, approves, and discards proposed photo groups on the photo-invento
   await expect(
     page.getByText("Completed", { exact: true }).first(),
   ).toBeVisible({ timeout: 10_000 });
+  if (recording) await page.waitForTimeout(1_500);
 });

@@ -147,7 +147,7 @@ extension PhotoImportRunFlow: BackgroundActivitySource {
     }
 }
 
-/// One review-free surface for bulk-uploading a photo selection into a photo-inventory import run.
+/// One bulk-upload surface for adding a photo selection to a photo-inventory import run.
 /// Presented like `PhotoDestinationSheet`'s `PhotoSelectionBatch`: the caller builds `flow` once per
 /// batch and owns it, rather than seeding it from this view's own `@State` (apps/apple/AGENTS.md,
 /// "Traps that cost real time" — a re-presented `.sheet(item:)` can otherwise show stale state).
@@ -220,7 +220,7 @@ struct PhotoImportRunSheet: View {
                 Text("New run")
             } footer: {
                 Text(
-                    "\(items.count) photo\(items.count == 1 ? "" : "s") will be added with no further review."
+                    "\(items.count) photo\(items.count == 1 ? "" : "s") will upload to a run. An agent can then propose product groups for you to review and approve in Cubby."
                 )
             }
             if flow.loadingRuns {
@@ -275,6 +275,8 @@ private struct RunningView: View {
     let onResume: () -> Void
     let onDone: (ImportRunShortcode) -> Void
 
+    @Environment(AppModel.self) private var appModel
+
     var body: some View {
         VStack(alignment: .leading, spacing: PorcelainTokens.Space.md) {
             ProgressView(
@@ -303,6 +305,19 @@ private struct RunningView: View {
             EmptyView()
         case .complete:
             if let runID = session.runID {
+                Label("Photos uploaded", systemImage: "checkmark.circle.fill")
+                    .foregroundStyle(PorcelainTokens.positive)
+                Text(
+                    "Ask your agent to propose groups for this run. Review the groups on the web before products are created."
+                )
+                .font(.porcelainBody)
+                Link("Review run on web", destination: appModel.webURL(for: runID))
+                Button("Copy agent instruction") {
+                    Clipboard.copy(
+                        "Propose product groups for photo import run \(runID). Stop before approving; I will review the groups in Cubby."
+                    )
+                }
+                .accessibilityIdentifier("photos.importRun.copyAgentInstruction")
                 Button("Done") { onDone(runID) }
                     .buttonStyle(.borderedProminent)
                     .accessibilityIdentifier("photos.importRun.done")
