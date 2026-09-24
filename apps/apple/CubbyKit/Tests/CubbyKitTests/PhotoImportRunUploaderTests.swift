@@ -121,6 +121,22 @@ private final class RunUploaderScript: @unchecked Sendable {
     }
 }
 
+private actor AnalysisGate {
+    private var open = false
+    private var waiter: CheckedContinuation<Void, Never>?
+
+    func wait() async {
+        if open { return }
+        await withCheckedContinuation { waiter = $0 }
+    }
+
+    func release() {
+        open = true
+        waiter?.resume()
+        waiter = nil
+    }
+}
+
 @Suite("PhotoImportRunUploader", .serialized)
 struct PhotoImportRunUploaderTests {
     private func makeClient() throws -> CubbyClient {
@@ -171,6 +187,38 @@ struct PhotoImportRunUploaderTests {
         #expect(session.phase == .complete)
         #expect(session.runID == "RUN-TEST")
         #expect(script.requests(matching: "/photoImport/createRun").count == 2)
+    }
+
+    @Test @MainActor func sessionCanFinishUploadingWhileAnalysisContinues() async throws {
+        defer { PhotoImportRunUploaderStub.handler.withLock { $0 = nil } }
+        let script = RunUploaderScript()
+        PhotoImportRunUploaderStub.handler.withLock { $0 = script.handler }
+        let gate = AnalysisGate()
+        let session = PhotoImportRunSession(
+            uploader: PhotoImportRunUploader(
+                client: try makeClient(), put: { _, _, _ in },
+                analyze: { input in
+                    await gate.wait()
+                    return fakeAnalysis(for: input.id)
+                }))
+
+        session.start([try photo("slow-analysis")], runID: "RUN-TEST")
+        for _ in 0..<200 {
+            if session.phase == .complete { break }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        #expect(session.phase == .complete)
+        #expect(session.runID == "RUN-TEST")
+        #expect(session.progress.uploaded == 1)
+        #expect(session.progress.analyzed == 0)
+        #expect(script.analysisCallCount(forImageID: "IMG-slow-analysis") == 0)
+
+        await gate.release()
+        for _ in 0..<200 {
+            if script.analysisCallCount(forImageID: "IMG-slow-analysis") == 1 { break }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        #expect(script.analysisCallCount(forImageID: "IMG-slow-analysis") == 1)
     }
 
     /// The server caps `finalize` at 100 images per call; the uploader must chunk the ordered

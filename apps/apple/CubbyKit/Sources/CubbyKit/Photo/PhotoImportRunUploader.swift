@@ -132,6 +132,7 @@ public actor PhotoImportRunUploader {
         _ photos: [PhotoImportRunPhoto],
         runID: ImportRunShortcode? = nil,
         createRun: PhotoImportCreateRunInput? = nil,
+        performLocalAnalysis: Bool = true,
         progress reportProgress: (@Sendable (Progress) -> Void)? = nil
     ) async throws -> ImportRunShortcode {
         self.photos = photos
@@ -140,7 +141,9 @@ public actor PhotoImportRunUploader {
         try Task.checkCancellation()
         try await uploadRemainingChunks(runID: resolvedRunID, report: reportProgress)
         try Task.checkCancellation()
-        await analyzeRemaining(report: reportProgress)
+        if performLocalAnalysis {
+            await analyzeRemaining(report: reportProgress)
+        }
         return resolvedRunID
     }
 
@@ -371,6 +374,9 @@ public final class PhotoImportRunSession {
         if case .failed = phase { return true }
         return false
     }
+    public var canRetryAnalysis: Bool {
+        phase == .complete && task == nil && !progress.failedIDs.isEmpty
+    }
 
     /// Starts (or, called again after `.failed`/`.cancelled` with the same `photos`, resumes) the
     /// upload. A no-op while already running.
@@ -397,15 +403,27 @@ public final class PhotoImportRunSession {
                 let resolved = try await uploader.upload(
                     photos, runID: targetRunID, createRun: createRunInput
                 ) {
-                    [weak self] update in
-                    Task { @MainActor in self?.progress = update }
+                    [weak self, uploader] update in
+                    Task { @MainActor in
+                        guard let self else { return }
+                        self.progress = update
+                        if update.total > 0, update.uploaded == update.total {
+                            self.runID = await uploader.runID
+                            self.phase = .complete
+                        }
+                    }
                 }
                 self.runID = resolved
                 self.progress = await uploader.progress
                 self.phase = .complete
             } catch is CancellationError {
                 self.progress = await uploader.progress
-                self.phase = .cancelled
+                if progress.total > 0, progress.uploaded == progress.total {
+                    self.runID = await uploader.runID
+                    self.phase = .complete
+                } else {
+                    self.phase = .cancelled
+                }
             } catch {
                 self.progress = await uploader.progress
                 self.phase = .failed(Self.message(for: error))

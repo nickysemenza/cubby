@@ -297,6 +297,14 @@ text: none` plus candidate names and passes through as "Deterministic local
 
 ## Requires database changes
 
+- **Persist per-photo device analysis work.** `AiAnalysis` records a successful
+  Vision submission but cannot distinguish queued, running, paused, or failed
+  work before submission. Give each finalized photo a durable device-work
+  record and an authenticated, idempotent status update from
+  `PhotoImportRunUploader`; reconcile success with the existing analysis row.
+  The photo-run page should read that record so closing the phone does not
+  leave an ambiguous "waiting" state, and retry can target failed photos.
+
 - **Carry the member through queued AI work.** Search-query embeddings,
   image-processing dispatch, location AI refresh and inbound purchase-mail
   classification run under `systemActor()` because no actor reaches them

@@ -830,10 +830,13 @@ async function runHeadlessPhotoScenario(
             )
             .toBe(expectedPhotos);
         }
-        await expect(
-          page.getByRole("button", { name: "Approve all (2)" }),
-        ).toBeEnabled();
-        await page.getByRole("button", { name: "Approve all (2)" }).click();
+        const approveAll = page.getByRole("button", {
+          name: "Approve all (2)",
+        });
+        await expect(approveAll).toBeDisabled();
+        await exercisePhotoProcessingJobs(imageIDs);
+        await expect(approveAll).toBeEnabled({ timeout: 15_000 });
+        await approveAll.click();
         await expect(
           page.getByText("Completed", { exact: true }).first(),
         ).toBeVisible();
@@ -893,9 +896,8 @@ async function runHeadlessPhotoScenario(
     } finally {
       await pool.end();
     }
-    await exercisePhotoProcessingJobs(imageIDs);
     console.log(
-      `[${lane}] Photo stages: native upload and processing ${(nativeReady - scenarioStarted).toFixed(0)}ms; MCP proposal ${(proposedAt - nativeReady).toFixed(0)}ms; browser review ${(reviewedAt - proposedAt).toFixed(0)}ms; final checks and image jobs ${(performance.now() - reviewedAt).toFixed(0)}ms`,
+      `[${lane}] Photo stages: native upload ${(nativeReady - scenarioStarted).toFixed(0)}ms; MCP proposal ${(proposedAt - nativeReady).toFixed(0)}ms; processing and browser review ${(reviewedAt - proposedAt).toFixed(0)}ms; final checks ${(performance.now() - reviewedAt).toFixed(0)}ms`,
     );
     console.log(`[${lane}] Proposal submission and reviewer approval verified`);
   } finally {

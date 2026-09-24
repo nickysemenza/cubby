@@ -16,8 +16,13 @@ import {
 } from "@cubby/schemas/photo-import-run";
 import { ArrowsMergeIcon } from "@phosphor-icons/react/dist/csr/ArrowsMerge";
 import { CheckIcon } from "@phosphor-icons/react/dist/csr/Check";
+import { CheckCircleIcon } from "@phosphor-icons/react/dist/csr/CheckCircle";
+import { CircleNotchIcon } from "@phosphor-icons/react/dist/csr/CircleNotch";
+import { ClockIcon } from "@phosphor-icons/react/dist/csr/Clock";
 import { DotsThreeIcon } from "@phosphor-icons/react/dist/csr/DotsThree";
+import { MinusCircleIcon } from "@phosphor-icons/react/dist/csr/MinusCircle";
 import { TrashIcon } from "@phosphor-icons/react/dist/csr/Trash";
+import { WarningCircleIcon } from "@phosphor-icons/react/dist/csr/WarningCircle";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
@@ -109,7 +114,16 @@ export function usePhotoRunReview(runId: string, runStatus: string) {
   return useQuery({
     queryKey: reviewQueryKey(runId),
     queryFn: () => fetchReview(runId),
-    refetchInterval: LIVE_RUN_STATUSES.has(runStatus) ? 3_000 : false,
+    refetchInterval: (query) =>
+      LIVE_RUN_STATUSES.has(runStatus)
+        ? 3_000
+        : query.state.data?.images.some((image) =>
+              ["pending", "waiting_for_device", "leased"].some(
+                (state) => image.cutout === state || image.describe === state,
+              ),
+            )
+          ? 15_000
+          : false,
   });
 }
 
@@ -868,6 +882,7 @@ function ProposalCard({
   // Photos deleted or settled outside this review (e.g. a direct commit) make
   // the group unapprovable and undiscardable; removing it is the way out.
   const stale = isStaleGroup(proposal, imagesById);
+  const descriptionsPending = awaitingDescriptions(proposal, imagesById);
   return (
     <Card>
       <CardHeader>
@@ -964,6 +979,7 @@ function ProposalCard({
               disabled={
                 working ||
                 stale ||
+                descriptionsPending.length > 0 ||
                 (proposal.product.kind === "existing" &&
                   !proposal.product.existing)
               }
@@ -1008,6 +1024,15 @@ function ProposalCard({
           <StatusText as="p" tone="warning" className="mt-3 text-xs">
             This group includes photos that can no longer be reviewed. Remove
             the group to continue.
+          </StatusText>
+        ) : null}
+        {descriptionsPending.length ? (
+          <StatusText as="p" tone="warning" className="mt-3 text-xs">
+            Approval waits for the AI description of{" "}
+            {descriptionsPending.length}{" "}
+            {descriptionsPending.length === 1 ? "photo" : "photos"}. Open a
+            failed photo to retry its analysis. Device analysis and cutouts can
+            continue in the background.
           </StatusText>
         ) : null}
         {proposal.lastError ? (
@@ -1113,6 +1138,22 @@ const PROCESSING_LABEL = {
   skipped: "Skipped",
   failed: "Failed",
 } satisfies Record<ImageProcessingJobState, string>;
+const DESCRIPTION_BLOCKING = new Set<ImageProcessingJobState>([
+  "pending",
+  "waiting_for_device",
+  "leased",
+  "failed",
+]);
+
+function awaitingDescriptions(
+  proposal: PhotoGroupProposal,
+  imagesById: ImagesById,
+) {
+  return proposal.images.filter((entry) => {
+    const state = imagesById.get(entry.id)?.describe;
+    return state != null && DESCRIPTION_BLOCKING.has(state);
+  });
+}
 const PROCESSING_VARIANT = {
   pending: "secondary",
   waiting_for_device: "warning",
@@ -1134,13 +1175,31 @@ function ProcessingBadge({
   if (!state)
     return (
       <span className="text-2xs text-muted-foreground">
+        <ClockIcon className="mr-1 inline size-3" aria-hidden="true" />
         {label}: not queued
       </span>
     );
+  const Icon =
+    state === "ready"
+      ? CheckCircleIcon
+      : state === "failed"
+        ? WarningCircleIcon
+        : state === "skipped"
+          ? MinusCircleIcon
+          : state === "leased"
+            ? CircleNotchIcon
+            : ClockIcon;
   return (
-    <Badge variant={PROCESSING_VARIANT[state]} title={reason ?? undefined}>
+    <Badge
+      variant={PROCESSING_VARIANT[state]}
+      title={reason ?? undefined}
+      className="max-w-full"
+    >
+      <Icon
+        className={`size-3 shrink-0 ${state === "leased" ? "animate-spin" : ""}`}
+        aria-hidden="true"
+      />
       {label}: {PROCESSING_LABEL[state]}
-      {reason ? ` · ${reason}` : ""}
     </Badge>
   );
 }
@@ -1174,7 +1233,7 @@ function PhotoTable({
                 <TableHead>Original</TableHead>
                 <TableHead>Cutout</TableHead>
                 <TableHead>Import</TableHead>
-                <TableHead>Processing</TableHead>
+                <TableHead>Analysis</TableHead>
                 <TableHead>Description</TableHead>
               </TableRow>
             </TableHeader>
@@ -1229,9 +1288,30 @@ function PhotoTable({
                     </TableCell>
                     <TableCell>
                       <Stack gap="tight">
+                        <Badge
+                          variant={
+                            photo.localAnalysisReady ? "positive" : "secondary"
+                          }
+                          title={
+                            photo.localAnalysisReady
+                              ? "Device Vision analysis received"
+                              : "Optional device Vision analysis has not arrived"
+                          }
+                        >
+                          {photo.localAnalysisReady ? (
+                            <CheckCircleIcon
+                              className="size-3"
+                              aria-hidden="true"
+                            />
+                          ) : (
+                            <ClockIcon className="size-3" aria-hidden="true" />
+                          )}
+                          Device:{" "}
+                          {photo.localAnalysisReady ? "Done" : "Not received"}
+                        </Badge>
                         {labelImages.has(photo.id) && !photo.cutoutUrl ? (
                           <span className="text-2xs text-muted-foreground">
-                            Cutout: not needed for label photo
+                            Cutout: not needed for label
                           </span>
                         ) : (
                           <ProcessingBadge
@@ -1240,10 +1320,21 @@ function PhotoTable({
                             reason={photo.cutoutReason}
                           />
                         )}
+                        {photo.cutoutReason ? (
+                          <span className="max-w-56 text-2xs break-words text-muted-foreground">
+                            {photo.cutoutReason}
+                          </span>
+                        ) : null}
                         <ProcessingBadge
-                          label="Describe"
+                          label="AI description"
                           state={photo.describe}
+                          reason={photo.describeReason}
                         />
+                        {photo.describeReason ? (
+                          <span className="max-w-56 text-2xs break-words text-destructive">
+                            {photo.describeReason}
+                          </span>
+                        ) : null}
                       </Stack>
                     </TableCell>
                     <TableCell className="max-w-96 whitespace-normal">
@@ -1326,6 +1417,9 @@ export function PhotoGroupReview({
   const hasStaleGroups = proposed.some((proposal) =>
     isStaleGroup(proposal, imagesById),
   );
+  const hasPendingDescriptions = proposed.some(
+    (proposal) => awaitingDescriptions(proposal, imagesById).length > 0,
+  );
 
   return (
     <Stack gap="lg">
@@ -1341,7 +1435,12 @@ export function PhotoGroupReview({
             </Stack>
             <Button
               className="min-h-11 w-full sm:w-auto"
-              disabled={busy || proposed.length === 0 || hasStaleGroups}
+              disabled={
+                busy ||
+                proposed.length === 0 ||
+                hasStaleGroups ||
+                hasPendingDescriptions
+              }
               onClick={() => action.mutate({ action: "approve" })}
             >
               <CheckIcon />

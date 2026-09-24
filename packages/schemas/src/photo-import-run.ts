@@ -349,8 +349,11 @@ export const photoRunImage = z.object({
   /** Current-source subject-lift and description job states; null = never queued. */
   cutout: imageProcessingJobState.nullable(),
   describe: imageProcessingJobState.nullable(),
+  /** True after the device has submitted its local Vision analysis. */
+  localAnalysisReady: z.boolean(),
   /** The cutout processor's skip or failure reason, e.g. `not_suitable`. */
   cutoutReason: z.string().nullable(),
+  describeReason: z.string().nullable(),
   description: z.string().nullable(),
   recognizedText: z.string().nullable(),
 });

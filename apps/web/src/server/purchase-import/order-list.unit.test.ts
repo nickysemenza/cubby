@@ -146,4 +146,29 @@ describe("classifyOrderCapture", () => {
     expect(ids).toContain("999-8888888-7777777");
     expect(ids).not.toContain("B0TESTTOKEN");
   });
+
+  it("keeps every order link when IDs are embedded in URL paths", () => {
+    const ids = [
+      "111-2222222-3333333",
+      "222-3333333-4444444",
+      "333-4444444-5555555",
+    ];
+    const cap = capture({
+      url: "https://shop.example.test/order-history",
+      title: "Your Orders",
+      text: ids.map((id) => `Order # ${id}`).join("\n"),
+      links: ids.map((id, index) => ({
+        id: `link-${index}`,
+        href: `https://shop.example.test/${id}`,
+        text: "View order details",
+      })),
+    });
+
+    const result = classifyOrderCapture(cap, { allowedHosts: ALLOWED_HOSTS });
+    expect(result.kind).toBe("order_list");
+    if (result.kind !== "order_list") return;
+    expect(result.orders.map(({ orderUrl }) => orderUrl)).toEqual(
+      ids.map((id) => `https://shop.example.test/${id}`),
+    );
+  });
 });

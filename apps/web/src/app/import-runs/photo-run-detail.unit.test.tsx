@@ -113,7 +113,9 @@ const photo = (
   cutoutUrl: text.cutout ? `https://img.example.com/${id}-cutout.png` : null,
   cutout: null,
   describe: null,
+  localAnalysisReady: Boolean(text.recognizedText),
   cutoutReason: null,
+  describeReason: null,
   description: text.description ?? null,
   recognizedText: text.recognizedText ?? null,
 });
@@ -190,6 +192,9 @@ describe("PhotoImportRunView", () => {
       within(progress).getByRole("progressbar", { name: "Photos reviewed" }),
     ).toHaveAttribute("aria-valuenow", "2");
     expect(progress).toHaveTextContent("2 of 3 photos settled");
+    expect(progress).toHaveTextContent("Device analysis · optional");
+    expect(progress).toHaveTextContent("Cloud description");
+    expect(progress).toHaveTextContent("Subject lift · optional");
 
     // Every run photo is a row linking to its image, with the cutout beside
     // the original once the device has produced one.
@@ -206,5 +211,64 @@ describe("PhotoImportRunView", () => {
     expect(screen.getByText("A folded sweater")).toBeInTheDocument();
     expect(screen.getByText("Patagonia")).toBeInTheDocument();
     expect(screen.queryByText("Size M")).not.toBeInTheDocument();
+    expect(screen.getByText("Device: Done")).toBeInTheDocument();
+    expect(screen.getAllByText("Device: Not received")).toHaveLength(2);
+  });
+
+  it("holds approval while cloud description runs, then enables it without waiting for device analysis or cutout", async () => {
+    const pendingReview: PhotoRunReview = {
+      review: {
+        ...review.review,
+        runStatus: "running",
+        proposals: [
+          {
+            groupKey: "fixture-sweater",
+            state: "proposed",
+            images: [{ id: imageShortcode.parse("IMG-4K7P"), purpose: "item" }],
+            skip: [],
+            product: { kind: "create", create: { name: "Fixture sweater" } },
+            committedProduct: null,
+            inventory: null,
+            evidence: null,
+            conflict: null,
+            lastError: null,
+            missingImageCount: 0,
+            committedAt: null,
+            updatedAt: "2026-09-20T16:04:00.000Z",
+          },
+        ],
+      },
+      images: review.images.map((image) =>
+        image.id === "IMG-4K7P"
+          ? { ...image, describe: "leased", cutout: "waiting_for_device" }
+          : image,
+      ),
+    };
+    const key = ["purchase-import", "run", RUN_ID, "photo-review"];
+    harness.queryClient.setQueryData(key, pendingReview);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => Response.json({ candidates: [] })),
+    );
+    render(
+      <PhotoImportRunView run={{ ...run, status: "running", endedAt: null }} />,
+      { wrapper: harness.wrapper },
+    );
+
+    const approveAll = await screen.findByRole("button", {
+      name: /Approve all/,
+    });
+    expect(approveAll).toBeDisabled();
+    expect(
+      screen.getByText(/Approval waits for the AI description/),
+    ).toBeInTheDocument();
+
+    harness.queryClient.setQueryData(key, {
+      ...pendingReview,
+      images: pendingReview.images.map((image) =>
+        image.id === "IMG-4K7P" ? { ...image, describe: "ready" } : image,
+      ),
+    } satisfies PhotoRunReview);
+    await waitFor(() => expect(approveAll).toBeEnabled());
   });
 });

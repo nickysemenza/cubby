@@ -30,6 +30,16 @@ function PhotoRunProgress({
   const readyGroups =
     review?.review.proposals.filter((proposal) => proposal.state === "proposed")
       .length ?? 0;
+  const imageWork = review?.images ?? [];
+  const deviceDone = imageWork.filter(
+    (photo) => photo.localAnalysisReady,
+  ).length;
+  const described = imageWork.filter(
+    (photo) => photo.describe === "ready" || photo.describe === "skipped",
+  ).length;
+  const cutoutsSettled = imageWork.filter(
+    (photo) => photo.cutout === "ready" || photo.cutout === "skipped",
+  ).length;
   const stage =
     photos.length === 0
       ? "Waiting for photos to upload"
@@ -55,6 +65,31 @@ function PhotoRunProgress({
         <p className="font-mono text-xs text-muted-foreground tabular-nums">
           {settled} of {photos.length} photos settled
         </p>
+        {imageWork.length ? (
+          <div
+            className="grid gap-2 border-t border-border pt-3 sm:grid-cols-3"
+            aria-live="polite"
+          >
+            {[
+              { label: "Device analysis", done: deviceDone, optional: true },
+              { label: "Cloud description", done: described, optional: false },
+              { label: "Subject lift", done: cutoutsSettled, optional: true },
+            ].map((work) => (
+              <div
+                key={work.label}
+                className="rounded-md bg-muted/50 px-3 py-2"
+              >
+                <p className="text-2xs text-muted-foreground">
+                  {work.label}
+                  {work.optional ? " · optional" : ""}
+                </p>
+                <p className="font-mono text-sm font-semibold tabular-nums">
+                  {work.done} / {imageWork.length}
+                </p>
+              </div>
+            ))}
+          </div>
+        ) : null}
         {children}
       </CardContent>
     </Card>
