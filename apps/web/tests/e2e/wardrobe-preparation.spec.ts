@@ -120,8 +120,4 @@ test("taxonomy edits keep product classification paths and labels separate from 
   await expect(
     labels.getByRole("img", { name: `${itemImageName}.png` }),
   ).toHaveCount(0);
-  await page.screenshot({
-    path: test.info().outputPath("product-images-desktop.png"),
-    fullPage: true,
-  });
 });

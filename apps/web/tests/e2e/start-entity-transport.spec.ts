@@ -185,7 +185,7 @@ test("core entity list, detail, and mutation ride named Start operations", async
 test("server error references remain usable on desktop", async ({
   page,
   context,
-}, testInfo) => {
+}) => {
   await context.grantPermissions(["clipboard-read", "clipboard-write"]);
   await page.goto("/");
   await page.route("**/_serverFn/**", async (route) => {
@@ -234,5 +234,4 @@ test("server error references remain usable on desktop", async ({
     "diagnostic-test-request",
   );
   await expect(dialog.getByRole("button", { name: "Copied" })).toBeVisible();
-  await page.screenshot({ path: testInfo.outputPath("error-desktop.png") });
 });

@@ -5,7 +5,7 @@ import { expect, test } from "./e2e-test";
 // Browser focus restoration and canonical detail refresh cross the dialog/router boundary.
 test("generic editing closes unchanged saves and restores the updated record", async ({
   page,
-}, testInfo) => {
+}) => {
   await page.setViewportSize({ width: 1440, height: 1000 });
   const name = `Example supplier ${Date.now()}`;
   const vendor = await seedVendorDisplayPrerequisite(page, name);
@@ -22,9 +22,6 @@ test("generic editing closes unchanged saves and restores the updated record", a
     .getByRole("textbox", { name: "Name", exact: true })
     .fill(`${name} updated`);
   await expectViewportBounded(page);
-  await page.screenshot({
-    path: testInfo.outputPath("shared-editor-desktop.png"),
-  });
   await dialog.getByRole("button", { name: "Save changes" }).click();
   await expect(dialog).toBeHidden();
   await expect(
