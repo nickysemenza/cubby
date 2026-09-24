@@ -144,7 +144,13 @@ final class PhotoImportManifest {
         let routes = destinationOptions.reduce(into: [EntityKey: [PhotoDestinationOption]]()) {
             $0[$1.route.source, default: []].append($1)
         }
-        return routes.keys.sorted { EntityCatalog[$0].plural < EntityCatalog[$1].plural }.compactMap {
+        let suggested = selectedSuggestedSourceType
+        return routes.keys.sorted {
+            let left = $0 == suggested ? 0 : $0 == .product ? 1 : 2
+            let right = $1 == suggested ? 0 : $1 == .product ? 1 : 2
+            return left == right
+                ? EntityCatalog[$0].plural < EntityCatalog[$1].plural : left < right
+        }.compactMap {
             guard let options = routes[$0] else { return nil }
             return PhotoSourceTypeOption(
                 source: $0, options: options.sorted { $0.menuTitle < $1.menuTitle })
@@ -799,14 +805,19 @@ final class PhotoImportManifest {
                 body.removeValue(forKey: binding.field)
             }
         }
-        let title = "New \(option.descriptor.singular)"
+        let enteredTitle = body[option.descriptor.titleField]?.stringValue?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let title =
+            enteredTitle.flatMap { $0.isEmpty ? nil : $0 }
+            ?? "New \(option.descriptor.singular)"
         let draft = PhotoCreateDraft(
             id: "\(option.id):new:\(UUID().uuidString)", route: option.route,
             source: nil, body: body, title: title,
             captureDate: captureDate)
         let assignment = PhotoDestinationAssignment(
             route: option.route, source: nil, sourceRow: nil, recordID: nil,
-            title: title, shortcode: "New", replaceConfirmed: false, evidence: title,
+            title: title, shortcode: "New", replaceConfirmed: false,
+            evidence: "New \(option.descriptor.singular)",
             createDraft: draft, decision: decision)
         for item in itemsToStage { assignments[item.id] = assignment }
         advanceFocusAfterAssignment()
