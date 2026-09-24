@@ -6,6 +6,8 @@ import { TEST_HOME_SHORTCODE, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import {
+  image,
+  imageProcessingJob,
   importRun,
   importRunTarget,
   inventoryEntry,
@@ -276,6 +278,66 @@ describe("photo group proposals", () => {
     const [view] = second.proposals;
     expect(view?.state).toBe("committed");
     expect(view?.committedProduct?.name).toBe("Synthetic Rain Coat");
+  });
+
+  it("waits for current cloud descriptions but lets device cutout work continue", async () => {
+    const { run, codes } = await seedRun(1);
+    const [source] = await getDb(ctx.db)
+      .select({ id: image.id, sha256: image.sha256 })
+      .from(image)
+      .where(eq(image.shortcode, codes[0]!));
+    if (!source) throw new Error("fixture: image not found");
+    const sourceHash = "a".repeat(64);
+    await getDb(ctx.db)
+      .update(image)
+      .set({ sha256: sourceHash })
+      .where(eq(image.id, source.id));
+    const [description] = await getDb(ctx.db)
+      .insert(imageProcessingJob)
+      .values({
+        imageId: parseEntityId("image", source.id),
+        kind: "describe_image",
+        state: "pending",
+        sourceContentHash: sourceHash,
+        processorRevision: 1,
+      })
+      .returning();
+    await getDb(ctx.db)
+      .insert(imageProcessingJob)
+      .values({
+        imageId: parseEntityId("image", source.id),
+        kind: "subject_lift",
+        state: "waiting_for_device",
+        sourceContentHash: sourceHash,
+        processorRevision: 1,
+      });
+    await proposePhotoGroups(ctx.db, {
+      runId: run.shortcode,
+      groups: [createGroup("sweater", codes)],
+    });
+
+    const blocked = await approvePhotoGroupProposals(
+      ctx.db,
+      { runId: run.shortcode },
+      ctx.actor,
+    );
+    expect(blocked.results[0]).toMatchObject({
+      outcome: "failed",
+      error: expect.stringContaining("AI description is still processing"),
+    });
+    await getDb(ctx.db)
+      .update(imageProcessingJob)
+      .set({ state: "ready", completedAt: new Date() })
+      .where(eq(imageProcessingJob.id, description!.id));
+
+    const approved = await approvePhotoGroupProposals(
+      ctx.db,
+      { runId: run.shortcode },
+      ctx.actor,
+    );
+    expect(approved.results).toEqual([
+      { groupKey: "sweater", outcome: "committed" },
+    ]);
   });
 
   it("keeps a name-collision conflict proposed, then commits once the reviewer picks the existing Product", async () => {

@@ -16,6 +16,7 @@ export type OrderListClassification =
   | { kind: "unknown" };
 
 const AMAZON_ORDER_ID = /\b\d{3}-\d{7}-\d{7}\b/g;
+const AMAZON_ORDER_ID_SEGMENT = /^\d{3}-\d{7}-\d{7}$/;
 // A generic order id only counts when it follows an explicit "Order" label,
 // so bare ASIN-like tokens and prices in surrounding text never match. The
 // label is matched case-insensitively but the id itself stays uppercase-only
@@ -135,7 +136,9 @@ function orderIdFromUrl(url: URL): string | null {
     if (value) return value;
   }
   const segments = url.pathname.split("/").filter(Boolean);
-  return segments.find((segment) => AMAZON_ORDER_ID.test(segment)) ?? null;
+  return (
+    segments.find((segment) => AMAZON_ORDER_ID_SEGMENT.test(segment)) ?? null
+  );
 }
 
 function collectIdsFromText(text: string): Map<string, number> {

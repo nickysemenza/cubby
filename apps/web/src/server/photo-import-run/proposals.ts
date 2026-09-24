@@ -56,6 +56,7 @@ import { z } from "zod";
 
 import type { Database } from "~/server/db";
 import {
+  aiAnalysis,
   image,
   imageProcessingJob,
   importRun,
@@ -784,6 +785,39 @@ async function approveRow(
     };
   const roster = liveRoster(row, imagesById);
   try {
+    if (roster.images.length) {
+      const descriptionJobs = await getDb(db)
+        .select({
+          imageId: imageProcessingJob.imageId,
+          state: imageProcessingJob.state,
+        })
+        .from(imageProcessingJob)
+        .innerJoin(image, eq(image.id, imageProcessingJob.imageId))
+        .where(
+          and(
+            inArray(
+              imageProcessingJob.imageId,
+              roster.images.map((entry) => entry.imageId),
+            ),
+            eq(imageProcessingJob.kind, "describe_image"),
+            eq(imageProcessingJob.sourceContentHash, image.sha256),
+          ),
+        )
+        .orderBy(desc(imageProcessingJob.processorRevision));
+      const latestByImage = new Map<ImageId, string>();
+      for (const job of descriptionJobs) {
+        const id = imageId.parse(job.imageId);
+        if (!latestByImage.has(id)) latestByImage.set(id, job.state);
+      }
+      const unfinished = roster.images.filter((entry) => {
+        const state = latestByImage.get(entry.imageId);
+        return state && state !== "ready" && state !== "skipped";
+      });
+      if (unfinished.length)
+        throw new Error(
+          `AI description is still processing or needs retry for ${unfinished.length} photo${unfinished.length === 1 ? "" : "s"}`,
+        );
+    }
     const input = await commitInputFor(db, run, row, roster);
     const result = await commitPhotoGroup(db, input, actor);
     if (result.outcome === "conflict") {
@@ -936,7 +970,7 @@ export async function listPhotoRunImages(
     .limit(RUN_IMAGE_LIMIT);
   if (!rows.length) return [];
   const shortcodes = rows.map((row) => row.shortcode);
-  const [representations, summaries, jobs] = await Promise.all([
+  const [representations, summaries, jobs, localAnalyses] = await Promise.all([
     loadImageRepresentations(db, shortcodes),
     loadImageAnalysisSummaries(db, shortcodes),
     getDb(db)
@@ -955,7 +989,22 @@ export async function listPhotoRunImages(
         ),
       )
       .orderBy(desc(imageProcessingJob.processorRevision)),
+    getDb(db)
+      .select({ imageId: aiAnalysis.entityId })
+      .from(aiAnalysis)
+      .where(
+        and(
+          eq(aiAnalysis.entityType, "image"),
+          eq(aiAnalysis.feature, "photo-local-analysis"),
+          inArray(
+            aiAnalysis.entityId,
+            rows.map((row) => imageId.parse(row.imageId)),
+          ),
+          notDeleted(aiAnalysis),
+        ),
+      ),
   ]);
+  const locallyAnalyzed = new Set(localAnalyses.map((entry) => entry.imageId));
   const hashById = new Map(rows.map((row) => [row.imageId, row.sha256]));
   // Newest processor revision first: the first current-source job per
   // (image, kind) is the one that decides what the reviewer sees.
@@ -979,10 +1028,12 @@ export async function listPhotoRunImages(
       cutoutUrl: rendition.transparent,
       cutout: cutout?.state ?? null,
       describe: describe?.state ?? null,
+      localAnalysisReady: locallyAnalyzed.has(row.imageId),
       cutoutReason:
         cutout && (cutout.state === "skipped" || cutout.state === "failed")
           ? cutout.lastError
           : null,
+      describeReason: describe?.state === "failed" ? describe.lastError : null,
       description: summary?.description ?? null,
       recognizedText: summary?.recognizedText ?? null,
     };

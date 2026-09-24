@@ -11,6 +11,7 @@ struct HeadlessPhotoImport: AsyncParsableCommand {
 
     func run() async throws {
         try await CLI.run {
+            let startedAt = Date.now
             guard
                 let baseURL = URL(string: baseURLString),
                 baseURL.scheme == "http", baseURL.host() == "127.0.0.1",
@@ -29,6 +30,9 @@ struct HeadlessPhotoImport: AsyncParsableCommand {
             let auth = AuthFlow(baseURL: baseURL, credentials: credentials, identity: identity)
             _ = try await auth.signIn(
                 email: "sim@cubby.localhost", password: "cubby-sim-local-only")
+            print(
+                "Headless photo phase: signed in after \(Int(Date.now.timeIntervalSince(startedAt) * 1000))ms"
+            )
             let client = CubbyClient(
                 baseURL: baseURL, credentials: credentials, identity: identity)
             let photos = try paths.enumerated().map { index, path in
@@ -38,11 +42,20 @@ struct HeadlessPhotoImport: AsyncParsableCommand {
                     provenance: PhotoAnalysisProvenance(
                         source: .files, filename: file.filename))
             }
+            print(
+                "Headless photo phase: files loaded after \(Int(Date.now.timeIntervalSince(startedAt) * 1000))ms"
+            )
             let uploader = PhotoImportRunUploader(client: client)
             let runID = try await uploader.upload(
                 photos,
                 createRun: PhotoImportCreateRunInput(
-                    ledgerPartyId: nil, notes: "Synthetic photo import rehearsal"))
+                    ledgerPartyId: nil, notes: "Synthetic photo import rehearsal"),
+                performLocalAnalysis: false,
+                progress: { progress in
+                    print(
+                        "Headless photo progress: \(progress.uploaded) uploaded, \(progress.analyzed) analyzed after \(Int(Date.now.timeIntervalSince(startedAt) * 1000))ms"
+                    )
+                })
             let progress = await uploader.progress
             guard progress.uploaded == photos.count else {
                 throw CLIError.message("Native uploader did not finalize every photo")

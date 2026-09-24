@@ -339,6 +339,12 @@ private struct RunningView: View {
             if let runID = session.runID {
                 Label("Photos uploaded", systemImage: "checkmark.circle.fill")
                     .foregroundStyle(PorcelainTokens.positive)
+                if session.progress.analyzed < session.progress.total,
+                    session.progress.failedIDs.isEmpty
+                {
+                    Label("Photo details are still processing on this device.", systemImage: "sparkles")
+                        .foregroundStyle(PorcelainTokens.graphiteSecondary)
+                }
                 Text(
                     "The agent will propose item groups. Review them on the web before products are created."
                 )
@@ -352,6 +358,11 @@ private struct RunningView: View {
                 Button("Done") { onDone(runID) }
                     .buttonStyle(.bordered)
                     .accessibilityIdentifier("photos.importRun.done")
+                if session.canRetryAnalysis {
+                    Button("Retry photo details") { onResume() }
+                        .buttonStyle(.bordered)
+                        .accessibilityIdentifier("photos.importRun.retryAnalysis")
+                }
             }
         case .cancelled:
             Button("Resume") { onResume() }
