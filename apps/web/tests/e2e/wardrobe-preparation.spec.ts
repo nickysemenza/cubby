@@ -2,6 +2,7 @@ import {
   attachProductImagePrerequisite,
   seedImagePrerequisite,
   seedProductCategoryPrerequisite,
+  seedProductPrerequisite,
 } from "./e2e-fixtures";
 import {
   gotoAuthenticatedPage,
@@ -11,9 +12,7 @@ import {
 } from "./e2e-helpers";
 import { expect, test } from "./e2e-test";
 
-test("taxonomy edits keep product classification paths and labels separate from covers", async ({
-  page,
-}) => {
+test("taxonomy edits keep product classification paths", async ({ page }) => {
   const suffix = Date.now();
   const originalRoot = `Wardrobe taxonomy root ${suffix}`;
   const destinationRoot = `Wardrobe taxonomy destination ${suffix}`;
@@ -73,8 +72,27 @@ test("taxonomy edits keep product classification paths and labels separate from 
   await expect(
     page.getByText(`${destinationRoot} / ${renamedType}`, { exact: true }),
   ).toBeVisible();
+});
 
-  const productId = new URL(page.url()).pathname.split("/").at(-1)!;
+test("product images keep item covers and label photos separate", async ({
+  page,
+}) => {
+  const suffix = Date.now();
+  const rootName = `Image taxonomy root ${suffix}`;
+  const typeName = `Image taxonomy type ${suffix}`;
+  const productName = `Image classified product ${suffix}`;
+  const root = await seedProductCategoryPrerequisite(page, {
+    name: rootName,
+  });
+  const type = await seedProductCategoryPrerequisite(page, {
+    name: typeName,
+    parentId: root.id,
+  });
+  const product = await seedProductPrerequisite(page, {
+    name: productName,
+    categoryId: type.id,
+  });
+  const productId = product.id;
   const itemImageName = `wardrobe-item-${suffix}`;
   const labelImageName = `wardrobe-label-${suffix}`;
   const [itemImage, labelImage] = await Promise.all([
@@ -102,6 +120,9 @@ test("taxonomy edits keep product classification paths and labels separate from 
     `/products/${productId}`,
     page.getByRole("heading", { level: 1, name: productName }),
   );
+  await expect(
+    page.getByText(`${rootName} / ${typeName}`, { exact: true }),
+  ).toBeVisible();
   await expect(
     page.locator("#images").getByRole("img", { name: `${itemImageName}.png` }),
   ).toBeVisible();

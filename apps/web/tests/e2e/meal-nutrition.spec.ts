@@ -114,6 +114,16 @@ test("meal nutrition keeps entered product and ingredient amounts while deriving
   await expect(page.getByText("Food updated", { exact: true })).toBeHidden({
     timeout: 5000,
   });
+});
+
+test("meal nutrition connects planned and today views and removes food portions", async ({
+  page,
+}, testInfo) => {
+  const name = `Nutrition ${Date.now().toString(36).slice(-5)}-${testInfo.workerIndex}`;
+  const fixture = await seedMealNutritionPrerequisite(page, name, {
+    seedProductPortion: true,
+    seedIngredientPortion: true,
+  });
 
   await gotoAuthenticatedPage(
     page,
@@ -169,6 +179,13 @@ test("meal nutrition keeps entered product and ingredient amounts while deriving
   await expect(
     page.getByRole("region", { name: `${name} member nutrition` }),
   ).toHaveCount(0);
+});
+
+test("manual nutrition food keeps inputs across failed save and retry", async ({
+  page,
+}, testInfo) => {
+  const name = `Nutrition ${Date.now().toString(36).slice(-5)}-${testInfo.workerIndex}`;
+  const fixture = await seedMealNutritionPrerequisite(page, name);
 
   await gotoAuthenticatedPage(
     page,
@@ -204,6 +221,7 @@ test("meal nutrition keeps entered product and ingredient amounts while deriving
     "Current conversion unavailable; this amount can still be saved.",
   );
 
+  const dispatcherUrl = "**/_serverFn/dispatch**";
   let failedSave = false;
   const failFirstManualSave = async (route: Route) => {
     if (

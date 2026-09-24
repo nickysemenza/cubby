@@ -552,7 +552,10 @@ export async function seedNutritionPrerequisite(
 export async function seedMealNutritionPrerequisite(
   page: Page,
   name: string,
-  options: { seedProductPortion?: boolean } = {},
+  options: {
+    seedProductPortion?: boolean;
+    seedIngredientPortion?: boolean;
+  } = {},
 ) {
   const member = await createFixture(
     page,
@@ -630,6 +633,19 @@ export async function seedMealNutritionPrerequisite(
         sourceKind: "product",
         productId: product.id,
         grams: 45,
+      }),
+      context.actorContext,
+    );
+  }
+  if (options.seedIngredientPortion) {
+    await saveMealFood(
+      db,
+      saveMealFoodInput.parse({
+        mealId: meal.id,
+        ledgerPartyId: member.id,
+        sourceKind: "ingredient",
+        ingredientId: ingredient.id,
+        amount: { value: 15, unit: "g" },
       }),
       context.actorContext,
     );
